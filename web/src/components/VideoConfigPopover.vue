@@ -20,7 +20,7 @@ import {
 import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo, type BitratePreset } from '@/api'
-import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
 export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
@@ -51,7 +51,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const systemStore = useSystemStore()
+const configStore = useConfigStore()
 const router = useRouter()
 
 // Device list
@@ -64,7 +64,7 @@ const loadingCodecs = ref(false)
 
 // Backend list
 const backends = ref<EncoderBackendInfo[]>([])
-const currentEncoderBackend = ref<string>('auto')
+const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
 
 // Browser supported codecs (WebRTC receive capabilities)
 const browserSupportedCodecs = ref<Set<string>>(new Set())
@@ -197,11 +197,11 @@ const applyingBitrate = ref(false)
 
 // Current config from store
 const currentConfig = computed(() => ({
-  device: systemStore.stream?.device || '',
-  format: systemStore.stream?.format || '',
-  width: systemStore.stream?.resolution?.[0] || 1920,
-  height: systemStore.stream?.resolution?.[1] || 1080,
-  fps: systemStore.stream?.targetFps || 30,
+  device: configStore.video?.device || '',
+  format: configStore.video?.format || '',
+  width: configStore.video?.width || 1920,
+  height: configStore.video?.height || 1080,
+  fps: configStore.video?.fps || 30,
 }))
 
 // Button display text - simplified to just show label
@@ -300,19 +300,6 @@ async function loadCodecs() {
     ]
   } finally {
     loadingCodecs.value = false
-  }
-}
-
-// Load current encoder backend from config
-async function loadEncoderBackend() {
-  try {
-    const config = await configApi.get()
-    // Access nested stream.encoder
-    const streamConfig = config.stream as { encoder?: string } | undefined
-    currentEncoderBackend.value = streamConfig?.encoder || 'auto'
-  } catch (e) {
-    console.info('[VideoConfig] Failed to load encoder backend config')
-    currentEncoderBackend.value = 'auto'
   }
 }
 
@@ -440,14 +427,12 @@ async function applyVideoConfig() {
 
   applying.value = true
   try {
-    await configApi.update({
-      video: {
-        device: selectedDevice.value,
-        format: selectedFormat.value,
-        width,
-        height,
-        fps: selectedFps.value,
-      },
+    await configStore.updateVideo({
+      device: selectedDevice.value,
+      format: selectedFormat.value,
+      width,
+      height,
+      fps: selectedFps.value,
     })
 
     toast.success(t('config.applied'))
@@ -463,26 +448,32 @@ async function applyVideoConfig() {
 
 // Watch open state
 watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    // Detect browser codec support on first open
-    if (browserSupportedCodecs.value.size === 0) {
-      detectBrowserCodecSupport()
-    }
-    // Load devices on first open
-    if (devices.value.length === 0) {
-      loadDevices()
-    }
-    // Load codecs and backends on first open
-    if (codecs.value.length === 0) {
-      loadCodecs()
-    }
-    // Load encoder backend config
-    loadEncoderBackend()
-    // Initialize from current config
-    initializeFromCurrent()
-  } else {
+  if (!isOpen) {
     isDirty.value = false
+    return
   }
+
+  // Detect browser codec support on first open
+  if (browserSupportedCodecs.value.size === 0) {
+    detectBrowserCodecSupport()
+  }
+  // Load devices on first open
+  if (devices.value.length === 0) {
+    loadDevices()
+  }
+  // Load codecs and backends on first open
+  if (codecs.value.length === 0) {
+    loadCodecs()
+  }
+
+  Promise.all([
+    configStore.refreshVideo(),
+    configStore.refreshStream(),
+  ]).then(() => {
+    initializeFromCurrent()
+  }).catch(() => {
+    initializeFromCurrent()
+  })
 })
 
 // Sync selected values when backend config changes (e.g., auto format switch on mode change)

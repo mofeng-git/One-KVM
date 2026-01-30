@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useConsoleEvents } from '@/composables/useConsoleEvents'
@@ -59,6 +60,7 @@ import { setLanguage } from '@/i18n'
 const { t, locale } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
+const configStore = useConfigStore()
 const authStore = useAuthStore()
 const { connected: wsConnected, networkError: wsNetworkError } = useWebSocket()
 const hidWs = useHidWebSocket()
@@ -133,6 +135,15 @@ let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas be
 
 // Cursor visibility (from localStorage, updated via storage event)
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
+
+function syncMouseModeFromConfig() {
+  const mouseAbsolute = configStore.hid?.mouse_absolute
+  if (typeof mouseAbsolute !== 'boolean') return
+  const nextMode: 'absolute' | 'relative' = mouseAbsolute ? 'absolute' : 'relative'
+  if (mouseMode.value !== nextMode) {
+    mouseMode.value = nextMode
+  }
+}
 
 // Virtual keyboard state
 const virtualKeyboardVisible = ref(false)
@@ -1787,6 +1798,9 @@ onMounted(async () => {
   // 4. 其他初始化
   await systemStore.startStream().catch(() => {})
   await systemStore.fetchAllStates()
+  await configStore.refreshHid().then(() => {
+    syncMouseModeFromConfig()
+  }).catch(() => {})
 
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
@@ -1799,6 +1813,10 @@ onMounted(async () => {
   window.addEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
   window.addEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
   window.addEventListener('storage', handleMouseSendIntervalStorage)
+
+  watch(() => configStore.hid?.mouse_absolute, () => {
+    syncMouseModeFromConfig()
+  })
 
   // Pointer Lock event listeners
   document.addEventListener('pointerlockchange', handlePointerLockChange)

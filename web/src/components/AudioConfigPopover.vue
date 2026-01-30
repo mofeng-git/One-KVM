@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Volume2, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { audioApi, configApi } from '@/api'
+import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const configStore = useConfigStore()
 const systemStore = useSystemStore()
 const unifiedAudio = getUnifiedAudio()
 
@@ -87,9 +89,9 @@ async function loadDevices() {
 
 // Initialize from current config
 function initializeFromCurrent() {
-  const audio = systemStore.audio
+  const audio = configStore.audio
   if (audio) {
-    audioEnabled.value = audio.available && audio.streaming
+    audioEnabled.value = audio.enabled
     selectedDevice.value = audio.device || ''
     selectedQuality.value = (audio.quality as 'voice' | 'balanced' | 'high') || 'balanced'
   }
@@ -104,12 +106,10 @@ async function applyConfig() {
 
   try {
     // Update config
-    await configApi.update({
-      audio: {
-        enabled: audioEnabled.value,
-        device: selectedDevice.value,
-        quality: selectedQuality.value,
-      },
+    await configStore.updateAudio({
+      enabled: audioEnabled.value,
+      device: selectedDevice.value,
+      quality: selectedQuality.value,
     })
 
     // If enabled and device is selected, try to start audio stream
@@ -151,12 +151,19 @@ async function applyConfig() {
 
 // Watch popover open state
 watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    if (devices.value.length === 0) {
-      loadDevices()
-    }
-    initializeFromCurrent()
+  if (!isOpen) return
+
+  if (devices.value.length === 0) {
+    loadDevices()
   }
+
+  configStore.refreshAudio()
+    .then(() => {
+      initializeFromCurrent()
+    })
+    .catch(() => {
+      initializeFromCurrent()
+    })
 })
 </script>
 

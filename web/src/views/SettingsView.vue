@@ -2,20 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
 import {
   authApi,
-  authConfigApi,
   configApi,
   streamApi,
-  videoConfigApi,
-  streamConfigApi,
-  hidConfigApi,
-  msdConfigApi,
   atxConfigApi,
   extensionsApi,
-  rustdeskConfigApi,
-  webConfigApi,
   systemApi,
   type EncoderBackendInfo,
   type AuthConfig,
@@ -80,6 +74,7 @@ import {
 
 const { t, locale } = useI18n()
 const systemStore = useSystemStore()
+const configStore = useConfigStore()
 const authStore = useAuthStore()
 
 // Settings state
@@ -271,7 +266,6 @@ const config = ref({
   } as OtgHidFunctions,
   msd_enabled: false,
   msd_dir: '',
-  network_port: 8080,
   encoder_backend: 'auto',
   // STUN/TURN settings
   stun_server: '',
@@ -583,7 +577,7 @@ async function saveConfig() {
     // Video 配置（包括编码器和 WebRTC/STUN/TURN 设置）
     if (activeSection.value === 'video') {
       savePromises.push(
-        videoConfigApi.update({
+        configStore.updateVideo({
           device: config.value.video_device || undefined,
           format: config.value.video_format || undefined,
           width: config.value.video_width,
@@ -593,7 +587,7 @@ async function saveConfig() {
       )
       // 同时保存 Stream/Encoder 和 STUN/TURN 配置
       savePromises.push(
-        streamConfigApi.update({
+        configStore.updateStream({
           encoder: config.value.encoder_backend as any,
           stun_server: config.value.stun_server || undefined,
           turn_server: config.value.turn_server || undefined,
@@ -642,12 +636,12 @@ async function saveConfig() {
         hidUpdate.otg_profile = config.value.hid_otg_profile
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
       }
-      savePromises.push(hidConfigApi.update(hidUpdate))
+      savePromises.push(configStore.updateHid(hidUpdate))
       if (config.value.msd_enabled !== desiredMsdEnabled) {
         config.value.msd_enabled = desiredMsdEnabled
       }
       savePromises.push(
-        msdConfigApi.update({
+        configStore.updateMsd({
           enabled: desiredMsdEnabled,
         })
       )
@@ -656,7 +650,7 @@ async function saveConfig() {
     // MSD 配置
     if (activeSection.value === 'msd') {
       savePromises.push(
-        msdConfigApi.update({
+        configStore.updateMsd({
           msd_dir: config.value.msd_dir || undefined,
         })
       )
@@ -677,10 +671,10 @@ async function loadConfig() {
   try {
     // 并行加载所有域配置
     const [video, stream, hid, msd] = await Promise.all([
-      videoConfigApi.get(),
-      streamConfigApi.get(),
-      hidConfigApi.get(),
-      msdConfigApi.get(),
+      configStore.refreshVideo(),
+      configStore.refreshStream(),
+      configStore.refreshHid(),
+      configStore.refreshMsd(),
     ])
 
     config.value = {
@@ -702,7 +696,6 @@ async function loadConfig() {
       } as OtgHidFunctions,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
-      network_port: 8080, // 从旧 API 加载
       encoder_backend: stream.encoder || 'auto',
       // STUN/TURN settings
       stun_server: stream.stun_server || '',
@@ -723,14 +716,6 @@ async function loadConfig() {
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
     }
 
-    // 加载 web config（仍使用旧 API）
-    try {
-      const fullConfig = await configApi.get()
-      const web = fullConfig.web as any || {}
-      config.value.network_port = web.http_port || 8080
-    } catch (e) {
-      console.warn('Failed to load web config:', e)
-    }
   } catch (e) {
     console.error('Failed to load config:', e)
   } finally {
@@ -763,7 +748,7 @@ async function loadBackends() {
 async function loadAuthConfig() {
   authConfigLoading.value = true
   try {
-    authConfig.value = await authConfigApi.get()
+    authConfig.value = await configStore.refreshAuth()
   } catch (e) {
     console.error('Failed to load auth config:', e)
   } finally {
@@ -774,10 +759,9 @@ async function loadAuthConfig() {
 async function saveAuthConfig() {
   authConfigLoading.value = true
   try {
-    await authConfigApi.update({
+    authConfig.value = await configStore.updateAuth({
       single_user_allow_multiple_sessions: authConfig.value.single_user_allow_multiple_sessions,
     })
-    await loadAuthConfig()
   } catch (e) {
     console.error('Failed to save auth config:', e)
   } finally {
@@ -912,7 +896,7 @@ function removeEasytierPeer(index: number) {
 // ATX management functions
 async function loadAtxConfig() {
   try {
-    const config = await atxConfigApi.get()
+    const config = await configStore.refreshAtx()
     atxConfig.value = {
       enabled: config.enabled,
       power: { ...config.power },
@@ -937,7 +921,7 @@ async function saveAtxConfig() {
   loading.value = true
   saved.value = false
   try {
-    await atxConfigApi.update({
+    await configStore.updateAtx({
       enabled: atxConfig.value.enabled,
       power: {
         driver: atxConfig.value.power.driver,
@@ -981,10 +965,8 @@ function getAtxDevicesForDriver(driver: string): string[] {
 async function loadRustdeskConfig() {
   rustdeskLoading.value = true
   try {
-    const [config, status] = await Promise.all([
-      rustdeskConfigApi.get(),
-      rustdeskConfigApi.getStatus(),
-    ])
+    const status = await configStore.refreshRustdeskStatus()
+    const config = status.config
     rustdeskConfig.value = config
     rustdeskStatus.value = status
     rustdeskLocalConfig.value = {
@@ -1002,7 +984,7 @@ async function loadRustdeskConfig() {
 
 async function loadRustdeskPassword() {
   try {
-    rustdeskPassword.value = await rustdeskConfigApi.getPassword()
+    rustdeskPassword.value = await configStore.refreshRustdeskPassword()
   } catch (e) {
     console.error('Failed to load RustDesk password:', e)
   }
@@ -1060,7 +1042,7 @@ function removeBindAddress(index: number) {
 // Web server config functions
 async function loadWebServerConfig() {
   try {
-    const config = await webConfigApi.get()
+    const config = await configStore.refreshWeb()
     webServerConfig.value = config
     applyBindStateFromConfig(config)
   } catch (e) {
@@ -1078,7 +1060,7 @@ async function saveWebServerConfig() {
       https_enabled: webServerConfig.value.https_enabled,
       bind_addresses: effectiveBindAddresses.value,
     }
-    const updated = await webConfigApi.update(update)
+    const updated = await configStore.updateWeb(update)
     webServerConfig.value = updated
     applyBindStateFromConfig(updated)
     showRestartDialog.value = true
@@ -1117,7 +1099,7 @@ async function saveRustdeskConfig() {
       21116,
     )
     const relayServer = normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117)
-    await rustdeskConfigApi.update({
+    await configStore.updateRustdesk({
       enabled: rustdeskLocalConfig.value.enabled,
       rendezvous_server: rendezvousServer,
       relay_server: relayServer,
@@ -1139,7 +1121,7 @@ async function regenerateRustdeskId() {
   if (!confirm(t('extensions.rustdesk.confirmRegenerateId'))) return
   rustdeskLoading.value = true
   try {
-    await rustdeskConfigApi.regenerateId()
+    await configStore.regenerateRustdeskId()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
   } catch (e) {
@@ -1153,7 +1135,7 @@ async function regenerateRustdeskPassword() {
   if (!confirm(t('extensions.rustdesk.confirmRegeneratePassword'))) return
   rustdeskLoading.value = true
   try {
-    await rustdeskConfigApi.regeneratePassword()
+    await configStore.regenerateRustdeskPassword()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
   } catch (e) {
@@ -1167,7 +1149,7 @@ async function startRustdesk() {
   rustdeskLoading.value = true
   try {
     // Enable and save config to start the service
-    await rustdeskConfigApi.update({ enabled: true })
+    await configStore.updateRustdesk({ enabled: true })
     rustdeskLocalConfig.value.enabled = true
     await loadRustdeskConfig()
   } catch (e) {
@@ -1181,7 +1163,7 @@ async function stopRustdesk() {
   rustdeskLoading.value = true
   try {
     // Disable and save config to stop the service
-    await rustdeskConfigApi.update({ enabled: false })
+    await configStore.updateRustdesk({ enabled: false })
     rustdeskLocalConfig.value.enabled = false
     await loadRustdeskConfig()
   } catch (e) {
