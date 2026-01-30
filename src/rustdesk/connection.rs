@@ -47,6 +47,11 @@ const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 /// Default mouse event throttle interval (16ms ≈ 60Hz)
 const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
 
+/// Advertised RustDesk version for client compatibility.
+const RUSTDESK_COMPAT_VERSION: &str = "1.4.5";
+// Advertised platform for RustDesk clients. This affects which UI options are shown.
+const RUSTDESK_COMPAT_PLATFORM: &str = "Windows";
+
 /// Input event throttler
 ///
 /// Limits the rate of input events sent to HID devices to prevent EAGAIN errors.
@@ -164,6 +169,8 @@ pub struct Connection {
     last_test_delay_sent: Option<Instant>,
     /// Last known CapsLock state from RustDesk modifiers (for detecting toggle)
     last_caps_lock: bool,
+    /// Whether relative mouse mode is currently active for this connection
+    relative_mouse_active: bool,
 }
 
 /// Messages sent to connection handler
@@ -241,6 +248,7 @@ impl Connection {
             last_delay: 0,
             last_test_delay_sent: None,
             last_caps_lock: false,
+            relative_mouse_active: false,
         };
 
         (conn, rx)
@@ -1113,11 +1121,11 @@ impl Connection {
             let mut peer_info = PeerInfo::new();
             peer_info.username = "one-kvm".to_string();
             peer_info.hostname = get_hostname();
-            peer_info.platform = "Linux".to_string();
+            peer_info.platform = RUSTDESK_COMPAT_PLATFORM.to_string();
             peer_info.displays.push(display_info);
             peer_info.current_display = 0;
             peer_info.sas_enabled = false;
-            peer_info.version = env!("CARGO_PKG_VERSION").to_string();
+            peer_info.version = RUSTDESK_COMPAT_VERSION.to_string();
             peer_info.encoding = protobuf::MessageField::some(encoding);
 
             let mut login_response = LoginResponse::new();
@@ -1324,9 +1332,16 @@ impl Connection {
     async fn handle_mouse_event(&mut self, me: &MouseEvent) -> anyhow::Result<()> {
         // Parse RustDesk mask format: (button << 3) | event_type
         let event_type = me.mask & 0x07;
+        let is_relative_move = event_type == mouse_type::MOVE_RELATIVE;
+
+        if is_relative_move {
+            self.relative_mouse_active = true;
+        } else if event_type == mouse_type::MOVE {
+            self.relative_mouse_active = false;
+        }
 
         // Check if this is a pure move event (no button/scroll)
-        let is_pure_move = event_type == mouse_type::MOVE;
+        let is_pure_move = event_type == mouse_type::MOVE || is_relative_move;
 
         // For pure move events, apply throttling
         if is_pure_move && !self.input_throttler.should_send_mouse_move() {
@@ -1337,7 +1352,8 @@ impl Connection {
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
         // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events = convert_mouse_event(me, self.screen_width, self.screen_height);
+        let mouse_events =
+            convert_mouse_event(me, self.screen_width, self.screen_height, self.relative_mouse_active);
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {
