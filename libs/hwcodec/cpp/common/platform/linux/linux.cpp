@@ -1,12 +1,16 @@
 #include "linux.h"
 #include "../../log.h"
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fstream>
 #include <signal.h>
 #include <sys/prctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string>
 
 // Check for NVIDIA driver support by loading CUDA libraries
 int linux_support_nv()
@@ -106,6 +110,57 @@ int linux_support_rkmpp() {
 // Check for V4L2 Memory-to-Memory (M2M) codec support
 // Returns 0 if a M2M capable device is found, -1 otherwise
 int linux_support_v4l2m2m() {
+  auto to_lower = [](std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    return value;
+  };
+
+  auto read_text_file = [](const char *path, std::string *out) -> bool {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+      return false;
+    }
+    std::getline(file, *out);
+    return !out->empty();
+  };
+
+  auto allow_video0_probe = []() -> bool {
+    const char *env = std::getenv("ONE_KVM_V4L2M2M_ALLOW_VIDEO0");
+    if (env == nullptr) {
+      return false;
+    }
+    if (env[0] == '\0') {
+      return false;
+    }
+    return std::strcmp(env, "0") != 0;
+  };
+
+  auto is_amlogic_vdec = [&]() -> bool {
+    std::string name;
+    std::string modalias;
+    if (read_text_file("/sys/class/video4linux/video0/name", &name)) {
+      const std::string lowered = to_lower(name);
+      if (lowered.find("meson") != std::string::npos ||
+          lowered.find("vdec") != std::string::npos ||
+          lowered.find("decoder") != std::string::npos ||
+          lowered.find("video-decoder") != std::string::npos) {
+        return true;
+      }
+    }
+    if (read_text_file("/sys/class/video4linux/video0/device/modalias", &modalias)) {
+      const std::string lowered = to_lower(modalias);
+      if (lowered.find("amlogic") != std::string::npos ||
+          lowered.find("meson") != std::string::npos ||
+          lowered.find("gxl-vdec") != std::string::npos ||
+          lowered.find("gx-vdec") != std::string::npos) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Check common V4L2 M2M device paths used by various ARM SoCs
   const char *m2m_devices[] = {
     "/dev/video10",  // Common M2M encoder device
@@ -115,6 +170,13 @@ int linux_support_v4l2m2m() {
 
   for (size_t i = 0; i < sizeof(m2m_devices) / sizeof(m2m_devices[0]); i++) {
     if (access(m2m_devices[i], F_OK) == 0) {
+      if (std::strcmp(m2m_devices[i], "/dev/video0") == 0) {
+        if (!allow_video0_probe() && is_amlogic_vdec()) {
+          LOG_TRACE(std::string("V4L2 M2M: Skipping /dev/video0 (Amlogic vdec)"));
+          continue;
+        }
+      }
+
       // Device exists, check if it's an M2M device by trying to open it
       int fd = open(m2m_devices[i], O_RDWR | O_NONBLOCK);
       if (fd >= 0) {

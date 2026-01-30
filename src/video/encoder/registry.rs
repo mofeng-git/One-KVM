@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use hwcodec::common::{DataFormat, Quality, RateControl};
 use hwcodec::ffmpeg::AVPixelFormat;
@@ -255,8 +255,33 @@ impl EncoderRegistry {
             thread_count: 1,
         };
 
-        // Get all available encoders from hwcodec
-        let all_encoders = HwEncoder::available_encoders(ctx, None);
+        const DETECT_TIMEOUT_MS: u64 = 5000;
+
+        // Get all available encoders from hwcodec with a hard timeout
+        let all_encoders = {
+            use std::sync::mpsc;
+            use std::time::Duration;
+
+            info!("Encoder detection timeout: {}ms", DETECT_TIMEOUT_MS);
+
+            let (tx, rx) = mpsc::channel();
+            let ctx_clone = ctx.clone();
+            std::thread::spawn(move || {
+                let result = HwEncoder::available_encoders(ctx_clone, None);
+                let _ = tx.send(result);
+            });
+
+            match rx.recv_timeout(Duration::from_millis(DETECT_TIMEOUT_MS)) {
+                Ok(encoders) => encoders,
+                Err(_) => {
+                    warn!(
+                        "Encoder detection timed out after {}ms, skipping hardware detection",
+                        DETECT_TIMEOUT_MS
+                    );
+                    Vec::new()
+                }
+            }
+        };
 
         info!("Found {} encoders from hwcodec", all_encoders.len());
 
