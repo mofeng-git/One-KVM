@@ -145,7 +145,7 @@ pub struct OtgBackend {
 }
 
 /// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
-const HID_WRITE_TIMEOUT_MS: i32 = 500;
+const HID_WRITE_TIMEOUT_MS: i32 = 20;
 
 impl OtgBackend {
     /// Create OTG backend from device paths provided by OtgService
