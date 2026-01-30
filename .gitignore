@@ -39,3 +39,4 @@ CLAUDE.md
 
 # Secrets (compile-time configuration)
 secrets.toml
+.env
