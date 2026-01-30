@@ -316,28 +316,11 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
         Err(_) => return Vec::new(),
     };
 
-    // Build a map of interface name -> IPv4 address
-    let mut ipv4_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    for ifaddr in all_addrs {
-        // Skip loopback
-        if ifaddr.interface_name == "lo" {
-            continue;
-        }
-        // Only collect IPv4 addresses (skip if already have one for this interface)
-        if !ipv4_map.contains_key(&ifaddr.interface_name) {
-            if let Some(addr) = ifaddr.address {
-                if let Some(sockaddr_in) = addr.as_sockaddr_in() {
-                    ipv4_map.insert(ifaddr.interface_name.clone(), sockaddr_in.ip().to_string());
-                }
-            }
-        }
-    }
-
-    // Now check which interfaces are up
-    let mut addresses = Vec::new();
+    // Check which interfaces are up
+    let mut up_ifaces = std::collections::HashSet::new();
     let net_dir = match std::fs::read_dir("/sys/class/net") {
         Ok(dir) => dir,
-        Err(_) => return addresses,
+        Err(_) => return Vec::new(),
     };
 
     for entry in net_dir.flatten() {
@@ -361,12 +344,43 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
             continue;
         }
 
-        // Get IP from pre-fetched map
-        if let Some(ip) = ipv4_map.remove(&iface_name) {
-            addresses.push(NetworkAddress {
-                interface: iface_name,
-                ip,
-            });
+        up_ifaces.insert(iface_name);
+    }
+
+    let mut addresses = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for ifaddr in all_addrs {
+        let iface_name = &ifaddr.interface_name;
+        if iface_name == "lo" || !up_ifaces.contains(iface_name) {
+            continue;
+        }
+
+        if let Some(addr) = ifaddr.address {
+            if let Some(sockaddr_in) = addr.as_sockaddr_in() {
+                let ip = sockaddr_in.ip();
+                if ip.is_loopback() {
+                    continue;
+                }
+                let ip_str = ip.to_string();
+                if seen.insert((iface_name.clone(), ip_str.clone())) {
+                    addresses.push(NetworkAddress {
+                        interface: iface_name.clone(),
+                        ip: ip_str,
+                    });
+                }
+            } else if let Some(sockaddr_in6) = addr.as_sockaddr_in6() {
+                let ip = sockaddr_in6.ip();
+                if ip.is_loopback() || ip.is_unspecified() || ip.is_unicast_link_local() {
+                    continue;
+                }
+                let ip_str = ip.to_string();
+                if seen.insert((iface_name.clone(), ip_str.clone())) {
+                    addresses.push(NetworkAddress {
+                        interface: iface_name.clone(),
+                        ip: ip_str,
+                    });
+                }
+            }
         }
     }
 

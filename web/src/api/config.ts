@@ -336,6 +336,7 @@ export const rustdeskConfigApi = {
 export interface WebConfig {
   http_port: number
   https_port: number
+  bind_addresses: string[]
   bind_address: string
   https_enabled: boolean
 }
@@ -344,6 +345,7 @@ export interface WebConfig {
 export interface WebConfigUpdate {
   http_port?: number
   https_port?: number
+  bind_addresses?: string[]
   bind_address?: string
   https_enabled?: boolean
 }

@@ -576,7 +576,9 @@ pub struct WebConfig {
     pub http_port: u16,
     /// HTTPS port
     pub https_port: u16,
-    /// Bind address
+    /// Bind addresses (preferred)
+    pub bind_addresses: Vec<String>,
+    /// Bind address (legacy)
     pub bind_address: String,
     /// Enable HTTPS
     pub https_enabled: bool,
@@ -591,6 +593,7 @@ impl Default for WebConfig {
         Self {
             http_port: 8080,
             https_port: 8443,
+            bind_addresses: Vec::new(),
             bind_address: "0.0.0.0".to_string(),
             https_enabled: false,
             ssl_cert_path: None,

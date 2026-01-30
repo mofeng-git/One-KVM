@@ -72,6 +72,7 @@ import {
   Square,
   ChevronRight,
   Plus,
+  Trash2,
   ExternalLink,
   Copy,
   ScreenShare,
@@ -196,11 +197,32 @@ const webServerConfig = ref<WebConfig>({
   http_port: 8080,
   https_port: 8443,
   bind_address: '0.0.0.0',
+  bind_addresses: ['0.0.0.0'],
   https_enabled: false,
 })
 const webServerLoading = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
+type BindMode = 'all' | 'loopback' | 'custom'
+const bindMode = ref<BindMode>('all')
+const bindAllIpv6 = ref(false)
+const bindLocalIpv6 = ref(false)
+const bindAddressList = ref<string[]>([])
+const bindAddressError = computed(() => {
+  if (bindMode.value !== 'custom') return ''
+  return normalizeBindAddresses(bindAddressList.value).length
+    ? ''
+    : t('settings.bindAddressListEmpty')
+})
+const effectiveBindAddresses = computed(() => {
+  if (bindMode.value === 'all') {
+    return bindAllIpv6.value ? ['0.0.0.0', '::'] : ['0.0.0.0']
+  }
+  if (bindMode.value === 'loopback') {
+    return bindLocalIpv6.value ? ['127.0.0.1', '::1'] : ['127.0.0.1']
+  }
+  return normalizeBindAddresses(bindAddressList.value)
+})
 
 // Config
 interface DeviceConfig {
@@ -317,6 +339,12 @@ const validateHex = (event: Event, _field: string) => {
 watch(() => config.value.msd_enabled, (enabled) => {
   if (!enabled && activeSection.value === 'msd') {
     activeSection.value = 'hid'
+  }
+})
+
+watch(bindMode, (mode) => {
+  if (mode === 'custom' && bindAddressList.value.length === 0) {
+    bindAddressList.value = ['']
   }
 })
 
@@ -987,20 +1015,72 @@ function normalizeRustdeskServer(value: string, defaultPort: number): string | u
   return `${trimmed}:${defaultPort}`
 }
 
+function normalizeBindAddresses(addresses: string[]): string[] {
+  return addresses.map(addr => addr.trim()).filter(Boolean)
+}
+
+function applyBindStateFromConfig(config: WebConfig) {
+  const rawAddrs =
+    config.bind_addresses && config.bind_addresses.length > 0
+      ? config.bind_addresses
+      : config.bind_address
+        ? [config.bind_address]
+        : []
+  const addrs = normalizeBindAddresses(rawAddrs)
+  const isAll = addrs.length > 0 && addrs.every(addr => addr === '0.0.0.0' || addr === '::') && addrs.includes('0.0.0.0')
+  const isLoopback =
+    addrs.length > 0 &&
+    addrs.every(addr => addr === '127.0.0.1' || addr === '::1') &&
+    addrs.includes('127.0.0.1')
+  if (isAll) {
+    bindMode.value = 'all'
+    bindAllIpv6.value = addrs.includes('::')
+    return
+  }
+  if (isLoopback) {
+    bindMode.value = 'loopback'
+    bindLocalIpv6.value = addrs.includes('::1')
+    return
+  }
+  bindMode.value = 'custom'
+  bindAddressList.value = addrs.length ? [...addrs] : ['']
+}
+
+function addBindAddress() {
+  bindAddressList.value.push('')
+}
+
+function removeBindAddress(index: number) {
+  bindAddressList.value.splice(index, 1)
+  if (bindAddressList.value.length === 0) {
+    bindAddressList.value.push('')
+  }
+}
+
 // Web server config functions
 async function loadWebServerConfig() {
   try {
     const config = await webConfigApi.get()
     webServerConfig.value = config
+    applyBindStateFromConfig(config)
   } catch (e) {
     console.error('Failed to load web server config:', e)
   }
 }
 
 async function saveWebServerConfig() {
+  if (bindAddressError.value) return
   webServerLoading.value = true
   try {
-    await webConfigApi.update(webServerConfig.value)
+    const update = {
+      http_port: webServerConfig.value.http_port,
+      https_port: webServerConfig.value.https_port,
+      https_enabled: webServerConfig.value.https_enabled,
+      bind_addresses: effectiveBindAddresses.value,
+    }
+    const updated = await webConfigApi.update(update)
+    webServerConfig.value = updated
+    applyBindStateFromConfig(updated)
     showRestartDialog.value = true
   } catch (e) {
     console.error('Failed to save web server config:', e)
@@ -1687,13 +1767,51 @@ onMounted(async () => {
                 </div>
 
                 <div class="space-y-2">
-                  <Label>{{ t('settings.bindAddress') }}</Label>
-                  <Input v-model="webServerConfig.bind_address" placeholder="0.0.0.0" />
-                  <p class="text-sm text-muted-foreground">{{ t('settings.bindAddressDesc') }}</p>
+                  <Label>{{ t('settings.bindMode') }}</Label>
+                  <select v-model="bindMode" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                    <option value="all">{{ t('settings.bindModeAll') }}</option>
+                    <option value="loopback">{{ t('settings.bindModeLocal') }}</option>
+                    <option value="custom">{{ t('settings.bindModeCustom') }}</option>
+                  </select>
+                  <p class="text-sm text-muted-foreground">{{ t('settings.bindModeDesc') }}</p>
+                </div>
+
+                <div v-if="bindMode === 'all'" class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.bindIpv6') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.bindAllDesc') }}</p>
+                  </div>
+                  <Switch v-model="bindAllIpv6" />
+                </div>
+
+                <div v-if="bindMode === 'loopback'" class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.bindIpv6') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.bindLocalDesc') }}</p>
+                  </div>
+                  <Switch v-model="bindLocalIpv6" />
+                </div>
+
+                <div v-if="bindMode === 'custom'" class="space-y-2">
+                  <Label>{{ t('settings.bindAddressList') }}</Label>
+                  <div class="space-y-2">
+                    <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
+                      <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
+                      <Button variant="ghost" size="icon" @click="removeBindAddress(i)">
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button variant="outline" size="sm" @click="addBindAddress">
+                      <Plus class="h-4 w-4 mr-1" />
+                      {{ t('settings.addBindAddress') }}
+                    </Button>
+                  </div>
+                  <p class="text-xs text-muted-foreground">{{ t('settings.bindAddressListDesc') }}</p>
+                  <p v-if="bindAddressError" class="text-xs text-destructive">{{ bindAddressError }}</p>
                 </div>
 
                 <div class="flex justify-end pt-4">
-                  <Button @click="saveWebServerConfig" :disabled="webServerLoading">
+                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError">
                     <Save class="h-4 w-4 mr-2" />
                     {{ t('common.save') }}
                   </Button>

@@ -610,6 +610,7 @@ impl RustDeskConfigUpdate {
 pub struct WebConfigUpdate {
     pub http_port: Option<u16>,
     pub https_port: Option<u16>,
+    pub bind_addresses: Option<Vec<String>>,
     pub bind_address: Option<String>,
     pub https_enabled: Option<bool>,
 }
@@ -624,6 +625,13 @@ impl WebConfigUpdate {
         if let Some(port) = self.https_port {
             if port == 0 {
                 return Err(AppError::BadRequest("HTTPS port cannot be 0".into()));
+            }
+        }
+        if let Some(ref addrs) = self.bind_addresses {
+            for addr in addrs {
+                if addr.parse::<std::net::IpAddr>().is_err() {
+                    return Err(AppError::BadRequest("Invalid bind address".into()));
+                }
             }
         }
         if let Some(ref addr) = self.bind_address {
@@ -641,8 +649,16 @@ impl WebConfigUpdate {
         if let Some(port) = self.https_port {
             config.https_port = port;
         }
-        if let Some(ref addr) = self.bind_address {
+        if let Some(ref addrs) = self.bind_addresses {
+            config.bind_addresses = addrs.clone();
+            if let Some(first) = addrs.first() {
+                config.bind_address = first.clone();
+            }
+        } else if let Some(ref addr) = self.bind_address {
             config.bind_address = addr.clone();
+            if config.bind_addresses.is_empty() {
+                config.bind_addresses = vec![addr.clone()];
+            }
         }
         if let Some(enabled) = self.https_enabled {
             config.https_enabled = enabled;

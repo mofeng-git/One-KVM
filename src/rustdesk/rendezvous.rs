@@ -4,7 +4,7 @@
 //! It registers the device ID and public key, handles punch hole requests,
 //! and relay requests.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -14,6 +14,8 @@ use tokio::net::UdpSocket;
 use tokio::sync::broadcast;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
+
+use crate::utils::bind_udp_socket;
 
 use super::config::RustDeskConfig;
 use super::crypto::{KeyPair, SigningKeyPair};
@@ -288,8 +290,13 @@ impl RendezvousMediator {
             .next()
             .ok_or_else(|| anyhow::anyhow!("Failed to resolve {}", addr))?;
 
-        // Create UDP socket
-        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        // Create UDP socket (match address family, enforce IPV6_V6ONLY)
+        let bind_addr = match server_addr {
+            SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+            SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+        };
+        let std_socket = bind_udp_socket(bind_addr)?;
+        let socket = UdpSocket::from_std(std_socket)?;
         socket.connect(server_addr).await?;
 
         info!("Connected to rendezvous server at {}", server_addr);

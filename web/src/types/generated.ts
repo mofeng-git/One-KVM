@@ -282,7 +282,9 @@ export interface WebConfig {
 	http_port: number;
 	/** HTTPS port */
 	https_port: number;
-	/** Bind address */
+	/** Bind addresses (preferred) */
+	bind_addresses: string[];
+	/** Bind address (legacy) */
 	bind_address: string;
 	/** Enable HTTPS */
 	https_enabled: boolean;
@@ -625,6 +627,7 @@ export interface VideoConfigUpdate {
 export interface WebConfigUpdate {
 	http_port?: number;
 	https_port?: number;
+	bind_addresses?: string[];
 	bind_address?: string;
 	https_enabled?: boolean;
 }
