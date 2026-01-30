@@ -46,16 +46,30 @@ function t(key: string, params?: Record<string, unknown>): string {
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // Check if system needs setup
-  if (!authStore.initialized && to.name !== 'Setup') {
+  // Prevent access to setup after initialization
+  const shouldCheckSetup = to.name === 'Setup' || !authStore.initialized
+  if (shouldCheckSetup) {
     try {
       await authStore.checkSetupStatus()
-      if (authStore.needsSetup) {
-        return next({ name: 'Setup' })
-      }
     } catch {
       // Continue anyway
     }
+  }
+
+  if (authStore.needsSetup) {
+    if (to.name !== 'Setup') {
+      return next({ name: 'Setup' })
+    }
+  } else if (authStore.initialized && to.name === 'Setup') {
+    if (!authStore.isAuthenticated) {
+      try {
+        await authStore.checkAuth()
+      } catch {
+        // Not authenticated
+      }
+    }
+
+    return next({ name: authStore.isAuthenticated ? 'Console' : 'Login' })
   }
 
   // Check authentication for protected routes
