@@ -162,10 +162,19 @@ int linux_support_v4l2m2m() {
   };
 
   // Check common V4L2 M2M device paths used by various ARM SoCs
+  // /dev/video10 - Standard on many SoCs
+  // /dev/video11 - Standard on many SoCs (often decoder)
+  // /dev/video0 - Some platforms (like RPi) might use this
+  // /dev/video1 - Alternate RPi path
+  // /dev/video2 - Alternate path
+  // /dev/video32 - Some Allwinner/Rockchip legacy
   const char *m2m_devices[] = {
-    "/dev/video10",  // Common M2M encoder device
-    "/dev/video11",  // Common M2M decoder device
-    "/dev/video0",   // Some SoCs use video0 for M2M
+    "/dev/video10",
+    "/dev/video11",
+    "/dev/video0",
+    "/dev/video1",
+    "/dev/video2",
+    "/dev/video32",
   };
 
   for (size_t i = 0; i < sizeof(m2m_devices) / sizeof(m2m_devices[0]); i++) {

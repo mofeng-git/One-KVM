@@ -712,10 +712,13 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
     let env_filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
 
-    tracing_subscriber::registry()
+    if let Err(err) = tracing_subscriber::registry()
         .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init()
+    {
+        eprintln!("failed to initialize tracing: {}", err);
+    }
 }
 
 /// Get the application data directory
