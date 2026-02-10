@@ -3,9 +3,13 @@
 
 FROM debian:11
 
+# Linux headers used by v4l2r bindgen
+ARG LINUX_HEADERS_VERSION=6.6
+ARG LINUX_HEADERS_SHA256=
+
 # Set Rustup mirrors (Aliyun)
-ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
-    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+#ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
+#    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
 
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libclang-dev \
     llvm \
     wget \
+    xz-utils \
     # Autotools for libopus (requires autoreconf)
     autoconf \
     automake \
@@ -37,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2-dev \
     libv4l-dev \
     libudev-dev \
+    linux-libc-dev \
     zlib1g-dev \
     # Note: libjpeg-turbo, libx264, libx265, libopus are built from source below for static linking
     libva-dev \
@@ -48,6 +54,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxau-dev \
     libxdmcp-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install newer V4L2 headers for v4l2r bindgen
+RUN mkdir -p /opt/v4l2-headers \
+    && wget -q https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${LINUX_HEADERS_VERSION}.tar.xz -O /tmp/linux-headers.tar.xz \
+    && if [ -n "$LINUX_HEADERS_SHA256" ]; then echo "$LINUX_HEADERS_SHA256  /tmp/linux-headers.tar.xz" | sha256sum -c -; fi \
+    && tar -xf /tmp/linux-headers.tar.xz -C /tmp \
+    && cd /tmp/linux-${LINUX_HEADERS_VERSION} \
+    && make ARCH=x86 headers_install INSTALL_HDR_PATH=/opt/v4l2-headers \
+    && rm -rf /tmp/linux-${LINUX_HEADERS_VERSION} /tmp/linux-headers.tar.xz
+
+ENV V4L2R_VIDEODEV2_H_PATH=/opt/v4l2-headers/include
 
 # Build static libjpeg-turbo from source (needed by libyuv)
 RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
