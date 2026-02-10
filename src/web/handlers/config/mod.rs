@@ -50,10 +50,26 @@ use std::sync::Arc;
 use crate::config::AppConfig;
 use crate::state::AppState;
 
+fn sanitize_config_for_api(config: &mut AppConfig) {
+    // Auth secrets
+    config.auth.totp_secret = None;
+
+    // Stream secrets
+    config.stream.turn_password = None;
+
+    // RustDesk secrets
+    config.rustdesk.device_password.clear();
+    config.rustdesk.relay_key = None;
+    config.rustdesk.public_key = None;
+    config.rustdesk.private_key = None;
+    config.rustdesk.signing_public_key = None;
+    config.rustdesk.signing_private_key = None;
+}
+
 /// 获取完整配置
 pub async fn get_all_config(State(state): State<Arc<AppState>>) -> Json<AppConfig> {
     let mut config = (*state.config.get()).clone();
     // 不暴露敏感信息
-    config.auth.totp_secret = None;
+    sanitize_config_for_api(&mut config);
     Json(config)
 }

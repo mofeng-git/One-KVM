@@ -1260,6 +1260,7 @@ onMounted(async () => {
           <SheetTrigger as-child>
             <Button variant="ghost" size="icon" class="mr-2 h-9 w-9">
               <Menu class="h-4 w-4" />
+              <span class="sr-only">{{ t('common.menu') }}</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" class="w-72 p-0">
@@ -1269,6 +1270,7 @@ onMounted(async () => {
                 <div v-for="group in navGroups" :key="group.title" class="space-y-1">
                   <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
                   <button
+                    type="button"
                     v-for="item in group.items"
                     :key="item.id"
                     @click="selectSection(item.id)"
@@ -1299,6 +1301,7 @@ onMounted(async () => {
             <div v-for="group in navGroups" :key="group.title" class="space-y-1">
               <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
               <button
+                type="button"
                 v-for="item in group.items"
                 :key="item.id"
                 @click="activeSection = item.id"
@@ -1424,7 +1427,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.videoSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.videoSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -1533,6 +1536,7 @@ onMounted(async () => {
                       <button
                         type="button"
                         class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                         @click="showPasswords = !showPasswords"
                       >
                         <Eye v-if="!showPasswords" class="h-4 w-4" />
@@ -1557,7 +1561,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.hidSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.hidSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -1779,7 +1783,7 @@ onMounted(async () => {
                   <div class="space-y-2">
                     <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
                       <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
-                      <Button variant="ghost" size="icon" @click="removeBindAddress(i)">
+                      <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeBindAddress(i)">
                         <Trash2 class="h-4 w-4" />
                       </Button>
                     </div>
@@ -1873,7 +1877,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.atxSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.atxSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadAtxDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadAtxDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -2118,7 +2122,7 @@ onMounted(async () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.ttyd = !showLogs.ttyd; if (showLogs.ttyd) refreshExtensionLogs('ttyd')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.ttyd = !showLogs.ttyd; if (showLogs.ttyd) refreshExtensionLogs('ttyd')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2212,7 +2216,7 @@ onMounted(async () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.gostc = !showLogs.gostc; if (showLogs.gostc) refreshExtensionLogs('gostc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.gostc = !showLogs.gostc; if (showLogs.gostc) refreshExtensionLogs('gostc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2299,7 +2303,7 @@ onMounted(async () => {
                       <div class="sm:col-span-3 space-y-2">
                         <div v-for="(_, i) in extConfig.easytier.peer_urls" :key="i" class="flex gap-2">
                           <Input v-model="extConfig.easytier.peer_urls[i]" placeholder="tcp://1.2.3.4:11010" :disabled="isExtRunning(extensions?.easytier?.status)" />
-                          <Button variant="ghost" size="icon" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
+                          <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
                             <Trash2 class="h-4 w-4" />
                           </Button>
                         </div>
@@ -2319,7 +2323,7 @@ onMounted(async () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.easytier = !showLogs.easytier; if (showLogs.easytier) refreshExtensionLogs('easytier')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.easytier = !showLogs.easytier; if (showLogs.easytier) refreshExtensionLogs('easytier')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2355,7 +2359,7 @@ onMounted(async () => {
                     <Badge :variant="rustdeskStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}
                     </Badge>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
                       <RefreshCw :class="['h-4 w-4', rustdeskLoading ? 'animate-spin' : '']" />
                     </Button>
                   </div>
@@ -2450,6 +2454,7 @@ onMounted(async () => {
                         variant="ghost"
                         size="icon"
                         class="h-8 w-8"
+                        :aria-label="t('extensions.rustdesk.copyId')"
                         @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
                         :disabled="!rustdeskConfig?.device_id"
                       >
@@ -2472,6 +2477,7 @@ onMounted(async () => {
                         variant="ghost"
                         size="icon"
                         class="h-8 w-8"
+                        :aria-label="t('extensions.rustdesk.copyPassword')"
                         @click="copyToClipboard(rustdeskPassword?.device_password || '', 'password')"
                         :disabled="!rustdeskPassword?.device_password"
                       >
@@ -2583,7 +2589,7 @@ onMounted(async () => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="max-w-[95vw] w-[1200px] h-[600px] p-0 flex flex-col overflow-hidden">
+      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-4 py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
@@ -2595,6 +2601,7 @@ onMounted(async () => {
               size="icon"
               class="h-8 w-8 mr-8"
               @click="openTerminalInNewTab"
+              :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
               <ExternalLink class="h-4 w-4" />

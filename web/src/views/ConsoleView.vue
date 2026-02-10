@@ -1897,7 +1897,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-background">
+  <div class="h-screen h-dvh flex flex-col bg-background">
     <!-- Header -->
     <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div class="px-4">
@@ -1960,13 +1960,13 @@ onUnmounted(() => {
             <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
 
             <!-- Theme Toggle -->
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleTheme">
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
               <Sun v-if="isDark" class="h-4 w-4" />
               <Moon v-else class="h-4 w-4" />
             </Button>
 
             <!-- Language Toggle -->
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleLanguage">
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleLanguage')" @click="toggleLanguage">
               <Languages class="h-4 w-4" />
             </Button>
 
@@ -2221,7 +2221,7 @@ onUnmounted(() => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="max-w-[95vw] w-[1200px] h-[600px] p-0 flex flex-col overflow-hidden">
+      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-4 py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
@@ -2233,6 +2233,7 @@ onUnmounted(() => {
               size="icon"
               class="h-8 w-8 mr-8"
               @click="openTerminalInNewTab"
+              :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
               <ExternalLink class="h-4 w-4" />

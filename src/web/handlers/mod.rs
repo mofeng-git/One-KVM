@@ -589,11 +589,8 @@ pub async fn setup_init(
         ));
     }
 
-    // Create admin user
-    state
-        .users
-        .create(&req.username, &req.password, true)
-        .await?;
+    // Create single system user
+    state.users.create(&req.username, &req.password).await?;
 
     // Update config
     state
@@ -771,10 +768,7 @@ pub async fn setup_init(
         }
     }
 
-    tracing::info!(
-        "System initialized successfully with admin user: {}",
-        req.username
-    );
+    tracing::info!("System initialized successfully");
 
     Ok(Json(LoginResponse {
         success: true,
@@ -799,7 +793,7 @@ pub async fn update_config(
     // Keep old config for rollback
     let old_config = state.config.get();
 
-    tracing::info!("Received config update: {:?}", req.updates);
+    tracing::info!("Received config update request");
 
     // Validate and merge config first (outside the update closure)
     let config_json = serde_json::to_value(&old_config)
@@ -807,8 +801,6 @@ pub async fn update_config(
 
     let merged = merge_json(config_json, req.updates.clone())
         .map_err(|_| AppError::Internal("Failed to merge config".to_string()))?;
-
-    tracing::debug!("Merged config: {:?}", merged);
 
     let new_config: AppConfig = serde_json::from_value(merged)
         .map_err(|e| AppError::BadRequest(format!("Invalid config format: {}", e)))?;

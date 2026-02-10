@@ -139,7 +139,7 @@ pub async fn regenerate_device_password(
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
-/// 获取设备密码（管理员专用）
+/// 获取设备密码（已认证用户）
 pub async fn get_device_password(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let config = state.config.get().rustdesk.clone();
     Json(serde_json::json!({
