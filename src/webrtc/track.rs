@@ -199,7 +199,7 @@ impl VideoTrack {
         let data = frame.data();
         let max_payload_size = 1200; // MTU - headers
 
-        let packet_count = (data.len() + max_payload_size - 1) / max_payload_size;
+        let packet_count = data.len().div_ceil(max_payload_size);
         let mut bytes_sent = 0u64;
 
         for i in 0..packet_count {

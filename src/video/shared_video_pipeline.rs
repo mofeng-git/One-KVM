@@ -36,9 +36,6 @@ use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::video::convert::{Nv12Converter, PixelConverter};
 use crate::video::decoder::MjpegTurboDecoder;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-use hwcodec::ffmpeg_hw::{last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline};
-use crate::video::v4l2r_capture::V4l2rCaptureStream;
 use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
 use crate::video::encoder::h265::{
     detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
@@ -49,6 +46,11 @@ use crate::video::encoder::vp8::{detect_best_vp8_encoder, VP8Config, VP8Encoder}
 use crate::video::encoder::vp9::{detect_best_vp9_encoder, VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
+use crate::video::v4l2r_capture::V4l2rCaptureStream;
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use hwcodec::ffmpeg_hw::{
+    last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline,
+};
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -508,7 +510,10 @@ impl SharedVideoPipeline {
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if needs_mjpeg_decode
             && is_rkmpp_encoder
-            && matches!(config.output_codec, VideoEncoderType::H264 | VideoEncoderType::H265)
+            && matches!(
+                config.output_codec,
+                VideoEncoderType::H264 | VideoEncoderType::H265
+            )
         {
             info!(
                 "Initializing FFmpeg HW MJPEG->{} pipeline (no fallback)",
@@ -525,7 +530,11 @@ impl SharedVideoPipeline {
                 thread_count: 1,
             };
             let pipeline = HwMjpegH26xPipeline::new(hw_config).map_err(|e| {
-                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                let detail = if e.is_empty() {
+                    ffmpeg_hw_last_error()
+                } else {
+                    e
+                };
                 AppError::VideoError(format!(
                     "FFmpeg HW MJPEG->{} init failed: {}",
                     config.output_codec, detail
@@ -899,7 +908,11 @@ impl SharedVideoPipeline {
 
     /// Get subscriber count
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.read().iter().filter(|tx| !tx.is_closed()).count()
+        self.subscribers
+            .read()
+            .iter()
+            .filter(|tx| !tx.is_closed())
+            .count()
     }
 
     /// Report that a receiver has lagged behind
@@ -948,7 +961,11 @@ impl SharedVideoPipeline {
                         pipeline
                             .reconfigure(bitrate_kbps as i32, gop as i32)
                             .map_err(|e| {
-                                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                                let detail = if e.is_empty() {
+                                    ffmpeg_hw_last_error()
+                                } else {
+                                    e
+                                };
                                 AppError::VideoError(format!(
                                     "FFmpeg HW reconfigure failed: {}",
                                     detail
@@ -1364,8 +1381,7 @@ impl SharedVideoPipeline {
                                         error!("Capture error: {}", e);
                                     }
                                 } else {
-                                    let counter =
-                                        suppressed_capture_errors.entry(key).or_insert(0);
+                                    let counter = suppressed_capture_errors.entry(key).or_insert(0);
                                     *counter = counter.saturating_add(1);
                                 }
                             }
@@ -1380,7 +1396,7 @@ impl SharedVideoPipeline {
 
                     validate_counter = validate_counter.wrapping_add(1);
                     if pixel_format.is_compressed()
-                        && validate_counter % JPEG_VALIDATE_INTERVAL == 0
+                        && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
                         && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
                     {
                         continue;
@@ -1401,7 +1417,6 @@ impl SharedVideoPipeline {
                         *guard = Some(frame);
                     }
                     let _ = frame_seq_tx.send(sequence);
-
                 }
 
                 pipeline.running_flag.store(false, Ordering::Release);
@@ -1466,7 +1481,11 @@ impl SharedVideoPipeline {
             }
 
             let packet = pipeline.encode(raw_frame, pts_ms).map_err(|e| {
-                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                let detail = if e.is_empty() {
+                    ffmpeg_hw_last_error()
+                } else {
+                    e
+                };
                 AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
             })?;
 
@@ -1486,9 +1505,10 @@ impl SharedVideoPipeline {
         }
 
         let decoded_buf = if input_format.is_compressed() {
-            let decoder = state.mjpeg_decoder.as_mut().ok_or_else(|| {
-                AppError::VideoError("MJPEG decoder not initialized".to_string())
-            })?;
+            let decoder = state
+                .mjpeg_decoder
+                .as_mut()
+                .ok_or_else(|| AppError::VideoError("MJPEG decoder not initialized".to_string()))?;
             let decoded = decoder.decode(raw_frame)?;
             Some(decoded)
         } else {
@@ -1518,16 +1538,18 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
-        let encode_result = if needs_yuv420p && state.yuv420p_converter.is_some() {
+        let encode_result = if needs_yuv420p {
             // Software encoder with direct input conversion to YUV420P
-            let conv = state.yuv420p_converter.as_mut().unwrap();
-            let yuv420p_data = conv
-                .convert(raw_frame)
-                .map_err(|e| AppError::VideoError(format!("YUV420P conversion failed: {}", e)))?;
-            encoder.encode_raw(yuv420p_data, pts_ms)
-        } else if state.nv12_converter.is_some() {
+            if let Some(conv) = state.yuv420p_converter.as_mut() {
+                let yuv420p_data = conv.convert(raw_frame).map_err(|e| {
+                    AppError::VideoError(format!("YUV420P conversion failed: {}", e))
+                })?;
+                encoder.encode_raw(yuv420p_data, pts_ms)
+            } else {
+                encoder.encode_raw(raw_frame, pts_ms)
+            }
+        } else if let Some(conv) = state.nv12_converter.as_mut() {
             // Hardware encoder with input conversion to NV12
-            let conv = state.nv12_converter.as_mut().unwrap();
             let nv12_data = conv
                 .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?;

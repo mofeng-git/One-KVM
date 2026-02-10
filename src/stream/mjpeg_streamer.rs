@@ -15,16 +15,16 @@
 //!
 //! Note: Audio WebSocket is handled separately by audio_ws.rs (/api/ws/audio)
 
-use std::io;
+use crate::utils::LogThrottler;
+use crate::video::v4l2r_capture::V4l2rCaptureStream;
 use std::collections::HashMap;
+use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn};
-use crate::video::v4l2r_capture::V4l2rCaptureStream;
-use crate::utils::LogThrottler;
 
 use crate::audio::AudioController;
 use crate::error::{AppError, Result};
@@ -624,7 +624,7 @@ impl MjpegStreamer {
 
             validate_counter = validate_counter.wrapping_add(1);
             if pixel_format.is_compressed()
-                && validate_counter % JPEG_VALIDATE_INTERVAL == 0
+                && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
                 && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
             {
                 continue;

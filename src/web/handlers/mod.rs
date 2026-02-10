@@ -205,7 +205,7 @@ fn get_cpu_model() -> String {
                 .count();
             Some(format!("{} {}C", std::env::consts::ARCH, cores))
         })
-        .unwrap_or_else(|| format!("{}", std::env::consts::ARCH))
+        .unwrap_or_else(|| std::env::consts::ARCH.to_string())
 }
 
 /// CPU usage state for calculating usage between samples
@@ -686,8 +686,7 @@ pub async fn setup_init(
 
     if matches!(new_config.hid.backend, crate::config::HidBackend::Otg) {
         let mut hid_functions = new_config.hid.effective_otg_functions();
-        if let Some(udc) =
-            crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
+        if let Some(udc) = crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
         {
             if crate::otg::configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
                 tracing::warn!(
@@ -1842,12 +1841,12 @@ pub async fn mjpeg_stream(
                         break;
                     }
                     // Send last frame again to keep connection alive
-                    if let Some(frame) = handler_clone.current_frame() {
-                        if frame.is_valid_jpeg() {
-                            if tx.send(create_mjpeg_part(frame.data())).await.is_err() {
-                                break;
-                            }
-                        }
+                    let Some(frame) = handler_clone.current_frame() else {
+                        continue;
+                    };
+
+                    if frame.is_valid_jpeg() && tx.send(create_mjpeg_part(frame.data())).await.is_err() {
+                        break;
                     }
                 }
             }
@@ -1866,7 +1865,7 @@ pub async fn mjpeg_stream(
             yield Ok::<bytes::Bytes, std::io::Error>(data);
             // Record FPS after yield - data has been handed to Axum/hyper
             // This is closer to actual TCP send than recording at tx.send()
-            handler_for_stream.record_frame_sent(&guard_for_stream.id());
+            handler_for_stream.record_frame_sent(guard_for_stream.id());
         }
     };
 
@@ -2516,7 +2515,7 @@ pub async fn msd_drive_download(
     let (file_size, mut rx) = drive.read_file_stream(&file_path).await?;
 
     // Extract filename for Content-Disposition
-    let filename = file_path.split('/').last().unwrap_or("download");
+    let filename = file_path.split('/').next_back().unwrap_or("download");
 
     // Create a stream from the channel receiver
     let body_stream = async_stream::stream! {

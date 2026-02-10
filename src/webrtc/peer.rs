@@ -93,7 +93,6 @@ impl PeerConnection {
                 urls: turn.urls.clone(),
                 username: turn.username.clone(),
                 credential: turn.credential.clone(),
-                ..Default::default()
             });
         }
 

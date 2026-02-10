@@ -31,12 +31,14 @@ fn init_hwcodec_logging() {
 
 /// VP8 encoder type (detected from hwcodec)
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VP8EncoderType {
     /// VAAPI (Intel on Linux)
     Vaapi,
     /// Software encoder (libvpx)
     Software,
     /// No encoder available
+    #[default]
     None,
 }
 
@@ -50,11 +52,6 @@ impl std::fmt::Display for VP8EncoderType {
     }
 }
 
-impl Default for VP8EncoderType {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 impl From<EncoderBackend> for VP8EncoderType {
     fn from(backend: EncoderBackend) -> Self {
@@ -68,18 +65,15 @@ impl From<EncoderBackend> for VP8EncoderType {
 
 /// Input pixel format for VP8 encoder
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VP8InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane
+    #[default]
     Nv12,
 }
 
-impl Default for VP8InputFormat {
-    fn default() -> Self {
-        Self::Nv12 // Default to NV12 for VAAPI compatibility
-    }
-}
 
 /// VP8 encoder configuration
 #[derive(Debug, Clone)]
@@ -180,8 +174,6 @@ pub fn detect_best_vp8_encoder(width: u32, height: u32) -> (VP8EncoderType, Opti
 
     let encoder_type = if codec.name.contains("vaapi") {
         VP8EncoderType::Vaapi
-    } else if codec.name.contains("libvpx") {
-        VP8EncoderType::Software
     } else {
         VP8EncoderType::Software // Default to software for unknown
     };

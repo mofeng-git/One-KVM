@@ -36,8 +36,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
 use crate::hid::HidController;
-use crate::video::stream_manager::VideoStreamManager;
 use crate::utils::bind_tcp_listener;
+use crate::video::stream_manager::VideoStreamManager;
 
 use self::config::RustDeskConfig;
 use self::connection::ConnectionManager;
@@ -559,6 +559,7 @@ impl RustDeskService {
 /// 2. Send RelayResponse with client's socket_addr
 /// 3. Connect to RELAY server
 /// 4. Accept connection without waiting for response
+#[allow(clippy::too_many_arguments)]
 async fn handle_relay_request(
     rendezvous_addr: &str,
     relay_server: &str,

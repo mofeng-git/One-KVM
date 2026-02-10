@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
-use v4l2r::nix::errno::Errno;
 use v4l2r::bindings::{v4l2_frmivalenum, v4l2_frmsizeenum};
 use v4l2r::ioctl::{
     self, Capabilities, Capability as V4l2rCapability, FormatIterator, FrmIvalTypes, FrmSizeTypes,
 };
+use v4l2r::nix::errno::Errno;
 use v4l2r::{Format as V4l2rFormat, QueueType};
 
 use super::format::{PixelFormat, Resolution};
@@ -96,7 +96,9 @@ impl VideoDevice {
             .read(true)
             .write(true)
             .open(&path)
-            .map_err(|e| AppError::VideoError(format!("Failed to open device {:?}: {}", path, e)))?;
+            .map_err(|e| {
+                AppError::VideoError(format!("Failed to open device {:?}: {}", path, e))
+            })?;
 
         Ok(Self { path, fd })
     }
@@ -106,10 +108,9 @@ impl VideoDevice {
         let path = path.as_ref().to_path_buf();
         debug!("Opening video device (read-only): {:?}", path);
 
-        let fd = File::options()
-            .read(true)
-            .open(&path)
-            .map_err(|e| AppError::VideoError(format!("Failed to open device {:?}: {}", path, e)))?;
+        let fd = File::options().read(true).open(&path).map_err(|e| {
+            AppError::VideoError(format!("Failed to open device {:?}: {}", path, e))
+        })?;
 
         Ok(Self { path, fd })
     }
@@ -206,8 +207,9 @@ impl VideoDevice {
                     if let Some(size) = size.size() {
                         match size {
                             FrmSizeTypes::Discrete(d) => {
-                                let fps =
-                                    self.enumerate_fps(fourcc, d.width, d.height).unwrap_or_default();
+                                let fps = self
+                                    .enumerate_fps(fourcc, d.width, d.height)
+                                    .unwrap_or_default();
                                 resolutions.push(ResolutionInfo::new(d.width, d.height, fps));
                             }
                             FrmSizeTypes::StepWise(s) => {
@@ -225,7 +227,8 @@ impl VideoDevice {
                                         let fps = self
                                             .enumerate_fps(fourcc, res.width, res.height)
                                             .unwrap_or_default();
-                                        resolutions.push(ResolutionInfo::new(res.width, res.height, fps));
+                                        resolutions
+                                            .push(ResolutionInfo::new(res.width, res.height, fps));
                                     }
                                 }
                             }
@@ -265,11 +268,7 @@ impl VideoDevice {
         let mut index = 0u32;
         loop {
             match ioctl::enum_frame_intervals::<v4l2_frmivalenum>(
-                &self.fd,
-                index,
-                fourcc,
-                width,
-                height,
+                &self.fd, index, fourcc, width, height,
             ) {
                 Ok(interval) => {
                     if let Some(interval) = interval.intervals() {
@@ -411,7 +410,7 @@ impl VideoDevice {
             .max()
             .unwrap_or(0);
 
-        priority += (max_resolution / 100000) as u32;
+        priority += max_resolution / 100000;
 
         // Known good drivers get bonus
         let good_drivers = ["uvcvideo", "tc358743"];
@@ -563,15 +562,7 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
     }
 
     let skip_hints = [
-        "codec",
-        "decoder",
-        "encoder",
-        "isp",
-        "mem2mem",
-        "m2m",
-        "vbi",
-        "radio",
-        "metadata",
+        "codec", "decoder", "encoder", "isp", "mem2mem", "m2m", "vbi", "radio", "metadata",
         "output",
     ];
     if skip_hints.iter().any(|hint| sysfs_name.contains(hint)) && !maybe_capture {

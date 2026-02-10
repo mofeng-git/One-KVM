@@ -191,9 +191,7 @@ pub async fn apply_hid_config(
 
     // Low-endpoint UDCs (e.g., musb) cannot handle consumer control endpoints reliably
     if new_config.backend == HidBackend::Otg {
-        if let Some(udc) =
-            crate::otg::configfs::resolve_udc_name(new_config.otg_udc.as_deref())
-        {
+        if let Some(udc) = crate::otg::configfs::resolve_udc_name(new_config.otg_udc.as_deref()) {
             if crate::otg::configfs::is_low_endpoint_udc(&udc) && new_hid_functions.consumer {
                 tracing::warn!(
                     "UDC {} has low endpoint resources, disabling consumer control",

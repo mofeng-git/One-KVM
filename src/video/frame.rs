@@ -81,6 +81,11 @@ impl FrameBuffer {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    /// Check if the frame buffer has no data
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }
 
 impl std::fmt::Debug for FrameBuffer {

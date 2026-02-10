@@ -64,6 +64,7 @@ pub struct AppState {
 
 impl AppState {
     /// Create new application state
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: ConfigStore,
         sessions: SessionStore,

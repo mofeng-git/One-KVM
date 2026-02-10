@@ -35,8 +35,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, trace, warn};
 
 use crate::audio::{AudioController, OpusFrame};
-use crate::events::EventBus;
 use crate::error::{AppError, Result};
+use crate::events::EventBus;
 use crate::hid::HidController;
 use crate::video::encoder::registry::EncoderBackend;
 use crate::video::encoder::registry::VideoEncoderType;
@@ -270,7 +270,6 @@ impl WebRtcStreamer {
             bitrate_preset: config.bitrate_preset,
             fps: config.fps,
             encoder_backend: config.encoder_backend,
-            ..Default::default()
         };
 
         info!("Creating shared video pipeline for {:?}", codec);
@@ -311,7 +310,9 @@ impl WebRtcStreamer {
                         }
                         drop(pipeline_guard);
 
-                        info!("Video pipeline stopped, but keeping capture config for new sessions");
+                        info!(
+                            "Video pipeline stopped, but keeping capture config for new sessions"
+                        );
                     }
                     break;
                 }
@@ -926,10 +927,7 @@ impl WebRtcStreamer {
                             let pipeline = pipeline_for_callback.clone();
                             let sid = sid.clone();
                             tokio::spawn(async move {
-                                info!(
-                                    "Requesting keyframe for session {} after reconnect",
-                                    sid
-                                );
+                                info!("Requesting keyframe for session {} after reconnect", sid);
                                 pipeline.request_keyframe().await;
                             });
                         });

@@ -184,14 +184,7 @@ impl AudioCapturer {
         let log_throttler = self.log_throttler.clone();
 
         let handle = tokio::task::spawn_blocking(move || {
-            capture_loop(
-                config,
-                state,
-                frame_tx,
-                stop_flag,
-                sequence,
-                log_throttler,
-            );
+            capture_loop(config, state, frame_tx, stop_flag, sequence, log_throttler);
         });
 
         *self.capture_handle.lock().await = Some(handle);

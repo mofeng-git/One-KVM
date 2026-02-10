@@ -149,6 +149,7 @@ impl Default for GostcConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct EasytierConfig {
     /// Enable auto-start
     pub enabled: bool,
@@ -165,17 +166,6 @@ pub struct EasytierConfig {
     pub virtual_ip: Option<String>,
 }
 
-impl Default for EasytierConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            network_name: String::new(),
-            network_secret: String::new(),
-            peer_urls: Vec::new(),
-            virtual_ip: None,
-        }
-    }
-}
 
 /// Combined extensions configuration
 #[typeshare]

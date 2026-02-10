@@ -559,7 +559,7 @@ impl RendezvousMediator {
                 );
 
                 let msg = make_punch_hole_sent(
-                    &ph.socket_addr.to_vec(), // Use peer's socket_addr, not ours
+                    &ph.socket_addr, // Use peer's socket_addr, not ours
                     &id,
                     &ph.relay_server,
                     ph.nat_type.enum_value().unwrap_or(NatType::UNKNOWN_NAT),

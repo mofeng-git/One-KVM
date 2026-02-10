@@ -718,9 +718,11 @@ impl VideoStreamManager {
     /// Returns None if video capture cannot be started or pipeline creation fails.
     pub async fn subscribe_encoded_frames(
         &self,
-    ) -> Option<tokio::sync::mpsc::Receiver<std::sync::Arc<
-        crate::video::shared_video_pipeline::EncodedVideoFrame,
-    >>> {
+    ) -> Option<
+        tokio::sync::mpsc::Receiver<
+            std::sync::Arc<crate::video::shared_video_pipeline::EncodedVideoFrame>,
+        >,
+    > {
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");
@@ -756,7 +758,11 @@ impl VideoStreamManager {
         }
 
         // 3. Use WebRtcStreamer to ensure the shared video pipeline is running
-        match self.webrtc_streamer.ensure_video_pipeline_for_external().await {
+        match self
+            .webrtc_streamer
+            .ensure_video_pipeline_for_external()
+            .await
+        {
             Ok(pipeline) => Some(pipeline.subscribe()),
             Err(e) => {
                 tracing::error!("Failed to start shared video pipeline: {}", e);

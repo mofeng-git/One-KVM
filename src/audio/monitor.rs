@@ -17,8 +17,10 @@ use crate::utils::LogThrottler;
 
 /// Audio health status
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum AudioHealthStatus {
     /// Device is healthy and operational
+    #[default]
     Healthy,
     /// Device has an error, attempting recovery
     Error {
@@ -33,11 +35,6 @@ pub enum AudioHealthStatus {
     Disconnected,
 }
 
-impl Default for AudioHealthStatus {
-    fn default() -> Self {
-        Self::Healthy
-    }
-}
 
 /// Audio health monitor configuration
 #[derive(Debug, Clone)]
@@ -166,7 +163,7 @@ impl AudioHealthMonitor {
         let attempt = self.retry_count.load(Ordering::Relaxed);
 
         // Only publish every 5 attempts to avoid event spam
-        if attempt == 1 || attempt % 5 == 0 {
+        if attempt == 1 || attempt.is_multiple_of(5) {
             debug!("Audio reconnecting, attempt {}", attempt);
 
             if let Some(ref events) = *self.events.read().await {

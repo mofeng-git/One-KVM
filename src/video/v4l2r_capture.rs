@@ -10,8 +10,8 @@ use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use tracing::{debug, warn};
 use v4l2r::bindings::{v4l2_requestbuffers, v4l2_streamparm, v4l2_streamparm__bindgen_ty_1};
 use v4l2r::ioctl::{
-    self, Capabilities, Capability as V4l2rCapability, MemoryConsistency, PlaneMapping,
-    QBufPlane, QBuffer, QueryBuffer, V4l2Buffer,
+    self, Capabilities, Capability as V4l2rCapability, MemoryConsistency, PlaneMapping, QBufPlane,
+    QBuffer, QueryBuffer, V4l2Buffer,
 };
 use v4l2r::memory::{MemoryType, MmapHandle};
 use v4l2r::{Format as V4l2rFormat, PixelFormat as V4l2rPixelFormat, QueueType};
@@ -68,24 +68,21 @@ impl V4l2rCaptureStream {
             ));
         };
 
-        let mut fmt: V4l2rFormat = ioctl::g_fmt(&fd, queue).map_err(|e| {
-            AppError::VideoError(format!("Failed to get device format: {}", e))
-        })?;
+        let mut fmt: V4l2rFormat = ioctl::g_fmt(&fd, queue)
+            .map_err(|e| AppError::VideoError(format!("Failed to get device format: {}", e)))?;
 
         fmt.width = resolution.width;
         fmt.height = resolution.height;
         fmt.pixelformat = V4l2rPixelFormat::from(&format.to_fourcc());
 
-        let actual_fmt: V4l2rFormat = ioctl::s_fmt(&mut fd, (queue, &fmt)).map_err(|e| {
-            AppError::VideoError(format!("Failed to set device format: {}", e))
-        })?;
+        let actual_fmt: V4l2rFormat = ioctl::s_fmt(&mut fd, (queue, &fmt))
+            .map_err(|e| AppError::VideoError(format!("Failed to set device format: {}", e)))?;
 
         let actual_resolution = Resolution::new(actual_fmt.width, actual_fmt.height);
         let actual_format = PixelFormat::from_v4l2r(actual_fmt.pixelformat).unwrap_or(format);
 
         let stride = actual_fmt
-            .plane_fmt
-            .get(0)
+            .plane_fmt.first()
             .map(|p| p.bytesperline)
             .unwrap_or_else(|| match actual_format.bytes_per_pixel() {
                 Some(bpp) => actual_resolution.width * bpp as u32,
@@ -129,10 +126,7 @@ impl V4l2rCaptureStream {
             let mut plane_maps = Vec::with_capacity(query.planes.len());
             for plane in &query.planes {
                 let mapping = ioctl::mmap(&fd, plane.mem_offset, plane.length).map_err(|e| {
-                    AppError::VideoError(format!(
-                        "Failed to mmap buffer {}: {}",
-                        index, e
-                    ))
+                    AppError::VideoError(format!("Failed to mmap buffer {}: {}", index, e))
                 })?;
                 plane_maps.push(mapping);
             }
@@ -150,9 +144,8 @@ impl V4l2rCaptureStream {
         };
 
         stream.queue_all_buffers()?;
-        ioctl::streamon(&stream.fd, stream.queue).map_err(|e| {
-            AppError::VideoError(format!("Failed to start capture stream: {}", e))
-        })?;
+        ioctl::streamon(&stream.fd, stream.queue)
+            .map_err(|e| AppError::VideoError(format!("Failed to start capture stream: {}", e)))?;
 
         Ok(stream)
     }
@@ -172,9 +165,8 @@ impl V4l2rCaptureStream {
     pub fn next_into(&mut self, dst: &mut Vec<u8>) -> io::Result<CaptureMeta> {
         self.wait_ready()?;
 
-        let dqbuf: V4l2Buffer = ioctl::dqbuf(&self.fd, self.queue).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("dqbuf failed: {}", e))
-        })?;
+        let dqbuf: V4l2Buffer = ioctl::dqbuf(&self.fd, self.queue)
+            .map_err(|e| io::Error::other(format!("dqbuf failed: {}", e)))?;
         let index = dqbuf.as_v4l2_buffer().index as usize;
         let sequence = dqbuf.as_v4l2_buffer().sequence as u64;
 
@@ -211,7 +203,7 @@ impl V4l2rCaptureStream {
         }
 
         self.queue_buffer(index as u32)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         Ok(CaptureMeta {
             bytes_used: total,
@@ -240,7 +232,7 @@ impl V4l2rCaptureStream {
     }
 
     fn queue_buffer(&mut self, index: u32) -> Result<()> {
-        let handle = MmapHandle::default();
+        let handle = MmapHandle;
         let planes = self.mappings[index as usize]
             .iter()
             .map(|mapping| {

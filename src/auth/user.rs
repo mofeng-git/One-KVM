@@ -161,13 +161,12 @@ impl UserStore {
         }
 
         let now = Utc::now();
-        let result =
-            sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
-                .bind(new_username)
-                .bind(now.to_rfc3339())
-                .bind(user_id)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
+            .bind(new_username)
+            .bind(now.to_rfc3339())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("User not found".to_string()));

@@ -729,7 +729,7 @@ impl Connection {
         }
 
         // Check if client sent supported_decoding with a codec preference
-        if let Some(ref supported_decoding) = opt.supported_decoding.as_ref() {
+        if let Some(supported_decoding) = opt.supported_decoding.as_ref() {
             let prefer = supported_decoding.prefer.value();
             debug!("Client codec preference: prefer={}", prefer);
 
@@ -1352,8 +1352,12 @@ impl Connection {
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
         // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events =
-            convert_mouse_event(me, self.screen_width, self.screen_height, self.relative_mouse_active);
+        let mouse_events = convert_mouse_event(
+            me,
+            self.screen_width,
+            self.screen_height,
+            self.relative_mouse_active,
+        );
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {
@@ -1616,7 +1620,10 @@ async fn run_video_streaming(
             );
         }
         if let Err(e) = video_manager.request_keyframe().await {
-            debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+            debug!(
+                "Failed to request keyframe for connection {}: {}",
+                conn_id, e
+            );
         }
 
         // Inner loop: receives frames from current subscription

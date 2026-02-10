@@ -50,7 +50,7 @@ fn decode_header(first_byte: u8, header_bytes: &[u8]) -> (usize, usize) {
     let head_len = ((first_byte & 0x3) + 1) as usize;
 
     let mut n = first_byte as usize;
-    if head_len > 1 && header_bytes.len() >= 1 {
+    if head_len > 1 && !header_bytes.is_empty() {
         n |= (header_bytes[0] as usize) << 8;
     }
     if head_len > 2 && header_bytes.len() >= 2 {

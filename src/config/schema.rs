@@ -11,6 +11,7 @@ pub use crate::rustdesk::config::RustDeskConfig;
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AppConfig {
     /// Whether initial setup has been completed
     pub initialized: bool,
@@ -36,23 +37,6 @@ pub struct AppConfig {
     pub rustdesk: RustDeskConfig,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            initialized: false,
-            auth: AuthConfig::default(),
-            video: VideoConfig::default(),
-            hid: HidConfig::default(),
-            msd: MsdConfig::default(),
-            atx: AtxConfig::default(),
-            audio: AudioConfig::default(),
-            stream: StreamConfig::default(),
-            web: WebConfig::default(),
-            extensions: ExtensionsConfig::default(),
-            rustdesk: RustDeskConfig::default(),
-        }
-    }
-}
 
 /// Authentication configuration
 #[typeshare]
@@ -116,20 +100,17 @@ impl Default for VideoConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum HidBackend {
     /// USB OTG HID gadget
     Otg,
     /// CH9329 serial HID controller
     Ch9329,
     /// Disabled
+    #[default]
     None,
 }
 
-impl Default for HidBackend {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 /// OTG USB device descriptor configuration
 #[typeshare]
@@ -163,8 +144,10 @@ impl Default for OtgDescriptorConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OtgHidProfile {
     /// Full HID device set (keyboard + relative mouse + absolute mouse + consumer control)
+    #[default]
     Full,
     /// Full HID device set without MSD
     FullNoMsd,
@@ -180,11 +163,6 @@ pub enum OtgHidProfile {
     Custom,
 }
 
-impl Default for OtgHidProfile {
-    fn default() -> Self {
-        Self::Full
-    }
-}
 
 /// OTG HID function selection (used when profile is Custom)
 #[typeshare]
@@ -360,6 +338,7 @@ pub use crate::atx::{ActiveLevel, AtxDriverType, AtxKeyConfig, AtxLedConfig};
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AtxConfig {
     /// Enable ATX functionality
     pub enabled: bool,
@@ -373,17 +352,6 @@ pub struct AtxConfig {
     pub wol_interface: String,
 }
 
-impl Default for AtxConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            power: AtxKeyConfig::default(),
-            reset: AtxKeyConfig::default(),
-            led: AtxLedConfig::default(),
-            wol_interface: String::new(),
-        }
-    }
-}
 
 impl AtxConfig {
     /// Convert to AtxControllerConfig for the controller
@@ -427,25 +395,24 @@ impl Default for AudioConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum StreamMode {
     /// WebRTC with H264/H265
     WebRTC,
     /// MJPEG over HTTP
+    #[default]
     Mjpeg,
 }
 
-impl Default for StreamMode {
-    fn default() -> Self {
-        Self::Mjpeg
-    }
-}
 
 /// Encoder type
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum EncoderType {
     /// Auto-detect best encoder
+    #[default]
     Auto,
     /// Software encoder (libx264)
     Software,
@@ -463,11 +430,6 @@ pub enum EncoderType {
     V4l2m2m,
 }
 
-impl Default for EncoderType {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 impl EncoderType {
     /// Convert to EncoderBackend for registry queries

@@ -15,12 +15,14 @@ use crate::video::format::{PixelFormat, Resolution};
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
+#[derive(Default)]
 pub enum BitratePreset {
     /// Speed priority: 1 Mbps, lowest latency, smaller GOP
     /// Best for: slow networks, remote management, low-bandwidth scenarios
     Speed,
     /// Balanced: 4 Mbps, good quality/latency tradeoff
     /// Best for: typical usage, recommended default
+    #[default]
     Balanced,
     /// Quality priority: 8 Mbps, best visual quality
     /// Best for: local network, high-bandwidth scenarios, detailed work
@@ -74,11 +76,6 @@ impl BitratePreset {
     }
 }
 
-impl Default for BitratePreset {
-    fn default() -> Self {
-        Self::Balanced
-    }
-}
 
 impl std::fmt::Display for BitratePreset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

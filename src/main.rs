@@ -158,7 +158,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let bind_ips = resolve_bind_addresses(&config.web)?;
-    let scheme = if config.web.https_enabled { "https" } else { "http" };
+    let scheme = if config.web.https_enabled {
+        "https"
+    } else {
+        "http"
+    };
     let bind_port = if config.web.https_enabled {
         config.web.https_port
     } else {
@@ -646,7 +650,7 @@ async fn main() -> anyhow::Result<()> {
 
             let server = axum_server::from_tcp_rustls(listener, tls_config.clone())?
                 .serve(app.clone().into_make_service());
-            servers.push(async move { server.await });
+            servers.push(server);
         }
 
         tokio::select! {

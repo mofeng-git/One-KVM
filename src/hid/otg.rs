@@ -228,7 +228,7 @@ impl OtgBackend {
                 Ok(false)
             }
             Ok(_) => Ok(false),
-            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+            Err(e) => Err(std::io::Error::other(e)),
         }
     }
 
@@ -393,21 +393,10 @@ impl OtgBackend {
 
     /// Check if all HID device files exist
     pub fn check_devices_exist(&self) -> bool {
-        self.keyboard_path
-            .as_ref()
-            .map_or(true, |p| p.exists())
-            && self
-                .mouse_rel_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
-            && self
-                .mouse_abs_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
-            && self
-                .consumer_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
+        self.keyboard_path.as_ref().is_none_or(|p| p.exists())
+            && self.mouse_rel_path.as_ref().is_none_or(|p| p.exists())
+            && self.mouse_abs_path.as_ref().is_none_or(|p| p.exists())
+            && self.consumer_path.as_ref().is_none_or(|p| p.exists())
     }
 
     /// Get list of missing device paths
@@ -952,9 +941,7 @@ impl HidBackend for OtgBackend {
     }
 
     fn supports_absolute_mouse(&self) -> bool {
-        self.mouse_abs_path
-            .as_ref()
-            .map_or(false, |p| p.exists())
+        self.mouse_abs_path.as_ref().is_some_and(|p| p.exists())
     }
 
     async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {

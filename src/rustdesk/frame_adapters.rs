@@ -127,7 +127,8 @@ impl VideoFrameAdapter {
 
         // Inject cached SPS/PPS before IDR when missing
         if is_keyframe && (!has_sps || !has_pps) {
-            if let (Some(ref sps), Some(ref pps)) = (self.h264_sps.as_ref(), self.h264_pps.as_ref()) {
+            if let (Some(sps), Some(pps)) = (self.h264_sps.as_ref(), self.h264_pps.as_ref())
+            {
                 let mut out = Vec::with_capacity(8 + sps.len() + pps.len() + data.len());
                 out.extend_from_slice(&[0, 0, 0, 1]);
                 out.extend_from_slice(sps);

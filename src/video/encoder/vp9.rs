@@ -31,12 +31,14 @@ fn init_hwcodec_logging() {
 
 /// VP9 encoder type (detected from hwcodec)
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VP9EncoderType {
     /// VAAPI (Intel on Linux)
     Vaapi,
     /// Software encoder (libvpx-vp9)
     Software,
     /// No encoder available
+    #[default]
     None,
 }
 
@@ -50,11 +52,6 @@ impl std::fmt::Display for VP9EncoderType {
     }
 }
 
-impl Default for VP9EncoderType {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 impl From<EncoderBackend> for VP9EncoderType {
     fn from(backend: EncoderBackend) -> Self {
@@ -68,18 +65,15 @@ impl From<EncoderBackend> for VP9EncoderType {
 
 /// Input pixel format for VP9 encoder
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VP9InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane
+    #[default]
     Nv12,
 }
 
-impl Default for VP9InputFormat {
-    fn default() -> Self {
-        Self::Nv12 // Default to NV12 for VAAPI compatibility
-    }
-}
 
 /// VP9 encoder configuration
 #[derive(Debug, Clone)]
@@ -180,8 +174,6 @@ pub fn detect_best_vp9_encoder(width: u32, height: u32) -> (VP9EncoderType, Opti
 
     let encoder_type = if codec.name.contains("vaapi") {
         VP9EncoderType::Vaapi
-    } else if codec.name.contains("libvpx") {
-        VP9EncoderType::Software
     } else {
         VP9EncoderType::Software // Default to software for unknown
     };

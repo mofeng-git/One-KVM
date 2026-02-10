@@ -571,11 +571,9 @@ impl Streamer {
                                 break;
                             }
                         }
-                    } else {
-                        if zero_since.is_some() {
-                            info!("Clients reconnected, canceling auto-pause");
-                            zero_since = None;
-                        }
+                    } else if zero_since.is_some() {
+                        info!("Clients reconnected, canceling auto-pause");
+                        zero_since = None;
                     }
                 }
             });
@@ -805,7 +803,7 @@ impl Streamer {
 
             validate_counter = validate_counter.wrapping_add(1);
             if pixel_format.is_compressed()
-                && validate_counter % JPEG_VALIDATE_INTERVAL == 0
+                && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
                 && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
             {
                 continue;
@@ -964,7 +962,7 @@ impl Streamer {
                 *streamer.state.write().await = StreamerState::Recovering;
 
                 // Publish reconnecting event (every 5 attempts to avoid spam)
-                if attempt == 1 || attempt % 5 == 0 {
+                if attempt == 1 || attempt.is_multiple_of(5) {
                     streamer
                         .publish_event(SystemEvent::StreamReconnecting {
                             device: device_path.clone(),

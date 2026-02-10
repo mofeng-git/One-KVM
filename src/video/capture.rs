@@ -2,10 +2,10 @@
 //!
 //! Provides async video capture using memory-mapped buffers.
 
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use bytes::Bytes;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

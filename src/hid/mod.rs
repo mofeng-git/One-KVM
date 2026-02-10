@@ -42,17 +42,17 @@ pub struct HidInfo {
     pub screen_resolution: Option<(u32, u32)>,
 }
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::error::{AppError, Result};
 use crate::otg::OtgService;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use std::time::Duration;
 
 const HID_EVENT_QUEUE_CAPACITY: usize = 64;
 const HID_EVENT_SEND_TIMEOUT_MS: u64 = 30;
@@ -203,7 +203,10 @@ impl HidController {
             ));
         }
 
-        if matches!(event.event_type, MouseEventType::Move | MouseEventType::MoveAbs) {
+        if matches!(
+            event.event_type,
+            MouseEventType::Move | MouseEventType::MoveAbs
+        ) {
             // Best-effort: drop/merge move events if queue is full
             self.enqueue_mouse_move(event)
         } else {
@@ -470,13 +473,7 @@ impl HidController {
                     None => break,
                 };
 
-                process_hid_event(
-                    event,
-                    &backend,
-                    &monitor,
-                    &backend_type,
-                )
-                .await;
+                process_hid_event(event, &backend, &monitor, &backend_type).await;
 
                 // After each event, flush latest move if pending
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
@@ -505,9 +502,9 @@ impl HidController {
                 self.pending_move_flag.store(true, Ordering::Release);
                 Ok(())
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => Err(AppError::BadRequest(
-                "HID event queue closed".to_string(),
-            )),
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                Err(AppError::BadRequest("HID event queue closed".to_string()))
+            }
         }
     }
 
@@ -517,9 +514,11 @@ impl HidController {
             Err(mpsc::error::TrySendError::Full(ev)) => {
                 // For non-move events, wait briefly to avoid dropping critical input
                 let tx = self.hid_tx.clone();
-                let send_result =
-                    tokio::time::timeout(Duration::from_millis(HID_EVENT_SEND_TIMEOUT_MS), tx.send(ev))
-                        .await;
+                let send_result = tokio::time::timeout(
+                    Duration::from_millis(HID_EVENT_SEND_TIMEOUT_MS),
+                    tx.send(ev),
+                )
+                .await;
                 if send_result.is_ok() {
                     Ok(())
                 } else {
@@ -527,9 +526,9 @@ impl HidController {
                     Ok(())
                 }
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => Err(AppError::BadRequest(
-                "HID event queue closed".to_string(),
-            )),
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                Err(AppError::BadRequest("HID event queue closed".to_string()))
+            }
         }
     }
 }

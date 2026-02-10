@@ -219,8 +219,10 @@ impl From<u8> for LedStatus {
 /// CH9329 work mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum WorkMode {
     /// Mode 0: Standard USB Keyboard + Mouse (default)
+    #[default]
     KeyboardMouse = 0x00,
     /// Mode 1: Standard USB Keyboard only
     KeyboardOnly = 0x01,
@@ -230,17 +232,14 @@ pub enum WorkMode {
     CustomHid = 0x03,
 }
 
-impl Default for WorkMode {
-    fn default() -> Self {
-        Self::KeyboardMouse
-    }
-}
 
 /// CH9329 serial communication mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum SerialMode {
     /// Mode 0: Protocol transmission mode (default)
+    #[default]
     Protocol = 0x00,
     /// Mode 1: ASCII mode
     Ascii = 0x01,
@@ -248,11 +247,6 @@ pub enum SerialMode {
     Transparent = 0x02,
 }
 
-impl Default for SerialMode {
-    fn default() -> Self {
-        Self::Protocol
-    }
-}
 
 /// CH9329 configuration parameters
 #[derive(Debug, Clone, Serialize, Deserialize)]
