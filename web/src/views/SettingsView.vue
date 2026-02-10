@@ -1567,6 +1567,7 @@ onMounted(async () => {
                   <select id="hid-backend" v-model="config.hid_backend" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                     <option value="ch9329">CH9329 (Serial)</option>
                     <option value="otg">USB OTG</option>
+                    <option value="none">{{ t('common.disabled') }}</option>
                   </select>
                 </div>
                 <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">

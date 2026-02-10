@@ -10,10 +10,18 @@ extern "C" {
 
 #include "common.h"
 
-#include "common.h"
-
 #define LOG_MODULE "UTIL"
 #include "log.h"
+
+#ifndef FF_PROFILE_H264_BASELINE
+#define FF_PROFILE_H264_BASELINE 66
+#endif
+#ifndef FF_PROFILE_H264_HIGH
+#define FF_PROFILE_H264_HIGH 100
+#endif
+#ifndef FF_PROFILE_HEVC_MAIN
+#define FF_PROFILE_HEVC_MAIN 1
+#endif
 
 namespace {
 
@@ -147,11 +155,11 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
   // V4L2 M2M hardware encoder - minimize buffer latency
   if (name.find("v4l2m2m") != std::string::npos) {
     // Minimize number of output buffers for lower latency
-    if ((ret = av_opt_set_int(priv_data, "num_output_buffers", 2, 0)) < 0) {
+    if ((ret = av_opt_set_int(priv_data, "num_output_buffers", 4, 0)) < 0) {
       LOG_WARN(std::string("v4l2m2m set num_output_buffers failed, ret = ") + av_err2str(ret));
       // Not fatal
     }
-    if ((ret = av_opt_set_int(priv_data, "num_capture_buffers", 2, 0)) < 0) {
+    if ((ret = av_opt_set_int(priv_data, "num_capture_buffers", 4, 0)) < 0) {
       LOG_WARN(std::string("v4l2m2m set num_capture_buffers failed, ret = ") + av_err2str(ret));
       // Not fatal
     }
