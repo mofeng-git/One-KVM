@@ -83,7 +83,7 @@ struct VideoSession {
     /// Last activity time
     last_activity: Instant,
     /// Frame receiver
-    frame_rx: Option<broadcast::Receiver<EncodedVideoFrame>>,
+    frame_rx: Option<tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>>,
     /// Stats
     frames_received: u64,
     bytes_received: u64,
@@ -243,7 +243,7 @@ impl VideoSessionManager {
     pub async fn start_session(
         &self,
         session_id: &str,
-    ) -> Result<broadcast::Receiver<EncodedVideoFrame>> {
+    ) -> Result<tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>> {
         // Ensure pipeline is running with correct codec
         self.ensure_pipeline_for_session(session_id).await?;
 

@@ -222,6 +222,22 @@ pub enum SystemEvent {
         hardware: bool,
     },
 
+    /// WebRTC ICE candidate (server -> client trickle)
+    #[serde(rename = "webrtc.ice_candidate")]
+    WebRTCIceCandidate {
+        /// WebRTC session ID
+        session_id: String,
+        /// ICE candidate data
+        candidate: crate::webrtc::signaling::IceCandidate,
+    },
+
+    /// WebRTC ICE gathering complete (server -> client)
+    #[serde(rename = "webrtc.ice_complete")]
+    WebRTCIceComplete {
+        /// WebRTC session ID
+        session_id: String,
+    },
+
     /// Stream statistics update (sent periodically for client stats)
     #[serde(rename = "stream.stats_update")]
     StreamStatsUpdate {
@@ -539,6 +555,8 @@ impl SystemEvent {
             Self::StreamStatsUpdate { .. } => "stream.stats_update",
             Self::StreamModeChanged { .. } => "stream.mode_changed",
             Self::StreamModeReady { .. } => "stream.mode_ready",
+            Self::WebRTCIceCandidate { .. } => "webrtc.ice_candidate",
+            Self::WebRTCIceComplete { .. } => "webrtc.ice_complete",
             Self::HidStateChanged { .. } => "hid.state_changed",
             Self::HidBackendSwitching { .. } => "hid.backend_switching",
             Self::HidDeviceLost { .. } => "hid.device_lost",

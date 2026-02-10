@@ -1,17 +1,110 @@
 //! Video frame data structures
 
 use bytes::Bytes;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Instant;
 
 use super::format::{PixelFormat, Resolution};
 
+#[derive(Clone)]
+enum FrameData {
+    Bytes(Bytes),
+    Pooled(Arc<FrameBuffer>),
+}
+
+impl std::fmt::Debug for FrameData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FrameData::Bytes(bytes) => f
+                .debug_struct("FrameData::Bytes")
+                .field("len", &bytes.len())
+                .finish(),
+            FrameData::Pooled(buf) => f
+                .debug_struct("FrameData::Pooled")
+                .field("len", &buf.len())
+                .finish(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FrameBufferPool {
+    pool: Mutex<Vec<Vec<u8>>>,
+    max_buffers: usize,
+}
+
+impl FrameBufferPool {
+    pub fn new(max_buffers: usize) -> Self {
+        Self {
+            pool: Mutex::new(Vec::new()),
+            max_buffers: max_buffers.max(1),
+        }
+    }
+
+    pub fn take(&self, min_capacity: usize) -> Vec<u8> {
+        let mut pool = self.pool.lock();
+        if let Some(mut buf) = pool.pop() {
+            if buf.capacity() < min_capacity {
+                buf.reserve(min_capacity - buf.capacity());
+            }
+            buf
+        } else {
+            Vec::with_capacity(min_capacity)
+        }
+    }
+
+    pub fn put(&self, mut buf: Vec<u8>) {
+        buf.clear();
+        let mut pool = self.pool.lock();
+        if pool.len() < self.max_buffers {
+            pool.push(buf);
+        }
+    }
+}
+
+pub struct FrameBuffer {
+    data: Vec<u8>,
+    pool: Option<Arc<FrameBufferPool>>,
+}
+
+impl FrameBuffer {
+    pub fn new(data: Vec<u8>, pool: Option<Arc<FrameBufferPool>>) -> Self {
+        Self { data, pool }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl std::fmt::Debug for FrameBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrameBuffer")
+            .field("len", &self.data.len())
+            .finish()
+    }
+}
+
+impl Drop for FrameBuffer {
+    fn drop(&mut self) {
+        if let Some(pool) = self.pool.take() {
+            let data = std::mem::take(&mut self.data);
+            pool.put(data);
+        }
+    }
+}
+
 /// A video frame with metadata
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
     /// Raw frame data
-    data: Arc<Bytes>,
+    data: FrameData,
     /// Cached xxHash64 of frame data (lazy computed for deduplication)
     hash: Arc<OnceLock<u64>>,
     /// Frame resolution
@@ -40,7 +133,7 @@ impl VideoFrame {
         sequence: u64,
     ) -> Self {
         Self {
-            data: Arc::new(data),
+            data: FrameData::Bytes(data),
             hash: Arc::new(OnceLock::new()),
             resolution,
             format,
@@ -63,24 +156,51 @@ impl VideoFrame {
         Self::new(Bytes::from(data), resolution, format, stride, sequence)
     }
 
+    /// Create a frame from pooled buffer
+    pub fn from_pooled(
+        data: Arc<FrameBuffer>,
+        resolution: Resolution,
+        format: PixelFormat,
+        stride: u32,
+        sequence: u64,
+    ) -> Self {
+        Self {
+            data: FrameData::Pooled(data),
+            hash: Arc::new(OnceLock::new()),
+            resolution,
+            format,
+            stride,
+            key_frame: true,
+            sequence,
+            capture_ts: Instant::now(),
+            online: true,
+        }
+    }
+
     /// Get frame data as bytes slice
     pub fn data(&self) -> &[u8] {
-        &self.data
+        match &self.data {
+            FrameData::Bytes(bytes) => bytes,
+            FrameData::Pooled(buf) => buf.as_slice(),
+        }
     }
 
     /// Get frame data as Bytes (cheap clone)
     pub fn data_bytes(&self) -> Bytes {
-        (*self.data).clone()
+        match &self.data {
+            FrameData::Bytes(bytes) => bytes.clone(),
+            FrameData::Pooled(buf) => Bytes::copy_from_slice(buf.as_slice()),
+        }
     }
 
     /// Get data length
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.data().len()
     }
 
     /// Check if frame is empty
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.data().is_empty()
     }
 
     /// Get width
@@ -108,7 +228,7 @@ impl VideoFrame {
     pub fn get_hash(&self) -> u64 {
         *self
             .hash
-            .get_or_init(|| xxhash_rust::xxh64::xxh64(self.data.as_ref(), 0))
+            .get_or_init(|| xxhash_rust::xxh64::xxh64(self.data(), 0))
     }
 
     /// Check if format is JPEG/MJPEG
@@ -121,25 +241,27 @@ impl VideoFrame {
         if !self.is_jpeg() {
             return false;
         }
-        if self.data.len() < 125 {
+        Self::is_valid_jpeg_bytes(self.data())
+    }
+
+    /// Validate JPEG bytes without constructing a frame
+    pub fn is_valid_jpeg_bytes(data: &[u8]) -> bool {
+        if data.len() < 125 {
             return false;
         }
-        // Check JPEG header
-        let start_marker = ((self.data[0] as u16) << 8) | self.data[1] as u16;
+        let start_marker = ((data[0] as u16) << 8) | data[1] as u16;
         if start_marker != 0xFFD8 {
             return false;
         }
-        // Check JPEG end marker
-        let end = self.data.len();
-        let end_marker = ((self.data[end - 2] as u16) << 8) | self.data[end - 1] as u16;
-        // Valid end markers: 0xFFD9, 0xD900, 0x0000 (padded)
+        let end = data.len();
+        let end_marker = ((data[end - 2] as u16) << 8) | data[end - 1] as u16;
         matches!(end_marker, 0xFFD9 | 0xD900 | 0x0000)
     }
 
     /// Create an offline placeholder frame
     pub fn offline(resolution: Resolution, format: PixelFormat) -> Self {
         Self {
-            data: Arc::new(Bytes::new()),
+            data: FrameData::Bytes(Bytes::new()),
             hash: Arc::new(OnceLock::new()),
             resolution,
             format,
@@ -173,67 +295,5 @@ impl From<&VideoFrame> for FrameMeta {
             key_frame: frame.key_frame,
             online: frame.online,
         }
-    }
-}
-
-/// Ring buffer for storing recent frames
-pub struct FrameRing {
-    frames: Vec<Option<VideoFrame>>,
-    capacity: usize,
-    write_pos: usize,
-    count: usize,
-}
-
-impl FrameRing {
-    /// Create a new frame ring with specified capacity
-    pub fn new(capacity: usize) -> Self {
-        assert!(capacity > 0, "Ring capacity must be > 0");
-        Self {
-            frames: (0..capacity).map(|_| None).collect(),
-            capacity,
-            write_pos: 0,
-            count: 0,
-        }
-    }
-
-    /// Push a frame into the ring
-    pub fn push(&mut self, frame: VideoFrame) {
-        self.frames[self.write_pos] = Some(frame);
-        self.write_pos = (self.write_pos + 1) % self.capacity;
-        if self.count < self.capacity {
-            self.count += 1;
-        }
-    }
-
-    /// Get the latest frame
-    pub fn latest(&self) -> Option<&VideoFrame> {
-        if self.count == 0 {
-            return None;
-        }
-        let pos = if self.write_pos == 0 {
-            self.capacity - 1
-        } else {
-            self.write_pos - 1
-        };
-        self.frames[pos].as_ref()
-    }
-
-    /// Get number of frames in ring
-    pub fn len(&self) -> usize {
-        self.count
-    }
-
-    /// Check if ring is empty
-    pub fn is_empty(&self) -> bool {
-        self.count == 0
-    }
-
-    /// Clear all frames
-    pub fn clear(&mut self) {
-        for frame in &mut self.frames {
-            *frame = None;
-        }
-        self.write_pos = 0;
-        self.count = 0;
     }
 }

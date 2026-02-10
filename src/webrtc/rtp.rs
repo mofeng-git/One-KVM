@@ -42,8 +42,6 @@ pub struct H264VideoTrack {
     config: H264VideoTrackConfig,
     /// H264 payloader for manual packetization (if needed)
     payloader: Mutex<H264Payloader>,
-    /// Statistics
-    stats: Mutex<H264TrackStats>,
     /// Cached SPS NAL unit for injection before IDR frames
     /// Some hardware encoders don't repeat SPS/PPS with every keyframe
     cached_sps: Mutex<Option<Bytes>>,
@@ -83,21 +81,6 @@ impl Default for H264VideoTrackConfig {
     }
 }
 
-/// H264 track statistics
-#[derive(Debug, Clone, Default)]
-pub struct H264TrackStats {
-    /// Frames sent
-    pub frames_sent: u64,
-    /// Bytes sent
-    pub bytes_sent: u64,
-    /// Packets sent (RTP packets)
-    pub packets_sent: u64,
-    /// Key frames sent
-    pub keyframes_sent: u64,
-    /// Errors encountered
-    pub errors: u64,
-}
-
 impl H264VideoTrack {
     /// Create a new H264 video track
     ///
@@ -134,7 +117,6 @@ impl H264VideoTrack {
             track,
             config,
             payloader: Mutex::new(H264Payloader::default()),
-            stats: Mutex::new(H264TrackStats::default()),
             cached_sps: Mutex::new(None),
             cached_pps: Mutex::new(None),
         }
@@ -148,11 +130,6 @@ impl H264VideoTrack {
     /// Get track as TrackLocal for peer connection
     pub fn as_track_local(&self) -> Arc<dyn TrackLocal + Send + Sync> {
         self.track.clone()
-    }
-
-    /// Get current statistics
-    pub async fn stats(&self) -> H264TrackStats {
-        self.stats.lock().await.clone()
     }
 
     /// Write an H264 encoded frame to the track
@@ -288,16 +265,6 @@ impl H264VideoTrack {
             nal_count += 1;
         }
 
-        // Update statistics
-        if nal_count > 0 {
-            let mut stats = self.stats.lock().await;
-            stats.frames_sent += 1;
-            stats.bytes_sent += total_bytes;
-            if is_keyframe {
-                stats.keyframes_sent += 1;
-            }
-        }
-
         trace!(
             "Sent frame: {} NAL units, {} bytes, keyframe={}",
             nal_count,
@@ -344,19 +311,6 @@ impl H264VideoTrack {
 pub struct OpusAudioTrack {
     /// The underlying WebRTC track
     track: Arc<TrackLocalStaticSample>,
-    /// Statistics
-    stats: Mutex<OpusTrackStats>,
-}
-
-/// Opus track statistics
-#[derive(Debug, Clone, Default)]
-pub struct OpusTrackStats {
-    /// Packets sent
-    pub packets_sent: u64,
-    /// Bytes sent
-    pub bytes_sent: u64,
-    /// Errors
-    pub errors: u64,
 }
 
 impl OpusAudioTrack {
@@ -378,7 +332,6 @@ impl OpusAudioTrack {
 
         Self {
             track,
-            stats: Mutex::new(OpusTrackStats::default()),
         }
     }
 
@@ -390,11 +343,6 @@ impl OpusAudioTrack {
     /// Get track as TrackLocal
     pub fn as_track_local(&self) -> Arc<dyn TrackLocal + Send + Sync> {
         self.track.clone()
-    }
-
-    /// Get statistics
-    pub async fn stats(&self) -> OpusTrackStats {
-        self.stats.lock().await.clone()
     }
 
     /// Write Opus encoded audio data
@@ -417,23 +365,13 @@ impl OpusAudioTrack {
             ..Default::default()
         };
 
-        match self.track.write_sample(&sample).await {
-            Ok(_) => {
-                let mut stats = self.stats.lock().await;
-                stats.packets_sent += 1;
-                stats.bytes_sent += data.len() as u64;
-                Ok(())
-            }
-            Err(e) => {
-                let mut stats = self.stats.lock().await;
-                stats.errors += 1;
+        self.track
+            .write_sample(&sample)
+            .await
+            .map_err(|e| {
                 error!("Failed to write Opus sample: {}", e);
-                Err(AppError::WebRtcError(format!(
-                    "Failed to write audio sample: {}",
-                    e
-                )))
-            }
-        }
+                AppError::WebRtcError(format!("Failed to write audio sample: {}", e))
+            })
     }
 }
 

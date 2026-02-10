@@ -52,14 +52,13 @@ const overflowMenuOpen = ref(false)
 const hidBackend = computed(() => (systemStore.hid?.backend ?? '').toLowerCase())
 const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
 const showMsd = computed(() => {
-  return props.isAdmin && !isCh9329Backend.value
+  return !!systemStore.msd?.available && !isCh9329Backend.value
 })
 
 const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
   videoMode?: VideoMode
   ttydRunning?: boolean
-  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -86,25 +85,23 @@ const extensionOpen = ref(false)
 
 <template>
   <div class="w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="flex items-center justify-between gap-2 px-4 py-1.5">
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-1.5">
       <!-- Left side buttons -->
-      <div class="flex items-center gap-1.5 min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-1.5 w-full sm:flex-1 sm:min-w-0">
         <!-- Video Config - Always visible -->
         <VideoConfigPopover
           v-model:open="videoPopoverOpen"
           :video-mode="props.videoMode || 'mjpeg'"
-          :is-admin="props.isAdmin"
           @update:video-mode="emit('update:videoMode', $event)"
         />
 
         <!-- Audio Config - Always visible -->
-        <AudioConfigPopover v-model:open="audioPopoverOpen" :is-admin="props.isAdmin" />
+        <AudioConfigPopover v-model:open="audioPopoverOpen" />
 
         <!-- HID Config - Always visible -->
         <HidConfigPopover
           v-model:open="hidPopoverOpen"
           :mouse-mode="mouseMode"
-          :is-admin="props.isAdmin"
           @update:mouse-mode="emit('toggleMouseMode')"
         />
 
@@ -125,7 +122,7 @@ const extensionOpen = ref(false)
         </TooltipProvider>
 
         <!-- ATX Power Control - Hidden on small screens -->
-        <Popover v-if="props.isAdmin" v-model:open="atxOpen" class="hidden sm:block">
+        <Popover v-model:open="atxOpen" class="hidden sm:block">
           <PopoverTrigger as-child>
             <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
               <Power class="h-4 w-4" />
@@ -158,9 +155,9 @@ const extensionOpen = ref(false)
       </div>
 
       <!-- Right side buttons -->
-      <div class="flex items-center gap-1.5 shrink-0">
-        <!-- Extension Menu - Admin only, hidden on small screens -->
-        <Popover v-if="props.isAdmin" v-model:open="extensionOpen" class="hidden lg:block">
+      <div class="flex items-center gap-1.5 w-full justify-end sm:w-auto sm:ml-auto shrink-0">
+        <!-- Extension Menu - Hidden on small screens -->
+        <Popover v-model:open="extensionOpen" class="hidden lg:block">
           <PopoverTrigger as-child>
             <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
               <Cable class="h-4 w-4" />
@@ -183,8 +180,8 @@ const extensionOpen = ref(false)
           </PopoverContent>
         </Popover>
 
-        <!-- Settings - Admin only, hidden on small screens -->
-        <TooltipProvider v-if="props.isAdmin" class="hidden lg:block">
+        <!-- Settings - Hidden on small screens -->
+        <TooltipProvider class="hidden lg:block">
           <Tooltip>
             <TooltipTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
@@ -270,7 +267,7 @@ const extensionOpen = ref(false)
             </DropdownMenuItem>
 
             <!-- ATX - Mobile only -->
-            <DropdownMenuItem v-if="props.isAdmin" class="sm:hidden" @click="atxOpen = true; overflowMenuOpen = false">
+            <DropdownMenuItem class="sm:hidden" @click="atxOpen = true; overflowMenuOpen = false">
               <Power class="h-4 w-4 mr-2" />
               {{ t('actionbar.power') }}
             </DropdownMenuItem>
@@ -291,7 +288,6 @@ const extensionOpen = ref(false)
 
             <!-- Extension - Tablet and below -->
             <DropdownMenuItem
-              v-if="props.isAdmin"
               class="lg:hidden"
               :disabled="!props.ttydRunning"
               @click="emit('openTerminal'); overflowMenuOpen = false"
@@ -301,7 +297,7 @@ const extensionOpen = ref(false)
             </DropdownMenuItem>
 
             <!-- Settings - Tablet and below -->
-            <DropdownMenuItem v-if="props.isAdmin" class="lg:hidden" @click="router.push('/settings'); overflowMenuOpen = false">
+            <DropdownMenuItem class="lg:hidden" @click="router.push('/settings'); overflowMenuOpen = false">
               <Settings class="h-4 w-4 mr-2" />
               {{ t('actionbar.settings') }}
             </DropdownMenuItem>

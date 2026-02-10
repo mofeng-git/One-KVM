@@ -81,7 +81,12 @@ export async function request<T>(
     // Handle HTTP errors (in case backend returns non-2xx)
     if (!response.ok) {
       const message = getErrorMessage(data, `HTTP ${response.status}`)
-      if (toastOnError && shouldShowToast(toastKey)) {
+      const normalized = message.toLowerCase()
+      const isNotAuthenticated = normalized.includes('not authenticated')
+      const isSessionExpired = normalized.includes('session expired')
+      const isLoggedInElsewhere = normalized.includes('logged in elsewhere')
+      const isAuthIssue = response.status === 401 && (isNotAuthenticated || isSessionExpired || isLoggedInElsewhere)
+      if (toastOnError && shouldShowToast(toastKey) && !isAuthIssue) {
         toast.error(t('api.operationFailed'), {
           description: message,
           duration: 4000,
@@ -130,4 +135,3 @@ export async function request<T>(
     throw new ApiError(0, t('api.networkError'))
   }
 }
-

@@ -22,12 +22,13 @@ import {
 import { MousePointer, Move, Loader2, RefreshCw } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 import { configApi } from '@/api'
-import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
+import { HidBackend } from '@/types/generated'
+import type { HidConfigUpdate } from '@/types/generated'
 
 const props = defineProps<{
   open: boolean
   mouseMode?: 'absolute' | 'relative'
-  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const systemStore = useSystemStore()
+const configStore = useConfigStore()
 
 const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
 
@@ -73,7 +74,7 @@ watch(showCursor, (newValue, oldValue) => {
 })
 
 // HID Device Settings (requires apply)
-const hidBackend = ref<'otg' | 'ch9329' | 'none'>('none')
+const hidBackend = ref<HidBackend>(HidBackend.None)
 const devicePath = ref<string>('')
 const baudrate = ref<number>(9600)
 
@@ -90,9 +91,9 @@ const buttonText = computed(() => t('actionbar.hidConfig'))
 
 // Available device paths based on backend type
 const availableDevicePaths = computed(() => {
-  if (hidBackend.value === 'ch9329') {
+  if (hidBackend.value === HidBackend.Ch9329) {
     return serialDevices.value
-  } else if (hidBackend.value === 'otg') {
+  } else if (hidBackend.value === HidBackend.Otg) {
     // For OTG, we show UDC devices
     return udcDevices.value.map(udc => ({
       path: udc.name,
@@ -125,9 +126,17 @@ function initializeFromCurrent() {
   showCursor.value = storedCursor
 
   // Initialize HID device settings from system state
-  const hid = systemStore.hid
+  const hid = configStore.hid
   if (hid) {
-    hidBackend.value = (hid.backend as 'otg' | 'ch9329' | 'none') || 'none'
+    hidBackend.value = hid.backend || HidBackend.None
+    if (hidBackend.value === HidBackend.Ch9329) {
+      devicePath.value = hid.ch9329_port || ''
+      baudrate.value = hid.ch9329_baudrate || 9600
+    } else if (hidBackend.value === HidBackend.Otg) {
+      devicePath.value = hid.otg_udc || ''
+    } else {
+      devicePath.value = ''
+    }
   }
 }
 
@@ -137,10 +146,8 @@ function toggleMouseMode() {
   emit('update:mouseMode', newMode)
 
   // Update backend config
-  configApi.update({
-    hid: {
-      mouse_absolute: newMode === 'absolute',
-    },
+  configStore.updateHid({
+    mouse_absolute: newMode === 'absolute',
   }).catch(_e => {
     console.info('[HidConfig] Failed to update mouse mode')
     toast.error(t('config.updateFailed'))
@@ -163,7 +170,11 @@ function handleThrottleChange(value: number[] | undefined) {
 // Handle backend change
 function handleBackendChange(backend: unknown) {
   if (typeof backend !== 'string') return
-  hidBackend.value = backend as 'otg' | 'ch9329' | 'none'
+  if (backend === HidBackend.Otg || backend === HidBackend.Ch9329 || backend === HidBackend.None) {
+    hidBackend.value = backend
+  } else {
+    return
+  }
 
   // Clear device path when changing backend
   devicePath.value = ''
@@ -190,18 +201,18 @@ function handleBaudrateChange(rate: unknown) {
 async function applyHidConfig() {
   applying.value = true
   try {
-    const config: Record<string, unknown> = {
+    const config: HidConfigUpdate = {
       backend: hidBackend.value,
     }
 
-    if (hidBackend.value === 'ch9329') {
+    if (hidBackend.value === HidBackend.Ch9329) {
       config.ch9329_port = devicePath.value
       config.ch9329_baudrate = baudrate.value
-    } else if (hidBackend.value === 'otg') {
+    } else if (hidBackend.value === HidBackend.Otg) {
       config.otg_udc = devicePath.value
     }
 
-    await configApi.update({ hid: config })
+    await configStore.updateHid(config)
 
     toast.success(t('config.applied'))
 
@@ -216,14 +227,20 @@ async function applyHidConfig() {
 
 // Watch open state
 watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    // Load devices on first open
-    if (serialDevices.value.length === 0) {
-      loadDevices()
-    }
-    // Initialize from current config
-    initializeFromCurrent()
+  if (!isOpen) return
+
+  // Load devices on first open
+  if (serialDevices.value.length === 0) {
+    loadDevices()
   }
+
+  configStore.refreshHid()
+    .then(() => {
+      initializeFromCurrent()
+    })
+    .catch(() => {
+      initializeFromCurrent()
+    })
 })
 </script>
 
@@ -304,11 +321,10 @@ watch(() => props.open, (isOpen) => {
           </div>
         </div>
 
-        <!-- HID Device Settings (Requires Apply) - Admin only -->
-        <template v-if="props.isAdmin">
-          <Separator />
+        <!-- HID Device Settings (Requires Apply) -->
+        <Separator />
 
-          <div class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.hidDeviceSettings') }}</h5>
             <Button
@@ -333,15 +349,15 @@ watch(() => props.open, (isOpen) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="otg" class="text-xs">USB OTG</SelectItem>
-                <SelectItem value="ch9329" class="text-xs">CH9329 (Serial)</SelectItem>
-                <SelectItem value="none" class="text-xs">{{ t('common.disabled') }}</SelectItem>
+                <SelectItem :value="HidBackend.Otg" class="text-xs">USB OTG</SelectItem>
+                <SelectItem :value="HidBackend.Ch9329" class="text-xs">CH9329 (Serial)</SelectItem>
+                <SelectItem :value="HidBackend.None" class="text-xs">{{ t('common.disabled') }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <!-- Device Path (OTG or CH9329) -->
-          <div v-if="hidBackend !== 'none'" class="space-y-2">
+          <div v-if="hidBackend !== HidBackend.None" class="space-y-2">
             <Label class="text-xs text-muted-foreground">{{ t('actionbar.devicePath') }}</Label>
             <Select
               :model-value="devicePath"
@@ -365,7 +381,7 @@ watch(() => props.open, (isOpen) => {
           </div>
 
           <!-- Baudrate (CH9329 only) -->
-          <div v-if="hidBackend === 'ch9329'" class="space-y-2">
+          <div v-if="hidBackend === HidBackend.Ch9329" class="space-y-2">
             <Label class="text-xs text-muted-foreground">{{ t('actionbar.baudrate') }}</Label>
             <Select
               :model-value="String(baudrate)"
@@ -393,8 +409,7 @@ watch(() => props.open, (isOpen) => {
             <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
-        </div>
-        </template>
+          </div>
       </div>
     </PopoverContent>
   </Popover>

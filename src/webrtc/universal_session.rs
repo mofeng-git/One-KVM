@@ -4,13 +4,16 @@
 //! Replaces the H264-only H264Session with a more flexible implementation.
 
 use std::sync::Arc;
-use tokio::sync::{broadcast, watch, Mutex, RwLock};
-use tracing::{debug, info, trace, warn};
+use std::time::{Duration, Instant};
+use tokio::sync::{watch, Mutex, RwLock};
+use tracing::{debug, info, warn};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
+use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice::mdns::MulticastDnsMode;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
@@ -24,17 +27,21 @@ use webrtc::rtp_transceiver::rtp_codec::{
 use webrtc::rtp_transceiver::RTCPFeedback;
 
 use super::config::WebRtcConfig;
+use super::mdns::{default_mdns_host_name, mdns_mode};
 use super::rtp::OpusAudioTrack;
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec};
 use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
+use crate::events::{EventBus, SystemEvent};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
 use crate::video::encoder::registry::VideoEncoderType;
 use crate::video::encoder::BitratePreset;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::shared_video_pipeline::EncodedVideoFrame;
+use std::sync::atomic::AtomicBool;
+use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
 
 /// H.265/HEVC MIME type (RFC 7798)
 const MIME_TYPE_H265: &str = "video/H265";
@@ -117,6 +124,8 @@ pub struct UniversalSession {
     ice_candidates: Arc<Mutex<Vec<IceCandidate>>>,
     /// HID controller reference
     hid_controller: Option<Arc<HidController>>,
+    /// Event bus for WebRTC signaling events (optional)
+    event_bus: Option<Arc<EventBus>>,
     /// Video frame receiver handle
     video_receiver_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Audio frame receiver handle
@@ -127,7 +136,11 @@ pub struct UniversalSession {
 
 impl UniversalSession {
     /// Create a new universal WebRTC session
-    pub async fn new(config: UniversalSessionConfig, session_id: String) -> Result<Self> {
+    pub async fn new(
+        config: UniversalSessionConfig,
+        session_id: String,
+        event_bus: Option<Arc<EventBus>>,
+    ) -> Result<Self> {
         info!(
             "Creating {} session: {} @ {}x{} (audio={})",
             config.codec,
@@ -243,8 +256,17 @@ impl UniversalSession {
         registry = register_default_interceptors(registry, &mut media_engine)
             .map_err(|e| AppError::VideoError(format!("Failed to register interceptors: {}", e)))?;
 
-        // Create API
+        // Create API (with optional mDNS settings)
+        let mut setting_engine = SettingEngine::default();
+        let mode = mdns_mode();
+        setting_engine.set_ice_multicast_dns_mode(mode);
+        if mode == MulticastDnsMode::QueryAndGather {
+            setting_engine.set_multicast_dns_host_name(default_mdns_host_name(&session_id));
+        }
+        info!("WebRTC mDNS mode: {:?} (session {})", mode, session_id);
+
         let api = APIBuilder::new()
+            .with_setting_engine(setting_engine)
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
             .build();
@@ -321,6 +343,7 @@ impl UniversalSession {
             state_rx,
             ice_candidates: Arc::new(Mutex::new(vec![])),
             hid_controller: None,
+            event_bus,
             video_receiver_handle: Mutex::new(None),
             audio_receiver_handle: Mutex::new(None),
             fps: config.fps,
@@ -337,6 +360,7 @@ impl UniversalSession {
         let state = self.state.clone();
         let session_id = self.session_id.clone();
         let codec = self.codec;
+        let event_bus = self.event_bus.clone();
 
         // Connection state change handler
         self.pc
@@ -372,32 +396,56 @@ impl UniversalSession {
 
         // ICE gathering state handler
         let session_id_gather = self.session_id.clone();
+        let event_bus_gather = event_bus.clone();
         self.pc
             .on_ice_gathering_state_change(Box::new(move |state| {
                 let session_id = session_id_gather.clone();
+                let event_bus = event_bus_gather.clone();
                 Box::pin(async move {
-                    debug!("[ICE] Session {} gathering state: {:?}", session_id, state);
+                    if matches!(state, RTCIceGathererState::Complete) {
+                        if let Some(bus) = event_bus.as_ref() {
+                            bus.publish(SystemEvent::WebRTCIceComplete { session_id });
+                        }
+                    }
                 })
             }));
 
         // ICE candidate handler
         let ice_candidates = self.ice_candidates.clone();
+        let session_id_candidate = self.session_id.clone();
+        let event_bus_candidate = event_bus.clone();
         self.pc
             .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
                 let ice_candidates = ice_candidates.clone();
+                let session_id = session_id_candidate.clone();
+                let event_bus = event_bus_candidate.clone();
 
                 Box::pin(async move {
                     if let Some(c) = candidate {
-                        let candidate_str = c.to_json().map(|j| j.candidate).unwrap_or_default();
-                        debug!("ICE candidate: {}", candidate_str);
+                        let candidate_json = c.to_json().ok();
+                        let candidate_str = candidate_json
+                            .as_ref()
+                            .map(|j| j.candidate.clone())
+                            .unwrap_or_default();
+                        let candidate = IceCandidate {
+                            candidate: candidate_str,
+                            sdp_mid: candidate_json.as_ref().and_then(|j| j.sdp_mid.clone()),
+                            sdp_mline_index: candidate_json.as_ref().and_then(|j| j.sdp_mline_index),
+                            username_fragment: candidate_json
+                                .as_ref()
+                                .and_then(|j| j.username_fragment.clone()),
+                        };
 
                         let mut candidates = ice_candidates.lock().await;
-                        candidates.push(IceCandidate {
-                            candidate: candidate_str,
-                            sdp_mid: c.to_json().ok().and_then(|j| j.sdp_mid),
-                            sdp_mline_index: c.to_json().ok().and_then(|j| j.sdp_mline_index),
-                            username_fragment: None,
-                        });
+                        candidates.push(candidate.clone());
+                        drop(candidates);
+
+                        if let Some(bus) = event_bus.as_ref() {
+                            bus.publish(SystemEvent::WebRTCIceCandidate {
+                                session_id,
+                                candidate,
+                            });
+                        }
                     }
                 })
             }));
@@ -488,13 +536,11 @@ impl UniversalSession {
     ///
     /// The `on_connected` callback is called when ICE connection is established,
     /// allowing the caller to request a keyframe at the right time.
-    pub async fn start_from_video_pipeline<F>(
+    pub async fn start_from_video_pipeline(
         &self,
-        mut frame_rx: broadcast::Receiver<EncodedVideoFrame>,
-        on_connected: F,
-    ) where
-        F: FnOnce() + Send + 'static,
-    {
+        mut frame_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>,
+        request_keyframe: Arc<dyn Fn() + Send + Sync + 'static>,
+    ) {
         info!(
             "Starting {} session {} with shared encoder",
             self.codec, self.session_id
@@ -505,6 +551,7 @@ impl UniversalSession {
         let session_id = self.session_id.clone();
         let _fps = self.fps;
         let expected_codec = self.codec;
+        let send_in_flight = Arc::new(AtomicBool::new(false));
 
         let handle = tokio::spawn(async move {
             info!(
@@ -536,7 +583,10 @@ impl UniversalSession {
             );
 
             // Request keyframe now that connection is established
-            on_connected();
+            request_keyframe();
+            let mut waiting_for_keyframe = true;
+            let mut last_sequence: Option<u64> = None;
+            let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
 
             let mut frames_sent: u64 = 0;
 
@@ -556,64 +606,81 @@ impl UniversalSession {
                     }
 
                     result = frame_rx.recv() => {
-                        match result {
-                            Ok(encoded_frame) => {
-                                // Verify codec matches
-                                let frame_codec = match encoded_frame.codec {
-                                    VideoEncoderType::H264 => VideoEncoderType::H264,
-                                    VideoEncoderType::H265 => VideoEncoderType::H265,
-                                    VideoEncoderType::VP8 => VideoEncoderType::VP8,
-                                    VideoEncoderType::VP9 => VideoEncoderType::VP9,
-                                };
-
-                                if frame_codec != expected_codec {
-                                    trace!("Skipping frame with codec {:?}, expected {:?}", frame_codec, expected_codec);
-                                    continue;
-                                }
-
-                                // Debug log for H265 frames
-                                if expected_codec == VideoEncoderType::H265 {
-                                    if encoded_frame.is_keyframe || frames_sent % 30 == 0 {
-                                        debug!(
-                                            "[Session-H265] Received frame #{}: size={}, keyframe={}, seq={}",
-                                            frames_sent,
-                                            encoded_frame.data.len(),
-                                            encoded_frame.is_keyframe,
-                                            encoded_frame.sequence
-                                        );
-                                    }
-                                }
-
-                                // Send encoded frame via RTP
-                                if let Err(e) = video_track
-                                    .write_frame_bytes(
-                                        encoded_frame.data.clone(),
-                                        encoded_frame.is_keyframe,
-                                    )
-                                    .await
-                                {
-                                    if frames_sent % 100 == 0 {
-                                        debug!("Failed to write frame to track: {}", e);
-                                    }
-                                } else {
-                                    frames_sent += 1;
-
-                                    // Log successful H265 frame send
-                                    if expected_codec == VideoEncoderType::H265 && (encoded_frame.is_keyframe || frames_sent % 30 == 0) {
-                                        debug!(
-                                            "[Session-H265] Frame #{} sent successfully",
-                                            frames_sent
-                                        );
-                                    }
-                                }
-                            }
-                            Err(broadcast::error::RecvError::Lagged(n)) => {
-                                debug!("Session {} lagged by {} frames", session_id, n);
-                            }
-                            Err(broadcast::error::RecvError::Closed) => {
+                        let encoded_frame = match result {
+                            Some(frame) => frame,
+                            None => {
                                 info!("Video frame channel closed for session {}", session_id);
                                 break;
                             }
+                        };
+
+                        // Verify codec matches
+                        let frame_codec = match encoded_frame.codec {
+                            VideoEncoderType::H264 => VideoEncoderType::H264,
+                            VideoEncoderType::H265 => VideoEncoderType::H265,
+                            VideoEncoderType::VP8 => VideoEncoderType::VP8,
+                            VideoEncoderType::VP9 => VideoEncoderType::VP9,
+                        };
+
+                        if frame_codec != expected_codec {
+                            continue;
+                        }
+
+                        // Debug log for H265 frames
+                        if expected_codec == VideoEncoderType::H265 {
+                            if encoded_frame.is_keyframe || frames_sent % 30 == 0 {
+                                debug!(
+                                    "[Session-H265] Received frame #{}: size={}, keyframe={}, seq={}",
+                                    frames_sent,
+                                    encoded_frame.data.len(),
+                                    encoded_frame.is_keyframe,
+                                    encoded_frame.sequence
+                                );
+                            }
+                        }
+
+                        // Ensure decoder starts from a keyframe and recover on gaps.
+                        let mut gap_detected = false;
+                        if let Some(prev) = last_sequence {
+                            if encoded_frame.sequence > prev.saturating_add(1) {
+                                gap_detected = true;
+                            }
+                        }
+
+                        if waiting_for_keyframe || gap_detected {
+                            if encoded_frame.is_keyframe {
+                                waiting_for_keyframe = false;
+                            } else {
+                                if gap_detected {
+                                    waiting_for_keyframe = true;
+                                }
+                                let now = Instant::now();
+                                if now.duration_since(last_keyframe_request)
+                                    >= Duration::from_millis(200)
+                                {
+                                    request_keyframe();
+                                    last_keyframe_request = now;
+                                }
+                                continue;
+                            }
+                        }
+
+                        let _ = send_in_flight;
+
+                        // Send encoded frame via RTP (drop if previous send is still in flight)
+                        let send_result = video_track
+                            .write_frame_bytes(
+                                encoded_frame.data.clone(),
+                                encoded_frame.is_keyframe,
+                            )
+                            .await;
+                        let _ = send_in_flight;
+
+                        if send_result.is_err() {
+                            // Keep quiet unless debugging send failures elsewhere
+                        } else {
+                            frames_sent += 1;
+                            last_sequence = Some(encoded_frame.sequence);
                         }
                     }
                 }
@@ -629,7 +696,10 @@ impl UniversalSession {
     }
 
     /// Start receiving Opus audio frames
-    pub async fn start_audio_from_opus(&self, mut opus_rx: broadcast::Receiver<OpusFrame>) {
+    pub async fn start_audio_from_opus(
+        &self,
+        mut opus_rx: tokio::sync::watch::Receiver<Option<std::sync::Arc<OpusFrame>>>,
+    ) {
         let audio_track = match &self.audio_track {
             Some(track) => track.clone(),
             None => {
@@ -684,26 +754,25 @@ impl UniversalSession {
                         }
                     }
 
-                    result = opus_rx.recv() => {
-                        match result {
-                            Ok(opus_frame) => {
-                                // 20ms at 48kHz = 960 samples
-                                let samples = 960u32;
-                                if let Err(e) = audio_track.write_packet(&opus_frame.data, samples).await {
-                                    if packets_sent % 100 == 0 {
-                                        debug!("Failed to write audio packet: {}", e);
-                                    }
-                                } else {
-                                    packets_sent += 1;
-                                }
+                    result = opus_rx.changed() => {
+                        if result.is_err() {
+                            info!("Opus channel closed for session {}", session_id);
+                            break;
+                        }
+
+                        let opus_frame = match opus_rx.borrow().clone() {
+                            Some(frame) => frame,
+                            None => continue,
+                        };
+
+                        // 20ms at 48kHz = 960 samples
+                        let samples = 960u32;
+                        if let Err(e) = audio_track.write_packet(&opus_frame.data, samples).await {
+                            if packets_sent % 100 == 0 {
+                                debug!("Failed to write audio packet: {}", e);
                             }
-                            Err(broadcast::error::RecvError::Lagged(n)) => {
-                                warn!("Session {} audio lagged by {} packets", session_id, n);
-                            }
-                            Err(broadcast::error::RecvError::Closed) => {
-                                info!("Opus channel closed for session {}", session_id);
-                                break;
-                            }
+                        } else {
+                            packets_sent += 1;
                         }
                     }
                 }

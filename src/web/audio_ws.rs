@@ -26,7 +26,6 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
 use crate::audio::OpusFrame;
@@ -79,23 +78,21 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
     loop {
         tokio::select! {
             // Receive Opus frames and send to client
-            opus_result = opus_rx.recv() => {
-                match opus_result {
-                    Ok(frame) => {
-                        let binary = encode_audio_packet(&frame, stream_start);
-                        if sender.send(Message::Binary(binary.into())).await.is_err() {
-                            debug!("Failed to send audio frame, client disconnected");
-                            break;
-                        }
-                    }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        warn!("Audio WebSocket client lagged by {} frames", n);
-                        // Continue - just skip the missed frames
-                    }
-                    Err(broadcast::error::RecvError::Closed) => {
-                        info!("Audio stream closed");
-                        break;
-                    }
+            opus_result = opus_rx.changed() => {
+                if opus_result.is_err() {
+                    info!("Audio stream closed");
+                    break;
+                }
+
+                let frame = match opus_rx.borrow().clone() {
+                    Some(frame) => frame,
+                    None => continue,
+                };
+
+                let binary = encode_audio_packet(&frame, stream_start);
+                if sender.send(Message::Binary(binary.into())).await.is_err() {
+                    debug!("Failed to send audio frame, client disconnected");
+                    break;
                 }
             }
 

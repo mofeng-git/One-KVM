@@ -39,7 +39,7 @@ RUN apt-get update && \
 COPY --chmod=755 init.sh /init.sh
 
 # Copy binaries (these are placed by the build script)
-COPY --chmod=755 one-kvm ttyd gostc easytier-core /usr/bin/
+COPY --chmod=755 one-kvm ttyd /usr/bin/
 
 # Copy ventoy resources if they exist
 COPY ventoy/ /etc/one-kvm/ventoy/

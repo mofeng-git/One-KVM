@@ -24,8 +24,6 @@ interface StreamState {
   resolution: [number, number] | null
   targetFps: number
   clients: number
-  framesCaptured: number
-  framesDropped: number
   streamMode: string  // 'mjpeg' or 'webrtc'
   error: string | null
 }
@@ -277,8 +275,6 @@ export const useSystemStore = defineStore('system', () => {
       resolution: data.video.resolution,
       targetFps: data.video.fps,
       clients: stream.value?.clients ?? 0,
-      framesCaptured: stream.value?.framesCaptured ?? 0,
-      framesDropped: stream.value?.framesDropped ?? 0,
       streamMode: data.video.stream_mode || 'mjpeg',
       error: data.video.error,
     }

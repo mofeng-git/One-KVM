@@ -6,6 +6,25 @@ use serde::Deserialize;
 use std::path::Path;
 use typeshare::typeshare;
 
+// ===== Auth Config =====
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct AuthConfigUpdate {
+    pub single_user_allow_multiple_sessions: Option<bool>,
+}
+
+impl AuthConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut AuthConfig) {
+        if let Some(allow_multiple) = self.single_user_allow_multiple_sessions {
+            config.single_user_allow_multiple_sessions = allow_multiple;
+        }
+    }
+}
+
 // ===== Video Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
@@ -254,12 +273,40 @@ impl OtgDescriptorConfigUpdate {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct OtgHidFunctionsUpdate {
+    pub keyboard: Option<bool>,
+    pub mouse_relative: Option<bool>,
+    pub mouse_absolute: Option<bool>,
+    pub consumer: Option<bool>,
+}
+
+impl OtgHidFunctionsUpdate {
+    pub fn apply_to(&self, config: &mut OtgHidFunctions) {
+        if let Some(enabled) = self.keyboard {
+            config.keyboard = enabled;
+        }
+        if let Some(enabled) = self.mouse_relative {
+            config.mouse_relative = enabled;
+        }
+        if let Some(enabled) = self.mouse_absolute {
+            config.mouse_absolute = enabled;
+        }
+        if let Some(enabled) = self.consumer {
+            config.consumer = enabled;
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
     pub backend: Option<HidBackend>,
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
+    pub otg_profile: Option<OtgHidProfile>,
+    pub otg_functions: Option<OtgHidFunctionsUpdate>,
     pub mouse_absolute: Option<bool>,
 }
 
@@ -294,6 +341,12 @@ impl HidConfigUpdate {
         }
         if let Some(ref desc) = self.otg_descriptor {
             desc.apply_to(&mut config.otg_descriptor);
+        }
+        if let Some(profile) = self.otg_profile.clone() {
+            config.otg_profile = profile;
+        }
+        if let Some(ref functions) = self.otg_functions {
+            functions.apply_to(&mut config.otg_functions);
         }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;
@@ -557,6 +610,7 @@ impl RustDeskConfigUpdate {
 pub struct WebConfigUpdate {
     pub http_port: Option<u16>,
     pub https_port: Option<u16>,
+    pub bind_addresses: Option<Vec<String>>,
     pub bind_address: Option<String>,
     pub https_enabled: Option<bool>,
 }
@@ -571,6 +625,13 @@ impl WebConfigUpdate {
         if let Some(port) = self.https_port {
             if port == 0 {
                 return Err(AppError::BadRequest("HTTPS port cannot be 0".into()));
+            }
+        }
+        if let Some(ref addrs) = self.bind_addresses {
+            for addr in addrs {
+                if addr.parse::<std::net::IpAddr>().is_err() {
+                    return Err(AppError::BadRequest("Invalid bind address".into()));
+                }
             }
         }
         if let Some(ref addr) = self.bind_address {
@@ -588,8 +649,16 @@ impl WebConfigUpdate {
         if let Some(port) = self.https_port {
             config.https_port = port;
         }
-        if let Some(ref addr) = self.bind_address {
+        if let Some(ref addrs) = self.bind_addresses {
+            config.bind_addresses = addrs.clone();
+            if let Some(first) = addrs.first() {
+                config.bind_address = first.clone();
+            }
+        } else if let Some(ref addr) = self.bind_address {
             config.bind_address = addr.clone();
+            if config.bind_addresses.is_empty() {
+                config.bind_addresses = vec![addr.clone()];
+            }
         }
         if let Some(enabled) = self.https_enabled {
             config.https_enabled = enabled;

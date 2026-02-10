@@ -2,7 +2,7 @@
 // Provides low-latency video via WebRTC with DataChannel for HID
 
 import { ref, onUnmounted, computed, type Ref } from 'vue'
-import { webrtcApi } from '@/api'
+import { webrtcApi, type IceCandidate } from '@/api'
 import { generateUUID } from '@/lib/utils'
 import {
   type HidKeyboardEvent,
@@ -10,6 +10,7 @@ import {
   encodeKeyboardEvent,
   encodeMouseEvent,
 } from '@/types/hid'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 export type { HidKeyboardEvent, HidMouseEvent }
 
@@ -39,10 +40,25 @@ export interface WebRTCStats {
 // Cached ICE servers from backend API
 let cachedIceServers: RTCIceServer[] | null = null
 
+interface WebRTCIceCandidateEvent {
+  session_id: string
+  candidate: IceCandidate
+}
+
+interface WebRTCIceCompleteEvent {
+  session_id: string
+}
+
 // Fetch ICE servers from backend API
 async function fetchIceServers(): Promise<RTCIceServer[]> {
   try {
     const response = await webrtcApi.getIceServers()
+    if (response.mdns_mode) {
+      allowMdnsHostCandidates = response.mdns_mode !== 'disabled'
+    } else if (response.ice_servers) {
+      allowMdnsHostCandidates = response.ice_servers.length === 0
+    }
+
     if (response.ice_servers && response.ice_servers.length > 0) {
       cachedIceServers = response.ice_servers.map(server => ({
         urls: server.urls,
@@ -65,6 +81,7 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
      window.location.hostname.startsWith('10.'))
 
   if (isLocalConnection) {
+    allowMdnsHostCandidates = false
     console.log('[WebRTC] Local connection detected, using host candidates only')
     return []
   }
@@ -83,7 +100,15 @@ let sessionId: string | null = null
 let statsInterval: number | null = null
 let isConnecting = false // Lock to prevent concurrent connect calls
 let pendingIceCandidates: RTCIceCandidate[] = [] // Queue for ICE candidates before sessionId is set
+let pendingRemoteCandidates: WebRTCIceCandidateEvent[] = [] // Queue for server ICE candidates
+let pendingRemoteIceComplete = new Set<string>() // Session IDs waiting for end-of-candidates
+let seenRemoteCandidates = new Set<string>() // Deduplicate server ICE candidates
 let cachedMediaStream: MediaStream | null = null // Cached MediaStream to avoid recreating
+
+let allowMdnsHostCandidates = false
+
+let wsHandlersRegistered = false
+const { on: wsOn } = useWebSocket()
 
 const state = ref<WebRTCState>('disconnected')
 const videoTrack = ref<MediaStreamTrack | null>(null)
@@ -148,6 +173,7 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   // Handle ICE candidates
   pc.onicecandidate = async (event) => {
     if (!event.candidate) return
+    if (shouldSkipLocalCandidate(event.candidate)) return
 
     const currentSessionId = sessionId
     if (currentSessionId && pc.connectionState !== 'closed') {
@@ -216,6 +242,99 @@ function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
   })
   setupDataChannel(channel)
   return channel
+}
+
+function registerWebSocketHandlers() {
+  if (wsHandlersRegistered) return
+  wsHandlersRegistered = true
+  wsOn('webrtc.ice_candidate', handleRemoteIceCandidate)
+  wsOn('webrtc.ice_complete', handleRemoteIceComplete)
+}
+
+function shouldSkipLocalCandidate(candidate: RTCIceCandidate): boolean {
+  if (allowMdnsHostCandidates) return false
+  const value = candidate.candidate || ''
+  return value.includes(' typ host') && value.includes('.local')
+}
+
+async function handleRemoteIceCandidate(data: WebRTCIceCandidateEvent) {
+  if (!data || !data.candidate) return
+
+  // Queue until session is ready and remote description is set
+  if (!sessionId) {
+    pendingRemoteCandidates.push(data)
+    return
+  }
+  if (data.session_id !== sessionId) return
+  if (!peerConnection || !peerConnection.remoteDescription) {
+    pendingRemoteCandidates.push(data)
+    return
+  }
+
+  await addRemoteIceCandidate(data.candidate)
+}
+
+async function handleRemoteIceComplete(data: WebRTCIceCompleteEvent) {
+  if (!data || !data.session_id) return
+
+  if (!sessionId) {
+    pendingRemoteIceComplete.add(data.session_id)
+    return
+  }
+  if (data.session_id !== sessionId) return
+  if (!peerConnection || !peerConnection.remoteDescription) {
+    pendingRemoteIceComplete.add(data.session_id)
+    return
+  }
+
+  try {
+    await peerConnection.addIceCandidate(null)
+  } catch {
+    // End-of-candidates failures are non-fatal
+  }
+}
+
+async function addRemoteIceCandidate(candidate: IceCandidate) {
+  if (!peerConnection) return
+  if (!candidate.candidate) return
+  if (seenRemoteCandidates.has(candidate.candidate)) return
+  seenRemoteCandidates.add(candidate.candidate)
+
+  const iceCandidate: RTCIceCandidateInit = {
+    candidate: candidate.candidate,
+    sdpMid: candidate.sdpMid ?? undefined,
+    sdpMLineIndex: candidate.sdpMLineIndex ?? undefined,
+    usernameFragment: candidate.usernameFragment ?? undefined,
+  }
+
+  try {
+    await peerConnection.addIceCandidate(iceCandidate)
+  } catch {
+    // ICE candidate add failures are non-fatal
+  }
+}
+
+async function flushPendingRemoteIce() {
+  if (!peerConnection || !sessionId || !peerConnection.remoteDescription) return
+
+  const remaining: WebRTCIceCandidateEvent[] = []
+  for (const event of pendingRemoteCandidates) {
+    if (event.session_id === sessionId) {
+      await addRemoteIceCandidate(event.candidate)
+    } else {
+      // Drop candidates for old sessions
+    }
+  }
+  pendingRemoteCandidates = remaining
+
+  if (pendingRemoteIceComplete.has(sessionId)) {
+    pendingRemoteIceComplete.delete(sessionId)
+    try {
+      await peerConnection.addIceCandidate(null)
+    } catch {
+      // Ignore end-of-candidates errors
+    }
+  }
 }
 
 // Start collecting stats
@@ -315,6 +434,7 @@ async function flushPendingIceCandidates() {
   pendingIceCandidates = []
 
   for (const candidate of candidates) {
+    if (shouldSkipLocalCandidate(candidate)) continue
     try {
       await webrtcApi.addIceCandidate(sessionId, {
         candidate: candidate.candidate,
@@ -330,6 +450,8 @@ async function flushPendingIceCandidates() {
 
 // Connect to WebRTC server
 async function connect(): Promise<boolean> {
+  registerWebSocketHandlers()
+
   // Prevent concurrent connection attempts
   if (isConnecting) {
     return false
@@ -384,19 +506,13 @@ async function connect(): Promise<boolean> {
     }
     await peerConnection.setRemoteDescription(answer)
 
+    // Flush any pending server ICE candidates once remote description is set
+    await flushPendingRemoteIce()
+
     // Add any ICE candidates from the response
     if (response.ice_candidates && response.ice_candidates.length > 0) {
       for (const candidateObj of response.ice_candidates) {
-        try {
-          const iceCandidate: RTCIceCandidateInit = {
-            candidate: candidateObj.candidate,
-            sdpMid: candidateObj.sdpMid ?? '0',
-            sdpMLineIndex: candidateObj.sdpMLineIndex ?? 0,
-          }
-          await peerConnection.addIceCandidate(iceCandidate)
-        } catch {
-          // ICE candidate add failures are non-fatal
-        }
+        await addRemoteIceCandidate(candidateObj)
       }
     }
 
@@ -440,6 +556,9 @@ async function disconnect() {
   sessionId = null
   isConnecting = false
   pendingIceCandidates = []
+  pendingRemoteCandidates = []
+  pendingRemoteIceComplete.clear()
+  seenRemoteCandidates.clear()
 
   if (dataChannel) {
     dataChannel.close()

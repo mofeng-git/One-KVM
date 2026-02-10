@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{broadcast, watch, Mutex};
+use tokio::sync::{broadcast, watch};
 use tracing::{debug, error, info};
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -87,38 +87,11 @@ pub fn audio_codec_capability() -> RTCRtpCodecCapability {
     }
 }
 
-/// Video track statistics
-#[derive(Debug, Clone, Default)]
-pub struct VideoTrackStats {
-    /// Frames sent
-    pub frames_sent: u64,
-    /// Bytes sent
-    pub bytes_sent: u64,
-    /// Packets sent
-    pub packets_sent: u64,
-    /// Packets lost (RTCP feedback)
-    pub packets_lost: u64,
-    /// Current bitrate (bps)
-    pub current_bitrate: u64,
-    /// Round trip time (ms)
-    pub rtt_ms: f64,
-    /// Jitter (ms)
-    pub jitter_ms: f64,
-}
-
 /// Video track for WebRTC streaming
 pub struct VideoTrack {
     config: VideoTrackConfig,
     /// RTP track
     track: Arc<TrackLocalStaticRTP>,
-    /// Statistics
-    stats: Arc<Mutex<VideoTrackStats>>,
-    /// Sequence number for RTP
-    sequence_number: Arc<Mutex<u16>>,
-    /// Timestamp for RTP
-    timestamp: Arc<Mutex<u32>>,
-    /// Last frame time
-    last_frame_time: Arc<Mutex<Option<Instant>>>,
     /// Running flag
     running: Arc<watch::Sender<bool>>,
 }
@@ -139,10 +112,6 @@ impl VideoTrack {
         Self {
             config,
             track,
-            stats: Arc::new(Mutex::new(VideoTrackStats::default())),
-            sequence_number: Arc::new(Mutex::new(0)),
-            timestamp: Arc::new(Mutex::new(0)),
-            last_frame_time: Arc::new(Mutex::new(None)),
             running: Arc::new(running_tx),
         }
     }
@@ -152,25 +121,17 @@ impl VideoTrack {
         self.track.clone()
     }
 
-    /// Get current statistics
-    pub async fn stats(&self) -> VideoTrackStats {
-        self.stats.lock().await.clone()
-    }
-
     /// Start sending frames from a broadcast receiver
     pub async fn start_sending(&self, mut frame_rx: broadcast::Receiver<VideoFrame>) {
         let _ = self.running.send(true);
         let track = self.track.clone();
-        let stats = self.stats.clone();
-        let sequence_number = self.sequence_number.clone();
-        let timestamp = self.timestamp.clone();
-        let last_frame_time = self.last_frame_time.clone();
         let clock_rate = self.config.clock_rate;
         let mut running_rx = self.running.subscribe();
 
         info!("Starting video track sender");
 
         tokio::spawn(async move {
+            let mut state = SendState::default();
             loop {
                 tokio::select! {
                     result = frame_rx.recv() => {
@@ -179,10 +140,7 @@ impl VideoTrack {
                                 if let Err(e) = Self::send_frame(
                                     &track,
                                     &frame,
-                                    &stats,
-                                    &sequence_number,
-                                    &timestamp,
-                                    &last_frame_time,
+                                    &mut state,
                                     clock_rate,
                                 ).await {
                                     debug!("Failed to send frame: {}", e);
@@ -219,29 +177,22 @@ impl VideoTrack {
     async fn send_frame(
         track: &TrackLocalStaticRTP,
         frame: &VideoFrame,
-        stats: &Mutex<VideoTrackStats>,
-        sequence_number: &Mutex<u16>,
-        timestamp: &Mutex<u32>,
-        last_frame_time: &Mutex<Option<Instant>>,
+        state: &mut SendState,
         clock_rate: u32,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Calculate timestamp increment based on frame timing
         let now = Instant::now();
-        let mut last_time = last_frame_time.lock().await;
-        let timestamp_increment = if let Some(last) = *last_time {
+        let timestamp_increment = if let Some(last) = state.last_frame_time {
             let elapsed = now.duration_since(last);
             ((elapsed.as_secs_f64() * clock_rate as f64) as u32).min(clock_rate / 10)
         } else {
             clock_rate / 30 // Default to 30 fps
         };
-        *last_time = Some(now);
-        drop(last_time);
+        state.last_frame_time = Some(now);
 
         // Update timestamp
-        let mut ts = timestamp.lock().await;
-        *ts = ts.wrapping_add(timestamp_increment);
-        let _current_ts = *ts;
-        drop(ts);
+        state.timestamp = state.timestamp.wrapping_add(timestamp_increment);
+        let _current_ts = state.timestamp;
 
         // For H.264, we need to packetize into RTP
         // This is a simplified implementation - real implementation needs proper NAL unit handling
@@ -257,31 +208,32 @@ impl VideoTrack {
             let _is_last = i == packet_count - 1;
 
             // Get sequence number
-            let mut seq = sequence_number.lock().await;
-            let _seq_num = *seq;
-            *seq = seq.wrapping_add(1);
-            drop(seq);
+            let _seq_num = state.sequence_number;
+            state.sequence_number = state.sequence_number.wrapping_add(1);
 
             // Build RTP packet payload
             // For simplicity, just send raw data - real implementation needs proper RTP packetization
-            let payload = data[start..end].to_vec();
+            let payload = &data[start..end];
             bytes_sent += payload.len() as u64;
 
             // Write sample (the track handles RTP header construction)
-            if let Err(e) = track.write(&payload).await {
+            if let Err(e) = track.write(payload).await {
                 error!("Failed to write RTP packet: {}", e);
                 return Err(e.into());
             }
         }
 
-        // Update stats
-        let mut s = stats.lock().await;
-        s.frames_sent += 1;
-        s.bytes_sent += bytes_sent;
-        s.packets_sent += packet_count as u64;
+        let _ = bytes_sent;
 
         Ok(())
     }
+}
+
+#[derive(Debug, Default)]
+struct SendState {
+    sequence_number: u16,
+    timestamp: u32,
+    last_frame_time: Option<Instant>,
 }
 
 /// Audio track configuration

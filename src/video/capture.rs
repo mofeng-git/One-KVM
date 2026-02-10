@@ -2,13 +2,13 @@
 //!
 //! Provides async video capture using memory-mapped buffers.
 
-use bytes::Bytes;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use bytes::Bytes;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, watch, Mutex};
+use tokio::sync::{watch, Mutex};
 use tracing::{debug, error, info, warn};
 use v4l::buffer::Type as BufferType;
 use v4l::io::traits::CaptureStream;
@@ -92,20 +92,8 @@ impl CaptureConfig {
 /// Capture statistics
 #[derive(Debug, Clone, Default)]
 pub struct CaptureStats {
-    /// Total frames captured
-    pub frames_captured: u64,
-    /// Frames dropped (invalid/too small)
-    pub frames_dropped: u64,
     /// Current FPS (calculated)
     pub current_fps: f32,
-    /// Average frame size in bytes
-    pub avg_frame_size: usize,
-    /// Capture errors
-    pub errors: u64,
-    /// Last frame timestamp
-    pub last_frame_ts: Option<Instant>,
-    /// Whether signal is present
-    pub signal_present: bool,
 }
 
 /// Video capturer state
@@ -131,9 +119,7 @@ pub struct VideoCapturer {
     state: Arc<watch::Sender<CaptureState>>,
     state_rx: watch::Receiver<CaptureState>,
     stats: Arc<Mutex<CaptureStats>>,
-    frame_tx: broadcast::Sender<VideoFrame>,
     stop_flag: Arc<AtomicBool>,
-    sequence: Arc<AtomicU64>,
     capture_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Last error that occurred (device path, reason)
     last_error: Arc<parking_lot::RwLock<Option<(String, String)>>>,
@@ -143,16 +129,13 @@ impl VideoCapturer {
     /// Create a new video capturer
     pub fn new(config: CaptureConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(CaptureState::Stopped);
-        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config,
             state: Arc::new(state_tx),
             state_rx,
             stats: Arc::new(Mutex::new(CaptureStats::default())),
-            frame_tx,
             stop_flag: Arc::new(AtomicBool::new(false)),
-            sequence: Arc::new(AtomicU64::new(0)),
             capture_handle: Mutex::new(None),
             last_error: Arc::new(parking_lot::RwLock::new(None)),
         }
@@ -176,16 +159,6 @@ impl VideoCapturer {
     /// Clear last error
     pub fn clear_error(&self) {
         *self.last_error.write() = None;
-    }
-
-    /// Subscribe to frames
-    pub fn subscribe(&self) -> broadcast::Receiver<VideoFrame> {
-        self.frame_tx.subscribe()
-    }
-
-    /// Get frame sender (for sharing with other components like WebRTC)
-    pub fn frame_sender(&self) -> broadcast::Sender<VideoFrame> {
-        self.frame_tx.clone()
     }
 
     /// Get capture statistics
@@ -225,15 +198,11 @@ impl VideoCapturer {
         let config = self.config.clone();
         let state = self.state.clone();
         let stats = self.stats.clone();
-        let frame_tx = self.frame_tx.clone();
         let stop_flag = self.stop_flag.clone();
-        let sequence = self.sequence.clone();
         let last_error = self.last_error.clone();
 
         let handle = tokio::task::spawn_blocking(move || {
-            capture_loop(
-                config, state, stats, frame_tx, stop_flag, sequence, last_error,
-            );
+            capture_loop(config, state, stats, stop_flag, last_error);
         });
 
         *self.capture_handle.lock().await = Some(handle);
@@ -272,12 +241,10 @@ fn capture_loop(
     config: CaptureConfig,
     state: Arc<watch::Sender<CaptureState>>,
     stats: Arc<Mutex<CaptureStats>>,
-    frame_tx: broadcast::Sender<VideoFrame>,
     stop_flag: Arc<AtomicBool>,
-    sequence: Arc<AtomicU64>,
     error_holder: Arc<parking_lot::RwLock<Option<(String, String)>>>,
 ) {
-    let result = run_capture(&config, &state, &stats, &frame_tx, &stop_flag, &sequence);
+    let result = run_capture(&config, &state, &stats, &stop_flag);
 
     match result {
         Ok(_) => {
@@ -300,9 +267,7 @@ fn run_capture(
     config: &CaptureConfig,
     state: &watch::Sender<CaptureState>,
     stats: &Arc<Mutex<CaptureStats>>,
-    frame_tx: &broadcast::Sender<VideoFrame>,
     stop_flag: &AtomicBool,
-    sequence: &AtomicU64,
 ) -> Result<()> {
     // Retry logic for device busy errors
     const MAX_RETRIES: u32 = 5;
@@ -368,16 +333,7 @@ fn run_capture(
         };
 
         // Device opened and format set successfully - proceed with capture
-        return run_capture_inner(
-            config,
-            state,
-            stats,
-            frame_tx,
-            stop_flag,
-            sequence,
-            device,
-            actual_format,
-        );
+        return run_capture_inner(config, state, stats, stop_flag, device, actual_format);
     }
 
     // All retries exhausted
@@ -391,9 +347,7 @@ fn run_capture_inner(
     config: &CaptureConfig,
     state: &watch::Sender<CaptureState>,
     stats: &Arc<Mutex<CaptureStats>>,
-    frame_tx: &broadcast::Sender<VideoFrame>,
     stop_flag: &AtomicBool,
-    sequence: &AtomicU64,
     device: Device,
     actual_format: Format,
 ) -> Result<()> {
@@ -402,8 +356,6 @@ fn run_capture_inner(
         actual_format.width, actual_format.height, actual_format.fourcc, actual_format.stride
     );
 
-    let resolution = Resolution::new(actual_format.width, actual_format.height);
-    let pixel_format = PixelFormat::from_fourcc(actual_format.fourcc).unwrap_or(config.format);
 
     // Try to set hardware FPS (V4L2 VIDIOC_S_PARM)
     if config.fps > 0 {
@@ -449,17 +401,12 @@ fn run_capture_inner(
     // Main capture loop
     while !stop_flag.load(Ordering::Relaxed) {
         // Try to capture a frame
-        let (buf, meta) = match stream.next() {
+        let (_buf, meta) = match stream.next() {
             Ok(frame_data) => frame_data,
             Err(e) => {
                 if e.kind() == io::ErrorKind::TimedOut {
                     warn!("Capture timeout - no signal?");
                     let _ = state.send(CaptureState::NoSignal);
-
-                    // Update stats
-                    if let Ok(mut s) = stats.try_lock() {
-                        s.signal_present = false;
-                    }
 
                     // Wait a bit before retrying
                     std::thread::sleep(Duration::from_millis(100));
@@ -486,9 +433,6 @@ fn run_capture_inner(
                 }
 
                 error!("Capture error: {}", e);
-                if let Ok(mut s) = stats.try_lock() {
-                    s.errors += 1;
-                }
                 continue;
             }
         };
@@ -502,54 +446,16 @@ fn run_capture_inner(
                 "Dropping small frame: {} bytes (bytesused={})",
                 frame_size, meta.bytesused
             );
-            if let Ok(mut s) = stats.try_lock() {
-                s.frames_dropped += 1;
-            }
             continue;
         }
-
-        // For JPEG formats, validate header
-        if pixel_format.is_compressed() && !is_valid_jpeg(&buf[..frame_size]) {
-            debug!("Dropping invalid JPEG frame (size={})", frame_size);
-            if let Ok(mut s) = stats.try_lock() {
-                s.frames_dropped += 1;
-            }
-            continue;
-        }
-
-        // Create frame with actual data size
-        let seq = sequence.fetch_add(1, Ordering::Relaxed);
-        let frame = VideoFrame::new(
-            Bytes::copy_from_slice(&buf[..frame_size]),
-            resolution,
-            pixel_format,
-            actual_format.stride,
-            seq,
-        );
 
         // Update state if was no signal
         if *state.borrow() == CaptureState::NoSignal {
             let _ = state.send(CaptureState::Running);
         }
 
-        // Send frame to subscribers
-        let receiver_count = frame_tx.receiver_count();
-        if receiver_count > 0 {
-            if let Err(e) = frame_tx.send(frame) {
-                debug!("No active receivers for frame: {}", e);
-            }
-        } else if seq % 60 == 0 {
-            // Log every 60 frames (about 1 second at 60fps) when no receivers
-            debug!("No receivers for video frames (receiver_count=0)");
-        }
-
-        // Update stats
+        // Update FPS calculation
         if let Ok(mut s) = stats.try_lock() {
-            s.frames_captured += 1;
-            s.signal_present = true;
-            s.last_frame_ts = Some(Instant::now());
-
-            // Update FPS calculation
             fps_frame_count += 1;
             let elapsed = fps_window_start.elapsed();
 
@@ -571,6 +477,7 @@ fn run_capture_inner(
 }
 
 /// Validate JPEG frame data
+#[cfg(test)]
 fn is_valid_jpeg(data: &[u8]) -> bool {
     if data.len() < 125 {
         return false;

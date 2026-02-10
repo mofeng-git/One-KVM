@@ -18,6 +18,7 @@ pub mod mouse_type {
     pub const UP: i32 = 2;
     pub const WHEEL: i32 = 3;
     pub const TRACKPAD: i32 = 4;
+    pub const MOVE_RELATIVE: i32 = 5;
 }
 
 /// Mouse button IDs from RustDesk protocol (before left shift by 3)
@@ -36,23 +37,25 @@ pub fn convert_mouse_event(
     event: &MouseEvent,
     screen_width: u32,
     screen_height: u32,
+    relative_mode: bool,
 ) -> Vec<OneKvmMouseEvent> {
     let mut events = Vec::new();
-
-    // RustDesk uses absolute coordinates
-    let x = event.x.max(0) as u32;
-    let y = event.y.max(0) as u32;
-
-    // Normalize to 0-32767 range for absolute mouse (USB HID standard)
-    let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-    let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
 
     // Parse RustDesk mask format: (button << 3) | event_type
     let event_type = event.mask & 0x07;
     let button_id = event.mask >> 3;
+    let include_abs_move = !relative_mode;
 
     match event_type {
         mouse_type::MOVE => {
+            // RustDesk uses absolute coordinates
+            let x = event.x.max(0) as u32;
+            let y = event.y.max(0) as u32;
+
+            // Normalize to 0-32767 range for absolute mouse (USB HID standard)
+            let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+            let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+
             // Move event - may have button held down (button_id > 0 means dragging)
             // Just send move, button state is tracked separately by HID backend
             events.push(OneKvmMouseEvent {
@@ -63,55 +66,83 @@ pub fn convert_mouse_event(
                 scroll: 0,
             });
         }
-        mouse_type::DOWN => {
-            // Button down - first move, then press
+        mouse_type::MOVE_RELATIVE => {
+            // Relative movement uses delta values directly (dx, dy).
             events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
+                event_type: MouseEventType::Move,
+                x: event.x,
+                y: event.y,
                 button: None,
                 scroll: 0,
             });
+        }
+        mouse_type::DOWN => {
+            if include_abs_move {
+                // Button down - first move, then press
+                let x = event.x.max(0) as u32;
+                let y = event.y.max(0) as u32;
+                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+                events.push(OneKvmMouseEvent {
+                    event_type: MouseEventType::MoveAbs,
+                    x: abs_x,
+                    y: abs_y,
+                    button: None,
+                    scroll: 0,
+                });
+            }
 
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Down,
-                    x: abs_x,
-                    y: abs_y,
+                    x: 0,
+                    y: 0,
                     button: Some(button),
                     scroll: 0,
                 });
             }
         }
         mouse_type::UP => {
-            // Button up - first move, then release
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
+            if include_abs_move {
+                // Button up - first move, then release
+                let x = event.x.max(0) as u32;
+                let y = event.y.max(0) as u32;
+                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+                events.push(OneKvmMouseEvent {
+                    event_type: MouseEventType::MoveAbs,
+                    x: abs_x,
+                    y: abs_y,
+                    button: None,
+                    scroll: 0,
+                });
+            }
 
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Up,
-                    x: abs_x,
-                    y: abs_y,
+                    x: 0,
+                    y: 0,
                     button: Some(button),
                     scroll: 0,
                 });
             }
         }
         mouse_type::WHEEL => {
-            // Scroll event - move first, then scroll
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
+            if include_abs_move {
+                // Scroll event - move first, then scroll
+                let x = event.x.max(0) as u32;
+                let y = event.y.max(0) as u32;
+                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+                events.push(OneKvmMouseEvent {
+                    event_type: MouseEventType::MoveAbs,
+                    x: abs_x,
+                    y: abs_y,
+                    button: None,
+                    scroll: 0,
+                });
+            }
 
             // RustDesk encodes scroll direction in the y coordinate
             // Positive y = scroll up, Negative y = scroll down
@@ -119,21 +150,27 @@ pub fn convert_mouse_event(
             let scroll = if event.y > 0 { 1i8 } else { -1i8 };
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::Scroll,
-                x: abs_x,
-                y: abs_y,
+                x: 0,
+                y: 0,
                 button: None,
                 scroll,
             });
         }
         _ => {
-            // Unknown event type, just move
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
+            if include_abs_move {
+                // Unknown event type, just move
+                let x = event.x.max(0) as u32;
+                let y = event.y.max(0) as u32;
+                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+                events.push(OneKvmMouseEvent {
+                    event_type: MouseEventType::MoveAbs,
+                    x: abs_x,
+                    y: abs_y,
+                    button: None,
+                    scroll: 0,
+                });
+            }
         }
     }
 
@@ -522,7 +559,7 @@ mod tests {
         event.y = 300;
         event.mask = mouse_type::MOVE; // Pure move event
 
-        let events = convert_mouse_event(&event, 1920, 1080);
+        let events = convert_mouse_event(&event, 1920, 1080, false);
         assert!(!events.is_empty());
         assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
     }
@@ -534,12 +571,26 @@ mod tests {
         event.y = 300;
         event.mask = (mouse_button::LEFT << 3) | mouse_type::DOWN;
 
-        let events = convert_mouse_event(&event, 1920, 1080);
+        let events = convert_mouse_event(&event, 1920, 1080, false);
         assert!(events.len() >= 2);
         // Should have a button down event
         assert!(events
             .iter()
             .any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));
+    }
+
+    #[test]
+    fn test_convert_mouse_move_relative() {
+        let mut event = MouseEvent::new();
+        event.x = -12;
+        event.y = 8;
+        event.mask = mouse_type::MOVE_RELATIVE;
+
+        let events = convert_mouse_event(&event, 1920, 1080, true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Move);
+        assert_eq!(events[0].x, -12);
+        assert_eq!(events[0].y, 8);
     }
 
     #[test]

@@ -109,13 +109,13 @@ impl LedState {
 /// reopened on the next operation attempt.
 pub struct OtgBackend {
     /// Keyboard device path (/dev/hidg0)
-    keyboard_path: PathBuf,
+    keyboard_path: Option<PathBuf>,
     /// Relative mouse device path (/dev/hidg1)
-    mouse_rel_path: PathBuf,
+    mouse_rel_path: Option<PathBuf>,
     /// Absolute mouse device path (/dev/hidg2)
-    mouse_abs_path: PathBuf,
+    mouse_abs_path: Option<PathBuf>,
     /// Consumer control device path (/dev/hidg3)
-    consumer_path: PathBuf,
+    consumer_path: Option<PathBuf>,
     /// Keyboard device file
     keyboard_dev: Mutex<Option<File>>,
     /// Relative mouse device file
@@ -145,7 +145,7 @@ pub struct OtgBackend {
 }
 
 /// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
-const HID_WRITE_TIMEOUT_MS: i32 = 500;
+const HID_WRITE_TIMEOUT_MS: i32 = 20;
 
 impl OtgBackend {
     /// Create OTG backend from device paths provided by OtgService
@@ -157,9 +157,7 @@ impl OtgBackend {
             keyboard_path: paths.keyboard,
             mouse_rel_path: paths.mouse_relative,
             mouse_abs_path: paths.mouse_absolute,
-            consumer_path: paths
-                .consumer
-                .unwrap_or_else(|| PathBuf::from("/dev/hidg3")),
+            consumer_path: paths.consumer,
             keyboard_dev: Mutex::new(None),
             mouse_rel_dev: Mutex::new(None),
             mouse_abs_dev: Mutex::new(None),
@@ -300,11 +298,23 @@ impl OtgBackend {
     /// 2. If handle is None but path exists, reopen the device
     /// 3. Return whether the device is ready for I/O
     fn ensure_device(&self, device_type: DeviceType) -> Result<()> {
-        let (path, dev_mutex) = match device_type {
+        let (path_opt, dev_mutex) = match device_type {
             DeviceType::Keyboard => (&self.keyboard_path, &self.keyboard_dev),
             DeviceType::MouseRelative => (&self.mouse_rel_path, &self.mouse_rel_dev),
             DeviceType::MouseAbsolute => (&self.mouse_abs_path, &self.mouse_abs_dev),
             DeviceType::ConsumerControl => (&self.consumer_path, &self.consumer_dev),
+        };
+
+        let path = match path_opt {
+            Some(p) => p,
+            None => {
+                self.online.store(false, Ordering::Relaxed);
+                return Err(AppError::HidError {
+                    backend: "otg".to_string(),
+                    reason: "Device disabled".to_string(),
+                    error_code: "disabled".to_string(),
+                });
+            }
         };
 
         // Check if device path exists
@@ -383,20 +393,40 @@ impl OtgBackend {
 
     /// Check if all HID device files exist
     pub fn check_devices_exist(&self) -> bool {
-        self.keyboard_path.exists() && self.mouse_rel_path.exists() && self.mouse_abs_path.exists()
+        self.keyboard_path
+            .as_ref()
+            .map_or(true, |p| p.exists())
+            && self
+                .mouse_rel_path
+                .as_ref()
+                .map_or(true, |p| p.exists())
+            && self
+                .mouse_abs_path
+                .as_ref()
+                .map_or(true, |p| p.exists())
+            && self
+                .consumer_path
+                .as_ref()
+                .map_or(true, |p| p.exists())
     }
 
     /// Get list of missing device paths
     pub fn get_missing_devices(&self) -> Vec<String> {
         let mut missing = Vec::new();
-        if !self.keyboard_path.exists() {
-            missing.push(self.keyboard_path.display().to_string());
+        if let Some(ref path) = self.keyboard_path {
+            if !path.exists() {
+                missing.push(path.display().to_string());
+            }
         }
-        if !self.mouse_rel_path.exists() {
-            missing.push(self.mouse_rel_path.display().to_string());
+        if let Some(ref path) = self.mouse_rel_path {
+            if !path.exists() {
+                missing.push(path.display().to_string());
+            }
         }
-        if !self.mouse_abs_path.exists() {
-            missing.push(self.mouse_abs_path.display().to_string());
+        if let Some(ref path) = self.mouse_abs_path {
+            if !path.exists() {
+                missing.push(path.display().to_string());
+            }
         }
         missing
     }
@@ -407,6 +437,10 @@ impl OtgBackend {
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
     /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_keyboard_report(&self, report: &KeyboardReport) -> Result<()> {
+        if self.keyboard_path.is_none() {
+            return Ok(());
+        }
+
         // Ensure device is ready
         self.ensure_device(DeviceType::Keyboard)?;
 
@@ -472,6 +506,10 @@ impl OtgBackend {
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
     /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_relative(&self, buttons: u8, dx: i8, dy: i8, wheel: i8) -> Result<()> {
+        if self.mouse_rel_path.is_none() {
+            return Ok(());
+        }
+
         // Ensure device is ready
         self.ensure_device(DeviceType::MouseRelative)?;
 
@@ -534,6 +572,10 @@ impl OtgBackend {
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
     /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_absolute(&self, buttons: u8, x: u16, y: u16, wheel: i8) -> Result<()> {
+        if self.mouse_abs_path.is_none() {
+            return Ok(());
+        }
+
         // Ensure device is ready
         self.ensure_device(DeviceType::MouseAbsolute)?;
 
@@ -600,6 +642,10 @@ impl OtgBackend {
     ///
     /// Sends a consumer control usage code and then releases it (sends 0x0000).
     fn send_consumer_report(&self, usage: u16) -> Result<()> {
+        if self.consumer_path.is_none() {
+            return Ok(());
+        }
+
         // Ensure device is ready
         self.ensure_device(DeviceType::ConsumerControl)?;
 
@@ -708,71 +754,72 @@ impl HidBackend for OtgBackend {
         }
 
         // Wait for devices to appear (they should already exist from OtgService)
-        let device_paths = vec![
-            self.keyboard_path.clone(),
-            self.mouse_rel_path.clone(),
-            self.mouse_abs_path.clone(),
-        ];
+        let mut device_paths = Vec::new();
+        if let Some(ref path) = self.keyboard_path {
+            device_paths.push(path.clone());
+        }
+        if let Some(ref path) = self.mouse_rel_path {
+            device_paths.push(path.clone());
+        }
+        if let Some(ref path) = self.mouse_abs_path {
+            device_paths.push(path.clone());
+        }
+        if let Some(ref path) = self.consumer_path {
+            device_paths.push(path.clone());
+        }
+
+        if device_paths.is_empty() {
+            return Err(AppError::Internal(
+                "No HID devices configured for OTG backend".into(),
+            ));
+        }
 
         if !wait_for_hid_devices(&device_paths, 2000).await {
             return Err(AppError::Internal("HID devices did not appear".into()));
         }
 
         // Open keyboard device
-        if self.keyboard_path.exists() {
-            let file = Self::open_device(&self.keyboard_path)?;
-            *self.keyboard_dev.lock() = Some(file);
-            info!("Keyboard device opened: {}", self.keyboard_path.display());
-        } else {
-            warn!(
-                "Keyboard device not found: {}",
-                self.keyboard_path.display()
-            );
+        if let Some(ref path) = self.keyboard_path {
+            if path.exists() {
+                let file = Self::open_device(path)?;
+                *self.keyboard_dev.lock() = Some(file);
+                info!("Keyboard device opened: {}", path.display());
+            } else {
+                warn!("Keyboard device not found: {}", path.display());
+            }
         }
 
         // Open relative mouse device
-        if self.mouse_rel_path.exists() {
-            let file = Self::open_device(&self.mouse_rel_path)?;
-            *self.mouse_rel_dev.lock() = Some(file);
-            info!(
-                "Relative mouse device opened: {}",
-                self.mouse_rel_path.display()
-            );
-        } else {
-            warn!(
-                "Relative mouse device not found: {}",
-                self.mouse_rel_path.display()
-            );
+        if let Some(ref path) = self.mouse_rel_path {
+            if path.exists() {
+                let file = Self::open_device(path)?;
+                *self.mouse_rel_dev.lock() = Some(file);
+                info!("Relative mouse device opened: {}", path.display());
+            } else {
+                warn!("Relative mouse device not found: {}", path.display());
+            }
         }
 
         // Open absolute mouse device
-        if self.mouse_abs_path.exists() {
-            let file = Self::open_device(&self.mouse_abs_path)?;
-            *self.mouse_abs_dev.lock() = Some(file);
-            info!(
-                "Absolute mouse device opened: {}",
-                self.mouse_abs_path.display()
-            );
-        } else {
-            warn!(
-                "Absolute mouse device not found: {}",
-                self.mouse_abs_path.display()
-            );
+        if let Some(ref path) = self.mouse_abs_path {
+            if path.exists() {
+                let file = Self::open_device(path)?;
+                *self.mouse_abs_dev.lock() = Some(file);
+                info!("Absolute mouse device opened: {}", path.display());
+            } else {
+                warn!("Absolute mouse device not found: {}", path.display());
+            }
         }
 
         // Open consumer control device (optional, may not exist on older setups)
-        if self.consumer_path.exists() {
-            let file = Self::open_device(&self.consumer_path)?;
-            *self.consumer_dev.lock() = Some(file);
-            info!(
-                "Consumer control device opened: {}",
-                self.consumer_path.display()
-            );
-        } else {
-            debug!(
-                "Consumer control device not found: {}",
-                self.consumer_path.display()
-            );
+        if let Some(ref path) = self.consumer_path {
+            if path.exists() {
+                let file = Self::open_device(path)?;
+                *self.consumer_dev.lock() = Some(file);
+                info!("Consumer control device opened: {}", path.display());
+            } else {
+                debug!("Consumer control device not found: {}", path.display());
+            }
         }
 
         // Mark as online if all devices opened successfully
@@ -905,7 +952,9 @@ impl HidBackend for OtgBackend {
     }
 
     fn supports_absolute_mouse(&self) -> bool {
-        self.mouse_abs_path.exists()
+        self.mouse_abs_path
+            .as_ref()
+            .map_or(false, |p| p.exists())
     }
 
     async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
@@ -928,7 +977,7 @@ pub fn is_otg_available() -> bool {
     let mouse_rel = PathBuf::from("/dev/hidg1");
     let mouse_abs = PathBuf::from("/dev/hidg2");
 
-    kb.exists() && mouse_rel.exists() && mouse_abs.exists()
+    kb.exists() || mouse_rel.exists() || mouse_abs.exists()
 }
 
 /// Implement Drop for OtgBackend to close device files

@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::RwLock;
 use tracing::info;
 
 use super::capture::AudioConfig;
@@ -104,10 +104,6 @@ pub struct AudioStatus {
     pub quality: AudioQuality,
     /// Number of connected subscribers
     pub subscriber_count: usize,
-    /// Frames encoded
-    pub frames_encoded: u64,
-    /// Bytes output
-    pub bytes_output: u64,
     /// Error message if any
     pub error: Option<String>,
 }
@@ -352,17 +348,11 @@ impl AudioController {
         let streaming = self.is_streaming().await;
         let error = self.last_error.read().await.clone();
 
-        let (subscriber_count, frames_encoded, bytes_output) =
-            if let Some(ref streamer) = *self.streamer.read().await {
-                let stats = streamer.stats().await;
-                (
-                    stats.subscriber_count,
-                    stats.frames_encoded,
-                    stats.bytes_output,
-                )
-            } else {
-                (0, 0, 0)
-            };
+        let subscriber_count = if let Some(ref streamer) = *self.streamer.read().await {
+            streamer.stats().await.subscriber_count
+        } else {
+            0
+        };
 
         AudioStatus {
             enabled: config.enabled,
@@ -374,14 +364,12 @@ impl AudioController {
             },
             quality: config.quality,
             subscriber_count,
-            frames_encoded,
-            bytes_output,
             error,
         }
     }
 
     /// Subscribe to Opus frames (for WebSocket clients)
-    pub fn subscribe_opus(&self) -> Option<broadcast::Receiver<OpusFrame>> {
+    pub fn subscribe_opus(&self) -> Option<tokio::sync::watch::Receiver<Option<Arc<OpusFrame>>>> {
         // Use try_read to avoid blocking - this is called from sync context sometimes
         if let Ok(guard) = self.streamer.try_read() {
             guard.as_ref().map(|s| s.subscribe_opus())
@@ -391,7 +379,9 @@ impl AudioController {
     }
 
     /// Subscribe to Opus frames (async version)
-    pub async fn subscribe_opus_async(&self) -> Option<broadcast::Receiver<OpusFrame>> {
+    pub async fn subscribe_opus_async(
+        &self,
+    ) -> Option<tokio::sync::watch::Receiver<Option<Arc<OpusFrame>>>> {
         self.streamer
             .read()
             .await

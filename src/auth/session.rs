@@ -116,6 +116,22 @@ impl SessionStore {
         Ok(result.rows_affected())
     }
 
+    /// Delete all sessions
+    pub async fn delete_all(&self) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM sessions")
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// List all session IDs
+    pub async fn list_ids(&self) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM sessions")
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter().map(|(id,)| id).collect())
+    }
+
     /// Extend session expiration
     pub async fn extend(&self, session_id: &str) -> Result<()> {
         let new_expires = Utc::now() + self.default_ttl;

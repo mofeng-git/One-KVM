@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
-use tracing::{error, info, trace, warn};
+use tracing::{error, info, warn};
 
 use super::capture::{AudioCapturer, AudioConfig, CaptureState};
 use super::encoder::{OpusConfig, OpusEncoder, OpusFrame};
@@ -72,18 +72,9 @@ impl AudioStreamerConfig {
 /// Audio stream statistics
 #[derive(Debug, Clone, Default)]
 pub struct AudioStreamStats {
-    /// Frames captured from ALSA
-    pub frames_captured: u64,
     /// Frames encoded to Opus
-    pub frames_encoded: u64,
-    /// Total bytes output (Opus)
-    pub bytes_output: u64,
-    /// Current encoding bitrate
-    pub current_bitrate: u32,
     /// Number of active subscribers
     pub subscriber_count: usize,
-    /// Buffer overruns
-    pub buffer_overruns: u64,
 }
 
 /// Audio streamer
@@ -95,7 +86,7 @@ pub struct AudioStreamer {
     state_rx: watch::Receiver<AudioStreamState>,
     capturer: RwLock<Option<Arc<AudioCapturer>>>,
     encoder: Arc<Mutex<Option<OpusEncoder>>>,
-    opus_tx: broadcast::Sender<OpusFrame>,
+    opus_tx: watch::Sender<Option<Arc<OpusFrame>>>,
     stats: Arc<Mutex<AudioStreamStats>>,
     sequence: AtomicU64,
     stream_start_time: RwLock<Option<Instant>>,
@@ -111,7 +102,7 @@ impl AudioStreamer {
     /// Create a new audio streamer with specified configuration
     pub fn with_config(config: AudioStreamerConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(AudioStreamState::Stopped);
-        let (opus_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
+        let (opus_tx, _opus_rx) = watch::channel(None);
 
         Self {
             config: RwLock::new(config),
@@ -138,7 +129,7 @@ impl AudioStreamer {
     }
 
     /// Subscribe to Opus frames
-    pub fn subscribe_opus(&self) -> broadcast::Receiver<OpusFrame> {
+    pub fn subscribe_opus(&self) -> watch::Receiver<Option<Arc<OpusFrame>>> {
         self.opus_tx.subscribe()
     }
 
@@ -174,9 +165,6 @@ impl AudioStreamer {
         if let Some(ref mut encoder) = *self.encoder.lock().await {
             encoder.set_bitrate(bitrate)?;
         }
-
-        // Update stats
-        self.stats.lock().await.current_bitrate = bitrate;
 
         info!("Audio bitrate changed to {}bps", bitrate);
         Ok(())
@@ -216,7 +204,6 @@ impl AudioStreamer {
         {
             let mut stats = self.stats.lock().await;
             *stats = AudioStreamStats::default();
-            stats.current_bitrate = config.opus.bitrate;
         }
 
         // Record start time
@@ -227,12 +214,11 @@ impl AudioStreamer {
         let capturer_for_task = capturer.clone();
         let encoder = self.encoder.clone();
         let opus_tx = self.opus_tx.clone();
-        let stats = self.stats.clone();
         let state = self.state.clone();
         let stop_flag = self.stop_flag.clone();
 
         tokio::spawn(async move {
-            Self::stream_task(capturer_for_task, encoder, opus_tx, stats, state, stop_flag).await;
+            Self::stream_task(capturer_for_task, encoder, opus_tx, state, stop_flag).await;
         });
 
         Ok(())
@@ -273,8 +259,7 @@ impl AudioStreamer {
     async fn stream_task(
         capturer: Arc<AudioCapturer>,
         encoder: Arc<Mutex<Option<OpusEncoder>>>,
-        opus_tx: broadcast::Sender<OpusFrame>,
-        stats: Arc<Mutex<AudioStreamStats>>,
+        opus_tx: watch::Sender<Option<Arc<OpusFrame>>>,
         state: watch::Sender<AudioStreamState>,
         stop_flag: Arc<AtomicBool>,
     ) {
@@ -302,12 +287,6 @@ impl AudioStreamer {
 
             match recv_result {
                 Ok(Ok(audio_frame)) => {
-                    // Update capture stats
-                    {
-                        let mut s = stats.lock().await;
-                        s.frames_captured += 1;
-                    }
-
                     // Encode to Opus
                     let opus_result = {
                         let mut enc_guard = encoder.lock().await;
@@ -320,18 +299,9 @@ impl AudioStreamer {
 
                     match opus_result {
                         Some(Ok(opus_frame)) => {
-                            // Update stats
-                            {
-                                let mut s = stats.lock().await;
-                                s.frames_encoded += 1;
-                                s.bytes_output += opus_frame.data.len() as u64;
-                            }
-
-                            // Broadcast to subscribers
+                            // Publish latest frame to subscribers
                             if opus_tx.receiver_count() > 0 {
-                                if let Err(e) = opus_tx.send(opus_frame) {
-                                    trace!("No audio subscribers: {}", e);
-                                }
+                                let _ = opus_tx.send(Some(Arc::new(opus_frame)));
                             }
                         }
                         Some(Err(e)) => {
@@ -349,8 +319,6 @@ impl AudioStreamer {
                 }
                 Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
                     warn!("Audio receiver lagged by {} frames", n);
-                    let mut s = stats.lock().await;
-                    s.buffer_overruns += n;
                 }
                 Err(_) => {
                     // Timeout - check if still capturing

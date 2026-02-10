@@ -157,6 +157,8 @@ pub struct MjpegStreamHandler {
     max_drop_same_frames: AtomicU64,
     /// JPEG encoder for non-JPEG input formats
     jpeg_encoder: ParkingMutex<Option<JpegEncoder>>,
+    /// JPEG quality for software encoding (1-100)
+    jpeg_quality: AtomicU64,
 }
 
 impl MjpegStreamHandler {
@@ -179,7 +181,14 @@ impl MjpegStreamHandler {
             last_frame_ts: ParkingRwLock::new(None),
             dropped_same_frames: AtomicU64::new(0),
             max_drop_same_frames: AtomicU64::new(max_drop),
+            jpeg_quality: AtomicU64::new(80),
         }
+    }
+
+    /// Set JPEG quality for software encoding (1-100)
+    pub fn set_jpeg_quality(&self, quality: u8) {
+        let clamped = quality.clamp(1, 100) as u64;
+        self.jpeg_quality.store(clamped, Ordering::Relaxed);
     }
 
     /// Update current frame
@@ -260,23 +269,24 @@ impl MjpegStreamHandler {
     fn encode_to_jpeg(&self, frame: &VideoFrame) -> Result<VideoFrame, String> {
         let resolution = frame.resolution;
         let sequence = self.sequence.load(Ordering::Relaxed);
+        let desired_quality = self.jpeg_quality.load(Ordering::Relaxed) as u32;
 
         // Get or create encoder
         let mut encoder_guard = self.jpeg_encoder.lock();
         let encoder = encoder_guard.get_or_insert_with(|| {
-            let config = EncoderConfig::jpeg(resolution, 85);
+            let config = EncoderConfig::jpeg(resolution, desired_quality);
             match JpegEncoder::new(config) {
                 Ok(enc) => {
                     debug!(
-                        "Created JPEG encoder for MJPEG stream: {}x{}",
-                        resolution.width, resolution.height
+                        "Created JPEG encoder for MJPEG stream: {}x{} (q={})",
+                        resolution.width, resolution.height, desired_quality
                     );
                     enc
                 }
                 Err(e) => {
                     warn!("Failed to create JPEG encoder: {}, using default", e);
                     // Try with default config
-                    JpegEncoder::new(EncoderConfig::jpeg(resolution, 85))
+                    JpegEncoder::new(EncoderConfig::jpeg(resolution, desired_quality))
                         .expect("Failed to create default JPEG encoder")
                 }
             }
@@ -288,9 +298,16 @@ impl MjpegStreamHandler {
                 "Resolution changed, recreating JPEG encoder: {}x{}",
                 resolution.width, resolution.height
             );
-            let config = EncoderConfig::jpeg(resolution, 85);
+            let config = EncoderConfig::jpeg(resolution, desired_quality);
             *encoder =
                 JpegEncoder::new(config).map_err(|e| format!("Failed to create encoder: {}", e))?;
+        } else if encoder.config().quality != desired_quality {
+            if let Err(e) = encoder.set_quality(desired_quality) {
+                warn!("Failed to set JPEG quality: {}, recreating encoder", e);
+                let config = EncoderConfig::jpeg(resolution, desired_quality);
+                *encoder = JpegEncoder::new(config)
+                    .map_err(|e| format!("Failed to create encoder: {}", e))?;
+            }
         }
 
         // Encode based on input format

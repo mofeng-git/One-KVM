@@ -395,6 +395,8 @@ pub struct Ch9329Backend {
     last_abs_x: AtomicU16,
     /// Last absolute mouse Y position (CH9329 coordinate: 0-4095)
     last_abs_y: AtomicU16,
+    /// Whether relative mouse mode is active (set by incoming events)
+    relative_mouse_active: AtomicBool,
     /// Consecutive error count
     error_count: AtomicU32,
     /// Whether a reset is in progress
@@ -426,6 +428,7 @@ impl Ch9329Backend {
             address: DEFAULT_ADDR,
             last_abs_x: AtomicU16::new(0),
             last_abs_y: AtomicU16::new(0),
+            relative_mouse_active: AtomicBool::new(false),
             error_count: AtomicU32::new(0),
             reset_in_progress: AtomicBool::new(false),
             last_success: Mutex::new(None),
@@ -1014,12 +1017,14 @@ impl HidBackend for Ch9329Backend {
         match event.event_type {
             MouseEventType::Move => {
                 // Relative movement - send delta directly without inversion
+                self.relative_mouse_active.store(true, Ordering::Relaxed);
                 let dx = event.x.clamp(-127, 127) as i8;
                 let dy = event.y.clamp(-127, 127) as i8;
                 self.send_mouse_relative(buttons, dx, dy, 0)?;
             }
             MouseEventType::MoveAbs => {
                 // Absolute movement
+                self.relative_mouse_active.store(false, Ordering::Relaxed);
                 // Frontend sends 0-32767 (HID standard), CH9329 expects 0-4095
                 let x = ((event.x.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
                 let y = ((event.y.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
@@ -1031,28 +1036,40 @@ impl HidBackend for Ch9329Backend {
             MouseEventType::Down => {
                 if let Some(button) = event.button {
                     let bit = button.to_hid_bit();
-                    let x = self.last_abs_x.load(Ordering::Relaxed);
-                    let y = self.last_abs_y.load(Ordering::Relaxed);
                     let new_buttons = self.mouse_buttons.fetch_or(bit, Ordering::Relaxed) | bit;
                     trace!("Mouse down: {:?} buttons=0x{:02X}", button, new_buttons);
-                    self.send_mouse_absolute(new_buttons, x, y, 0)?;
+                    if self.relative_mouse_active.load(Ordering::Relaxed) {
+                        self.send_mouse_relative(new_buttons, 0, 0, 0)?;
+                    } else {
+                        let x = self.last_abs_x.load(Ordering::Relaxed);
+                        let y = self.last_abs_y.load(Ordering::Relaxed);
+                        self.send_mouse_absolute(new_buttons, x, y, 0)?;
+                    }
                 }
             }
             MouseEventType::Up => {
                 if let Some(button) = event.button {
                     let bit = button.to_hid_bit();
-                    let x = self.last_abs_x.load(Ordering::Relaxed);
-                    let y = self.last_abs_y.load(Ordering::Relaxed);
                     let new_buttons = self.mouse_buttons.fetch_and(!bit, Ordering::Relaxed) & !bit;
                     trace!("Mouse up: {:?} buttons=0x{:02X}", button, new_buttons);
-                    self.send_mouse_absolute(new_buttons, x, y, 0)?;
+                    if self.relative_mouse_active.load(Ordering::Relaxed) {
+                        self.send_mouse_relative(new_buttons, 0, 0, 0)?;
+                    } else {
+                        let x = self.last_abs_x.load(Ordering::Relaxed);
+                        let y = self.last_abs_y.load(Ordering::Relaxed);
+                        self.send_mouse_absolute(new_buttons, x, y, 0)?;
+                    }
                 }
             }
             MouseEventType::Scroll => {
-                // Use absolute mouse for scroll with last position
-                let x = self.last_abs_x.load(Ordering::Relaxed);
-                let y = self.last_abs_y.load(Ordering::Relaxed);
-                self.send_mouse_absolute(buttons, x, y, event.scroll)?;
+                if self.relative_mouse_active.load(Ordering::Relaxed) {
+                    self.send_mouse_relative(buttons, 0, 0, event.scroll)?;
+                } else {
+                    // Use absolute mouse for scroll with last position
+                    let x = self.last_abs_x.load(Ordering::Relaxed);
+                    let y = self.last_abs_y.load(Ordering::Relaxed);
+                    self.send_mouse_absolute(buttons, x, y, event.scroll)?;
+                }
             }
         }
 
@@ -1073,6 +1090,7 @@ impl HidBackend for Ch9329Backend {
         self.mouse_buttons.store(0, Ordering::Relaxed);
         self.last_abs_x.store(0, Ordering::Relaxed);
         self.last_abs_y.store(0, Ordering::Relaxed);
+        self.relative_mouse_active.store(false, Ordering::Relaxed);
         self.send_mouse_absolute(0, 0, 0, 0)?;
 
         // Reset media keys

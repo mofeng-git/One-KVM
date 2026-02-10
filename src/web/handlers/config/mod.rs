@@ -21,6 +21,7 @@ mod types;
 
 mod atx;
 mod audio;
+mod auth;
 mod hid;
 mod msd;
 mod rustdesk;
@@ -31,6 +32,7 @@ mod web;
 // 导出 handler 函数
 pub use atx::{get_atx_config, update_atx_config};
 pub use audio::{get_audio_config, update_audio_config};
+pub use auth::{get_auth_config, update_auth_config};
 pub use hid::{get_hid_config, update_hid_config};
 pub use msd::{get_msd_config, update_msd_config};
 pub use rustdesk::{

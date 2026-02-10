@@ -23,7 +23,7 @@ pub mod protocol;
 pub mod punch;
 pub mod rendezvous;
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -37,6 +37,7 @@ use tracing::{debug, error, info, warn};
 use crate::audio::AudioController;
 use crate::hid::HidController;
 use crate::video::stream_manager::VideoStreamManager;
+use crate::utils::bind_tcp_listener;
 
 use self::config::RustDeskConfig;
 use self::connection::ConnectionManager;
@@ -84,7 +85,7 @@ pub struct RustDeskService {
     status: Arc<RwLock<ServiceStatus>>,
     rendezvous: Arc<RwLock<Option<Arc<RendezvousMediator>>>>,
     rendezvous_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
-    tcp_listener_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
+    tcp_listener_handle: Arc<RwLock<Option<Vec<JoinHandle<()>>>>>,
     listen_port: Arc<RwLock<u16>>,
     connection_manager: Arc<ConnectionManager>,
     video_manager: Arc<VideoStreamManager>,
@@ -212,8 +213,8 @@ impl RustDeskService {
 
         // Start TCP listener BEFORE the rendezvous mediator to ensure port is set correctly
         // This prevents race condition where mediator starts registration with wrong port
-        let (tcp_handle, listen_port) = self.start_tcp_listener_with_port().await?;
-        *self.tcp_listener_handle.write() = Some(tcp_handle);
+        let (tcp_handles, listen_port) = self.start_tcp_listener_with_port().await?;
+        *self.tcp_listener_handle.write() = Some(tcp_handles);
 
         // Set the listen port on mediator before starting the registration loop
         mediator.set_listen_port(listen_port);
@@ -373,52 +374,83 @@ impl RustDeskService {
 
     /// Start TCP listener for direct peer connections
     /// Returns the join handle and the port that was bound
-    async fn start_tcp_listener_with_port(&self) -> anyhow::Result<(JoinHandle<()>, u16)> {
+    async fn start_tcp_listener_with_port(&self) -> anyhow::Result<(Vec<JoinHandle<()>>, u16)> {
         // Try to bind to the default port, or find an available port
-        let listener = match TcpListener::bind(format!("0.0.0.0:{}", DIRECT_LISTEN_PORT)).await {
-            Ok(l) => l,
-            Err(_) => {
-                // Try binding to port 0 to get an available port
-                TcpListener::bind("0.0.0.0:0").await?
+        let (listeners, listen_port) = match self.bind_direct_listeners(DIRECT_LISTEN_PORT) {
+            Ok(result) => result,
+            Err(err) => {
+                warn!(
+                    "Failed to bind RustDesk TCP on port {}: {}, falling back to random port",
+                    DIRECT_LISTEN_PORT, err
+                );
+                self.bind_direct_listeners(0)?
             }
         };
 
-        let local_addr = listener.local_addr()?;
-        let listen_port = local_addr.port();
         *self.listen_port.write() = listen_port;
-        info!("RustDesk TCP listener started on {}", local_addr);
 
         let connection_manager = self.connection_manager.clone();
-        let mut shutdown_rx = self.shutdown_tx.subscribe();
+        let mut handles = Vec::new();
 
-        let handle = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, peer_addr)) => {
-                                info!("Accepted direct connection from {}", peer_addr);
-                                let conn_mgr = connection_manager.clone();
-                                tokio::spawn(async move {
-                                    if let Err(e) = conn_mgr.accept_connection(stream, peer_addr).await {
-                                        error!("Failed to handle direct connection from {}: {}", peer_addr, e);
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                error!("TCP accept error: {}", e);
+        for listener in listeners {
+            let local_addr = listener.local_addr()?;
+            info!("RustDesk TCP listener started on {}", local_addr);
+
+            let conn_mgr = connection_manager.clone();
+            let mut shutdown_rx = self.shutdown_tx.subscribe();
+            let handle = tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        result = listener.accept() => {
+                            match result {
+                                Ok((stream, peer_addr)) => {
+                                    info!("Accepted direct connection from {}", peer_addr);
+                                    let conn_mgr = conn_mgr.clone();
+                                    tokio::spawn(async move {
+                                        if let Err(e) = conn_mgr.accept_connection(stream, peer_addr).await {
+                                            error!("Failed to handle direct connection from {}: {}", peer_addr, e);
+                                        }
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("TCP accept error: {}", e);
+                                }
                             }
                         }
-                    }
-                    _ = shutdown_rx.recv() => {
-                        info!("TCP listener shutting down");
-                        break;
+                        _ = shutdown_rx.recv() => {
+                            info!("TCP listener shutting down");
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            });
+            handles.push(handle);
+        }
 
-        Ok((handle, listen_port))
+        Ok((handles, listen_port))
+    }
+
+    fn bind_direct_listeners(&self, port: u16) -> anyhow::Result<(Vec<TcpListener>, u16)> {
+        let v4_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
+        let v4_listener = bind_tcp_listener(v4_addr)?;
+        let listen_port = v4_listener.local_addr()?.port();
+
+        let mut listeners = vec![TcpListener::from_std(v4_listener)?];
+
+        let v6_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), listen_port);
+        match bind_tcp_listener(v6_addr) {
+            Ok(v6_listener) => {
+                listeners.push(TcpListener::from_std(v6_listener)?);
+            }
+            Err(err) => {
+                warn!(
+                    "IPv6 listener unavailable on port {}: {}, continuing with IPv4 only",
+                    listen_port, err
+                );
+            }
+        }
+
+        Ok((listeners, listen_port))
     }
 
     /// Stop the RustDesk service
@@ -446,8 +478,10 @@ impl RustDeskService {
         }
 
         // Wait for TCP listener task to finish
-        if let Some(handle) = self.tcp_listener_handle.write().take() {
-            handle.abort();
+        if let Some(handles) = self.tcp_listener_handle.write().take() {
+            for handle in handles {
+                handle.abort();
+            }
         }
 
         *self.rendezvous.write() = None;

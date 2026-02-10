@@ -47,6 +47,11 @@ const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 /// Default mouse event throttle interval (16ms ≈ 60Hz)
 const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
 
+/// Advertised RustDesk version for client compatibility.
+const RUSTDESK_COMPAT_VERSION: &str = "1.4.5";
+// Advertised platform for RustDesk clients. This affects which UI options are shown.
+const RUSTDESK_COMPAT_PLATFORM: &str = "Windows";
+
 /// Input event throttler
 ///
 /// Limits the rate of input events sent to HID devices to prevent EAGAIN errors.
@@ -164,6 +169,8 @@ pub struct Connection {
     last_test_delay_sent: Option<Instant>,
     /// Last known CapsLock state from RustDesk modifiers (for detecting toggle)
     last_caps_lock: bool,
+    /// Whether relative mouse mode is currently active for this connection
+    relative_mouse_active: bool,
 }
 
 /// Messages sent to connection handler
@@ -241,6 +248,7 @@ impl Connection {
             last_delay: 0,
             last_test_delay_sent: None,
             last_caps_lock: false,
+            relative_mouse_active: false,
         };
 
         (conn, rx)
@@ -623,7 +631,7 @@ impl Connection {
         self.negotiated_codec = Some(negotiated);
         info!("Negotiated video codec: {:?}", negotiated);
 
-        let response = self.create_login_response(true);
+        let response = self.create_login_response(true).await;
         let response_bytes = response
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
@@ -673,7 +681,11 @@ impl Connection {
             Some(misc::Union::RefreshVideo(refresh)) => {
                 if *refresh {
                     debug!("Video refresh requested");
-                    // TODO: Request keyframe from encoder
+                    if let Some(ref video_manager) = self.video_manager {
+                        if let Err(e) = video_manager.request_keyframe().await {
+                            warn!("Failed to request keyframe: {}", e);
+                        }
+                    }
                 }
             }
             Some(misc::Union::VideoReceived(received)) => {
@@ -1064,7 +1076,7 @@ impl Connection {
     }
 
     /// Create login response with dynamically detected encoder capabilities
-    fn create_login_response(&self, success: bool) -> HbbMessage {
+    async fn create_login_response(&self, success: bool) -> HbbMessage {
         if success {
             // Dynamically detect available encoders
             let registry = EncoderRegistry::global();
@@ -1080,11 +1092,21 @@ impl Connection {
                 h264_available, h265_available, vp8_available, vp9_available
             );
 
+            let mut display_width = self.screen_width;
+            let mut display_height = self.screen_height;
+            if let Some(ref video_manager) = self.video_manager {
+                let video_info = video_manager.get_video_info().await;
+                if let Some((width, height)) = video_info.resolution {
+                    display_width = width;
+                    display_height = height;
+                }
+            }
+
             let mut display_info = DisplayInfo::new();
             display_info.x = 0;
             display_info.y = 0;
-            display_info.width = 1920;
-            display_info.height = 1080;
+            display_info.width = display_width as i32;
+            display_info.height = display_height as i32;
             display_info.name = "KVM Display".to_string();
             display_info.online = true;
             display_info.cursor_embedded = false;
@@ -1099,11 +1121,11 @@ impl Connection {
             let mut peer_info = PeerInfo::new();
             peer_info.username = "one-kvm".to_string();
             peer_info.hostname = get_hostname();
-            peer_info.platform = "Linux".to_string();
+            peer_info.platform = RUSTDESK_COMPAT_PLATFORM.to_string();
             peer_info.displays.push(display_info);
             peer_info.current_display = 0;
             peer_info.sas_enabled = false;
-            peer_info.version = env!("CARGO_PKG_VERSION").to_string();
+            peer_info.version = RUSTDESK_COMPAT_VERSION.to_string();
             peer_info.encoding = protobuf::MessageField::some(encoding);
 
             let mut login_response = LoginResponse::new();
@@ -1310,9 +1332,16 @@ impl Connection {
     async fn handle_mouse_event(&mut self, me: &MouseEvent) -> anyhow::Result<()> {
         // Parse RustDesk mask format: (button << 3) | event_type
         let event_type = me.mask & 0x07;
+        let is_relative_move = event_type == mouse_type::MOVE_RELATIVE;
+
+        if is_relative_move {
+            self.relative_mouse_active = true;
+        } else if event_type == mouse_type::MOVE {
+            self.relative_mouse_active = false;
+        }
 
         // Check if this is a pure move event (no button/scroll)
-        let is_pure_move = event_type == mouse_type::MOVE;
+        let is_pure_move = event_type == mouse_type::MOVE || is_relative_move;
 
         // For pure move events, apply throttling
         if is_pure_move && !self.input_throttler.should_send_mouse_move() {
@@ -1323,7 +1352,8 @@ impl Connection {
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
         // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events = convert_mouse_event(me, self.screen_width, self.screen_height);
+        let mouse_events =
+            convert_mouse_event(me, self.screen_width, self.screen_height, self.relative_mouse_active);
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {
@@ -1543,6 +1573,9 @@ async fn run_video_streaming(
     let mut shutdown_rx = shutdown_tx.subscribe();
     let mut encoded_count: u64 = 0;
     let mut last_log_time = Instant::now();
+    let mut waiting_for_keyframe = true;
+    let mut last_sequence: Option<u64> = None;
+    let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
 
     info!(
         "Started shared video streaming for connection {} (codec: {:?})",
@@ -1582,6 +1615,9 @@ async fn run_video_streaming(
                 config.bitrate_preset
             );
         }
+        if let Err(e) = video_manager.request_keyframe().await {
+            debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+        }
 
         // Inner loop: receives frames from current subscription
         loop {
@@ -1600,43 +1636,63 @@ async fn run_video_streaming(
                 }
 
                 result = encoded_frame_rx.recv() => {
-                    match result {
-                        Ok(frame) => {
-                            // Convert EncodedVideoFrame to RustDesk VideoFrame message
-                            // Use zero-copy version: Bytes.clone() only increments refcount
-                            let msg_bytes = video_adapter.encode_frame_bytes_zero_copy(
-                                frame.data.clone(),
-                                frame.is_keyframe,
-                                frame.pts_ms as u64,
-                            );
-
-                            // Send to connection (blocks if channel is full, providing backpressure)
-                            if video_tx.send(msg_bytes).await.is_err() {
-                                debug!("Video channel closed for connection {}", conn_id);
-                                break 'subscribe_loop;
-                            }
-
-                            encoded_count += 1;
-
-                            // Log stats periodically
-                            if last_log_time.elapsed().as_secs() >= 10 {
-                                info!(
-                                    "Video streaming stats for connection {}: {} frames forwarded",
-                                    conn_id, encoded_count
-                                );
-                                last_log_time = Instant::now();
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            debug!("Connection {} lagged {} encoded frames", conn_id, n);
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            // Pipeline was restarted (e.g., bitrate/codec change)
-                            // Re-subscribe to the new pipeline
+                    let frame = match result {
+                        Some(frame) => frame,
+                        None => {
                             info!("Video pipeline closed for connection {}, re-subscribing...", conn_id);
                             tokio::time::sleep(Duration::from_millis(100)).await;
                             continue 'subscribe_loop;
                         }
+                    };
+
+                    let gap_detected = if let Some(prev) = last_sequence {
+                        frame.sequence > prev.saturating_add(1)
+                    } else {
+                        false
+                    };
+
+                    if waiting_for_keyframe || gap_detected {
+                        if frame.is_keyframe {
+                            waiting_for_keyframe = false;
+                        } else {
+                            if gap_detected {
+                                waiting_for_keyframe = true;
+                            }
+                            let now = Instant::now();
+                            if now.duration_since(last_keyframe_request) >= Duration::from_millis(200) {
+                                if let Err(e) = video_manager.request_keyframe().await {
+                                    debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+                                }
+                                last_keyframe_request = now;
+                            }
+                            continue;
+                        }
+                    }
+
+                    // Convert EncodedVideoFrame to RustDesk VideoFrame message
+                    // Use zero-copy version: Bytes.clone() only increments refcount
+                    let msg_bytes = video_adapter.encode_frame_bytes_zero_copy(
+                        frame.data.clone(),
+                        frame.is_keyframe,
+                        frame.pts_ms as u64,
+                    );
+
+                    // Send to connection (backpressure instead of dropping)
+                    if video_tx.send(msg_bytes).await.is_err() {
+                        debug!("Video channel closed for connection {}", conn_id);
+                        break 'subscribe_loop;
+                    }
+
+                    last_sequence = Some(frame.sequence);
+                    encoded_count += 1;
+
+                    // Log stats periodically
+                    if last_log_time.elapsed().as_secs() >= 30 {
+                        info!(
+                            "Video streaming stats for connection {}: {} frames forwarded",
+                            conn_id, encoded_count
+                        );
+                        last_log_time = Instant::now();
                     }
                 }
             }
@@ -1725,39 +1781,38 @@ async fn run_audio_streaming(
                     break 'subscribe_loop;
                 }
 
-                result = opus_rx.recv() => {
-                    match result {
-                        Ok(opus_frame) => {
-                            // Convert OpusFrame to RustDesk AudioFrame message
-                            let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
+                result = opus_rx.changed() => {
+                    if result.is_err() {
+                        // Pipeline was restarted
+                        info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
+                        audio_adapter.reset();
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        continue 'subscribe_loop;
+                    }
 
-                            // Send to connection (blocks if channel is full, providing backpressure)
-                            if audio_tx.send(msg_bytes).await.is_err() {
-                                debug!("Audio channel closed for connection {}", conn_id);
-                                break 'subscribe_loop;
-                            }
+                    let opus_frame = match opus_rx.borrow().clone() {
+                        Some(frame) => frame,
+                        None => continue,
+                    };
 
-                            frame_count += 1;
+                    // Convert OpusFrame to RustDesk AudioFrame message
+                    let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
 
-                            // Log stats periodically
-                            if last_log_time.elapsed().as_secs() >= 30 {
-                                info!(
-                                    "Audio streaming stats for connection {}: {} frames forwarded",
-                                    conn_id, frame_count
-                                );
-                                last_log_time = Instant::now();
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            debug!("Connection {} lagged {} audio frames", conn_id, n);
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            // Pipeline was restarted
-                            info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
-                            audio_adapter.reset();
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            continue 'subscribe_loop;
-                        }
+                    // Send to connection (blocks if channel is full, providing backpressure)
+                    if audio_tx.send(msg_bytes).await.is_err() {
+                        debug!("Audio channel closed for connection {}", conn_id);
+                        break 'subscribe_loop;
+                    }
+
+                    frame_count += 1;
+
+                    // Log stats periodically
+                    if last_log_time.elapsed().as_secs() >= 30 {
+                        info!(
+                            "Audio streaming stats for connection {}: {} frames forwarded",
+                            conn_id, frame_count
+                        );
+                        last_log_time = Instant::now();
                     }
                 }
             }

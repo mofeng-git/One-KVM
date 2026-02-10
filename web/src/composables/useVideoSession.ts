@@ -32,6 +32,10 @@ function createVideoSession() {
     resolve: (ready: boolean) => void
     timer: ReturnType<typeof setTimeout>
   } | null = null
+  let webrtcReadyAnyWaiter: {
+    resolve: (ready: boolean) => void
+    timer: ReturnType<typeof setTimeout>
+  } | null = null
 
   let modeReadyWaiter: {
     transitionId: string
@@ -61,6 +65,11 @@ function createVideoSession() {
       clearTimeout(webrtcReadyWaiter.timer)
       webrtcReadyWaiter.resolve(false)
       webrtcReadyWaiter = null
+    }
+    if (webrtcReadyAnyWaiter) {
+      clearTimeout(webrtcReadyAnyWaiter.timer)
+      webrtcReadyAnyWaiter.resolve(false)
+      webrtcReadyAnyWaiter = null
     }
     if (modeReadyWaiter) {
       clearTimeout(modeReadyWaiter.timer)
@@ -98,6 +107,28 @@ function createVideoSession() {
 
       webrtcReadyWaiter = {
         transitionId,
+        resolve,
+        timer,
+      }
+    })
+  }
+
+  function waitForWebRTCReadyAny(timeoutMs = 3000): Promise<boolean> {
+    if (webrtcReadyAnyWaiter) {
+      clearTimeout(webrtcReadyAnyWaiter.timer)
+      webrtcReadyAnyWaiter.resolve(false)
+      webrtcReadyAnyWaiter = null
+    }
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        if (webrtcReadyAnyWaiter) {
+          webrtcReadyAnyWaiter = null
+        }
+        resolve(false)
+      }, timeoutMs)
+
+      webrtcReadyAnyWaiter = {
         resolve,
         timer,
       }
@@ -156,6 +187,10 @@ function createVideoSession() {
       clearTimeout(webrtcReadyWaiter.timer)
       webrtcReadyWaiter.resolve(true)
       webrtcReadyWaiter = null
+    } else if (!data.transition_id && webrtcReadyAnyWaiter) {
+      clearTimeout(webrtcReadyAnyWaiter.timer)
+      webrtcReadyAnyWaiter.resolve(true)
+      webrtcReadyAnyWaiter = null
     }
   }
 
@@ -170,6 +205,7 @@ function createVideoSession() {
     clearWaiters,
     registerTransition,
     waitForWebRTCReady,
+    waitForWebRTCReadyAny,
     waitForModeReady,
     onModeSwitching,
     onModeReady,

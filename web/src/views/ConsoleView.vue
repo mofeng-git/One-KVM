@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useConsoleEvents } from '@/composables/useConsoleEvents'
@@ -10,7 +11,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
-import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, userApi } from '@/api'
+import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, authApi } from '@/api'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
@@ -59,6 +60,7 @@ import { setLanguage } from '@/i18n'
 const { t, locale } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
+const configStore = useConfigStore()
 const authStore = useAuthStore()
 const { connected: wsConnected, networkError: wsNetworkError } = useWebSocket()
 const hidWs = useHidWebSocket()
@@ -133,6 +135,15 @@ let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas be
 
 // Cursor visibility (from localStorage, updated via storage event)
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
+
+function syncMouseModeFromConfig() {
+  const mouseAbsolute = configStore.hid?.mouse_absolute
+  if (typeof mouseAbsolute !== 'boolean') return
+  const nextMode: 'absolute' | 'relative' = mouseAbsolute ? 'absolute' : 'relative'
+  if (mouseMode.value !== nextMode) {
+    mouseMode.value = nextMode
+  }
+}
 
 // Virtual keyboard state
 const virtualKeyboardVisible = ref(false)
@@ -641,7 +652,7 @@ function handleStreamConfigChanging(data: any) {
   })
 }
 
-function handleStreamConfigApplied(data: any) {
+async function handleStreamConfigApplied(data: any) {
   // Reset consecutive error counter for new config
   consecutiveErrors = 0
 
@@ -662,6 +673,10 @@ function handleStreamConfigApplied(data: any) {
 
   if (videoMode.value !== 'mjpeg') {
     // In WebRTC mode, reconnect WebRTC (session was closed due to config change)
+    const ready = await videoSession.waitForWebRTCReadyAny(3000)
+    if (!ready) {
+      console.warn('[WebRTC] Backend not ready after timeout (config change), attempting connection anyway')
+    }
     switchToWebRTC(videoMode.value)
   } else {
     // In MJPEG mode, refresh the MJPEG stream
@@ -1259,16 +1274,7 @@ async function handleChangePassword() {
 
   changingPassword.value = true
   try {
-    // Get current user ID - we need to fetch user list first
-    const result = await userApi.list()
-    const currentUser = result.users.find(u => u.username === authStore.user)
-
-    if (!currentUser) {
-      toast.error(t('auth.userNotFound'))
-      return
-    }
-
-    await userApi.changePassword(currentUser.id, newPassword.value, currentPassword.value)
+    await authApi.changePassword(currentPassword.value, newPassword.value)
     toast.success(t('auth.passwordChanged'))
 
     // Reset form and close dialog
@@ -1792,6 +1798,9 @@ onMounted(async () => {
   // 4. 其他初始化
   await systemStore.startStream().catch(() => {})
   await systemStore.fetchAllStates()
+  await configStore.refreshHid().then(() => {
+    syncMouseModeFromConfig()
+  }).catch(() => {})
 
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
@@ -1804,6 +1813,10 @@ onMounted(async () => {
   window.addEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
   window.addEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
   window.addEventListener('storage', handleMouseSendIntervalStorage)
+
+  watch(() => configStore.hid?.mouse_absolute, () => {
+    syncMouseModeFromConfig()
+  })
 
   // Pointer Lock event listeners
   document.addEventListener('pointerlockchange', handlePointerLockChange)
@@ -1886,104 +1899,161 @@ onUnmounted(() => {
 <template>
   <div class="h-screen flex flex-col bg-background">
     <!-- Header -->
-    <header class="h-14 shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="h-full px-4 flex items-center justify-between">
-        <!-- Left: Logo -->
-        <div class="flex items-center gap-6">
+    <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="px-4">
+        <div class="h-14 flex items-center justify-between">
+          <!-- Left: Logo -->
+          <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+              <Monitor class="h-6 w-6 text-primary" />
+              <span class="font-bold text-lg">One-KVM</span>
+            </div>
+          </div>
+
+          <!-- Right: Status Cards + User Menu -->
           <div class="flex items-center gap-2">
-            <Monitor class="h-6 w-6 text-primary" />
-            <span class="font-bold text-lg">One-KVM</span>
+            <div class="hidden md:flex items-center gap-2">
+              <!-- Video Status -->
+              <StatusCard
+                :title="t('statusCard.video')"
+                type="video"
+                :status="videoStatus"
+                :quick-info="videoQuickInfo"
+                :error-message="videoErrorMessage"
+                :details="videoDetails"
+              />
+
+              <!-- Audio Status -->
+              <StatusCard
+                v-if="systemStore.audio?.available"
+                :title="t('statusCard.audio')"
+                type="audio"
+                :status="audioStatus"
+                :quick-info="audioQuickInfo"
+                :error-message="audioErrorMessage"
+                :details="audioDetails"
+              />
+
+              <!-- HID Status -->
+              <StatusCard
+                :title="t('statusCard.hid')"
+                type="hid"
+                :status="hidStatus"
+                :quick-info="hidQuickInfo"
+                :details="hidDetails"
+              />
+
+              <!-- MSD Status - Hidden when CH9329 backend (no USB gadget support) -->
+              <StatusCard
+                v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
+                :title="t('statusCard.msd')"
+                type="msd"
+                :status="msdStatus"
+                :quick-info="msdQuickInfo"
+                :error-message="msdErrorMessage"
+                :details="msdDetails"
+                hover-align="end"
+              />
+            </div>
+
+            <!-- Separator -->
+            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
+
+            <!-- Theme Toggle -->
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleTheme">
+              <Sun v-if="isDark" class="h-4 w-4" />
+              <Moon v-else class="h-4 w-4" />
+            </Button>
+
+            <!-- Language Toggle -->
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleLanguage">
+              <Languages class="h-4 w-4" />
+            </Button>
+
+            <!-- User Menu -->
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button variant="outline" size="sm" class="gap-1.5">
+                  <span class="text-xs max-w-[100px] truncate">{{ authStore.user || 'admin' }}</span>
+                  <ChevronDown class="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem class="md:hidden" @click="toggleTheme">
+                  <Sun v-if="isDark" class="h-4 w-4 mr-2" />
+                  <Moon v-else class="h-4 w-4 mr-2" />
+                  {{ isDark ? t('settings.lightMode') : t('settings.darkMode') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem class="md:hidden" @click="toggleLanguage">
+                  <Languages class="h-4 w-4 mr-2" />
+                  {{ locale === 'zh-CN' ? 'English' : '中文' }}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator class="md:hidden" />
+                <DropdownMenuItem @click="changePasswordDialogOpen = true">
+                  <KeyRound class="h-4 w-4 mr-2" />
+                  {{ t('auth.changePassword') }}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @click="logout">
+                  <LogOut class="h-4 w-4 mr-2" />
+                  {{ t('auth.logout') }}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        <!-- Right: Status Cards + User Menu -->
-        <div class="flex items-center gap-2">
-          <!-- Video Status -->
-          <StatusCard
-            :title="t('statusCard.video')"
-            type="video"
-            :status="videoStatus"
-            :quick-info="videoQuickInfo"
-            :error-message="videoErrorMessage"
-            :details="videoDetails"
-          />
+        <!-- Mobile Status Row -->
+        <div class="md:hidden pb-2">
+          <div class="flex items-center gap-2 overflow-x-auto">
+            <div class="shrink-0">
+              <StatusCard
+                :title="t('statusCard.video')"
+                type="video"
+                :status="videoStatus"
+                :quick-info="videoQuickInfo"
+                :error-message="videoErrorMessage"
+                :details="videoDetails"
+                compact
+              />
+            </div>
 
-          <!-- Audio Status -->
-          <StatusCard
-            v-if="systemStore.audio?.available"
-            :title="t('statusCard.audio')"
-            type="audio"
-            :status="audioStatus"
-            :quick-info="audioQuickInfo"
-            :error-message="audioErrorMessage"
-            :details="audioDetails"
-          />
+            <div v-if="systemStore.audio?.available" class="shrink-0">
+              <StatusCard
+                :title="t('statusCard.audio')"
+                type="audio"
+                :status="audioStatus"
+                :quick-info="audioQuickInfo"
+                :error-message="audioErrorMessage"
+                :details="audioDetails"
+                compact
+              />
+            </div>
 
-          <!-- HID Status -->
-          <StatusCard
-            :title="t('statusCard.hid')"
-            type="hid"
-            :status="hidStatus"
-            :quick-info="hidQuickInfo"
-            :details="hidDetails"
-          />
+            <div class="shrink-0">
+              <StatusCard
+                :title="t('statusCard.hid')"
+                type="hid"
+                :status="hidStatus"
+                :quick-info="hidQuickInfo"
+                :details="hidDetails"
+                compact
+              />
+            </div>
 
-          <!-- MSD Status - Admin only, hidden when CH9329 backend (no USB gadget support) -->
-          <StatusCard
-            v-if="authStore.isAdmin && systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
-            :title="t('statusCard.msd')"
-            type="msd"
-            :status="msdStatus"
-            :quick-info="msdQuickInfo"
-            :error-message="msdErrorMessage"
-            :details="msdDetails"
-            hover-align="end"
-          />
-
-          <!-- Separator -->
-          <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
-
-          <!-- Theme Toggle -->
-          <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleTheme">
-            <Sun v-if="isDark" class="h-4 w-4" />
-            <Moon v-else class="h-4 w-4" />
-          </Button>
-
-          <!-- Language Toggle -->
-          <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleLanguage">
-            <Languages class="h-4 w-4" />
-          </Button>
-
-          <!-- User Menu -->
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <Button variant="outline" size="sm" class="gap-1.5">
-                <span class="text-xs max-w-[100px] truncate">{{ authStore.user || 'admin' }}</span>
-                <ChevronDown class="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem class="md:hidden" @click="toggleTheme">
-                <Sun v-if="isDark" class="h-4 w-4 mr-2" />
-                <Moon v-else class="h-4 w-4 mr-2" />
-                {{ isDark ? t('settings.lightMode') : t('settings.darkMode') }}
-              </DropdownMenuItem>
-              <DropdownMenuItem class="md:hidden" @click="toggleLanguage">
-                <Languages class="h-4 w-4 mr-2" />
-                {{ locale === 'zh-CN' ? 'English' : '中文' }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator class="md:hidden" />
-              <DropdownMenuItem @click="changePasswordDialogOpen = true">
-                <KeyRound class="h-4 w-4 mr-2" />
-                {{ t('auth.changePassword') }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem @click="logout">
-                <LogOut class="h-4 w-4 mr-2" />
-                {{ t('auth.logout') }}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <div v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'" class="shrink-0">
+              <StatusCard
+                :title="t('statusCard.msd')"
+                type="msd"
+                :status="msdStatus"
+                :quick-info="msdQuickInfo"
+                :error-message="msdErrorMessage"
+                :details="msdDetails"
+                hover-align="end"
+                compact
+              />
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -1993,7 +2063,6 @@ onUnmounted(() => {
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
       :ttyd-running="ttydStatus?.running"
-      :is-admin="authStore.isAdmin"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="statsSheetOpen = true"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"

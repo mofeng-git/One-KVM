@@ -1,22 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
+import { useAuthStore } from '@/stores/auth'
 import {
+  authApi,
   configApi,
   streamApi,
-  userApi,
-  videoConfigApi,
-  streamConfigApi,
-  hidConfigApi,
-  msdConfigApi,
   atxConfigApi,
   extensionsApi,
-  rustdeskConfigApi,
-  webConfigApi,
   systemApi,
   type EncoderBackendInfo,
-  type User as UserType,
+  type AuthConfig,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskPasswordResponse,
@@ -28,6 +24,8 @@ import type {
   AtxDriverType,
   ActiveLevel,
   AtxDevices,
+  OtgHidProfile,
+  OtgHidFunctions,
 } from '@/types/generated'
 import { setLanguage } from '@/i18n'
 import { useClipboard } from '@/composables/useClipboard'
@@ -57,22 +55,18 @@ import {
   EyeOff,
   Save,
   Check,
-  Network,
   HardDrive,
   Power,
-  UserPlus,
-  User,
-  Pencil,
-  Trash2,
   Menu,
-  Users,
-  Globe,
+  Lock,
+  User,
   RefreshCw,
   Terminal,
   Play,
   Square,
   ChevronRight,
   Plus,
+  Trash2,
   ExternalLink,
   Copy,
   ScreenShare,
@@ -80,6 +74,8 @@ import {
 
 const { t, locale } = useI18n()
 const systemStore = useSystemStore()
+const configStore = useConfigStore()
+const authStore = useAuthStore()
 
 // Settings state
 const activeSection = ref('appearance')
@@ -90,9 +86,11 @@ const saved = ref(false)
 // Navigation structure
 const navGroups = computed(() => [
   {
-    title: t('settings.general'),
+    title: t('settings.system'),
     items: [
       { id: 'appearance', label: t('settings.appearance'), icon: Sun },
+      { id: 'account', label: t('settings.account'), icon: User },
+      { id: 'access', label: t('settings.access'), icon: Lock },
     ]
   },
   {
@@ -100,7 +98,7 @@ const navGroups = computed(() => [
     items: [
       { id: 'video', label: t('settings.video'), icon: Monitor, status: config.value.video_device ? t('settings.configured') : null },
       { id: 'hid', label: t('settings.hid'), icon: Keyboard, status: config.value.hid_backend.toUpperCase() },
-      { id: 'msd', label: t('settings.msd'), icon: HardDrive },
+      ...(config.value.msd_enabled ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
       { id: 'atx', label: t('settings.atx'), icon: Power },
     ]
   },
@@ -108,16 +106,13 @@ const navGroups = computed(() => [
     title: t('settings.extensions'),
     items: [
       { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
+      { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
-      { id: 'ext-gostc', label: t('extensions.gostc.title'), icon: Globe },
-      { id: 'ext-easytier', label: t('extensions.easytier.title'), icon: Network },
     ]
   },
   {
-    title: t('settings.system'),
+    title: t('settings.other'),
     items: [
-      { id: 'web-server', label: t('settings.webServer'), icon: Globe },
-      { id: 'users', label: t('settings.users'), icon: Users },
       { id: 'about', label: t('settings.about'), icon: Info },
     ]
   }
@@ -131,22 +126,28 @@ function selectSection(id: string) {
 // Theme
 const theme = ref<'light' | 'dark' | 'system'>('system')
 
-// Password change
-const showPasswordDialog = ref(false)
+// Account settings
+const usernameInput = ref('')
+const usernamePassword = ref('')
+const usernameSaving = ref(false)
+const usernameSaved = ref(false)
+const usernameError = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const showPasswords = ref(false)
+const passwordSaving = ref(false)
+const passwordSaved = ref(false)
 const passwordError = ref('')
+const showPasswords = ref(false)
 
-// User management
-const users = ref<UserType[]>([])
-const usersLoading = ref(false)
-const showAddUserDialog = ref(false)
-const showEditUserDialog = ref(false)
-const editingUser = ref<UserType | null>(null)
-const newUser = ref({ username: '', password: '', role: 'user' as 'admin' | 'user' })
-const editUserData = ref({ username: '', role: 'user' as 'admin' | 'user' })
+// Auth config state
+const authConfig = ref<AuthConfig>({
+  session_timeout_secs: 3600 * 24,
+  single_user_allow_multiple_sessions: false,
+  totp_enabled: false,
+  totp_secret: undefined,
+})
+const authConfigLoading = ref(false)
 
 // Extensions management
 const extensions = ref<ExtensionsStatus | null>(null)
@@ -191,11 +192,32 @@ const webServerConfig = ref<WebConfig>({
   http_port: 8080,
   https_port: 8443,
   bind_address: '0.0.0.0',
+  bind_addresses: ['0.0.0.0'],
   https_enabled: false,
 })
 const webServerLoading = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
+type BindMode = 'all' | 'loopback' | 'custom'
+const bindMode = ref<BindMode>('all')
+const bindAllIpv6 = ref(false)
+const bindLocalIpv6 = ref(false)
+const bindAddressList = ref<string[]>([])
+const bindAddressError = computed(() => {
+  if (bindMode.value !== 'custom') return ''
+  return normalizeBindAddresses(bindAddressList.value).length
+    ? ''
+    : t('settings.bindAddressListEmpty')
+})
+const effectiveBindAddresses = computed(() => {
+  if (bindMode.value === 'all') {
+    return bindAllIpv6.value ? ['0.0.0.0', '::'] : ['0.0.0.0']
+  }
+  if (bindMode.value === 'loopback') {
+    return bindLocalIpv6.value ? ['127.0.0.1', '::1'] : ['127.0.0.1']
+  }
+  return normalizeBindAddresses(bindAddressList.value)
+})
 
 // Config
 interface DeviceConfig {
@@ -215,12 +237,14 @@ interface DeviceConfig {
   }>
   serial: Array<{ path: string; name: string }>
   audio: Array<{ name: string; description: string }>
+  udc: Array<{ name: string }>
 }
 
 const devices = ref<DeviceConfig>({
   video: [],
   serial: [],
   audio: [],
+  udc: [],
 })
 
 const config = ref({
@@ -232,9 +256,16 @@ const config = ref({
   hid_backend: 'ch9329',
   hid_serial_device: '',
   hid_serial_baudrate: 9600,
+  hid_otg_udc: '',
+  hid_otg_profile: 'full' as OtgHidProfile,
+  hid_otg_functions: {
+    keyboard: true,
+    mouse_relative: true,
+    mouse_absolute: true,
+    consumer: true,
+  } as OtgHidFunctions,
   msd_enabled: false,
   msd_dir: '',
-  network_port: 8080,
   encoder_backend: 'auto',
   // STUN/TURN settings
   stun_server: '',
@@ -245,6 +276,46 @@ const config = ref({
 
 // 跟踪服务器是否已配置 TURN 密码
 const hasTurnPassword = ref(false)
+const configLoaded = ref(false)
+const devicesLoaded = ref(false)
+const hidProfileAligned = ref(false)
+
+const isLowEndpointUdc = computed(() => {
+  if (config.value.hid_otg_udc) {
+    return /musb/i.test(config.value.hid_otg_udc)
+  }
+  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
+})
+
+const showLowEndpointHint = computed(() =>
+  config.value.hid_backend === 'otg' && isLowEndpointUdc.value
+)
+
+function alignHidProfileForLowEndpoint() {
+  if (hidProfileAligned.value) return
+  if (!configLoaded.value || !devicesLoaded.value) return
+  if (config.value.hid_backend !== 'otg') {
+    hidProfileAligned.value = true
+    return
+  }
+  if (!isLowEndpointUdc.value) {
+    hidProfileAligned.value = true
+    return
+  }
+  if (config.value.hid_otg_profile === 'full') {
+    config.value.hid_otg_profile = 'full_no_consumer' as OtgHidProfile
+  } else if (config.value.hid_otg_profile === 'full_no_msd') {
+    config.value.hid_otg_profile = 'full_no_consumer_no_msd' as OtgHidProfile
+  }
+  hidProfileAligned.value = true
+}
+
+const isHidFunctionSelectionValid = computed(() => {
+  if (config.value.hid_backend !== 'otg') return true
+  if (config.value.hid_otg_profile !== 'custom') return true
+  const f = config.value.hid_otg_functions
+  return !!(f.keyboard || f.mouse_relative || f.mouse_absolute || f.consumer)
+})
 
 // OTG Descriptor settings
 const otgVendorIdHex = ref('1d6b')
@@ -258,6 +329,18 @@ const validateHex = (event: Event, _field: string) => {
   const input = event.target as HTMLInputElement
   input.value = input.value.replace(/[^0-9a-fA-F]/g, '').toLowerCase()
 }
+
+watch(() => config.value.msd_enabled, (enabled) => {
+  if (!enabled && activeSection.value === 'msd') {
+    activeSection.value = 'hid'
+  }
+})
+
+watch(bindMode, (mode) => {
+  if (mode === 'custom' && bindAddressList.value.length === 0) {
+    bindAddressList.value = ['']
+  }
+})
 
 // ATX config state
 const atxConfig = ref({
@@ -299,9 +382,6 @@ const selectedBackendFormats = computed(() => {
 })
 
 const isCh9329Backend = computed(() => config.value.hid_backend === 'ch9329')
-
-// Video selection computed properties
-import { watch } from 'vue'
 
 const selectedDevice = computed(() => {
   return devices.value.video.find(d => d.path === config.value.video_device)
@@ -384,6 +464,12 @@ watch(() => [config.value.video_width, config.value.video_height], () => {
   }
 })
 
+watch(() => authStore.user, (value) => {
+  if (value) {
+    usernameInput.value = value
+  }
+})
+
 
 // Format bytes to human readable string
 function formatBytes(bytes: number): string {
@@ -414,37 +500,69 @@ function handleLanguageChange(lang: string) {
   }
 }
 
-// Password change
+// Account updates
+async function changeUsername() {
+  usernameError.value = ''
+  usernameSaved.value = false
+
+  if (usernameInput.value.length < 2) {
+    usernameError.value = t('auth.enterUsername')
+    return
+  }
+  if (!usernamePassword.value) {
+    usernameError.value = t('auth.enterPassword')
+    return
+  }
+
+  usernameSaving.value = true
+  try {
+    await authApi.changeUsername(usernameInput.value, usernamePassword.value)
+    usernameSaved.value = true
+    usernamePassword.value = ''
+    await authStore.checkAuth()
+    usernameInput.value = authStore.user || usernameInput.value
+    setTimeout(() => {
+      usernameSaved.value = false
+    }, 2000)
+  } catch (e) {
+    usernameError.value = t('auth.invalidPassword')
+  } finally {
+    usernameSaving.value = false
+  }
+}
+
 async function changePassword() {
   passwordError.value = ''
+  passwordSaved.value = false
 
+  if (!currentPassword.value) {
+    passwordError.value = t('auth.enterPassword')
+    return
+  }
   if (newPassword.value.length < 4) {
     passwordError.value = t('setup.passwordHint')
     return
   }
-
   if (newPassword.value !== confirmPassword.value) {
     passwordError.value = t('setup.passwordMismatch')
     return
   }
 
+  passwordSaving.value = true
   try {
-    await configApi.update({
-      current_password: currentPassword.value,
-      new_password: newPassword.value,
-    })
-    showPasswordDialog.value = false
+    await authApi.changePassword(currentPassword.value, newPassword.value)
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
+    passwordSaved.value = true
+    setTimeout(() => {
+      passwordSaved.value = false
+    }, 2000)
   } catch (e) {
     passwordError.value = t('auth.invalidPassword')
+  } finally {
+    passwordSaving.value = false
   }
-}
-
-// MSD 开关变更处理
-function onMsdEnabledChange(val: boolean) {
-  config.value.msd_enabled = val
 }
 
 // Save config - 使用域分离 API
@@ -459,7 +577,7 @@ async function saveConfig() {
     // Video 配置（包括编码器和 WebRTC/STUN/TURN 设置）
     if (activeSection.value === 'video') {
       savePromises.push(
-        videoConfigApi.update({
+        configStore.updateVideo({
           device: config.value.video_device || undefined,
           format: config.value.video_format || undefined,
           width: config.value.video_width,
@@ -469,7 +587,7 @@ async function saveConfig() {
       )
       // 同时保存 Stream/Encoder 和 STUN/TURN 配置
       savePromises.push(
-        streamConfigApi.update({
+        configStore.updateStream({
           encoder: config.value.encoder_backend as any,
           stun_server: config.value.stun_server || undefined,
           turn_server: config.value.turn_server || undefined,
@@ -481,6 +599,26 @@ async function saveConfig() {
 
     // HID 配置
     if (activeSection.value === 'hid') {
+      if (!isHidFunctionSelectionValid.value) {
+        return
+      }
+      let desiredMsdEnabled = config.value.msd_enabled
+      if (config.value.hid_backend === 'otg') {
+        if (config.value.hid_otg_profile === 'full') {
+          desiredMsdEnabled = true
+        } else if (config.value.hid_otg_profile === 'full_no_msd') {
+          desiredMsdEnabled = false
+        } else if (config.value.hid_otg_profile === 'full_no_consumer') {
+          desiredMsdEnabled = true
+        } else if (config.value.hid_otg_profile === 'full_no_consumer_no_msd') {
+          desiredMsdEnabled = false
+        } else if (
+          config.value.hid_otg_profile === 'legacy_keyboard'
+          || config.value.hid_otg_profile === 'legacy_mouse_relative'
+        ) {
+          desiredMsdEnabled = false
+        }
+      }
       const hidUpdate: any = {
         backend: config.value.hid_backend as any,
         ch9329_port: config.value.hid_serial_device || undefined,
@@ -495,15 +633,25 @@ async function saveConfig() {
           product: otgProduct.value || 'One-KVM USB Device',
           serial_number: otgSerialNumber.value || undefined,
         }
+        hidUpdate.otg_profile = config.value.hid_otg_profile
+        hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
       }
-      savePromises.push(hidConfigApi.update(hidUpdate))
+      savePromises.push(configStore.updateHid(hidUpdate))
+      if (config.value.msd_enabled !== desiredMsdEnabled) {
+        config.value.msd_enabled = desiredMsdEnabled
+      }
+      savePromises.push(
+        configStore.updateMsd({
+          enabled: desiredMsdEnabled,
+        })
+      )
     }
 
     // MSD 配置
     if (activeSection.value === 'msd') {
       savePromises.push(
-        msdConfigApi.update({
-          enabled: config.value.msd_enabled,
+        configStore.updateMsd({
+          msd_dir: config.value.msd_dir || undefined,
         })
       )
     }
@@ -523,10 +671,10 @@ async function loadConfig() {
   try {
     // 并行加载所有域配置
     const [video, stream, hid, msd] = await Promise.all([
-      videoConfigApi.get(),
-      streamConfigApi.get(),
-      hidConfigApi.get(),
-      msdConfigApi.get(),
+      configStore.refreshVideo(),
+      configStore.refreshStream(),
+      configStore.refreshHid(),
+      configStore.refreshMsd(),
     ])
 
     config.value = {
@@ -538,9 +686,16 @@ async function loadConfig() {
       hid_backend: hid.backend || 'none',
       hid_serial_device: hid.ch9329_port || '',
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
+      hid_otg_udc: hid.otg_udc || '',
+      hid_otg_profile: (hid.otg_profile || 'full') as OtgHidProfile,
+      hid_otg_functions: {
+        keyboard: hid.otg_functions?.keyboard ?? true,
+        mouse_relative: hid.otg_functions?.mouse_relative ?? true,
+        mouse_absolute: hid.otg_functions?.mouse_absolute ?? true,
+        consumer: hid.otg_functions?.consumer ?? true,
+      } as OtgHidFunctions,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
-      network_port: 8080, // 从旧 API 加载
       encoder_backend: stream.encoder || 'auto',
       // STUN/TURN settings
       stun_server: stream.stun_server || '',
@@ -561,16 +716,11 @@ async function loadConfig() {
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
     }
 
-    // 加载 web config（仍使用旧 API）
-    try {
-      const fullConfig = await configApi.get()
-      const web = fullConfig.web as any || {}
-      config.value.network_port = web.http_port || 8080
-    } catch (e) {
-      console.warn('Failed to load web config:', e)
-    }
   } catch (e) {
     console.error('Failed to load config:', e)
+  } finally {
+    configLoaded.value = true
+    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -579,6 +729,9 @@ async function loadDevices() {
     devices.value = await configApi.listDevices()
   } catch (e) {
     console.error('Failed to load devices:', e)
+  } finally {
+    devicesLoaded.value = true
+    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -591,56 +744,28 @@ async function loadBackends() {
   }
 }
 
-// User management functions
-async function loadUsers() {
-  usersLoading.value = true
+// Auth config functions
+async function loadAuthConfig() {
+  authConfigLoading.value = true
   try {
-    const result = await userApi.list()
-    users.value = result.users || []
+    authConfig.value = await configStore.refreshAuth()
   } catch (e) {
-    console.error('Failed to load users:', e)
+    console.error('Failed to load auth config:', e)
   } finally {
-    usersLoading.value = false
+    authConfigLoading.value = false
   }
 }
 
-async function createUser() {
-  if (!newUser.value.username || !newUser.value.password) return
+async function saveAuthConfig() {
+  authConfigLoading.value = true
   try {
-    await userApi.create(newUser.value.username, newUser.value.password, newUser.value.role)
-    showAddUserDialog.value = false
-    newUser.value = { username: '', password: '', role: 'user' }
-    await loadUsers()
+    authConfig.value = await configStore.updateAuth({
+      single_user_allow_multiple_sessions: authConfig.value.single_user_allow_multiple_sessions,
+    })
   } catch (e) {
-    console.error('Failed to create user:', e)
-  }
-}
-
-function openEditUserDialog(user: UserType) {
-  editingUser.value = user
-  editUserData.value = { username: user.username, role: user.role }
-  showEditUserDialog.value = true
-}
-
-async function updateUser() {
-  if (!editingUser.value) return
-  try {
-    await userApi.update(editingUser.value.id, editUserData.value)
-    showEditUserDialog.value = false
-    editingUser.value = null
-    await loadUsers()
-  } catch (e) {
-    console.error('Failed to update user:', e)
-  }
-}
-
-async function confirmDeleteUser(user: UserType) {
-  if (!confirm(`Delete user "${user.username}"?`)) return
-  try {
-    await userApi.delete(user.id)
-    await loadUsers()
-  } catch (e) {
-    console.error('Failed to delete user:', e)
+    console.error('Failed to save auth config:', e)
+  } finally {
+    authConfigLoading.value = false
   }
 }
 
@@ -771,7 +896,7 @@ function removeEasytierPeer(index: number) {
 // ATX management functions
 async function loadAtxConfig() {
   try {
-    const config = await atxConfigApi.get()
+    const config = await configStore.refreshAtx()
     atxConfig.value = {
       enabled: config.enabled,
       power: { ...config.power },
@@ -796,7 +921,7 @@ async function saveAtxConfig() {
   loading.value = true
   saved.value = false
   try {
-    await atxConfigApi.update({
+    await configStore.updateAtx({
       enabled: atxConfig.value.enabled,
       power: {
         driver: atxConfig.value.power.driver,
@@ -840,10 +965,8 @@ function getAtxDevicesForDriver(driver: string): string[] {
 async function loadRustdeskConfig() {
   rustdeskLoading.value = true
   try {
-    const [config, status] = await Promise.all([
-      rustdeskConfigApi.get(),
-      rustdeskConfigApi.getStatus(),
-    ])
+    const status = await configStore.refreshRustdeskStatus()
+    const config = status.config
     rustdeskConfig.value = config
     rustdeskStatus.value = status
     rustdeskLocalConfig.value = {
@@ -861,26 +984,85 @@ async function loadRustdeskConfig() {
 
 async function loadRustdeskPassword() {
   try {
-    rustdeskPassword.value = await rustdeskConfigApi.getPassword()
+    rustdeskPassword.value = await configStore.refreshRustdeskPassword()
   } catch (e) {
     console.error('Failed to load RustDesk password:', e)
+  }
+}
+
+function normalizeRustdeskServer(value: string, defaultPort: number): string | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (trimmed.includes(':')) return trimmed
+  return `${trimmed}:${defaultPort}`
+}
+
+function normalizeBindAddresses(addresses: string[]): string[] {
+  return addresses.map(addr => addr.trim()).filter(Boolean)
+}
+
+function applyBindStateFromConfig(config: WebConfig) {
+  const rawAddrs =
+    config.bind_addresses && config.bind_addresses.length > 0
+      ? config.bind_addresses
+      : config.bind_address
+        ? [config.bind_address]
+        : []
+  const addrs = normalizeBindAddresses(rawAddrs)
+  const isAll = addrs.length > 0 && addrs.every(addr => addr === '0.0.0.0' || addr === '::') && addrs.includes('0.0.0.0')
+  const isLoopback =
+    addrs.length > 0 &&
+    addrs.every(addr => addr === '127.0.0.1' || addr === '::1') &&
+    addrs.includes('127.0.0.1')
+  if (isAll) {
+    bindMode.value = 'all'
+    bindAllIpv6.value = addrs.includes('::')
+    return
+  }
+  if (isLoopback) {
+    bindMode.value = 'loopback'
+    bindLocalIpv6.value = addrs.includes('::1')
+    return
+  }
+  bindMode.value = 'custom'
+  bindAddressList.value = addrs.length ? [...addrs] : ['']
+}
+
+function addBindAddress() {
+  bindAddressList.value.push('')
+}
+
+function removeBindAddress(index: number) {
+  bindAddressList.value.splice(index, 1)
+  if (bindAddressList.value.length === 0) {
+    bindAddressList.value.push('')
   }
 }
 
 // Web server config functions
 async function loadWebServerConfig() {
   try {
-    const config = await webConfigApi.get()
+    const config = await configStore.refreshWeb()
     webServerConfig.value = config
+    applyBindStateFromConfig(config)
   } catch (e) {
     console.error('Failed to load web server config:', e)
   }
 }
 
 async function saveWebServerConfig() {
+  if (bindAddressError.value) return
   webServerLoading.value = true
   try {
-    await webConfigApi.update(webServerConfig.value)
+    const update = {
+      http_port: webServerConfig.value.http_port,
+      https_port: webServerConfig.value.https_port,
+      https_enabled: webServerConfig.value.https_enabled,
+      bind_addresses: effectiveBindAddresses.value,
+    }
+    const updated = await configStore.updateWeb(update)
+    webServerConfig.value = updated
+    applyBindStateFromConfig(updated)
     showRestartDialog.value = true
   } catch (e) {
     console.error('Failed to save web server config:', e)
@@ -912,10 +1094,15 @@ async function saveRustdeskConfig() {
   loading.value = true
   saved.value = false
   try {
-    await rustdeskConfigApi.update({
+    const rendezvousServer = normalizeRustdeskServer(
+      rustdeskLocalConfig.value.rendezvous_server,
+      21116,
+    )
+    const relayServer = normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117)
+    await configStore.updateRustdesk({
       enabled: rustdeskLocalConfig.value.enabled,
-      rendezvous_server: rustdeskLocalConfig.value.rendezvous_server || undefined,
-      relay_server: rustdeskLocalConfig.value.relay_server || undefined,
+      rendezvous_server: rendezvousServer,
+      relay_server: relayServer,
       relay_key: rustdeskLocalConfig.value.relay_key || undefined,
     })
     await loadRustdeskConfig()
@@ -934,7 +1121,7 @@ async function regenerateRustdeskId() {
   if (!confirm(t('extensions.rustdesk.confirmRegenerateId'))) return
   rustdeskLoading.value = true
   try {
-    await rustdeskConfigApi.regenerateId()
+    await configStore.regenerateRustdeskId()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
   } catch (e) {
@@ -948,7 +1135,7 @@ async function regenerateRustdeskPassword() {
   if (!confirm(t('extensions.rustdesk.confirmRegeneratePassword'))) return
   rustdeskLoading.value = true
   try {
-    await rustdeskConfigApi.regeneratePassword()
+    await configStore.regenerateRustdeskPassword()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
   } catch (e) {
@@ -962,7 +1149,7 @@ async function startRustdesk() {
   rustdeskLoading.value = true
   try {
     // Enable and save config to start the service
-    await rustdeskConfigApi.update({ enabled: true })
+    await configStore.updateRustdesk({ enabled: true })
     rustdeskLocalConfig.value.enabled = true
     await loadRustdeskConfig()
   } catch (e) {
@@ -976,7 +1163,7 @@ async function stopRustdesk() {
   rustdeskLoading.value = true
   try {
     // Disable and save config to stop the service
-    await rustdeskConfigApi.update({ enabled: false })
+    await configStore.updateRustdesk({ enabled: false })
     rustdeskLocalConfig.value.enabled = false
     await loadRustdeskConfig()
   } catch (e) {
@@ -1052,7 +1239,7 @@ onMounted(async () => {
     loadConfig(),
     loadDevices(),
     loadBackends(),
-    loadUsers(),
+    loadAuthConfig(),
     loadExtensions(),
     loadAtxConfig(),
     loadAtxDevices(),
@@ -1060,6 +1247,7 @@ onMounted(async () => {
     loadRustdeskPassword(),
     loadWebServerConfig(),
   ])
+  usernameInput.value = authStore.user || ''
 })
 </script>
 
@@ -1067,13 +1255,11 @@ onMounted(async () => {
   <AppLayout>
     <div class="flex h-full overflow-hidden">
       <!-- Mobile Header -->
-      <div class="lg:hidden fixed top-16 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 border-b bg-background">
-        <h1 class="text-lg font-semibold">{{ t('settings.title') }}</h1>
+      <div class="lg:hidden fixed top-16 left-0 right-0 z-20 flex items-center px-4 py-3 border-b bg-background">
         <Sheet v-model:open="mobileMenuOpen">
           <SheetTrigger as-child>
-            <Button variant="outline" size="sm">
-              <Menu class="h-4 w-4 mr-2" />
-              {{ t('common.menu') }}
+            <Button variant="ghost" size="icon" class="mr-2 h-9 w-9">
+              <Menu class="h-4 w-4" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" class="w-72 p-0">
@@ -1102,6 +1288,7 @@ onMounted(async () => {
             </div>
           </SheetContent>
         </Sheet>
+        <h1 class="text-lg font-semibold">{{ t('settings.title') }}</h1>
       </div>
 
       <!-- Desktop Sidebar -->
@@ -1171,6 +1358,63 @@ onMounted(async () => {
             </Card>
           </div>
 
+          <!-- Account Section -->
+          <div v-show="activeSection === 'account'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.username') }}</CardTitle>
+                <CardDescription>{{ t('settings.usernameDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="space-y-2">
+                  <Label for="account-username">{{ t('settings.username') }}</Label>
+                  <Input id="account-username" v-model="usernameInput" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="account-username-password">{{ t('settings.currentPassword') }}</Label>
+                  <Input id="account-username-password" v-model="usernamePassword" type="password" />
+                </div>
+                <p v-if="usernameError" class="text-xs text-destructive">{{ usernameError }}</p>
+                <p v-else-if="usernameSaved" class="text-xs text-emerald-600">{{ t('common.success') }}</p>
+                <div class="flex justify-end">
+                  <Button @click="changeUsername" :disabled="usernameSaving">
+                    <Save class="h-4 w-4 mr-2" />
+                    {{ t('common.save') }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.changePassword') }}</CardTitle>
+                <CardDescription>{{ t('settings.passwordDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="space-y-2">
+                  <Label for="account-current-password">{{ t('settings.currentPassword') }}</Label>
+                  <Input id="account-current-password" v-model="currentPassword" type="password" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="account-new-password">{{ t('settings.newPassword') }}</Label>
+                  <Input id="account-new-password" v-model="newPassword" type="password" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="account-confirm-password">{{ t('auth.confirmPassword') }}</Label>
+                  <Input id="account-confirm-password" v-model="confirmPassword" type="password" />
+                </div>
+                <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
+                <p v-else-if="passwordSaved" class="text-xs text-emerald-600">{{ t('common.success') }}</p>
+                <div class="flex justify-end">
+                  <Button @click="changePassword" :disabled="passwordSaving">
+                    <Save class="h-4 w-4 mr-2" />
+                    {{ t('common.save') }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <!-- Video Section -->
           <div v-show="activeSection === 'video'" class="space-y-6">
             <!-- Video Device Settings -->
@@ -1199,7 +1443,7 @@ onMounted(async () => {
                     <option v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">{{ fmt.format }} - {{ fmt.description }}</option>
                   </select>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="video-resolution">{{ t('settings.resolution') }}</Label>
                     <select id="video-resolution" :value="`${config.video_width}x${config.video_height}`" @change="e => { const parts = (e.target as HTMLSelectElement).value.split('x').map(Number); if (parts[0] && parts[1]) { config.video_width = parts[0]; config.video_height = parts[1]; } }" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_format">
@@ -1267,7 +1511,7 @@ onMounted(async () => {
                   />
                   <p class="text-xs text-muted-foreground">{{ t('settings.turnServerHint') }}</p>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="turn-username">{{ t('settings.turnUsername') }}</Label>
                     <Input
@@ -1349,6 +1593,72 @@ onMounted(async () => {
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.otgHidProfileDesc') }}</p>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="otg-profile">{{ t('settings.profile') }}</Label>
+                      <select id="otg-profile" v-model="config.hid_otg_profile" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                        <option value="full">{{ t('settings.otgProfileFull') }}</option>
+                        <option value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</option>
+                        <option value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</option>
+                        <option value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</option>
+                        <option value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</option>
+                        <option value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</option>
+                        <option value="custom">{{ t('settings.otgProfileCustom') }}</option>
+                      </select>
+                    </div>
+                    <div v-if="config.hid_otg_profile === 'custom'" class="space-y-3 rounded-md border border-border/60 p-3">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_otg_functions.keyboard" />
+                      </div>
+                      <Separator />
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_otg_functions.mouse_relative" />
+                      </div>
+                      <Separator />
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_otg_functions.mouse_absolute" />
+                      </div>
+                      <Separator />
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_otg_functions.consumer" />
+                      </div>
+                      <Separator />
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <Label>{{ t('settings.otgFunctionMsd') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.msd_enabled" />
+                      </div>
+                    </div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.otgProfileWarning') }}
+                    </p>
+                    <p v-if="showLowEndpointHint" class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.otgLowEndpointHint') }}
+                    </p>
+                  </div>
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
                       <h4 class="text-sm font-medium">{{ t('settings.otgDescriptor') }}</h4>
                       <p class="text-sm text-muted-foreground">{{ t('settings.otgDescriptorDesc') }}</p>
                     </div>
@@ -1410,8 +1720,8 @@ onMounted(async () => {
             </Card>
           </div>
 
-          <!-- Web Server Section -->
-          <div v-show="activeSection === 'web-server'" class="space-y-6">
+          <!-- Access Section -->
+          <div v-show="activeSection === 'access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.webServer') }}</CardTitle>
@@ -1440,13 +1750,77 @@ onMounted(async () => {
                 </div>
 
                 <div class="space-y-2">
-                  <Label>{{ t('settings.bindAddress') }}</Label>
-                  <Input v-model="webServerConfig.bind_address" placeholder="0.0.0.0" />
-                  <p class="text-sm text-muted-foreground">{{ t('settings.bindAddressDesc') }}</p>
+                  <Label>{{ t('settings.bindMode') }}</Label>
+                  <select v-model="bindMode" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                    <option value="all">{{ t('settings.bindModeAll') }}</option>
+                    <option value="loopback">{{ t('settings.bindModeLocal') }}</option>
+                    <option value="custom">{{ t('settings.bindModeCustom') }}</option>
+                  </select>
+                  <p class="text-sm text-muted-foreground">{{ t('settings.bindModeDesc') }}</p>
+                </div>
+
+                <div v-if="bindMode === 'all'" class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.bindIpv6') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.bindAllDesc') }}</p>
+                  </div>
+                  <Switch v-model="bindAllIpv6" />
+                </div>
+
+                <div v-if="bindMode === 'loopback'" class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.bindIpv6') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.bindLocalDesc') }}</p>
+                  </div>
+                  <Switch v-model="bindLocalIpv6" />
+                </div>
+
+                <div v-if="bindMode === 'custom'" class="space-y-2">
+                  <Label>{{ t('settings.bindAddressList') }}</Label>
+                  <div class="space-y-2">
+                    <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
+                      <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
+                      <Button variant="ghost" size="icon" @click="removeBindAddress(i)">
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button variant="outline" size="sm" @click="addBindAddress">
+                      <Plus class="h-4 w-4 mr-1" />
+                      {{ t('settings.addBindAddress') }}
+                    </Button>
+                  </div>
+                  <p class="text-xs text-muted-foreground">{{ t('settings.bindAddressListDesc') }}</p>
+                  <p v-if="bindAddressError" class="text-xs text-destructive">{{ bindAddressError }}</p>
                 </div>
 
                 <div class="flex justify-end pt-4">
-                  <Button @click="saveWebServerConfig" :disabled="webServerLoading">
+                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError">
+                    <Save class="h-4 w-4 mr-2" />
+                    {{ t('common.save') }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.authSettings') }}</CardTitle>
+                <CardDescription>{{ t('settings.authSettingsDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.allowMultipleSessions') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.allowMultipleSessionsDesc') }}</p>
+                  </div>
+                  <Switch
+                    v-model="authConfig.single_user_allow_multiple_sessions"
+                    :disabled="authConfigLoading"
+                  />
+                </div>
+                <Separator />
+                <p class="text-xs text-muted-foreground">{{ t('settings.singleUserSessionNote') }}</p>
+                <div class="flex justify-end pt-2">
+                  <Button @click="saveAuthConfig" :disabled="authConfigLoading">
                     <Save class="h-4 w-4 mr-2" />
                     {{ t('common.save') }}
                   </Button>
@@ -1455,49 +1829,8 @@ onMounted(async () => {
             </Card>
           </div>
 
-          <!-- Users Section -->
-          <div v-show="activeSection === 'users'" class="space-y-6">
-            <Card>
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-4">
-                <div class="space-y-1.5">
-                  <CardTitle>{{ t('settings.userManagement') }}</CardTitle>
-                  <CardDescription>{{ t('settings.userManagementDesc') }}</CardDescription>
-                </div>
-                <Button size="sm" @click="showAddUserDialog = true">
-                  <UserPlus class="h-4 w-4 mr-2" />{{ t('settings.addUser') }}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div v-if="usersLoading" class="text-center py-8">
-                  <p class="text-sm text-muted-foreground">{{ t('settings.loadingUsers') }}</p>
-                </div>
-                <div v-else-if="users.length === 0" class="text-center py-8">
-                  <User class="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p class="text-sm text-muted-foreground">{{ t('settings.noUsers') }}</p>
-                </div>
-                <div v-else class="divide-y">
-                  <div v-for="user in users" :key="user.id" class="flex items-center justify-between py-3">
-                    <div class="flex items-center gap-3">
-                      <div class="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                        <User class="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p class="text-sm font-medium">{{ user.username }}</p>
-                        <Badge variant="outline" class="text-xs">{{ user.role === 'admin' ? t('settings.roleAdmin') : t('settings.roleUser') }}</Badge>
-                      </div>
-                    </div>
-                    <div class="flex gap-1">
-                      <Button size="icon" variant="ghost" class="h-8 w-8" @click="openEditUserDialog(user)"><Pencil class="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" class="h-8 w-8 text-destructive" :disabled="user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1" @click="confirmDeleteUser(user)"><Trash2 class="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           <!-- MSD Section -->
-          <div v-show="activeSection === 'msd'" class="space-y-6">
+          <div v-show="activeSection === 'msd' && config.msd_enabled" class="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.msdSettings') }}</CardTitle>
@@ -1508,19 +1841,6 @@ onMounted(async () => {
                   <p class="font-medium">{{ t('settings.msdCh9329Warning') }}</p>
                   <p class="text-xs text-amber-900/80">{{ t('settings.msdCh9329WarningDesc') }}</p>
                 </div>
-                <div class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label for="msd-enabled">{{ t('settings.msdEnable') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.msdEnableDesc') }}</p>
-                  </div>
-                  <Switch
-                    id="msd-enabled"
-                    :disabled="isCh9329Backend"
-                    :model-value="config.msd_enabled"
-                    @update:model-value="onMsdEnabledChange"
-                  />
-                </div>
-                <Separator />
                 <div class="space-y-4">
                   <div class="space-y-2">
                     <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
@@ -1579,7 +1899,7 @@ onMounted(async () => {
                 <CardDescription>{{ t('settings.atxPowerButtonDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="power-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="power-driver" v-model="atxConfig.power.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -1596,7 +1916,7 @@ onMounted(async () => {
                     </select>
                   </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="power-pin">{{ atxConfig.power.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="power-pin" type="number" v-model.number="atxConfig.power.pin" min="0" :disabled="atxConfig.power.driver === 'none'" />
@@ -1619,7 +1939,7 @@ onMounted(async () => {
                 <CardDescription>{{ t('settings.atxResetButtonDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="reset-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="reset-driver" v-model="atxConfig.reset.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -1636,7 +1956,7 @@ onMounted(async () => {
                     </select>
                   </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="reset-pin">{{ atxConfig.reset.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="reset-pin" type="number" v-model.number="atxConfig.reset.pin" min="0" :disabled="atxConfig.reset.driver === 'none'" />
@@ -1671,7 +1991,7 @@ onMounted(async () => {
                 </div>
                 <template v-if="atxConfig.led.enabled">
                   <Separator />
-                  <div class="grid grid-cols-2 gap-4">
+                  <div class="grid gap-4 sm:grid-cols-2">
                     <div class="space-y-2">
                       <Label for="led-chip">{{ t('settings.atxLedChip') }}</Label>
                       <select id="led-chip" v-model="atxConfig.led.gpio_chip" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -1788,13 +2108,13 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.ttyd.enabled" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.ttyd.shell') }}</Label>
-                      <Input v-model="extConfig.ttyd.shell" class="col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.ttyd.shell') }}</Label>
+                      <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.ttyd.credential') }}</Label>
-                      <Input v-model="extConfig.ttyd.credential" class="col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.ttyd.credential') }}</Label>
+                      <Input v-model="extConfig.ttyd.credential" class="sm:col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
                   </div>
                   <!-- Logs -->
@@ -1822,8 +2142,8 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- gostc Section -->
-          <div v-show="activeSection === 'ext-gostc'" class="space-y-6">
+          <!-- Remote Access Section -->
+          <div v-show="activeSection === 'ext-remote-access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -1876,17 +2196,17 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.gostc.enabled" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.addr') }}</Label>
-                      <Input v-model="extConfig.gostc.addr" class="col-span-3" placeholder="gostc.mofeng.run" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
+                      <Input v-model="extConfig.gostc.addr" class="sm:col-span-3" placeholder="gostc.mofeng.run" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.key') }}</Label>
-                      <Input v-model="extConfig.gostc.key" type="password" class="col-span-3" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
+                      <Input v-model="extConfig.gostc.key" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.tls') }}</Label>
-                      <div class="col-span-3">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.tls') }}</Label>
+                      <div class="sm:col-span-3">
                         <Switch v-model="extConfig.gostc.tls" :disabled="isExtRunning(extensions?.gostc?.status)" />
                       </div>
                     </div>
@@ -1914,10 +2234,7 @@ onMounted(async () => {
                 <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
-          </div>
 
-          <!-- easytier Section -->
-          <div v-show="activeSection === 'ext-easytier'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -1970,17 +2287,17 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.easytier.enabled" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.networkName') }}</Label>
-                      <Input v-model="extConfig.easytier.network_name" class="col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.networkName') }}</Label>
+                      <Input v-model="extConfig.easytier.network_name" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
-                      <Input v-model="extConfig.easytier.network_secret" type="password" class="col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
+                      <Input v-model="extConfig.easytier.network_secret" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.peers') }}</Label>
-                      <div class="col-span-3 space-y-2">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.peers') }}</Label>
+                      <div class="sm:col-span-3 space-y-2">
                         <div v-for="(_, i) in extConfig.easytier.peer_urls" :key="i" class="flex gap-2">
                           <Input v-model="extConfig.easytier.peer_urls[i]" placeholder="tcp://1.2.3.4:11010" :disabled="isExtRunning(extensions?.easytier?.status)" />
                           <Button variant="ghost" size="icon" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
@@ -1993,9 +2310,9 @@ onMounted(async () => {
                         </Button>
                       </div>
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.virtualIp') }}</Label>
-                      <div class="col-span-3 space-y-1">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.virtualIp') }}</Label>
+                      <div class="sm:col-span-3 space-y-1">
                         <Input v-model="extConfig.easytier.virtual_ip" placeholder="10.0.0.1/24" :disabled="isExtRunning(extensions?.easytier?.status)" />
                         <p class="text-xs text-muted-foreground">{{ t('extensions.easytier.virtualIpHint') }}</p>
                       </div>
@@ -2087,9 +2404,9 @@ onMounted(async () => {
                     <Label>{{ t('extensions.autoStart') }}</Label>
                     <Switch v-model="rustdeskLocalConfig.enabled" />
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.rendezvous_server"
                         :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
@@ -2097,9 +2414,9 @@ onMounted(async () => {
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
                     </div>
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.relay_server"
                         :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
@@ -2107,9 +2424,9 @@ onMounted(async () => {
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayServerHint') }}</p>
                     </div>
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.relay_key"
                         type="password"
@@ -2126,9 +2443,9 @@ onMounted(async () => {
                   <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
 
                   <!-- Device ID -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
-                    <div class="col-span-3 flex items-center gap-2">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
+                    <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskConfig?.device_id || '-' }}</code>
                       <Button
                         variant="ghost"
@@ -2148,9 +2465,9 @@ onMounted(async () => {
                   </div>
 
                   <!-- Device Password (直接显示) -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
-                    <div class="col-span-3 flex items-center gap-2">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
+                    <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskPassword?.device_password || '-' }}</code>
                       <Button
                         variant="ghost"
@@ -2170,9 +2487,9 @@ onMounted(async () => {
                   </div>
 
                   <!-- Keypair Status -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
-                    <div class="col-span-3">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
+                    <div class="sm:col-span-3">
                       <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">
                         {{ rustdeskConfig?.has_keypair ? t('common.yes') : t('common.no') }}
                       </Badge>
@@ -2250,104 +2567,20 @@ onMounted(async () => {
           <!-- Save Button (sticky) -->
           <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-4 pb-2 bg-background border-t -mx-6 px-6 lg:-mx-8 lg:px-8">
             <div class="flex justify-end">
-              <Button :disabled="loading" @click="saveConfig">
+              <div class="flex items-center gap-3">
+                <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400">
+                  {{ t('settings.otgFunctionMinWarning') }}
+                </p>
+                <Button :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
                 <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
-              </Button>
+                </Button>
+              </div>
             </div>
           </div>
 
         </div>
       </main>
     </div>
-
-    <!-- Password Change Dialog -->
-    <Dialog v-model:open="showPasswordDialog">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ t('settings.changePassword') }}</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <Label for="current-password">{{ t('settings.currentPassword') }}</Label>
-            <div class="relative">
-              <Input id="current-password" v-model="currentPassword" :type="showPasswords ? 'text' : 'password'" />
-              <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" @click="showPasswords = !showPasswords">
-                <Eye v-if="!showPasswords" class="h-4 w-4" /><EyeOff v-else class="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <div class="space-y-2">
-            <Label for="new-password">{{ t('settings.newPassword') }}</Label>
-            <Input id="new-password" v-model="newPassword" :type="showPasswords ? 'text' : 'password'" />
-          </div>
-          <div class="space-y-2">
-            <Label for="confirm-password">{{ t('setup.confirmPassword') }}</Label>
-            <Input id="confirm-password" v-model="confirmPassword" :type="showPasswords ? 'text' : 'password'" />
-          </div>
-          <p v-if="passwordError" class="text-sm text-destructive">{{ passwordError }}</p>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" @click="showPasswordDialog = false">{{ t('common.cancel') }}</Button>
-          <Button size="sm" @click="changePassword">{{ t('common.save') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Add User Dialog -->
-    <Dialog v-model:open="showAddUserDialog">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ t('settings.addUser') }}</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <Label for="new-username">{{ t('settings.username') }}</Label>
-            <Input id="new-username" v-model="newUser.username" />
-          </div>
-          <div class="space-y-2">
-            <Label for="new-user-password">{{ t('settings.password') }}</Label>
-            <Input id="new-user-password" v-model="newUser.password" type="password" />
-          </div>
-          <div class="space-y-2">
-            <Label for="new-user-role">{{ t('settings.role') }}</Label>
-            <select id="new-user-role" v-model="newUser.role" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-              <option value="user">{{ t('settings.roleUser') }}</option>
-              <option value="admin">{{ t('settings.roleAdmin') }}</option>
-            </select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" @click="showAddUserDialog = false">{{ t('common.cancel') }}</Button>
-          <Button size="sm" @click="createUser">{{ t('settings.create') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Edit User Dialog -->
-    <Dialog v-model:open="showEditUserDialog">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ t('settings.editUser') }}</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <Label for="edit-username">{{ t('settings.username') }}</Label>
-            <Input id="edit-username" v-model="editUserData.username" />
-          </div>
-          <div class="space-y-2">
-            <Label for="edit-user-role">{{ t('settings.role') }}</Label>
-            <select id="edit-user-role" v-model="editUserData.role" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-              <option value="user">{{ t('settings.roleUser') }}</option>
-              <option value="admin">{{ t('settings.roleAdmin') }}</option>
-            </select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" @click="showEditUserDialog = false">{{ t('common.cancel') }}</Button>
-          <Button size="sm" @click="updateUser">{{ t('common.save') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">

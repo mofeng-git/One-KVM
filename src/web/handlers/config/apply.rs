@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::config::*;
 use crate::error::{AppError, Result};
+use crate::events::SystemEvent;
 use crate::state::AppState;
 
 /// 应用 Video 配置变更
@@ -57,27 +58,55 @@ pub async fn apply_video_config(
         .map_err(|e| AppError::VideoError(format!("Failed to apply video config: {}", e)))?;
     tracing::info!("Video config applied to streamer");
 
-    // Step 3: 重启 streamer
-    if let Err(e) = state.stream_manager.start().await {
-        tracing::error!("Failed to start streamer after config change: {}", e);
-    } else {
-        tracing::info!("Streamer started after config change");
+    // Step 3: 重启 streamer（仅 MJPEG 模式）
+    if !state.stream_manager.is_webrtc_enabled().await {
+        if let Err(e) = state.stream_manager.start().await {
+            tracing::error!("Failed to start streamer after config change: {}", e);
+        } else {
+            tracing::info!("Streamer started after config change");
+        }
     }
 
-    // Step 4: 更新 WebRTC frame source
-    if let Some(frame_tx) = state.stream_manager.frame_sender().await {
-        let receiver_count = frame_tx.receiver_count();
+    // 配置 WebRTC direct capture（所有模式统一配置）
+    let (device_path, _resolution, _format, _fps, jpeg_quality) = state
+        .stream_manager
+        .streamer()
+        .current_capture_config()
+        .await;
+    if let Some(device_path) = device_path {
         state
             .stream_manager
             .webrtc_streamer()
-            .set_video_source(frame_tx)
+            .set_capture_device(device_path, jpeg_quality)
             .await;
-        tracing::info!(
-            "WebRTC streamer frame source updated (receiver_count={})",
-            receiver_count
-        );
     } else {
-        tracing::warn!("No frame source available after config change");
+        tracing::warn!("No capture device configured for WebRTC");
+    }
+
+    if state.stream_manager.is_webrtc_enabled().await {
+        use crate::video::encoder::VideoCodecType;
+        let codec = state
+            .stream_manager
+            .webrtc_streamer()
+            .current_video_codec()
+            .await;
+        let codec_str = match codec {
+            VideoCodecType::H264 => "h264",
+            VideoCodecType::H265 => "h265",
+            VideoCodecType::VP8 => "vp8",
+            VideoCodecType::VP9 => "vp9",
+        }
+        .to_string();
+        let is_hardware = state
+            .stream_manager
+            .webrtc_streamer()
+            .is_hardware_encoding()
+            .await;
+        state.events.publish(SystemEvent::WebRTCReady {
+            transition_id: None,
+            codec: codec_str,
+            hardware: is_hardware,
+        });
     }
 
     tracing::info!("Video config applied successfully");
@@ -157,6 +186,31 @@ pub async fn apply_hid_config(
 ) -> Result<()> {
     // 检查 OTG 描述符是否变更
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
+    let old_hid_functions = old_config.effective_otg_functions();
+    let mut new_hid_functions = new_config.effective_otg_functions();
+
+    // Low-endpoint UDCs (e.g., musb) cannot handle consumer control endpoints reliably
+    if new_config.backend == HidBackend::Otg {
+        if let Some(udc) =
+            crate::otg::configfs::resolve_udc_name(new_config.otg_udc.as_deref())
+        {
+            if crate::otg::configfs::is_low_endpoint_udc(&udc) && new_hid_functions.consumer {
+                tracing::warn!(
+                    "UDC {} has low endpoint resources, disabling consumer control",
+                    udc
+                );
+                new_hid_functions.consumer = false;
+            }
+        }
+    }
+
+    let hid_functions_changed = old_hid_functions != new_hid_functions;
+
+    if new_config.backend == HidBackend::Otg && new_hid_functions.is_empty() {
+        return Err(AppError::BadRequest(
+            "OTG HID functions cannot be empty".to_string(),
+        ));
+    }
 
     // 如果描述符变更且当前使用 OTG 后端，需要重建 Gadget
     if descriptor_changed && new_config.backend == HidBackend::Otg {
@@ -181,12 +235,23 @@ pub async fn apply_hid_config(
         && old_config.ch9329_baudrate == new_config.ch9329_baudrate
         && old_config.otg_udc == new_config.otg_udc
         && !descriptor_changed
+        && !hid_functions_changed
     {
         tracing::info!("HID config unchanged, skipping reload");
         return Ok(());
     }
 
     tracing::info!("Applying HID config changes...");
+
+    if new_config.backend == HidBackend::Otg
+        && (hid_functions_changed || old_config.backend != HidBackend::Otg)
+    {
+        state
+            .otg_service
+            .update_hid_functions(new_hid_functions.clone())
+            .await
+            .map_err(|e| AppError::Config(format!("OTG HID function update failed: {}", e)))?;
+    }
 
     let new_hid_backend = match new_config.backend {
         HidBackend::Otg => crate::hid::HidBackendType::Otg,
@@ -207,32 +272,6 @@ pub async fn apply_hid_config(
         "HID backend reloaded successfully: {:?}",
         new_config.backend
     );
-
-    // When switching to OTG backend, automatically enable MSD if not already enabled
-    // OTG HID and MSD share the same USB gadget, so it makes sense to enable both
-    if new_config.backend == HidBackend::Otg && old_config.backend != HidBackend::Otg {
-        let msd_guard = state.msd.read().await;
-        if msd_guard.is_none() {
-            drop(msd_guard); // Release read lock before acquiring write lock
-
-            tracing::info!("OTG HID enabled, automatically initializing MSD...");
-
-            // Get MSD config from store
-            let config = state.config.get();
-
-            let msd =
-                crate::msd::MsdController::new(state.otg_service.clone(), config.msd.msd_dir_path());
-
-            if let Err(e) = msd.init().await {
-                tracing::warn!("Failed to auto-initialize MSD for OTG: {}", e);
-            } else {
-                let events = state.events.clone();
-                msd.set_event_bus(events).await;
-                *state.msd.write().await = Some(msd);
-                tracing::info!("MSD automatically initialized for OTG mode");
-            }
-        }
-    }
 
     Ok(())
 }

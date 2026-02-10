@@ -25,11 +25,13 @@ echo_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Configuration
 REGISTRY="${REGISTRY:-}"  # e.g., docker.io/username or ghcr.io/username
-IMAGE_NAME="${IMAGE_NAME:-one-kvm}"
+IMAGE_NAME="${IMAGE_NAME:-}"
 TAG="${TAG:-latest}"
+VARIANT="${VARIANT:-minimal}"
+INCLUDE_THIRD_PARTY=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-STAGING_DIR="$PROJECT_ROOT/build-staging"
+BASE_STAGING_DIR="$PROJECT_ROOT/build-staging"
 
 # Full image name with registry
 get_full_image_name() {
@@ -77,6 +79,18 @@ while [[ $# -gt 0 ]]; do
             REGISTRY="$2"
             shift 2
             ;;
+        --image-name)
+            IMAGE_NAME="$2"
+            shift 2
+            ;;
+        --variant)
+            VARIANT="$2"
+            shift 2
+            ;;
+        --full)
+            VARIANT="full"
+            shift
+            ;;
         --build)
             BUILD_BINARY=true
             shift
@@ -91,15 +105,21 @@ while [[ $# -gt 0 ]]; do
             echo "                        Use comma to specify multiple: linux/amd64,linux/arm64"
             echo "                        Default: $DEFAULT_PLATFORM"
             echo "  --registry REGISTRY   Container registry (e.g., docker.io/user, ghcr.io/user)"
+            echo "  --image-name NAME     Override image name (default: one-kvm or one-kvm-full)"
             echo "  --push                Push image to registry"
             echo "  --load                Load image to local Docker (single platform only)"
             echo "  --tag TAG             Image tag (default: latest)"
+            echo "  --variant VARIANT     Image variant: minimal or full (default: minimal)"
+            echo "  --full                Shortcut for --variant full"
             echo "  --build               Also build the binary with cross (optional)"
             echo "  --help                Show this help"
             echo ""
             echo "Examples:"
             echo "  # Build for current platform and load locally"
             echo "  $0 --platform linux/arm64 --load"
+            echo ""
+            echo "  # Build full image (includes gostc + easytier)"
+            echo "  $0 --variant full --platform linux/arm64 --load"
             echo ""
             echo "  # Build and push single platform"
             echo "  $0 --platform linux/arm64 --registry docker.io/user --push"
@@ -114,6 +134,28 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Normalize variant and image name
+case "$VARIANT" in
+    minimal)
+        INCLUDE_THIRD_PARTY=false
+        ;;
+    full)
+        INCLUDE_THIRD_PARTY=true
+        ;;
+    *)
+        echo_error "Unknown variant: $VARIANT (expected: minimal or full)"
+        exit 1
+        ;;
+esac
+
+if [ -z "$IMAGE_NAME" ]; then
+    if [ "$VARIANT" = "full" ]; then
+        IMAGE_NAME="one-kvm-full"
+    else
+        IMAGE_NAME="one-kvm"
+    fi
+fi
 
 # Default platform
 if [ -z "$PLATFORMS" ]; then
@@ -176,21 +218,23 @@ download_tools() {
         chmod +x "$staging/ttyd"
     fi
 
-    # gostc
-    if [ ! -f "$staging/gostc" ]; then
-        curl -fsSL "$GOSTC_URL" -o /tmp/gostc.tar.gz
-        tar -xzf /tmp/gostc.tar.gz -C "$staging"
-        chmod +x "$staging/gostc"
-        rm /tmp/gostc.tar.gz
-    fi
+    if [ "$INCLUDE_THIRD_PARTY" = true ]; then
+        # gostc
+        if [ ! -f "$staging/gostc" ]; then
+            curl -fsSL "$GOSTC_URL" -o /tmp/gostc.tar.gz
+            tar -xzf /tmp/gostc.tar.gz -C "$staging"
+            chmod +x "$staging/gostc"
+            rm /tmp/gostc.tar.gz
+        fi
 
-    # easytier
-    if [ ! -f "$staging/easytier-core" ]; then
-        curl -fsSL "$EASYTIER_URL" -o /tmp/easytier.zip
-        unzip -o /tmp/easytier.zip -d /tmp/easytier
-        cp "/tmp/easytier/$EASYTIER_DIR/easytier-core" "$staging/easytier-core"
-        chmod +x "$staging/easytier-core"
-        rm -rf /tmp/easytier.zip /tmp/easytier
+        # easytier
+        if [ ! -f "$staging/easytier-core" ]; then
+            curl -fsSL "$EASYTIER_URL" -o /tmp/easytier.zip
+            unzip -o /tmp/easytier.zip -d /tmp/easytier
+            cp "/tmp/easytier/$EASYTIER_DIR/easytier-core" "$staging/easytier-core"
+            chmod +x "$staging/easytier-core"
+            rm -rf /tmp/easytier.zip /tmp/easytier
+        fi
     fi
 }
 
@@ -198,13 +242,14 @@ download_tools() {
 build_for_platform() {
     local platform="$1"
     local target=$(platform_to_target "$platform")
-    local staging="$STAGING_DIR/$target"
+    local staging="$BASE_STAGING_DIR/$VARIANT/$target"
 
     echo_info "=========================================="
     echo_info "Processing: $platform ($target)"
     echo_info "=========================================="
 
     # Create staging directory
+    rm -rf "$staging"
     mkdir -p "$staging/ventoy"
 
     # Build binary if requested
@@ -252,7 +297,11 @@ build_for_platform() {
     fi
 
     # Copy Dockerfile
-    cp "$PROJECT_ROOT/build/Dockerfile.runtime" "$staging/Dockerfile"
+    local dockerfile="$PROJECT_ROOT/build/Dockerfile.runtime"
+    if [ "$INCLUDE_THIRD_PARTY" = true ]; then
+        dockerfile="$PROJECT_ROOT/build/Dockerfile.runtime-full"
+    fi
+    cp "$dockerfile" "$staging/Dockerfile"
 
     # Build Docker image
     echo_info "Building Docker image..."
@@ -292,6 +341,7 @@ main() {
 
     echo_info "One-KVM Docker Image Builder"
     echo_info "Image: $full_image:$TAG"
+    echo_info "Variant: $VARIANT"
     echo_info "Platforms: $PLATFORMS"
     if [ -n "$REGISTRY" ]; then
         echo_info "Registry: $REGISTRY"

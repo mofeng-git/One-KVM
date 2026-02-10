@@ -4,7 +4,6 @@ import { authApi, systemApi } from '@/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<string | null>(null)
-  const isAdmin = ref(false)
   const isAuthenticated = ref(false)
   const initialized = ref(false)
   const needsSetup = ref(false)
@@ -30,12 +29,14 @@ export const useAuthStore = defineStore('auth', () => {
       const result = await authApi.check()
       isAuthenticated.value = result.authenticated
       user.value = result.user || null
-      isAdmin.value = result.is_admin ?? false
       return result
-    } catch {
+    } catch (e) {
       isAuthenticated.value = false
       user.value = null
-      isAdmin.value = false
+      error.value = e instanceof Error ? e.message : 'Not authenticated'
+      if (e instanceof Error) {
+        throw e
+      }
       throw new Error('Not authenticated')
     }
   }
@@ -49,13 +50,6 @@ export const useAuthStore = defineStore('auth', () => {
       if (result.success) {
         isAuthenticated.value = true
         user.value = username
-        // After login, fetch admin status
-        try {
-          const authResult = await authApi.check()
-          isAdmin.value = authResult.is_admin ?? false
-        } catch {
-          isAdmin.value = false
-        }
         return true
       } else {
         error.value = result.message || 'Login failed'
@@ -75,7 +69,6 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       isAuthenticated.value = false
       user.value = null
-      isAdmin.value = false
     }
   }
 
@@ -91,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
+    hid_otg_profile?: string
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean
@@ -119,7 +113,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user,
-    isAdmin,
     isAuthenticated,
     initialized,
     needsSetup,

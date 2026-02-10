@@ -61,6 +61,8 @@ impl Default for AppConfig {
 pub struct AuthConfig {
     /// Session timeout in seconds
     pub session_timeout_secs: u32,
+    /// Allow multiple concurrent web sessions (single-user mode)
+    pub single_user_allow_multiple_sessions: bool,
     /// Enable 2FA
     pub totp_enabled: bool,
     /// TOTP secret (encrypted)
@@ -71,6 +73,7 @@ impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             session_timeout_secs: 3600 * 24, // 24 hours
+            single_user_allow_multiple_sessions: false,
             totp_enabled: false,
             totp_secret: None,
         }
@@ -156,6 +159,106 @@ impl Default for OtgDescriptorConfig {
     }
 }
 
+/// OTG HID function profile
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum OtgHidProfile {
+    /// Full HID device set (keyboard + relative mouse + absolute mouse + consumer control)
+    Full,
+    /// Full HID device set without MSD
+    FullNoMsd,
+    /// Full HID device set without consumer control
+    FullNoConsumer,
+    /// Full HID device set without consumer control and MSD
+    FullNoConsumerNoMsd,
+    /// Legacy profile: only keyboard
+    LegacyKeyboard,
+    /// Legacy profile: only relative mouse
+    LegacyMouseRelative,
+    /// Custom function selection
+    Custom,
+}
+
+impl Default for OtgHidProfile {
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+/// OTG HID function selection (used when profile is Custom)
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct OtgHidFunctions {
+    pub keyboard: bool,
+    pub mouse_relative: bool,
+    pub mouse_absolute: bool,
+    pub consumer: bool,
+}
+
+impl OtgHidFunctions {
+    pub fn full() -> Self {
+        Self {
+            keyboard: true,
+            mouse_relative: true,
+            mouse_absolute: true,
+            consumer: true,
+        }
+    }
+
+    pub fn full_no_consumer() -> Self {
+        Self {
+            keyboard: true,
+            mouse_relative: true,
+            mouse_absolute: true,
+            consumer: false,
+        }
+    }
+
+    pub fn legacy_keyboard() -> Self {
+        Self {
+            keyboard: true,
+            mouse_relative: false,
+            mouse_absolute: false,
+            consumer: false,
+        }
+    }
+
+    pub fn legacy_mouse_relative() -> Self {
+        Self {
+            keyboard: false,
+            mouse_relative: true,
+            mouse_absolute: false,
+            consumer: false,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.keyboard && !self.mouse_relative && !self.mouse_absolute && !self.consumer
+    }
+}
+
+impl Default for OtgHidFunctions {
+    fn default() -> Self {
+        Self::full()
+    }
+}
+
+impl OtgHidProfile {
+    pub fn resolve_functions(&self, custom: &OtgHidFunctions) -> OtgHidFunctions {
+        match self {
+            Self::Full => OtgHidFunctions::full(),
+            Self::FullNoMsd => OtgHidFunctions::full(),
+            Self::FullNoConsumer => OtgHidFunctions::full_no_consumer(),
+            Self::FullNoConsumerNoMsd => OtgHidFunctions::full_no_consumer(),
+            Self::LegacyKeyboard => OtgHidFunctions::legacy_keyboard(),
+            Self::LegacyMouseRelative => OtgHidFunctions::legacy_mouse_relative(),
+            Self::Custom => custom.clone(),
+        }
+    }
+}
+
 /// HID configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -172,6 +275,12 @@ pub struct HidConfig {
     /// OTG USB device descriptor configuration
     #[serde(default)]
     pub otg_descriptor: OtgDescriptorConfig,
+    /// OTG HID function profile
+    #[serde(default)]
+    pub otg_profile: OtgHidProfile,
+    /// OTG HID function selection (used when profile is Custom)
+    #[serde(default)]
+    pub otg_functions: OtgHidFunctions,
     /// CH9329 serial port
     pub ch9329_port: String,
     /// CH9329 baud rate
@@ -188,10 +297,18 @@ impl Default for HidConfig {
             otg_mouse: "/dev/hidg1".to_string(),
             otg_udc: None,
             otg_descriptor: OtgDescriptorConfig::default(),
+            otg_profile: OtgHidProfile::default(),
+            otg_functions: OtgHidFunctions::default(),
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
             mouse_absolute: true,
         }
+    }
+}
+
+impl HidConfig {
+    pub fn effective_otg_functions(&self) -> OtgHidFunctions {
+        self.otg_profile.resolve_functions(&self.otg_functions)
     }
 }
 
@@ -459,7 +576,9 @@ pub struct WebConfig {
     pub http_port: u16,
     /// HTTPS port
     pub https_port: u16,
-    /// Bind address
+    /// Bind addresses (preferred)
+    pub bind_addresses: Vec<String>,
+    /// Bind address (legacy)
     pub bind_address: String,
     /// Enable HTTPS
     pub https_enabled: bool,
@@ -474,6 +593,7 @@ impl Default for WebConfig {
         Self {
             http_port: 8080,
             https_port: 8443,
+            bind_addresses: Vec::new(),
             bind_address: "0.0.0.0".to_string(),
             https_enabled: false,
             ssl_cert_path: None,

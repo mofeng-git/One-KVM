@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 use v4l::capability::Flags;
 use v4l::prelude::*;
@@ -11,6 +13,8 @@ use v4l::FourCC;
 
 use super::format::{PixelFormat, Resolution};
 use crate::error::{AppError, Result};
+
+const DEVICE_PROBE_TIMEOUT_MS: u64 = 400;
 
 /// Information about a video device
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -401,32 +405,29 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
 
         debug!("Found video device: {:?}", path);
 
-        // Try to open and query the device
-        match VideoDevice::open(&path) {
-            Ok(device) => {
-                match device.info() {
-                    Ok(info) => {
-                        // Only include devices with video capture capability
-                        if info.capabilities.video_capture || info.capabilities.video_capture_mplane
-                        {
-                            info!(
-                                "Found capture device: {} ({}) - {} formats",
-                                info.name,
-                                info.driver,
-                                info.formats.len()
-                            );
-                            devices.push(info);
-                        } else {
-                            debug!("Skipping non-capture device: {:?}", path);
-                        }
-                    }
-                    Err(e) => {
-                        debug!("Failed to get info for {:?}: {}", path, e);
-                    }
+        if !sysfs_maybe_capture(&path) {
+            debug!("Skipping non-capture candidate (sysfs): {:?}", path);
+            continue;
+        }
+
+        // Try to open and query the device (with timeout)
+        match probe_device_with_timeout(&path, Duration::from_millis(DEVICE_PROBE_TIMEOUT_MS)) {
+            Some(info) => {
+                // Only include devices with video capture capability
+                if info.capabilities.video_capture || info.capabilities.video_capture_mplane {
+                    info!(
+                        "Found capture device: {} ({}) - {} formats",
+                        info.name,
+                        info.driver,
+                        info.formats.len()
+                    );
+                    devices.push(info);
+                } else {
+                    debug!("Skipping non-capture device: {:?}", path);
                 }
             }
-            Err(e) => {
-                debug!("Failed to open {:?}: {}", path, e);
+            None => {
+                debug!("Failed to probe {:?}", path);
             }
         }
     }
@@ -436,6 +437,104 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
 
     info!("Found {} video capture devices", devices.len());
     Ok(devices)
+}
+
+fn probe_device_with_timeout(path: &Path, timeout: Duration) -> Option<VideoDeviceInfo> {
+    let path = path.to_path_buf();
+    let path_for_thread = path.clone();
+    let (tx, rx) = mpsc::channel();
+
+    std::thread::spawn(move || {
+        let result = (|| -> Result<VideoDeviceInfo> {
+            let device = VideoDevice::open(&path_for_thread)?;
+            device.info()
+        })();
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(info)) => Some(info),
+        Ok(Err(e)) => {
+            debug!("Failed to get info for {:?}: {}", path, e);
+            None
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            warn!("Timed out probing video device: {:?}", path);
+            None
+        }
+        Err(_) => None,
+    }
+}
+
+fn sysfs_maybe_capture(path: &Path) -> bool {
+    let name = match path.file_name().and_then(|n| n.to_str()) {
+        Some(name) => name,
+        None => return true,
+    };
+    let sysfs_base = Path::new("/sys/class/video4linux").join(name);
+
+    let sysfs_name = read_sysfs_string(&sysfs_base.join("name"))
+        .unwrap_or_default()
+        .to_lowercase();
+    let uevent = read_sysfs_string(&sysfs_base.join("device/uevent"))
+        .unwrap_or_default()
+        .to_lowercase();
+    let driver = extract_uevent_value(&uevent, "driver");
+
+    let mut maybe_capture = false;
+    let capture_hints = [
+        "capture",
+        "hdmi",
+        "usb",
+        "uvc",
+        "ms2109",
+        "ms2130",
+        "macrosilicon",
+        "tc358743",
+        "grabber",
+    ];
+    if capture_hints.iter().any(|hint| sysfs_name.contains(hint)) {
+        maybe_capture = true;
+    }
+    if let Some(driver) = driver {
+        if driver.contains("uvcvideo") || driver.contains("tc358743") {
+            maybe_capture = true;
+        }
+    }
+
+    let skip_hints = [
+        "codec",
+        "decoder",
+        "encoder",
+        "isp",
+        "mem2mem",
+        "m2m",
+        "vbi",
+        "radio",
+        "metadata",
+        "output",
+    ];
+    if skip_hints.iter().any(|hint| sysfs_name.contains(hint)) && !maybe_capture {
+        return false;
+    }
+
+    true
+}
+
+fn read_sysfs_string(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|value| value.trim().to_string())
+}
+
+fn extract_uevent_value(content: &str, key: &str) -> Option<String> {
+    let key_upper = key.to_ascii_uppercase();
+    for line in content.lines() {
+        if let Some(value) = line.strip_prefix(&format!("{}=", key_upper)) {
+            return Some(value.to_lowercase());
+        }
+    }
+    None
 }
 
 /// Find the best video device for KVM use

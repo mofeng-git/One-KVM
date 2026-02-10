@@ -6,6 +6,8 @@
 export interface AuthConfig {
 	/** Session timeout in seconds */
 	session_timeout_secs: number;
+	/** Allow multiple concurrent web sessions (single-user mode) */
+	single_user_allow_multiple_sessions: boolean;
 	/** Enable 2FA */
 	totp_enabled: boolean;
 	/** TOTP secret (encrypted) */
@@ -52,6 +54,32 @@ export interface OtgDescriptorConfig {
 	serial_number?: string;
 }
 
+/** OTG HID function profile */
+export enum OtgHidProfile {
+	/** Full HID device set (keyboard + relative mouse + absolute mouse + consumer control) */
+	Full = "full",
+	/** Full HID device set without MSD */
+	FullNoMsd = "full_no_msd",
+	/** Full HID device set without consumer control */
+	FullNoConsumer = "full_no_consumer",
+	/** Full HID device set without consumer control and MSD */
+	FullNoConsumerNoMsd = "full_no_consumer_no_msd",
+	/** Legacy profile: only keyboard */
+	LegacyKeyboard = "legacy_keyboard",
+	/** Legacy profile: only relative mouse */
+	LegacyMouseRelative = "legacy_mouse_relative",
+	/** Custom function selection */
+	Custom = "custom",
+}
+
+/** OTG HID function selection (used when profile is Custom) */
+export interface OtgHidFunctions {
+	keyboard: boolean;
+	mouse_relative: boolean;
+	mouse_absolute: boolean;
+	consumer: boolean;
+}
+
 /** HID configuration */
 export interface HidConfig {
 	/** HID backend type */
@@ -64,6 +92,10 @@ export interface HidConfig {
 	otg_udc?: string;
 	/** OTG USB device descriptor configuration */
 	otg_descriptor?: OtgDescriptorConfig;
+	/** OTG HID function profile */
+	otg_profile?: OtgHidProfile;
+	/** OTG HID function selection (used when profile is Custom) */
+	otg_functions?: OtgHidFunctions;
 	/** CH9329 serial port */
 	ch9329_port: string;
 	/** CH9329 baud rate */
@@ -250,7 +282,9 @@ export interface WebConfig {
 	http_port: number;
 	/** HTTPS port */
 	https_port: number;
-	/** Bind address */
+	/** Bind addresses (preferred) */
+	bind_addresses: string[];
+	/** Bind address (legacy) */
 	bind_address: string;
 	/** Enable HTTPS */
 	https_enabled: boolean;
@@ -392,6 +426,10 @@ export interface AudioConfigUpdate {
 	quality?: string;
 }
 
+export interface AuthConfigUpdate {
+	single_user_allow_multiple_sessions?: boolean;
+}
+
 /** Update easytier config */
 export interface EasytierConfigUpdate {
 	enabled?: boolean;
@@ -496,12 +534,21 @@ export interface OtgDescriptorConfigUpdate {
 	serial_number?: string;
 }
 
+export interface OtgHidFunctionsUpdate {
+	keyboard?: boolean;
+	mouse_relative?: boolean;
+	mouse_absolute?: boolean;
+	consumer?: boolean;
+}
+
 export interface HidConfigUpdate {
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
+	otg_profile?: OtgHidProfile;
+	otg_functions?: OtgHidFunctionsUpdate;
 	mouse_absolute?: boolean;
 }
 
@@ -580,6 +627,7 @@ export interface VideoConfigUpdate {
 export interface WebConfigUpdate {
 	http_port?: number;
 	https_port?: number;
+	bind_addresses?: string[];
 	bind_address?: string;
 	https_enabled?: boolean;
 }

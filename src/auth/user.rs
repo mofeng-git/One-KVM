@@ -149,6 +149,33 @@ impl UserStore {
         Ok(())
     }
 
+    /// Update username
+    pub async fn update_username(&self, user_id: &str, new_username: &str) -> Result<()> {
+        if let Some(existing) = self.get_by_username(new_username).await? {
+            if existing.id != user_id {
+                return Err(AppError::BadRequest(format!(
+                    "Username '{}' already exists",
+                    new_username
+                )));
+            }
+        }
+
+        let now = Utc::now();
+        let result =
+            sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
+                .bind(new_username)
+                .bind(now.to_rfc3339())
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("User not found".to_string()));
+        }
+
+        Ok(())
+    }
+
     /// List all users
     pub async fn list(&self) -> Result<Vec<User>> {
         let rows: Vec<UserRow> = sqlx::query_as(

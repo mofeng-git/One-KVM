@@ -96,12 +96,13 @@ const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
+const hidOtgProfile = ref('full')
+const otgProfileTouched = ref(false)
+const showAdvancedOtg = ref(false)
 
 // Extension settings
 const ttydEnabled = ref(false)
-const rustdeskEnabled = ref(false)
 const ttydAvailable = ref(false)
-const rustdeskAvailable = ref(true) // RustDesk is built-in, always available
 
 // Encoder backend settings
 const encoderBackend = ref('auto')
@@ -139,7 +140,6 @@ interface DeviceInfo {
   udc: Array<{ name: string }>
   extensions: {
     ttyd_available: boolean
-    rustdesk_available: boolean
   }
 }
 
@@ -150,7 +150,6 @@ const devices = ref<DeviceInfo>({
   udc: [],
   extensions: {
     ttyd_available: false,
-    rustdesk_available: true,
   },
 })
 
@@ -203,6 +202,26 @@ const availableFps = computed(() => {
   )
   return resolution?.fps || []
 })
+
+const isLowEndpointUdc = computed(() => {
+  if (otgUdc.value) {
+    return /musb/i.test(otgUdc.value)
+  }
+  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
+})
+
+function applyOtgProfileDefault() {
+  if (otgProfileTouched.value) return
+  if (hidBackend.value !== 'otg') return
+  const preferred = isLowEndpointUdc.value ? 'full_no_consumer' : 'full'
+  if (hidOtgProfile.value === preferred) return
+  hidOtgProfile.value = preferred
+}
+
+function onOtgProfileChange(value: unknown) {
+  hidOtgProfile.value = typeof value === 'string' ? value : 'full'
+  otgProfileTouched.value = true
+}
 
 // Common baud rates for CH9329
 const baudRates = [9600, 19200, 38400, 57600, 115200]
@@ -319,9 +338,16 @@ watch(hidBackend, (newBackend) => {
   if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
     otgUdc.value = devices.value.udc[0]?.name || ''
   }
-  if (newBackend === 'none') {
-    ch9329Port.value = ''
-    otgUdc.value = ''
+  applyOtgProfileDefault()
+})
+
+watch(otgUdc, () => {
+  applyOtgProfileDefault()
+})
+
+watch(showAdvancedOtg, (open) => {
+  if (open) {
+    applyOtgProfileDefault()
   }
 })
 
@@ -344,6 +370,7 @@ onMounted(async () => {
     if (result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
     }
+    applyOtgProfileDefault()
 
     // If no HID devices exist, default to disabled to avoid blocking setup
     if (result.serial.length === 0 && result.udc.length === 0) {
@@ -360,7 +387,6 @@ onMounted(async () => {
     // Set extension availability from devices API
     if (result.extensions) {
       ttydAvailable.value = result.extensions.ttyd_available
-      rustdeskAvailable.value = result.extensions.rustdesk_available
     }
   } catch {
     // Use defaults
@@ -505,6 +531,7 @@ async function handleSetup() {
   }
   if (hidBackend.value === 'otg' && otgUdc.value) {
     setupData.hid_otg_udc = otgUdc.value
+    setupData.hid_otg_profile = hidOtgProfile.value
   }
 
   // Encoder backend setting
@@ -519,7 +546,6 @@ async function handleSetup() {
 
   // Extension settings
   setupData.ttyd_enabled = ttydEnabled.value
-  setupData.rustdesk_enabled = rustdeskEnabled.value
 
   const success = await authStore.setup(setupData)
 
@@ -539,7 +565,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background p-4">
+  <div class="min-h-screen flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
@@ -566,28 +592,28 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
         </DropdownMenu>
       </div>
 
-      <CardHeader class="text-center space-y-2 pt-12">
+      <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
         <div
           class="inline-flex items-center justify-center w-16 h-16 mx-auto rounded-full bg-primary/10"
         >
           <Monitor class="w-8 h-8 text-primary" />
         </div>
-        <CardTitle class="text-2xl">{{ t('setup.welcome') }}</CardTitle>
+        <CardTitle class="text-xl sm:text-2xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="space-y-6">
+      <CardContent class="space-y-5 sm:space-y-6">
         <!-- Progress Text -->
         <p class="text-sm text-muted-foreground text-center">
           {{ t('setup.progress', { current: step, total: totalSteps }) }}
         </p>
 
         <!-- Step Indicator with Labels -->
-        <div class="flex items-center justify-center gap-2 mb-6">
+        <div class="flex items-center justify-center gap-1.5 sm:gap-2 mb-5 sm:mb-6">
           <template v-for="i in totalSteps" :key="i">
             <div class="flex flex-col items-center gap-1">
               <div
-                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300"
+                class="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 transition-all duration-300"
                 :class="
                   step > i
                     ? 'bg-primary border-primary text-primary-foreground scale-100'
@@ -596,11 +622,11 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                       : 'border-muted text-muted-foreground scale-100'
                 "
               >
-                <Check v-if="step > i" class="w-5 h-5" />
-                <component :is="stepIcons[i - 1]" v-else class="w-5 h-5" />
+                <Check v-if="step > i" class="w-4 h-4 sm:w-5 sm:h-5" />
+                <component :is="stepIcons[i - 1]" v-else class="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <span
-                class="text-xs transition-colors duration-300 max-w-16 text-center leading-tight"
+                class="text-[10px] sm:text-xs transition-colors duration-300 max-w-14 sm:max-w-16 text-center leading-tight"
                 :class="step >= i ? 'text-foreground font-medium' : 'text-muted-foreground'"
               >
                 {{ stepLabels[i - 1] }}
@@ -608,7 +634,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             </div>
             <div
               v-if="i < totalSteps"
-              class="w-8 h-0.5 transition-colors duration-300 mb-6"
+              class="w-5 sm:w-8 h-0.5 transition-colors duration-300 mb-5 sm:mb-6"
               :class="step > i ? 'bg-primary' : 'bg-muted'"
             />
           </template>
@@ -944,6 +970,46 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   {{ t('setup.noUdcDevices') }}
                 </p>
               </div>
+
+              <div class="mt-2 border rounded-lg">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                  @click="showAdvancedOtg = !showAdvancedOtg"
+                >
+                  <span class="text-sm font-medium">
+                    {{ t('setup.otgAdvanced') }} ({{ t('common.optional') }})
+                  </span>
+                  <ChevronRight
+                    class="h-4 w-4 transition-transform duration-200"
+                    :class="{ 'rotate-90': showAdvancedOtg }"
+                  />
+                </button>
+                <div v-if="showAdvancedOtg" class="px-3 pb-3 space-y-3">
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('setup.otgProfileDesc') }}
+                  </p>
+                  <div class="space-y-2">
+                    <Label for="otgProfile">{{ t('setup.otgProfile') }}</Label>
+                    <Select :model-value="hidOtgProfile" @update:modelValue="onOtgProfileChange">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full">{{ t('settings.otgProfileFull') }}</SelectItem>
+                        <SelectItem value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</SelectItem>
+                        <SelectItem value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</SelectItem>
+                        <SelectItem value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</SelectItem>
+                        <SelectItem value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</SelectItem>
+                        <SelectItem value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p v-if="isLowEndpointUdc" class="text-xs text-amber-600 dark:text-amber-400">
+                    {{ t('setup.otgLowEndpointHint') }}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <p v-if="hidBackend === 'none'" class="text-xs text-muted-foreground">
@@ -972,19 +1038,6 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 </p>
               </div>
               <Switch v-model="ttydEnabled" :disabled="!ttydAvailable" />
-            </div>
-
-            <!-- RustDesk -->
-            <div class="flex items-center justify-between p-4 rounded-lg border">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                  <Label class="text-base font-medium">{{ t('setup.rustdeskTitle') }}</Label>
-                </div>
-                <p class="text-sm text-muted-foreground">
-                  {{ t('setup.rustdeskDescription') }}
-                </p>
-              </div>
-              <Switch v-model="rustdeskEnabled" />
             </div>
 
             <p class="text-xs text-muted-foreground text-center pt-2">

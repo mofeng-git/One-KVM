@@ -117,21 +117,11 @@ pub enum CaptureState {
     Error,
 }
 
-/// Audio capture statistics
-#[derive(Debug, Clone, Default)]
-pub struct AudioStats {
-    pub frames_captured: u64,
-    pub frames_dropped: u64,
-    pub buffer_overruns: u64,
-    pub current_latency_ms: f32,
-}
-
 /// ALSA audio capturer
 pub struct AudioCapturer {
     config: AudioConfig,
     state: Arc<watch::Sender<CaptureState>>,
     state_rx: watch::Receiver<CaptureState>,
-    stats: Arc<Mutex<AudioStats>>,
     frame_tx: broadcast::Sender<AudioFrame>,
     stop_flag: Arc<AtomicBool>,
     sequence: Arc<AtomicU64>,
@@ -150,7 +140,6 @@ impl AudioCapturer {
             config,
             state: Arc::new(state_tx),
             state_rx,
-            stats: Arc::new(Mutex::new(AudioStats::default())),
             frame_tx,
             stop_flag: Arc::new(AtomicBool::new(false)),
             sequence: Arc::new(AtomicU64::new(0)),
@@ -174,11 +163,6 @@ impl AudioCapturer {
         self.frame_tx.subscribe()
     }
 
-    /// Get statistics
-    pub async fn stats(&self) -> AudioStats {
-        self.stats.lock().await.clone()
-    }
-
     /// Start capturing
     pub async fn start(&self) -> Result<()> {
         if self.state() == CaptureState::Running {
@@ -194,7 +178,6 @@ impl AudioCapturer {
 
         let config = self.config.clone();
         let state = self.state.clone();
-        let stats = self.stats.clone();
         let frame_tx = self.frame_tx.clone();
         let stop_flag = self.stop_flag.clone();
         let sequence = self.sequence.clone();
@@ -204,7 +187,6 @@ impl AudioCapturer {
             capture_loop(
                 config,
                 state,
-                stats,
                 frame_tx,
                 stop_flag,
                 sequence,
@@ -239,7 +221,6 @@ impl AudioCapturer {
 fn capture_loop(
     config: AudioConfig,
     state: Arc<watch::Sender<CaptureState>>,
-    stats: Arc<Mutex<AudioStats>>,
     frame_tx: broadcast::Sender<AudioFrame>,
     stop_flag: Arc<AtomicBool>,
     sequence: Arc<AtomicU64>,
@@ -248,7 +229,6 @@ fn capture_loop(
     let result = run_capture(
         &config,
         &state,
-        &stats,
         &frame_tx,
         &stop_flag,
         &sequence,
@@ -266,7 +246,6 @@ fn capture_loop(
 fn run_capture(
     config: &AudioConfig,
     state: &watch::Sender<CaptureState>,
-    stats: &Arc<Mutex<AudioStats>>,
     frame_tx: &broadcast::Sender<AudioFrame>,
     stop_flag: &AtomicBool,
     sequence: &AtomicU64,
@@ -334,9 +313,6 @@ fn run_capture(
         match pcm.state() {
             State::XRun => {
                 warn_throttled!(log_throttler, "xrun", "Audio buffer overrun, recovering");
-                if let Ok(mut s) = stats.try_lock() {
-                    s.buffer_overruns += 1;
-                }
                 let _ = pcm.prepare();
                 continue;
             }
@@ -377,11 +353,6 @@ fn run_capture(
                         debug!("No audio receivers: {}", e);
                     }
                 }
-
-                // Update stats
-                if let Ok(mut s) = stats.try_lock() {
-                    s.frames_captured += 1;
-                }
             }
             Err(e) => {
                 // Check for buffer overrun (EPIPE = 32 on Linux)
@@ -389,21 +360,12 @@ fn run_capture(
                 if desc.contains("EPIPE") || desc.contains("Broken pipe") {
                     // Buffer overrun
                     warn_throttled!(log_throttler, "buffer_overrun", "Audio buffer overrun");
-                    if let Ok(mut s) = stats.try_lock() {
-                        s.buffer_overruns += 1;
-                    }
                     let _ = pcm.prepare();
                 } else if desc.contains("No such device") || desc.contains("ENODEV") {
                     // Device disconnected - use longer throttle for this
                     error_throttled!(log_throttler, "no_device", "Audio read error: {}", e);
-                    if let Ok(mut s) = stats.try_lock() {
-                        s.frames_dropped += 1;
-                    }
                 } else {
                     error_throttled!(log_throttler, "read_error", "Audio read error: {}", e);
-                    if let Ok(mut s) = stats.try_lock() {
-                        s.frames_dropped += 1;
-                    }
                 }
             }
         }

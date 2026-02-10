@@ -43,6 +43,23 @@ pub fn find_udc() -> Option<String> {
         .next()
 }
 
+/// Check if UDC is known to have low endpoint resources
+pub fn is_low_endpoint_udc(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.contains("musb") || name.contains("musb-hdrc")
+}
+
+/// Resolve preferred UDC name if available, otherwise auto-detect
+pub fn resolve_udc_name(preferred: Option<&str>) -> Option<String> {
+    if let Some(name) = preferred {
+        let path = Path::new("/sys/class/udc").join(name);
+        if path.exists() {
+            return Some(name.to_string());
+        }
+    }
+    find_udc()
+}
+
 /// Write string content to a file
 ///
 /// For sysfs files, this function appends a newline and flushes
