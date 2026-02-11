@@ -267,7 +267,6 @@ const hidDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.device'), value: hid.device || '-' },
     { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
     { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.initialized ? 'ok' : 'warning' },
-    { label: t('statusCard.mouseSupport'), value: hid.supportsAbsoluteMouse ? t('statusCard.absolute') : t('statusCard.relative'), status: hid.available ? 'ok' : undefined },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
   ]
 
@@ -406,6 +405,14 @@ const msdDetails = computed<StatusDetail[]>(() => {
   }
 
   return details
+})
+
+const showMsdStatusCard = computed(() => {
+  return !!(systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329')
+})
+
+const hidHoverAlign = computed<'start' | 'end'>(() => {
+  return showMsdStatusCard.value ? 'start' : 'end'
 })
 
 // Video handling
@@ -1941,11 +1948,12 @@ onUnmounted(() => {
                 :status="hidStatus"
                 :quick-info="hidQuickInfo"
                 :details="hidDetails"
+                :hover-align="hidHoverAlign"
               />
 
               <!-- MSD Status - Hidden when CH9329 backend (no USB gadget support) -->
               <StatusCard
-                v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
+                v-if="showMsdStatusCard"
                 :title="t('statusCard.msd')"
                 type="msd"
                 :status="msdStatus"
@@ -2037,11 +2045,12 @@ onUnmounted(() => {
                 :status="hidStatus"
                 :quick-info="hidQuickInfo"
                 :details="hidDetails"
+                :hover-align="hidHoverAlign"
                 compact
               />
             </div>
 
-            <div v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'" class="shrink-0">
+            <div v-if="showMsdStatusCard" class="shrink-0">
               <StatusCard
                 :title="t('statusCard.msd')"
                 type="msd"
