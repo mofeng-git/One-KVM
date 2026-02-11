@@ -1654,7 +1654,7 @@ watch(updateChannel, async () => {
                   <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
                   <select id="video-device" v-model="config.video_device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                     <option value="">{{ t('settings.selectDevice') }}</option>
-                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ dev.name }}</option>
+                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</option>
                   </select>
                 </div>
                 <div class="space-y-2">

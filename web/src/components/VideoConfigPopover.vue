@@ -753,7 +753,7 @@ watch(currentConfig, () => {
                   :value="device.path"
                   class="text-xs"
                 >
-                  {{ device.name }}
+                  {{ device.name }} ({{ device.path }})
                 </SelectItem>
               </SelectContent>
             </Select>

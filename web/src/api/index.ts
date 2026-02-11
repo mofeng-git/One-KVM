@@ -537,6 +537,25 @@ export const msdApi = {
     }),
 }
 
+interface SerialDeviceOption {
+  path: string
+  name: string
+}
+
+function getSerialDevicePriority(path: string): number {
+  if (/^\/dev\/ttyUSB/i.test(path)) return 0
+  if (/^\/dev\/(ttyS|S)/i.test(path)) return 2
+  return 1
+}
+
+function sortSerialDevices(serialDevices: SerialDeviceOption[]): SerialDeviceOption[] {
+  return [...serialDevices].sort((a, b) => {
+    const priorityDiff = getSerialDevicePriority(a.path) - getSerialDevicePriority(b.path)
+    if (priorityDiff !== 0) return priorityDiff
+    return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
+
 // Config API
 /** @deprecated 使用域特定 API（videoConfigApi, hidConfigApi 等）替代 */
 export const configApi = {
@@ -549,8 +568,8 @@ export const configApi = {
       body: JSON.stringify(updates),
     }),
 
-  listDevices: () =>
-    request<{
+  listDevices: async () => {
+    const result = await request<{
       video: Array<{
         path: string
         name: string
@@ -578,7 +597,13 @@ export const configApi = {
         ttyd_available: boolean
         rustdesk_available: boolean
       }
-    }>('/devices'),
+    }>('/devices')
+
+    return {
+      ...result,
+      serial: sortSerialDevices(result.serial),
+    }
+  },
 }
 
 // 导出新的域分离配置 API
