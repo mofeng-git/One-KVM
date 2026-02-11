@@ -134,6 +134,8 @@ export default {
     backendAuto: '自动',
     recommended: '推荐',
     notRecommended: '不推荐',
+    multiSourceCodecLocked: '{sources} 已启用，当前编码已锁定',
+    multiSourceVideoParamsWarning: '{sources} 已启用，修改视频设备和输入参数将导致流中断',
     // HID Config
     hidConfig: '鼠键配置',
     mouseSettings: '鼠标设置',

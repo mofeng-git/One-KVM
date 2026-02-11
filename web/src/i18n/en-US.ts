@@ -134,6 +134,8 @@ export default {
     backendAuto: 'Auto',
     recommended: 'Recommended',
     notRecommended: 'Not Recommended',
+    multiSourceCodecLocked: '{sources} are enabled. Current codec is locked.',
+    multiSourceVideoParamsWarning: '{sources} are enabled. Changing video device and input parameters will interrupt the stream.',
     // HID Config
     hidConfig: 'Mouse & HID',
     mouseSettings: 'Mouse Settings',

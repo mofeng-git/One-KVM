@@ -1,8 +1,10 @@
-use bytes::Bytes;
 use base64::Engine;
+use bytes::Bytes;
 use rand::Rng;
 use rtp::packet::Packet;
 use rtp::packetizer::Payloader;
+use rtsp_types as rtsp;
+use sdp_types as sdp;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -10,9 +12,8 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::time::{sleep, Duration};
 use webrtc::util::Marshal;
-use rtsp_types as rtsp;
-use sdp_types as sdp;
 
 use crate::config::{RtspCodec, RtspConfig};
 use crate::error::{AppError, Result};
@@ -26,6 +27,7 @@ use crate::webrtc::rtp::parse_profile_level_id_from_sps;
 const RTP_CLOCK_RATE: u32 = 90_000;
 const RTP_MTU: usize = 1200;
 const RTSP_BUF_SIZE: usize = 8192;
+const RTSP_RESUBSCRIBE_DELAY_MS: u64 = 300;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RtspServiceStatus {
@@ -150,9 +152,9 @@ impl RtspService {
             .parse()
             .map_err(|e| AppError::BadRequest(format!("Invalid RTSP bind address: {}", e)))?;
 
-        let listener = TcpListener::bind(bind_addr)
-            .await
-            .map_err(|e| AppError::Io(io::Error::new(e.kind(), format!("RTSP bind failed: {}", e))))?;
+        let listener = TcpListener::bind(bind_addr).await.map_err(|e| {
+            AppError::Io(io::Error::new(e.kind(), format!("RTSP bind failed: {}", e)))
+        })?;
 
         let service_config = self.config.clone();
         let video_manager = self.video_manager.clone();
@@ -245,8 +247,14 @@ async fn handle_client(
 ) -> Result<()> {
     let cfg_snapshot = config.read().await.clone();
 
-    let auth_enabled = cfg_snapshot.username.as_ref().is_some_and(|u| !u.is_empty())
-        || cfg_snapshot.password.as_ref().is_some_and(|p| !p.is_empty());
+    let auth_enabled = cfg_snapshot
+        .username
+        .as_ref()
+        .is_some_and(|u| !u.is_empty())
+        || cfg_snapshot
+            .password
+            .as_ref()
+            .is_some_and(|p| !p.is_empty());
 
     if cfg_snapshot.allow_one_client {
         let mut active_guard = shared.active_client.lock().await;
@@ -288,17 +296,8 @@ async fn handle_client(
                 }
             };
 
-            if !is_valid_rtsp_path(&req.uri, &cfg_snapshot.path) {
-                send_response(
-                    &mut stream,
-                    &req,
-                    404,
-                    "Not Found",
-                    vec![],
-                    "",
-                    "",
-                )
-                .await?;
+            if !is_valid_rtsp_path(&req.method, &req.uri, &cfg_snapshot.path) {
+                send_response(&mut stream, &req, 404, "Not Found", vec![], "", "").await?;
                 continue;
             }
 
@@ -368,21 +367,31 @@ async fn handle_client(
                         &req,
                         200,
                         "OK",
-                        vec![(
-                            "Content-Type".to_string(),
-                            "application/sdp".to_string(),
-                        )],
+                        vec![("Content-Type".to_string(), "application/sdp".to_string())],
                         &sdp,
                         &state.session_id,
                     )
                     .await?;
                 }
                 rtsp::Method::Setup => {
-                    let transport = req
-                        .headers
-                        .get("transport")
-                        .cloned()
-                        .unwrap_or_default();
+                    let transport = req.headers.get("transport").cloned().unwrap_or_default();
+
+                    if !is_tcp_transport_request(&transport) {
+                        send_response(
+                            &mut stream,
+                            &req,
+                            461,
+                            "Unsupported Transport",
+                            vec![(
+                                "Transport".to_string(),
+                                "RTP/AVP/TCP;unicast;interleaved=0-1".to_string(),
+                            )],
+                            "",
+                            &state.session_id,
+                        )
+                        .await?;
+                        continue;
+                    }
 
                     let interleaved = parse_interleaved_channel(&transport).unwrap_or(0);
                     state.setup_done = true;
@@ -420,16 +429,8 @@ async fn handle_client(
                         continue;
                     }
 
-                    send_response(
-                        &mut stream,
-                        &req,
-                        200,
-                        "OK",
-                        vec![],
-                        "",
-                        &state.session_id,
-                    )
-                    .await?;
+                    send_response(&mut stream, &req, 200, "OK", vec![], "", &state.session_id)
+                        .await?;
 
                     if let Err(e) = stream_video_interleaved(
                         stream,
@@ -447,16 +448,8 @@ async fn handle_client(
                     break 'client_loop;
                 }
                 rtsp::Method::Teardown => {
-                    send_response(
-                        &mut stream,
-                        &req,
-                        200,
-                        "OK",
-                        vec![],
-                        "",
-                        &state.session_id,
-                    )
-                    .await?;
+                    send_response(&mut stream, &req, 200, "OK", vec![], "", &state.session_id)
+                        .await?;
                     break 'client_loop;
                 }
                 _ => {
@@ -498,7 +491,9 @@ async fn stream_video_interleaved(
     let mut rx = video_manager
         .subscribe_encoded_frames()
         .await
-        .ok_or_else(|| AppError::VideoError("RTSP failed to subscribe encoded frames".to_string()))?;
+        .ok_or_else(|| {
+            AppError::VideoError("RTSP failed to subscribe encoded frames".to_string())
+        })?;
 
     video_manager.request_keyframe().await.ok();
 
@@ -518,7 +513,21 @@ async fn stream_video_interleaved(
         tokio::select! {
             maybe_frame = rx.recv() => {
                 let Some(frame) = maybe_frame else {
-                    break;
+                    tracing::warn!("RTSP encoded frame subscription ended, attempting to restart pipeline");
+
+                    if let Some(new_rx) = video_manager.subscribe_encoded_frames().await {
+                        rx = new_rx;
+                        let _ = video_manager.request_keyframe().await;
+                        tracing::info!("RTSP frame subscription recovered");
+                    } else {
+                        tracing::warn!(
+                            "RTSP failed to resubscribe encoded frames, retrying in {}ms",
+                            RTSP_RESUBSCRIBE_DELAY_MS
+                        );
+                        sleep(Duration::from_millis(RTSP_RESUBSCRIBE_DELAY_MS)).await;
+                    }
+
+                    continue;
                 };
 
                 if !is_frame_codec_match(&frame, &rtsp_codec) {
@@ -689,11 +698,14 @@ fn take_rtsp_request_from_buffer(buffer: &mut Vec<u8>) -> Option<String> {
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 fn parse_rtsp_request(raw: &str) -> Option<RtspRequest> {
-    let (message, consumed): (rtsp::Message<Vec<u8>>, usize) = rtsp::Message::parse(raw.as_bytes()).ok()?;
+    let (message, consumed): (rtsp::Message<Vec<u8>>, usize) =
+        rtsp::Message::parse(raw.as_bytes()).ok()?;
     if consumed != raw.len() {
         return None;
     }
@@ -743,6 +755,14 @@ fn parse_interleaved_channel(transport: &str) -> Option<u8> {
         return first.parse::<u8>().ok();
     }
     None
+}
+
+fn is_tcp_transport_request(transport: &str) -> bool {
+    transport
+        .split(',')
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .any(|item| item.contains("rtp/avp/tcp") || item.contains("interleaved="))
 }
 
 fn update_parameter_sets(params: &mut ParameterSets, frame: &EncodedVideoFrame) {
@@ -1036,18 +1056,33 @@ fn status_code_from_u16(code: u16) -> rtsp::StatusCode {
         405 => rtsp::StatusCode::MethodNotAllowed,
         453 => rtsp::StatusCode::NotEnoughBandwidth,
         455 => rtsp::StatusCode::MethodNotValidInThisState,
+        461 => rtsp::StatusCode::UnsupportedTransport,
         _ => rtsp::StatusCode::InternalServerError,
     }
 }
 
-fn is_valid_rtsp_path(uri: &str, configured_path: &str) -> bool {
+fn is_valid_rtsp_path(method: &rtsp::Method, uri: &str, configured_path: &str) -> bool {
+    if matches!(method, rtsp::Method::Options) && uri.trim() == "*" {
+        return true;
+    }
+
     let normalized_cfg = configured_path.trim_matches('/');
     if normalized_cfg.is_empty() {
         return false;
     }
 
     let request_path = extract_rtsp_path(uri);
-    request_path == normalized_cfg
+
+    if request_path == normalized_cfg {
+        return true;
+    }
+
+    if !matches!(method, rtsp::Method::Setup | rtsp::Method::Teardown) {
+        return false;
+    }
+
+    let control_track_path = format!("{}/trackID=0", normalized_cfg);
+    request_path == "trackID=0" || request_path == control_track_path
 }
 
 fn extract_rtsp_path(uri: &str) -> String {
@@ -1074,8 +1109,13 @@ fn extract_rtsp_path(uri: &str) -> String {
 fn is_frame_codec_match(frame: &EncodedVideoFrame, codec: &RtspCodec) -> bool {
     matches!(
         (frame.codec, codec),
-        (crate::video::encoder::registry::VideoEncoderType::H264, RtspCodec::H264)
-            | (crate::video::encoder::registry::VideoEncoderType::H265, RtspCodec::H265)
+        (
+            crate::video::encoder::registry::VideoEncoderType::H264,
+            RtspCodec::H264
+        ) | (
+            crate::video::encoder::registry::VideoEncoderType::H265,
+            RtspCodec::H265
+        )
     )
 }
 
@@ -1091,7 +1131,6 @@ fn generate_session_id() -> String {
     let value: u64 = rng.random();
     format!("{:016x}", value)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1109,9 +1148,14 @@ mod tests {
         }
     }
 
-    async fn read_response_from_duplex(mut client: tokio::io::DuplexStream) -> rtsp::Response<Vec<u8>> {
+    async fn read_response_from_duplex(
+        mut client: tokio::io::DuplexStream,
+    ) -> rtsp::Response<Vec<u8>> {
         let mut buf = vec![0u8; 4096];
-        let n = client.read(&mut buf).await.expect("failed to read rtsp response");
+        let n = client
+            .read(&mut buf)
+            .await
+            .expect("failed to read rtsp response");
         assert!(n > 0);
         let (message, consumed): (rtsp::Message<Vec<u8>>, usize) =
             rtsp::Message::parse(&buf[..n]).expect("failed to parse rtsp response");
@@ -1188,13 +1232,57 @@ mod tests {
         assert!(fmtp_value.contains("sprop-parameter-sets="));
     }
 
+    #[test]
+    fn rtsp_path_matching_follows_sdp_control_rules() {
+        assert!(is_valid_rtsp_path(
+            &rtsp::Method::Describe,
+            "rtsp://127.0.0.1/live",
+            "live"
+        ));
+        assert!(is_valid_rtsp_path(
+            &rtsp::Method::Describe,
+            "rtsp://127.0.0.1/live/?token=1",
+            "/live/"
+        ));
+        assert!(!is_valid_rtsp_path(
+            &rtsp::Method::Describe,
+            "rtsp://127.0.0.1/live2",
+            "live"
+        ));
+        assert!(!is_valid_rtsp_path(
+            &rtsp::Method::Describe,
+            "rtsp://127.0.0.1/",
+            "/"
+        ));
+
+        assert!(is_valid_rtsp_path(
+            &rtsp::Method::Setup,
+            "rtsp://127.0.0.1/live/trackID=0",
+            "live"
+        ));
+        assert!(is_valid_rtsp_path(
+            &rtsp::Method::Setup,
+            "rtsp://127.0.0.1/trackID=0",
+            "live"
+        ));
+        assert!(!is_valid_rtsp_path(
+            &rtsp::Method::Describe,
+            "rtsp://127.0.0.1/live/trackID=0",
+            "live"
+        ));
+
+        assert!(is_valid_rtsp_path(&rtsp::Method::Options, "*", "live"));
+    }
 
     #[test]
-    fn rtsp_path_matching_is_exact_after_normalization() {
-        assert!(is_valid_rtsp_path("rtsp://127.0.0.1/live", "live"));
-        assert!(is_valid_rtsp_path("rtsp://127.0.0.1/live/?token=1", "/live/"));
-        assert!(!is_valid_rtsp_path("rtsp://127.0.0.1/live2", "live"));
-        assert!(!is_valid_rtsp_path("rtsp://127.0.0.1/", "/"));
+    fn transport_parsing_detects_tcp_interleaved_requests() {
+        assert!(is_tcp_transport_request(
+            "RTP/AVP/TCP;unicast;interleaved=0-1"
+        ));
+        assert!(is_tcp_transport_request("RTP/AVP;unicast;interleaved=2-3"));
+        assert!(!is_tcp_transport_request(
+            "RTP/AVP;unicast;client_port=8000-8001"
+        ));
     }
 
     #[test]

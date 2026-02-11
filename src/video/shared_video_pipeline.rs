@@ -27,6 +27,8 @@ use tracing::{debug, error, info, trace, warn};
 
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
+/// Restart capture stream after this many consecutive timeouts.
+const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
 /// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 /// Validate JPEG header every N frames to reduce overhead
@@ -1319,6 +1321,7 @@ impl SharedVideoPipeline {
                 let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
                 let mut sequence: u64 = 0;
                 let mut validate_counter: u64 = 0;
+                let mut consecutive_timeouts: u32 = 0;
                 let capture_error_throttler = LogThrottler::with_secs(5);
                 let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
 
@@ -1363,11 +1366,27 @@ impl SharedVideoPipeline {
 
                     let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
                     let meta = match stream.next_into(&mut owned) {
-                        Ok(meta) => meta,
+                        Ok(meta) => {
+                            consecutive_timeouts = 0;
+                            meta
+                        }
                         Err(e) => {
                             if e.kind() == std::io::ErrorKind::TimedOut {
+                                consecutive_timeouts = consecutive_timeouts.saturating_add(1);
                                 warn!("Capture timeout - no signal?");
+
+                                if consecutive_timeouts >= CAPTURE_TIMEOUT_RESTART_THRESHOLD {
+                                    warn!(
+                                        "Capture timed out {} consecutive times, restarting video pipeline",
+                                        consecutive_timeouts
+                                    );
+                                    let _ = pipeline.running.send(false);
+                                    pipeline.running_flag.store(false, Ordering::Release);
+                                    let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                    break;
+                                }
                             } else {
+                                consecutive_timeouts = 0;
                                 let key = classify_capture_error(&e);
                                 if capture_error_throttler.should_log(&key) {
                                     let suppressed =
