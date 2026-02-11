@@ -72,12 +72,15 @@ pub fn discover_devices() -> AtxDevices {
                 devices.gpio_chips.push(format!("/dev/{}", name_str));
             } else if name_str.starts_with("hidraw") {
                 devices.usb_relays.push(format!("/dev/{}", name_str));
+            } else if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
+                devices.serial_ports.push(format!("/dev/{}", name_str));
             }
         }
     }
 
     devices.gpio_chips.sort();
     devices.usb_relays.sort();
+    devices.serial_ports.sort();
 
     devices
 }
@@ -92,6 +95,7 @@ mod tests {
         // Just verify the function runs without error
         assert!(devices.gpio_chips.len() >= 0);
         assert!(devices.usb_relays.len() >= 0);
+        assert!(devices.serial_ports.len() >= 0);
     }
 
     #[test]
