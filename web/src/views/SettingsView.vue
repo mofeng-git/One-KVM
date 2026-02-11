@@ -350,12 +350,14 @@ const atxConfig = ref({
     device: '',
     pin: 0,
     active_level: 'high' as ActiveLevel,
+    baud_rate: 9600,
   },
   reset: {
     driver: 'none' as AtxDriverType,
     device: '',
     pin: 0,
     active_level: 'high' as ActiveLevel,
+    baud_rate: 9600,
   },
   led: {
     enabled: false,
@@ -370,6 +372,7 @@ const atxConfig = ref({
 const atxDevices = ref<AtxDevices>({
   gpio_chips: [],
   usb_relays: [],
+  serial_ports: [],
 })
 
 // Encoder backend
@@ -927,12 +930,14 @@ async function saveAtxConfig() {
         driver: atxConfig.value.power.driver,
         device: atxConfig.value.power.device || undefined,
         pin: atxConfig.value.power.pin,
-        active_level: atxConfig.value.power.active_level,
+        baud_rate: atxConfig.value.power.baud_rate,
       },
       reset: {
         driver: atxConfig.value.reset.driver,
         device: atxConfig.value.reset.device || undefined,
         pin: atxConfig.value.reset.pin,
+        active_level: atxConfig.value.reset.active_level,
+        baud_rate: atxConfig.value.reset.baud_rate
         active_level: atxConfig.value.reset.active_level,
       },
       led: {
@@ -955,6 +960,8 @@ async function saveAtxConfig() {
 function getAtxDevicesForDriver(driver: string): string[] {
   if (driver === 'gpio') {
     return atxDevices.value.gpio_chips
+  } else if (driver === 'serial') {
+    return atxDevices.value.serial_ports
   } else if (driver === 'usbrelay') {
     return atxDevices.value.usb_relays
   }
@@ -1906,6 +1913,7 @@ onMounted(async () => {
                       <option value="none">{{ t('settings.atxDriverNone') }}</option>
                       <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
                       <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
+                      <option value="serial">Serial (LCUS)</option>
                     </select>
                   </div>
                   <div class="space-y-2">
@@ -1918,7 +1926,7 @@ onMounted(async () => {
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
-                    <Label for="power-pin">{{ atxConfig.power.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
+                    <Label for="power-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.power.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="power-pin" type="number" v-model.number="atxConfig.power.pin" min="0" :disabled="atxConfig.power.driver === 'none'" />
                   </div>
                   <div v-if="atxConfig.power.driver === 'gpio'" class="space-y-2">
@@ -1926,6 +1934,16 @@ onMounted(async () => {
                     <select id="power-level" v-model="atxConfig.power.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                       <option value="high">{{ t('settings.atxLevelHigh') }}</option>
                       <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                    </select>
+                  </div>
+                  <div v-if="atxConfig.power.driver === 'serial'" class="space-y-2">
+                    <Label for="power-baudrate">{{ t('settings.baudRate') }}</Label>
+                    <select id="power-baudrate" v-model.number="atxConfig.power.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                      <option :value="9600">9600</option>
+                      <option :value="19200">19200</option>
+                      <option :value="38400">38400</option>
+                      <option :value="57600">57600</option>
+                      <option :value="115200">115200</option>
                     </select>
                   </div>
                 </div>
@@ -1946,6 +1964,7 @@ onMounted(async () => {
                       <option value="none">{{ t('settings.atxDriverNone') }}</option>
                       <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
                       <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
+                      <option value="serial">Serial (LCUS)</option>
                     </select>
                   </div>
                   <div class="space-y-2">
@@ -1958,7 +1977,7 @@ onMounted(async () => {
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
-                    <Label for="reset-pin">{{ atxConfig.reset.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
+                    <Label for="reset-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.reset.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="reset-pin" type="number" v-model.number="atxConfig.reset.pin" min="0" :disabled="atxConfig.reset.driver === 'none'" />
                   </div>
                   <div v-if="atxConfig.reset.driver === 'gpio'" class="space-y-2">
@@ -1966,6 +1985,16 @@ onMounted(async () => {
                     <select id="reset-level" v-model="atxConfig.reset.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                       <option value="high">{{ t('settings.atxLevelHigh') }}</option>
                       <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                    </select>
+                  </div>
+                  <div v-if="atxConfig.reset.driver === 'serial'" class="space-y-2">
+                    <Label for="reset-baudrate">{{ t('settings.baudRate') }}</Label>
+                    <select id="reset-baudrate" v-model.number="atxConfig.reset.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                      <option :value="9600">9600</option>
+                      <option :value="19200">19200</option>
+                      <option :value="38400">38400</option>
+                      <option :value="57600">57600</option>
+                      <option :value="115200">115200</option>
                     </select>
                   </div>
                 </div>

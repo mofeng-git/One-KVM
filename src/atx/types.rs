@@ -33,6 +33,8 @@ pub enum AtxDriverType {
     Gpio,
     /// USB HID relay module
     UsbRelay,
+    /// Serial/COM port relay (LCUS type)
+    Serial,
     /// Disabled / Not configured
     None,
 }
@@ -78,6 +80,8 @@ pub struct AtxKeyConfig {
     pub pin: u32,
     /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
+    /// Baud rate for serial relay (start with 9600)
+    pub baud_rate: u32,
 }
 
 impl Default for AtxKeyConfig {
@@ -87,6 +91,7 @@ impl Default for AtxKeyConfig {
             device: String::new(),
             pin: 0,
             active_level: ActiveLevel::High,
+            baud_rate: 9600,
         }
     }
 }
@@ -185,6 +190,8 @@ pub struct AtxDevices {
     pub gpio_chips: Vec<String>,
     /// Available USB HID relay devices (/dev/hidraw*)
     pub usb_relays: Vec<String>,
+    /// Available Serial ports (/dev/ttyUSB*)
+    pub serial_ports: Vec<String>,
 }
 
 impl Default for AtxDevices {
@@ -192,6 +199,7 @@ impl Default for AtxDevices {
         Self {
             gpio_chips: Vec::new(),
             usb_relays: Vec::new(),
+            serial_ports: Vec::new(),
         }
     }
 }

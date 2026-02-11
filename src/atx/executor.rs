@@ -4,6 +4,7 @@
 //! Each executor handles one button (power or reset) with its own hardware binding.
 
 use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
+use serialport::SerialPort;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,6 +39,8 @@ pub struct AtxKeyExecutor {
     gpio_handle: Mutex<Option<LineHandle>>,
     /// Cached USB relay file handle to avoid repeated open/close syscalls
     usb_relay_handle: Mutex<Option<File>>,
+    /// Cached Serial port handle
+    serial_handle: Mutex<Option<Box<dyn SerialPort>>>,
     initialized: AtomicBool,
 }
 
@@ -48,6 +51,7 @@ impl AtxKeyExecutor {
             config,
             gpio_handle: Mutex::new(None),
             usb_relay_handle: Mutex::new(None),
+            serial_handle: Mutex::new(None),
             initialized: AtomicBool::new(false),
         }
     }
@@ -72,6 +76,7 @@ impl AtxKeyExecutor {
         match self.config.driver {
             AtxDriverType::Gpio => self.init_gpio().await?,
             AtxDriverType::UsbRelay => self.init_usb_relay().await?,
+            AtxDriverType::Serial => self.init_serial().await?,
             AtxDriverType::None => {}
         }
 
@@ -134,6 +139,36 @@ impl AtxKeyExecutor {
         Ok(())
     }
 
+    /// Initialize Serial relay backend
+    async fn init_serial(&self) -> Result<()> {
+        info!(
+            "Initializing Serial relay ATX executor on {} channel {}",
+            self.config.device, self.config.pin
+        );
+
+        let baud_rate = if self.config.baud_rate > 0 {
+            self.config.baud_rate
+        } else {
+            9600
+        };
+
+        let port = serialport::new(&self.config.device, baud_rate)
+            .timeout(Duration::from_millis(100))
+            .open()
+            .map_err(|e| AppError::Internal(format!("Serial port open failed: {}", e)))?;
+
+        *self.serial_handle.lock().unwrap() = Some(port);
+
+        // Ensure relay is off initially
+        self.send_serial_relay_command(false)?;
+
+        debug!(
+            "Serial relay channel {} configured successfully",
+            self.config.pin
+        );
+        Ok(())
+    }
+
     /// Pulse the button for the specified duration
     pub async fn pulse(&self, duration: Duration) -> Result<()> {
         if !self.is_configured() {
@@ -147,6 +182,7 @@ impl AtxKeyExecutor {
         match self.config.driver {
             AtxDriverType::Gpio => self.pulse_gpio(duration).await,
             AtxDriverType::UsbRelay => self.pulse_usb_relay(duration).await,
+            AtxDriverType::Serial => self.pulse_serial(duration).await,
             AtxDriverType::None => Ok(()),
         }
     }
@@ -220,6 +256,42 @@ impl AtxKeyExecutor {
         Ok(())
     }
 
+    /// Pulse Serial relay
+    async fn pulse_serial(&self, duration: Duration) -> Result<()> {
+        // Turn relay on
+        self.send_serial_relay_command(true)?;
+
+        // Wait for duration
+        sleep(duration).await;
+
+        // Turn relay off
+        self.send_serial_relay_command(false)?;
+
+        Ok(())
+    }
+
+    /// Send Serial relay command using cached handle
+    fn send_serial_relay_command(&self, on: bool) -> Result<()> {
+        let channel = self.config.pin as u8;
+
+        // LCUS-Type Protocol
+        // Checksum = A0 + channel + state
+        let state = if on { 1 } else { 0 };
+        let checksum = 0xA0u8.wrapping_add(channel).wrapping_add(state);
+        
+        let cmd = [0xA0, channel, state, checksum];
+
+        let mut guard = self.serial_handle.lock().unwrap();
+        let port = guard
+            .as_mut()
+            .ok_or_else(|| AppError::Internal("Serial relay not initialized".to_string()))?;
+
+        port.write_all(&cmd)
+            .map_err(|e| AppError::Internal(format!("Serial relay write failed: {}", e)))?;
+
+        Ok(())
+    }
+
     /// Shutdown the executor
     pub async fn shutdown(&mut self) -> Result<()> {
         if !self.is_initialized() {
@@ -236,6 +308,12 @@ impl AtxKeyExecutor {
                 let _ = self.send_usb_relay_command(false);
                 // Release USB relay handle
                 *self.usb_relay_handle.lock().unwrap() = None;
+            }
+            AtxDriverType::Serial => {
+                // Ensure relay is off before closing handle
+                let _ = self.send_serial_relay_command(false);
+                // Release Serial relay handle
+                *self.serial_handle.lock().unwrap() = None;
             }
             AtxDriverType::None => {}
         }
@@ -256,6 +334,12 @@ impl Drop for AtxKeyExecutor {
             let _ = self.send_usb_relay_command(false);
         }
         *self.usb_relay_handle.lock().unwrap() = None;
+
+        // Ensure Serial relay is off and handle released
+        if self.config.driver == AtxDriverType::Serial && self.is_initialized() {
+            let _ = self.send_serial_relay_command(false);
+        }
+        *self.serial_handle.lock().unwrap() = None;
     }
 }
 
@@ -278,6 +362,7 @@ mod tests {
             device: "/dev/gpiochip0".to_string(),
             pin: 5,
             active_level: ActiveLevel::High,
+            baud_rate: 9600,
         };
         let executor = AtxKeyExecutor::new(config);
         assert!(executor.is_configured());
@@ -291,6 +376,20 @@ mod tests {
             device: "/dev/hidraw0".to_string(),
             pin: 0,
             active_level: ActiveLevel::High, // Ignored for USB relay
+            baud_rate: 9600,
+        };
+        let executor = AtxKeyExecutor::new(config);
+        assert!(executor.is_configured());
+    }
+
+    #[test]
+    fn test_executor_with_serial_config() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 1,
+            active_level: ActiveLevel::High, // Ignored
+            baud_rate: 9600,
         };
         let executor = AtxKeyExecutor::new(config);
         assert!(executor.is_configured());
