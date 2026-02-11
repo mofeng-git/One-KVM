@@ -168,7 +168,7 @@ const showTerminalDialog = ref(false)
 
 // Extension config (local edit state)
 const extConfig = ref({
-  ttyd: { enabled: false, shell: '/bin/bash', credential: '' },
+  ttyd: { enabled: false, shell: '/bin/bash' },
   gostc: { enabled: false, addr: 'gostc.mofeng.run', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
 })
@@ -780,7 +780,6 @@ async function loadExtensions() {
       extConfig.value.ttyd = {
         enabled: ttyd.enabled,
         shell: ttyd.shell,
-        credential: ttyd.credential || '',
       }
       extConfig.value.gostc = { ...extensions.value.gostc.config }
       const easytier = extensions.value.easytier.config
@@ -2114,10 +2113,6 @@ onMounted(async () => {
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.ttyd.shell') }}</Label>
                       <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
-                    </div>
-                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.ttyd.credential') }}</Label>
-                      <Input v-model="extConfig.ttyd.credential" class="sm:col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
                   </div>
                   <!-- Logs -->

@@ -102,9 +102,6 @@ pub struct TtydConfig {
     pub port: u16,
     /// Shell to execute
     pub shell: String,
-    /// Credential in format "user:password" (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub credential: Option<String>,
 }
 
 impl Default for TtydConfig {
@@ -113,7 +110,6 @@ impl Default for TtydConfig {
             enabled: false,
             port: 7681,
             shell: "/bin/bash".to_string(),
-            credential: None,
         }
     }
 }

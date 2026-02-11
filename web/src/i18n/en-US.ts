@@ -741,7 +741,6 @@ export default {
       openInNewTab: 'Open in New Tab',
       port: 'Port',
       shell: 'Shell',
-      credential: 'Credential',
     },
     // gostc
     gostc: {

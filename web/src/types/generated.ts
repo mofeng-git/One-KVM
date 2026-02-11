@@ -302,8 +302,6 @@ export interface TtydConfig {
 	port: number;
 	/** Shell to execute */
 	shell: string;
-	/** Credential in format "user:password" (optional) */
-	credential?: string;
 }
 
 /** gostc configuration (NAT traversal based on FRP) */
@@ -659,7 +657,6 @@ export interface TtydConfigUpdate {
 	enabled?: boolean;
 	port?: number;
 	shell?: string;
-	credential?: string;
 }
 
 /** Simple ttyd status for console view */

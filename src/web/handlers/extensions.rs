@@ -156,7 +156,6 @@ pub struct TtydConfigUpdate {
     pub enabled: Option<bool>,
     pub port: Option<u16>,
     pub shell: Option<String>,
-    pub credential: Option<String>,
 }
 
 /// Update gostc config
@@ -202,9 +201,6 @@ pub async fn update_ttyd_config(
             }
             if let Some(ref shell) = req.shell {
                 ttyd.shell = shell.clone();
-            }
-            if req.credential.is_some() {
-                ttyd.credential = req.credential.clone();
             }
         })
         .await?;

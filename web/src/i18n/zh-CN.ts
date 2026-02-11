@@ -741,7 +741,6 @@ export default {
       openInNewTab: '在新标签页打开',
       port: '端口',
       shell: 'Shell',
-      credential: '认证凭据',
     },
     // gostc
     gostc: {
