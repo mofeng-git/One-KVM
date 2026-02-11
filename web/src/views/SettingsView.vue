@@ -930,6 +930,7 @@ async function saveAtxConfig() {
         driver: atxConfig.value.power.driver,
         device: atxConfig.value.power.device || undefined,
         pin: atxConfig.value.power.pin,
+        active_level: atxConfig.value.power.active_level,
         baud_rate: atxConfig.value.power.baud_rate,
       },
       reset: {
@@ -937,8 +938,7 @@ async function saveAtxConfig() {
         device: atxConfig.value.reset.device || undefined,
         pin: atxConfig.value.reset.pin,
         active_level: atxConfig.value.reset.active_level,
-        baud_rate: atxConfig.value.reset.baud_rate
-        active_level: atxConfig.value.reset.active_level,
+        baud_rate: atxConfig.value.reset.baud_rate,
       },
       led: {
         enabled: atxConfig.value.led.enabled,

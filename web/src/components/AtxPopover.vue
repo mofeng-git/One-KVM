@@ -33,7 +33,9 @@ const activeTab = ref('atx')
 
 // ATX state
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
-const confirmAction = ref<'short' | 'long' | 'reset' | null>(null)
+// Decouple action data from dialog visibility to prevent race conditions
+const pendingAction = ref<'short' | 'long' | 'reset' | null>(null)
+const confirmDialogOpen = ref(false)
 
 // WOL state
 const wolMacAddress = ref('')
@@ -56,15 +58,21 @@ const powerStateText = computed(() => {
   }
 })
 
+function requestAction(action: 'short' | 'long' | 'reset') {
+  pendingAction.value = action
+  confirmDialogOpen.value = true
+}
+
 function handleAction() {
-  if (confirmAction.value === 'short') emit('powerShort')
-  else if (confirmAction.value === 'long') emit('powerLong')
-  else if (confirmAction.value === 'reset') emit('reset')
-  confirmAction.value = null
+  console.log('[AtxPopover] Confirming action:', pendingAction.value)
+  if (pendingAction.value === 'short') emit('powerShort')
+  else if (pendingAction.value === 'long') emit('powerLong')
+  else if (pendingAction.value === 'reset') emit('reset')
+  confirmDialogOpen.value = false
 }
 
 const confirmTitle = computed(() => {
-  switch (confirmAction.value) {
+  switch (pendingAction.value) {
     case 'short': return t('atx.confirmShortTitle')
     case 'long': return t('atx.confirmLongTitle')
     case 'reset': return t('atx.confirmResetTitle')
@@ -73,14 +81,13 @@ const confirmTitle = computed(() => {
 })
 
 const confirmDescription = computed(() => {
-  switch (confirmAction.value) {
+  switch (pendingAction.value) {
     case 'short': return t('atx.confirmShortDesc')
     case 'long': return t('atx.confirmLongDesc')
     case 'reset': return t('atx.confirmResetDesc')
     default: return ''
   }
 })
-
 // MAC address validation
 const isValidMac = computed(() => {
   const mac = wolMacAddress.value.trim()
@@ -169,7 +176,7 @@ if (savedHistory) {
             variant="outline"
             size="sm"
             class="w-full justify-start gap-2 h-8 text-xs"
-            @click="confirmAction = 'short'"
+            @click="requestAction('short')"
           >
             <Power class="h-3.5 w-3.5" />
             {{ t('atx.shortPress') }}
@@ -179,7 +186,7 @@ if (savedHistory) {
             variant="outline"
             size="sm"
             class="w-full justify-start gap-2 h-8 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
-            @click="confirmAction = 'long'"
+            @click="requestAction('long')"
           >
             <CircleDot class="h-3.5 w-3.5" />
             {{ t('atx.longPress') }}
@@ -189,7 +196,7 @@ if (savedHistory) {
             variant="outline"
             size="sm"
             class="w-full justify-start gap-2 h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-            @click="confirmAction = 'reset'"
+            @click="requestAction('reset')"
           >
             <RotateCcw class="h-3.5 w-3.5" />
             {{ t('atx.reset') }}
@@ -247,7 +254,7 @@ if (savedHistory) {
   </div>
 
   <!-- Confirm Dialog -->
-  <AlertDialog :open="!!confirmAction" @update:open="confirmAction = null">
+  <AlertDialog :open="confirmDialogOpen" @update:open="confirmDialogOpen = $event">
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>{{ confirmTitle }}</AlertDialogTitle>

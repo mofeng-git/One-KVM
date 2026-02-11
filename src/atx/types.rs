@@ -33,7 +33,7 @@ pub enum AtxDriverType {
     Gpio,
     /// USB HID relay module
     UsbRelay,
-    /// Serial/COM port relay (LCUS type)
+    /// Serial/COM port relay (taobao LCUS type)
     Serial,
     /// Disabled / Not configured
     None,

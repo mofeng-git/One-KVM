@@ -258,6 +258,7 @@ impl AtxKeyExecutor {
 
     /// Pulse Serial relay
     async fn pulse_serial(&self, duration: Duration) -> Result<()> {
+        info!("Pulse serial relay on {} pin {}", self.config.device, self.config.pin);
         // Turn relay on
         self.send_serial_relay_command(true)?;
 
@@ -272,13 +273,19 @@ impl AtxKeyExecutor {
 
     /// Send Serial relay command using cached handle
     fn send_serial_relay_command(&self, on: bool) -> Result<()> {
+        // user config pin should be 1 for most LCUS modules (A0 01 01 A2)
+        // if user set 0, it will send A0 00 01 A1 which might not work
         let channel = self.config.pin as u8;
 
         // LCUS-Type Protocol
+        // Frame: [StopByte(A0), Channel, State, Checksum]
         // Checksum = A0 + channel + state
         let state = if on { 1 } else { 0 };
         let checksum = 0xA0u8.wrapping_add(channel).wrapping_add(state);
         
+        // Example for Channel 1:
+        // ON:  A0 01 01 A2
+        // OFF: A0 01 00 A1
         let cmd = [0xA0, channel, state, checksum];
 
         let mut guard = self.serial_handle.lock().unwrap();
