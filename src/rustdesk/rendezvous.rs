@@ -536,6 +536,10 @@ impl RendezvousMediator {
                 }
             }
             Some(rendezvous_message::Union::PunchHole(ph)) => {
+                let config = self.config.read().clone();
+                let effective_relay_server =
+                    select_relay_server(config.relay_server.as_deref(), &ph.relay_server);
+
                 // Decode the peer's socket address
                 let peer_addr = if !ph.socket_addr.is_empty() {
                     AddrMangle::decode(&ph.socket_addr)
@@ -544,8 +548,12 @@ impl RendezvousMediator {
                 };
 
                 info!(
-                    "Received PunchHole request: peer_addr={:?}, socket_addr_len={}, relay_server={}, nat_type={:?}",
-                    peer_addr, ph.socket_addr.len(), ph.relay_server, ph.nat_type
+                    "Received PunchHole request: peer_addr={:?}, socket_addr_len={}, relay_server={}, effective_relay_server={}, nat_type={:?}",
+                    peer_addr,
+                    ph.socket_addr.len(),
+                    ph.relay_server,
+                    effective_relay_server.as_deref().unwrap_or(""),
+                    ph.nat_type
                 );
 
                 // Send PunchHoleSent to acknowledge
@@ -555,13 +563,19 @@ impl RendezvousMediator {
 
                 info!(
                     "Sending PunchHoleSent: id={}, peer_addr={:?}, relay_server={}",
-                    id, peer_addr, ph.relay_server
+                    id,
+                    peer_addr,
+                    effective_relay_server
+                        .as_deref()
+                        .unwrap_or(ph.relay_server.as_str())
                 );
 
                 let msg = make_punch_hole_sent(
                     &ph.socket_addr, // Use peer's socket_addr, not ours
                     &id,
-                    &ph.relay_server,
+                    effective_relay_server
+                        .as_deref()
+                        .unwrap_or(ph.relay_server.as_str()),
                     ph.nat_type.enum_value().unwrap_or(NatType::UNKNOWN_NAT),
                     env!("CARGO_PKG_VERSION"),
                 );
@@ -573,16 +587,10 @@ impl RendezvousMediator {
                 }
 
                 // Try P2P direct connection first, fall back to relay if needed
-                if !ph.relay_server.is_empty() {
-                    let relay_server = if ph.relay_server.contains(':') {
-                        ph.relay_server.clone()
-                    } else {
-                        format!("{}:21117", ph.relay_server)
-                    };
+                if let Some(relay_server) = effective_relay_server {
                     // Generate a standard UUID v4 for relay pairing
                     // This must match the format used by RustDesk client
                     let uuid = uuid::Uuid::new_v4().to_string();
-                    let config = self.config.read().clone();
                     let rendezvous_addr = config.rendezvous_addr();
                     let device_id = config.device_id.clone();
 
@@ -606,41 +614,56 @@ impl RendezvousMediator {
                             device_id,
                         );
                     }
+                } else {
+                    debug!("No relay server available for PunchHole, skipping relay fallback");
                 }
             }
             Some(rendezvous_message::Union::RequestRelay(rr)) => {
+                let config = self.config.read().clone();
+                let effective_relay_server =
+                    select_relay_server(config.relay_server.as_deref(), &rr.relay_server);
+
                 info!(
-                    "Received RequestRelay: relay_server={}, uuid={}, secure={}",
-                    rr.relay_server, rr.uuid, rr.secure
+                    "Received RequestRelay: relay_server={}, effective_relay_server={}, uuid={}, secure={}",
+                    rr.relay_server,
+                    effective_relay_server.as_deref().unwrap_or(""),
+                    rr.uuid,
+                    rr.secure
                 );
                 // Call the relay callback to handle the connection
                 if let Some(callback) = self.relay_callback.read().as_ref() {
-                    let relay_server = if rr.relay_server.contains(':') {
-                        rr.relay_server.clone()
+                    if let Some(relay_server) = effective_relay_server {
+                        let rendezvous_addr = config.rendezvous_addr();
+                        let device_id = config.device_id.clone();
+                        callback(
+                            rendezvous_addr,
+                            relay_server,
+                            rr.uuid.clone(),
+                            rr.socket_addr.to_vec(),
+                            device_id,
+                        );
                     } else {
-                        format!("{}:21117", rr.relay_server)
-                    };
-                    let config = self.config.read().clone();
-                    let rendezvous_addr = config.rendezvous_addr();
-                    let device_id = config.device_id.clone();
-                    callback(
-                        rendezvous_addr,
-                        relay_server,
-                        rr.uuid.clone(),
-                        rr.socket_addr.to_vec(),
-                        device_id,
-                    );
+                        debug!("No relay server available for RequestRelay callback");
+                    }
                 }
             }
             Some(rendezvous_message::Union::FetchLocalAddr(fla)) => {
+                let config = self.config.read().clone();
+                let effective_relay_server =
+                    select_relay_server(config.relay_server.as_deref(), &fla.relay_server)
+                        .unwrap_or_default();
+
                 // Decode the peer address for logging
                 let peer_addr = AddrMangle::decode(&fla.socket_addr);
                 info!(
-                    "Received FetchLocalAddr request: peer_addr={:?}, socket_addr_len={}, relay_server={}",
-                    peer_addr, fla.socket_addr.len(), fla.relay_server
+                    "Received FetchLocalAddr request: peer_addr={:?}, socket_addr_len={}, relay_server={}, effective_relay_server={}",
+                    peer_addr,
+                    fla.socket_addr.len(),
+                    fla.relay_server,
+                    effective_relay_server
                 );
                 // Respond with our local address for same-LAN direct connection
-                self.send_local_addr(socket, &fla.socket_addr, &fla.relay_server)
+                self.send_local_addr(socket, &fla.socket_addr, &effective_relay_server)
                     .await?;
             }
             Some(rendezvous_message::Union::ConfigureUpdate(cu)) => {
@@ -691,6 +714,25 @@ impl RendezvousMediator {
 /// Certain routers and firewalls scan packets and modify IP addresses.
 /// This encoding mangles the address to avoid detection.
 pub struct AddrMangle;
+
+fn normalize_relay_server(server: &str) -> Option<String> {
+    let trimmed = server.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.contains(':') {
+        Some(trimmed.to_string())
+    } else {
+        Some(format!("{}:21117", trimmed))
+    }
+}
+
+fn select_relay_server(local_relay: Option<&str>, server_relay: &str) -> Option<String> {
+    local_relay
+        .and_then(normalize_relay_server)
+        .or_else(|| normalize_relay_server(server_relay))
+}
 
 impl AddrMangle {
     /// Encode a SocketAddr to bytes using RustDesk's mangle algorithm
@@ -875,4 +917,48 @@ fn get_local_addresses() -> Vec<std::net::IpAddr> {
     }
 
     addrs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_relay_server, select_relay_server};
+
+    #[test]
+    fn test_normalize_relay_server() {
+        assert_eq!(normalize_relay_server(""), None);
+        assert_eq!(normalize_relay_server("   "), None);
+        assert_eq!(
+            normalize_relay_server("relay.example.com"),
+            Some("relay.example.com:21117".to_string())
+        );
+        assert_eq!(
+            normalize_relay_server("relay.example.com:22117"),
+            Some("relay.example.com:22117".to_string())
+        );
+    }
+
+    #[test]
+    fn test_select_relay_server_prefers_local() {
+        assert_eq!(
+            select_relay_server(Some("local.example.com:21117"), "server.example.com:21117"),
+            Some("local.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(Some("local.example.com"), "server.example.com:21117"),
+            Some("local.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(Some("   "), "server.example.com"),
+            Some("server.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(None, "server.example.com:21117"),
+            Some("server.example.com:21117".to_string())
+        );
+
+        assert_eq!(select_relay_server(None, ""), None);
+    }
 }
