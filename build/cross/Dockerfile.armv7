@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     xz-utils \
     file \
+    rsync \
     gcc-arm-linux-gnueabihf \
     g++-arm-linux-gnueabihf \
     libc6-dev-armhf-cross \

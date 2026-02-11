@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     xz-utils \
     file \
+    rsync \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
