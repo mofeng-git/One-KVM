@@ -2843,12 +2843,11 @@ watch(updateChannel, async () => {
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
             <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.onlineUpgrade') }}</CardTitle>
+                <CardDescription>{{ t('settings.onlineUpgradeDesc') }}</CardDescription>
+              </CardHeader>
               <CardContent class="space-y-4">
-                <div>
-                  <p class="text-sm font-medium">{{ t('settings.onlineUpgrade') }}</p>
-                  <p class="text-xs text-muted-foreground mt-1">{{ t('settings.onlineUpgradeDesc') }}</p>
-                </div>
-
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label>{{ t('settings.currentVersion') }}</Label>
