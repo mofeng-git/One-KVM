@@ -16,6 +16,8 @@ import {
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskPasswordResponse,
+  type RtspStatusResponse,
+  type RtspConfigUpdate,
   type WebConfig,
 } from '@/api'
 import type {
@@ -70,6 +72,7 @@ import {
   ExternalLink,
   Copy,
   ScreenShare,
+  Radio,
 } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -106,6 +109,7 @@ const navGroups = computed(() => [
     title: t('settings.extensions'),
     items: [
       { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
+      { id: 'ext-rtsp', label: t('extensions.rtsp.title'), icon: Radio },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
     ]
@@ -185,6 +189,26 @@ const rustdeskLocalConfig = ref({
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
+})
+
+// RTSP config state
+const rtspStatus = ref<RtspStatusResponse | null>(null)
+const rtspLoading = ref(false)
+const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
+  enabled: false,
+  bind: '0.0.0.0',
+  port: 8554,
+  path: 'live',
+  allow_one_client: true,
+  codec: 'h264',
+  username: '',
+  password: '',
+})
+const rtspStreamUrl = computed(() => {
+  const host = window.location.hostname || '127.0.0.1'
+  const path = (rtspLocalConfig.value.path || 'live').trim().replace(/^\/+|\/+$/g, '') || 'live'
+  const port = Number(rtspLocalConfig.value.port) || 8554
+  return `rtsp://${host}:${port}/${path}`
 })
 
 // Web server config state
@@ -996,6 +1020,10 @@ function normalizeRustdeskServer(value: string, defaultPort: number): string | u
   return `${trimmed}:${defaultPort}`
 }
 
+function normalizeRtspPath(path: string): string {
+  return path.trim().replace(/^\/+|\/+$/g, '') || 'live'
+}
+
 function normalizeBindAddresses(addresses: string[]): string[] {
   return addresses.map(addr => addr.trim()).filter(Boolean)
 }
@@ -1225,6 +1253,108 @@ function getRustdeskStatusClass(status: string | null | undefined): string {
   }
 }
 
+async function loadRtspConfig() {
+  rtspLoading.value = true
+  try {
+    const status = await configStore.refreshRtspStatus()
+    rtspStatus.value = status
+    rtspLocalConfig.value = {
+      enabled: status.config.enabled,
+      bind: status.config.bind,
+      port: status.config.port,
+      path: status.config.path,
+      allow_one_client: status.config.allow_one_client,
+      codec: status.config.codec,
+      username: status.config.username || '',
+      password: '',
+    }
+  } catch (e) {
+    console.error('Failed to load RTSP config:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+async function saveRtspConfig() {
+  loading.value = true
+  saved.value = false
+  try {
+    const update: RtspConfigUpdate = {
+      enabled: !!rtspLocalConfig.value.enabled,
+      bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
+      port: Number(rtspLocalConfig.value.port) || 8554,
+      path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
+      allow_one_client: !!rtspLocalConfig.value.allow_one_client,
+      codec: rtspLocalConfig.value.codec || 'h264',
+      username: (rtspLocalConfig.value.username || '').trim(),
+    }
+
+    const nextPassword = (rtspLocalConfig.value.password || '').trim()
+    if (nextPassword) {
+      update.password = nextPassword
+    }
+
+    await configStore.updateRtsp(update)
+    await loadRtspConfig()
+    rtspLocalConfig.value.password = ''
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch (e) {
+    console.error('Failed to save RTSP config:', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function startRtsp() {
+  rtspLoading.value = true
+  try {
+    await configStore.updateRtsp({ enabled: true })
+    rtspLocalConfig.value.enabled = true
+    await loadRtspConfig()
+  } catch (e) {
+    console.error('Failed to start RTSP:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+async function stopRtsp() {
+  rtspLoading.value = true
+  try {
+    await configStore.updateRtsp({ enabled: false })
+    rtspLocalConfig.value.enabled = false
+    await loadRtspConfig()
+  } catch (e) {
+    console.error('Failed to stop RTSP:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+function getRtspServiceStatusText(status: string | undefined): string {
+  if (!status) return t('extensions.stopped')
+  switch (status) {
+    case 'running': return t('extensions.running')
+    case 'starting': return t('extensions.starting')
+    case 'stopped': return t('extensions.stopped')
+    default:
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getRtspStatusClass(status: string | undefined): string {
+  switch (status) {
+    case 'running': return 'bg-green-500'
+    case 'starting': return 'bg-yellow-500'
+    case 'stopped': return 'bg-gray-400'
+    default:
+      if (status?.startsWith('error:')) return 'bg-red-500'
+      return 'bg-gray-400'
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   // Load theme preference
@@ -1244,6 +1374,7 @@ onMounted(async () => {
     loadAtxDevices(),
     loadRustdeskConfig(),
     loadRustdeskPassword(),
+    loadRtspConfig(),
     loadWebServerConfig(),
   ])
   usernameInput.value = authStore.user || ''
@@ -2336,6 +2467,121 @@ onMounted(async () => {
             <!-- Save button -->
             <div v-if="extensions?.easytier?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
+                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- RTSP Section -->
+          <div v-show="activeSection === 'ext-rtsp'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.rtsp.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.rtsp.desc') }}</CardDescription>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Badge :variant="rtspStatus?.service_status === 'running' ? 'default' : 'secondary'">
+                      {{ getRtspServiceStatusText(rtspStatus?.service_status) }}
+                    </Badge>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRtspConfig" :disabled="rtspLoading">
+                      <RefreshCw :class="['h-4 w-4', rtspLoading ? 'animate-spin' : '']" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-2 h-2 rounded-full', getRtspStatusClass(rtspStatus?.service_status)]" />
+                    <span class="text-sm">{{ getRtspServiceStatusText(rtspStatus?.service_status) }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="rtspStatus?.service_status !== 'running'"
+                      size="sm"
+                      @click="startRtsp"
+                      :disabled="rtspLoading"
+                    >
+                      <Play class="h-4 w-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      @click="stopRtsp"
+                      :disabled="rtspLoading"
+                    >
+                      <Square class="h-4 w-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+
+                <div class="grid gap-4">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.autoStart') }}</Label>
+                    <Switch v-model="rtspLocalConfig.enabled" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
+                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
+                    <Input v-model.number="rtspLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.path') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="rtspLocalConfig.path" :placeholder="t('extensions.rtsp.pathPlaceholder')" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.pathHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.codec') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="rtspLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.codecHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.rtsp.allowOneClient') }}</Label>
+                    <Switch v-model="rtspLocalConfig.allow_one_client" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.username') }}</Label>
+                    <Input v-model="rtspLocalConfig.username" class="sm:col-span-3" :placeholder="t('extensions.rtsp.usernamePlaceholder')" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.password') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input
+                        v-model="rtspLocalConfig.password"
+                        type="password"
+                        :placeholder="rtspStatus?.config?.has_password ? t('extensions.rtsp.passwordSet') : t('extensions.rtsp.passwordPlaceholder')"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.passwordHint') }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
+                  <p class="text-sm font-medium">{{ t('extensions.rtsp.urlPreview') }}</p>
+                  <code class="font-mono text-sm break-all">{{ rtspStreamUrl }}</code>
+                </div>
+              </CardContent>
+            </Card>
+            <div class="flex justify-end">
+              <Button :disabled="loading || rtspLoading" @click="saveRtspConfig">
                 <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
