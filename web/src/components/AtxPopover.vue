@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Power, RotateCcw, CircleDot, Wifi, Send } from 'lucide-vue-next'
+import { atxConfigApi } from '@/api/config'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -39,6 +40,7 @@ const confirmAction = ref<'short' | 'long' | 'reset' | null>(null)
 const wolMacAddress = ref('')
 const wolHistory = ref<string[]>([])
 const wolSending = ref(false)
+const wolLoadingHistory = ref(false)
 
 const powerStateColor = computed(() => {
   switch (powerState.value) {
@@ -103,16 +105,11 @@ function sendWol() {
 
   emit('wol', mac)
 
-  // Add to history if not exists
-  if (!wolHistory.value.includes(mac)) {
-    wolHistory.value.unshift(mac)
-    // Keep only last 5
-    if (wolHistory.value.length > 5) {
-      wolHistory.value.pop()
-    }
-    // Save to localStorage
-    localStorage.setItem('wol_history', JSON.stringify(wolHistory.value))
-  }
+  // Optimistic update, then sync from server after request likely completes
+  wolHistory.value = [mac, ...wolHistory.value.filter(item => item !== mac)].slice(0, 5)
+  setTimeout(() => {
+    loadWolHistory().catch(() => {})
+  }, 1200)
 
   setTimeout(() => {
     wolSending.value = false
@@ -123,15 +120,27 @@ function selectFromHistory(mac: string) {
   wolMacAddress.value = mac
 }
 
-// Load WOL history on mount
-const savedHistory = localStorage.getItem('wol_history')
-if (savedHistory) {
+async function loadWolHistory() {
+  wolLoadingHistory.value = true
   try {
-    wolHistory.value = JSON.parse(savedHistory)
-  } catch (e) {
+    const response = await atxConfigApi.getWolHistory(5)
+    wolHistory.value = response.history.map(item => item.mac_address)
+  } catch {
     wolHistory.value = []
+  } finally {
+    wolLoadingHistory.value = false
   }
 }
+
+watch(
+  () => activeTab.value,
+  (tab) => {
+    if (tab === 'wol') {
+      loadWolHistory().catch(() => {})
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -226,6 +235,10 @@ if (savedHistory) {
             {{ t('atx.invalidMac') }}
           </p>
         </div>
+
+        <p v-if="wolLoadingHistory" class="text-xs text-muted-foreground">
+          {{ t('common.loading') }}
+        </p>
 
         <!-- History -->
         <div v-if="wolHistory.length > 0" class="space-y-2">

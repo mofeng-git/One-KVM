@@ -2660,6 +2660,10 @@ pub async fn msd_drive_mkdir(
 
 use crate::atx::{AtxState, PowerStatus};
 
+const WOL_HISTORY_MAX_ENTRIES: i64 = 50;
+const WOL_HISTORY_DEFAULT_LIMIT: usize = 5;
+const WOL_HISTORY_MAX_LIMIT: usize = 50;
+
 /// ATX state response
 #[derive(Serialize)]
 pub struct AtxStateResponse {
@@ -2765,11 +2769,78 @@ pub struct WolRequest {
     pub mac_address: String,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct WolHistoryQuery {
+    /// Maximum history entries to return
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WolHistoryEntry {
+    pub mac_address: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WolHistoryResponse {
+    pub history: Vec<WolHistoryEntry>,
+}
+
+fn normalize_wol_mac_address(mac_address: &str) -> String {
+    let normalized = mac_address.trim().to_uppercase().replace('-', ":");
+
+    if normalized.len() == 12 && normalized.chars().all(|c| c.is_ascii_hexdigit()) {
+        let mut mac_with_separator = String::with_capacity(17);
+        for (index, chunk) in normalized.as_bytes().chunks(2).enumerate() {
+            if index > 0 {
+                mac_with_separator.push(':');
+            }
+            mac_with_separator.push(chunk[0] as char);
+            mac_with_separator.push(chunk[1] as char);
+        }
+        mac_with_separator
+    } else {
+        normalized
+    }
+}
+
+async fn record_wol_history(state: &Arc<AppState>, mac_address: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO wol_history (mac_address, updated_at)
+        VALUES (?1, CAST(strftime('%s', 'now') AS INTEGER))
+        ON CONFLICT(mac_address) DO UPDATE SET
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(mac_address)
+    .execute(state.config.pool())
+    .await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM wol_history
+        WHERE mac_address NOT IN (
+            SELECT mac_address FROM wol_history
+            ORDER BY updated_at DESC
+            LIMIT ?1
+        )
+        "#,
+    )
+    .bind(WOL_HISTORY_MAX_ENTRIES)
+    .execute(state.config.pool())
+    .await?;
+
+    Ok(())
+}
+
 /// Send Wake-on-LAN magic packet
 pub async fn atx_wol(
     State(state): State<Arc<AppState>>,
     Json(req): Json<WolRequest>,
 ) -> Result<Json<LoginResponse>> {
+    let mac_address = normalize_wol_mac_address(&req.mac_address);
+
     // Get WOL interface from config
     let config = state.config.get();
     let interface = if config.atx.wol_interface.is_empty() {
@@ -2779,12 +2850,49 @@ pub async fn atx_wol(
     };
 
     // Send WOL packet
-    crate::atx::send_wol(&req.mac_address, interface)?;
+    crate::atx::send_wol(&mac_address, interface)?;
+
+    if let Err(error) = record_wol_history(&state, &mac_address).await {
+        warn!("Failed to persist WOL history: {}", error);
+    }
 
     Ok(Json(LoginResponse {
         success: true,
-        message: Some(format!("WOL packet sent to {}", req.mac_address)),
+        message: Some(format!("WOL packet sent to {}", mac_address)),
     }))
+}
+
+/// Get WOL history
+pub async fn atx_wol_history(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<WolHistoryQuery>,
+) -> Result<Json<WolHistoryResponse>> {
+    let limit = query
+        .limit
+        .unwrap_or(WOL_HISTORY_DEFAULT_LIMIT)
+        .clamp(1, WOL_HISTORY_MAX_LIMIT);
+
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        r#"
+        SELECT mac_address, updated_at
+        FROM wol_history
+        ORDER BY updated_at DESC
+        LIMIT ?1
+        "#,
+    )
+    .bind(limit as i64)
+    .fetch_all(state.config.pool())
+    .await?;
+
+    let history = rows
+        .into_iter()
+        .map(|(mac_address, updated_at)| WolHistoryEntry {
+            mac_address,
+            updated_at,
+        })
+        .collect();
+
+    Ok(Json(WolHistoryResponse { history }))
 }
 
 // ============================================================================

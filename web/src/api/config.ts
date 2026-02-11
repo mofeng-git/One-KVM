@@ -136,6 +136,15 @@ export const msdConfigApi = {
 // ===== ATX 配置 API =====
 import type { AtxDevices } from '@/types/generated'
 
+export interface WolHistoryEntry {
+  mac_address: string
+  updated_at: number
+}
+
+export interface WolHistoryResponse {
+  history: WolHistoryEntry[]
+}
+
 export const atxConfigApi = {
   /**
    * 获取 ATX 配置
@@ -166,6 +175,13 @@ export const atxConfigApi = {
       method: 'POST',
       body: JSON.stringify({ mac_address: macAddress }),
     }),
+
+  /**
+   * 获取 WOL 历史记录（服务端持久化）
+   * @param limit 返回条数（1-50）
+   */
+  getWolHistory: (limit = 5) =>
+    request<WolHistoryResponse>(`/atx/wol/history?limit=${Math.max(1, Math.min(50, limit))}`),
 }
 
 // ===== Audio 配置 API =====

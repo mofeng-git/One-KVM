@@ -120,6 +120,26 @@ impl ConfigStore {
         .execute(pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS wol_history (
+                mac_address TEXT PRIMARY KEY,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_wol_history_updated_at
+            ON wol_history(updated_at DESC)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
 
