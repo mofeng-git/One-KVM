@@ -246,15 +246,7 @@ async fn handle_client(
     shared: SharedRtspState,
 ) -> Result<()> {
     let cfg_snapshot = config.read().await.clone();
-
-    let auth_enabled = cfg_snapshot
-        .username
-        .as_ref()
-        .is_some_and(|u| !u.is_empty())
-        || cfg_snapshot
-            .password
-            .as_ref()
-            .is_some_and(|p| !p.is_empty());
+    let expected_auth = rtsp_auth_credentials(&cfg_snapshot);
 
     if cfg_snapshot.allow_one_client {
         let mut active_guard = shared.active_client.lock().await;
@@ -301,11 +293,9 @@ async fn handle_client(
                 continue;
             }
 
-            if auth_enabled {
-                let expected_user = cfg_snapshot.username.clone().unwrap_or_default();
-                let expected_pass = cfg_snapshot.password.clone().unwrap_or_default();
+            if let Some((expected_user, expected_pass)) = expected_auth.as_ref() {
                 let ok = extract_basic_auth(&req)
-                    .map(|(u, p)| u == expected_user && p == expected_pass)
+                    .map(|(u, p)| u == expected_user.as_str() && p == expected_pass.as_str())
                     .unwrap_or(false);
                 if !ok {
                     send_response(
@@ -745,6 +735,18 @@ fn extract_basic_auth(req: &RtspRequest) -> Option<(String, String)> {
     let raw = String::from_utf8(decoded).ok()?;
     let (user, pass) = raw.split_once(':')?;
     Some((user.to_string(), pass.to_string()))
+}
+
+fn rtsp_auth_credentials(config: &RtspConfig) -> Option<(String, String)> {
+    let username = config.username.as_ref()?.trim();
+    if username.is_empty() {
+        return None;
+    }
+
+    Some((
+        username.to_string(),
+        config.password.clone().unwrap_or_default(),
+    ))
 }
 
 fn parse_interleaved_channel(transport: &str) -> Option<u8> {
@@ -1319,5 +1321,23 @@ mod tests {
         assert!(fmtp_value.contains("sprop-vps="));
         assert!(fmtp_value.contains("sprop-sps="));
         assert!(fmtp_value.contains("sprop-pps="));
+    }
+
+    #[test]
+    fn rtsp_auth_requires_non_empty_username() {
+        let mut config = RtspConfig::default();
+        config.password = Some("secret".to_string());
+        assert!(rtsp_auth_credentials(&config).is_none());
+
+        config.username = Some("".to_string());
+        assert!(rtsp_auth_credentials(&config).is_none());
+
+        config.username = Some("user".to_string());
+        let credentials = rtsp_auth_credentials(&config).expect("expected credentials");
+        assert_eq!(credentials, ("user".to_string(), "secret".to_string()));
+
+        config.password = None;
+        let credentials = rtsp_auth_credentials(&config).expect("expected credentials");
+        assert_eq!(credentials, ("user".to_string(), "".to_string()));
     }
 }
