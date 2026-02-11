@@ -14,6 +14,7 @@ use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
 use crate::events::SystemEvent;
 use crate::state::AppState;
+use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
 use crate::video::codec_constraints::codec_to_id;
 use crate::video::encoder::BitratePreset;
 
@@ -751,7 +752,8 @@ pub async fn setup_init(
     // Start RTSP if enabled
     if new_config.rtsp.enabled {
         let empty_config = crate::config::RtspConfig::default();
-        if let Err(e) = config::apply::apply_rtsp_config(&state, &empty_config, &new_config.rtsp).await
+        if let Err(e) =
+            config::apply::apply_rtsp_config(&state, &empty_config, &new_config.rtsp).await
         {
             tracing::warn!("Failed to start RTSP during setup: {}", e);
         } else {
@@ -1641,7 +1643,10 @@ pub async fn stream_constraints_get(
             .into_iter()
             .map(str::to_string)
             .collect(),
-        locked_codec: constraints.locked_codec.map(codec_to_id).map(str::to_string),
+        locked_codec: constraints
+            .locked_codec
+            .map(codec_to_id)
+            .map(str::to_string),
         disallow_mjpeg: !constraints.allow_mjpeg,
         sources: ConstraintSources {
             rustdesk: constraints.rustdesk_enabled,
@@ -1929,7 +1934,9 @@ pub async fn mjpeg_stream(
                         continue;
                     };
 
-                    if frame.is_valid_jpeg() && tx.send(create_mjpeg_part(frame.data())).await.is_err() {
+                    if frame.is_valid_jpeg()
+                        && tx.send(create_mjpeg_part(frame.data())).await.is_err()
+                    {
                         break;
                     }
                 }
@@ -3129,4 +3136,38 @@ pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginRes
         success: true,
         message: Some("Restarting...".to_string()),
     })
+}
+
+// ============================================================================
+// Online Update
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct UpdateOverviewQuery {
+    pub channel: Option<UpdateChannel>,
+}
+
+pub async fn update_overview(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<UpdateOverviewQuery>,
+) -> Result<Json<UpdateOverviewResponse>> {
+    let channel = query.channel.unwrap_or(UpdateChannel::Stable);
+    let response = state.update.overview(channel).await?;
+    Ok(Json(response))
+}
+
+pub async fn update_upgrade(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<UpgradeRequest>,
+) -> Result<Json<LoginResponse>> {
+    state.update.start_upgrade(req, state.shutdown_tx.clone())?;
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Upgrade started".to_string()),
+    }))
+}
+
+pub async fn update_status(State(state): State<Arc<AppState>>) -> Json<UpdateStatusResponse> {
+    Json(state.update.status().await)
 }

@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 
 use super::executor::{timing, AtxKeyExecutor};
 use super::led::LedSensor;
-use super::types::{AtxKeyConfig, AtxLedConfig, AtxState, AtxAction, PowerStatus};
+use super::types::{AtxAction, AtxKeyConfig, AtxLedConfig, AtxState, PowerStatus};
 use crate::error::{AppError, Result};
 
 /// ATX power control configuration

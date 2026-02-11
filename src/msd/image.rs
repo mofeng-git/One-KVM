@@ -87,8 +87,7 @@ impl ImageManager {
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| {
-                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                    .unwrap_or_else(Utc::now)
+                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap_or_else(Utc::now)
             })
             .unwrap_or_else(Utc::now);
 

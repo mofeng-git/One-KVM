@@ -681,7 +681,9 @@ impl Connection {
         video_codec_to_encoder_codec(preferred)
     }
 
-    async fn current_codec_constraints(&self) -> crate::video::codec_constraints::StreamCodecConstraints {
+    async fn current_codec_constraints(
+        &self,
+    ) -> crate::video::codec_constraints::StreamCodecConstraints {
         if let Some(ref video_manager) = self.video_manager {
             video_manager.codec_constraints().await
         } else {
@@ -772,8 +774,7 @@ impl Connection {
                 // Check if this codec is different from current and available
                 if self.negotiated_codec != Some(new_codec) {
                     let constraints = self.current_codec_constraints().await;
-                    if !constraints
-                        .is_webrtc_codec_allowed(encoder_codec_to_video_codec(new_codec))
+                    if !constraints.is_webrtc_codec_allowed(encoder_codec_to_video_codec(new_codec))
                     {
                         warn!(
                             "Client requested codec {:?} but it's blocked by constraints: {}",

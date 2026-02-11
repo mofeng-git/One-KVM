@@ -30,8 +30,7 @@ fn init_hwcodec_logging() {
 }
 
 /// VP8 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum VP8EncoderType {
     /// VAAPI (Intel on Linux)
     Vaapi,
@@ -52,7 +51,6 @@ impl std::fmt::Display for VP8EncoderType {
     }
 }
 
-
 impl From<EncoderBackend> for VP8EncoderType {
     fn from(backend: EncoderBackend) -> Self {
         match backend {
@@ -64,8 +62,7 @@ impl From<EncoderBackend> for VP8EncoderType {
 }
 
 /// Input pixel format for VP8 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VP8InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
@@ -73,7 +70,6 @@ pub enum VP8InputFormat {
     #[default]
     Nv12,
 }
-
 
 /// VP8 encoder configuration
 #[derive(Debug, Clone)]

@@ -101,6 +101,46 @@ export const systemApi = {
     }),
 }
 
+export type UpdateChannel = 'stable' | 'beta'
+
+export interface UpdateOverviewResponse {
+  success: boolean
+  current_version: string
+  channel: UpdateChannel
+  latest_version: string
+  upgrade_available: boolean
+  target_version?: string
+  notes_between: Array<{
+    version: string
+    published_at: string
+    notes: string[]
+  }>
+}
+
+export interface UpdateStatusResponse {
+  success: boolean
+  phase: 'idle' | 'checking' | 'downloading' | 'verifying' | 'installing' | 'restarting' | 'success' | 'failed'
+  progress: number
+  current_version: string
+  target_version?: string
+  message?: string
+  last_error?: string
+}
+
+export const updateApi = {
+  overview: (channel: UpdateChannel = 'stable') =>
+    request<UpdateOverviewResponse>(`/update/overview?channel=${encodeURIComponent(channel)}`),
+
+  upgrade: (payload: { channel?: UpdateChannel; target_version?: string }) =>
+    request<{ success: boolean; message?: string }>('/update/upgrade', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  status: () =>
+    request<UpdateStatusResponse>('/update/status'),
+}
+
 // Stream API
 export interface VideoCodecInfo {
   id: string

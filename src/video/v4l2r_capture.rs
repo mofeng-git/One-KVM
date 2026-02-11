@@ -82,7 +82,8 @@ impl V4l2rCaptureStream {
         let actual_format = PixelFormat::from_v4l2r(actual_fmt.pixelformat).unwrap_or(format);
 
         let stride = actual_fmt
-            .plane_fmt.first()
+            .plane_fmt
+            .first()
             .map(|p| p.bytesperline)
             .unwrap_or_else(|| match actual_format.bytes_per_pixel() {
                 Some(bpp) => actual_resolution.width * bpp as u32,

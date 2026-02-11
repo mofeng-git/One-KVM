@@ -162,7 +162,6 @@ pub struct EasytierConfig {
     pub virtual_ip: Option<String>,
 }
 
-
 /// Combined extensions configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

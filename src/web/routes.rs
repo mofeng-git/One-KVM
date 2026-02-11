@@ -136,6 +136,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/auth", patch(handlers::config::update_auth_config))
         // System control
         .route("/system/restart", post(handlers::system_restart))
+        .route("/update/overview", get(handlers::update_overview))
+        .route("/update/upgrade", post(handlers::update_upgrade))
+        .route("/update/status", get(handlers::update_status))
         // MSD (Mass Storage Device) endpoints
         .route("/msd/status", get(handlers::msd_status))
         .route("/msd/images", get(handlers::msd_images_list))

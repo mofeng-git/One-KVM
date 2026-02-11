@@ -54,7 +54,10 @@ pub async fn update_rtsp_config(
             })
             .await
         {
-            tracing::error!("Failed to rollback RTSP config after apply failure: {}", rollback_err);
+            tracing::error!(
+                "Failed to rollback RTSP config after apply failure: {}",
+                rollback_err
+            );
             return Err(AppError::ServiceUnavailable(format!(
                 "RTSP apply failed: {}; rollback failed: {}",
                 err, rollback_err

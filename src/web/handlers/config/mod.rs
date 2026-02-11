@@ -24,8 +24,8 @@ mod audio;
 mod auth;
 mod hid;
 mod msd;
-mod rustdesk;
 mod rtsp;
+mod rustdesk;
 mod stream;
 pub(crate) mod video;
 mod web;
@@ -36,11 +36,11 @@ pub use audio::{get_audio_config, update_audio_config};
 pub use auth::{get_auth_config, update_auth_config};
 pub use hid::{get_hid_config, update_hid_config};
 pub use msd::{get_msd_config, update_msd_config};
+pub use rtsp::{get_rtsp_config, get_rtsp_status, update_rtsp_config};
 pub use rustdesk::{
     get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,
     regenerate_device_password, update_rustdesk_config,
 };
-pub use rtsp::{get_rtsp_config, get_rtsp_status, update_rtsp_config};
 pub use stream::{get_stream_config, update_stream_config};
 pub use video::{get_video_config, update_video_config};
 pub use web::{get_web_config, update_web_config};

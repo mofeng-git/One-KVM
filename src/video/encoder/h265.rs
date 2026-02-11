@@ -30,8 +30,7 @@ fn init_hwcodec_logging() {
 }
 
 /// H.265 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum H265EncoderType {
     /// NVIDIA NVENC
     Nvenc,
@@ -67,7 +66,6 @@ impl std::fmt::Display for H265EncoderType {
     }
 }
 
-
 impl From<EncoderBackend> for H265EncoderType {
     fn from(backend: EncoderBackend) -> Self {
         match backend {
@@ -83,8 +81,7 @@ impl From<EncoderBackend> for H265EncoderType {
 }
 
 /// Input pixel format for H265 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum H265InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
@@ -104,7 +101,6 @@ pub enum H265InputFormat {
     /// BGR24 - packed BGR format (RKMPP direct input)
     Bgr24,
 }
-
 
 /// H.265 encoder configuration
 #[derive(Debug, Clone)]

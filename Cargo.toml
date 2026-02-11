@@ -47,7 +47,7 @@ nix = { version = "0.30", features = ["fs", "net", "hostname", "poll"] }
 
 # HTTP client (for URL downloads)
 # Use rustls by default, but allow native-tls for systems with older GLIBC
-reqwest = { version = "0.13", features = ["stream", "rustls"], default-features = false }
+reqwest = { version = "0.13", features = ["stream", "rustls", "json"], default-features = false }
 urlencoding = "2"
 
 # Static file embedding
@@ -118,7 +118,6 @@ hwcodec = { path = "libs/hwcodec" }
 protobuf = { version = "3.7", features = ["with-bytes"] }
 sodiumoxide = "0.2"
 sha2 = "0.10"
-
 # High-performance pixel format conversion (libyuv)
 libyuv = { path = "res/vcpkg/libyuv" }
 

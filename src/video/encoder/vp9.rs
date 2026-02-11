@@ -30,8 +30,7 @@ fn init_hwcodec_logging() {
 }
 
 /// VP9 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum VP9EncoderType {
     /// VAAPI (Intel on Linux)
     Vaapi,
@@ -52,7 +51,6 @@ impl std::fmt::Display for VP9EncoderType {
     }
 }
 
-
 impl From<EncoderBackend> for VP9EncoderType {
     fn from(backend: EncoderBackend) -> Self {
         match backend {
@@ -64,8 +62,7 @@ impl From<EncoderBackend> for VP9EncoderType {
 }
 
 /// Input pixel format for VP9 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VP9InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
@@ -73,7 +70,6 @@ pub enum VP9InputFormat {
     #[default]
     Nv12,
 }
-
 
 /// VP9 encoder configuration
 #[derive(Debug, Clone)]

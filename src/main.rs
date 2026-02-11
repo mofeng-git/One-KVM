@@ -22,6 +22,7 @@ use one_kvm::otg::{configfs, OtgService};
 use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
+use one_kvm::update::UpdateService;
 use one_kvm::utils::bind_tcp_listener;
 use one_kvm::video::codec_constraints::{
     enforce_constraints_with_stream_manager, StreamCodecConstraints,
@@ -554,6 +555,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Create application state
+    let update_service = Arc::new(UpdateService::new(data_dir.join("updates")));
+
     let state = AppState::new(
         config_store.clone(),
         session_store,
@@ -568,6 +571,7 @@ async fn main() -> anyhow::Result<()> {
         rtsp.clone(),
         extensions.clone(),
         events.clone(),
+        update_service,
         shutdown_tx.clone(),
         data_dir.clone(),
     );

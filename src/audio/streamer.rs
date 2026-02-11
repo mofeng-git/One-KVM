@@ -14,8 +14,7 @@ use super::encoder::{OpusConfig, OpusEncoder, OpusFrame};
 use crate::error::{AppError, Result};
 
 /// Audio stream state
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AudioStreamState {
     /// Stream is stopped
     #[default]
@@ -28,17 +27,14 @@ pub enum AudioStreamState {
     Error,
 }
 
-
 /// Audio streamer configuration
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AudioStreamerConfig {
     /// Audio capture configuration
     pub capture: AudioConfig,
     /// Opus encoder configuration
     pub opus: OpusConfig,
 }
-
 
 impl AudioStreamerConfig {
     /// Create config for a specific device with default quality
@@ -280,7 +276,9 @@ impl AudioStreamer {
                     // Encode to Opus
                     let opus_result = {
                         let mut enc_guard = encoder.lock().await;
-                        (*enc_guard).as_mut().map(|enc| enc.encode_frame(&audio_frame))
+                        (*enc_guard)
+                            .as_mut()
+                            .map(|enc| enc.encode_frame(&audio_frame))
                     };
 
                     match opus_result {

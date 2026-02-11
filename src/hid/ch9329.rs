@@ -232,7 +232,6 @@ pub enum WorkMode {
     CustomHid = 0x03,
 }
 
-
 /// CH9329 serial communication mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
@@ -246,7 +245,6 @@ pub enum SerialMode {
     /// Mode 2: Transparent mode
     Transparent = 0x02,
 }
-
 
 /// CH9329 configuration parameters
 #[derive(Debug, Clone, Serialize, Deserialize)]

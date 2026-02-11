@@ -11,6 +11,7 @@ import {
   atxConfigApi,
   extensionsApi,
   systemApi,
+  updateApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
@@ -19,6 +20,9 @@ import {
   type RtspStatusResponse,
   type RtspConfigUpdate,
   type WebConfig,
+  type UpdateOverviewResponse,
+  type UpdateStatusResponse,
+  type UpdateChannel,
 } from '@/api'
 import type {
   ExtensionsStatus,
@@ -222,6 +226,19 @@ const webServerConfig = ref<WebConfig>({
 const webServerLoading = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
+const updateChannel = ref<UpdateChannel>('stable')
+const updateOverview = ref<UpdateOverviewResponse | null>(null)
+const updateStatus = ref<UpdateStatusResponse | null>(null)
+const updateLoading = ref(false)
+const updateRunning = computed(() => {
+  const phase = updateStatus.value?.phase
+  return phase === 'checking'
+    || phase === 'downloading'
+    || phase === 'verifying'
+    || phase === 'installing'
+    || phase === 'restarting'
+})
+let updateStatusTimer: number | null = null
 type BindMode = 'all' | 'loopback' | 'custom'
 const bindMode = ref<BindMode>('all')
 const bindAllIpv6 = ref(false)
@@ -1117,6 +1134,67 @@ async function restartServer() {
   }
 }
 
+async function loadUpdateOverview() {
+  updateLoading.value = true
+  try {
+    updateOverview.value = await updateApi.overview(updateChannel.value)
+  } catch (e) {
+    console.error('Failed to load update overview:', e)
+  } finally {
+    updateLoading.value = false
+  }
+}
+
+async function refreshUpdateStatus() {
+  try {
+    updateStatus.value = await updateApi.status()
+  } catch (e) {
+    console.error('Failed to refresh update status:', e)
+  }
+}
+
+function stopUpdatePolling() {
+  if (updateStatusTimer !== null) {
+    window.clearInterval(updateStatusTimer)
+    updateStatusTimer = null
+  }
+}
+
+function startUpdatePolling() {
+  if (updateStatusTimer !== null) return
+  updateStatusTimer = window.setInterval(async () => {
+    await refreshUpdateStatus()
+    if (!updateRunning.value) {
+      stopUpdatePolling()
+      await loadUpdateOverview()
+    }
+  }, 1000)
+}
+
+async function startOnlineUpgrade() {
+  try {
+    await updateApi.upgrade({ channel: updateChannel.value })
+    await refreshUpdateStatus()
+    startUpdatePolling()
+  } catch (e) {
+    console.error('Failed to start upgrade:', e)
+  }
+}
+
+function updatePhaseText(phase?: string): string {
+  switch (phase) {
+    case 'idle': return t('settings.updatePhaseIdle')
+    case 'checking': return t('settings.updatePhaseChecking')
+    case 'downloading': return t('settings.updatePhaseDownloading')
+    case 'verifying': return t('settings.updatePhaseVerifying')
+    case 'installing': return t('settings.updatePhaseInstalling')
+    case 'restarting': return t('settings.updatePhaseRestarting')
+    case 'success': return t('settings.updatePhaseSuccess')
+    case 'failed': return t('settings.updatePhaseFailed')
+    default: return t('common.unknown')
+  }
+}
+
 async function saveRustdeskConfig() {
   loading.value = true
   saved.value = false
@@ -1376,8 +1454,18 @@ onMounted(async () => {
     loadRustdeskPassword(),
     loadRtspConfig(),
     loadWebServerConfig(),
+    loadUpdateOverview(),
+    refreshUpdateStatus(),
   ])
   usernameInput.value = authStore.user || ''
+
+  if (updateRunning.value) {
+    startUpdatePolling()
+  }
+})
+
+watch(updateChannel, async () => {
+  await loadUpdateOverview()
 })
 </script>
 
@@ -2755,14 +2843,80 @@ onMounted(async () => {
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>One-KVM</CardTitle>
-                <CardDescription>{{ t('settings.aboutDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div class="flex justify-between items-center py-2">
-                  <span class="text-sm text-muted-foreground">{{ t('settings.version') }}</span>
-                  <Badge>{{ systemStore.version || t('common.unknown') }} ({{ systemStore.buildDate || t('common.unknown') }})</Badge>
+              <CardContent class="space-y-4">
+                <div>
+                  <p class="text-sm font-medium">{{ t('settings.onlineUpgrade') }}</p>
+                  <p class="text-xs text-muted-foreground mt-1">{{ t('settings.onlineUpgradeDesc') }}</p>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.currentVersion') }}</Label>
+                    <Badge variant="outline">
+                      {{ updateOverview?.current_version || systemStore.version || t('common.unknown') }}
+                      ({{ systemStore.buildDate || t('common.unknown') }})
+                    </Badge>
+                  </div>
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.latestVersion') }}</Label>
+                    <Badge variant="outline">{{ updateOverview?.latest_version || t('common.unknown') }}</Badge>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>{{ t('settings.updateChannel') }}</Label>
+                  <select v-model="updateChannel" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="updateRunning">
+                    <option value="stable">Stable</option>
+                    <option value="beta">Beta</option>
+                  </select>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('settings.updateStatus') }}</Label>
+                    <Badge
+                      variant="outline"
+                      class="max-w-[60%] truncate"
+                      :title="updateStatus?.message || updatePhaseText(updateStatus?.phase)"
+                    >
+                      {{ updateStatus?.message || updatePhaseText(updateStatus?.phase) }}
+                    </Badge>
+                  </div>
+                  <div v-if="updateRunning || updateStatus?.phase === 'failed' || updateStatus?.phase === 'success'" class="w-full h-2 bg-muted rounded overflow-hidden">
+                    <div class="h-full bg-primary transition-all" :style="{ width: `${Math.max(0, Math.min(100, updateStatus?.progress || 0))}%` }" />
+                  </div>
+                  <p v-if="updateStatus?.last_error" class="text-xs text-destructive">{{ updateStatus.last_error }}</p>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>{{ t('settings.releaseNotes') }}</Label>
+                  <div v-if="updateLoading" class="text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+                  <div v-else-if="!updateOverview?.notes_between?.length" class="text-sm text-muted-foreground">{{ t('settings.noUpdates') }}</div>
+                  <div v-else class="space-y-3 max-h-56 overflow-y-auto pr-1">
+                    <div v-for="item in updateOverview.notes_between" :key="item.version" class="rounded border p-3 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="font-medium">v{{ item.version }}</span>
+                        <span class="text-xs text-muted-foreground">{{ item.published_at }}</span>
+                      </div>
+                      <ul class="list-disc pl-5 text-sm space-y-1">
+                        <li v-for="(note, idx) in item.notes" :key="`${item.version}-${idx}`">{{ note }}</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                  <Button variant="outline" :disabled="updateRunning" @click="loadUpdateOverview">
+                    <RefreshCw class="h-4 w-4 mr-2" />
+                    {{ t('common.refresh') }}
+                  </Button>
+                  <Button
+                    :disabled="updateRunning || !updateOverview?.upgrade_available"
+                    @click="startOnlineUpgrade"
+                  >
+                    <RefreshCw class="h-4 w-4 mr-2" :class="updateRunning ? 'animate-spin' : ''" />
+                    {{ t('settings.startUpgrade') }}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

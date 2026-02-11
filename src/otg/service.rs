@@ -35,15 +35,13 @@ const FLAG_HID: u8 = 0b01;
 const FLAG_MSD: u8 = 0b10;
 
 /// HID device paths
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct HidDevicePaths {
     pub keyboard: Option<PathBuf>,
     pub mouse_relative: Option<PathBuf>,
     pub mouse_absolute: Option<PathBuf>,
     pub consumer: Option<PathBuf>,
 }
-
 
 impl HidDevicePaths {
     pub fn existing_paths(&self) -> Vec<PathBuf> {
@@ -230,13 +228,12 @@ impl OtgService {
         let requested_functions = self.hid_functions.read().await.clone();
         {
             let state = self.state.read().await;
-            if state.hid_enabled
-                && state.hid_functions.as_ref() == Some(&requested_functions) {
-                    if let Some(ref paths) = state.hid_paths {
-                        info!("HID already enabled, returning existing paths");
-                        return Ok(paths.clone());
-                    }
+            if state.hid_enabled && state.hid_functions.as_ref() == Some(&requested_functions) {
+                if let Some(ref paths) = state.hid_paths {
+                    info!("HID already enabled, returning existing paths");
+                    return Ok(paths.clone());
                 }
+            }
         }
 
         // Recreate gadget with both HID and MSD if needed

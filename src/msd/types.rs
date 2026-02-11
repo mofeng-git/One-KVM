@@ -18,7 +18,6 @@ pub enum MsdMode {
     Drive,
 }
 
-
 /// Image file metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageInfo {

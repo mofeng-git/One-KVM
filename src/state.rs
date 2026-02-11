@@ -15,6 +15,7 @@ use crate::msd::MsdController;
 use crate::otg::OtgService;
 use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
+use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
 
 /// Application-wide state shared across handlers
@@ -57,6 +58,8 @@ pub struct AppState {
     pub extensions: Arc<ExtensionManager>,
     /// Event bus for real-time notifications
     pub events: Arc<EventBus>,
+    /// Online update service
+    pub update: Arc<UpdateService>,
     /// Shutdown signal sender
     pub shutdown_tx: broadcast::Sender<()>,
     /// Recently revoked session IDs (for client kick detection)
@@ -82,6 +85,7 @@ impl AppState {
         rtsp: Option<Arc<RtspService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
+        update: Arc<UpdateService>,
         shutdown_tx: broadcast::Sender<()>,
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
@@ -99,6 +103,7 @@ impl AppState {
             rtsp: Arc::new(RwLock::new(rtsp)),
             extensions,
             events,
+            update,
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
             data_dir,

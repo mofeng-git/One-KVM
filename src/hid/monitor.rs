@@ -16,8 +16,7 @@ use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// HID health status
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum HidHealthStatus {
     /// Device is healthy and operational
     #[default]
@@ -34,7 +33,6 @@ pub enum HidHealthStatus {
     /// Device is disconnected
     Disconnected,
 }
-
 
 /// HID health monitor configuration
 #[derive(Debug, Clone)]

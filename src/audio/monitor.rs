@@ -16,8 +16,7 @@ use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// Audio health status
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum AudioHealthStatus {
     /// Device is healthy and operational
     #[default]
@@ -34,7 +33,6 @@ pub enum AudioHealthStatus {
     /// Device is disconnected or not available
     Disconnected,
 }
-
 
 /// Audio health monitor configuration
 #[derive(Debug, Clone)]

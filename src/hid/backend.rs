@@ -31,7 +31,6 @@ pub enum HidBackendType {
     None,
 }
 
-
 impl HidBackendType {
     /// Check if OTG backend is available on this system
     pub fn otg_available() -> bool {

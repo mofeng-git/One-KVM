@@ -18,6 +18,7 @@ pub mod rtsp;
 pub mod rustdesk;
 pub mod state;
 pub mod stream;
+pub mod update;
 pub mod utils;
 pub mod video;
 pub mod web;

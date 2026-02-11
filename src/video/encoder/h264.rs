@@ -32,8 +32,7 @@ fn init_hwcodec_logging() {
 }
 
 /// H.264 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum H264EncoderType {
     /// NVIDIA NVENC
     Nvenc,
@@ -69,7 +68,6 @@ impl std::fmt::Display for H264EncoderType {
     }
 }
 
-
 /// Map codec name to encoder type
 fn codec_name_to_type(name: &str) -> H264EncoderType {
     if name.contains("nvenc") {
@@ -90,8 +88,7 @@ fn codec_name_to_type(name: &str) -> H264EncoderType {
 }
 
 /// Input pixel format for H264 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum H264InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
@@ -111,7 +108,6 @@ pub enum H264InputFormat {
     /// BGR24 - packed BGR format (RKMPP direct input)
     Bgr24,
 }
-
 
 /// H.264 encoder configuration
 #[derive(Debug, Clone)]

@@ -39,7 +39,6 @@ pub struct AppConfig {
     pub rtsp: RtspConfig,
 }
 
-
 /// Authentication configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,7 +112,6 @@ pub enum HidBackend {
     None,
 }
 
-
 /// OTG USB device descriptor configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -164,7 +162,6 @@ pub enum OtgHidProfile {
     /// Custom function selection
     Custom,
 }
-
 
 /// OTG HID function selection (used when profile is Custom)
 #[typeshare]
@@ -354,7 +351,6 @@ pub struct AtxConfig {
     pub wol_interface: String,
 }
 
-
 impl AtxConfig {
     /// Convert to AtxControllerConfig for the controller
     pub fn to_controller_config(&self) -> crate::atx::AtxControllerConfig {
@@ -456,7 +452,6 @@ impl Default for RtspConfig {
     }
 }
 
-
 /// Encoder type
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -481,7 +476,6 @@ pub enum EncoderType {
     /// V4L2 M2M hardware encoder
     V4l2m2m,
 }
-
 
 impl EncoderType {
     /// Convert to EncoderBackend for registry queries
