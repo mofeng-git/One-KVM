@@ -14,6 +14,7 @@ pub mod hid;
 pub mod modules;
 pub mod msd;
 pub mod otg;
+pub mod rtsp;
 pub mod rustdesk;
 pub mod state;
 pub mod stream;

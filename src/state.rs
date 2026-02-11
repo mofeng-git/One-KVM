@@ -13,6 +13,7 @@ use crate::extensions::ExtensionManager;
 use crate::hid::HidController;
 use crate::msd::MsdController;
 use crate::otg::OtgService;
+use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
 use crate::video::VideoStreamManager;
 
@@ -50,6 +51,8 @@ pub struct AppState {
     pub audio: Arc<AudioController>,
     /// RustDesk remote access service (optional)
     pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
+    /// RTSP streaming service (optional)
+    pub rtsp: Arc<RwLock<Option<Arc<RtspService>>>>,
     /// Extension manager (ttyd, gostc, easytier)
     pub extensions: Arc<ExtensionManager>,
     /// Event bus for real-time notifications
@@ -76,6 +79,7 @@ impl AppState {
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
         rustdesk: Option<Arc<RustDeskService>>,
+        rtsp: Option<Arc<RtspService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
         shutdown_tx: broadcast::Sender<()>,
@@ -92,6 +96,7 @@ impl AppState {
             atx: Arc::new(RwLock::new(atx)),
             audio,
             rustdesk: Arc::new(RwLock::new(rustdesk)),
+            rtsp: Arc::new(RwLock::new(rtsp)),
             extensions,
             events,
             shutdown_tx,

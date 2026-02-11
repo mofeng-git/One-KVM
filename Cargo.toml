@@ -92,6 +92,8 @@ arc-swap = "1.8"
 # WebRTC
 webrtc = "0.14"
 rtp = "0.14"
+rtsp-types = "0.1"
+sdp-types = "0.1"
 
 # Audio (ALSA capture + Opus encoding)
 # Note: audiopus links to libopus.so (unavoidable for audio support)

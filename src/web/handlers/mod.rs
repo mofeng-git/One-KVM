@@ -14,6 +14,7 @@ use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
 use crate::events::SystemEvent;
 use crate::state::AppState;
+use crate::video::codec_constraints::codec_to_id;
 use crate::video::encoder::BitratePreset;
 
 // ============================================================================
@@ -747,6 +748,17 @@ pub async fn setup_init(
         }
     }
 
+    // Start RTSP if enabled
+    if new_config.rtsp.enabled {
+        let empty_config = crate::config::RtspConfig::default();
+        if let Err(e) = config::apply::apply_rtsp_config(&state, &empty_config, &new_config.rtsp).await
+        {
+            tracing::warn!("Failed to start RTSP during setup: {}", e);
+        } else {
+            tracing::info!("RTSP started during setup");
+        }
+    }
+
     // Start audio streaming if audio device was selected during setup
     if new_config.audio.enabled {
         let audio_config = crate::audio::AudioControllerConfig {
@@ -1439,6 +1451,8 @@ pub async fn stream_mode_set(
 ) -> Result<Json<StreamModeResponse>> {
     use crate::video::encoder::VideoCodecType;
 
+    let constraints = state.stream_manager.codec_constraints().await;
+
     let mode_lower = req.mode.to_lowercase();
     let (new_mode, video_codec) = match mode_lower.as_str() {
         "mjpeg" => (StreamMode::Mjpeg, None),
@@ -1453,6 +1467,23 @@ pub async fn stream_mode_set(
             )));
         }
     };
+
+    if new_mode == StreamMode::Mjpeg && !constraints.is_mjpeg_allowed() {
+        return Err(AppError::BadRequest(format!(
+            "Codec 'mjpeg' is not allowed: {}",
+            constraints.reason
+        )));
+    }
+
+    if let Some(codec) = video_codec {
+        if !constraints.is_webrtc_codec_allowed(codec) {
+            return Err(AppError::BadRequest(format!(
+                "Codec '{}' is not allowed: {}",
+                codec_to_id(codec),
+                constraints.reason
+            )));
+        }
+    }
 
     // Set video codec if switching to WebRTC mode with specific codec
     if let Some(codec) = video_codec {
@@ -1558,6 +1589,67 @@ pub struct AvailableCodecsResponse {
     pub backends: Vec<EncoderBackendInfo>,
     /// Available codecs (for backward compatibility)
     pub codecs: Vec<VideoCodecInfo>,
+}
+
+/// Stream constraints response
+#[derive(Serialize)]
+pub struct StreamConstraintsResponse {
+    pub success: bool,
+    pub allowed_codecs: Vec<String>,
+    pub locked_codec: Option<String>,
+    pub disallow_mjpeg: bool,
+    pub sources: ConstraintSources,
+    pub reason: String,
+    pub current_mode: String,
+}
+
+#[derive(Serialize)]
+pub struct ConstraintSources {
+    pub rustdesk: bool,
+    pub rtsp: bool,
+}
+
+/// Get stream codec constraints derived from enabled services.
+pub async fn stream_constraints_get(
+    State(state): State<Arc<AppState>>,
+) -> Json<StreamConstraintsResponse> {
+    use crate::video::encoder::VideoCodecType;
+
+    let constraints = state.stream_manager.codec_constraints().await;
+    let current_mode = state.stream_manager.current_mode().await;
+    let current_mode = match current_mode {
+        StreamMode::Mjpeg => "mjpeg".to_string(),
+        StreamMode::WebRTC => {
+            let codec = state
+                .stream_manager
+                .webrtc_streamer()
+                .current_video_codec()
+                .await;
+            match codec {
+                VideoCodecType::H264 => "h264".to_string(),
+                VideoCodecType::H265 => "h265".to_string(),
+                VideoCodecType::VP8 => "vp8".to_string(),
+                VideoCodecType::VP9 => "vp9".to_string(),
+            }
+        }
+    };
+
+    Json(StreamConstraintsResponse {
+        success: true,
+        allowed_codecs: constraints
+            .allowed_codecs_for_api()
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        locked_codec: constraints.locked_codec.map(codec_to_id).map(str::to_string),
+        disallow_mjpeg: !constraints.allow_mjpeg,
+        sources: ConstraintSources {
+            rustdesk: constraints.rustdesk_enabled,
+            rtsp: constraints.rtsp_enabled,
+        },
+        reason: constraints.reason,
+        current_mode,
+    })
 }
 
 /// Set bitrate request

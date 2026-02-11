@@ -1,5 +1,6 @@
 use crate::config::*;
 use crate::error::AppError;
+use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
 use crate::video::encoder::BitratePreset;
 use serde::Deserialize;
@@ -600,6 +601,124 @@ impl RustDeskConfigUpdate {
             if !password.is_empty() {
                 config.device_password = password.clone();
             }
+        }
+    }
+}
+
+// ===== RTSP Config =====
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct RtspConfigResponse {
+    pub enabled: bool,
+    pub bind: String,
+    pub port: u16,
+    pub path: String,
+    pub allow_one_client: bool,
+    pub codec: RtspCodec,
+    pub username: Option<String>,
+    pub has_password: bool,
+}
+
+impl From<&RtspConfig> for RtspConfigResponse {
+    fn from(config: &RtspConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            bind: config.bind.clone(),
+            port: config.port,
+            path: config.path.clone(),
+            allow_one_client: config.allow_one_client,
+            codec: config.codec.clone(),
+            username: config.username.clone(),
+            has_password: config.password.is_some(),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct RtspStatusResponse {
+    pub config: RtspConfigResponse,
+    pub service_status: String,
+}
+
+impl RtspStatusResponse {
+    pub fn new(config: &RtspConfig, status: RtspServiceStatus) -> Self {
+        Self {
+            config: RtspConfigResponse::from(config),
+            service_status: status.to_string(),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct RtspConfigUpdate {
+    pub enabled: Option<bool>,
+    pub bind: Option<String>,
+    pub port: Option<u16>,
+    pub path: Option<String>,
+    pub allow_one_client: Option<bool>,
+    pub codec: Option<RtspCodec>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl RtspConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(port) = self.port {
+            if port == 0 {
+                return Err(AppError::BadRequest("RTSP port cannot be 0".into()));
+            }
+        }
+
+        if let Some(ref bind) = self.bind {
+            if bind.parse::<std::net::IpAddr>().is_err() {
+                return Err(AppError::BadRequest("RTSP bind must be a valid IP".into()));
+            }
+        }
+
+        if let Some(ref path) = self.path {
+            let normalized = path.trim_matches('/');
+            if normalized.is_empty() {
+                return Err(AppError::BadRequest("RTSP path cannot be empty".into()));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut RtspConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref bind) = self.bind {
+            config.bind = bind.clone();
+        }
+        if let Some(port) = self.port {
+            config.port = port;
+        }
+        if let Some(ref path) = self.path {
+            config.path = path.trim_matches('/').to_string();
+        }
+        if let Some(allow_one_client) = self.allow_one_client {
+            config.allow_one_client = allow_one_client;
+        }
+        if let Some(codec) = self.codec.clone() {
+            config.codec = codec;
+        }
+        if let Some(ref username) = self.username {
+            config.username = if username.is_empty() {
+                None
+            } else {
+                Some(username.clone())
+            };
+        }
+        if let Some(ref password) = self.password {
+            config.password = if password.is_empty() {
+                None
+            } else {
+                Some(password.clone())
+            };
         }
     }
 }

@@ -19,9 +19,13 @@ use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
 use one_kvm::msd::MsdController;
 use one_kvm::otg::{configfs, OtgService};
+use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
 use one_kvm::utils::bind_tcp_listener;
+use one_kvm::video::codec_constraints::{
+    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+};
 use one_kvm::video::format::{PixelFormat, Resolution};
 use one_kvm::video::{Streamer, VideoStreamManager};
 use one_kvm::web;
@@ -534,6 +538,21 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    // Create RTSP service (optional, based on config)
+    let rtsp = if config.rtsp.enabled {
+        tracing::info!(
+            "Initializing RTSP service: rtsp://{}:{}/{}",
+            config.rtsp.bind,
+            config.rtsp.port,
+            config.rtsp.path
+        );
+        let service = RtspService::new(config.rtsp.clone(), stream_manager.clone());
+        Some(Arc::new(service))
+    } else {
+        tracing::info!("RTSP disabled in configuration");
+        None
+    };
+
     // Create application state
     let state = AppState::new(
         config_store.clone(),
@@ -546,6 +565,7 @@ async fn main() -> anyhow::Result<()> {
         atx,
         audio,
         rustdesk.clone(),
+        rtsp.clone(),
         extensions.clone(),
         events.clone(),
         shutdown_tx.clone(),
@@ -574,6 +594,30 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             tracing::info!("RustDesk service started");
+        }
+    }
+
+    // Start RTSP service if enabled
+    if let Some(ref service) = rtsp {
+        if let Err(e) = service.start().await {
+            tracing::error!("Failed to start RTSP service: {}", e);
+        } else {
+            tracing::info!("RTSP service started");
+        }
+    }
+
+    // Enforce startup codec constraints (e.g. RTSP/RustDesk locks)
+    {
+        let runtime_config = state.config.get();
+        let constraints = StreamCodecConstraints::from_config(&runtime_config);
+        match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
+            Ok(result) if result.changed => {
+                if let Some(message) = result.message {
+                    tracing::info!("{}", message);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("Failed to enforce startup codec constraints: {}", e),
         }
     }
 
@@ -883,6 +927,15 @@ async fn cleanup(state: &Arc<AppState>) {
             tracing::warn!("Failed to stop RustDesk service: {}", e);
         } else {
             tracing::info!("RustDesk service stopped");
+        }
+    }
+
+    // Stop RTSP service
+    if let Some(ref service) = *state.rtsp.read().await {
+        if let Err(e) = service.stop().await {
+            tracing::warn!("Failed to stop RTSP service: {}", e);
+        } else {
+            tracing::info!("RTSP service stopped");
         }
     }
 

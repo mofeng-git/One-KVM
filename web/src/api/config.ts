@@ -330,6 +330,49 @@ export const rustdeskConfigApi = {
     }),
 }
 
+// ===== RTSP 配置 API =====
+
+export type RtspCodec = 'h264' | 'h265'
+
+export interface RtspConfigResponse {
+  enabled: boolean
+  bind: string
+  port: number
+  path: string
+  allow_one_client: boolean
+  codec: RtspCodec
+  username?: string | null
+  has_password: boolean
+}
+
+export interface RtspConfigUpdate {
+  enabled?: boolean
+  bind?: string
+  port?: number
+  path?: string
+  allow_one_client?: boolean
+  codec?: RtspCodec
+  username?: string
+  password?: string
+}
+
+export interface RtspStatusResponse {
+  config: RtspConfigResponse
+  service_status: string
+}
+
+export const rtspConfigApi = {
+  get: () => request<RtspConfigResponse>('/config/rtsp'),
+
+  update: (config: RtspConfigUpdate) =>
+    request<RtspConfigResponse>('/config/rtsp', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  getStatus: () => request<RtspStatusResponse>('/config/rtsp/status'),
+}
+
 // ===== Web 服务器配置 API =====
 
 /** Web 服务器配置 */

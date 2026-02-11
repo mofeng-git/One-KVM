@@ -50,6 +50,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/stream/mode", post(handlers::stream_mode_set))
         .route("/stream/bitrate", post(handlers::stream_set_bitrate))
         .route("/stream/codecs", get(handlers::stream_codecs_list))
+        .route("/stream/constraints", get(handlers::stream_constraints_get))
         // WebRTC endpoints
         .route("/webrtc/session", post(handlers::webrtc_create_session))
         .route("/webrtc/offer", post(handlers::webrtc_offer))
@@ -119,6 +120,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/config/rustdesk/regenerate-password",
             post(handlers::config::regenerate_device_password),
+        )
+        // RTSP configuration endpoints
+        .route("/config/rtsp", get(handlers::config::get_rtsp_config))
+        .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
+        .route(
+            "/config/rtsp/status",
+            get(handlers::config::get_rtsp_status),
         )
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))

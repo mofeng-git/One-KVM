@@ -37,6 +37,7 @@ use crate::error::Result;
 use crate::events::{EventBus, SystemEvent, VideoDeviceInfo};
 use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
+use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::streamer::{Streamer, StreamerState};
 use crate::webrtc::WebRtcStreamer;
@@ -142,6 +143,16 @@ impl VideoStreamManager {
     /// Set configuration store
     pub async fn set_config_store(&self, config: ConfigStore) {
         *self.config_store.write().await = Some(config);
+    }
+
+    /// Get current stream codec constraints derived from global configuration.
+    pub async fn codec_constraints(&self) -> StreamCodecConstraints {
+        if let Some(ref config_store) = *self.config_store.read().await {
+            let config = config_store.get();
+            StreamCodecConstraints::from_config(&config)
+        } else {
+            StreamCodecConstraints::unrestricted()
+        }
     }
 
     /// Get current streaming mode

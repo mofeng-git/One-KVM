@@ -106,6 +106,15 @@ pub async fn update_rustdesk_config(
         tracing::error!("Failed to apply RustDesk config: {}", e);
     }
 
+    // Share a non-sensitive summary for frontend UX
+    let constraints = state.stream_manager.codec_constraints().await;
+    if constraints.rustdesk_enabled || constraints.rtsp_enabled {
+        tracing::info!(
+            "Stream codec constraints active after RustDesk update: {}",
+            constraints.reason
+        );
+    }
+
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 

@@ -124,6 +124,19 @@ export interface AvailableCodecsResponse {
   codecs: VideoCodecInfo[]
 }
 
+export interface StreamConstraintsResponse {
+  success: boolean
+  allowed_codecs: string[]
+  locked_codec: string | null
+  disallow_mjpeg: boolean
+  sources: {
+    rustdesk: boolean
+    rtsp: boolean
+  }
+  reason: string
+  current_mode: string
+}
+
 export const streamApi = {
   status: () =>
     request<{
@@ -160,6 +173,9 @@ export const streamApi = {
 
   getCodecs: () =>
     request<AvailableCodecsResponse>('/stream/codecs'),
+
+  getConstraints: () =>
+    request<StreamConstraintsResponse>('/stream/constraints'),
 
   setBitratePreset: (bitrate_preset: import('@/types/generated').BitratePreset) =>
     request<{ success: boolean; message?: string }>('/stream/bitrate', {
@@ -536,11 +552,15 @@ export {
   audioConfigApi,
   extensionsApi,
   rustdeskConfigApi,
+  rtspConfigApi,
   webConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
   type RustDeskPasswordResponse,
+  type RtspConfigResponse,
+  type RtspConfigUpdate,
+  type RtspStatusResponse,
   type WebConfig,
 } from './config'
 

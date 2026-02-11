@@ -7,7 +7,11 @@ use std::sync::Arc;
 use crate::config::*;
 use crate::error::{AppError, Result};
 use crate::events::SystemEvent;
+use crate::rtsp::RtspService;
 use crate::state::AppState;
+use crate::video::codec_constraints::{
+    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+};
 
 /// 应用 Video 配置变更
 pub async fn apply_video_config(
@@ -444,6 +448,15 @@ pub async fn apply_audio_config(
     Ok(())
 }
 
+/// Apply stream codec constraints derived from global config.
+pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<Option<String>> {
+    let config = state.config.get();
+    let constraints = StreamCodecConstraints::from_config(&config);
+    let enforcement =
+        enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await?;
+    Ok(enforcement.message)
+}
+
 /// 应用 RustDesk 配置变更
 pub async fn apply_rustdesk_config(
     state: &Arc<AppState>,
@@ -453,6 +466,7 @@ pub async fn apply_rustdesk_config(
     tracing::info!("Applying RustDesk config changes...");
 
     let mut rustdesk_guard = state.rustdesk.write().await;
+    let mut credentials_to_save = None;
 
     // Check if service needs to be stopped
     if old_config.enabled && !new_config.enabled {
@@ -464,7 +478,6 @@ pub async fn apply_rustdesk_config(
             tracing::info!("RustDesk service stopped");
         }
         *rustdesk_guard = None;
-        return Ok(());
     }
 
     // Check if service needs to be started or restarted
@@ -472,8 +485,6 @@ pub async fn apply_rustdesk_config(
         let need_restart = old_config.rendezvous_server != new_config.rendezvous_server
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
-
-        let mut credentials_to_save = None;
 
         if rustdesk_guard.is_none() {
             // Create new service
@@ -507,27 +518,81 @@ pub async fn apply_rustdesk_config(
                 }
             }
         }
+    }
 
-        // Save credentials to persistent config store (outside the lock)
-        drop(rustdesk_guard);
-        if let Some(updated_config) = credentials_to_save {
-            tracing::info!("Saving RustDesk credentials to config store...");
-            if let Err(e) = state
-                .config
-                .update(|cfg| {
-                    cfg.rustdesk.public_key = updated_config.public_key.clone();
-                    cfg.rustdesk.private_key = updated_config.private_key.clone();
-                    cfg.rustdesk.signing_public_key = updated_config.signing_public_key.clone();
-                    cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
-                    cfg.rustdesk.uuid = updated_config.uuid.clone();
-                })
-                .await
-            {
-                tracing::warn!("Failed to save RustDesk credentials: {}", e);
-            } else {
-                tracing::info!("RustDesk credentials saved successfully");
+    // Save credentials to persistent config store (outside the lock)
+    drop(rustdesk_guard);
+    if let Some(updated_config) = credentials_to_save {
+        tracing::info!("Saving RustDesk credentials to config store...");
+        if let Err(e) = state
+            .config
+            .update(|cfg| {
+                cfg.rustdesk.public_key = updated_config.public_key.clone();
+                cfg.rustdesk.private_key = updated_config.private_key.clone();
+                cfg.rustdesk.signing_public_key = updated_config.signing_public_key.clone();
+                cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
+                cfg.rustdesk.uuid = updated_config.uuid.clone();
+            })
+            .await
+        {
+            tracing::warn!("Failed to save RustDesk credentials: {}", e);
+        } else {
+            tracing::info!("RustDesk credentials saved successfully");
+        }
+    }
+
+    if let Some(message) = enforce_stream_codec_constraints(state).await? {
+        tracing::info!("{}", message);
+    }
+
+    Ok(())
+}
+
+/// 应用 RTSP 配置变更
+pub async fn apply_rtsp_config(
+    state: &Arc<AppState>,
+    old_config: &RtspConfig,
+    new_config: &RtspConfig,
+) -> Result<()> {
+    tracing::info!("Applying RTSP config changes...");
+
+    let mut rtsp_guard = state.rtsp.write().await;
+
+    if old_config.enabled && !new_config.enabled {
+        if let Some(ref service) = *rtsp_guard {
+            if let Err(e) = service.stop().await {
+                tracing::error!("Failed to stop RTSP service: {}", e);
             }
         }
+        *rtsp_guard = None;
+    }
+
+    if new_config.enabled {
+        let need_restart = old_config.bind != new_config.bind
+            || old_config.port != new_config.port
+            || old_config.path != new_config.path
+            || old_config.codec != new_config.codec
+            || old_config.username != new_config.username
+            || old_config.password != new_config.password
+            || old_config.allow_one_client != new_config.allow_one_client;
+
+        if rtsp_guard.is_none() {
+            let service = RtspService::new(new_config.clone(), state.stream_manager.clone());
+            service.start().await?;
+            tracing::info!("RTSP service started");
+            *rtsp_guard = Some(Arc::new(service));
+        } else if need_restart {
+            if let Some(ref service) = *rtsp_guard {
+                service.restart(new_config.clone()).await?;
+                tracing::info!("RTSP service restarted");
+            }
+        }
+    }
+
+    drop(rtsp_guard);
+
+    if let Some(message) = enforce_stream_codec_constraints(state).await? {
+        tracing::info!("{}", message);
     }
 
     Ok(())

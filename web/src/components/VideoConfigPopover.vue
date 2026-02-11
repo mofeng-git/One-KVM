@@ -19,7 +19,14 @@ import {
 } from '@/components/ui/select'
 import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo, type BitratePreset } from '@/api'
+import {
+  configApi,
+  streamApi,
+  type VideoCodecInfo,
+  type EncoderBackendInfo,
+  type BitratePreset,
+  type StreamConstraintsResponse,
+} from '@/api'
 import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
@@ -64,6 +71,7 @@ const loadingCodecs = ref(false)
 
 // Backend list
 const backends = ref<EncoderBackendInfo[]>([])
+const constraints = ref<StreamConstraintsResponse | null>(null)
 const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
 
 // Browser supported codecs (WebRTC receive capabilities)
@@ -220,7 +228,7 @@ const availableCodecs = computed(() => {
   const backend = backends.value.find(b => b.id === currentEncoderBackend.value)
   if (!backend) return allAvailable
 
-  return allAvailable
+  const backendFiltered = allAvailable
     .filter(codec => {
       // MJPEG is always available (doesn't require encoder)
       if (codec.id === 'mjpeg') return true
@@ -238,6 +246,13 @@ const availableCodecs = computed(() => {
         backend: backend.name,
       }
     })
+
+  const allowed = constraints.value?.allowed_codecs
+  if (!allowed || allowed.length === 0) {
+    return backendFiltered
+  }
+
+  return backendFiltered.filter(codec => allowed.includes(codec.id))
 })
 
 // Cascading filters
@@ -303,6 +318,14 @@ async function loadCodecs() {
   }
 }
 
+async function loadConstraints() {
+  try {
+    constraints.value = await streamApi.getConstraints()
+  } catch {
+    constraints.value = null
+  }
+}
+
 // Navigate to settings page (video tab)
 function goToSettings() {
   router.push('/settings?tab=video')
@@ -339,6 +362,12 @@ function syncFromCurrentIfChanged() {
 // Handle video mode change
 function handleVideoModeChange(mode: unknown) {
   if (typeof mode !== 'string') return
+
+  if (constraints.value?.allowed_codecs?.length && !constraints.value.allowed_codecs.includes(mode)) {
+    toast.error(constraints.value.reason || t('actionbar.selectMode'))
+    return
+  }
+
   emit('update:videoMode', mode as VideoMode)
 }
 
@@ -465,6 +494,8 @@ watch(() => props.open, (isOpen) => {
   if (codecs.value.length === 0) {
     loadCodecs()
   }
+
+  loadConstraints()
 
   Promise.all([
     configStore.refreshVideo(),

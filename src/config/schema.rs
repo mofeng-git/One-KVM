@@ -35,6 +35,8 @@ pub struct AppConfig {
     pub extensions: ExtensionsConfig,
     /// RustDesk remote access settings
     pub rustdesk: RustDeskConfig,
+    /// RTSP streaming settings
+    pub rtsp: RtspConfig,
 }
 
 
@@ -402,6 +404,56 @@ pub enum StreamMode {
     /// MJPEG over HTTP
     #[default]
     Mjpeg,
+}
+
+/// RTSP output codec
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum RtspCodec {
+    #[default]
+    H264,
+    H265,
+}
+
+/// RTSP configuration
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RtspConfig {
+    /// Enable RTSP output
+    pub enabled: bool,
+    /// Bind IP address
+    pub bind: String,
+    /// RTSP TCP listen port
+    pub port: u16,
+    /// Stream path (without leading slash)
+    pub path: String,
+    /// Allow only one client connection at a time
+    pub allow_one_client: bool,
+    /// Output codec (H264/H265)
+    pub codec: RtspCodec,
+    /// Optional username for authentication
+    pub username: Option<String>,
+    /// Optional password for authentication
+    #[typeshare(skip)]
+    pub password: Option<String>,
+}
+
+impl Default for RtspConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind: "0.0.0.0".to_string(),
+            port: 8554,
+            path: "live".to_string(),
+            allow_one_client: true,
+            codec: RtspCodec::H264,
+            username: None,
+            password: None,
+        }
+    }
 }
 
 
