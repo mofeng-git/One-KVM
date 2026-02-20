@@ -940,6 +940,30 @@ impl HidBackend for OtgBackend {
         Ok(())
     }
 
+    fn health_check(&self) -> Result<()> {
+        if !self.check_devices_exist() {
+            let missing = self.get_missing_devices();
+            self.online.store(false, Ordering::Relaxed);
+            return Err(AppError::HidError {
+                backend: "otg".to_string(),
+                reason: format!("HID device node missing: {}", missing.join(", ")),
+                error_code: "enoent".to_string(),
+            });
+        }
+
+        if !self.is_udc_configured() {
+            self.online.store(false, Ordering::Relaxed);
+            return Err(AppError::HidError {
+                backend: "otg".to_string(),
+                reason: "UDC is not in configured state".to_string(),
+                error_code: "udc_not_configured".to_string(),
+            });
+        }
+
+        self.online.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
     fn supports_absolute_mouse(&self) -> bool {
         self.mouse_abs_path.as_ref().is_some_and(|p| p.exists())
     }

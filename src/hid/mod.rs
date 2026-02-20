@@ -56,6 +56,7 @@ use tokio::task::JoinHandle;
 
 const HID_EVENT_QUEUE_CAPACITY: usize = 64;
 const HID_EVENT_SEND_TIMEOUT_MS: u64 = 30;
+const HID_HEALTH_CHECK_INTERVAL_MS: u64 = 1000;
 
 #[derive(Debug)]
 enum HidEvent {
@@ -87,6 +88,8 @@ pub struct HidController {
     pending_move_flag: Arc<AtomicBool>,
     /// Worker task handle
     hid_worker: Mutex<Option<JoinHandle<()>>>,
+    /// Health check task handle
+    hid_health_checker: Mutex<Option<JoinHandle<()>>>,
     /// Backend availability fast flag
     backend_available: AtomicBool,
 }
@@ -108,6 +111,7 @@ impl HidController {
             pending_move: Arc::new(parking_lot::Mutex::new(None)),
             pending_move_flag: Arc::new(AtomicBool::new(false)),
             hid_worker: Mutex::new(None),
+            hid_health_checker: Mutex::new(None),
             backend_available: AtomicBool::new(false),
         }
     }
@@ -159,6 +163,7 @@ impl HidController {
 
         // Start HID event worker (once)
         self.start_event_worker().await;
+        self.start_health_checker().await;
 
         info!("HID backend initialized: {:?}", backend_type);
         Ok(())
@@ -167,6 +172,7 @@ impl HidController {
     /// Shutdown the HID backend and release resources
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down HID controller");
+        self.stop_health_checker().await;
 
         // Close the backend
         *self.backend.write().await = None;
@@ -298,6 +304,7 @@ impl HidController {
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {
         info!("Reloading HID backend: {:?}", new_backend_type);
         self.backend_available.store(false, Ordering::Release);
+        self.stop_health_checker().await;
 
         // Shutdown existing backend first
         if let Some(backend) = self.backend.write().await.take() {
@@ -400,6 +407,7 @@ impl HidController {
             info!("HID backend reloaded successfully: {:?}", new_backend_type);
             self.backend_available.store(true, Ordering::Release);
             self.start_event_worker().await;
+            self.start_health_checker().await;
 
             // Update backend_type on success
             *self.backend_type.write().await = new_backend_type.clone();
@@ -492,6 +500,87 @@ impl HidController {
         });
 
         *worker_guard = Some(handle);
+    }
+
+    async fn start_health_checker(&self) {
+        let mut checker_guard = self.hid_health_checker.lock().await;
+        if checker_guard.is_some() {
+            return;
+        }
+
+        let backend = self.backend.clone();
+        let backend_type = self.backend_type.clone();
+        let monitor = self.monitor.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut ticker =
+                tokio::time::interval(Duration::from_millis(HID_HEALTH_CHECK_INTERVAL_MS));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                ticker.tick().await;
+
+                let backend_opt = backend.read().await.clone();
+                let Some(active_backend) = backend_opt else {
+                    continue;
+                };
+
+                let backend_name = backend_type.read().await.name_str().to_string();
+                let result =
+                    tokio::task::spawn_blocking(move || active_backend.health_check()).await;
+
+                match result {
+                    Ok(Ok(())) => {
+                        if monitor.is_error().await {
+                            monitor.report_recovered(&backend_name).await;
+                        }
+                    }
+                    Ok(Err(AppError::HidError {
+                        backend,
+                        reason,
+                        error_code,
+                    })) => {
+                        monitor
+                            .report_error(&backend, None, &reason, &error_code)
+                            .await;
+                    }
+                    Ok(Err(e)) => {
+                        monitor
+                            .report_error(
+                                &backend_name,
+                                None,
+                                &format!("HID health check failed: {}", e),
+                                "health_check_failed",
+                            )
+                            .await;
+                    }
+                    Err(e) => {
+                        monitor
+                            .report_error(
+                                &backend_name,
+                                None,
+                                &format!("HID health check task failed: {}", e),
+                                "health_check_join_failed",
+                            )
+                            .await;
+                    }
+                }
+            }
+        });
+
+        *checker_guard = Some(handle);
+    }
+
+    async fn stop_health_checker(&self) {
+        let handle_opt = {
+            let mut checker_guard = self.hid_health_checker.lock().await;
+            checker_guard.take()
+        };
+
+        if let Some(handle) = handle_opt {
+            handle.abort();
+            let _ = handle.await;
+        }
     }
 
     fn enqueue_mouse_move(&self, event: MouseEvent) -> Result<()> {

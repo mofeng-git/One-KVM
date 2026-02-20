@@ -226,6 +226,9 @@ const videoDetails = computed<StatusDetail[]>(() => {
 })
 
 const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
+  const hid = systemStore.hid
+  if (hid?.error) return 'error'
+
   // In WebRTC mode, check DataChannel status first
   if (videoMode.value !== 'mjpeg') {
     // DataChannel is ready - HID is connected via WebRTC
@@ -248,8 +251,8 @@ const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   if (hidWs.hidUnavailable.value) return 'disconnected'
 
   // Normal status based on system state
-  if (systemStore.hid?.available && systemStore.hid?.initialized) return 'connected'
-  if (systemStore.hid?.available && !systemStore.hid?.initialized) return 'connecting'
+  if (hid?.available && hid.initialized) return 'connected'
+  if (hid?.available && !hid.initialized) return 'connecting'
   return 'disconnected'
 })
 
@@ -261,16 +264,65 @@ const hidQuickInfo = computed(() => {
   return mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative')
 })
 
+function hidErrorHint(errorCode?: string | null, backend?: string | null): string {
+  switch (errorCode) {
+    case 'udc_not_configured':
+      return t('hid.errorHints.udcNotConfigured')
+    case 'enoent':
+      return t('hid.errorHints.hidDeviceMissing')
+    case 'port_not_found':
+    case 'port_not_opened':
+      return t('hid.errorHints.portNotFound')
+    case 'no_response':
+      return t('hid.errorHints.noResponse')
+    case 'protocol_error':
+    case 'invalid_response':
+      return t('hid.errorHints.protocolError')
+    case 'health_check_failed':
+    case 'health_check_join_failed':
+      return t('hid.errorHints.healthCheckFailed')
+    case 'eio':
+    case 'epipe':
+    case 'eshutdown':
+      if (backend === 'otg') return t('hid.errorHints.otgIoError')
+      if (backend === 'ch9329') return t('hid.errorHints.ch9329IoError')
+      return t('hid.errorHints.ioError')
+    default:
+      return ''
+  }
+}
+
+function buildHidErrorMessage(reason?: string | null, errorCode?: string | null, backend?: string | null): string {
+  if (!reason && !errorCode) return ''
+  const hint = hidErrorHint(errorCode, backend)
+  if (reason && hint) return `${reason} (${hint})`
+  if (reason) return reason
+  return hint || t('common.error')
+}
+
+const hidErrorMessage = computed(() => {
+  const hid = systemStore.hid
+  return buildHidErrorMessage(hid?.error, hid?.errorCode, hid?.backend)
+})
+
 const hidDetails = computed<StatusDetail[]>(() => {
   const hid = systemStore.hid
   if (!hid) return []
+  const errorMessage = buildHidErrorMessage(hid.error, hid.errorCode, hid.backend)
 
   const details: StatusDetail[] = [
     { label: t('statusCard.device'), value: hid.device || '-' },
     { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
-    { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.initialized ? 'ok' : 'warning' },
+    { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error ? 'error' : hid.initialized ? 'ok' : 'warning' },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
   ]
+
+  if (hid.errorCode) {
+    details.push({ label: t('statusCard.errorCode'), value: hid.errorCode, status: 'error' })
+  }
+  if (errorMessage) {
+    details.push({ label: t('common.error'), value: errorMessage, status: 'error' })
+  }
 
   // Add HID channel info based on video mode
   if (videoMode.value !== 'mjpeg') {
@@ -2058,6 +2110,7 @@ onUnmounted(() => {
                 type="hid"
                 :status="hidStatus"
                 :quick-info="hidQuickInfo"
+                :error-message="hidErrorMessage"
                 :details="hidDetails"
                 :hover-align="hidHoverAlign"
               />

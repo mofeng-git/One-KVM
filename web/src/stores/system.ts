@@ -35,6 +35,7 @@ interface HidState {
   supportsAbsoluteMouse: boolean
   device: string | null
   error: string | null
+  errorCode: string | null
 }
 
 interface AtxState {
@@ -185,6 +186,7 @@ export const useSystemStore = defineStore('system', () => {
         supportsAbsoluteMouse: state.supports_absolute_mouse,
         device: null,
         error: null,
+        errorCode: null,
       }
       return state
     } catch (e) {
@@ -287,6 +289,8 @@ export const useSystemStore = defineStore('system', () => {
       supportsAbsoluteMouse: data.hid.supports_absolute_mouse,
       device: data.hid.device,
       error: data.hid.error,
+      // system.device_info does not include HID error_code, keep latest one when error still exists.
+      errorCode: data.hid.error ? (hid.value?.errorCode ?? null) : null,
     }
 
     // Update MSD state (optional)
@@ -356,6 +360,28 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  /**
+   * Update HID state from hid.state_changed / hid.device_lost events.
+   */
+  function updateHidStateFromEvent(data: {
+    backend: string
+    initialized: boolean
+    error?: string | null
+    error_code?: string | null
+  }) {
+    const current = hid.value
+    const nextBackend = data.backend || current?.backend || 'unknown'
+    hid.value = {
+      available: nextBackend !== 'none',
+      backend: nextBackend,
+      initialized: data.initialized,
+      supportsAbsoluteMouse: current?.supportsAbsoluteMouse ?? false,
+      device: current?.device ?? null,
+      error: data.error ?? null,
+      errorCode: data.error_code ?? null,
+    }
+  }
+
   return {
     version,
     buildDate,
@@ -380,6 +406,7 @@ export const useSystemStore = defineStore('system', () => {
     updateWsConnection,
     updateHidWsConnection,
     updateFromDeviceInfo,
+    updateHidStateFromEvent,
     updateStreamClients,
     setStreamOnline,
   }

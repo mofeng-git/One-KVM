@@ -361,6 +361,17 @@ export default {
     reconnectingDesc: 'Attempting to reconnect (attempt {attempt})',
     recovered: 'HID Recovered',
     recoveredDesc: '{backend} HID device reconnected successfully',
+    errorHints: {
+      udcNotConfigured: 'Target host has not finished USB enumeration yet',
+      hidDeviceMissing: 'HID gadget device node is missing, try restarting HID service',
+      portNotFound: 'Serial port not found, check CH9329 wiring and device path',
+      noResponse: 'No response from CH9329, check baud rate and power',
+      protocolError: 'CH9329 replied with invalid protocol data',
+      healthCheckFailed: 'Background health check failed',
+      ioError: 'I/O communication error detected',
+      otgIoError: 'OTG link is unstable, check USB cable and host port',
+      ch9329IoError: 'CH9329 serial link is unstable, check wiring and power',
+    },
   },
   audio: {
     // Device monitoring
@@ -812,6 +823,7 @@ export default {
     networkError: 'Network Error',
     disconnected: 'Disconnected',
     availability: 'Availability',
+    errorCode: 'Error Code',
     hidUnavailable: 'HID Unavailable',
     sampleRate: 'Sample Rate',
     channels: 'Channels',

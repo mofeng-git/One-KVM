@@ -741,6 +741,20 @@ impl Ch9329Backend {
         }
     }
 
+    fn update_chip_info_cache(&self, response: &Response) -> Result<ChipInfo> {
+        if let Some(info) = ChipInfo::from_response(&response.data) {
+            *self.chip_info.write() = Some(info.clone());
+            *self.led_status.write() = LedStatus {
+                num_lock: info.num_lock,
+                caps_lock: info.caps_lock,
+                scroll_lock: info.scroll_lock,
+            };
+            Ok(info)
+        } else {
+            Err(AppError::Internal("Failed to parse chip info".to_string()))
+        }
+    }
+
     // ========================================================================
     // Public API
     // ========================================================================
@@ -759,18 +773,15 @@ impl Ch9329Backend {
             response.cmd, response.data, response.is_error
         );
 
-        if let Some(info) = ChipInfo::from_response(&response.data) {
-            // Update cache
-            *self.chip_info.write() = Some(info.clone());
-            *self.led_status.write() = LedStatus {
-                num_lock: info.num_lock,
-                caps_lock: info.caps_lock,
-                scroll_lock: info.scroll_lock,
-            };
-            Ok(info)
-        } else {
-            Err(AppError::Internal("Failed to parse chip info".to_string()))
+        if response.is_error {
+            let reason = response
+                .error_code
+                .map(|e| format!("CH9329 error response: {}", e))
+                .unwrap_or_else(|| "CH9329 returned error response".to_string());
+            return Err(AppError::Internal(reason));
         }
+
+        self.update_chip_info_cache(&response)
     }
 
     /// Get cached LED status
@@ -1100,6 +1111,56 @@ impl HidBackend for Ch9329Backend {
         *self.port.lock() = None;
 
         info!("CH9329 backend shutdown");
+        Ok(())
+    }
+
+    fn health_check(&self) -> Result<()> {
+        if !self.check_port_exists() {
+            return Err(AppError::HidError {
+                backend: "ch9329".to_string(),
+                reason: format!("Serial port {} not found", self.port_path),
+                error_code: "port_not_found".to_string(),
+            });
+        }
+
+        if !self.is_port_open() {
+            return Err(AppError::HidError {
+                backend: "ch9329".to_string(),
+                reason: "CH9329 serial port is not open".to_string(),
+                error_code: "port_not_opened".to_string(),
+            });
+        }
+
+        let response =
+            self.send_and_receive(cmd::GET_INFO, &[])
+                .map_err(|e| AppError::HidError {
+                    backend: "ch9329".to_string(),
+                    reason: format!("CH9329 health check failed: {}", e),
+                    error_code: "no_response".to_string(),
+                })?;
+
+        if response.is_error {
+            let reason = response
+                .error_code
+                .map(|e| format!("CH9329 error response: {}", e))
+                .unwrap_or_else(|| "CH9329 returned error response".to_string());
+            return Err(AppError::HidError {
+                backend: "ch9329".to_string(),
+                reason,
+                error_code: "protocol_error".to_string(),
+            });
+        }
+
+        self.update_chip_info_cache(&response)
+            .map_err(|e| AppError::HidError {
+                backend: "ch9329".to_string(),
+                reason: format!("CH9329 invalid response: {}", e),
+                error_code: "invalid_response".to_string(),
+            })?;
+
+        self.error_count.store(0, Ordering::Relaxed);
+        *self.last_success.lock() = Some(Instant::now());
+
         Ok(())
     }
 

@@ -361,6 +361,17 @@ export default {
     reconnectingDesc: '正在尝试重连（第 {attempt} 次）',
     recovered: 'HID 已恢复',
     recoveredDesc: '{backend} HID 设备已成功重连',
+    errorHints: {
+      udcNotConfigured: '被控机尚未完成 USB 枚举',
+      hidDeviceMissing: '未找到 HID 设备节点，可尝试重启 HID 服务',
+      portNotFound: '找不到串口设备，请检查 CH9329 接线与设备路径',
+      noResponse: 'CH9329 无响应，请检查波特率与供电',
+      protocolError: 'CH9329 返回了无效协议数据',
+      healthCheckFailed: '后台健康检查失败',
+      ioError: '检测到 I/O 通信异常',
+      otgIoError: 'OTG 链路不稳定，请检查 USB 线和被控机接口',
+      ch9329IoError: 'CH9329 串口链路不稳定，请检查接线与供电',
+    },
   },
   audio: {
     // 设备监控
@@ -812,6 +823,7 @@ export default {
     networkError: '网络错误',
     disconnected: '已断开',
     availability: '可用性',
+    errorCode: '错误码',
     hidUnavailable: 'HID不可用',
     sampleRate: '采样率',
     channels: '声道',

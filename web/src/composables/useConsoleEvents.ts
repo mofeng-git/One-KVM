@@ -29,21 +29,84 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   const { on, off, connect } = useWebSocket()
   const unifiedAudio = getUnifiedAudio()
   const noop = () => {}
+  const HID_TOAST_DEDUPE_MS = 30_000
+  const hidLastToastAt = new Map<string, number>()
+
+  function hidErrorHint(errorCode?: string, backend?: string): string {
+    switch (errorCode) {
+      case 'udc_not_configured':
+        return t('hid.errorHints.udcNotConfigured')
+      case 'enoent':
+        return t('hid.errorHints.hidDeviceMissing')
+      case 'port_not_found':
+      case 'port_not_opened':
+        return t('hid.errorHints.portNotFound')
+      case 'no_response':
+        return t('hid.errorHints.noResponse')
+      case 'protocol_error':
+      case 'invalid_response':
+        return t('hid.errorHints.protocolError')
+      case 'health_check_failed':
+      case 'health_check_join_failed':
+        return t('hid.errorHints.healthCheckFailed')
+      case 'eio':
+      case 'epipe':
+      case 'eshutdown':
+        if (backend === 'otg') {
+          return t('hid.errorHints.otgIoError')
+        }
+        if (backend === 'ch9329') {
+          return t('hid.errorHints.ch9329IoError')
+        }
+        return t('hid.errorHints.ioError')
+      default:
+        return ''
+    }
+  }
+
+  function formatHidReason(reason: string, errorCode?: string, backend?: string): string {
+    const hint = hidErrorHint(errorCode, backend)
+    if (!hint) return reason
+    return `${reason} (${hint})`
+  }
 
   // HID event handlers
-  function handleHidStateChanged(_data: unknown) {
-    // Empty handler to prevent warning - HID state handled via device_info
+  function handleHidStateChanged(data: {
+    backend: string
+    initialized: boolean
+    error?: string | null
+    error_code?: string | null
+  }) {
+    systemStore.updateHidStateFromEvent({
+      backend: data.backend,
+      initialized: data.initialized,
+      error: data.error ?? null,
+      error_code: data.error_code ?? null,
+    })
   }
 
   function handleHidDeviceLost(data: { backend: string; device?: string; reason: string; error_code: string }) {
     const temporaryErrors = ['eagain', 'eagain_retry']
     if (temporaryErrors.includes(data.error_code)) return
 
-    if (systemStore.hid) {
-      systemStore.hid.initialized = false
+    systemStore.updateHidStateFromEvent({
+      backend: data.backend,
+      initialized: false,
+      error: data.reason,
+      error_code: data.error_code,
+    })
+
+    const dedupeKey = `${data.backend}:${data.error_code}`
+    const now = Date.now()
+    const last = hidLastToastAt.get(dedupeKey) ?? 0
+    if (now - last < HID_TOAST_DEDUPE_MS) {
+      return
     }
+    hidLastToastAt.set(dedupeKey, now)
+
+    const reason = formatHidReason(data.reason, data.error_code, data.backend)
     toast.error(t('hid.deviceLost'), {
-      description: t('hid.deviceLostDesc', { backend: data.backend, reason: data.reason }),
+      description: t('hid.deviceLostDesc', { backend: data.backend, reason }),
       duration: 5000,
     })
   }
@@ -58,9 +121,12 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   }
 
   function handleHidRecovered(data: { backend: string }) {
-    if (systemStore.hid) {
-      systemStore.hid.initialized = true
-    }
+    systemStore.updateHidStateFromEvent({
+      backend: data.backend,
+      initialized: true,
+      error: null,
+      error_code: null,
+    })
     toast.success(t('hid.recovered'), {
       description: t('hid.recoveredDesc', { backend: data.backend }),
       duration: 3000,

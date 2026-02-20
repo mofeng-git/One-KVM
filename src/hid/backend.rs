@@ -104,6 +104,13 @@ pub trait HidBackend: Send + Sync {
     /// Shutdown the backend
     async fn shutdown(&self) -> Result<()>;
 
+    /// Perform backend health check.
+    ///
+    /// Default implementation assumes backend is healthy.
+    fn health_check(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Check if backend supports absolute mouse positioning
     fn supports_absolute_mouse(&self) -> bool {
         false
