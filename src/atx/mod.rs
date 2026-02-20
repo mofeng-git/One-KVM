@@ -28,12 +28,14 @@
 //!         device: "/dev/gpiochip0".to_string(),
 //!         pin: 5,
 //!         active_level: ActiveLevel::High,
+//!         baud_rate: 9600,
 //!     },
 //!     reset: AtxKeyConfig {
 //!         driver: AtxDriverType::UsbRelay,
 //!         device: "/dev/hidraw0".to_string(),
 //!         pin: 0,
 //!         active_level: ActiveLevel::High,
+//!         baud_rate: 9600,
 //!     },
 //!     led: Default::default(),
 //! };
@@ -72,12 +74,15 @@ pub fn discover_devices() -> AtxDevices {
                 devices.gpio_chips.push(format!("/dev/{}", name_str));
             } else if name_str.starts_with("hidraw") {
                 devices.usb_relays.push(format!("/dev/{}", name_str));
+            } else if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
+                devices.serial_ports.push(format!("/dev/{}", name_str));
             }
         }
     }
 
     devices.gpio_chips.sort();
     devices.usb_relays.sort();
+    devices.serial_ports.sort();
 
     devices
 }

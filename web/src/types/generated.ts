@@ -118,6 +118,8 @@ export enum AtxDriverType {
 	Gpio = "gpio",
 	/** USB HID relay module */
 	UsbRelay = "usbrelay",
+	/** Serial/COM port relay (LCUS type) */
+	Serial = "serial",
 	/** Disabled / Not configured */
 	None = "none",
 }
@@ -151,6 +153,8 @@ export interface AtxKeyConfig {
 	pin: number;
 	/** Active level (only applicable to GPIO, ignored for USB Relay) */
 	active_level: ActiveLevel;
+	/** Baud rate for serial relay (start with 9600) */
+	baud_rate: number;
 }
 
 /** LED sensing configuration (optional) */
@@ -411,6 +415,7 @@ export interface AppConfig {
 export interface AtxKeyConfigUpdate {
 	driver?: AtxDriverType;
 	device?: string;
+	baud_rate?: number;
 	pin?: number;
 	active_level?: ActiveLevel;
 }
@@ -439,6 +444,8 @@ export interface AtxConfigUpdate {
 /** Available ATX devices for discovery */
 export interface AtxDevices {
 	/** Available GPIO chips (/dev/gpiochip*) */
+	/** Available Serial ports (/dev/ttyUSB*) */
+	serial_ports: string[];
 	gpio_chips: string[];
 	/** Available USB HID relay devices (/dev/hidraw*) */
 	usb_relays: string[];
@@ -681,4 +688,3 @@ export interface WebConfigUpdate {
 	bind_address?: string;
 	https_enabled?: boolean;
 }
-
