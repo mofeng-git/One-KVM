@@ -242,10 +242,10 @@ export const webrtcApi = {
   createSession: () =>
     request<{ session_id: string }>('/webrtc/session', { method: 'POST' }),
 
-  offer: (sdp: string, clientId?: string) =>
+  offer: (sdp: string) =>
     request<{ sdp: string; session_id: string; ice_candidates: IceCandidate[] }>('/webrtc/offer', {
       method: 'POST',
-      body: JSON.stringify({ sdp, client_id: clientId }),
+      body: JSON.stringify({ sdp }),
     }),
 
   addIceCandidate: (sessionId: string, candidate: IceCandidate) =>
@@ -325,17 +325,12 @@ export const hidApi = {
       }>
     }>('/hid/otg/self-check'),
 
-  keyboard: async (type: 'down' | 'up', key: number, modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }) => {
+  keyboard: async (type: 'down' | 'up', key: number, modifier?: number) => {
     await ensureHidConnection()
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
       key,
-      modifiers,
+      modifier: (modifier ?? 0) & 0xff,
     }
     await hidWs.sendKeyboard(event)
     return { success: true }

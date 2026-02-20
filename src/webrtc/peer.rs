@@ -317,14 +317,26 @@ impl PeerConnection {
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to create answer: {}", e)))?;
 
+        // Wait for ICE gathering complete (or timeout) after setting local description.
+        // This improves first-connection robustness by returning a fuller initial candidate set.
+        let mut gather_complete = self.pc.gathering_complete_promise().await;
+
         // Set local description
         self.pc
             .set_local_description(answer.clone())
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to set local description: {}", e)))?;
 
-        // Wait a bit for ICE candidates to gather
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        const ICE_GATHER_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_millis(2500);
+        if tokio::time::timeout(ICE_GATHER_TIMEOUT, gather_complete.recv())
+            .await
+            .is_err()
+        {
+            debug!(
+                "ICE gathering timeout after {:?} for session {}",
+                ICE_GATHER_TIMEOUT, self.session_id
+            );
+        }
 
         // Get gathered ICE candidates
         let candidates = self.ice_candidates.lock().await.clone();

@@ -9,7 +9,7 @@
 //!
 //! Keyboard event (type 0x01):
 //! - Byte 1: Event type (0x00 = down, 0x01 = up)
-//! - Byte 2: Key code (USB HID usage code or JS keyCode)
+//! - Byte 2: Key code (USB HID usage code)
 //! - Byte 3: Modifiers bitmask
 //!   - Bit 0: Left Ctrl
 //!   - Bit 1: Left Shift
@@ -119,7 +119,7 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         event_type,
         key,
         modifiers,
-        is_usb_hid: false, // WebRTC datachannel sends JS keycodes
+        is_usb_hid: true, // WebRTC/WebSocket HID channel sends USB HID usages
     }))
 }
 
@@ -245,6 +245,7 @@ mod tests {
                 assert_eq!(kb.key, 0x04);
                 assert!(kb.modifiers.left_ctrl);
                 assert!(!kb.modifiers.left_shift);
+                assert!(kb.is_usb_hid);
             }
             _ => panic!("Expected keyboard event"),
         }
@@ -280,7 +281,7 @@ mod tests {
                 right_alt: false,
                 right_meta: false,
             },
-            is_usb_hid: false,
+            is_usb_hid: true,
         };
 
         let encoded = encode_keyboard_event(&event);

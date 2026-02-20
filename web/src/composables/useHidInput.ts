@@ -5,6 +5,7 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { hidApi } from '@/api'
+import { keyboardEventToHidCode, updateModifierMaskForHidKey } from '@/lib/keyboardMappings'
 
 export interface HidInputState {
   mouseMode: Ref<'absolute' | 'relative'>
@@ -32,6 +33,7 @@ export function useHidInput(options: UseHidInputOptions) {
     numLock: false,
     scrollLock: false,
   })
+  const activeModifierMask = ref(0)
   const mousePosition = ref({ x: 0, y: 0 })
   const lastMousePosition = ref({ x: 0, y: 0 })
   const isPointerLocked = ref(false)
@@ -83,14 +85,14 @@ export function useHidInput(options: UseHidInputOptions) {
     keyboardLed.value.numLock = e.getModifierState('NumLock')
     keyboardLed.value.scrollLock = e.getModifierState('ScrollLock')
 
-    const modifiers = {
-      ctrl: e.ctrlKey,
-      shift: e.shiftKey,
-      alt: e.altKey,
-      meta: e.metaKey,
+    const hidKey = keyboardEventToHidCode(e.code, e.key)
+    if (hidKey === undefined) {
+      return
     }
 
-    hidApi.keyboard('down', e.keyCode, modifiers).catch(err => handleHidError(err, 'keyboard down'))
+    const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, true)
+    activeModifierMask.value = modifierMask
+    hidApi.keyboard('down', hidKey, modifierMask).catch(err => handleHidError(err, 'keyboard down'))
   }
 
   function handleKeyUp(e: KeyboardEvent) {
@@ -107,7 +109,14 @@ export function useHidInput(options: UseHidInputOptions) {
     const keyName = e.key === ' ' ? 'Space' : e.key
     pressedKeys.value = pressedKeys.value.filter(k => k !== keyName)
 
-    hidApi.keyboard('up', e.keyCode).catch(err => handleHidError(err, 'keyboard up'))
+    const hidKey = keyboardEventToHidCode(e.code, e.key)
+    if (hidKey === undefined) {
+      return
+    }
+
+    const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, false)
+    activeModifierMask.value = modifierMask
+    hidApi.keyboard('up', hidKey, modifierMask).catch(err => handleHidError(err, 'keyboard up'))
   }
 
   // Mouse handlers
@@ -233,6 +242,7 @@ export function useHidInput(options: UseHidInputOptions) {
 
   function handleBlur() {
     pressedKeys.value = []
+    activeModifierMask.value = 0
     if (pressedMouseButton.value !== null) {
       const button = pressedMouseButton.value
       pressedMouseButton.value = null

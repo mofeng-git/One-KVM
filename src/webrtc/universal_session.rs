@@ -833,13 +833,24 @@ impl UniversalSession {
             }
         }
 
+        let mut gather_complete = self.pc.gathering_complete_promise().await;
+
         self.pc
             .set_local_description(answer.clone())
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to set local description: {}", e)))?;
 
-        // Wait for ICE candidates
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for ICE gathering complete (or timeout) to return a fuller initial candidate set.
+        const ICE_GATHER_TIMEOUT: Duration = Duration::from_millis(2500);
+        if tokio::time::timeout(ICE_GATHER_TIMEOUT, gather_complete.recv())
+            .await
+            .is_err()
+        {
+            debug!(
+                "ICE gathering timeout after {:?} for session {}",
+                ICE_GATHER_TIMEOUT, self.session_id
+            );
+        }
 
         let candidates = self.ice_candidates.lock().await.clone();
         Ok(SdpAnswer::with_candidates(answer.sdp, candidates))

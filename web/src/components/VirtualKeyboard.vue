@@ -9,6 +9,7 @@ import {
   consumerKeys,
   latchingKeys,
   modifiers,
+  updateModifierMaskForHidKey,
   type KeyName,
   type ConsumerKeyName,
 } from '@/lib/keyboardMappings'
@@ -304,9 +305,10 @@ async function onKeyDown(key: string) {
   // Handle latching keys (Caps Lock, etc.)
   if ((latchingKeys as readonly string[]).includes(cleanKey)) {
     emit('keyDown', cleanKey)
-    await sendKeyPress(keyCode, true)
+    const currentMask = pressedModifiers.value & 0xff
+    await sendKeyPress(keyCode, true, currentMask)
     setTimeout(() => {
-      sendKeyPress(keyCode, false)
+      sendKeyPress(keyCode, false, currentMask)
       emit('keyUp', cleanKey)
     }, 100)
     return
@@ -318,12 +320,14 @@ async function onKeyDown(key: string) {
     const isCurrentlyDown = (pressedModifiers.value & mask) !== 0
 
     if (isCurrentlyDown) {
-      pressedModifiers.value &= ~mask
-      await sendKeyPress(keyCode, false)
+      const nextMask = pressedModifiers.value & ~mask
+      pressedModifiers.value = nextMask
+      await sendKeyPress(keyCode, false, nextMask)
       emit('keyUp', cleanKey)
     } else {
-      pressedModifiers.value |= mask
-      await sendKeyPress(keyCode, true)
+      const nextMask = pressedModifiers.value | mask
+      pressedModifiers.value = nextMask
+      await sendKeyPress(keyCode, true, nextMask)
       emit('keyDown', cleanKey)
     }
     updateKeyboardButtonTheme()
@@ -333,11 +337,12 @@ async function onKeyDown(key: string) {
   // Regular key: press and release
   keysDown.value.push(cleanKey)
   emit('keyDown', cleanKey)
-  await sendKeyPress(keyCode, true)
+  const currentMask = pressedModifiers.value & 0xff
+  await sendKeyPress(keyCode, true, currentMask)
   updateKeyboardButtonTheme()
   setTimeout(async () => {
     keysDown.value = keysDown.value.filter(k => k !== cleanKey)
-    await sendKeyPress(keyCode, false)
+    await sendKeyPress(keyCode, false, currentMask)
     emit('keyUp', cleanKey)
     updateKeyboardButtonTheme()
   }, 50)
@@ -347,16 +352,9 @@ async function onKeyUp() {
   // Not used for now - we handle up in onKeyDown with setTimeout
 }
 
-async function sendKeyPress(keyCode: number, press: boolean) {
+async function sendKeyPress(keyCode: number, press: boolean, modifierMask: number) {
   try {
-    const mods = {
-      ctrl: (pressedModifiers.value & 0x11) !== 0,
-      shift: (pressedModifiers.value & 0x22) !== 0,
-      alt: (pressedModifiers.value & 0x44) !== 0,
-      meta: (pressedModifiers.value & 0x88) !== 0,
-    }
-
-    await hidApi.keyboard(press ? 'down' : 'up', keyCode, mods)
+    await hidApi.keyboard(press ? 'down' : 'up', keyCode, modifierMask & 0xff)
   } catch (err) {
     console.error('[VirtualKeyboard] Key send failed:', err)
   }
@@ -368,16 +366,20 @@ interface MacroStep {
 }
 
 async function executeMacro(steps: MacroStep[]) {
+  let macroModifierMask = pressedModifiers.value & 0xff
+
   for (const step of steps) {
     for (const mod of step.modifiers) {
       if (mod in keys) {
-        await sendKeyPress(keys[mod as KeyName], true)
+        const modHid = keys[mod as KeyName]
+        macroModifierMask = updateModifierMaskForHidKey(macroModifierMask, modHid, true)
+        await sendKeyPress(modHid, true, macroModifierMask)
       }
     }
 
     for (const key of step.keys) {
       if (key in keys) {
-        await sendKeyPress(keys[key as KeyName], true)
+        await sendKeyPress(keys[key as KeyName], true, macroModifierMask)
       }
     }
 
@@ -385,13 +387,15 @@ async function executeMacro(steps: MacroStep[]) {
 
     for (const key of step.keys) {
       if (key in keys) {
-        await sendKeyPress(keys[key as KeyName], false)
+        await sendKeyPress(keys[key as KeyName], false, macroModifierMask)
       }
     }
 
     for (const mod of step.modifiers) {
       if (mod in keys) {
-        await sendKeyPress(keys[mod as KeyName], false)
+        const modHid = keys[mod as KeyName]
+        macroModifierMask = updateModifierMaskForHidKey(macroModifierMask, modHid, false)
+        await sendKeyPress(modHid, false, macroModifierMask)
       }
     }
   }

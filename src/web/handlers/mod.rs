@@ -183,31 +183,59 @@ fn get_hostname() -> String {
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
-/// Get CPU model name from /proc/cpuinfo
+/// Get CPU model name from /proc/cpuinfo, fallback to device-tree model
 fn get_cpu_model() -> String {
-    std::fs::read_to_string("/proc/cpuinfo")
+    let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").ok();
+
+    if let Some(model) = cpuinfo
+        .as_deref()
+        .and_then(parse_cpu_model_from_cpuinfo_content)
+    {
+        return model;
+    }
+
+    if let Some(model) = read_device_tree_model() {
+        return model;
+    }
+
+    if let Some(content) = cpuinfo.as_deref() {
+        let cores = content
+            .lines()
+            .filter(|line| line.starts_with("processor"))
+            .count();
+        if cores > 0 {
+            return format!("{} {}C", std::env::consts::ARCH, cores);
+        }
+    }
+
+    std::env::consts::ARCH.to_string()
+}
+
+fn parse_cpu_model_from_cpuinfo_content(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find(|line| line.starts_with("model name") || line.starts_with("Model"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn read_device_tree_model() -> Option<String> {
+    std::fs::read("/proc/device-tree/model")
         .ok()
-        .and_then(|content| {
-            // Try to get model name
-            let model = content
-                .lines()
-                .find(|line| line.starts_with("model name") || line.starts_with("Model"))
-                .and_then(|line| line.split(':').nth(1))
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty());
+        .and_then(|bytes| parse_device_tree_model_bytes(&bytes))
+}
 
-            if model.is_some() {
-                return model;
-            }
+fn parse_device_tree_model_bytes(bytes: &[u8]) -> Option<String> {
+    let model = String::from_utf8_lossy(bytes)
+        .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+        .to_string();
 
-            // Fallback: show arch and core count
-            let cores = content
-                .lines()
-                .filter(|line| line.starts_with("processor"))
-                .count();
-            Some(format!("{} {}C", std::env::consts::ARCH, cores))
-        })
-        .unwrap_or_else(|| std::env::consts::ARCH.to_string())
+    if model.is_empty() {
+        None
+    } else {
+        Some(model)
+    }
 }
 
 /// CPU usage state for calculating usage between samples
@@ -387,6 +415,38 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
     }
 
     addresses
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_cpu_model_from_cpuinfo_content, parse_device_tree_model_bytes};
+
+    #[test]
+    fn parse_cpu_model_from_model_name_field() {
+        let input = "processor\t: 0\nmodel name\t: Intel(R) Xeon(R)\n";
+        assert_eq!(
+            parse_cpu_model_from_cpuinfo_content(input),
+            Some("Intel(R) Xeon(R)".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_cpu_model_from_model_field() {
+        let input = "processor\t: 0\nModel\t\t: Raspberry Pi 4 Model B Rev 1.4\n";
+        assert_eq!(
+            parse_cpu_model_from_cpuinfo_content(input),
+            Some("Raspberry Pi 4 Model B Rev 1.4".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_device_tree_model_trimmed() {
+        let input = b"Onething OEC Box\0\n";
+        assert_eq!(
+            parse_device_tree_model_bytes(input),
+            Some("Onething OEC Box".to_string())
+        );
+    }
 }
 
 // ============================================================================
@@ -2053,10 +2113,11 @@ pub async fn webrtc_offer(
         ));
     }
 
-    // Create session if client_id not provided
+    // Backward compatibility: `client_id` is treated as an existing session_id hint.
+    // New clients should not pass it; each offer creates a fresh session.
     let webrtc = state.stream_manager.webrtc_streamer();
     let session_id = if let Some(client_id) = &req.client_id {
-        // Check if session exists
+        // Reuse only when it matches an active session ID.
         if webrtc.get_session(client_id).await.is_some() {
             client_id.clone()
         } else {
@@ -2411,15 +2472,13 @@ pub async fn hid_otg_self_check(State(state): State<Arc<AppState>>) -> Json<OtgS
     let hid_backend_is_otg = matches!(config.hid.backend, crate::config::HidBackend::Otg);
     let mut checks = Vec::new();
 
-    let build_response = |
-        checks: Vec<OtgSelfCheckItem>,
-        selected_udc: Option<String>,
-        bound_udc: Option<String>,
-        udc_state: Option<String>,
-        udc_speed: Option<String>,
-        available_udcs: Vec<String>,
-        other_gadgets: Vec<String>,
-    | {
+    let build_response = |checks: Vec<OtgSelfCheckItem>,
+                          selected_udc: Option<String>,
+                          bound_udc: Option<String>,
+                          udc_state: Option<String>,
+                          udc_speed: Option<String>,
+                          available_udcs: Vec<String>,
+                          other_gadgets: Vec<String>| {
         let error_count = checks
             .iter()
             .filter(|item| item.level == OtgSelfCheckLevel::Error)
@@ -2528,7 +2587,9 @@ pub async fn hid_otg_self_check(State(state): State<Arc<AppState>>) -> Json<OtgS
                 OtgSelfCheckLevel::Info
             },
             "Check configured UDC validity",
-            Some("You can set hid_otg_udc in settings to avoid ambiguity in multi-controller setups"),
+            Some(
+                "You can set hid_otg_udc in settings to avoid ambiguity in multi-controller setups",
+            ),
             Some("/sys/class/udc"),
         );
     }
@@ -2854,7 +2915,6 @@ pub async fn hid_otg_self_check(State(state): State<Arc<AppState>>) -> Json<OtgS
                 );
             }
         }
-
     }
 
     if !other_gadgets.is_empty() {
