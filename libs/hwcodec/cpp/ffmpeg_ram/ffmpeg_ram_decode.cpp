@@ -55,11 +55,7 @@ public:
     callback_ = callback;
 
     if (name_.find("rkmpp") != std::string::npos) {
-#ifdef AV_HWDEVICE_TYPE_RKMPP
       hw_device_type_ = AV_HWDEVICE_TYPE_RKMPP;
-#else
-      set_last_error("RKMPP support not compiled in FFmpeg");
-#endif
     }
   }
 

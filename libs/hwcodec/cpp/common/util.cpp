@@ -10,18 +10,10 @@ extern "C" {
 
 #include "common.h"
 
+#include "common.h"
+
 #define LOG_MODULE "UTIL"
 #include "log.h"
-
-#ifndef FF_PROFILE_H264_BASELINE
-#define FF_PROFILE_H264_BASELINE 66
-#endif
-#ifndef FF_PROFILE_H264_HIGH
-#define FF_PROFILE_H264_HIGH 100
-#endif
-#ifndef FF_PROFILE_HEVC_MAIN
-#define FF_PROFILE_HEVC_MAIN 1
-#endif
 
 namespace {
 

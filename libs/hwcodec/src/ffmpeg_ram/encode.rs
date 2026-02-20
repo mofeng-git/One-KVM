@@ -354,42 +354,68 @@ impl Encoder {
                         let mut last_err: Option<i32> = None;
                         let is_v4l2m2m = codec.name.contains("v4l2m2m");
 
-                        let max_attempts = if codec.name.contains("v4l2m2m") {
-                            5
-                        } else {
-                            1
-                        };
+                        let max_attempts = if is_v4l2m2m { 5 } else { 1 };
                         for attempt in 0..max_attempts {
-                            encoder.request_keyframe();
+                            if is_v4l2m2m {
+                                encoder.request_keyframe();
+                            }
                             let pts = (attempt as i64) * 33; // 33ms is an approximation for 30 FPS (1000 / 30)
                             let start = std::time::Instant::now();
                             match encoder.encode(&yuv, pts) {
                                 Ok(frames) => {
                                     let elapsed = start.elapsed().as_millis();
 
-                                    if frames.len() >= 1 && elapsed < TEST_TIMEOUT_MS as _ {
+                                    if is_v4l2m2m {
+                                        if !frames.is_empty() && elapsed < TEST_TIMEOUT_MS as _ {
+                                            debug!(
+                                                "Encoder {} test passed on attempt {} (frames: {})",
+                                                codec.name,
+                                                attempt + 1,
+                                                frames.len()
+                                            );
+                                            res.push(codec.clone());
+                                            passed = true;
+                                            break;
+                                        } else if frames.is_empty() {
+                                            debug!(
+                                                "Encoder {} test produced no output on attempt {}",
+                                                codec.name,
+                                                attempt + 1
+                                            );
+                                        } else {
+                                            debug!(
+                                                "Encoder {} test failed on attempt {} - frames: {}, timeout: {}ms",
+                                                codec.name,
+                                                attempt + 1,
+                                                frames.len(),
+                                                elapsed
+                                            );
+                                        }
+                                    } else if frames.len() == 1 {
+                                        if frames[0].key == 1 && elapsed < TEST_TIMEOUT_MS as _ {
+                                            debug!(
+                                                "Encoder {} test passed on attempt {}",
+                                                codec.name,
+                                                attempt + 1
+                                            );
+                                            res.push(codec.clone());
+                                            passed = true;
+                                            break;
+                                        } else {
+                                            debug!(
+                                                "Encoder {} test failed on attempt {} - key: {}, timeout: {}ms",
+                                                codec.name,
+                                                attempt + 1,
+                                                frames[0].key,
+                                                elapsed
+                                            );
+                                        }
+                                    } else {
                                         debug!(
-                                            "Encoder {} test passed on attempt {} (frames: {})",
+                                            "Encoder {} test failed on attempt {} - wrong frame count: {}",
                                             codec.name,
                                             attempt + 1,
                                             frames.len()
-                                        );
-                                        res.push(codec.clone());
-                                        passed = true;
-                                        break;
-                                    } else if frames.is_empty() {
-                                        debug!(
-                                            "Encoder {} test produced no output on attempt {}",
-                                            codec.name,
-                                            attempt + 1
-                                        );
-                                    } else {
-                                        debug!(
-                                            "Encoder {} test failed on attempt {} - frames: {}, timeout: {}ms",
-                                            codec.name,
-                                            attempt + 1,
-                                            frames.len(),
-                                            elapsed
                                         );
                                     }
                                 }
