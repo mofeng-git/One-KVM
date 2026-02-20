@@ -93,21 +93,21 @@ impl VideoConfigUpdate {
 
 // ===== Stream Config =====
 
-/// Stream 配置响应（包含 has_turn_password 字段）
+/// Stream configuration response (includes has_turn_password)
 #[typeshare]
 #[derive(Debug, serde::Serialize)]
 pub struct StreamConfigResponse {
     pub mode: StreamMode,
     pub encoder: EncoderType,
     pub bitrate_preset: BitratePreset,
-    /// 是否有公共 ICE 服务器可用（编译时确定）
+    /// Whether public ICE servers are available (compile-time decision)
     pub has_public_ice_servers: bool,
-    /// 当前是否正在使用公共 ICE 服务器（STUN/TURN 都为空时）
+    /// Whether public ICE servers are currently in use (when STUN/TURN are unset)
     pub using_public_ice_servers: bool,
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
-    /// 指示是否已设置 TURN 密码（实际密码不返回）
+    /// Indicates whether TURN password has been configured (password is not returned)
     pub has_turn_password: bool,
 }
 
@@ -397,6 +397,7 @@ impl MsdConfigUpdate {
 pub struct AtxKeyConfigUpdate {
     pub driver: Option<crate::atx::AtxDriverType>,
     pub device: Option<String>,
+    pub baud_rate: Option<u32>,
     pub pin: Option<u32>,
     pub active_level: Option<crate::atx::ActiveLevel>,
 }
@@ -439,6 +440,37 @@ impl AtxConfigUpdate {
         Ok(())
     }
 
+    pub fn validate_with_current(&self, current: &AtxConfig) -> crate::error::Result<()> {
+        self.validate()?;
+
+        // Validate with full context after applying the patch payload.
+        let mut merged = current.clone();
+        self.apply_to(&mut merged);
+
+        Self::validate_effective_key_config(&merged.power, "power")?;
+        Self::validate_effective_key_config(&merged.reset, "reset")?;
+        Self::validate_shared_serial_baud_rate(&merged)?;
+        Ok(())
+    }
+
+    fn validate_shared_serial_baud_rate(config: &AtxConfig) -> crate::error::Result<()> {
+        let power = &config.power;
+        let reset = &config.reset;
+        let same_serial_device = power.driver == crate::atx::AtxDriverType::Serial
+            && reset.driver == crate::atx::AtxDriverType::Serial
+            && !power.device.trim().is_empty()
+            && power.device.trim() == reset.device.trim();
+
+        if same_serial_device && power.baud_rate != reset.baud_rate {
+            return Err(AppError::BadRequest(
+                "ATX power/reset sharing the same serial relay device must use one baud_rate"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     fn validate_key_config(key: &AtxKeyConfigUpdate, name: &str) -> crate::error::Result<()> {
         if let Some(ref device) = key.device {
             if !device.is_empty() && !std::path::Path::new(device).exists() {
@@ -447,6 +479,88 @@ impl AtxConfigUpdate {
                     name, device
                 )));
             }
+        }
+        if let Some(baud_rate) = key.baud_rate {
+            if baud_rate == 0 {
+                return Err(AppError::BadRequest(format!(
+                    "{} baud_rate must be greater than 0",
+                    name
+                )));
+            }
+        }
+
+        if let Some(driver) = key.driver {
+            match driver {
+                crate::atx::AtxDriverType::Serial => {
+                    if let Some(pin) = key.pin {
+                        if pin == 0 {
+                            return Err(AppError::BadRequest(format!(
+                                "{} serial channel must be 1-based (>= 1)",
+                                name
+                            )));
+                        }
+                        if pin > u8::MAX as u32 {
+                            return Err(AppError::BadRequest(format!(
+                                "{} serial channel must be <= {}",
+                                name,
+                                u8::MAX
+                            )));
+                        }
+                    }
+                }
+                crate::atx::AtxDriverType::UsbRelay => {
+                    if let Some(pin) = key.pin {
+                        if pin > u8::MAX as u32 {
+                            return Err(AppError::BadRequest(format!(
+                                "{} USB relay channel must be <= {}",
+                                name,
+                                u8::MAX
+                            )));
+                        }
+                    }
+                }
+                crate::atx::AtxDriverType::Gpio | crate::atx::AtxDriverType::None => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_effective_key_config(
+        key: &crate::atx::AtxKeyConfig,
+        name: &str,
+    ) -> crate::error::Result<()> {
+        match key.driver {
+            crate::atx::AtxDriverType::Serial => {
+                if key.pin == 0 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} serial channel must be 1-based (>= 1)",
+                        name
+                    )));
+                }
+                if key.pin > u8::MAX as u32 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} serial channel must be <= {}",
+                        name,
+                        u8::MAX
+                    )));
+                }
+                if key.baud_rate == 0 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} baud_rate must be greater than 0",
+                        name
+                    )));
+                }
+            }
+            crate::atx::AtxDriverType::UsbRelay => {
+                if key.pin > u8::MAX as u32 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} USB relay channel must be <= {}",
+                        name,
+                        u8::MAX
+                    )));
+                }
+            }
+            crate::atx::AtxDriverType::Gpio | crate::atx::AtxDriverType::None => {}
         }
         Ok(())
     }
@@ -475,6 +589,9 @@ impl AtxConfigUpdate {
         }
         if let Some(ref device) = update.device {
             config.device = device.clone();
+        }
+        if let Some(baud_rate) = update.baud_rate {
+            config.baud_rate = baud_rate;
         }
         if let Some(pin) = update.pin {
             config.pin = pin;
@@ -782,5 +899,85 @@ impl WebConfigUpdate {
         if let Some(enabled) = self.https_enabled {
             config.https_enabled = enabled;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_atx_apply_key_update_applies_baud_rate() {
+        let mut config = AtxConfig::default();
+        let update = AtxConfigUpdate {
+            enabled: None,
+            power: Some(AtxKeyConfigUpdate {
+                driver: Some(crate::atx::AtxDriverType::Serial),
+                device: Some("/dev/null".to_string()),
+                baud_rate: Some(19200),
+                pin: Some(1),
+                active_level: None,
+            }),
+            reset: None,
+            led: None,
+            wol_interface: None,
+        };
+
+        update.apply_to(&mut config);
+        assert_eq!(config.power.baud_rate, 19200);
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_serial_pin_zero() {
+        let mut current = AtxConfig::default();
+        current.power.driver = crate::atx::AtxDriverType::Serial;
+        current.power.device = "/dev/null".to_string();
+        current.power.pin = 1;
+        current.power.baud_rate = 9600;
+
+        let update = AtxConfigUpdate {
+            enabled: None,
+            power: Some(AtxKeyConfigUpdate {
+                driver: None,
+                device: None,
+                baud_rate: None,
+                pin: Some(0),
+                active_level: None,
+            }),
+            reset: None,
+            led: None,
+            wol_interface: None,
+        };
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_shared_serial_baud_mismatch() {
+        let mut current = AtxConfig::default();
+        current.power.driver = crate::atx::AtxDriverType::Serial;
+        current.power.device = "/dev/ttyUSB0".to_string();
+        current.power.pin = 1;
+        current.power.baud_rate = 9600;
+        current.reset.driver = crate::atx::AtxDriverType::Serial;
+        current.reset.device = "/dev/ttyUSB0".to_string();
+        current.reset.pin = 2;
+        current.reset.baud_rate = 9600;
+
+        let update = AtxConfigUpdate {
+            enabled: None,
+            power: None,
+            reset: Some(AtxKeyConfigUpdate {
+                driver: None,
+                device: None,
+                baud_rate: Some(115200),
+                pin: None,
+                active_level: None,
+            }),
+            led: None,
+            wol_interface: None,
+        };
+
+        assert!(update.validate_with_current(&current).is_err());
     }
 }

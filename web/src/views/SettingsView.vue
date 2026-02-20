@@ -321,7 +321,7 @@ const config = ref({
   turn_password: '',
 })
 
-// 跟踪服务器是否已配置 TURN 密码
+// Tracks whether TURN password is configured on the server
 const hasTurnPassword = ref(false)
 const configLoaded = ref(false)
 const devicesLoaded = ref(false)
@@ -623,6 +623,22 @@ const atxDevices = ref<AtxDevices>({
   serial_ports: [],
 })
 
+const ch9329ReservedSerialDevice = computed(() => {
+  if (config.value.hid_backend !== 'ch9329') return ''
+  return config.value.hid_serial_device.trim()
+})
+
+const isSharedAtxSerialRelay = computed(() => {
+  const power = atxConfig.value.power
+  const reset = atxConfig.value.reset
+  return (
+    power.driver === 'serial'
+    && reset.driver === 'serial'
+    && !!power.device.trim()
+    && power.device === reset.device
+  )
+})
+
 // Encoder backend
 const availableBackends = ref<EncoderBackendInfo[]>([])
 
@@ -816,16 +832,16 @@ async function changePassword() {
   }
 }
 
-// Save config - 使用域分离 API
+// Save config using domain-separated APIs
 async function saveConfig() {
   loading.value = true
   saved.value = false
 
   try {
-    // 根据当前激活的 section 只保存相关配置
+    // Save only config related to the active section
     const savePromises: Promise<unknown>[] = []
 
-    // Video 配置（包括编码器和 WebRTC/STUN/TURN 设置）
+    // Video config (including encoder and WebRTC/STUN/TURN settings)
     if (activeSection.value === 'video') {
       savePromises.push(
         configStore.updateVideo({
@@ -836,7 +852,7 @@ async function saveConfig() {
           fps: config.value.video_fps,
         })
       )
-      // 同时保存 Stream/Encoder 和 STUN/TURN 配置
+      // Save Stream/Encoder and STUN/TURN config together
       savePromises.push(
         configStore.updateStream({
           encoder: config.value.encoder_backend as any,
@@ -848,7 +864,7 @@ async function saveConfig() {
       )
     }
 
-    // HID 配置
+    // HID config
     if (activeSection.value === 'hid') {
       if (!isHidFunctionSelectionValid.value) {
         return
@@ -875,7 +891,7 @@ async function saveConfig() {
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
       }
-      // 如果是 OTG 后端，添加描述符配置
+      // Add descriptor config for OTG backend
       if (config.value.hid_backend === 'otg') {
         hidUpdate.otg_descriptor = {
           vendor_id: parseInt(otgVendorIdHex.value, 16) || 0x1d6b,
@@ -898,7 +914,7 @@ async function saveConfig() {
       )
     }
 
-    // MSD 配置
+    // MSD config
     if (activeSection.value === 'msd') {
       savePromises.push(
         configStore.updateMsd({
@@ -917,10 +933,10 @@ async function saveConfig() {
   }
 }
 
-// Load config - 使用域分离 API
+// Load config using domain-separated APIs
 async function loadConfig() {
   try {
-    // 并行加载所有域配置
+    // Load all domain configs in parallel
     const [video, stream, hid, msd] = await Promise.all([
       configStore.refreshVideo(),
       configStore.refreshStream(),
@@ -952,13 +968,13 @@ async function loadConfig() {
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
-      turn_password: '', // 密码不从服务器返回，仅用于设置
+      turn_password: '', // Password is never returned from server; set-only field
     }
 
-    // 设置是否已配置 TURN 密码
+    // Track whether TURN password is configured
     hasTurnPassword.value = stream.has_turn_password || false
 
-    // 加载 OTG 描述符配置
+    // Load OTG descriptor config
     if (hid.otg_descriptor) {
       otgVendorIdHex.value = hid.otg_descriptor.vendor_id?.toString(16).padStart(4, '0') || '1d6b'
       otgProductIdHex.value = hid.otg_descriptor.product_id?.toString(16).padStart(4, '0') || '0104'
@@ -1154,6 +1170,8 @@ async function loadAtxConfig() {
       led: { ...config.led },
       wol_interface: config.wol_interface || '',
     }
+    clearAtxSerialDeviceConflicts()
+    syncSharedAtxSerialBaudRate()
   } catch (e) {
     console.error('Failed to load ATX config:', e)
   }
@@ -1171,6 +1189,7 @@ async function saveAtxConfig() {
   loading.value = true
   saved.value = false
   try {
+    syncSharedAtxSerialBaudRate()
     await configStore.updateAtx({
       enabled: atxConfig.value.enabled,
       power: {
@@ -1185,7 +1204,9 @@ async function saveAtxConfig() {
         device: atxConfig.value.reset.device || undefined,
         pin: atxConfig.value.reset.pin,
         active_level: atxConfig.value.reset.active_level,
-        baud_rate: atxConfig.value.reset.baud_rate,
+        baud_rate: isSharedAtxSerialRelay.value
+          ? atxConfig.value.power.baud_rate
+          : atxConfig.value.reset.baud_rate,
       },
       led: {
         enabled: atxConfig.value.led.enabled,
@@ -1214,6 +1235,55 @@ function getAtxDevicesForDriver(driver: string): string[] {
   }
   return []
 }
+
+function isAtxSerialDeviceReserved(device: string): boolean {
+  const reserved = ch9329ReservedSerialDevice.value
+  return !!reserved && device === reserved
+}
+
+function formatAtxDeviceLabel(driver: string, device: string): string {
+  if (driver === 'serial' && isAtxSerialDeviceReserved(device)) {
+    return `${device} (CH9329 in use)`
+  }
+  return device
+}
+
+function clearAtxSerialDeviceConflicts() {
+  const reserved = ch9329ReservedSerialDevice.value
+  if (!reserved) return
+
+  if (atxConfig.value.power.driver === 'serial' && atxConfig.value.power.device === reserved) {
+    atxConfig.value.power.device = ''
+  }
+  if (atxConfig.value.reset.driver === 'serial' && atxConfig.value.reset.device === reserved) {
+    atxConfig.value.reset.device = ''
+  }
+}
+
+function syncSharedAtxSerialBaudRate() {
+  if (!isSharedAtxSerialRelay.value) return
+  atxConfig.value.reset.baud_rate = atxConfig.value.power.baud_rate
+}
+
+watch(
+  () => [config.value.hid_backend, config.value.hid_serial_device],
+  () => {
+    clearAtxSerialDeviceConflicts()
+  },
+)
+
+watch(
+  () => [
+    atxConfig.value.power.driver,
+    atxConfig.value.power.device,
+    atxConfig.value.power.baud_rate,
+    atxConfig.value.reset.driver,
+    atxConfig.value.reset.device,
+  ],
+  () => {
+    syncSharedAtxSerialBaudRate()
+  },
+)
 
 // RustDesk management functions
 async function loadRustdeskConfig() {
@@ -2482,21 +2552,34 @@ watch(() => config.value.hid_backend, async () => {
                       <option value="none">{{ t('settings.atxDriverNone') }}</option>
                       <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
                       <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
-                      <option value="serial">Serial (LCUS)</option>
+                      <option value="serial">{{ t('settings.atxDriverSerial') }}</option>
                     </select>
                   </div>
                   <div class="space-y-2">
                     <Label for="power-device">{{ t('settings.atxDevice') }}</Label>
                     <select id="power-device" v-model="atxConfig.power.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="atxConfig.power.driver === 'none'">
                       <option value="">{{ t('settings.selectDevice') }}</option>
-                      <option v-for="dev in getAtxDevicesForDriver(atxConfig.power.driver)" :key="dev" :value="dev">{{ dev }}</option>
+                      <option
+                        v-for="dev in getAtxDevicesForDriver(atxConfig.power.driver)"
+                        :key="dev"
+                        :value="dev"
+                        :disabled="atxConfig.power.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
+                      >
+                        {{ formatAtxDeviceLabel(atxConfig.power.driver, dev) }}
+                      </option>
                     </select>
                   </div>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="power-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.power.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
-                    <Input id="power-pin" type="number" v-model.number="atxConfig.power.pin" min="0" :disabled="atxConfig.power.driver === 'none'" />
+                    <Input
+                      id="power-pin"
+                      type="number"
+                      v-model.number="atxConfig.power.pin"
+                      :min="atxConfig.power.driver === 'serial' ? 1 : 0"
+                      :disabled="atxConfig.power.driver === 'none'"
+                    />
                   </div>
                   <div v-if="atxConfig.power.driver === 'gpio'" class="space-y-2">
                     <Label for="power-level">{{ t('settings.atxActiveLevel') }}</Label>
@@ -2533,21 +2616,34 @@ watch(() => config.value.hid_backend, async () => {
                       <option value="none">{{ t('settings.atxDriverNone') }}</option>
                       <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
                       <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
-                      <option value="serial">Serial (LCUS)</option>
+                      <option value="serial">{{ t('settings.atxDriverSerial') }}</option>
                     </select>
                   </div>
                   <div class="space-y-2">
                     <Label for="reset-device">{{ t('settings.atxDevice') }}</Label>
                     <select id="reset-device" v-model="atxConfig.reset.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="atxConfig.reset.driver === 'none'">
                       <option value="">{{ t('settings.selectDevice') }}</option>
-                      <option v-for="dev in getAtxDevicesForDriver(atxConfig.reset.driver)" :key="dev" :value="dev">{{ dev }}</option>
+                      <option
+                        v-for="dev in getAtxDevicesForDriver(atxConfig.reset.driver)"
+                        :key="dev"
+                        :value="dev"
+                        :disabled="atxConfig.reset.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
+                      >
+                        {{ formatAtxDeviceLabel(atxConfig.reset.driver, dev) }}
+                      </option>
                     </select>
                   </div>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="reset-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.reset.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
-                    <Input id="reset-pin" type="number" v-model.number="atxConfig.reset.pin" min="0" :disabled="atxConfig.reset.driver === 'none'" />
+                    <Input
+                      id="reset-pin"
+                      type="number"
+                      v-model.number="atxConfig.reset.pin"
+                      :min="atxConfig.reset.driver === 'serial' ? 1 : 0"
+                      :disabled="atxConfig.reset.driver === 'none'"
+                    />
                   </div>
                   <div v-if="atxConfig.reset.driver === 'gpio'" class="space-y-2">
                     <Label for="reset-level">{{ t('settings.atxActiveLevel') }}</Label>
@@ -2558,13 +2654,21 @@ watch(() => config.value.hid_backend, async () => {
                   </div>
                   <div v-if="atxConfig.reset.driver === 'serial'" class="space-y-2">
                     <Label for="reset-baudrate">{{ t('settings.baudRate') }}</Label>
-                    <select id="reset-baudrate" v-model.number="atxConfig.reset.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                    <select
+                      id="reset-baudrate"
+                      v-model.number="atxConfig.reset.baud_rate"
+                      class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                      :disabled="isSharedAtxSerialRelay"
+                    >
                       <option :value="9600">9600</option>
                       <option :value="19200">19200</option>
                       <option :value="38400">38400</option>
                       <option :value="57600">57600</option>
                       <option :value="115200">115200</option>
                     </select>
+                    <p v-if="isSharedAtxSerialRelay" class="text-xs text-muted-foreground">
+                      {{ t('settings.atxSharedSerialBaudHint') }}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -3174,7 +3278,7 @@ watch(() => config.value.hid_backend, async () => {
                     </div>
                   </div>
 
-                  <!-- Device Password (直接显示) -->
+                  <!-- Device Password (shown directly) -->
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
                     <div class="sm:col-span-3 flex items-center gap-2">

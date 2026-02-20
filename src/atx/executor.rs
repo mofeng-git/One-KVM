@@ -73,6 +73,8 @@ impl AtxKeyExecutor {
             return Ok(());
         }
 
+        self.validate_runtime_config()?;
+
         match self.config.driver {
             AtxDriverType::Gpio => self.init_gpio().await?,
             AtxDriverType::UsbRelay => self.init_usb_relay().await?,
@@ -81,6 +83,39 @@ impl AtxKeyExecutor {
         }
 
         self.initialized.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn validate_runtime_config(&self) -> Result<()> {
+        match self.config.driver {
+            AtxDriverType::Serial => {
+                if self.config.pin == 0 {
+                    return Err(AppError::Config(
+                        "Serial ATX channel must be 1-based (>= 1)".to_string(),
+                    ));
+                }
+                if self.config.pin > u8::MAX as u32 {
+                    return Err(AppError::Config(format!(
+                        "Serial ATX channel must be <= {}",
+                        u8::MAX
+                    )));
+                }
+                if self.config.baud_rate == 0 {
+                    return Err(AppError::Config(
+                        "Serial ATX baud_rate must be greater than 0".to_string(),
+                    ));
+                }
+            }
+            AtxDriverType::UsbRelay => {
+                if self.config.pin > u8::MAX as u32 {
+                    return Err(AppError::Config(format!(
+                        "USB relay channel must be <= {}",
+                        u8::MAX
+                    )));
+                }
+            }
+            AtxDriverType::Gpio | AtxDriverType::None => {}
+        }
         Ok(())
     }
 
@@ -146,11 +181,7 @@ impl AtxKeyExecutor {
             self.config.device, self.config.pin
         );
 
-        let baud_rate = if self.config.baud_rate > 0 {
-            self.config.baud_rate
-        } else {
-            9600
-        };
+        let baud_rate = self.config.baud_rate;
 
         let port = serialport::new(&self.config.device, baud_rate)
             .timeout(Duration::from_millis(100))
@@ -235,7 +266,13 @@ impl AtxKeyExecutor {
 
     /// Send USB relay command using cached handle
     fn send_usb_relay_command(&self, on: bool) -> Result<()> {
-        let channel = self.config.pin as u8;
+        let channel = u8::try_from(self.config.pin).map_err(|_| {
+            AppError::Config(format!(
+                "USB relay channel {} exceeds max {}",
+                self.config.pin,
+                u8::MAX
+            ))
+        })?;
 
         // Standard HID relay command format
         let cmd = if on {
@@ -273,9 +310,18 @@ impl AtxKeyExecutor {
 
     /// Send Serial relay command using cached handle
     fn send_serial_relay_command(&self, on: bool) -> Result<()> {
-        // user config pin should be 1 for most LCUS modules (A0 01 01 A2)
-        // if user set 0, it will send A0 00 01 A1 which might not work
-        let channel = self.config.pin as u8;
+        let channel = u8::try_from(self.config.pin).map_err(|_| {
+            AppError::Config(format!(
+                "Serial relay channel {} exceeds max {}",
+                self.config.pin,
+                u8::MAX
+            ))
+        })?;
+        if channel == 0 {
+            return Err(AppError::Config(
+                "Serial relay channel must be 1-based (>= 1)".to_string(),
+            ));
+        }
 
         // LCUS-Type Protocol
         // Frame: [StopByte(A0), Channel, State, Checksum]
@@ -407,5 +453,47 @@ mod tests {
         assert_eq!(timing::SHORT_PRESS.as_millis(), 500);
         assert_eq!(timing::LONG_PRESS.as_millis(), 5000);
         assert_eq!(timing::RESET_PRESS.as_millis(), 500);
+    }
+
+    #[tokio::test]
+    async fn test_executor_init_rejects_serial_channel_zero() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 0,
+            active_level: ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let mut executor = AtxKeyExecutor::new(config);
+        let err = executor.init().await.unwrap_err();
+        assert!(matches!(err, AppError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn test_executor_init_rejects_serial_channel_overflow() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 256,
+            active_level: ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let mut executor = AtxKeyExecutor::new(config);
+        let err = executor.init().await.unwrap_err();
+        assert!(matches!(err, AppError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn test_executor_init_rejects_zero_serial_baud_rate() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 1,
+            active_level: ActiveLevel::High,
+            baud_rate: 0,
+        };
+        let mut executor = AtxKeyExecutor::new(config);
+        let err = executor.init().await.unwrap_err();
+        assert!(matches!(err, AppError::Config(_)));
     }
 }
