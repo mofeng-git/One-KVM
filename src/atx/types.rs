@@ -28,6 +28,8 @@ pub enum AtxDriverType {
     Gpio,
     /// USB HID relay module
     UsbRelay,
+    /// Serial/COM port relay (taobao LCUS type)
+    Serial,
     /// Disabled / Not configured
     #[default]
     None,
@@ -48,7 +50,7 @@ pub enum ActiveLevel {
 /// Configuration for a single ATX key (power or reset)
 /// This is the "four-tuple" configuration: (driver, device, pin/channel, level)
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AtxKeyConfig {
     /// Driver type (GPIO or USB Relay)
@@ -60,9 +62,24 @@ pub struct AtxKeyConfig {
     /// Pin or channel number:
     /// - For GPIO: GPIO pin number
     /// - For USB Relay: relay channel (0-based)
+    /// - For Serial Relay (LCUS): relay channel (1-based)
     pub pin: u32,
     /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
+    /// Baud rate for serial relay
+    pub baud_rate: u32,
+}
+
+impl Default for AtxKeyConfig {
+    fn default() -> Self {
+        Self {
+            driver: AtxDriverType::None,
+            device: String::new(),
+            pin: 0,
+            active_level: ActiveLevel::High,
+            baud_rate: 9600,
+        }
+    }
 }
 
 impl AtxKeyConfig {
@@ -130,12 +147,24 @@ pub enum AtxAction {
 
 /// Available ATX devices for discovery
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtxDevices {
     /// Available GPIO chips (/dev/gpiochip*)
     pub gpio_chips: Vec<String>,
     /// Available USB HID relay devices (/dev/hidraw*)
     pub usb_relays: Vec<String>,
+    /// Available Serial ports (/dev/ttyUSB* or /dev/ttyACM*)
+    pub serial_ports: Vec<String>,
+}
+
+impl Default for AtxDevices {
+    fn default() -> Self {
+        Self {
+            gpio_chips: Vec::new(),
+            usb_relays: Vec::new(),
+            serial_ports: Vec::new(),
+        }
+    }
 }
 
 #[cfg(test)]
