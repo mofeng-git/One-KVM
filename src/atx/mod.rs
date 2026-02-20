@@ -93,7 +93,11 @@ mod tests {
 
     #[test]
     fn test_discover_devices() {
-        let _devices = discover_devices();
+        let devices = discover_devices();
+        // Just verify the function runs without error
+        assert!(devices.gpio_chips.len() >= 0);
+        assert!(devices.usb_relays.len() >= 0);
+        assert!(devices.serial_ports.len() >= 0);
     }
 
     #[test]

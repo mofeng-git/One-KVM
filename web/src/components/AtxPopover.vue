@@ -90,7 +90,6 @@ const confirmDescription = computed(() => {
     default: return ''
   }
 })
-
 // MAC address validation
 const isValidMac = computed(() => {
   const mac = wolMacAddress.value.trim()

@@ -169,12 +169,12 @@ int linux_support_v4l2m2m() {
   // /dev/video2 - Alternate path
   // /dev/video32 - Some Allwinner/Rockchip legacy
   const char *m2m_devices[] = {
-    "/dev/video10",
-    "/dev/video11",
-    "/dev/video0",
-    "/dev/video1",
-    "/dev/video2",
-    "/dev/video32",
+      "/dev/video10",
+      "/dev/video11",
+      "/dev/video0",
+      "/dev/video1",
+      "/dev/video2",
+      "/dev/video32",
   };
 
   for (size_t i = 0; i < sizeof(m2m_devices) / sizeof(m2m_devices[0]); i++) {

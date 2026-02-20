@@ -3552,6 +3552,7 @@ pub async fn atx_power(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AtxPowerControlRequest>,
 ) -> Result<Json<LoginResponse>> {
+    tracing::info!("Received ATX power request: action={}", req.action);
     let atx_guard = state.atx.read().await;
     let atx = atx_guard
         .as_ref()

@@ -1407,15 +1407,19 @@ function openTerminalInNewTab() {
 
 // ATX actions
 async function handlePowerShort() {
+  console.log('[ConsoleView] Handling power short press')
   try {
-    await atxApi.power('short')
+    const res = await atxApi.power('short')
+    console.log('[ConsoleView] Power short API result:', res)
     await systemStore.fetchAtxState()
-  } catch {
+  } catch (e) {
+    console.error('[ConsoleView] Power short API failed:', e)
     // ATX action failed
   }
 }
 
 async function handlePowerLong() {
+  console.log('[ConsoleView] Handling power long press')
   try {
     await atxApi.power('long')
     await systemStore.fetchAtxState()

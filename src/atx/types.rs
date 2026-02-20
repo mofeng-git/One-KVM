@@ -66,7 +66,7 @@ pub struct AtxKeyConfig {
     pub pin: u32,
     /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
-    /// Baud rate for serial relay
+    /// Baud rate for serial relay (start with 9600)
     pub baud_rate: u32,
 }
 
@@ -153,7 +153,7 @@ pub struct AtxDevices {
     pub gpio_chips: Vec<String>,
     /// Available USB HID relay devices (/dev/hidraw*)
     pub usb_relays: Vec<String>,
-    /// Available Serial ports (/dev/ttyUSB* or /dev/ttyACM*)
+    /// Available Serial ports (/dev/ttyUSB*)
     pub serial_ports: Vec<String>,
 }
 

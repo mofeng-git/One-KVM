@@ -258,10 +258,7 @@ impl AtxKeyExecutor {
 
     /// Pulse Serial relay
     async fn pulse_serial(&self, duration: Duration) -> Result<()> {
-        info!(
-            "Pulse serial relay on {} pin {}",
-            self.config.device, self.config.pin
-        );
+        info!("Pulse serial relay on {} pin {}", self.config.device, self.config.pin);
         // Turn relay on
         self.send_serial_relay_command(true)?;
 
@@ -285,7 +282,7 @@ impl AtxKeyExecutor {
         // Checksum = A0 + channel + state
         let state = if on { 1 } else { 0 };
         let checksum = 0xA0u8.wrapping_add(channel).wrapping_add(state);
-
+        
         // Example for Channel 1:
         // ON:  A0 01 01 A2
         // OFF: A0 01 00 A1
