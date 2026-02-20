@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   authApi,
   configApi,
+  hidApi,
   streamApi,
   atxConfigApi,
   extensionsApi,
@@ -63,6 +64,7 @@ import {
   Check,
   HardDrive,
   Power,
+  Server,
   Menu,
   Lock,
   User,
@@ -79,7 +81,7 @@ import {
   Radio,
 } from 'lucide-vue-next'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
@@ -107,15 +109,16 @@ const navGroups = computed(() => [
       { id: 'hid', label: t('settings.hid'), icon: Keyboard, status: config.value.hid_backend.toUpperCase() },
       ...(config.value.msd_enabled ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
       { id: 'atx', label: t('settings.atx'), icon: Power },
+      { id: 'environment', label: t('settings.environment'), icon: Server },
     ]
   },
   {
     title: t('settings.extensions'),
     items: [
+      { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
       { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
       { id: 'ext-rtsp', label: t('extensions.rtsp.title'), icon: Radio },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
-      { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
     ]
   },
   {
@@ -230,6 +233,9 @@ const updateChannel = ref<UpdateChannel>('stable')
 const updateOverview = ref<UpdateOverviewResponse | null>(null)
 const updateStatus = ref<UpdateStatusResponse | null>(null)
 const updateLoading = ref(false)
+const updateSawRestarting = ref(false)
+const updateSawRequestFailure = ref(false)
+const updateAutoReloadTriggered = ref(false)
 const updateRunning = computed(() => {
   const phase = updateStatus.value?.phase
   return phase === 'checking'
@@ -331,6 +337,207 @@ const isLowEndpointUdc = computed(() => {
 const showLowEndpointHint = computed(() =>
   config.value.hid_backend === 'otg' && isLowEndpointUdc.value
 )
+
+type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
+type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
+
+interface OtgSelfCheckItem {
+  id: string
+  ok: boolean
+  level: OtgSelfCheckLevel
+  message: string
+  hint?: string
+  path?: string
+}
+
+interface OtgSelfCheckResult {
+  overall_ok: boolean
+  error_count: number
+  warning_count: number
+  hid_backend: string
+  selected_udc: string | null
+  bound_udc: string | null
+  udc_state: string | null
+  udc_speed: string | null
+  available_udcs: string[]
+  other_gadgets: string[]
+  checks: OtgSelfCheckItem[]
+}
+
+interface OtgCheckGroupDef {
+  id: string
+  titleKey: string
+  checkIds: string[]
+}
+
+interface OtgCheckGroup {
+  id: string
+  titleKey: string
+  status: OtgCheckGroupStatus
+  okCount: number
+  warningCount: number
+  errorCount: number
+  items: OtgSelfCheckItem[]
+}
+
+const otgSelfCheckLoading = ref(false)
+const otgSelfCheckResult = ref<OtgSelfCheckResult | null>(null)
+const otgSelfCheckError = ref('')
+const otgRunButtonPressed = ref(false)
+
+const otgCheckGroupDefs: OtgCheckGroupDef[] = [
+  {
+    id: 'udc',
+    titleKey: 'settings.otgSelfCheck.groups.udc',
+    checkIds: ['udc_dir_exists', 'udc_has_entries', 'configured_udc_valid'],
+  },
+  {
+    id: 'gadget_config',
+    titleKey: 'settings.otgSelfCheck.groups.gadgetConfig',
+    checkIds: ['configfs_mounted', 'usb_gadget_dir_exists', 'libcomposite_loaded'],
+  },
+  {
+    id: 'one_kvm',
+    titleKey: 'settings.otgSelfCheck.groups.oneKvm',
+    checkIds: ['one_kvm_gadget_exists', 'one_kvm_bound_udc', 'other_gadgets', 'udc_conflict'],
+  },
+  {
+    id: 'functions',
+    titleKey: 'settings.otgSelfCheck.groups.functions',
+    checkIds: ['hid_functions_present', 'config_c1_exists', 'function_links_ok', 'hid_device_nodes'],
+  },
+  {
+    id: 'link',
+    titleKey: 'settings.otgSelfCheck.groups.link',
+    checkIds: ['udc_state', 'udc_speed'],
+  },
+]
+
+const otgCheckGroups = computed<OtgCheckGroup[]>(() => {
+  const items = otgSelfCheckResult.value?.checks || []
+  return otgCheckGroupDefs.map((group) => {
+    const groupItems = items.filter(item => group.checkIds.includes(item.id))
+    const errorCount = groupItems.filter(item => item.level === 'error').length
+    const warningCount = groupItems.filter(item => item.level === 'warn').length
+    const okCount = Math.max(0, groupItems.length - errorCount - warningCount)
+    let status: OtgCheckGroupStatus = 'skipped'
+    if (groupItems.length > 0) {
+      if (errorCount > 0) status = 'error'
+      else if (warningCount > 0) status = 'warn'
+      else status = 'ok'
+    }
+
+    return {
+      id: group.id,
+      titleKey: group.titleKey,
+      status,
+      okCount,
+      warningCount,
+      errorCount,
+      items: groupItems,
+    }
+  })
+})
+
+function otgCheckLevelClass(level: OtgSelfCheckLevel): string {
+  if (level === 'error') return 'bg-red-500'
+  if (level === 'warn') return 'bg-amber-500'
+  return 'bg-blue-500'
+}
+
+function otgCheckStatusText(level: OtgSelfCheckLevel): string {
+  if (level === 'error') return t('common.error')
+  if (level === 'warn') return t('common.warning')
+  return t('common.info')
+}
+
+function otgGroupStatusClass(status: OtgCheckGroupStatus): string {
+  if (status === 'error') return 'bg-red-500'
+  if (status === 'warn') return 'bg-amber-500'
+  if (status === 'ok') return 'bg-emerald-500'
+  return 'bg-muted-foreground/40'
+}
+
+function otgGroupStatusText(status: OtgCheckGroupStatus): string {
+  return t(`settings.otgSelfCheck.status.${status}`)
+}
+
+function otgGroupSummary(group: OtgCheckGroup): string {
+  if (group.items.length === 0) {
+    return t('settings.otgSelfCheck.notRun')
+  }
+  return t('settings.otgSelfCheck.groupCounts', {
+    ok: group.okCount,
+    warnings: group.warningCount,
+    errors: group.errorCount,
+  })
+}
+
+function otgCheckMessage(item: OtgSelfCheckItem): string {
+  const key = `settings.otgSelfCheck.messages.${item.id}`
+  const label = te(key) ? t(key) : item.message
+  const result = otgSelfCheckResult.value
+  if (!result) return label
+
+  const value = (name: string) => t(`settings.otgSelfCheck.values.${name}`)
+
+  switch (item.id) {
+    case 'udc_has_entries':
+      return `${label}：${result.available_udcs.length ? result.available_udcs.join(', ') : value('missing')}`
+    case 'configured_udc_valid':
+      if (!result.selected_udc) return `${label}：${value('notConfigured')}`
+      return `${label}：${item.ok ? result.selected_udc : `${value('missing')}/${result.selected_udc}`}`
+    case 'configfs_mounted':
+      return `${label}：${item.ok ? value('mounted') : value('unmounted')}`
+    case 'usb_gadget_dir_exists':
+      return `${label}：${item.ok ? value('available') : value('unavailable')}`
+    case 'libcomposite_loaded':
+      return `${label}：${item.ok ? value('available') : value('unavailable')}`
+    case 'one_kvm_gadget_exists':
+      return `${label}：${item.ok ? value('exists') : value('missing')}`
+    case 'other_gadgets':
+      return `${label}：${result.other_gadgets.length ? result.other_gadgets.join(', ') : value('none')}`
+    case 'one_kvm_bound_udc':
+      return `${label}：${result.bound_udc || value('unbound')}`
+    case 'udc_conflict':
+      return `${label}：${item.ok ? value('noConflict') : value('conflict')}`
+    case 'udc_state':
+      return `${label}：${result.udc_state || value('unknown')}`
+    case 'udc_speed':
+      return `${label}：${result.udc_speed || value('unknown')}`
+    default:
+      return `${label}：${item.ok ? value('normal') : value('abnormal')}`
+  }
+}
+
+function otgCheckHint(item: OtgSelfCheckItem): string {
+  if (!item.hint) return ''
+  const key = `settings.otgSelfCheck.hints.${item.id}`
+  return te(key) ? t(key) : item.hint
+}
+
+async function runOtgSelfCheck() {
+  otgSelfCheckLoading.value = true
+  otgSelfCheckError.value = ''
+  try {
+    otgSelfCheckResult.value = await hidApi.otgSelfCheck()
+  } catch (e) {
+    console.error('Failed to run OTG self-check:', e)
+    otgSelfCheckError.value = t('settings.otgSelfCheck.failed')
+  } finally {
+    otgSelfCheckLoading.value = false
+  }
+}
+
+async function onRunOtgSelfCheckClick() {
+  if (!otgSelfCheckLoading.value) {
+    otgRunButtonPressed.value = true
+    window.setTimeout(() => {
+      otgRunButtonPressed.value = false
+    }, 160)
+  }
+  await runOtgSelfCheck()
+}
 
 function alignHidProfileForLowEndpoint() {
   if (hidProfileAligned.value) return
@@ -1148,8 +1355,18 @@ async function loadUpdateOverview() {
 async function refreshUpdateStatus() {
   try {
     updateStatus.value = await updateApi.status()
+
+    if (updateSawRestarting.value && !updateAutoReloadTriggered.value) {
+      if (updateSawRequestFailure.value || updateStatus.value.phase === 'idle') {
+        updateAutoReloadTriggered.value = true
+        window.location.reload()
+      }
+    }
   } catch (e) {
     console.error('Failed to refresh update status:', e)
+    if (updateSawRestarting.value) {
+      updateSawRequestFailure.value = true
+    }
   }
 }
 
@@ -1164,6 +1381,9 @@ function startUpdatePolling() {
   if (updateStatusTimer !== null) return
   updateStatusTimer = window.setInterval(async () => {
     await refreshUpdateStatus()
+    if (updateStatus.value?.phase === 'restarting') {
+      updateSawRestarting.value = true
+    }
     if (!updateRunning.value) {
       stopUpdatePolling()
       await loadUpdateOverview()
@@ -1173,6 +1393,9 @@ function startUpdatePolling() {
 
 async function startOnlineUpgrade() {
   try {
+    updateSawRestarting.value = false
+    updateSawRequestFailure.value = false
+    updateAutoReloadTriggered.value = false
     await updateApi.upgrade({ channel: updateChannel.value })
     await refreshUpdateStatus()
     startUpdatePolling()
@@ -1193,6 +1416,25 @@ function updatePhaseText(phase?: string): string {
     case 'failed': return t('settings.updatePhaseFailed')
     default: return t('common.unknown')
   }
+}
+
+function localizeUpdateMessage(message?: string): string | null {
+  if (!message) return null
+
+  if (message === 'Checking for updates') return t('settings.updateMsgChecking')
+  if (message.startsWith('Downloading binary')) {
+    return message.replace('Downloading binary', t('settings.updateMsgDownloading'))
+  }
+  if (message === 'Verifying sha256') return t('settings.updateMsgVerifying')
+  if (message === 'Replacing binary') return t('settings.updateMsgInstalling')
+  if (message === 'Restarting service') return t('settings.updateMsgRestarting')
+
+  return message
+}
+
+function updateStatusBadgeText(): string {
+  return localizeUpdateMessage(updateStatus.value?.message)
+    || updatePhaseText(updateStatus.value?.phase)
 }
 
 async function saveRustdeskConfig() {
@@ -1462,10 +1704,16 @@ onMounted(async () => {
   if (updateRunning.value) {
     startUpdatePolling()
   }
+
+  await runOtgSelfCheck()
 })
 
 watch(updateChannel, async () => {
   await loadUpdateOverview()
+})
+
+watch(() => config.value.hid_backend, async () => {
+  await runOtgSelfCheck()
 })
 </script>
 
@@ -1937,6 +2185,105 @@ watch(updateChannel, async () => {
                     </p>
                   </div>
                 </template>
+              </CardContent>
+            </Card>
+
+          </div>
+
+          <!-- Environment Section -->
+          <div v-show="activeSection === 'environment'" class="space-y-4 max-w-3xl">
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.otgSelfCheck.title') }}</CardTitle>
+                  <CardDescription>{{ t('settings.otgSelfCheck.desc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="otgSelfCheckLoading"
+                  :class="[
+                    'transition-all duration-150 active:scale-95 active:brightness-95',
+                    otgRunButtonPressed ? 'scale-95 brightness-95' : ''
+                  ]"
+                  @click="onRunOtgSelfCheckClick"
+                >
+                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': otgSelfCheckLoading }" />
+                  {{ t('settings.otgSelfCheck.run') }}
+                </Button>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p v-if="otgSelfCheckError" class="text-xs text-red-600 dark:text-red-400">
+                  {{ otgSelfCheckError }}
+                </p>
+
+                <template v-if="otgSelfCheckResult">
+                  <div class="flex flex-wrap gap-2 text-xs">
+                    <Badge
+                      :variant="otgSelfCheckResult.overall_ok ? 'default' : 'destructive'"
+                      class="font-medium"
+                    >
+                      {{ t('settings.otgSelfCheck.overall') }}：{{ otgSelfCheckResult.overall_ok ? t('settings.otgSelfCheck.ok') : t('settings.otgSelfCheck.hasIssues') }}
+                    </Badge>
+                    <Badge variant="outline" class="font-normal">
+                      {{ t('settings.otgSelfCheck.counts', { errors: otgSelfCheckResult.error_count, warnings: otgSelfCheckResult.warning_count }) }}
+                    </Badge>
+                    <Badge variant="secondary" class="font-normal">
+                      {{ t('settings.otgSelfCheck.selectedUdc') }}：{{ otgSelfCheckResult.selected_udc || '-' }}
+                    </Badge>
+                    <Badge variant="secondary" class="font-normal">
+                      {{ t('settings.otgSelfCheck.boundUdc') }}：{{ otgSelfCheckResult.bound_udc || '-' }}
+                    </Badge>
+                  </div>
+
+                  <div class="rounded-md border divide-y">
+                    <details
+                      v-for="group in otgCheckGroups"
+                      :key="group.id"
+                      :open="group.status === 'error' || group.status === 'warn'"
+                      class="group"
+                    >
+                      <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/40">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="inline-block h-2 w-2 rounded-full shrink-0" :class="otgGroupStatusClass(group.status)" />
+                          <span class="text-sm font-medium truncate leading-6">{{ t(group.titleKey) }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <span class="text-xs text-muted-foreground">{{ otgGroupSummary(group) }}</span>
+                          <Badge variant="outline" class="text-[10px] h-5 px-1.5">{{ otgGroupStatusText(group.status) }}</Badge>
+                        </div>
+                      </summary>
+
+                      <div v-if="group.items.length > 0" class="border-t bg-muted/20">
+                        <div
+                          v-for="item in group.items"
+                          :key="item.id"
+                          class="px-4 py-3 border-b last:border-b-0"
+                        >
+                          <div class="flex items-start gap-2">
+                            <span class="inline-block h-2 w-2 rounded-full mt-1.5 shrink-0" :class="otgCheckLevelClass(item.level)" />
+                            <div class="min-w-0 space-y-1">
+                              <div class="flex items-center gap-2">
+                                <p class="text-sm leading-5">{{ otgCheckMessage(item) }}</p>
+                                <span class="text-[11px] text-muted-foreground shrink-0">{{ otgCheckStatusText(item.level) }}</span>
+                              </div>
+                              <div class="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                <span v-if="item.hint">{{ otgCheckHint(item) }}</span>
+                                <code v-if="item.path" class="font-mono break-all">{{ item.path }}</code>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                        {{ t('settings.otgSelfCheck.notRun') }}
+                      </div>
+                    </details>
+                  </div>
+                </template>
+                <p v-else-if="otgSelfCheckLoading" class="text-xs text-muted-foreground">
+                  {{ t('common.loading') }}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -2843,9 +3190,21 @@ watch(updateChannel, async () => {
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>{{ t('settings.onlineUpgrade') }}</CardTitle>
-                <CardDescription>{{ t('settings.onlineUpgradeDesc') }}</CardDescription>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.onlineUpgrade') }}</CardTitle>
+                  <CardDescription>{{ t('settings.onlineUpgradeDesc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8"
+                  :aria-label="t('common.refresh')"
+                  :disabled="updateRunning || updateLoading"
+                  @click="loadUpdateOverview"
+                >
+                  <RefreshCw :class="['h-4 w-4', (updateLoading || updateRunning) ? 'animate-spin' : '']" />
+                </Button>
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -2876,9 +3235,9 @@ watch(updateChannel, async () => {
                     <Badge
                       variant="outline"
                       class="max-w-[60%] truncate"
-                      :title="updateStatus?.message || updatePhaseText(updateStatus?.phase)"
+                      :title="updateStatusBadgeText()"
                     >
-                      {{ updateStatus?.message || updatePhaseText(updateStatus?.phase) }}
+                      {{ updateStatusBadgeText() }}
                     </Badge>
                   </div>
                   <div v-if="updateRunning || updateStatus?.phase === 'failed' || updateStatus?.phase === 'success'" class="w-full h-2 bg-muted rounded overflow-hidden">
@@ -2905,10 +3264,6 @@ watch(updateChannel, async () => {
                 </div>
 
                 <div class="flex justify-end gap-2">
-                  <Button variant="outline" :disabled="updateRunning" @click="loadUpdateOverview">
-                    <RefreshCw class="h-4 w-4 mr-2" />
-                    {{ t('common.refresh') }}
-                  </Button>
                   <Button
                     :disabled="updateRunning || !updateOverview?.upgrade_available"
                     @click="startOnlineUpgrade"

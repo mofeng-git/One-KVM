@@ -303,6 +303,28 @@ export const hidApi = {
       screen_resolution: [number, number] | null
     }>('/hid/status'),
 
+  otgSelfCheck: () =>
+    request<{
+      overall_ok: boolean
+      error_count: number
+      warning_count: number
+      hid_backend: string
+      selected_udc: string | null
+      bound_udc: string | null
+      udc_state: string | null
+      udc_speed: string | null
+      available_udcs: string[]
+      other_gadgets: string[]
+      checks: Array<{
+        id: string
+        ok: boolean
+        level: 'info' | 'warn' | 'error'
+        message: string
+        hint?: string
+        path?: string
+      }>
+    }>('/hid/otg/self-check'),
+
   keyboard: async (type: 'down' | 'up', key: number, modifiers?: {
     ctrl?: boolean
     shift?: boolean

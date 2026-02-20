@@ -60,6 +60,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/webrtc/close", post(handlers::webrtc_close_session))
         // HID endpoints
         .route("/hid/status", get(handlers::hid_status))
+        .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
         .route("/hid/reset", post(handlers::hid_reset))
         // WebSocket HID endpoint (for MJPEG mode)
         .route("/ws/hid", any(ws_hid_handler))
