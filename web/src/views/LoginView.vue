@@ -49,7 +49,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background p-4">
+  <div class="min-h-screen min-h-dvh flex items-center justify-center bg-background p-4">
     <div class="w-full max-w-sm space-y-6">
       <!-- Logo and Title -->
       <div class="text-center space-y-2">
@@ -91,6 +91,7 @@ function handleKeydown(e: KeyboardEvent) {
           <button
             type="button"
             class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
             @click="showPassword = !showPassword"
           >
             <Eye v-if="!showPassword" class="w-4 h-4" />

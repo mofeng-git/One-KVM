@@ -37,6 +37,7 @@ use crate::error::Result;
 use crate::events::{EventBus, SystemEvent, VideoDeviceInfo};
 use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
+use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::streamer::{Streamer, StreamerState};
 use crate::webrtc::WebRtcStreamer;
@@ -142,6 +143,16 @@ impl VideoStreamManager {
     /// Set configuration store
     pub async fn set_config_store(&self, config: ConfigStore) {
         *self.config_store.write().await = Some(config);
+    }
+
+    /// Get current stream codec constraints derived from global configuration.
+    pub async fn codec_constraints(&self) -> StreamCodecConstraints {
+        if let Some(ref config_store) = *self.config_store.read().await {
+            let config = config_store.get();
+            StreamCodecConstraints::from_config(&config)
+        } else {
+            StreamCodecConstraints::unrestricted()
+        }
     }
 
     /// Get current streaming mode
@@ -718,9 +729,11 @@ impl VideoStreamManager {
     /// Returns None if video capture cannot be started or pipeline creation fails.
     pub async fn subscribe_encoded_frames(
         &self,
-    ) -> Option<tokio::sync::mpsc::Receiver<std::sync::Arc<
-        crate::video::shared_video_pipeline::EncodedVideoFrame,
-    >>> {
+    ) -> Option<
+        tokio::sync::mpsc::Receiver<
+            std::sync::Arc<crate::video::shared_video_pipeline::EncodedVideoFrame>,
+        >,
+    > {
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");
@@ -756,7 +769,11 @@ impl VideoStreamManager {
         }
 
         // 3. Use WebRtcStreamer to ensure the shared video pipeline is running
-        match self.webrtc_streamer.ensure_video_pipeline_for_external().await {
+        match self
+            .webrtc_streamer
+            .ensure_video_pipeline_for_external()
+            .await
+        {
             Ok(pipeline) => Some(pipeline.subscribe()),
             Err(e) => {
                 tracing::error!("Failed to start shared video pipeline: {}", e);

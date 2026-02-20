@@ -191,6 +191,13 @@ export const hidKeyToModifierMask: Record<number, number> = {
   0xe7: 0x80, // MetaRight
 }
 
+// Update modifier mask when a HID modifier key is pressed/released.
+export function updateModifierMaskForHidKey(mask: number, hidKey: number, press: boolean): number {
+  const bit = hidKeyToModifierMask[hidKey] ?? 0
+  if (bit === 0) return mask
+  return press ? (mask | bit) : (mask & ~bit)
+}
+
 // Keys that latch (toggle state) instead of being held
 export const latchingKeys = ['CapsLock', 'ScrollLock', 'NumLock'] as const
 
@@ -218,6 +225,23 @@ export function getModifierMask(keyName: string): number {
     return modifiers[keyName as ModifierName]
   }
   return 0
+}
+
+// Normalize browser-specific KeyboardEvent.code variants.
+export function normalizeKeyboardCode(code: string, key: string): string {
+  if (code === 'IntlBackslash' && (key === '`' || key === '~')) return 'Backquote'
+  if (code === 'Backquote' && (key === '§' || key === '±')) return 'IntlBackslash'
+  if (code === 'IntlYen') return 'IntlBackslash'
+  if (code === 'OSLeft') return 'MetaLeft'
+  if (code === 'OSRight') return 'MetaRight'
+  if (code === '' && key === 'Shift') return 'ShiftRight'
+  return code
+}
+
+// Convert KeyboardEvent.code/key to USB HID usage code.
+export function keyboardEventToHidCode(code: string, key: string): number | undefined {
+  const normalizedCode = normalizeKeyboardCode(code, key)
+  return keys[normalizedCode as KeyName]
 }
 
 // Decode modifier byte into individual states

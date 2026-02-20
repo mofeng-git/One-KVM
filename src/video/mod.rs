@@ -3,6 +3,7 @@
 //! This module provides V4L2 video capture, encoding, and streaming functionality.
 
 pub mod capture;
+pub mod codec_constraints;
 pub mod convert;
 pub mod decoder;
 pub mod device;
@@ -13,6 +14,7 @@ pub mod h264_pipeline;
 pub mod shared_video_pipeline;
 pub mod stream_manager;
 pub mod streamer;
+pub mod v4l2r_capture;
 pub mod video_session;
 
 pub use capture::VideoCapturer;

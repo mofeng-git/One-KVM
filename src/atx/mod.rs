@@ -28,12 +28,14 @@
 //!         device: "/dev/gpiochip0".to_string(),
 //!         pin: 5,
 //!         active_level: ActiveLevel::High,
+//!         baud_rate: 9600,
 //!     },
 //!     reset: AtxKeyConfig {
 //!         driver: AtxDriverType::UsbRelay,
 //!         device: "/dev/hidraw0".to_string(),
 //!         pin: 0,
 //!         active_level: ActiveLevel::High,
+//!         baud_rate: 9600,
 //!     },
 //!     led: Default::default(),
 //! };

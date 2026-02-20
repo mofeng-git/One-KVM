@@ -127,14 +127,14 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
                     .first_or_octet_stream()
                     .to_string();
 
-                return Some(
+                Some(
                     Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, mime)
                         .header(header::CACHE_CONTROL, "public, max-age=86400")
                         .body(Body::from(data))
                         .unwrap(),
-                );
+                )
             }
             Err(e) => {
                 tracing::debug!(
@@ -143,7 +143,7 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
                     file_path.display(),
                     e
                 );
-                return None;
+                None
             }
         }
     }

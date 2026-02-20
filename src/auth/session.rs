@@ -110,7 +110,9 @@ impl SessionStore {
 
     /// Delete all expired sessions
     pub async fn cleanup_expired(&self) -> Result<u64> {
-        let result = sqlx::query("DELETE FROM sessions WHERE expires_at < datetime('now')")
+        let now = Utc::now().to_rfc3339();
+        let result = sqlx::query("DELETE FROM sessions WHERE expires_at < ?1")
+            .bind(now)
             .execute(&self.pool)
             .await?;
         Ok(result.rows_affected())

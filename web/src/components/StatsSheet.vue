@@ -442,7 +442,7 @@ onUnmounted(() => {
   <Sheet :open="props.open" @update:open="emit('update:open', $event)">
     <SheetContent
       side="right"
-      class="w-[400px] sm:w-[440px] p-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+      class="w-[90vw] max-w-[440px] p-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
     >
       <!-- Header -->
       <SheetHeader class="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
@@ -454,7 +454,7 @@ onUnmounted(() => {
         </div>
       </SheetHeader>
 
-      <ScrollArea class="h-[calc(100vh-60px)]">
+      <ScrollArea class="h-[calc(100dvh-60px)]">
         <div class="px-6 py-4 space-y-6">
           <!-- Video Section Header -->
           <div>

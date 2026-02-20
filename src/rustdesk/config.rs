@@ -202,9 +202,11 @@ mod tests {
 
     #[test]
     fn test_rendezvous_addr() {
-        let mut config = RustDeskConfig::default();
+        let mut config = RustDeskConfig {
+            rendezvous_server: "example.com".to_string(),
+            ..Default::default()
+        };
 
-        config.rendezvous_server = "example.com".to_string();
         assert_eq!(config.rendezvous_addr(), "example.com:21116");
 
         config.rendezvous_server = "example.com:21116".to_string();
@@ -217,10 +219,12 @@ mod tests {
 
     #[test]
     fn test_relay_addr() {
-        let mut config = RustDeskConfig::default();
+        let mut config = RustDeskConfig {
+            rendezvous_server: "example.com".to_string(),
+            ..Default::default()
+        };
 
         // Rendezvous server configured, relay defaults to same host
-        config.rendezvous_server = "example.com".to_string();
         assert_eq!(config.relay_addr(), Some("example.com:21117".to_string()));
 
         // Explicit relay server
@@ -238,10 +242,12 @@ mod tests {
 
     #[test]
     fn test_effective_rendezvous_server() {
-        let mut config = RustDeskConfig::default();
+        let mut config = RustDeskConfig {
+            rendezvous_server: "custom.example.com".to_string(),
+            ..Default::default()
+        };
 
         // When user sets a server, use it
-        config.rendezvous_server = "custom.example.com".to_string();
         assert_eq!(config.effective_rendezvous_server(), "custom.example.com");
 
         // When empty, returns empty

@@ -52,10 +52,7 @@ impl MsdController {
     /// # Parameters
     /// * `otg_service` - OTG service for gadget management
     /// * `msd_dir` - Base directory for MSD storage
-    pub fn new(
-        otg_service: Arc<OtgService>,
-        msd_dir: impl Into<PathBuf>,
-    ) -> Self {
+    pub fn new(otg_service: Arc<OtgService>, msd_dir: impl Into<PathBuf>) -> Self {
         let msd_dir = msd_dir.into();
         let images_path = msd_dir.join("images");
         let ventoy_dir = msd_dir.join("ventoy");

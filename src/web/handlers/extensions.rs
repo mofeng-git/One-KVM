@@ -86,7 +86,7 @@ pub async fn start_extension(
     // Start the extension
     mgr.start(ext_id, &config.extensions)
         .await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     // Return updated status
     Ok(Json(ExtensionInfo {
@@ -108,7 +108,7 @@ pub async fn stop_extension(
     let mgr = &state.extensions;
 
     // Stop the extension
-    mgr.stop(ext_id).await.map_err(|e| AppError::Internal(e))?;
+    mgr.stop(ext_id).await.map_err(AppError::Internal)?;
 
     // Return updated status
     Ok(Json(ExtensionInfo {
@@ -156,7 +156,6 @@ pub struct TtydConfigUpdate {
     pub enabled: Option<bool>,
     pub port: Option<u16>,
     pub shell: Option<String>,
-    pub credential: Option<String>,
 }
 
 /// Update gostc config
@@ -202,9 +201,6 @@ pub async fn update_ttyd_config(
             }
             if let Some(ref shell) = req.shell {
                 ttyd.shell = shell.clone();
-            }
-            if req.credential.is_some() {
-                ttyd.credential = req.credential.clone();
             }
         })
         .await?;
@@ -263,14 +259,16 @@ pub async fn update_gostc_config(
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Gostc).await.ok();
-    } else if !was_enabled && is_enabled && has_key {
-        if state.extensions.check_available(ExtensionId::Gostc) {
-            state
-                .extensions
-                .start(ExtensionId::Gostc, &new_config.extensions)
-                .await
-                .ok();
-        }
+    } else if !was_enabled
+        && is_enabled
+        && has_key
+        && state.extensions.check_available(ExtensionId::Gostc)
+    {
+        state
+            .extensions
+            .start(ExtensionId::Gostc, &new_config.extensions)
+            .await
+            .ok();
     }
 
     Ok(Json(new_config.extensions.gostc.clone()))
@@ -312,14 +310,16 @@ pub async fn update_easytier_config(
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Easytier).await.ok();
-    } else if !was_enabled && is_enabled && has_name {
-        if state.extensions.check_available(ExtensionId::Easytier) {
-            state
-                .extensions
-                .start(ExtensionId::Easytier, &new_config.extensions)
-                .await
-                .ok();
-        }
+    } else if !was_enabled
+        && is_enabled
+        && has_name
+        && state.extensions.check_available(ExtensionId::Easytier)
+    {
+        state
+            .extensions
+            .start(ExtensionId::Easytier, &new_config.extensions)
+            .await
+            .ok();
     }
 
     Ok(Json(new_config.extensions.easytier.clone()))

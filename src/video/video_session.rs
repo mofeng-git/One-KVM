@@ -326,7 +326,6 @@ impl VideoSessionManager {
             bitrate_preset: self.config.bitrate_preset,
             fps: self.config.fps,
             encoder_backend: self.config.encoder_backend,
-            ..Default::default()
         };
 
         // Create new pipeline

@@ -85,9 +85,7 @@ pub fn enumerate_audio_devices_with_current(
     let mut devices = Vec::new();
 
     // Try to enumerate cards
-    let cards = match alsa::card::Iter::new() {
-        i => i,
-    };
+    let cards = alsa::card::Iter::new();
 
     for card_result in cards {
         let card = match card_result {

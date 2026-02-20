@@ -422,7 +422,11 @@ impl OtgGadgetManager {
 
             if dest.exists() {
                 if let Err(e) = remove_file(&dest) {
-                    warn!("Failed to remove existing config link {}: {}", dest.display(), e);
+                    warn!(
+                        "Failed to remove existing config link {}: {}",
+                        dest.display(),
+                        e
+                    );
                     continue;
                 }
             }

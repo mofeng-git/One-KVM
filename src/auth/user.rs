@@ -7,7 +7,7 @@ use super::password::{hash_password, verify_password};
 use crate::error::{AppError, Result};
 
 /// User row type from database
-type UserRow = (String, String, String, i32, String, String);
+type UserRow = (String, String, String, String, String);
 
 /// User data
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,7 +16,6 @@ pub struct User {
     pub username: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
-    pub is_admin: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -24,12 +23,11 @@ pub struct User {
 impl User {
     /// Convert from database row to User
     fn from_row(row: UserRow) -> Self {
-        let (id, username, password_hash, is_admin, created_at, updated_at) = row;
+        let (id, username, password_hash, created_at, updated_at) = row;
         Self {
             id,
             username,
             password_hash,
-            is_admin: is_admin != 0,
             created_at: DateTime::parse_from_rfc3339(&created_at)
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now()),
@@ -53,7 +51,7 @@ impl UserStore {
     }
 
     /// Create a new user
-    pub async fn create(&self, username: &str, password: &str, is_admin: bool) -> Result<User> {
+    pub async fn create(&self, username: &str, password: &str) -> Result<User> {
         // Check if username already exists
         if self.get_by_username(username).await?.is_some() {
             return Err(AppError::BadRequest(format!(
@@ -68,21 +66,19 @@ impl UserStore {
             id: Uuid::new_v4().to_string(),
             username: username.to_string(),
             password_hash,
-            is_admin,
             created_at: now,
             updated_at: now,
         };
 
         sqlx::query(
             r#"
-            INSERT INTO users (id, username, password_hash, is_admin, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO users (id, username, password_hash, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
         )
         .bind(&user.id)
         .bind(&user.username)
         .bind(&user.password_hash)
-        .bind(user.is_admin as i32)
         .bind(user.created_at.to_rfc3339())
         .bind(user.updated_at.to_rfc3339())
         .execute(&self.pool)
@@ -94,7 +90,7 @@ impl UserStore {
     /// Get user by ID
     pub async fn get(&self, user_id: &str) -> Result<Option<User>> {
         let row: Option<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, is_admin, created_at, updated_at FROM users WHERE id = ?1",
+            "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE id = ?1",
         )
         .bind(user_id)
         .fetch_optional(&self.pool)
@@ -106,7 +102,7 @@ impl UserStore {
     /// Get user by username
     pub async fn get_by_username(&self, username: &str) -> Result<Option<User>> {
         let row: Option<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, is_admin, created_at, updated_at FROM users WHERE username = ?1",
+            "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = ?1",
         )
         .bind(username)
         .fetch_optional(&self.pool)
@@ -161,13 +157,12 @@ impl UserStore {
         }
 
         let now = Utc::now();
-        let result =
-            sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
-                .bind(new_username)
-                .bind(now.to_rfc3339())
-                .bind(user_id)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
+            .bind(new_username)
+            .bind(now.to_rfc3339())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("User not found".to_string()));
@@ -179,7 +174,7 @@ impl UserStore {
     /// List all users
     pub async fn list(&self) -> Result<Vec<User>> {
         let rows: Vec<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, is_admin, created_at, updated_at FROM users ORDER BY created_at",
+            "SELECT id, username, password_hash, created_at, updated_at FROM users ORDER BY created_at",
         )
         .fetch_all(&self.pool)
         .await?;

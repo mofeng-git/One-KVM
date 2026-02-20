@@ -6,6 +6,7 @@ import {
   audioConfigApi,
   hidConfigApi,
   msdConfigApi,
+  rtspConfigApi,
   rustdeskConfigApi,
   streamConfigApi,
   videoConfigApi,
@@ -30,6 +31,9 @@ import type {
   WebConfigUpdate,
 } from '@/types/generated'
 import type {
+  RtspConfigResponse as ApiRtspConfigResponse,
+  RtspConfigUpdate as ApiRtspConfigUpdate,
+  RtspStatusResponse as ApiRtspStatusResponse,
   RustDeskConfigResponse as ApiRustDeskConfigResponse,
   RustDeskConfigUpdate as ApiRustDeskConfigUpdate,
   RustDeskStatusResponse as ApiRustDeskStatusResponse,
@@ -51,6 +55,8 @@ export const useConfigStore = defineStore('config', () => {
   const stream = ref<StreamConfigResponse | null>(null)
   const web = ref<WebConfig | null>(null)
   const atx = ref<AtxConfig | null>(null)
+  const rtspConfig = ref<ApiRtspConfigResponse | null>(null)
+  const rtspStatus = ref<ApiRtspStatusResponse | null>(null)
   const rustdeskConfig = ref<ApiRustDeskConfigResponse | null>(null)
   const rustdeskStatus = ref<ApiRustDeskStatusResponse | null>(null)
   const rustdeskPassword = ref<ApiRustDeskPasswordResponse | null>(null)
@@ -63,6 +69,7 @@ export const useConfigStore = defineStore('config', () => {
   const streamLoading = ref(false)
   const webLoading = ref(false)
   const atxLoading = ref(false)
+  const rtspLoading = ref(false)
   const rustdeskLoading = ref(false)
 
   const authError = ref<string | null>(null)
@@ -73,6 +80,7 @@ export const useConfigStore = defineStore('config', () => {
   const streamError = ref<string | null>(null)
   const webError = ref<string | null>(null)
   const atxError = ref<string | null>(null)
+  const rtspError = ref<string | null>(null)
   const rustdeskError = ref<string | null>(null)
 
   let authPromise: Promise<AuthConfig> | null = null
@@ -83,6 +91,8 @@ export const useConfigStore = defineStore('config', () => {
   let streamPromise: Promise<StreamConfigResponse> | null = null
   let webPromise: Promise<WebConfig> | null = null
   let atxPromise: Promise<AtxConfig> | null = null
+  let rtspPromise: Promise<ApiRtspConfigResponse> | null = null
+  let rtspStatusPromise: Promise<ApiRtspStatusResponse> | null = null
   let rustdeskPromise: Promise<ApiRustDeskConfigResponse> | null = null
   let rustdeskStatusPromise: Promise<ApiRustDeskStatusResponse> | null = null
   let rustdeskPasswordPromise: Promise<ApiRustDeskPasswordResponse> | null = null
@@ -263,6 +273,51 @@ export const useConfigStore = defineStore('config', () => {
     return request
   }
 
+  async function refreshRtspConfig() {
+    if (rtspLoading.value && rtspPromise) return rtspPromise
+    rtspLoading.value = true
+    rtspError.value = null
+    const request = rtspConfigApi.get()
+      .then((response) => {
+        rtspConfig.value = response
+        return response
+      })
+      .catch((error) => {
+        rtspError.value = normalizeErrorMessage(error)
+        throw error
+      })
+      .finally(() => {
+        rtspLoading.value = false
+        rtspPromise = null
+      })
+
+    rtspPromise = request
+    return request
+  }
+
+  async function refreshRtspStatus() {
+    if (rtspLoading.value && rtspStatusPromise) return rtspStatusPromise
+    rtspLoading.value = true
+    rtspError.value = null
+    const request = rtspConfigApi.getStatus()
+      .then((response) => {
+        rtspStatus.value = response
+        rtspConfig.value = response.config
+        return response
+      })
+      .catch((error) => {
+        rtspError.value = normalizeErrorMessage(error)
+        throw error
+      })
+      .finally(() => {
+        rtspLoading.value = false
+        rtspStatusPromise = null
+      })
+
+    rtspStatusPromise = request
+    return request
+  }
+
   async function refreshRustdeskConfig() {
     if (rustdeskLoading.value && rustdeskPromise) return rustdeskPromise
     rustdeskLoading.value = true
@@ -370,6 +425,11 @@ export const useConfigStore = defineStore('config', () => {
     return refreshAtx()
   }
 
+  function ensureRtspConfig() {
+    if (rtspConfig.value) return Promise.resolve(rtspConfig.value)
+    return refreshRtspConfig()
+  }
+
   function ensureRustdeskConfig() {
     if (rustdeskConfig.value) return Promise.resolve(rustdeskConfig.value)
     return refreshRustdeskConfig()
@@ -423,6 +483,12 @@ export const useConfigStore = defineStore('config', () => {
     return response
   }
 
+  async function updateRtsp(update: ApiRtspConfigUpdate) {
+    const response = await rtspConfigApi.update(update)
+    rtspConfig.value = response
+    return response
+  }
+
   async function updateRustdesk(update: ApiRustDeskConfigUpdate) {
     const response = await rustdeskConfigApi.update(update)
     rustdeskConfig.value = response
@@ -450,6 +516,8 @@ export const useConfigStore = defineStore('config', () => {
     stream,
     web,
     atx,
+    rtspConfig,
+    rtspStatus,
     rustdeskConfig,
     rustdeskStatus,
     rustdeskPassword,
@@ -461,6 +529,7 @@ export const useConfigStore = defineStore('config', () => {
     streamLoading,
     webLoading,
     atxLoading,
+    rtspLoading,
     rustdeskLoading,
     authError,
     videoError,
@@ -470,6 +539,7 @@ export const useConfigStore = defineStore('config', () => {
     streamError,
     webError,
     atxError,
+    rtspError,
     rustdeskError,
     refreshAuth,
     refreshVideo,
@@ -479,6 +549,8 @@ export const useConfigStore = defineStore('config', () => {
     refreshStream,
     refreshWeb,
     refreshAtx,
+    refreshRtspConfig,
+    refreshRtspStatus,
     refreshRustdeskConfig,
     refreshRustdeskStatus,
     refreshRustdeskPassword,
@@ -490,6 +562,7 @@ export const useConfigStore = defineStore('config', () => {
     ensureStream,
     ensureWeb,
     ensureAtx,
+    ensureRtspConfig,
     ensureRustdeskConfig,
     updateAuth,
     updateVideo,
@@ -499,6 +572,7 @@ export const useConfigStore = defineStore('config', () => {
     updateStream,
     updateWeb,
     updateAtx,
+    updateRtsp,
     updateRustdesk,
     regenerateRustdeskId,
     regenerateRustdeskPassword,

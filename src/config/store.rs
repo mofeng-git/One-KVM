@@ -82,7 +82,6 @@ impl ConfigStore {
                 id TEXT PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                is_admin INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -116,6 +115,26 @@ impl ConfigStore {
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 last_used TEXT
             )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS wol_history (
+                mac_address TEXT PRIMARY KEY,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_wol_history_updated_at
+            ON wol_history(updated_at DESC)
             "#,
         )
         .execute(pool)

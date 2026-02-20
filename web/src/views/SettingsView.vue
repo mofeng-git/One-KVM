@@ -7,16 +7,23 @@ import { useAuthStore } from '@/stores/auth'
 import {
   authApi,
   configApi,
+  hidApi,
   streamApi,
   atxConfigApi,
   extensionsApi,
   systemApi,
+  updateApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskPasswordResponse,
+  type RtspStatusResponse,
+  type RtspConfigUpdate,
   type WebConfig,
+  type UpdateOverviewResponse,
+  type UpdateStatusResponse,
+  type UpdateChannel,
 } from '@/api'
 import type {
   ExtensionsStatus,
@@ -57,6 +64,7 @@ import {
   Check,
   HardDrive,
   Power,
+  Server,
   Menu,
   Lock,
   User,
@@ -70,9 +78,10 @@ import {
   ExternalLink,
   Copy,
   ScreenShare,
+  Radio,
 } from 'lucide-vue-next'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
@@ -100,14 +109,16 @@ const navGroups = computed(() => [
       { id: 'hid', label: t('settings.hid'), icon: Keyboard, status: config.value.hid_backend.toUpperCase() },
       ...(config.value.msd_enabled ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
       { id: 'atx', label: t('settings.atx'), icon: Power },
+      { id: 'environment', label: t('settings.environment'), icon: Server },
     ]
   },
   {
     title: t('settings.extensions'),
     items: [
-      { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
-      { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
+      { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
+      { id: 'ext-rtsp', label: t('extensions.rtsp.title'), icon: Radio },
+      { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
     ]
   },
   {
@@ -168,7 +179,7 @@ const showTerminalDialog = ref(false)
 
 // Extension config (local edit state)
 const extConfig = ref({
-  ttyd: { enabled: false, shell: '/bin/bash', credential: '' },
+  ttyd: { enabled: false, shell: '/bin/bash' },
   gostc: { enabled: false, addr: 'gostc.mofeng.run', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
 })
@@ -187,6 +198,26 @@ const rustdeskLocalConfig = ref({
   relay_key: '',
 })
 
+// RTSP config state
+const rtspStatus = ref<RtspStatusResponse | null>(null)
+const rtspLoading = ref(false)
+const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
+  enabled: false,
+  bind: '0.0.0.0',
+  port: 8554,
+  path: 'live',
+  allow_one_client: true,
+  codec: 'h264',
+  username: '',
+  password: '',
+})
+const rtspStreamUrl = computed(() => {
+  const host = window.location.hostname || '127.0.0.1'
+  const path = (rtspLocalConfig.value.path || 'live').trim().replace(/^\/+|\/+$/g, '') || 'live'
+  const port = Number(rtspLocalConfig.value.port) || 8554
+  return `rtsp://${host}:${port}/${path}`
+})
+
 // Web server config state
 const webServerConfig = ref<WebConfig>({
   http_port: 8080,
@@ -198,6 +229,22 @@ const webServerConfig = ref<WebConfig>({
 const webServerLoading = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
+const updateChannel = ref<UpdateChannel>('stable')
+const updateOverview = ref<UpdateOverviewResponse | null>(null)
+const updateStatus = ref<UpdateStatusResponse | null>(null)
+const updateLoading = ref(false)
+const updateSawRestarting = ref(false)
+const updateSawRequestFailure = ref(false)
+const updateAutoReloadTriggered = ref(false)
+const updateRunning = computed(() => {
+  const phase = updateStatus.value?.phase
+  return phase === 'checking'
+    || phase === 'downloading'
+    || phase === 'verifying'
+    || phase === 'installing'
+    || phase === 'restarting'
+})
+let updateStatusTimer: number | null = null
 type BindMode = 'all' | 'loopback' | 'custom'
 const bindMode = ref<BindMode>('all')
 const bindAllIpv6 = ref(false)
@@ -290,6 +337,207 @@ const isLowEndpointUdc = computed(() => {
 const showLowEndpointHint = computed(() =>
   config.value.hid_backend === 'otg' && isLowEndpointUdc.value
 )
+
+type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
+type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
+
+interface OtgSelfCheckItem {
+  id: string
+  ok: boolean
+  level: OtgSelfCheckLevel
+  message: string
+  hint?: string
+  path?: string
+}
+
+interface OtgSelfCheckResult {
+  overall_ok: boolean
+  error_count: number
+  warning_count: number
+  hid_backend: string
+  selected_udc: string | null
+  bound_udc: string | null
+  udc_state: string | null
+  udc_speed: string | null
+  available_udcs: string[]
+  other_gadgets: string[]
+  checks: OtgSelfCheckItem[]
+}
+
+interface OtgCheckGroupDef {
+  id: string
+  titleKey: string
+  checkIds: string[]
+}
+
+interface OtgCheckGroup {
+  id: string
+  titleKey: string
+  status: OtgCheckGroupStatus
+  okCount: number
+  warningCount: number
+  errorCount: number
+  items: OtgSelfCheckItem[]
+}
+
+const otgSelfCheckLoading = ref(false)
+const otgSelfCheckResult = ref<OtgSelfCheckResult | null>(null)
+const otgSelfCheckError = ref('')
+const otgRunButtonPressed = ref(false)
+
+const otgCheckGroupDefs: OtgCheckGroupDef[] = [
+  {
+    id: 'udc',
+    titleKey: 'settings.otgSelfCheck.groups.udc',
+    checkIds: ['udc_dir_exists', 'udc_has_entries', 'configured_udc_valid'],
+  },
+  {
+    id: 'gadget_config',
+    titleKey: 'settings.otgSelfCheck.groups.gadgetConfig',
+    checkIds: ['configfs_mounted', 'usb_gadget_dir_exists', 'libcomposite_loaded'],
+  },
+  {
+    id: 'one_kvm',
+    titleKey: 'settings.otgSelfCheck.groups.oneKvm',
+    checkIds: ['one_kvm_gadget_exists', 'one_kvm_bound_udc', 'other_gadgets', 'udc_conflict'],
+  },
+  {
+    id: 'functions',
+    titleKey: 'settings.otgSelfCheck.groups.functions',
+    checkIds: ['hid_functions_present', 'config_c1_exists', 'function_links_ok', 'hid_device_nodes'],
+  },
+  {
+    id: 'link',
+    titleKey: 'settings.otgSelfCheck.groups.link',
+    checkIds: ['udc_state', 'udc_speed'],
+  },
+]
+
+const otgCheckGroups = computed<OtgCheckGroup[]>(() => {
+  const items = otgSelfCheckResult.value?.checks || []
+  return otgCheckGroupDefs.map((group) => {
+    const groupItems = items.filter(item => group.checkIds.includes(item.id))
+    const errorCount = groupItems.filter(item => item.level === 'error').length
+    const warningCount = groupItems.filter(item => item.level === 'warn').length
+    const okCount = Math.max(0, groupItems.length - errorCount - warningCount)
+    let status: OtgCheckGroupStatus = 'skipped'
+    if (groupItems.length > 0) {
+      if (errorCount > 0) status = 'error'
+      else if (warningCount > 0) status = 'warn'
+      else status = 'ok'
+    }
+
+    return {
+      id: group.id,
+      titleKey: group.titleKey,
+      status,
+      okCount,
+      warningCount,
+      errorCount,
+      items: groupItems,
+    }
+  })
+})
+
+function otgCheckLevelClass(level: OtgSelfCheckLevel): string {
+  if (level === 'error') return 'bg-red-500'
+  if (level === 'warn') return 'bg-amber-500'
+  return 'bg-blue-500'
+}
+
+function otgCheckStatusText(level: OtgSelfCheckLevel): string {
+  if (level === 'error') return t('common.error')
+  if (level === 'warn') return t('common.warning')
+  return t('common.info')
+}
+
+function otgGroupStatusClass(status: OtgCheckGroupStatus): string {
+  if (status === 'error') return 'bg-red-500'
+  if (status === 'warn') return 'bg-amber-500'
+  if (status === 'ok') return 'bg-emerald-500'
+  return 'bg-muted-foreground/40'
+}
+
+function otgGroupStatusText(status: OtgCheckGroupStatus): string {
+  return t(`settings.otgSelfCheck.status.${status}`)
+}
+
+function otgGroupSummary(group: OtgCheckGroup): string {
+  if (group.items.length === 0) {
+    return t('settings.otgSelfCheck.notRun')
+  }
+  return t('settings.otgSelfCheck.groupCounts', {
+    ok: group.okCount,
+    warnings: group.warningCount,
+    errors: group.errorCount,
+  })
+}
+
+function otgCheckMessage(item: OtgSelfCheckItem): string {
+  const key = `settings.otgSelfCheck.messages.${item.id}`
+  const label = te(key) ? t(key) : item.message
+  const result = otgSelfCheckResult.value
+  if (!result) return label
+
+  const value = (name: string) => t(`settings.otgSelfCheck.values.${name}`)
+
+  switch (item.id) {
+    case 'udc_has_entries':
+      return `${label}：${result.available_udcs.length ? result.available_udcs.join(', ') : value('missing')}`
+    case 'configured_udc_valid':
+      if (!result.selected_udc) return `${label}：${value('notConfigured')}`
+      return `${label}：${item.ok ? result.selected_udc : `${value('missing')}/${result.selected_udc}`}`
+    case 'configfs_mounted':
+      return `${label}：${item.ok ? value('mounted') : value('unmounted')}`
+    case 'usb_gadget_dir_exists':
+      return `${label}：${item.ok ? value('available') : value('unavailable')}`
+    case 'libcomposite_loaded':
+      return `${label}：${item.ok ? value('available') : value('unavailable')}`
+    case 'one_kvm_gadget_exists':
+      return `${label}：${item.ok ? value('exists') : value('missing')}`
+    case 'other_gadgets':
+      return `${label}：${result.other_gadgets.length ? result.other_gadgets.join(', ') : value('none')}`
+    case 'one_kvm_bound_udc':
+      return `${label}：${result.bound_udc || value('unbound')}`
+    case 'udc_conflict':
+      return `${label}：${item.ok ? value('noConflict') : value('conflict')}`
+    case 'udc_state':
+      return `${label}：${result.udc_state || value('unknown')}`
+    case 'udc_speed':
+      return `${label}：${result.udc_speed || value('unknown')}`
+    default:
+      return `${label}：${item.ok ? value('normal') : value('abnormal')}`
+  }
+}
+
+function otgCheckHint(item: OtgSelfCheckItem): string {
+  if (!item.hint) return ''
+  const key = `settings.otgSelfCheck.hints.${item.id}`
+  return te(key) ? t(key) : item.hint
+}
+
+async function runOtgSelfCheck() {
+  otgSelfCheckLoading.value = true
+  otgSelfCheckError.value = ''
+  try {
+    otgSelfCheckResult.value = await hidApi.otgSelfCheck()
+  } catch (e) {
+    console.error('Failed to run OTG self-check:', e)
+    otgSelfCheckError.value = t('settings.otgSelfCheck.failed')
+  } finally {
+    otgSelfCheckLoading.value = false
+  }
+}
+
+async function onRunOtgSelfCheckClick() {
+  if (!otgSelfCheckLoading.value) {
+    otgRunButtonPressed.value = true
+    window.setTimeout(() => {
+      otgRunButtonPressed.value = false
+    }, 160)
+  }
+  await runOtgSelfCheck()
+}
 
 function alignHidProfileForLowEndpoint() {
   if (hidProfileAligned.value) return
@@ -783,7 +1031,6 @@ async function loadExtensions() {
       extConfig.value.ttyd = {
         enabled: ttyd.enabled,
         shell: ttyd.shell,
-        credential: ttyd.credential || '',
       }
       extConfig.value.gostc = { ...extensions.value.gostc.config }
       const easytier = extensions.value.easytier.config
@@ -1004,6 +1251,10 @@ function normalizeRustdeskServer(value: string, defaultPort: number): string | u
   return `${trimmed}:${defaultPort}`
 }
 
+function normalizeRtspPath(path: string): string {
+  return path.trim().replace(/^\/+|\/+$/g, '') || 'live'
+}
+
 function normalizeBindAddresses(addresses: string[]): string[] {
   return addresses.map(addr => addr.trim()).filter(Boolean)
 }
@@ -1095,6 +1346,102 @@ async function restartServer() {
     console.error('Failed to restart server:', e)
     restarting.value = false
   }
+}
+
+async function loadUpdateOverview() {
+  updateLoading.value = true
+  try {
+    updateOverview.value = await updateApi.overview(updateChannel.value)
+  } catch (e) {
+    console.error('Failed to load update overview:', e)
+  } finally {
+    updateLoading.value = false
+  }
+}
+
+async function refreshUpdateStatus() {
+  try {
+    updateStatus.value = await updateApi.status()
+
+    if (updateSawRestarting.value && !updateAutoReloadTriggered.value) {
+      if (updateSawRequestFailure.value || updateStatus.value.phase === 'idle') {
+        updateAutoReloadTriggered.value = true
+        window.location.reload()
+      }
+    }
+  } catch (e) {
+    console.error('Failed to refresh update status:', e)
+    if (updateSawRestarting.value) {
+      updateSawRequestFailure.value = true
+    }
+  }
+}
+
+function stopUpdatePolling() {
+  if (updateStatusTimer !== null) {
+    window.clearInterval(updateStatusTimer)
+    updateStatusTimer = null
+  }
+}
+
+function startUpdatePolling() {
+  if (updateStatusTimer !== null) return
+  updateStatusTimer = window.setInterval(async () => {
+    await refreshUpdateStatus()
+    if (updateStatus.value?.phase === 'restarting') {
+      updateSawRestarting.value = true
+    }
+    if (!updateRunning.value) {
+      stopUpdatePolling()
+      await loadUpdateOverview()
+    }
+  }, 1000)
+}
+
+async function startOnlineUpgrade() {
+  try {
+    updateSawRestarting.value = false
+    updateSawRequestFailure.value = false
+    updateAutoReloadTriggered.value = false
+    await updateApi.upgrade({ channel: updateChannel.value })
+    await refreshUpdateStatus()
+    startUpdatePolling()
+  } catch (e) {
+    console.error('Failed to start upgrade:', e)
+  }
+}
+
+function updatePhaseText(phase?: string): string {
+  switch (phase) {
+    case 'idle': return t('settings.updatePhaseIdle')
+    case 'checking': return t('settings.updatePhaseChecking')
+    case 'downloading': return t('settings.updatePhaseDownloading')
+    case 'verifying': return t('settings.updatePhaseVerifying')
+    case 'installing': return t('settings.updatePhaseInstalling')
+    case 'restarting': return t('settings.updatePhaseRestarting')
+    case 'success': return t('settings.updatePhaseSuccess')
+    case 'failed': return t('settings.updatePhaseFailed')
+    default: return t('common.unknown')
+  }
+}
+
+function localizeUpdateMessage(message?: string): string | null {
+  if (!message) return null
+
+  if (message === 'Checking for updates') return t('settings.updateMsgChecking')
+  if (message.startsWith('Downloading binary')) {
+    return message.replace('Downloading binary', t('settings.updateMsgDownloading'))
+  }
+  if (message === 'Verifying sha256') return t('settings.updateMsgVerifying')
+  if (message === 'Replacing binary') return t('settings.updateMsgInstalling')
+  if (message === 'Restarting service') return t('settings.updateMsgRestarting')
+
+  return message
+}
+
+function updateStatusBadgeText(): string {
+  return localizeUpdateMessage(updateStatus.value?.message)
+    || updatePhaseText(updateStatus.value?.phase)
 }
 
 async function saveRustdeskConfig() {
@@ -1233,6 +1580,108 @@ function getRustdeskStatusClass(status: string | null | undefined): string {
   }
 }
 
+async function loadRtspConfig() {
+  rtspLoading.value = true
+  try {
+    const status = await configStore.refreshRtspStatus()
+    rtspStatus.value = status
+    rtspLocalConfig.value = {
+      enabled: status.config.enabled,
+      bind: status.config.bind,
+      port: status.config.port,
+      path: status.config.path,
+      allow_one_client: status.config.allow_one_client,
+      codec: status.config.codec,
+      username: status.config.username || '',
+      password: '',
+    }
+  } catch (e) {
+    console.error('Failed to load RTSP config:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+async function saveRtspConfig() {
+  loading.value = true
+  saved.value = false
+  try {
+    const update: RtspConfigUpdate = {
+      enabled: !!rtspLocalConfig.value.enabled,
+      bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
+      port: Number(rtspLocalConfig.value.port) || 8554,
+      path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
+      allow_one_client: !!rtspLocalConfig.value.allow_one_client,
+      codec: rtspLocalConfig.value.codec || 'h264',
+      username: (rtspLocalConfig.value.username || '').trim(),
+    }
+
+    const nextPassword = (rtspLocalConfig.value.password || '').trim()
+    if (nextPassword) {
+      update.password = nextPassword
+    }
+
+    await configStore.updateRtsp(update)
+    await loadRtspConfig()
+    rtspLocalConfig.value.password = ''
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch (e) {
+    console.error('Failed to save RTSP config:', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function startRtsp() {
+  rtspLoading.value = true
+  try {
+    await configStore.updateRtsp({ enabled: true })
+    rtspLocalConfig.value.enabled = true
+    await loadRtspConfig()
+  } catch (e) {
+    console.error('Failed to start RTSP:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+async function stopRtsp() {
+  rtspLoading.value = true
+  try {
+    await configStore.updateRtsp({ enabled: false })
+    rtspLocalConfig.value.enabled = false
+    await loadRtspConfig()
+  } catch (e) {
+    console.error('Failed to stop RTSP:', e)
+  } finally {
+    rtspLoading.value = false
+  }
+}
+
+function getRtspServiceStatusText(status: string | undefined): string {
+  if (!status) return t('extensions.stopped')
+  switch (status) {
+    case 'running': return t('extensions.running')
+    case 'starting': return t('extensions.starting')
+    case 'stopped': return t('extensions.stopped')
+    default:
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getRtspStatusClass(status: string | undefined): string {
+  switch (status) {
+    case 'running': return 'bg-green-500'
+    case 'starting': return 'bg-yellow-500'
+    case 'stopped': return 'bg-gray-400'
+    default:
+      if (status?.startsWith('error:')) return 'bg-red-500'
+      return 'bg-gray-400'
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   // Load theme preference
@@ -1252,9 +1701,26 @@ onMounted(async () => {
     loadAtxDevices(),
     loadRustdeskConfig(),
     loadRustdeskPassword(),
+    loadRtspConfig(),
     loadWebServerConfig(),
+    loadUpdateOverview(),
+    refreshUpdateStatus(),
   ])
   usernameInput.value = authStore.user || ''
+
+  if (updateRunning.value) {
+    startUpdatePolling()
+  }
+
+  await runOtgSelfCheck()
+})
+
+watch(updateChannel, async () => {
+  await loadUpdateOverview()
+})
+
+watch(() => config.value.hid_backend, async () => {
+  await runOtgSelfCheck()
 })
 </script>
 
@@ -1267,6 +1733,7 @@ onMounted(async () => {
           <SheetTrigger as-child>
             <Button variant="ghost" size="icon" class="mr-2 h-9 w-9">
               <Menu class="h-4 w-4" />
+              <span class="sr-only">{{ t('common.menu') }}</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" class="w-72 p-0">
@@ -1276,6 +1743,7 @@ onMounted(async () => {
                 <div v-for="group in navGroups" :key="group.title" class="space-y-1">
                   <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
                   <button
+                    type="button"
                     v-for="item in group.items"
                     :key="item.id"
                     @click="selectSection(item.id)"
@@ -1306,6 +1774,7 @@ onMounted(async () => {
             <div v-for="group in navGroups" :key="group.title" class="space-y-1">
               <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
               <button
+                type="button"
                 v-for="item in group.items"
                 :key="item.id"
                 @click="activeSection = item.id"
@@ -1431,7 +1900,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.videoSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.videoSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -1440,7 +1909,7 @@ onMounted(async () => {
                   <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
                   <select id="video-device" v-model="config.video_device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                     <option value="">{{ t('settings.selectDevice') }}</option>
-                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ dev.name }}</option>
+                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</option>
                   </select>
                 </div>
                 <div class="space-y-2">
@@ -1540,6 +2009,7 @@ onMounted(async () => {
                       <button
                         type="button"
                         class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                         @click="showPasswords = !showPasswords"
                       >
                         <Eye v-if="!showPasswords" class="h-4 w-4" />
@@ -1564,7 +2034,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.hidSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.hidSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -1725,6 +2195,105 @@ onMounted(async () => {
                 </template>
               </CardContent>
             </Card>
+
+          </div>
+
+          <!-- Environment Section -->
+          <div v-show="activeSection === 'environment'" class="space-y-4 max-w-3xl">
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.otgSelfCheck.title') }}</CardTitle>
+                  <CardDescription>{{ t('settings.otgSelfCheck.desc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="otgSelfCheckLoading"
+                  :class="[
+                    'transition-all duration-150 active:scale-95 active:brightness-95',
+                    otgRunButtonPressed ? 'scale-95 brightness-95' : ''
+                  ]"
+                  @click="onRunOtgSelfCheckClick"
+                >
+                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': otgSelfCheckLoading }" />
+                  {{ t('settings.otgSelfCheck.run') }}
+                </Button>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p v-if="otgSelfCheckError" class="text-xs text-red-600 dark:text-red-400">
+                  {{ otgSelfCheckError }}
+                </p>
+
+                <template v-if="otgSelfCheckResult">
+                  <div class="flex flex-wrap gap-2 text-xs">
+                    <Badge
+                      :variant="otgSelfCheckResult.overall_ok ? 'default' : 'destructive'"
+                      class="font-medium"
+                    >
+                      {{ t('settings.otgSelfCheck.overall') }}：{{ otgSelfCheckResult.overall_ok ? t('settings.otgSelfCheck.ok') : t('settings.otgSelfCheck.hasIssues') }}
+                    </Badge>
+                    <Badge variant="outline" class="font-normal">
+                      {{ t('settings.otgSelfCheck.counts', { errors: otgSelfCheckResult.error_count, warnings: otgSelfCheckResult.warning_count }) }}
+                    </Badge>
+                    <Badge variant="secondary" class="font-normal">
+                      {{ t('settings.otgSelfCheck.selectedUdc') }}：{{ otgSelfCheckResult.selected_udc || '-' }}
+                    </Badge>
+                    <Badge variant="secondary" class="font-normal">
+                      {{ t('settings.otgSelfCheck.boundUdc') }}：{{ otgSelfCheckResult.bound_udc || '-' }}
+                    </Badge>
+                  </div>
+
+                  <div class="rounded-md border divide-y">
+                    <details
+                      v-for="group in otgCheckGroups"
+                      :key="group.id"
+                      :open="group.status === 'error' || group.status === 'warn'"
+                      class="group"
+                    >
+                      <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/40">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="inline-block h-2 w-2 rounded-full shrink-0" :class="otgGroupStatusClass(group.status)" />
+                          <span class="text-sm font-medium truncate leading-6">{{ t(group.titleKey) }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <span class="text-xs text-muted-foreground">{{ otgGroupSummary(group) }}</span>
+                          <Badge variant="outline" class="text-[10px] h-5 px-1.5">{{ otgGroupStatusText(group.status) }}</Badge>
+                        </div>
+                      </summary>
+
+                      <div v-if="group.items.length > 0" class="border-t bg-muted/20">
+                        <div
+                          v-for="item in group.items"
+                          :key="item.id"
+                          class="px-4 py-3 border-b last:border-b-0"
+                        >
+                          <div class="flex items-start gap-2">
+                            <span class="inline-block h-2 w-2 rounded-full mt-1.5 shrink-0" :class="otgCheckLevelClass(item.level)" />
+                            <div class="min-w-0 space-y-1">
+                              <div class="flex items-center gap-2">
+                                <p class="text-sm leading-5">{{ otgCheckMessage(item) }}</p>
+                                <span class="text-[11px] text-muted-foreground shrink-0">{{ otgCheckStatusText(item.level) }}</span>
+                              </div>
+                              <div class="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                <span v-if="item.hint">{{ otgCheckHint(item) }}</span>
+                                <code v-if="item.path" class="font-mono break-all">{{ item.path }}</code>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                        {{ t('settings.otgSelfCheck.notRun') }}
+                      </div>
+                    </details>
+                  </div>
+                </template>
+                <p v-else-if="otgSelfCheckLoading" class="text-xs text-muted-foreground">
+                  {{ t('common.loading') }}
+                </p>
+              </CardContent>
+            </Card>
           </div>
 
           <!-- Access Section -->
@@ -1787,7 +2356,7 @@ onMounted(async () => {
                   <div class="space-y-2">
                     <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
                       <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
-                      <Button variant="ghost" size="icon" @click="removeBindAddress(i)">
+                      <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeBindAddress(i)">
                         <Trash2 class="h-4 w-4" />
                       </Button>
                     </div>
@@ -1881,7 +2450,7 @@ onMounted(async () => {
                   <CardTitle>{{ t('settings.atxSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.atxSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadAtxDevices">
+                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadAtxDevices">
                   <RefreshCw class="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -2141,14 +2710,10 @@ onMounted(async () => {
                       <Label class="sm:text-right">{{ t('extensions.ttyd.shell') }}</Label>
                       <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
-                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.ttyd.credential') }}</Label>
-                      <Input v-model="extConfig.ttyd.credential" class="sm:col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
-                    </div>
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.ttyd = !showLogs.ttyd; if (showLogs.ttyd) refreshExtensionLogs('ttyd')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.ttyd = !showLogs.ttyd; if (showLogs.ttyd) refreshExtensionLogs('ttyd')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2242,7 +2807,7 @@ onMounted(async () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.gostc = !showLogs.gostc; if (showLogs.gostc) refreshExtensionLogs('gostc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.gostc = !showLogs.gostc; if (showLogs.gostc) refreshExtensionLogs('gostc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2329,7 +2894,7 @@ onMounted(async () => {
                       <div class="sm:col-span-3 space-y-2">
                         <div v-for="(_, i) in extConfig.easytier.peer_urls" :key="i" class="flex gap-2">
                           <Input v-model="extConfig.easytier.peer_urls[i]" placeholder="tcp://1.2.3.4:11010" :disabled="isExtRunning(extensions?.easytier?.status)" />
-                          <Button variant="ghost" size="icon" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
+                          <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
                             <Trash2 class="h-4 w-4" />
                           </Button>
                         </div>
@@ -2349,7 +2914,7 @@ onMounted(async () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button @click="showLogs.easytier = !showLogs.easytier; if (showLogs.easytier) refreshExtensionLogs('easytier')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <button type="button" @click="showLogs.easytier = !showLogs.easytier; if (showLogs.easytier) refreshExtensionLogs('easytier')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                       <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />
                       {{ t('extensions.viewLogs') }}
                     </button>
@@ -2372,6 +2937,121 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- RTSP Section -->
+          <div v-show="activeSection === 'ext-rtsp'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.rtsp.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.rtsp.desc') }}</CardDescription>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Badge :variant="rtspStatus?.service_status === 'running' ? 'default' : 'secondary'">
+                      {{ getRtspServiceStatusText(rtspStatus?.service_status) }}
+                    </Badge>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRtspConfig" :disabled="rtspLoading">
+                      <RefreshCw :class="['h-4 w-4', rtspLoading ? 'animate-spin' : '']" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-2 h-2 rounded-full', getRtspStatusClass(rtspStatus?.service_status)]" />
+                    <span class="text-sm">{{ getRtspServiceStatusText(rtspStatus?.service_status) }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="rtspStatus?.service_status !== 'running'"
+                      size="sm"
+                      @click="startRtsp"
+                      :disabled="rtspLoading"
+                    >
+                      <Play class="h-4 w-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      @click="stopRtsp"
+                      :disabled="rtspLoading"
+                    >
+                      <Square class="h-4 w-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+
+                <div class="grid gap-4">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.autoStart') }}</Label>
+                    <Switch v-model="rtspLocalConfig.enabled" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
+                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
+                    <Input v-model.number="rtspLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.path') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="rtspLocalConfig.path" :placeholder="t('extensions.rtsp.pathPlaceholder')" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.pathHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.codec') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="rtspLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.codecHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.rtsp.allowOneClient') }}</Label>
+                    <Switch v-model="rtspLocalConfig.allow_one_client" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.username') }}</Label>
+                    <Input v-model="rtspLocalConfig.username" class="sm:col-span-3" :placeholder="t('extensions.rtsp.usernamePlaceholder')" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rtsp.password') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input
+                        v-model="rtspLocalConfig.password"
+                        type="password"
+                        :placeholder="rtspStatus?.config?.has_password ? t('extensions.rtsp.passwordSet') : t('extensions.rtsp.passwordPlaceholder')"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.passwordHint') }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
+                  <p class="text-sm font-medium">{{ t('extensions.rtsp.urlPreview') }}</p>
+                  <code class="font-mono text-sm break-all">{{ rtspStreamUrl }}</code>
+                </div>
+              </CardContent>
+            </Card>
+            <div class="flex justify-end">
+              <Button :disabled="loading || rtspLoading" @click="saveRtspConfig">
+                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+
           <!-- RustDesk Section -->
           <div v-show="activeSection === 'ext-rustdesk'" class="space-y-6">
             <Card>
@@ -2385,7 +3065,7 @@ onMounted(async () => {
                     <Badge :variant="rustdeskStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}
                     </Badge>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
                       <RefreshCw :class="['h-4 w-4', rustdeskLoading ? 'animate-spin' : '']" />
                     </Button>
                   </div>
@@ -2480,6 +3160,7 @@ onMounted(async () => {
                         variant="ghost"
                         size="icon"
                         class="h-8 w-8"
+                        :aria-label="t('extensions.rustdesk.copyId')"
                         @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
                         :disabled="!rustdeskConfig?.device_id"
                       >
@@ -2502,6 +3183,7 @@ onMounted(async () => {
                         variant="ghost"
                         size="icon"
                         class="h-8 w-8"
+                        :aria-label="t('extensions.rustdesk.copyPassword')"
                         @click="copyToClipboard(rustdeskPassword?.device_password || '', 'password')"
                         :disabled="!rustdeskPassword?.device_password"
                       >
@@ -2538,14 +3220,87 @@ onMounted(async () => {
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>One-KVM</CardTitle>
-                <CardDescription>{{ t('settings.aboutDesc') }}</CardDescription>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.onlineUpgrade') }}</CardTitle>
+                  <CardDescription>{{ t('settings.onlineUpgradeDesc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8"
+                  :aria-label="t('common.refresh')"
+                  :disabled="updateRunning || updateLoading"
+                  @click="loadUpdateOverview"
+                >
+                  <RefreshCw :class="['h-4 w-4', (updateLoading || updateRunning) ? 'animate-spin' : '']" />
+                </Button>
               </CardHeader>
-              <CardContent>
-                <div class="flex justify-between items-center py-2">
-                  <span class="text-sm text-muted-foreground">{{ t('settings.version') }}</span>
-                  <Badge>{{ systemStore.version || t('common.unknown') }} ({{ systemStore.buildDate || t('common.unknown') }})</Badge>
+              <CardContent class="space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.currentVersion') }}</Label>
+                    <Badge variant="outline">
+                      {{ updateOverview?.current_version || systemStore.version || t('common.unknown') }}
+                      ({{ systemStore.buildDate || t('common.unknown') }})
+                    </Badge>
+                  </div>
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.latestVersion') }}</Label>
+                    <Badge variant="outline">{{ updateOverview?.latest_version || t('common.unknown') }}</Badge>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>{{ t('settings.updateChannel') }}</Label>
+                  <select v-model="updateChannel" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="updateRunning">
+                    <option value="stable">Stable</option>
+                    <option value="beta">Beta</option>
+                  </select>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('settings.updateStatus') }}</Label>
+                    <Badge
+                      variant="outline"
+                      class="max-w-[60%] truncate"
+                      :title="updateStatusBadgeText()"
+                    >
+                      {{ updateStatusBadgeText() }}
+                    </Badge>
+                  </div>
+                  <div v-if="updateRunning || updateStatus?.phase === 'failed' || updateStatus?.phase === 'success'" class="w-full h-2 bg-muted rounded overflow-hidden">
+                    <div class="h-full bg-primary transition-all" :style="{ width: `${Math.max(0, Math.min(100, updateStatus?.progress || 0))}%` }" />
+                  </div>
+                  <p v-if="updateStatus?.last_error" class="text-xs text-destructive">{{ updateStatus.last_error }}</p>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>{{ t('settings.releaseNotes') }}</Label>
+                  <div v-if="updateLoading" class="text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+                  <div v-else-if="!updateOverview?.notes_between?.length" class="text-sm text-muted-foreground">{{ t('settings.noUpdates') }}</div>
+                  <div v-else class="space-y-3 max-h-56 overflow-y-auto pr-1">
+                    <div v-for="item in updateOverview.notes_between" :key="item.version" class="rounded border p-3 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="font-medium">v{{ item.version }}</span>
+                        <span class="text-xs text-muted-foreground">{{ item.published_at }}</span>
+                      </div>
+                      <ul class="list-disc pl-5 text-sm space-y-1">
+                        <li v-for="(note, idx) in item.notes" :key="`${item.version}-${idx}`">{{ note }}</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                  <Button
+                    :disabled="updateRunning || !updateOverview?.upgrade_available"
+                    @click="startOnlineUpgrade"
+                  >
+                    <RefreshCw class="h-4 w-4 mr-2" :class="updateRunning ? 'animate-spin' : ''" />
+                    {{ t('settings.startUpgrade') }}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -2613,7 +3368,7 @@ onMounted(async () => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="max-w-[95vw] w-[1200px] h-[600px] p-0 flex flex-col overflow-hidden">
+      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-4 py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
@@ -2625,6 +3380,7 @@ onMounted(async () => {
               size="icon"
               class="h-8 w-8 mr-8"
               @click="openTerminalInNewTab"
+              :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
               <ExternalLink class="h-4 w-4" />

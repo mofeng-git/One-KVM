@@ -306,8 +306,6 @@ export interface TtydConfig {
 	port: number;
 	/** Shell to execute */
 	shell: string;
-	/** Credential in format "user:password" (optional) */
-	credential?: string;
 }
 
 /** gostc configuration (NAT traversal based on FRP) */
@@ -361,6 +359,30 @@ export interface RustDeskConfig {
 	device_id: string;
 }
 
+/** RTSP output codec */
+export enum RtspCodec {
+	H264 = "h264",
+	H265 = "h265",
+}
+
+/** RTSP configuration */
+export interface RtspConfig {
+	/** Enable RTSP output */
+	enabled: boolean;
+	/** Bind IP address */
+	bind: string;
+	/** RTSP TCP listen port */
+	port: number;
+	/** Stream path (without leading slash) */
+	path: string;
+	/** Allow only one client connection at a time */
+	allow_one_client: boolean;
+	/** Output codec (H264/H265) */
+	codec: RtspCodec;
+	/** Optional username for authentication */
+	username?: string;
+}
+
 /** Main application configuration */
 export interface AppConfig {
 	/** Whether initial setup has been completed */
@@ -385,6 +407,8 @@ export interface AppConfig {
 	extensions: ExtensionsConfig;
 	/** RustDesk remote access settings */
 	rustdesk: RustDeskConfig;
+	/** RTSP streaming settings */
+	rtsp: RtspConfig;
 }
 
 /** Update for a single ATX key configuration */
@@ -564,6 +588,33 @@ export interface MsdConfigUpdate {
 	msd_dir?: string;
 }
 
+export interface RtspConfigResponse {
+	enabled: boolean;
+	bind: string;
+	port: number;
+	path: string;
+	allow_one_client: boolean;
+	codec: RtspCodec;
+	username?: string;
+	has_password: boolean;
+}
+
+export interface RtspConfigUpdate {
+	enabled?: boolean;
+	bind?: string;
+	port?: number;
+	path?: string;
+	allow_one_client?: boolean;
+	codec?: RtspCodec;
+	username?: string;
+	password?: string;
+}
+
+export interface RtspStatusResponse {
+	config: RtspConfigResponse;
+	service_status: string;
+}
+
 export interface RustDeskConfigUpdate {
 	enabled?: boolean;
 	rendezvous_server?: string;
@@ -613,7 +664,6 @@ export interface TtydConfigUpdate {
 	enabled?: boolean;
 	port?: number;
 	shell?: string;
-	credential?: string;
 }
 
 /** Simple ttyd status for console view */
@@ -638,4 +688,3 @@ export interface WebConfigUpdate {
 	bind_address?: string;
 	https_enabled?: boolean;
 }
-

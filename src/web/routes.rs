@@ -50,6 +50,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/stream/mode", post(handlers::stream_mode_set))
         .route("/stream/bitrate", post(handlers::stream_set_bitrate))
         .route("/stream/codecs", get(handlers::stream_codecs_list))
+        .route("/stream/constraints", get(handlers::stream_constraints_get))
         // WebRTC endpoints
         .route("/webrtc/session", post(handlers::webrtc_create_session))
         .route("/webrtc/offer", post(handlers::webrtc_offer))
@@ -59,6 +60,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/webrtc/close", post(handlers::webrtc_close_session))
         // HID endpoints
         .route("/hid/status", get(handlers::hid_status))
+        .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
         .route("/hid/reset", post(handlers::hid_reset))
         // WebSocket HID endpoint (for MJPEG mode)
         .route("/ws/hid", any(ws_hid_handler))
@@ -120,6 +122,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/rustdesk/regenerate-password",
             post(handlers::config::regenerate_device_password),
         )
+        // RTSP configuration endpoints
+        .route("/config/rtsp", get(handlers::config::get_rtsp_config))
+        .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
+        .route(
+            "/config/rtsp/status",
+            get(handlers::config::get_rtsp_status),
+        )
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
@@ -128,6 +137,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/auth", patch(handlers::config::update_auth_config))
         // System control
         .route("/system/restart", post(handlers::system_restart))
+        .route("/update/overview", get(handlers::update_overview))
+        .route("/update/upgrade", post(handlers::update_upgrade))
+        .route("/update/status", get(handlers::update_status))
         // MSD (Mass Storage Device) endpoints
         .route("/msd/status", get(handlers::msd_status))
         .route("/msd/images", get(handlers::msd_images_list))
@@ -158,6 +170,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/atx/status", get(handlers::atx_status))
         .route("/atx/power", post(handlers::atx_power))
         .route("/atx/wol", post(handlers::atx_wol))
+        .route("/atx/wol/history", get(handlers::atx_wol_history))
         // Device discovery endpoints
         .route("/devices/atx", get(handlers::devices::list_atx_devices))
         // Extension management endpoints

@@ -30,7 +30,7 @@ fn init_hwcodec_logging() {
 }
 
 /// H.265 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum H265EncoderType {
     /// NVIDIA NVENC
     Nvenc,
@@ -47,6 +47,7 @@ pub enum H265EncoderType {
     /// Software encoder (libx265)
     Software,
     /// No encoder available
+    #[default]
     None,
 }
 
@@ -65,12 +66,6 @@ impl std::fmt::Display for H265EncoderType {
     }
 }
 
-impl Default for H265EncoderType {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 impl From<EncoderBackend> for H265EncoderType {
     fn from(backend: EncoderBackend) -> Self {
         match backend {
@@ -86,11 +81,12 @@ impl From<EncoderBackend> for H265EncoderType {
 }
 
 /// Input pixel format for H265 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum H265InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for hardware encoders)
+    #[default]
     Nv12,
     /// NV21 - Y plane + interleaved VU plane
     Nv21,
@@ -104,12 +100,6 @@ pub enum H265InputFormat {
     Rgb24,
     /// BGR24 - packed BGR format (RKMPP direct input)
     Bgr24,
-}
-
-impl Default for H265InputFormat {
-    fn default() -> Self {
-        Self::Nv12 // Default to NV12 for hardware encoder compatibility
-    }
 }
 
 /// H.265 encoder configuration
@@ -256,8 +246,6 @@ pub fn detect_best_h265_encoder(width: u32, height: u32) -> (H265EncoderType, Op
         H265EncoderType::Rkmpp
     } else if codec.name.contains("v4l2m2m") {
         H265EncoderType::V4l2M2m
-    } else if codec.name.contains("libx265") {
-        H265EncoderType::Software
     } else {
         H265EncoderType::Software // Default to software for unknown
     };

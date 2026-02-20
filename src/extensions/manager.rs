@@ -230,13 +230,6 @@ impl ExtensionManager {
                     "-W".to_string(),            // Writable (allow input)
                 ];
 
-                // Add credential if set (still useful for additional security layer)
-                if let Some(ref cred) = c.credential {
-                    if !cred.is_empty() {
-                        args.extend(["-c".to_string(), cred.clone()]);
-                    }
-                }
-
                 // Add shell as last argument
                 args.push(c.shell.clone());
                 Ok(args)

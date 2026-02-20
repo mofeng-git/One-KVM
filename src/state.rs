@@ -13,7 +13,9 @@ use crate::extensions::ExtensionManager;
 use crate::hid::HidController;
 use crate::msd::MsdController;
 use crate::otg::OtgService;
+use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
+use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
 
 /// Application-wide state shared across handlers
@@ -50,10 +52,14 @@ pub struct AppState {
     pub audio: Arc<AudioController>,
     /// RustDesk remote access service (optional)
     pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
+    /// RTSP streaming service (optional)
+    pub rtsp: Arc<RwLock<Option<Arc<RtspService>>>>,
     /// Extension manager (ttyd, gostc, easytier)
     pub extensions: Arc<ExtensionManager>,
     /// Event bus for real-time notifications
     pub events: Arc<EventBus>,
+    /// Online update service
+    pub update: Arc<UpdateService>,
     /// Shutdown signal sender
     pub shutdown_tx: broadcast::Sender<()>,
     /// Recently revoked session IDs (for client kick detection)
@@ -64,6 +70,7 @@ pub struct AppState {
 
 impl AppState {
     /// Create new application state
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: ConfigStore,
         sessions: SessionStore,
@@ -75,8 +82,10 @@ impl AppState {
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
         rustdesk: Option<Arc<RustDeskService>>,
+        rtsp: Option<Arc<RtspService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
+        update: Arc<UpdateService>,
         shutdown_tx: broadcast::Sender<()>,
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
@@ -91,8 +100,10 @@ impl AppState {
             atx: Arc::new(RwLock::new(atx)),
             audio,
             rustdesk: Arc::new(RwLock::new(rustdesk)),
+            rtsp: Arc::new(RwLock::new(rtsp)),
             extensions,
             events,
+            update,
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
             data_dir,

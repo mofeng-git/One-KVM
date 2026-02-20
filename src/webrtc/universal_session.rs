@@ -292,7 +292,6 @@ impl UniversalSession {
                 urls: turn.urls.clone(),
                 username: turn.username.clone(),
                 credential: turn.credential.clone(),
-                ..Default::default()
             });
         }
 
@@ -430,7 +429,9 @@ impl UniversalSession {
                         let candidate = IceCandidate {
                             candidate: candidate_str,
                             sdp_mid: candidate_json.as_ref().and_then(|j| j.sdp_mid.clone()),
-                            sdp_mline_index: candidate_json.as_ref().and_then(|j| j.sdp_mline_index),
+                            sdp_mline_index: candidate_json
+                                .as_ref()
+                                .and_then(|j| j.sdp_mline_index),
                             username_fragment: candidate_json
                                 .as_ref()
                                 .and_then(|j| j.username_fragment.clone()),
@@ -615,20 +616,15 @@ impl UniversalSession {
                         };
 
                         // Verify codec matches
-                        let frame_codec = match encoded_frame.codec {
-                            VideoEncoderType::H264 => VideoEncoderType::H264,
-                            VideoEncoderType::H265 => VideoEncoderType::H265,
-                            VideoEncoderType::VP8 => VideoEncoderType::VP8,
-                            VideoEncoderType::VP9 => VideoEncoderType::VP9,
-                        };
+                        let frame_codec = encoded_frame.codec;
 
                         if frame_codec != expected_codec {
                             continue;
                         }
 
                         // Debug log for H265 frames
-                        if expected_codec == VideoEncoderType::H265 {
-                            if encoded_frame.is_keyframe || frames_sent % 30 == 0 {
+                        if expected_codec == VideoEncoderType::H265
+                                && (encoded_frame.is_keyframe || frames_sent.is_multiple_of(30)) {
                                 debug!(
                                     "[Session-H265] Received frame #{}: size={}, keyframe={}, seq={}",
                                     frames_sent,
@@ -637,7 +633,6 @@ impl UniversalSession {
                                     encoded_frame.sequence
                                 );
                             }
-                        }
 
                         // Ensure decoder starts from a keyframe and recover on gaps.
                         let mut gap_detected = false;
@@ -768,7 +763,7 @@ impl UniversalSession {
                         // 20ms at 48kHz = 960 samples
                         let samples = 960u32;
                         if let Err(e) = audio_track.write_packet(&opus_frame.data, samples).await {
-                            if packets_sent % 100 == 0 {
+                            if packets_sent.is_multiple_of(100) {
                                 debug!("Failed to write audio packet: {}", e);
                             }
                         } else {
@@ -838,13 +833,24 @@ impl UniversalSession {
             }
         }
 
+        let mut gather_complete = self.pc.gathering_complete_promise().await;
+
         self.pc
             .set_local_description(answer.clone())
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to set local description: {}", e)))?;
 
-        // Wait for ICE candidates
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait for ICE gathering complete (or timeout) to return a fuller initial candidate set.
+        const ICE_GATHER_TIMEOUT: Duration = Duration::from_millis(2500);
+        if tokio::time::timeout(ICE_GATHER_TIMEOUT, gather_complete.recv())
+            .await
+            .is_err()
+        {
+            debug!(
+                "ICE gathering timeout after {:?} for session {}",
+                ICE_GATHER_TIMEOUT, self.session_id
+            );
+        }
 
         let candidates = self.ice_candidates.lock().await.clone();
         Ok(SdpAnswer::with_candidates(answer.sdp, candidates))

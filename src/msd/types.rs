@@ -7,19 +7,15 @@ use std::path::PathBuf;
 /// MSD operating mode
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum MsdMode {
     /// No storage connected
+    #[default]
     None,
     /// Image file mounted (ISO/IMG)
     Image,
     /// Virtual drive (FAT32) connected
     Drive,
-}
-
-impl Default for MsdMode {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Image file metadata

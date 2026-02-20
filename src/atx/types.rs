@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 /// Power status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PowerStatus {
     /// Power is on
@@ -15,18 +15,13 @@ pub enum PowerStatus {
     /// Power is off
     Off,
     /// Power status unknown (no LED connected)
+    #[default]
     Unknown,
-}
-
-impl Default for PowerStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Driver type for ATX key operations
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AtxDriverType {
     /// GPIO control via Linux character device
@@ -36,30 +31,20 @@ pub enum AtxDriverType {
     /// Serial/COM port relay (taobao LCUS type)
     Serial,
     /// Disabled / Not configured
+    #[default]
     None,
-}
-
-impl Default for AtxDriverType {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Active level for GPIO pins
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ActiveLevel {
     /// Active high (default for most cases)
+    #[default]
     High,
     /// Active low (inverted)
     Low,
-}
-
-impl Default for ActiveLevel {
-    fn default() -> Self {
-        Self::High
-    }
 }
 
 /// Configuration for a single ATX key (power or reset)
@@ -77,6 +62,7 @@ pub struct AtxKeyConfig {
     /// Pin or channel number:
     /// - For GPIO: GPIO pin number
     /// - For USB Relay: relay channel (0-based)
+    /// - For Serial Relay (LCUS): relay channel (1-based)
     pub pin: u32,
     /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
@@ -105,7 +91,7 @@ impl AtxKeyConfig {
 
 /// LED sensing configuration (optional)
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AtxLedConfig {
     /// Whether LED sensing is enabled
@@ -118,17 +104,6 @@ pub struct AtxLedConfig {
     pub inverted: bool,
 }
 
-impl Default for AtxLedConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            gpio_chip: String::new(),
-            gpio_pin: 0,
-            inverted: false,
-        }
-    }
-}
-
 impl AtxLedConfig {
     /// Check if LED sensing is configured
     pub fn is_configured(&self) -> bool {
@@ -137,7 +112,7 @@ impl AtxLedConfig {
 }
 
 /// ATX state information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AtxState {
     /// Whether ATX feature is available/enabled
     pub available: bool,
@@ -149,18 +124,6 @@ pub struct AtxState {
     pub power_status: PowerStatus,
     /// Whether power LED sensing is supported
     pub led_supported: bool,
-}
-
-impl Default for AtxState {
-    fn default() -> Self {
-        Self {
-            available: false,
-            power_configured: false,
-            reset_configured: false,
-            power_status: PowerStatus::Unknown,
-            led_supported: false,
-        }
-    }
 }
 
 /// ATX power action request
@@ -274,5 +237,6 @@ mod tests {
         assert!(!state.power_configured);
         assert!(!state.reset_configured);
         assert_eq!(state.power_status, PowerStatus::Unknown);
+        assert!(!state.led_supported);
     }
 }

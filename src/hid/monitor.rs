@@ -16,9 +16,10 @@ use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// HID health status
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum HidHealthStatus {
     /// Device is healthy and operational
+    #[default]
     Healthy,
     /// Device has an error, attempting recovery
     Error {
@@ -31,12 +32,6 @@ pub enum HidHealthStatus {
     },
     /// Device is disconnected
     Disconnected,
-}
-
-impl Default for HidHealthStatus {
-    fn default() -> Self {
-        Self::Healthy
-    }
 }
 
 /// HID health monitor configuration
@@ -196,7 +191,7 @@ impl HidHealthMonitor {
         let attempt = self.retry_count.load(Ordering::Relaxed);
 
         // Only publish every 5 attempts to avoid event spam
-        if attempt == 1 || attempt % 5 == 0 {
+        if attempt == 1 || attempt.is_multiple_of(5) {
             debug!("HID {} reconnecting, attempt {}", backend, attempt);
 
             if let Some(ref events) = *self.events.read().await {

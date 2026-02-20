@@ -87,8 +87,7 @@ impl ImageManager {
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| {
-                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                    .unwrap_or_else(|| Utc::now().into())
+                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap_or_else(Utc::now)
             })
             .unwrap_or_else(Utc::now);
 
@@ -400,7 +399,7 @@ impl ImageManager {
                 .headers()
                 .get(reqwest::header::CONTENT_DISPOSITION)
                 .and_then(|v| v.to_str().ok())
-                .and_then(|s| extract_filename_from_content_disposition(s));
+                .and_then(extract_filename_from_content_disposition);
 
             if let Some(name) = from_header {
                 sanitize_filename(&name)

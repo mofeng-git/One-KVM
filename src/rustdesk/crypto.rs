@@ -189,7 +189,7 @@ pub fn hash_password_double(password: &str, salt: &str, challenge: &str) -> Vec<
 
     // Second hash: SHA256(first_hash + challenge)
     let mut hasher2 = Sha256::new();
-    hasher2.update(&first_hash);
+    hasher2.update(first_hash);
     hasher2.update(challenge.as_bytes());
     hasher2.finalize().to_vec()
 }

@@ -31,8 +31,10 @@ unsafe impl Send for HwMjpegH26xPipeline {}
 impl HwMjpegH26xPipeline {
     pub fn new(config: HwMjpegH26xConfig) -> Result<Self, String> {
         unsafe {
-            let dec = CString::new(config.decoder.as_str()).map_err(|_| "decoder name invalid".to_string())?;
-            let enc = CString::new(config.encoder.as_str()).map_err(|_| "encoder name invalid".to_string())?;
+            let dec = CString::new(config.decoder.as_str())
+                .map_err(|_| "decoder name invalid".to_string())?;
+            let enc = CString::new(config.encoder.as_str())
+                .map_err(|_| "encoder name invalid".to_string())?;
             let ctx = ffmpeg_hw_mjpeg_h26x_new(
                 dec.as_ptr(),
                 enc.as_ptr(),

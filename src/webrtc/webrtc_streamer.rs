@@ -35,8 +35,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, trace, warn};
 
 use crate::audio::{AudioController, OpusFrame};
-use crate::events::EventBus;
 use crate::error::{AppError, Result};
+use crate::events::EventBus;
 use crate::hid::HidController;
 use crate::video::encoder::registry::EncoderBackend;
 use crate::video::encoder::registry::VideoEncoderType;
@@ -250,6 +250,33 @@ impl WebRtcStreamer {
         }
     }
 
+    fn should_stop_pipeline(session_count: usize, subscriber_count: usize) -> bool {
+        session_count == 0 && subscriber_count == 0
+    }
+
+    async fn stop_pipeline_if_idle(&self, reason: &str) {
+        let session_count = self.sessions.read().await.len();
+        let pipeline = self.video_pipeline.read().await.clone();
+
+        let Some(pipeline) = pipeline else {
+            return;
+        };
+
+        let subscriber_count = pipeline.subscriber_count();
+        if Self::should_stop_pipeline(session_count, subscriber_count) {
+            info!(
+                "{} stopping video pipeline (sessions={}, subscribers={})",
+                reason, session_count, subscriber_count
+            );
+            pipeline.stop();
+        } else {
+            debug!(
+                "Keeping video pipeline alive (reason={}, sessions={}, subscribers={})",
+                reason, session_count, subscriber_count
+            );
+        }
+    }
+
     /// Ensure video pipeline is initialized and running
     async fn ensure_video_pipeline(self: &Arc<Self>) -> Result<Arc<SharedVideoPipeline>> {
         let mut pipeline_guard = self.video_pipeline.write().await;
@@ -270,7 +297,6 @@ impl WebRtcStreamer {
             bitrate_preset: config.bitrate_preset,
             fps: config.fps,
             encoder_backend: config.encoder_backend,
-            ..Default::default()
         };
 
         info!("Creating shared video pipeline for {:?}", codec);
@@ -311,7 +337,9 @@ impl WebRtcStreamer {
                         }
                         drop(pipeline_guard);
 
-                        info!("Video pipeline stopped, but keeping capture config for new sessions");
+                        info!(
+                            "Video pipeline stopped, but keeping capture config for new sessions"
+                        );
                     }
                     break;
                 }
@@ -739,13 +767,7 @@ impl WebRtcStreamer {
             session.close().await?;
         }
 
-        // Stop pipeline if no more sessions
-        if self.sessions.read().await.is_empty() {
-            if let Some(ref pipeline) = *self.video_pipeline.read().await {
-                info!("No more sessions, stopping video pipeline");
-                pipeline.stop();
-            }
-        }
+        self.stop_pipeline_if_idle("After close_session").await;
 
         Ok(())
     }
@@ -762,11 +784,8 @@ impl WebRtcStreamer {
             }
         }
 
-        // Stop pipeline
         drop(sessions);
-        if let Some(ref pipeline) = *self.video_pipeline.read().await {
-            pipeline.stop();
-        }
+        self.stop_pipeline_if_idle("After close_all_sessions").await;
 
         count
     }
@@ -825,14 +844,9 @@ impl WebRtcStreamer {
                 sessions.remove(id);
             }
 
-            // Stop pipeline if no more sessions
-            if sessions.is_empty() {
-                drop(sessions);
-                if let Some(ref pipeline) = *self.video_pipeline.read().await {
-                    info!("No more sessions after cleanup, stopping video pipeline");
-                    pipeline.stop();
-                }
-            }
+            drop(sessions);
+            self.stop_pipeline_if_idle("After cleanup_closed_sessions")
+                .await;
         }
     }
 
@@ -926,10 +940,7 @@ impl WebRtcStreamer {
                             let pipeline = pipeline_for_callback.clone();
                             let sid = sid.clone();
                             tokio::spawn(async move {
-                                info!(
-                                    "Requesting keyframe for session {} after reconnect",
-                                    sid
-                                );
+                                info!("Requesting keyframe for session {} after reconnect", sid);
                                 pipeline.request_keyframe().await;
                             });
                         });
@@ -991,5 +1002,13 @@ mod tests {
         let streamer = WebRtcStreamer::new();
         let codecs = streamer.supported_video_codecs();
         assert!(codecs.contains(&VideoCodecType::H264));
+    }
+
+    #[test]
+    fn stop_pipeline_requires_no_sessions_and_no_subscribers() {
+        assert!(WebRtcStreamer::should_stop_pipeline(0, 0));
+        assert!(!WebRtcStreamer::should_stop_pipeline(1, 0));
+        assert!(!WebRtcStreamer::should_stop_pipeline(0, 1));
+        assert!(!WebRtcStreamer::should_stop_pipeline(2, 3));
     }
 }

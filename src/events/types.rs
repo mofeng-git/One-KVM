@@ -124,6 +124,7 @@ pub struct ClientStats {
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "event", content = "data")]
+#[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
     // ============================================================================
     // Video Stream Events

@@ -10,7 +10,7 @@ use crate::error::{AppError, Result};
 /// WOL magic packet structure:
 /// - 6 bytes of 0xFF
 /// - 16 repetitions of the target MAC address (6 bytes each)
-/// Total: 6 + 16 * 6 = 102 bytes
+///   Total: 6 + 16 * 6 = 102 bytes
 const MAGIC_PACKET_SIZE: usize = 102;
 
 /// Parse MAC address string into bytes
@@ -160,8 +160,8 @@ mod tests {
         let packet = build_magic_packet(&mac);
 
         // Check header (6 bytes of 0xFF)
-        for i in 0..6 {
-            assert_eq!(packet[i], 0xFF);
+        for byte in packet.iter().take(6) {
+            assert_eq!(*byte, 0xFF);
         }
 
         // Check MAC repetitions

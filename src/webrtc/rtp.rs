@@ -330,9 +330,7 @@ impl OpusAudioTrack {
             stream_id.to_string(),
         ));
 
-        Self {
-            track,
-        }
+        Self { track }
     }
 
     /// Get the underlying WebRTC track
@@ -365,13 +363,10 @@ impl OpusAudioTrack {
             ..Default::default()
         };
 
-        self.track
-            .write_sample(&sample)
-            .await
-            .map_err(|e| {
-                error!("Failed to write Opus sample: {}", e);
-                AppError::WebRtcError(format!("Failed to write audio sample: {}", e))
-            })
+        self.track.write_sample(&sample).await.map_err(|e| {
+            error!("Failed to write Opus sample: {}", e);
+            AppError::WebRtcError(format!("Failed to write audio sample: {}", e))
+        })
     }
 }
 

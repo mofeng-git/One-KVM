@@ -11,6 +11,7 @@ pub use crate::rustdesk::config::RustDeskConfig;
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AppConfig {
     /// Whether initial setup has been completed
     pub initialized: bool,
@@ -34,24 +35,8 @@ pub struct AppConfig {
     pub extensions: ExtensionsConfig,
     /// RustDesk remote access settings
     pub rustdesk: RustDeskConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            initialized: false,
-            auth: AuthConfig::default(),
-            video: VideoConfig::default(),
-            hid: HidConfig::default(),
-            msd: MsdConfig::default(),
-            atx: AtxConfig::default(),
-            audio: AudioConfig::default(),
-            stream: StreamConfig::default(),
-            web: WebConfig::default(),
-            extensions: ExtensionsConfig::default(),
-            rustdesk: RustDeskConfig::default(),
-        }
-    }
+    /// RTSP streaming settings
+    pub rtsp: RtspConfig,
 }
 
 /// Authentication configuration
@@ -116,19 +101,15 @@ impl Default for VideoConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum HidBackend {
     /// USB OTG HID gadget
     Otg,
     /// CH9329 serial HID controller
     Ch9329,
     /// Disabled
+    #[default]
     None,
-}
-
-impl Default for HidBackend {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// OTG USB device descriptor configuration
@@ -163,8 +144,10 @@ impl Default for OtgDescriptorConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OtgHidProfile {
     /// Full HID device set (keyboard + relative mouse + absolute mouse + consumer control)
+    #[default]
     Full,
     /// Full HID device set without MSD
     FullNoMsd,
@@ -178,12 +161,6 @@ pub enum OtgHidProfile {
     LegacyMouseRelative,
     /// Custom function selection
     Custom,
-}
-
-impl Default for OtgHidProfile {
-    fn default() -> Self {
-        Self::Full
-    }
 }
 
 /// OTG HID function selection (used when profile is Custom)
@@ -360,6 +337,7 @@ pub use crate::atx::{ActiveLevel, AtxDriverType, AtxKeyConfig, AtxLedConfig};
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AtxConfig {
     /// Enable ATX functionality
     pub enabled: bool,
@@ -371,18 +349,6 @@ pub struct AtxConfig {
     pub led: AtxLedConfig,
     /// Network interface for WOL packets (empty = auto)
     pub wol_interface: String,
-}
-
-impl Default for AtxConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            power: AtxKeyConfig::default(),
-            reset: AtxKeyConfig::default(),
-            led: AtxLedConfig::default(),
-            wol_interface: String::new(),
-        }
-    }
 }
 
 impl AtxConfig {
@@ -427,16 +393,62 @@ impl Default for AudioConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum StreamMode {
     /// WebRTC with H264/H265
     WebRTC,
     /// MJPEG over HTTP
+    #[default]
     Mjpeg,
 }
 
-impl Default for StreamMode {
+/// RTSP output codec
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum RtspCodec {
+    #[default]
+    H264,
+    H265,
+}
+
+/// RTSP configuration
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RtspConfig {
+    /// Enable RTSP output
+    pub enabled: bool,
+    /// Bind IP address
+    pub bind: String,
+    /// RTSP TCP listen port
+    pub port: u16,
+    /// Stream path (without leading slash)
+    pub path: String,
+    /// Allow only one client connection at a time
+    pub allow_one_client: bool,
+    /// Output codec (H264/H265)
+    pub codec: RtspCodec,
+    /// Optional username for authentication
+    pub username: Option<String>,
+    /// Optional password for authentication
+    #[typeshare(skip)]
+    pub password: Option<String>,
+}
+
+impl Default for RtspConfig {
     fn default() -> Self {
-        Self::Mjpeg
+        Self {
+            enabled: false,
+            bind: "0.0.0.0".to_string(),
+            port: 8554,
+            path: "live".to_string(),
+            allow_one_client: true,
+            codec: RtspCodec::H264,
+            username: None,
+            password: None,
+        }
     }
 }
 
@@ -444,8 +456,10 @@ impl Default for StreamMode {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum EncoderType {
     /// Auto-detect best encoder
+    #[default]
     Auto,
     /// Software encoder (libx264)
     Software,
@@ -461,12 +475,6 @@ pub enum EncoderType {
     Rkmpp,
     /// V4L2 M2M hardware encoder
     V4l2m2m,
-}
-
-impl Default for EncoderType {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl EncoderType {

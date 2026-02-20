@@ -1,8 +1,7 @@
 use crate::{
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
-        ffmpeg_ram_decode, ffmpeg_ram_free_decoder, ffmpeg_ram_last_error,
-        ffmpeg_ram_new_decoder,
+        ffmpeg_ram_decode, ffmpeg_ram_free_decoder, ffmpeg_ram_last_error, ffmpeg_ram_new_decoder,
     },
 };
 use std::{

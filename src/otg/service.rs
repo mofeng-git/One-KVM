@@ -35,23 +35,12 @@ const FLAG_HID: u8 = 0b01;
 const FLAG_MSD: u8 = 0b10;
 
 /// HID device paths
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HidDevicePaths {
     pub keyboard: Option<PathBuf>,
     pub mouse_relative: Option<PathBuf>,
     pub mouse_absolute: Option<PathBuf>,
     pub consumer: Option<PathBuf>,
-}
-
-impl Default for HidDevicePaths {
-    fn default() -> Self {
-        Self {
-            keyboard: None,
-            mouse_relative: None,
-            mouse_absolute: None,
-            consumer: None,
-        }
-    }
 }
 
 impl HidDevicePaths {
@@ -239,12 +228,10 @@ impl OtgService {
         let requested_functions = self.hid_functions.read().await.clone();
         {
             let state = self.state.read().await;
-            if state.hid_enabled {
-                if state.hid_functions.as_ref() == Some(&requested_functions) {
-                    if let Some(ref paths) = state.hid_paths {
-                        info!("HID already enabled, returning existing paths");
-                        return Ok(paths.clone());
-                    }
+            if state.hid_enabled && state.hid_functions.as_ref() == Some(&requested_functions) {
+                if let Some(ref paths) = state.hid_paths {
+                    info!("HID already enabled, returning existing paths");
+                    return Ok(paths.clone());
                 }
             }
         }
@@ -671,7 +658,7 @@ mod tests {
     fn test_service_creation() {
         let _service = OtgService::new();
         // Just test that creation doesn't panic
-        assert!(!OtgService::is_available() || true); // Depends on environment
+        let _ = OtgService::is_available(); // Depends on environment
     }
 
     #[tokio::test]

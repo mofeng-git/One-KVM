@@ -17,9 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image } from 'lucide-vue-next'
+import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image, AlertTriangle } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo, type BitratePreset } from '@/api'
+import {
+  configApi,
+  streamApi,
+  type VideoCodecInfo,
+  type EncoderBackendInfo,
+  type BitratePreset,
+  type StreamConstraintsResponse,
+} from '@/api'
 import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
@@ -64,7 +71,50 @@ const loadingCodecs = ref(false)
 
 // Backend list
 const backends = ref<EncoderBackendInfo[]>([])
+const constraints = ref<StreamConstraintsResponse | null>(null)
 const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
+const isRtspEnabled = computed(() => {
+  if (typeof configStore.rtspStatus?.config?.enabled === 'boolean') {
+    return configStore.rtspStatus.config.enabled
+  }
+  return !!configStore.rtspConfig?.enabled
+})
+const isRustdeskEnabled = computed(() => {
+  if (typeof configStore.rustdeskStatus?.config?.enabled === 'boolean') {
+    return configStore.rustdeskStatus.config.enabled
+  }
+  return !!configStore.rustdeskConfig?.enabled
+})
+const isRtspCodecLocked = computed(() => isRtspEnabled.value)
+const isRustdeskWebrtcLocked = computed(() => !isRtspEnabled.value && isRustdeskEnabled.value)
+const codecLockSources = computed(() => {
+  if (isRtspCodecLocked.value) {
+    return isRustdeskEnabled.value ? 'RTSP/RustDesk' : 'RTSP'
+  }
+  if (isRustdeskWebrtcLocked.value) return 'RustDesk'
+  return ''
+})
+const codecLockMessage = computed(() => {
+  if (!codecLockSources.value) return ''
+  return t('actionbar.multiSourceCodecLocked', { sources: codecLockSources.value })
+})
+const videoParamWarningSources = computed(() => {
+  if (isRtspEnabled.value && isRustdeskEnabled.value) return 'RTSP/RustDesk'
+  if (isRtspEnabled.value) return 'RTSP'
+  if (isRustdeskEnabled.value) return 'RustDesk'
+  return ''
+})
+const videoParamWarningMessage = computed(() => {
+  if (!videoParamWarningSources.value) return ''
+  return t('actionbar.multiSourceVideoParamsWarning', { sources: videoParamWarningSources.value })
+})
+const isCodecLocked = computed(() => !!codecLockMessage.value)
+
+const isCodecOptionDisabled = (codecId: string): boolean => {
+  if (!isBrowserSupported(codecId)) return true
+  if (isRustdeskWebrtcLocked.value && codecId === 'mjpeg') return true
+  return false
+}
 
 // Browser supported codecs (WebRTC receive capabilities)
 const browserSupportedCodecs = ref<Set<string>>(new Set())
@@ -220,7 +270,7 @@ const availableCodecs = computed(() => {
   const backend = backends.value.find(b => b.id === currentEncoderBackend.value)
   if (!backend) return allAvailable
 
-  return allAvailable
+  const backendFiltered = allAvailable
     .filter(codec => {
       // MJPEG is always available (doesn't require encoder)
       if (codec.id === 'mjpeg') return true
@@ -238,6 +288,13 @@ const availableCodecs = computed(() => {
         backend: backend.name,
       }
     })
+
+  const allowed = constraints.value?.allowed_codecs
+  if (!allowed || allowed.length === 0) {
+    return backendFiltered
+  }
+
+  return backendFiltered.filter(codec => allowed.includes(codec.id))
 })
 
 // Cascading filters
@@ -303,6 +360,14 @@ async function loadCodecs() {
   }
 }
 
+async function loadConstraints() {
+  try {
+    constraints.value = await streamApi.getConstraints()
+  } catch {
+    constraints.value = null
+  }
+}
+
 // Navigate to settings page (video tab)
 function goToSettings() {
   router.push('/settings?tab=video')
@@ -339,6 +404,22 @@ function syncFromCurrentIfChanged() {
 // Handle video mode change
 function handleVideoModeChange(mode: unknown) {
   if (typeof mode !== 'string') return
+
+  if (isRtspCodecLocked.value) {
+    toast.warning(codecLockMessage.value)
+    return
+  }
+
+  if (isRustdeskWebrtcLocked.value && mode === 'mjpeg') {
+    toast.warning(codecLockMessage.value)
+    return
+  }
+
+  if (constraints.value?.allowed_codecs?.length && !constraints.value.allowed_codecs.includes(mode)) {
+    toast.error(constraints.value.reason || t('actionbar.selectMode'))
+    return
+  }
+
   emit('update:videoMode', mode as VideoMode)
 }
 
@@ -466,9 +547,13 @@ watch(() => props.open, (isOpen) => {
     loadCodecs()
   }
 
+  loadConstraints()
+
   Promise.all([
     configStore.refreshVideo(),
     configStore.refreshStream(),
+    configStore.refreshRtspStatus(),
+    configStore.refreshRustdeskStatus(),
   ]).then(() => {
     initializeFromCurrent()
   }).catch(() => {
@@ -508,7 +593,7 @@ watch(currentConfig, () => {
             <Select
               :model-value="props.videoMode"
               @update:model-value="handleVideoModeChange"
-              :disabled="loadingCodecs || availableCodecs.length === 0"
+              :disabled="loadingCodecs || availableCodecs.length === 0 || isRtspCodecLocked"
             >
               <SelectTrigger class="h-8 text-xs">
                 <div v-if="selectedCodecInfo" class="flex items-center gap-1.5 truncate">
@@ -530,8 +615,8 @@ watch(currentConfig, () => {
                   v-for="codec in availableCodecs"
                   :key="codec.id"
                   :value="codec.id"
-                  :disabled="!isBrowserSupported(codec.id)"
-                  :class="['text-xs', { 'opacity-50': !isBrowserSupported(codec.id) }]"
+                  :disabled="isCodecOptionDisabled(codec.id)"
+                  :class="['text-xs', { 'opacity-50': isCodecOptionDisabled(codec.id) }]"
                 >
                   <div class="flex items-center gap-2">
                     <span>{{ codec.name }}</span>
@@ -557,6 +642,9 @@ watch(currentConfig, () => {
             </Select>
             <p v-if="props.videoMode !== 'mjpeg'" class="text-xs text-muted-foreground">
               {{ t('actionbar.webrtcHint') }}
+            </p>
+            <p v-if="isCodecLocked" class="text-xs text-amber-600 dark:text-amber-400">
+              {{ codecLockMessage }}
             </p>
           </div>
 
@@ -624,6 +712,16 @@ watch(currentConfig, () => {
         <Separator />
 
         <div class="space-y-3">
+          <div
+            v-if="videoParamWarningMessage"
+            class="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2"
+          >
+            <p class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+              <AlertTriangle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>{{ videoParamWarningMessage }}</span>
+            </p>
+          </div>
+
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.deviceSettings') }}</h5>
             <Button
@@ -655,7 +753,7 @@ watch(currentConfig, () => {
                   :value="device.path"
                   class="text-xs"
                 >
-                  {{ device.name }}
+                  {{ device.name }} ({{ device.path }})
                 </SelectItem>
               </SelectContent>
             </Select>

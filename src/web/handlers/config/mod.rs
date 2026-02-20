@@ -24,6 +24,7 @@ mod audio;
 mod auth;
 mod hid;
 mod msd;
+mod rtsp;
 mod rustdesk;
 mod stream;
 pub(crate) mod video;
@@ -35,6 +36,7 @@ pub use audio::{get_audio_config, update_audio_config};
 pub use auth::{get_auth_config, update_auth_config};
 pub use hid::{get_hid_config, update_hid_config};
 pub use msd::{get_msd_config, update_msd_config};
+pub use rtsp::{get_rtsp_config, get_rtsp_status, update_rtsp_config};
 pub use rustdesk::{
     get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,
     regenerate_device_password, update_rustdesk_config,
@@ -50,10 +52,29 @@ use std::sync::Arc;
 use crate::config::AppConfig;
 use crate::state::AppState;
 
+fn sanitize_config_for_api(config: &mut AppConfig) {
+    // Auth secrets
+    config.auth.totp_secret = None;
+
+    // Stream secrets
+    config.stream.turn_password = None;
+
+    // RustDesk secrets
+    config.rustdesk.device_password.clear();
+    config.rustdesk.relay_key = None;
+    config.rustdesk.public_key = None;
+    config.rustdesk.private_key = None;
+    config.rustdesk.signing_public_key = None;
+    config.rustdesk.signing_private_key = None;
+
+    // RTSP secrets
+    config.rtsp.password = None;
+}
+
 /// 获取完整配置
 pub async fn get_all_config(State(state): State<Arc<AppState>>) -> Json<AppConfig> {
     let mut config = (*state.config.get()).clone();
     // 不暴露敏感信息
-    config.auth.totp_secret = None;
+    sanitize_config_for_api(&mut config);
     Json(config)
 }

@@ -14,6 +14,7 @@ fn default_ch9329_baud_rate() -> u32 {
 /// HID backend type
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
+#[derive(Default)]
 pub enum HidBackendType {
     /// USB OTG gadget mode
     Otg,
@@ -26,13 +27,8 @@ pub enum HidBackendType {
         baud_rate: u32,
     },
     /// No HID backend (disabled)
+    #[default]
     None,
-}
-
-impl Default for HidBackendType {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl HidBackendType {

@@ -1,15 +1,17 @@
 //! V4L2 device enumeration and capability query
 
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
-use v4l::capability::Flags;
-use v4l::prelude::*;
-use v4l::video::Capture;
-use v4l::Format;
-use v4l::FourCC;
+use v4l2r::bindings::{v4l2_frmivalenum, v4l2_frmsizeenum};
+use v4l2r::ioctl::{
+    self, Capabilities, Capability as V4l2rCapability, FormatIterator, FrmIvalTypes, FrmSizeTypes,
+};
+use v4l2r::nix::errno::Errno;
+use v4l2r::{Format as V4l2rFormat, QueueType};
 
 use super::format::{PixelFormat, Resolution};
 use crate::error::{AppError, Result};
@@ -81,7 +83,7 @@ pub struct DeviceCapabilities {
 /// Wrapper around a V4L2 video device
 pub struct VideoDevice {
     pub path: PathBuf,
-    device: Device,
+    fd: File,
 }
 
 impl VideoDevice {
@@ -90,42 +92,55 @@ impl VideoDevice {
         let path = path.as_ref().to_path_buf();
         debug!("Opening video device: {:?}", path);
 
-        let device = Device::with_path(&path).map_err(|e| {
+        let fd = File::options()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .map_err(|e| {
+                AppError::VideoError(format!("Failed to open device {:?}: {}", path, e))
+            })?;
+
+        Ok(Self { path, fd })
+    }
+
+    /// Open a video device read-only (for probing/enumeration)
+    pub fn open_readonly(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        debug!("Opening video device (read-only): {:?}", path);
+
+        let fd = File::options().read(true).open(&path).map_err(|e| {
             AppError::VideoError(format!("Failed to open device {:?}: {}", path, e))
         })?;
 
-        Ok(Self { path, device })
+        Ok(Self { path, fd })
     }
 
     /// Get device capabilities
     pub fn capabilities(&self) -> Result<DeviceCapabilities> {
-        let caps = self
-            .device
-            .query_caps()
+        let caps: V4l2rCapability = ioctl::querycap(&self.fd)
             .map_err(|e| AppError::VideoError(format!("Failed to query capabilities: {}", e)))?;
+        let flags = caps.device_caps();
 
         Ok(DeviceCapabilities {
-            video_capture: caps.capabilities.contains(Flags::VIDEO_CAPTURE),
-            video_capture_mplane: caps.capabilities.contains(Flags::VIDEO_CAPTURE_MPLANE),
-            video_output: caps.capabilities.contains(Flags::VIDEO_OUTPUT),
-            streaming: caps.capabilities.contains(Flags::STREAMING),
-            read_write: caps.capabilities.contains(Flags::READ_WRITE),
+            video_capture: flags.contains(Capabilities::VIDEO_CAPTURE),
+            video_capture_mplane: flags.contains(Capabilities::VIDEO_CAPTURE_MPLANE),
+            video_output: flags.contains(Capabilities::VIDEO_OUTPUT),
+            streaming: flags.contains(Capabilities::STREAMING),
+            read_write: flags.contains(Capabilities::READWRITE),
         })
     }
 
     /// Get detailed device information
     pub fn info(&self) -> Result<VideoDeviceInfo> {
-        let caps = self
-            .device
-            .query_caps()
+        let caps: V4l2rCapability = ioctl::querycap(&self.fd)
             .map_err(|e| AppError::VideoError(format!("Failed to query capabilities: {}", e)))?;
-
+        let flags = caps.device_caps();
         let capabilities = DeviceCapabilities {
-            video_capture: caps.capabilities.contains(Flags::VIDEO_CAPTURE),
-            video_capture_mplane: caps.capabilities.contains(Flags::VIDEO_CAPTURE_MPLANE),
-            video_output: caps.capabilities.contains(Flags::VIDEO_OUTPUT),
-            streaming: caps.capabilities.contains(Flags::STREAMING),
-            read_write: caps.capabilities.contains(Flags::READ_WRITE),
+            video_capture: flags.contains(Capabilities::VIDEO_CAPTURE),
+            video_capture_mplane: flags.contains(Capabilities::VIDEO_CAPTURE_MPLANE),
+            video_output: flags.contains(Capabilities::VIDEO_OUTPUT),
+            streaming: flags.contains(Capabilities::STREAMING),
+            read_write: flags.contains(Capabilities::READWRITE),
         };
 
         let formats = self.enumerate_formats()?;
@@ -141,7 +156,7 @@ impl VideoDevice {
             path: self.path.clone(),
             name: caps.card.clone(),
             driver: caps.driver.clone(),
-            bus_info: caps.bus.clone(),
+            bus_info: caps.bus_info.clone(),
             card: caps.card,
             formats,
             capabilities,
@@ -154,16 +169,13 @@ impl VideoDevice {
     pub fn enumerate_formats(&self) -> Result<Vec<FormatInfo>> {
         let mut formats = Vec::new();
 
-        // Get supported formats
-        let format_descs = self
-            .device
-            .enum_formats()
-            .map_err(|e| AppError::VideoError(format!("Failed to enumerate formats: {}", e)))?;
+        let queue = self.capture_queue_type()?;
+        let format_descs = FormatIterator::new(&self.fd, queue);
 
         for desc in format_descs {
             // Try to convert FourCC to our PixelFormat
-            if let Some(format) = PixelFormat::from_fourcc(desc.fourcc) {
-                let resolutions = self.enumerate_resolutions(desc.fourcc)?;
+            if let Some(format) = PixelFormat::from_v4l2r(desc.pixelformat) {
+                let resolutions = self.enumerate_resolutions(desc.pixelformat)?;
 
                 formats.push(FormatInfo {
                     format,
@@ -173,7 +185,7 @@ impl VideoDevice {
             } else {
                 debug!(
                     "Skipping unsupported format: {:?} ({})",
-                    desc.fourcc, desc.description
+                    desc.pixelformat, desc.description
                 );
             }
         }
@@ -185,46 +197,55 @@ impl VideoDevice {
     }
 
     /// Enumerate resolutions for a specific format
-    fn enumerate_resolutions(&self, fourcc: FourCC) -> Result<Vec<ResolutionInfo>> {
+    fn enumerate_resolutions(&self, fourcc: v4l2r::PixelFormat) -> Result<Vec<ResolutionInfo>> {
         let mut resolutions = Vec::new();
 
-        // Try to enumerate frame sizes
-        match self.device.enum_framesizes(fourcc) {
-            Ok(sizes) => {
-                for size in sizes {
-                    match size.size {
-                        v4l::framesize::FrameSizeEnum::Discrete(d) => {
-                            let fps = self
-                                .enumerate_fps(fourcc, d.width, d.height)
-                                .unwrap_or_default();
-                            resolutions.push(ResolutionInfo::new(d.width, d.height, fps));
-                        }
-                        v4l::framesize::FrameSizeEnum::Stepwise(s) => {
-                            // For stepwise, add some common resolutions
-                            for res in [
-                                Resolution::VGA,
-                                Resolution::HD720,
-                                Resolution::HD1080,
-                                Resolution::UHD4K,
-                            ] {
-                                if res.width >= s.min_width
-                                    && res.width <= s.max_width
-                                    && res.height >= s.min_height
-                                    && res.height <= s.max_height
-                                {
-                                    let fps = self
-                                        .enumerate_fps(fourcc, res.width, res.height)
-                                        .unwrap_or_default();
-                                    resolutions
-                                        .push(ResolutionInfo::new(res.width, res.height, fps));
+        let mut index = 0u32;
+        loop {
+            match ioctl::enum_frame_sizes::<v4l2_frmsizeenum>(&self.fd, index, fourcc) {
+                Ok(size) => {
+                    if let Some(size) = size.size() {
+                        match size {
+                            FrmSizeTypes::Discrete(d) => {
+                                let fps = self
+                                    .enumerate_fps(fourcc, d.width, d.height)
+                                    .unwrap_or_default();
+                                resolutions.push(ResolutionInfo::new(d.width, d.height, fps));
+                            }
+                            FrmSizeTypes::StepWise(s) => {
+                                for res in [
+                                    Resolution::VGA,
+                                    Resolution::HD720,
+                                    Resolution::HD1080,
+                                    Resolution::UHD4K,
+                                ] {
+                                    if res.width >= s.min_width
+                                        && res.width <= s.max_width
+                                        && res.height >= s.min_height
+                                        && res.height <= s.max_height
+                                    {
+                                        let fps = self
+                                            .enumerate_fps(fourcc, res.width, res.height)
+                                            .unwrap_or_default();
+                                        resolutions
+                                            .push(ResolutionInfo::new(res.width, res.height, fps));
+                                    }
                                 }
                             }
                         }
                     }
+                    index += 1;
                 }
-            }
-            Err(e) => {
-                debug!("Failed to enumerate frame sizes for {:?}: {}", fourcc, e);
+                Err(e) => {
+                    let is_einval = matches!(
+                        e,
+                        v4l2r::ioctl::FrameSizeError::IoctlError(err) if err == Errno::EINVAL
+                    );
+                    if !is_einval {
+                        debug!("Failed to enumerate frame sizes for {:?}: {}", fourcc, e);
+                    }
+                    break;
+                }
             }
         }
 
@@ -236,36 +257,55 @@ impl VideoDevice {
     }
 
     /// Enumerate FPS for a specific resolution
-    fn enumerate_fps(&self, fourcc: FourCC, width: u32, height: u32) -> Result<Vec<u32>> {
+    fn enumerate_fps(
+        &self,
+        fourcc: v4l2r::PixelFormat,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u32>> {
         let mut fps_list = Vec::new();
 
-        match self.device.enum_frameintervals(fourcc, width, height) {
-            Ok(intervals) => {
-                for interval in intervals {
-                    match interval.interval {
-                        v4l::frameinterval::FrameIntervalEnum::Discrete(fraction) => {
-                            if fraction.numerator > 0 {
-                                let fps = fraction.denominator / fraction.numerator;
-                                fps_list.push(fps);
+        let mut index = 0u32;
+        loop {
+            match ioctl::enum_frame_intervals::<v4l2_frmivalenum>(
+                &self.fd, index, fourcc, width, height,
+            ) {
+                Ok(interval) => {
+                    if let Some(interval) = interval.intervals() {
+                        match interval {
+                            FrmIvalTypes::Discrete(fraction) => {
+                                if fraction.numerator > 0 {
+                                    let fps = fraction.denominator / fraction.numerator;
+                                    fps_list.push(fps);
+                                }
                             }
-                        }
-                        v4l::frameinterval::FrameIntervalEnum::Stepwise(step) => {
-                            // Just pick max/min/step
-                            if step.max.numerator > 0 {
-                                let min_fps = step.max.denominator / step.max.numerator;
-                                let max_fps = step.min.denominator / step.min.numerator;
-                                fps_list.push(min_fps);
-                                if max_fps != min_fps {
-                                    fps_list.push(max_fps);
+                            FrmIvalTypes::StepWise(step) => {
+                                if step.max.numerator > 0 {
+                                    let min_fps = step.max.denominator / step.max.numerator;
+                                    let max_fps = step.min.denominator / step.min.numerator;
+                                    fps_list.push(min_fps);
+                                    if max_fps != min_fps {
+                                        fps_list.push(max_fps);
+                                    }
                                 }
                             }
                         }
                     }
+                    index += 1;
                 }
-            }
-            Err(_) => {
-                // If enumeration fails, assume 30fps
-                fps_list.push(30);
+                Err(e) => {
+                    let is_einval = matches!(
+                        e,
+                        v4l2r::ioctl::FrameIntervalsError::IoctlError(err) if err == Errno::EINVAL
+                    );
+                    if !is_einval {
+                        debug!(
+                            "Failed to enumerate frame intervals for {:?} {}x{}: {}",
+                            fourcc, width, height, e
+                        );
+                    }
+                    break;
+                }
             }
         }
 
@@ -275,20 +315,26 @@ impl VideoDevice {
     }
 
     /// Get current format
-    pub fn get_format(&self) -> Result<Format> {
-        self.device
-            .format()
+    pub fn get_format(&self) -> Result<V4l2rFormat> {
+        let queue = self.capture_queue_type()?;
+        ioctl::g_fmt(&self.fd, queue)
             .map_err(|e| AppError::VideoError(format!("Failed to get format: {}", e)))
     }
 
     /// Set capture format
-    pub fn set_format(&self, width: u32, height: u32, format: PixelFormat) -> Result<Format> {
-        let fmt = Format::new(width, height, format.to_fourcc());
+    pub fn set_format(&self, width: u32, height: u32, format: PixelFormat) -> Result<V4l2rFormat> {
+        let queue = self.capture_queue_type()?;
+        let mut fmt: V4l2rFormat = ioctl::g_fmt(&self.fd, queue)
+            .map_err(|e| AppError::VideoError(format!("Failed to get format: {}", e)))?;
+        fmt.width = width;
+        fmt.height = height;
+        fmt.pixelformat = format.to_v4l2r();
 
-        // Request the format
-        let actual = self
-            .device
-            .set_format(&fmt)
+        let mut fd = self
+            .fd
+            .try_clone()
+            .map_err(|e| AppError::VideoError(format!("Failed to clone device fd: {}", e)))?;
+        let actual: V4l2rFormat = ioctl::s_fmt(&mut fd, (queue, &fmt))
             .map_err(|e| AppError::VideoError(format!("Failed to set format: {}", e)))?;
 
         if actual.width != width || actual.height != height {
@@ -364,7 +410,7 @@ impl VideoDevice {
             .max()
             .unwrap_or(0);
 
-        priority += (max_resolution / 100000) as u32;
+        priority += max_resolution / 100000;
 
         // Known good drivers get bonus
         let good_drivers = ["uvcvideo", "tc358743"];
@@ -376,8 +422,21 @@ impl VideoDevice {
     }
 
     /// Get the inner device reference (for advanced usage)
-    pub fn inner(&self) -> &Device {
-        &self.device
+    pub fn inner(&self) -> &File {
+        &self.fd
+    }
+
+    fn capture_queue_type(&self) -> Result<QueueType> {
+        let caps = self.capabilities()?;
+        if caps.video_capture {
+            Ok(QueueType::VideoCapture)
+        } else if caps.video_capture_mplane {
+            Ok(QueueType::VideoCaptureMplane)
+        } else {
+            Err(AppError::VideoError(
+                "Device does not expose a capture queue".to_string(),
+            ))
+        }
     }
 }
 
@@ -446,7 +505,7 @@ fn probe_device_with_timeout(path: &Path, timeout: Duration) -> Option<VideoDevi
 
     std::thread::spawn(move || {
         let result = (|| -> Result<VideoDeviceInfo> {
-            let device = VideoDevice::open(&path_for_thread)?;
+            let device = VideoDevice::open_readonly(&path_for_thread)?;
             device.info()
         })();
         let _ = tx.send(result);
@@ -503,15 +562,7 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
     }
 
     let skip_hints = [
-        "codec",
-        "decoder",
-        "encoder",
-        "isp",
-        "mem2mem",
-        "m2m",
-        "vbi",
-        "radio",
-        "metadata",
+        "codec", "decoder", "encoder", "isp", "mem2mem", "m2m", "vbi", "radio", "metadata",
         "output",
     ];
     if skip_hints.iter().any(|hint| sysfs_name.contains(hint)) && !maybe_capture {

@@ -13,6 +13,7 @@ import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, authApi } from '@/api'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
+import { keyboardEventToHidCode, updateModifierMaskForHidKey } from '@/lib/keyboardMappings'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
@@ -121,6 +122,7 @@ const pressedKeys = ref<string[]>([])
 const keyboardLed = ref({
   capsLock: false,
 })
+const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
 const isPointerLocked = ref(false) // Track pointer lock state
@@ -267,7 +269,6 @@ const hidDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.device'), value: hid.device || '-' },
     { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
     { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.initialized ? 'ok' : 'warning' },
-    { label: t('statusCard.mouseSupport'), value: hid.supportsAbsoluteMouse ? t('statusCard.absolute') : t('statusCard.relative'), status: hid.available ? 'ok' : undefined },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
   ]
 
@@ -408,6 +409,45 @@ const msdDetails = computed<StatusDetail[]>(() => {
   return details
 })
 
+const webrtcLoadingMessage = computed(() => {
+  if (videoMode.value === 'mjpeg') {
+    return videoRestarting.value ? t('console.videoRestarting') : t('console.connecting')
+  }
+
+  switch (webrtc.connectStage.value) {
+    case 'fetching_ice_servers':
+      return t('console.webrtcPhaseIceServers')
+    case 'creating_peer_connection':
+      return t('console.webrtcPhaseCreatePeer')
+    case 'creating_data_channel':
+      return t('console.webrtcPhaseCreateChannel')
+    case 'creating_offer':
+      return t('console.webrtcPhaseCreateOffer')
+    case 'waiting_server_answer':
+      return t('console.webrtcPhaseWaitAnswer')
+    case 'setting_remote_description':
+      return t('console.webrtcPhaseSetRemote')
+    case 'applying_ice_candidates':
+      return t('console.webrtcPhaseApplyIce')
+    case 'waiting_connection':
+      return t('console.webrtcPhaseNegotiating')
+    case 'connected':
+      return t('console.webrtcConnected')
+    case 'failed':
+      return t('console.webrtcFailed')
+    default:
+      return videoRestarting.value ? t('console.videoRestarting') : t('console.connecting')
+  }
+})
+
+const showMsdStatusCard = computed(() => {
+  return !!(systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329')
+})
+
+const hidHoverAlign = computed<'start' | 'end'>(() => {
+  return showMsdStatusCard.value ? 'start' : 'end'
+})
+
 // Video handling
 let retryTimeoutId: number | null = null
 let retryCount = 0
@@ -416,6 +456,8 @@ let consecutiveErrors = 0
 const BASE_RETRY_DELAY = 2000
 const GRACE_PERIOD = 2000 // Ignore errors for 2s after config change (reduced from 3s)
 const MAX_CONSECUTIVE_ERRORS = 2 // If 2+ errors in grace period, it's a real problem
+let pendingWebRTCReadyGate = false
+let webrtcConnectTask: Promise<boolean> | null = null
 
 // Last-frame overlay (prevents black flash during mode switches)
 const frameOverlayUrl = ref<string | null>(null)
@@ -483,6 +525,52 @@ function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise
       resolve(false)
     }, timeoutMs)
   })
+}
+
+function shouldSuppressAutoReconnect(): boolean {
+  return videoMode.value === 'mjpeg'
+    || videoSession.localSwitching.value
+    || videoSession.backendSwitching.value
+    || videoRestarting.value
+}
+
+function markWebRTCFailure(reason: string, description?: string) {
+  pendingWebRTCReadyGate = false
+  videoError.value = true
+  videoErrorMessage.value = reason
+  videoLoading.value = false
+  systemStore.setStreamOnline(false)
+
+  toast.error(reason, {
+    description: description ?? '',
+    duration: 5000,
+  })
+}
+
+async function waitForWebRTCReadyGate(reason: string, timeoutMs = 3000): Promise<void> {
+  if (!pendingWebRTCReadyGate) return
+  const ready = await videoSession.waitForWebRTCReadyAny(timeoutMs)
+  if (!ready) {
+    console.warn(`[WebRTC] Ready gate timeout (${reason}), attempting connection anyway`)
+  }
+  pendingWebRTCReadyGate = false
+}
+
+async function connectWebRTCSerial(reason: string): Promise<boolean> {
+  if (webrtcConnectTask) {
+    return webrtcConnectTask
+  }
+
+  webrtcConnectTask = (async () => {
+    await waitForWebRTCReadyGate(reason)
+    return webrtc.connect()
+  })()
+
+  try {
+    return await webrtcConnectTask
+  } finally {
+    webrtcConnectTask = null
+  }
 }
 
 function handleVideoLoad() {
@@ -605,9 +693,9 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
     if (!webrtc.audioTrack.value) {
       // No audio track - need to reconnect WebRTC to get one
       // This happens when audio was enabled after WebRTC session was created
-      webrtc.disconnect()
+      await webrtc.disconnect()
       await new Promise(resolve => setTimeout(resolve, 300))
-      await webrtc.connect()
+      await connectWebRTCSerial('audio track refresh')
       // After reconnect, the new session will have audio track
       // and the watch on audioTrack will add it to MediaStream
     } else {
@@ -638,6 +726,7 @@ function handleStreamConfigChanging(data: any) {
 
   // Reset all counters and states
   videoRestarting.value = true
+  pendingWebRTCReadyGate = true
   videoLoading.value = true
   videoError.value = false
   retryCount = 0
@@ -663,7 +752,7 @@ async function handleStreamConfigApplied(data: any) {
   }, GRACE_PERIOD)
 
   // Refresh video based on current mode
-  videoRestarting.value = false
+  videoRestarting.value = true
 
   // 如果正在进行模式切换，不需要在这里处理（WebRTCReady 事件会处理）
   if (isModeSwitching.value) {
@@ -673,15 +762,14 @@ async function handleStreamConfigApplied(data: any) {
 
   if (videoMode.value !== 'mjpeg') {
     // In WebRTC mode, reconnect WebRTC (session was closed due to config change)
-    const ready = await videoSession.waitForWebRTCReadyAny(3000)
-    if (!ready) {
-      console.warn('[WebRTC] Backend not ready after timeout (config change), attempting connection anyway')
-    }
-    switchToWebRTC(videoMode.value)
+    // connectWebRTCSerial() will wait on stream.webrtc_ready when gate is enabled.
+    await switchToWebRTC(videoMode.value)
   } else {
     // In MJPEG mode, refresh the MJPEG stream
     refreshVideo()
   }
+
+  videoRestarting.value = false
 
   toast.success(t('console.videoRestarted'), {
     description: `${data.device} - ${data.resolution[0]}x${data.resolution[1]} @ ${data.fps}fps`,
@@ -692,11 +780,15 @@ async function handleStreamConfigApplied(data: any) {
 // 处理 WebRTC 就绪事件 - 这是后端真正准备好接受 WebRTC 连接的信号
 function handleWebRTCReady(data: { codec: string; hardware: boolean; transition_id?: string }) {
   console.log(`[WebRTCReady] Backend ready: codec=${data.codec}, hardware=${data.hardware}, transition_id=${data.transition_id || '-'}`)
+  pendingWebRTCReadyGate = false
   videoSession.onWebRTCReady(data)
 }
 
 function handleStreamModeReady(data: { transition_id: string; mode: string }) {
   videoSession.onModeReady(data)
+  if (data.mode === 'mjpeg') {
+    pendingWebRTCReadyGate = false
+  }
   videoRestarting.value = false
 }
 
@@ -707,6 +799,7 @@ function handleStreamModeSwitching(data: { transition_id: string; to_mode: strin
     videoLoading.value = true
     captureFrameOverlay().catch(() => {})
   }
+  pendingWebRTCReadyGate = true
   videoSession.onModeSwitching(data)
 }
 
@@ -751,6 +844,40 @@ function handleStreamStatsUpdate(data: any) {
 
 // Track if we've received the initial device_info
 let initialDeviceInfoReceived = false
+let initialModeRestoreDone = false
+let initialModeRestoreInProgress = false
+
+function normalizeServerMode(mode: string | undefined): VideoMode | null {
+  if (!mode) return null
+  if (mode === 'webrtc') return 'h264'
+  if (mode === 'mjpeg' || mode === 'h264' || mode === 'h265' || mode === 'vp8' || mode === 'vp9') {
+    return mode
+  }
+  return null
+}
+
+async function restoreInitialMode(serverMode: VideoMode) {
+  if (initialModeRestoreDone || initialModeRestoreInProgress) return
+  initialModeRestoreInProgress = true
+
+  try {
+    initialDeviceInfoReceived = true
+    if (serverMode !== videoMode.value) {
+      videoMode.value = serverMode
+      localStorage.setItem('videoMode', serverMode)
+    }
+
+    if (serverMode !== 'mjpeg') {
+      await connectWebRTCOnly(serverMode)
+    } else if (mjpegTimestamp.value === 0) {
+      refreshVideo()
+    }
+
+    initialModeRestoreDone = true
+  } finally {
+    initialModeRestoreInProgress = false
+  }
+}
 
 function handleDeviceInfo(data: any) {
   systemStore.updateFromDeviceInfo(data)
@@ -763,40 +890,28 @@ function handleDeviceInfo(data: any) {
 
   // Sync video mode from server's stream_mode
   if (data.video?.stream_mode) {
-    // Server returns: 'mjpeg', 'h264', 'h265', 'vp8', 'vp9', or 'webrtc'
-    const serverStreamMode = data.video.stream_mode
-    const serverMode = serverStreamMode === 'webrtc' ? 'h264' : serverStreamMode as VideoMode
+    const serverMode = normalizeServerMode(data.video.stream_mode)
+    if (!serverMode) return
 
     if (!initialDeviceInfoReceived) {
-      // First device_info - initialize to server mode
       initialDeviceInfoReceived = true
-
-      if (serverMode !== videoMode.value) {
-        // Server mode differs from default, sync to server mode without calling setMode
-        videoMode.value = serverMode
-        if (serverMode !== 'mjpeg') {
-          setTimeout(() => connectWebRTCOnly(serverMode), 100)
-        } else {
-          setTimeout(() => refreshVideo(), 100)
-        }
-      } else if (serverMode !== 'mjpeg') {
-        // Server is in WebRTC mode and client default matches, connect WebRTC (no setMode)
-        setTimeout(() => connectWebRTCOnly(serverMode), 100)
-      } else if (serverMode === 'mjpeg') {
-        // Server is in MJPEG mode and client default is also mjpeg, start MJPEG stream
-        setTimeout(() => refreshVideo(), 100)
+      if (!initialModeRestoreDone && !initialModeRestoreInProgress) {
+        void restoreInitialMode(serverMode)
+        return
       }
-    } else if (serverMode !== videoMode.value) {
-      // Subsequent device_info with mode change - sync to server (no setMode)
-      syncToServerMode(serverMode as VideoMode)
+    }
+
+    if (initialModeRestoreInProgress) return
+    if (serverMode !== videoMode.value) {
+      syncToServerMode(serverMode)
     }
   }
 }
 
 // Handle stream mode change event from server (WebSocket broadcast)
 function handleStreamModeChanged(data: { mode: string; previous_mode: string }) {
-  // Server returns: 'mjpeg', 'h264', 'h265', 'vp8', 'vp9', or 'webrtc'
-  const newMode = data.mode === 'webrtc' ? 'h264' : data.mode as VideoMode
+  const newMode = normalizeServerMode(data.mode)
+  if (!newMode) return
 
   // 如果正在进行模式切换，忽略这个事件（这是我们自己触发的切换产生的）
   if (isModeSwitching.value) {
@@ -812,7 +927,7 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
 
   // Switch to new mode (external sync handled by device_info after mode_ready)
   if (newMode !== videoMode.value) {
-    syncToServerMode(newMode as VideoMode)
+    syncToServerMode(newMode)
   }
 }
 
@@ -885,7 +1000,7 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   videoErrorMessage.value = ''
 
   try {
-    const success = await webrtc.connect()
+    const success = await connectWebRTCSerial('connectWebRTCOnly')
     if (success) {
       toast.success(t('console.webrtcConnected'), {
         description: t('console.webrtcConnectedDesc'),
@@ -903,7 +1018,7 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
       throw new Error('WebRTC connection failed')
     }
   } catch {
-    await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
+    markWebRTCFailure(t('console.webrtcFailed'))
   }
 }
 
@@ -954,6 +1069,7 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
   videoLoading.value = true
   videoError.value = false
   videoErrorMessage.value = ''
+  pendingWebRTCReadyGate = true
 
   try {
     // Step 1: Disconnect existing WebRTC connection FIRST
@@ -988,7 +1104,7 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
     let retries = 3
     let success = false
     while (retries > 0 && !success) {
-      success = await webrtc.connect()
+      success = await connectWebRTCSerial('switchToWebRTC')
       if (!success) {
         retries--
         if (retries > 0) {
@@ -1014,30 +1130,7 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       throw new Error('WebRTC connection failed')
     }
   } catch {
-    await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'), true)
-  }
-}
-
-async function fallbackToMJPEG(reason: string, description?: string, force = false) {
-  if (fallbackInProgress) return
-  if (videoMode.value === 'mjpeg') return
-  if (!force && (videoSession.localSwitching.value || videoSession.backendSwitching.value)) return
-
-  fallbackInProgress = true
-  videoError.value = true
-  videoErrorMessage.value = reason
-  videoLoading.value = false
-
-  toast.error(reason, {
-    description: description ?? '',
-    duration: 5000,
-  })
-
-  videoMode.value = 'mjpeg'
-  try {
-    await switchToMJPEG()
-  } finally {
-    fallbackInProgress = false
+    markWebRTCFailure(t('console.webrtcFailed'))
   }
 }
 
@@ -1045,6 +1138,7 @@ async function switchToMJPEG() {
   videoLoading.value = true
   videoError.value = false
   videoErrorMessage.value = ''
+  pendingWebRTCReadyGate = false
 
   // Step 1: Call backend API to switch mode FIRST
   // This ensures the MJPEG endpoint will accept our request
@@ -1062,9 +1156,9 @@ async function switchToMJPEG() {
     // Continue anyway - the mode might already be correct
   }
 
-  // Step 2: Disconnect WebRTC if connected
-  if (webrtc.isConnected.value) {
-    webrtc.disconnect()
+  // Step 2: Disconnect WebRTC if connected or session still exists
+  if (webrtc.isConnected.value || webrtc.sessionId.value) {
+    await webrtc.disconnect()
   }
 
   // Clear WebRTC video
@@ -1174,9 +1268,18 @@ watch(webrtc.stats, (stats) => {
 // Watch for WebRTC connection state changes - auto-reconnect on disconnect
 let webrtcReconnectTimeout: ReturnType<typeof setTimeout> | null = null
 let webrtcReconnectFailures = 0
-let fallbackInProgress = false
 watch(() => webrtc.state.value, (newState, oldState) => {
   console.log('[WebRTC] State changed:', oldState, '->', newState)
+
+  // Clear any pending reconnect
+  if (webrtcReconnectTimeout) {
+    clearTimeout(webrtcReconnectTimeout)
+    webrtcReconnectTimeout = null
+  }
+
+  if (shouldSuppressAutoReconnect()) {
+    return
+  }
 
   // Update stream online status based on WebRTC connection state
   if (videoMode.value !== 'mjpeg') {
@@ -1189,28 +1292,22 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     }
   }
 
-  // Clear any pending reconnect
-  if (webrtcReconnectTimeout) {
-    clearTimeout(webrtcReconnectTimeout)
-    webrtcReconnectTimeout = null
-  }
-
   // Auto-reconnect when disconnected (but was previously connected)
   if (newState === 'disconnected' && oldState === 'connected' && videoMode.value !== 'mjpeg') {
     webrtcReconnectTimeout = setTimeout(async () => {
       if (videoMode.value !== 'mjpeg' && webrtc.state.value === 'disconnected') {
         try {
-          const success = await webrtc.connect()
+          const success = await connectWebRTCSerial('auto reconnect')
           if (!success) {
             webrtcReconnectFailures += 1
             if (webrtcReconnectFailures >= 2) {
-              await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
+              markWebRTCFailure(t('console.webrtcFailed'))
             }
           }
         } catch {
           webrtcReconnectFailures += 1
           if (webrtcReconnectFailures >= 2) {
-            await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
+            markWebRTCFailure(t('console.webrtcFailed'))
           }
         }
       }
@@ -1220,7 +1317,7 @@ watch(() => webrtc.state.value, (newState, oldState) => {
   if (newState === 'failed' && videoMode.value !== 'mjpeg') {
     webrtcReconnectFailures += 1
     if (webrtcReconnectFailures >= 1) {
-      fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg')).catch(() => {})
+      markWebRTCFailure(t('console.webrtcFailed'))
     }
   }
 })
@@ -1355,20 +1452,20 @@ function handleHidError(_error: any, _operation: string) {
 }
 
 // HID channel selection: use WebRTC DataChannel when available, fallback to WebSocket
-function sendKeyboardEvent(type: 'down' | 'up', key: number, modifiers?: { ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean }) {
+function sendKeyboardEvent(type: 'down' | 'up', key: number, modifier?: number) {
   // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
       key,
-      modifiers,
+      modifier,
     }
     const sent = webrtc.sendKeyboard(event)
     if (sent) return
     // Fallback to WebSocket if DataChannel send failed
   }
   // Use WebSocket as fallback or for MJPEG mode
-  hidApi.keyboard(type, key, modifiers).catch(err => handleHidError(err, `keyboard ${type}`))
+  hidApi.keyboard(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
@@ -1441,14 +1538,15 @@ function handleKeyDown(e: KeyboardEvent) {
 
   keyboardLed.value.capsLock = e.getModifierState('CapsLock')
 
-  const modifiers = {
-    ctrl: e.ctrlKey,
-    shift: e.shiftKey,
-    alt: e.altKey,
-    meta: e.metaKey,
+  const hidKey = keyboardEventToHidCode(e.code, e.key)
+  if (hidKey === undefined) {
+    console.warn(`[HID] Unmapped key down: code=${e.code}, key=${e.key}`)
+    return
   }
 
-  sendKeyboardEvent('down', e.keyCode, modifiers)
+  const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, true)
+  activeModifierMask.value = modifierMask
+  sendKeyboardEvent('down', hidKey, modifierMask)
 }
 
 function handleKeyUp(e: KeyboardEvent) {
@@ -1467,7 +1565,15 @@ function handleKeyUp(e: KeyboardEvent) {
   const keyName = e.key === ' ' ? 'Space' : e.key
   pressedKeys.value = pressedKeys.value.filter(k => k !== keyName)
 
-  sendKeyboardEvent('up', e.keyCode)
+  const hidKey = keyboardEventToHidCode(e.code, e.key)
+  if (hidKey === undefined) {
+    console.warn(`[HID] Unmapped key up: code=${e.code}, key=${e.key}`)
+    return
+  }
+
+  const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, false)
+  activeModifierMask.value = modifierMask
+  sendKeyboardEvent('up', hidKey, modifierMask)
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -1686,6 +1792,7 @@ function handlePointerLockError() {
 
 function handleBlur() {
   pressedKeys.value = []
+  activeModifierMask.value = 0
   // Release any pressed mouse button when window loses focus
   if (pressedMouseButton.value !== null) {
     const button = pressedMouseButton.value
@@ -1843,11 +1950,22 @@ onMounted(async () => {
   // Note: Video mode is now synced from server via device_info event
   // The handleDeviceInfo function will automatically switch to the server's mode
   // localStorage preference is only used when server mode matches
+  try {
+    const modeResp = await streamApi.getMode()
+    const serverMode = normalizeServerMode(modeResp?.mode)
+    if (serverMode && !initialModeRestoreDone && !initialModeRestoreInProgress) {
+      await restoreInitialMode(serverMode)
+    }
+  } catch (err) {
+    console.warn('[Console] Failed to fetch stream mode on enter, fallback to WS events:', err)
+  }
 })
 
 onUnmounted(() => {
   // Reset initial device info flag
   initialDeviceInfoReceived = false
+  initialModeRestoreDone = false
+  initialModeRestoreInProgress = false
 
   // Clear mouse flush timer
   if (mouseFlushTimer !== null) {
@@ -1878,9 +1996,9 @@ onUnmounted(() => {
   consoleEvents.unsubscribe()
   consecutiveErrors = 0
 
-  // Disconnect WebRTC if connected
-  if (webrtc.isConnected.value) {
-    webrtc.disconnect()
+  // Disconnect WebRTC if connected or session still exists
+  if (webrtc.isConnected.value || webrtc.sessionId.value) {
+    void webrtc.disconnect()
   }
 
   // Exit pointer lock if active
@@ -1901,7 +2019,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-background">
+  <div class="h-screen h-dvh flex flex-col bg-background">
     <!-- Header -->
     <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div class="px-4">
@@ -1945,11 +2063,12 @@ onUnmounted(() => {
                 :status="hidStatus"
                 :quick-info="hidQuickInfo"
                 :details="hidDetails"
+                :hover-align="hidHoverAlign"
               />
 
               <!-- MSD Status - Hidden when CH9329 backend (no USB gadget support) -->
               <StatusCard
-                v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
+                v-if="showMsdStatusCard"
                 :title="t('statusCard.msd')"
                 type="msd"
                 :status="msdStatus"
@@ -1964,13 +2083,13 @@ onUnmounted(() => {
             <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
 
             <!-- Theme Toggle -->
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleTheme">
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
               <Sun v-if="isDark" class="h-4 w-4" />
               <Moon v-else class="h-4 w-4" />
             </Button>
 
             <!-- Language Toggle -->
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" @click="toggleLanguage">
+            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleLanguage')" @click="toggleLanguage">
               <Languages class="h-4 w-4" />
             </Button>
 
@@ -2041,11 +2160,12 @@ onUnmounted(() => {
                 :status="hidStatus"
                 :quick-info="hidQuickInfo"
                 :details="hidDetails"
+                :hover-align="hidHoverAlign"
                 compact
               />
             </div>
 
-            <div v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'" class="shrink-0">
+            <div v-if="showMsdStatusCard" class="shrink-0">
               <StatusCard
                 :title="t('statusCard.msd')"
                 type="msd"
@@ -2156,7 +2276,7 @@ onUnmounted(() => {
 
               <Spinner class="h-16 w-16 text-white mb-4" />
               <p class="text-white/90 text-lg font-medium">
-                {{ videoRestarting ? t('console.videoRestarting') : t('console.connecting') }}
+                {{ webrtcLoadingMessage }}
               </p>
               <p class="text-white/50 text-sm mt-2">
                 {{ t('console.pleaseWait') }}
@@ -2225,7 +2345,7 @@ onUnmounted(() => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="max-w-[95vw] w-[1200px] h-[600px] p-0 flex flex-col overflow-hidden">
+      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-4 py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
@@ -2237,6 +2357,7 @@ onUnmounted(() => {
               size="icon"
               class="h-8 w-8 mr-8"
               @click="openTerminalInNewTab"
+              :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
               <ExternalLink class="h-4 w-4" />

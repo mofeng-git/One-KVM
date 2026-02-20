@@ -565,7 +565,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
+  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
@@ -686,6 +686,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <button
                   type="button"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                   @click="showPassword = !showPassword"
                 >
                   <Eye v-if="!showPassword" class="w-4 h-4" />
@@ -736,7 +737,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="videoDevice">{{ t('setup.videoDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
                     </button>
                   </HoverCardTrigger>
@@ -762,7 +763,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="videoFormat">{{ t('setup.videoFormat') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
                     </button>
                   </HoverCardTrigger>
@@ -827,7 +828,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="audioDevice">{{ t('setup.audioDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
                     </button>
                   </HoverCardTrigger>
@@ -858,6 +859,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
               <button
                 type="button"
                 class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                :aria-label="t('setup.advancedEncoder')"
                 @click="showAdvancedEncoder = !showAdvancedEncoder"
               >
                 <span class="text-sm font-medium">
@@ -975,6 +977,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <button
                   type="button"
                   class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                  :aria-label="t('setup.advancedOtg')"
                   @click="showAdvancedOtg = !showAdvancedOtg"
                 >
                   <span class="text-sm font-medium">

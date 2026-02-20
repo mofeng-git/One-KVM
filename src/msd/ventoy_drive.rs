@@ -328,10 +328,7 @@ impl VentoyDrive {
             let image = match VentoyImage::open(&path) {
                 Ok(img) => img,
                 Err(e) => {
-                    let _ = rt.block_on(tx.send(Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    ))));
+                    let _ = rt.block_on(tx.send(Err(std::io::Error::other(e.to_string()))));
                     return;
                 }
             };
@@ -341,10 +338,7 @@ impl VentoyDrive {
 
             // Stream the file through the writer
             if let Err(e) = image.read_file_to_writer(&file_path_owned, &mut chunk_writer) {
-                let _ = rt.block_on(tx.send(Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                ))));
+                let _ = rt.block_on(tx.send(Err(std::io::Error::other(e.to_string()))));
             }
         });
 
@@ -543,17 +537,14 @@ mod tests {
     /// Decompress xz file using system command
     fn decompress_xz(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
         let output = Command::new("xz")
-            .args(&["-d", "-k", "-c", src.to_str().unwrap()])
+            .args(["-d", "-k", "-c", src.to_str().unwrap()])
             .output()?;
 
         if !output.status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "xz decompress failed: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                ),
-            ));
+            return Err(std::io::Error::other(format!(
+                "xz decompress failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
         }
 
         std::fs::write(dst, &output.stdout)?;

@@ -285,7 +285,7 @@ impl UniversalVideoTrack {
     }
 
     /// Get current statistics
-
+    ///
     /// Write an encoded frame to the track
     ///
     /// Handles codec-specific processing:
@@ -464,7 +464,6 @@ impl UniversalVideoTrack {
             if let Err(e) = rtp_track.write_rtp(&packet).await {
                 trace!("H265 write_rtp failed: {}", e);
             }
-
         }
 
         Ok(())

@@ -32,7 +32,7 @@ fn init_hwcodec_logging() {
 }
 
 /// H.264 encoder type (detected from hwcodec)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum H264EncoderType {
     /// NVIDIA NVENC
     Nvenc,
@@ -49,6 +49,7 @@ pub enum H264EncoderType {
     /// Software encoding (libx264/openh264)
     Software,
     /// No encoder available
+    #[default]
     None,
 }
 
@@ -64,12 +65,6 @@ impl std::fmt::Display for H264EncoderType {
             H264EncoderType::Software => write!(f, "Software"),
             H264EncoderType::None => write!(f, "None"),
         }
-    }
-}
-
-impl Default for H264EncoderType {
-    fn default() -> Self {
-        Self::None
     }
 }
 
@@ -93,11 +88,12 @@ fn codec_name_to_type(name: &str) -> H264EncoderType {
 }
 
 /// Input pixel format for H264 encoder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum H264InputFormat {
     /// YUV420P (I420) - planar Y, U, V
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for VAAPI)
+    #[default]
     Nv12,
     /// NV21 - Y plane + interleaved VU plane
     Nv21,
@@ -111,12 +107,6 @@ pub enum H264InputFormat {
     Rgb24,
     /// BGR24 - packed BGR format (RKMPP direct input)
     Bgr24,
-}
-
-impl Default for H264InputFormat {
-    fn default() -> Self {
-        Self::Nv12 // Default to NV12 for VAAPI compatibility
-    }
 }
 
 /// H.264 encoder configuration

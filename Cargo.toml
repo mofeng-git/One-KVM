@@ -28,7 +28,8 @@ serde_json = "1"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "tracing-log"] }
+tracing-log = "0.2"
 
 # Error handling
 thiserror = "2"
@@ -46,7 +47,7 @@ nix = { version = "0.30", features = ["fs", "net", "hostname", "poll"] }
 
 # HTTP client (for URL downloads)
 # Use rustls by default, but allow native-tls for systems with older GLIBC
-reqwest = { version = "0.13", features = ["stream", "rustls"], default-features = false }
+reqwest = { version = "0.13", features = ["stream", "rustls", "json"], default-features = false }
 urlencoding = "2"
 
 # Static file embedding
@@ -65,7 +66,7 @@ clap = { version = "4", features = ["derive"] }
 time = "0.3"
 
 # Video capture (V4L2)
-v4l = "0.14"
+v4l2r = "0.0.7"
 
 # JPEG encoding (libjpeg-turbo, SIMD accelerated)
 turbojpeg = "1.3"
@@ -91,6 +92,8 @@ arc-swap = "1.8"
 # WebRTC
 webrtc = "0.14"
 rtp = "0.14"
+rtsp-types = "0.1"
+sdp-types = "0.1"
 
 # Audio (ALSA capture + Opus encoding)
 # Note: audiopus links to libopus.so (unavoidable for audio support)
@@ -115,7 +118,6 @@ hwcodec = { path = "libs/hwcodec" }
 protobuf = { version = "3.7", features = ["with-bytes"] }
 sodiumoxide = "0.2"
 sha2 = "0.10"
-
 # High-performance pixel format conversion (libyuv)
 libyuv = { path = "res/vcpkg/libyuv" }
 

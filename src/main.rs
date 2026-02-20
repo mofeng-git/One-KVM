@@ -19,9 +19,14 @@ use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
 use one_kvm::msd::MsdController;
 use one_kvm::otg::{configfs, OtgService};
+use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
+use one_kvm::update::UpdateService;
 use one_kvm::utils::bind_tcp_listener;
+use one_kvm::video::codec_constraints::{
+    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+};
 use one_kvm::video::format::{PixelFormat, Resolution};
 use one_kvm::video::{Streamer, VideoStreamManager};
 use one_kvm::web;
@@ -158,7 +163,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let bind_ips = resolve_bind_addresses(&config.web)?;
-    let scheme = if config.web.https_enabled { "https" } else { "http" };
+    let scheme = if config.web.https_enabled {
+        "https"
+    } else {
+        "http"
+    };
     let bind_port = if config.web.https_enabled {
         config.web.https_port
     } else {
@@ -530,7 +539,24 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    // Create RTSP service (optional, based on config)
+    let rtsp = if config.rtsp.enabled {
+        tracing::info!(
+            "Initializing RTSP service: rtsp://{}:{}/{}",
+            config.rtsp.bind,
+            config.rtsp.port,
+            config.rtsp.path
+        );
+        let service = RtspService::new(config.rtsp.clone(), stream_manager.clone());
+        Some(Arc::new(service))
+    } else {
+        tracing::info!("RTSP disabled in configuration");
+        None
+    };
+
     // Create application state
+    let update_service = Arc::new(UpdateService::new(data_dir.join("updates")));
+
     let state = AppState::new(
         config_store.clone(),
         session_store,
@@ -542,8 +568,10 @@ async fn main() -> anyhow::Result<()> {
         atx,
         audio,
         rustdesk.clone(),
+        rtsp.clone(),
         extensions.clone(),
         events.clone(),
+        update_service,
         shutdown_tx.clone(),
         data_dir.clone(),
     );
@@ -570,6 +598,30 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             tracing::info!("RustDesk service started");
+        }
+    }
+
+    // Start RTSP service if enabled
+    if let Some(ref service) = rtsp {
+        if let Err(e) = service.start().await {
+            tracing::error!("Failed to start RTSP service: {}", e);
+        } else {
+            tracing::info!("RTSP service started");
+        }
+    }
+
+    // Enforce startup codec constraints (e.g. RTSP/RustDesk locks)
+    {
+        let runtime_config = state.config.get();
+        let constraints = StreamCodecConstraints::from_config(&runtime_config);
+        match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
+            Ok(result) if result.changed => {
+                if let Some(message) = result.message {
+                    tracing::info!("{}", message);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("Failed to enforce startup codec constraints: {}", e),
         }
     }
 
@@ -646,7 +698,7 @@ async fn main() -> anyhow::Result<()> {
 
             let server = axum_server::from_tcp_rustls(listener, tls_config.clone())?
                 .serve(app.clone().into_make_service());
-            servers.push(async move { server.await });
+            servers.push(server);
         }
 
         tokio::select! {
@@ -712,10 +764,13 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
     let env_filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
 
-    tracing_subscriber::registry()
+    if let Err(err) = tracing_subscriber::registry()
         .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init()
+    {
+        eprintln!("failed to initialize tracing: {}", err);
+    }
 }
 
 /// Get the application data directory
@@ -876,6 +931,15 @@ async fn cleanup(state: &Arc<AppState>) {
             tracing::warn!("Failed to stop RustDesk service: {}", e);
         } else {
             tracing::info!("RustDesk service stopped");
+        }
+    }
+
+    // Stop RTSP service
+    if let Some(ref service) = *state.rtsp.read().await {
+        if let Err(e) = service.stop().await {
+            tracing::warn!("Failed to stop RTSP service: {}", e);
+        } else {
+            tracing::info!("RTSP service stopped");
         }
     }
 

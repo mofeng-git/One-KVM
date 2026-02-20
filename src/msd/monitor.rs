@@ -15,9 +15,10 @@ use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// MSD health status
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum MsdHealthStatus {
     /// Device is healthy and operational
+    #[default]
     Healthy,
     /// Device has an error
     Error {
@@ -26,12 +27,6 @@ pub enum MsdHealthStatus {
         /// Error code for programmatic handling
         error_code: String,
     },
-}
-
-impl Default for MsdHealthStatus {
-    fn default() -> Self {
-        Self::Healthy
-    }
 }
 
 /// MSD health monitor configuration

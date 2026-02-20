@@ -352,6 +352,7 @@ impl Encoder {
                         debug!("Encoder {} created successfully", codec.name);
                         let mut passed = false;
                         let mut last_err: Option<i32> = None;
+                        let is_v4l2m2m = codec.name.contains("v4l2m2m");
 
                         let max_attempts = if codec.name.contains("v4l2m2m") {
                             5

@@ -14,6 +14,8 @@ use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
 use crate::events::SystemEvent;
 use crate::state::AppState;
+use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
+use crate::video::codec_constraints::codec_to_id;
 use crate::video::encoder::BitratePreset;
 
 // ============================================================================
@@ -181,31 +183,59 @@ fn get_hostname() -> String {
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
-/// Get CPU model name from /proc/cpuinfo
+/// Get CPU model name from /proc/cpuinfo, fallback to device-tree model
 fn get_cpu_model() -> String {
-    std::fs::read_to_string("/proc/cpuinfo")
+    let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").ok();
+
+    if let Some(model) = cpuinfo
+        .as_deref()
+        .and_then(parse_cpu_model_from_cpuinfo_content)
+    {
+        return model;
+    }
+
+    if let Some(model) = read_device_tree_model() {
+        return model;
+    }
+
+    if let Some(content) = cpuinfo.as_deref() {
+        let cores = content
+            .lines()
+            .filter(|line| line.starts_with("processor"))
+            .count();
+        if cores > 0 {
+            return format!("{} {}C", std::env::consts::ARCH, cores);
+        }
+    }
+
+    std::env::consts::ARCH.to_string()
+}
+
+fn parse_cpu_model_from_cpuinfo_content(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find(|line| line.starts_with("model name") || line.starts_with("Model"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn read_device_tree_model() -> Option<String> {
+    std::fs::read("/proc/device-tree/model")
         .ok()
-        .and_then(|content| {
-            // Try to get model name
-            let model = content
-                .lines()
-                .find(|line| line.starts_with("model name") || line.starts_with("Model"))
-                .and_then(|line| line.split(':').nth(1))
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty());
+        .and_then(|bytes| parse_device_tree_model_bytes(&bytes))
+}
 
-            if model.is_some() {
-                return model;
-            }
+fn parse_device_tree_model_bytes(bytes: &[u8]) -> Option<String> {
+    let model = String::from_utf8_lossy(bytes)
+        .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+        .to_string();
 
-            // Fallback: show arch and core count
-            let cores = content
-                .lines()
-                .filter(|line| line.starts_with("processor"))
-                .count();
-            Some(format!("{} {}C", std::env::consts::ARCH, cores))
-        })
-        .unwrap_or_else(|| format!("{}", std::env::consts::ARCH))
+    if model.is_empty() {
+        None
+    } else {
+        Some(model)
+    }
 }
 
 /// CPU usage state for calculating usage between samples
@@ -385,6 +415,38 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
     }
 
     addresses
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_cpu_model_from_cpuinfo_content, parse_device_tree_model_bytes};
+
+    #[test]
+    fn parse_cpu_model_from_model_name_field() {
+        let input = "processor\t: 0\nmodel name\t: Intel(R) Xeon(R)\n";
+        assert_eq!(
+            parse_cpu_model_from_cpuinfo_content(input),
+            Some("Intel(R) Xeon(R)".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_cpu_model_from_model_field() {
+        let input = "processor\t: 0\nModel\t\t: Raspberry Pi 4 Model B Rev 1.4\n";
+        assert_eq!(
+            parse_cpu_model_from_cpuinfo_content(input),
+            Some("Raspberry Pi 4 Model B Rev 1.4".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_device_tree_model_trimmed() {
+        let input = b"Onething OEC Box\0\n";
+        assert_eq!(
+            parse_device_tree_model_bytes(input),
+            Some("Onething OEC Box".to_string())
+        );
+    }
 }
 
 // ============================================================================
@@ -589,11 +651,8 @@ pub async fn setup_init(
         ));
     }
 
-    // Create admin user
-    state
-        .users
-        .create(&req.username, &req.password, true)
-        .await?;
+    // Create single system user
+    state.users.create(&req.username, &req.password).await?;
 
     // Update config
     state
@@ -686,8 +745,7 @@ pub async fn setup_init(
 
     if matches!(new_config.hid.backend, crate::config::HidBackend::Otg) {
         let mut hid_functions = new_config.hid.effective_otg_functions();
-        if let Some(udc) =
-            crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
+        if let Some(udc) = crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
         {
             if crate::otg::configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
                 tracing::warn!(
@@ -751,6 +809,18 @@ pub async fn setup_init(
         }
     }
 
+    // Start RTSP if enabled
+    if new_config.rtsp.enabled {
+        let empty_config = crate::config::RtspConfig::default();
+        if let Err(e) =
+            config::apply::apply_rtsp_config(&state, &empty_config, &new_config.rtsp).await
+        {
+            tracing::warn!("Failed to start RTSP during setup: {}", e);
+        } else {
+            tracing::info!("RTSP started during setup");
+        }
+    }
+
     // Start audio streaming if audio device was selected during setup
     if new_config.audio.enabled {
         let audio_config = crate::audio::AudioControllerConfig {
@@ -772,10 +842,7 @@ pub async fn setup_init(
         }
     }
 
-    tracing::info!(
-        "System initialized successfully with admin user: {}",
-        req.username
-    );
+    tracing::info!("System initialized successfully");
 
     Ok(Json(LoginResponse {
         success: true,
@@ -800,7 +867,7 @@ pub async fn update_config(
     // Keep old config for rollback
     let old_config = state.config.get();
 
-    tracing::info!("Received config update: {:?}", req.updates);
+    tracing::info!("Received config update request");
 
     // Validate and merge config first (outside the update closure)
     let config_json = serde_json::to_value(&old_config)
@@ -808,8 +875,6 @@ pub async fn update_config(
 
     let merged = merge_json(config_json, req.updates.clone())
         .map_err(|_| AppError::Internal("Failed to merge config".to_string()))?;
-
-    tracing::debug!("Merged config: {:?}", merged);
 
     let new_config: AppConfig = serde_json::from_value(merged)
         .map_err(|e| AppError::BadRequest(format!("Invalid config format: {}", e)))?;
@@ -1448,6 +1513,8 @@ pub async fn stream_mode_set(
 ) -> Result<Json<StreamModeResponse>> {
     use crate::video::encoder::VideoCodecType;
 
+    let constraints = state.stream_manager.codec_constraints().await;
+
     let mode_lower = req.mode.to_lowercase();
     let (new_mode, video_codec) = match mode_lower.as_str() {
         "mjpeg" => (StreamMode::Mjpeg, None),
@@ -1462,6 +1529,23 @@ pub async fn stream_mode_set(
             )));
         }
     };
+
+    if new_mode == StreamMode::Mjpeg && !constraints.is_mjpeg_allowed() {
+        return Err(AppError::BadRequest(format!(
+            "Codec 'mjpeg' is not allowed: {}",
+            constraints.reason
+        )));
+    }
+
+    if let Some(codec) = video_codec {
+        if !constraints.is_webrtc_codec_allowed(codec) {
+            return Err(AppError::BadRequest(format!(
+                "Codec '{}' is not allowed: {}",
+                codec_to_id(codec),
+                constraints.reason
+            )));
+        }
+    }
 
     // Set video codec if switching to WebRTC mode with specific codec
     if let Some(codec) = video_codec {
@@ -1567,6 +1651,70 @@ pub struct AvailableCodecsResponse {
     pub backends: Vec<EncoderBackendInfo>,
     /// Available codecs (for backward compatibility)
     pub codecs: Vec<VideoCodecInfo>,
+}
+
+/// Stream constraints response
+#[derive(Serialize)]
+pub struct StreamConstraintsResponse {
+    pub success: bool,
+    pub allowed_codecs: Vec<String>,
+    pub locked_codec: Option<String>,
+    pub disallow_mjpeg: bool,
+    pub sources: ConstraintSources,
+    pub reason: String,
+    pub current_mode: String,
+}
+
+#[derive(Serialize)]
+pub struct ConstraintSources {
+    pub rustdesk: bool,
+    pub rtsp: bool,
+}
+
+/// Get stream codec constraints derived from enabled services.
+pub async fn stream_constraints_get(
+    State(state): State<Arc<AppState>>,
+) -> Json<StreamConstraintsResponse> {
+    use crate::video::encoder::VideoCodecType;
+
+    let constraints = state.stream_manager.codec_constraints().await;
+    let current_mode = state.stream_manager.current_mode().await;
+    let current_mode = match current_mode {
+        StreamMode::Mjpeg => "mjpeg".to_string(),
+        StreamMode::WebRTC => {
+            let codec = state
+                .stream_manager
+                .webrtc_streamer()
+                .current_video_codec()
+                .await;
+            match codec {
+                VideoCodecType::H264 => "h264".to_string(),
+                VideoCodecType::H265 => "h265".to_string(),
+                VideoCodecType::VP8 => "vp8".to_string(),
+                VideoCodecType::VP9 => "vp9".to_string(),
+            }
+        }
+    };
+
+    Json(StreamConstraintsResponse {
+        success: true,
+        allowed_codecs: constraints
+            .allowed_codecs_for_api()
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        locked_codec: constraints
+            .locked_codec
+            .map(codec_to_id)
+            .map(str::to_string),
+        disallow_mjpeg: !constraints.allow_mjpeg,
+        sources: ConstraintSources {
+            rustdesk: constraints.rustdesk_enabled,
+            rtsp: constraints.rtsp_enabled,
+        },
+        reason: constraints.reason,
+        current_mode,
+    })
 }
 
 /// Set bitrate request
@@ -1842,12 +1990,14 @@ pub async fn mjpeg_stream(
                         break;
                     }
                     // Send last frame again to keep connection alive
-                    if let Some(frame) = handler_clone.current_frame() {
-                        if frame.is_valid_jpeg() {
-                            if tx.send(create_mjpeg_part(frame.data())).await.is_err() {
-                                break;
-                            }
-                        }
+                    let Some(frame) = handler_clone.current_frame() else {
+                        continue;
+                    };
+
+                    if frame.is_valid_jpeg()
+                        && tx.send(create_mjpeg_part(frame.data())).await.is_err()
+                    {
+                        break;
                     }
                 }
             }
@@ -1866,7 +2016,7 @@ pub async fn mjpeg_stream(
             yield Ok::<bytes::Bytes, std::io::Error>(data);
             // Record FPS after yield - data has been handed to Axum/hyper
             // This is closer to actual TCP send than recording at tx.send()
-            handler_for_stream.record_frame_sent(&guard_for_stream.id());
+            handler_for_stream.record_frame_sent(guard_for_stream.id());
         }
     };
 
@@ -1963,10 +2113,11 @@ pub async fn webrtc_offer(
         ));
     }
 
-    // Create session if client_id not provided
+    // Backward compatibility: `client_id` is treated as an existing session_id hint.
+    // New clients should not pass it; each offer creates a fresh session.
     let webrtc = state.stream_manager.webrtc_streamer();
     let session_id = if let Some(client_id) = &req.client_id {
-        // Check if session exists
+        // Reuse only when it matches an active session ID.
         if webrtc.get_session(client_id).await.is_some() {
             client_id.clone()
         } else {
@@ -2150,6 +2301,762 @@ pub struct HidStatus {
     pub initialized: bool,
     pub supports_absolute_mouse: bool,
     pub screen_resolution: Option<(u32, u32)>,
+}
+
+#[derive(Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OtgSelfCheckLevel {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Serialize)]
+pub struct OtgSelfCheckItem {
+    pub id: &'static str,
+    pub ok: bool,
+    pub level: OtgSelfCheckLevel,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct OtgSelfCheckResponse {
+    pub overall_ok: bool,
+    pub error_count: usize,
+    pub warning_count: usize,
+    pub hid_backend: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_udc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bound_udc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub udc_state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub udc_speed: Option<String>,
+    pub available_udcs: Vec<String>,
+    pub other_gadgets: Vec<String>,
+    pub checks: Vec<OtgSelfCheckItem>,
+}
+
+fn push_otg_check(
+    checks: &mut Vec<OtgSelfCheckItem>,
+    id: &'static str,
+    ok: bool,
+    level: OtgSelfCheckLevel,
+    message: impl Into<String>,
+    hint: Option<impl Into<String>>,
+    path: Option<impl Into<String>>,
+) {
+    checks.push(OtgSelfCheckItem {
+        id,
+        ok,
+        level,
+        message: message.into(),
+        hint: hint.map(|v| v.into()),
+        path: path.map(|v| v.into()),
+    });
+}
+
+fn list_dir_names(path: &std::path::Path) -> Vec<String> {
+    let mut names = std::fs::read_dir(path)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn read_trimmed(path: &std::path::Path) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|value| value.trim().to_string())
+}
+
+fn proc_modules_has(module_name: &str) -> bool {
+    std::fs::read_to_string("/proc/modules")
+        .ok()
+        .map(|content| {
+            content
+                .lines()
+                .filter_map(|line| line.split_whitespace().next())
+                .any(|name| name == module_name)
+        })
+        .unwrap_or(false)
+}
+
+fn modules_metadata_has(module_name: &str) -> bool {
+    let kernel_release = match read_trimmed(std::path::Path::new("/proc/sys/kernel/osrelease")) {
+        Some(value) if !value.is_empty() => value,
+        _ => return false,
+    };
+
+    let module_dir = std::path::Path::new("/lib/modules").join(kernel_release);
+    let candidates = ["modules.builtin", "modules.builtin.modinfo", "modules.dep"];
+
+    candidates.iter().any(|filename| {
+        let path = module_dir.join(filename);
+        std::fs::read_to_string(path)
+            .ok()
+            .map(|content| {
+                let module_token = format!("/{module_name}.ko");
+                content.lines().any(|line| {
+                    line.contains(&module_token)
+                        || line.contains(module_name)
+                        || line.contains(&module_name.replace('_', "-"))
+                })
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn kernel_config_option_enabled(option_name: &str) -> bool {
+    let kernel_release = match read_trimmed(std::path::Path::new("/proc/sys/kernel/osrelease")) {
+        Some(value) if !value.is_empty() => value,
+        _ => return false,
+    };
+
+    let config_paths = [
+        std::path::PathBuf::from(format!("/boot/config-{kernel_release}")),
+        std::path::PathBuf::from("/boot/config"),
+        std::path::PathBuf::from(format!("/lib/modules/{kernel_release}/build/.config")),
+    ];
+
+    config_paths.iter().any(|path| {
+        std::fs::read_to_string(path)
+            .ok()
+            .map(|content| {
+                let enabled_y = format!("{option_name}=y");
+                let enabled_m = format!("{option_name}=m");
+                content
+                    .lines()
+                    .any(|line| line == enabled_y || line == enabled_m)
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn detect_libcomposite_available(gadget_root: &std::path::Path) -> bool {
+    let sys_module = std::path::Path::new("/sys/module/libcomposite").exists();
+    if sys_module {
+        return true;
+    }
+
+    if proc_modules_has("libcomposite") {
+        return true;
+    }
+
+    if modules_metadata_has("libcomposite") {
+        return true;
+    }
+
+    if kernel_config_option_enabled("CONFIG_USB_LIBCOMPOSITE")
+        || kernel_config_option_enabled("CONFIG_USB_CONFIGFS")
+    {
+        return true;
+    }
+
+    // Fallback: if usb_gadget path exists, libcomposite may be built-in and already active.
+    gadget_root.exists()
+}
+
+/// OTG self-check status for troubleshooting USB gadget issues
+pub async fn hid_otg_self_check(State(state): State<Arc<AppState>>) -> Json<OtgSelfCheckResponse> {
+    let config = state.config.get();
+    let hid_backend_is_otg = matches!(config.hid.backend, crate::config::HidBackend::Otg);
+    let mut checks = Vec::new();
+
+    let build_response = |checks: Vec<OtgSelfCheckItem>,
+                          selected_udc: Option<String>,
+                          bound_udc: Option<String>,
+                          udc_state: Option<String>,
+                          udc_speed: Option<String>,
+                          available_udcs: Vec<String>,
+                          other_gadgets: Vec<String>| {
+        let error_count = checks
+            .iter()
+            .filter(|item| item.level == OtgSelfCheckLevel::Error)
+            .count();
+        let warning_count = checks
+            .iter()
+            .filter(|item| item.level == OtgSelfCheckLevel::Warn)
+            .count();
+
+        Json(OtgSelfCheckResponse {
+            overall_ok: error_count == 0,
+            error_count,
+            warning_count,
+            hid_backend: format!("{:?}", config.hid.backend).to_lowercase(),
+            selected_udc,
+            bound_udc,
+            udc_state,
+            udc_speed,
+            available_udcs,
+            other_gadgets,
+            checks,
+        })
+    };
+
+    let udc_root = std::path::Path::new("/sys/class/udc");
+    let available_udcs = list_dir_names(udc_root);
+    let selected_udc = config
+        .hid
+        .otg_udc
+        .clone()
+        .filter(|udc| !udc.trim().is_empty())
+        .or_else(|| available_udcs.first().cloned());
+    let mut udc_stage_ok = true;
+    if !udc_root.exists() {
+        udc_stage_ok = false;
+        push_otg_check(
+            &mut checks,
+            "udc_dir_exists",
+            false,
+            OtgSelfCheckLevel::Error,
+            "Check /sys/class/udc existence",
+            Some("Ensure UDC/OTG kernel drivers are enabled"),
+            Some("/sys/class/udc"),
+        );
+    } else if available_udcs.is_empty() {
+        udc_stage_ok = false;
+        push_otg_check(
+            &mut checks,
+            "udc_has_entries",
+            false,
+            OtgSelfCheckLevel::Error,
+            "Check available UDC entries",
+            Some("Ensure OTG controller is enabled in device tree"),
+            Some("/sys/class/udc"),
+        );
+    } else {
+        push_otg_check(
+            &mut checks,
+            "udc_has_entries",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check available UDC entries",
+            None::<String>,
+            Some("/sys/class/udc"),
+        );
+    }
+
+    let mut configured_udc_ok = true;
+    if let Some(config_udc) = config
+        .hid
+        .otg_udc
+        .clone()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        if available_udcs.iter().any(|item| item == &config_udc) {
+            push_otg_check(
+                &mut checks,
+                "configured_udc_valid",
+                true,
+                OtgSelfCheckLevel::Info,
+                "Check configured UDC validity",
+                None::<String>,
+                Some("/sys/class/udc"),
+            );
+        } else {
+            configured_udc_ok = false;
+            push_otg_check(
+                &mut checks,
+                "configured_udc_valid",
+                false,
+                OtgSelfCheckLevel::Error,
+                "Check configured UDC validity",
+                Some("Please reselect UDC in HID OTG settings"),
+                Some("/sys/class/udc"),
+            );
+        }
+    } else {
+        push_otg_check(
+            &mut checks,
+            "configured_udc_valid",
+            !available_udcs.is_empty(),
+            if available_udcs.is_empty() {
+                OtgSelfCheckLevel::Warn
+            } else {
+                OtgSelfCheckLevel::Info
+            },
+            "Check configured UDC validity",
+            Some(
+                "You can set hid_otg_udc in settings to avoid ambiguity in multi-controller setups",
+            ),
+            Some("/sys/class/udc"),
+        );
+    }
+
+    if !udc_stage_ok || !configured_udc_ok {
+        return build_response(
+            checks,
+            selected_udc,
+            None,
+            None,
+            None,
+            available_udcs,
+            vec![],
+        );
+    }
+
+    let gadget_root = std::path::Path::new("/sys/kernel/config/usb_gadget");
+    let configfs_mounted = std::fs::read_to_string("/proc/mounts")
+        .ok()
+        .map(|mounts| {
+            mounts.lines().any(|line| {
+                let mut parts = line.split_whitespace();
+                let _src = parts.next();
+                let mount_point = parts.next();
+                let fs_type = parts.next();
+                mount_point == Some("/sys/kernel/config") && fs_type == Some("configfs")
+            })
+        })
+        .unwrap_or(false);
+
+    let mut gadget_config_ok = true;
+
+    if configfs_mounted {
+        push_otg_check(
+            &mut checks,
+            "configfs_mounted",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check configfs mount status",
+            None::<String>,
+            Some("/sys/kernel/config"),
+        );
+    } else {
+        gadget_config_ok = false;
+        push_otg_check(
+            &mut checks,
+            "configfs_mounted",
+            false,
+            OtgSelfCheckLevel::Error,
+            "Check configfs mount status",
+            Some("Try: mount -t configfs none /sys/kernel/config"),
+            Some("/sys/kernel/config"),
+        );
+    }
+
+    if gadget_root.exists() {
+        push_otg_check(
+            &mut checks,
+            "usb_gadget_dir_exists",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check /sys/kernel/config/usb_gadget access",
+            None::<String>,
+            Some("/sys/kernel/config/usb_gadget"),
+        );
+    } else {
+        gadget_config_ok = false;
+        push_otg_check(
+            &mut checks,
+            "usb_gadget_dir_exists",
+            false,
+            OtgSelfCheckLevel::Error,
+            "Check /sys/kernel/config/usb_gadget access",
+            Some("Ensure configfs and USB gadget support are enabled"),
+            Some("/sys/kernel/config/usb_gadget"),
+        );
+    }
+
+    let libcomposite_available = detect_libcomposite_available(gadget_root);
+    if libcomposite_available {
+        push_otg_check(
+            &mut checks,
+            "libcomposite_loaded",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check libcomposite module status",
+            None::<String>,
+            Some("/sys/module/libcomposite"),
+        );
+    } else {
+        gadget_config_ok = false;
+        push_otg_check(
+            &mut checks,
+            "libcomposite_loaded",
+            false,
+            OtgSelfCheckLevel::Error,
+            "Check libcomposite module status",
+            Some("Try: modprobe libcomposite"),
+            Some("/sys/module/libcomposite"),
+        );
+    }
+
+    if !gadget_config_ok {
+        return build_response(
+            checks,
+            selected_udc,
+            None,
+            None,
+            None,
+            available_udcs,
+            vec![],
+        );
+    }
+
+    let gadget_names = list_dir_names(gadget_root);
+    let one_kvm_path = gadget_root.join("one-kvm");
+    let one_kvm_exists = one_kvm_path.exists();
+    if one_kvm_exists {
+        push_otg_check(
+            &mut checks,
+            "one_kvm_gadget_exists",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check one-kvm gadget presence",
+            None::<String>,
+            Some(one_kvm_path.display().to_string()),
+        );
+    } else {
+        push_otg_check(
+            &mut checks,
+            "one_kvm_gadget_exists",
+            false,
+            if hid_backend_is_otg {
+                OtgSelfCheckLevel::Error
+            } else {
+                OtgSelfCheckLevel::Warn
+            },
+            "Check one-kvm gadget presence",
+            Some("Enable OTG HID or MSD to let one-kvm gadget be created automatically"),
+            Some(one_kvm_path.display().to_string()),
+        );
+    }
+
+    let other_gadgets = gadget_names
+        .iter()
+        .filter(|name| name.as_str() != "one-kvm")
+        .cloned()
+        .collect::<Vec<_>>();
+    if other_gadgets.is_empty() {
+        push_otg_check(
+            &mut checks,
+            "other_gadgets",
+            true,
+            OtgSelfCheckLevel::Info,
+            "Check for other gadget services",
+            None::<String>,
+            Some("/sys/kernel/config/usb_gadget"),
+        );
+    } else {
+        push_otg_check(
+            &mut checks,
+            "other_gadgets",
+            false,
+            OtgSelfCheckLevel::Warn,
+            "Check for other gadget services",
+            Some("Potential UDC contention with one-kvm; check other OTG services"),
+            Some("/sys/kernel/config/usb_gadget"),
+        );
+    }
+
+    let mut bound_udc = None;
+
+    if one_kvm_exists {
+        let one_kvm_udc_path = one_kvm_path.join("UDC");
+        let current_udc = read_trimmed(&one_kvm_udc_path).unwrap_or_default();
+        if current_udc.is_empty() {
+            push_otg_check(
+                &mut checks,
+                "one_kvm_bound_udc",
+                false,
+                OtgSelfCheckLevel::Warn,
+                "Check one-kvm UDC binding",
+                Some("Ensure HID/MSD is enabled and initialized successfully"),
+                Some(one_kvm_udc_path.display().to_string()),
+            );
+        } else {
+            push_otg_check(
+                &mut checks,
+                "one_kvm_bound_udc",
+                true,
+                OtgSelfCheckLevel::Info,
+                "Check one-kvm UDC binding",
+                None::<String>,
+                Some(one_kvm_udc_path.display().to_string()),
+            );
+            bound_udc = Some(current_udc);
+        }
+
+        let functions_path = one_kvm_path.join("functions");
+        let function_names = list_dir_names(&functions_path)
+            .into_iter()
+            .filter(|name| name.contains(".usb"))
+            .collect::<Vec<_>>();
+        let hid_functions = function_names
+            .iter()
+            .filter(|name| name.starts_with("hid.usb"))
+            .cloned()
+            .collect::<Vec<_>>();
+        if hid_functions.is_empty() {
+            push_otg_check(
+                &mut checks,
+                "hid_functions_present",
+                false,
+                if hid_backend_is_otg {
+                    OtgSelfCheckLevel::Error
+                } else {
+                    OtgSelfCheckLevel::Warn
+                },
+                "Check HID function creation",
+                Some("Check OTG HID config and enable at least one HID function"),
+                Some(functions_path.display().to_string()),
+            );
+        } else {
+            push_otg_check(
+                &mut checks,
+                "hid_functions_present",
+                true,
+                OtgSelfCheckLevel::Info,
+                "Check HID function creation",
+                None::<String>,
+                Some(functions_path.display().to_string()),
+            );
+        }
+
+        let config_path = one_kvm_path.join("configs/c.1");
+        if !config_path.exists() {
+            push_otg_check(
+                &mut checks,
+                "config_c1_exists",
+                false,
+                OtgSelfCheckLevel::Error,
+                "Check configs/c.1 structure",
+                Some("Gadget structure is incomplete; try restarting One-KVM"),
+                Some(config_path.display().to_string()),
+            );
+        } else {
+            push_otg_check(
+                &mut checks,
+                "config_c1_exists",
+                true,
+                OtgSelfCheckLevel::Info,
+                "Check configs/c.1 structure",
+                None::<String>,
+                Some(config_path.display().to_string()),
+            );
+
+            let linked_functions = list_dir_names(&config_path)
+                .into_iter()
+                .filter(|name| name.contains(".usb"))
+                .collect::<Vec<_>>();
+            let missing_links = function_names
+                .iter()
+                .filter(|func| !linked_functions.iter().any(|link| link == *func))
+                .cloned()
+                .collect::<Vec<_>>();
+
+            if missing_links.is_empty() {
+                push_otg_check(
+                    &mut checks,
+                    "function_links_ok",
+                    true,
+                    OtgSelfCheckLevel::Info,
+                    "Check function links in configs/c.1",
+                    None::<String>,
+                    Some(config_path.display().to_string()),
+                );
+            } else {
+                push_otg_check(
+                    &mut checks,
+                    "function_links_ok",
+                    false,
+                    OtgSelfCheckLevel::Warn,
+                    "Check function links in configs/c.1",
+                    Some("Reinitialize OTG (toggle HID backend once or restart service)"),
+                    Some(config_path.display().to_string()),
+                );
+            }
+        }
+
+        let missing_hid_devices = hid_functions
+            .iter()
+            .filter_map(|name| {
+                let index = name.strip_prefix("hid.usb")?.parse::<u8>().ok()?;
+                let dev_path = std::path::PathBuf::from(format!("/dev/hidg{}", index));
+                if dev_path.exists() {
+                    None
+                } else {
+                    Some(dev_path.display().to_string())
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !hid_functions.is_empty() {
+            if missing_hid_devices.is_empty() {
+                push_otg_check(
+                    &mut checks,
+                    "hid_device_nodes",
+                    true,
+                    OtgSelfCheckLevel::Info,
+                    "Check /dev/hidg* device nodes",
+                    None::<String>,
+                    Some("/dev/hidg*"),
+                );
+            } else {
+                push_otg_check(
+                    &mut checks,
+                    "hid_device_nodes",
+                    false,
+                    OtgSelfCheckLevel::Warn,
+                    "Check /dev/hidg* device nodes",
+                    Some("Ensure gadget is bound and check kernel logs"),
+                    Some("/dev/hidg*"),
+                );
+            }
+        }
+    }
+
+    if !other_gadgets.is_empty() {
+        let check_udc = bound_udc.clone().or_else(|| selected_udc.clone());
+        if let Some(target_udc) = check_udc {
+            let conflicting_gadgets = other_gadgets
+                .iter()
+                .filter_map(|name| {
+                    let udc_file = gadget_root.join(name).join("UDC");
+                    let udc = read_trimmed(&udc_file)?;
+                    if udc == target_udc {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            if conflicting_gadgets.is_empty() {
+                push_otg_check(
+                    &mut checks,
+                    "udc_conflict",
+                    true,
+                    OtgSelfCheckLevel::Info,
+                    "Check UDC binding conflicts",
+                    None::<String>,
+                    Some("/sys/kernel/config/usb_gadget/*/UDC"),
+                );
+            } else {
+                push_otg_check(
+                    &mut checks,
+                    "udc_conflict",
+                    false,
+                    OtgSelfCheckLevel::Error,
+                    "Check UDC binding conflicts",
+                    Some("Stop other OTG services or switch one-kvm to an idle UDC"),
+                    Some("/sys/kernel/config/usb_gadget/*/UDC"),
+                );
+            }
+        }
+    }
+
+    let active_udc = bound_udc.clone().or_else(|| selected_udc.clone());
+    let mut udc_state = None;
+    let mut udc_speed = None;
+
+    if let Some(udc) = active_udc.clone() {
+        let state_path = udc_root.join(&udc).join("state");
+        match read_trimmed(&state_path) {
+            Some(state_name) if state_name.eq_ignore_ascii_case("configured") => {
+                udc_state = Some(state_name.clone());
+                push_otg_check(
+                    &mut checks,
+                    "udc_state",
+                    true,
+                    OtgSelfCheckLevel::Info,
+                    "Check UDC connection state",
+                    None::<String>,
+                    Some(state_path.display().to_string()),
+                );
+            }
+            Some(state_name) => {
+                udc_state = Some(state_name.clone());
+                push_otg_check(
+                    &mut checks,
+                    "udc_state",
+                    false,
+                    OtgSelfCheckLevel::Warn,
+                    "Check UDC connection state",
+                    Some("Ensure target host is connected and has recognized the USB device"),
+                    Some(state_path.display().to_string()),
+                );
+            }
+            None => {
+                push_otg_check(
+                    &mut checks,
+                    "udc_state",
+                    false,
+                    OtgSelfCheckLevel::Warn,
+                    "Check UDC connection state",
+                    Some("Ensure UDC name is valid and check kernel permissions"),
+                    Some(state_path.display().to_string()),
+                );
+            }
+        }
+
+        let speed_path = udc_root.join(&udc).join("current_speed");
+        if let Some(speed) = read_trimmed(&speed_path) {
+            udc_speed = Some(speed.clone());
+            let is_unknown = speed.eq_ignore_ascii_case("unknown");
+            push_otg_check(
+                &mut checks,
+                "udc_speed",
+                !is_unknown,
+                if is_unknown {
+                    OtgSelfCheckLevel::Warn
+                } else {
+                    OtgSelfCheckLevel::Info
+                },
+                "Check UDC current link speed",
+                if is_unknown {
+                    Some("Device may not be fully enumerated; try reconnecting USB".to_string())
+                } else {
+                    None
+                },
+                Some(speed_path.display().to_string()),
+            );
+        }
+    } else {
+        push_otg_check(
+            &mut checks,
+            "udc_state",
+            false,
+            OtgSelfCheckLevel::Warn,
+            "Check UDC connection state",
+            Some("Ensure UDC is available and one-kvm gadget is bound first"),
+            Some("/sys/class/udc"),
+        );
+    }
+
+    let error_count = checks
+        .iter()
+        .filter(|item| item.level == OtgSelfCheckLevel::Error)
+        .count();
+    let warning_count = checks
+        .iter()
+        .filter(|item| item.level == OtgSelfCheckLevel::Warn)
+        .count();
+
+    Json(OtgSelfCheckResponse {
+        overall_ok: error_count == 0,
+        error_count,
+        warning_count,
+        hid_backend: format!("{:?}", config.hid.backend).to_lowercase(),
+        selected_udc,
+        bound_udc,
+        udc_state,
+        udc_speed,
+        available_udcs,
+        other_gadgets,
+        checks,
+    })
 }
 
 /// Get HID status
@@ -2516,7 +3423,7 @@ pub async fn msd_drive_download(
     let (file_size, mut rx) = drive.read_file_stream(&file_path).await?;
 
     // Extract filename for Content-Disposition
-    let filename = file_path.split('/').last().unwrap_or("download");
+    let filename = file_path.split('/').next_back().unwrap_or("download");
 
     // Create a stream from the channel receiver
     let body_stream = async_stream::stream! {
@@ -2576,6 +3483,10 @@ pub async fn msd_drive_mkdir(
 // ============================================================================
 
 use crate::atx::{AtxState, PowerStatus};
+
+const WOL_HISTORY_MAX_ENTRIES: i64 = 50;
+const WOL_HISTORY_DEFAULT_LIMIT: usize = 5;
+const WOL_HISTORY_MAX_LIMIT: usize = 50;
 
 /// ATX state response
 #[derive(Serialize)]
@@ -2683,11 +3594,78 @@ pub struct WolRequest {
     pub mac_address: String,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct WolHistoryQuery {
+    /// Maximum history entries to return
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WolHistoryEntry {
+    pub mac_address: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WolHistoryResponse {
+    pub history: Vec<WolHistoryEntry>,
+}
+
+fn normalize_wol_mac_address(mac_address: &str) -> String {
+    let normalized = mac_address.trim().to_uppercase().replace('-', ":");
+
+    if normalized.len() == 12 && normalized.chars().all(|c| c.is_ascii_hexdigit()) {
+        let mut mac_with_separator = String::with_capacity(17);
+        for (index, chunk) in normalized.as_bytes().chunks(2).enumerate() {
+            if index > 0 {
+                mac_with_separator.push(':');
+            }
+            mac_with_separator.push(chunk[0] as char);
+            mac_with_separator.push(chunk[1] as char);
+        }
+        mac_with_separator
+    } else {
+        normalized
+    }
+}
+
+async fn record_wol_history(state: &Arc<AppState>, mac_address: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO wol_history (mac_address, updated_at)
+        VALUES (?1, CAST(strftime('%s', 'now') AS INTEGER))
+        ON CONFLICT(mac_address) DO UPDATE SET
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(mac_address)
+    .execute(state.config.pool())
+    .await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM wol_history
+        WHERE mac_address NOT IN (
+            SELECT mac_address FROM wol_history
+            ORDER BY updated_at DESC
+            LIMIT ?1
+        )
+        "#,
+    )
+    .bind(WOL_HISTORY_MAX_ENTRIES)
+    .execute(state.config.pool())
+    .await?;
+
+    Ok(())
+}
+
 /// Send Wake-on-LAN magic packet
 pub async fn atx_wol(
     State(state): State<Arc<AppState>>,
     Json(req): Json<WolRequest>,
 ) -> Result<Json<LoginResponse>> {
+    let mac_address = normalize_wol_mac_address(&req.mac_address);
+
     // Get WOL interface from config
     let config = state.config.get();
     let interface = if config.atx.wol_interface.is_empty() {
@@ -2697,12 +3675,49 @@ pub async fn atx_wol(
     };
 
     // Send WOL packet
-    crate::atx::send_wol(&req.mac_address, interface)?;
+    crate::atx::send_wol(&mac_address, interface)?;
+
+    if let Err(error) = record_wol_history(&state, &mac_address).await {
+        warn!("Failed to persist WOL history: {}", error);
+    }
 
     Ok(Json(LoginResponse {
         success: true,
-        message: Some(format!("WOL packet sent to {}", req.mac_address)),
+        message: Some(format!("WOL packet sent to {}", mac_address)),
     }))
+}
+
+/// Get WOL history
+pub async fn atx_wol_history(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<WolHistoryQuery>,
+) -> Result<Json<WolHistoryResponse>> {
+    let limit = query
+        .limit
+        .unwrap_or(WOL_HISTORY_DEFAULT_LIMIT)
+        .clamp(1, WOL_HISTORY_MAX_LIMIT);
+
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        r#"
+        SELECT mac_address, updated_at
+        FROM wol_history
+        ORDER BY updated_at DESC
+        LIMIT ?1
+        "#,
+    )
+    .bind(limit as i64)
+    .fetch_all(state.config.pool())
+    .await?;
+
+    let history = rows
+        .into_iter()
+        .map(|(mac_address, updated_at)| WolHistoryEntry {
+            mac_address,
+            updated_at,
+        })
+        .collect();
+
+    Ok(Json(WolHistoryResponse { history }))
 }
 
 // ============================================================================
@@ -2939,4 +3954,38 @@ pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginRes
         success: true,
         message: Some("Restarting...".to_string()),
     })
+}
+
+// ============================================================================
+// Online Update
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct UpdateOverviewQuery {
+    pub channel: Option<UpdateChannel>,
+}
+
+pub async fn update_overview(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<UpdateOverviewQuery>,
+) -> Result<Json<UpdateOverviewResponse>> {
+    let channel = query.channel.unwrap_or(UpdateChannel::Stable);
+    let response = state.update.overview(channel).await?;
+    Ok(Json(response))
+}
+
+pub async fn update_upgrade(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<UpgradeRequest>,
+) -> Result<Json<LoginResponse>> {
+    state.update.start_upgrade(req, state.shutdown_tx.clone())?;
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Upgrade started".to_string()),
+    }))
+}
+
+pub async fn update_status(State(state): State<Arc<AppState>>) -> Json<UpdateStatusResponse> {
+    Json(state.update.status().await)
 }

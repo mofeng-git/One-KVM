@@ -102,9 +102,6 @@ pub struct TtydConfig {
     pub port: u16,
     /// Shell to execute
     pub shell: String,
-    /// Credential in format "user:password" (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub credential: Option<String>,
 }
 
 impl Default for TtydConfig {
@@ -113,7 +110,6 @@ impl Default for TtydConfig {
             enabled: false,
             port: 7681,
             shell: "/bin/bash".to_string(),
-            credential: None,
         }
     }
 }
@@ -149,6 +145,7 @@ impl Default for GostcConfig {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct EasytierConfig {
     /// Enable auto-start
     pub enabled: bool,
@@ -163,18 +160,6 @@ pub struct EasytierConfig {
     /// Virtual IP address (optional, auto-assigned if not set)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub virtual_ip: Option<String>,
-}
-
-impl Default for EasytierConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            network_name: String::new(),
-            network_secret: String::new(),
-            peer_urls: Vec::new(),
-            virtual_ip: None,
-        }
-    }
 }
 
 /// Combined extensions configuration

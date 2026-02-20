@@ -129,9 +129,11 @@ const statusBadgeText = computed(() => {
   <HoverCard v-if="!prefersPopover" :open-delay="200" :close-delay="100">
     <HoverCardTrigger as-child>
       <!-- New layout: vertical with title on top, status+quickInfo on bottom -->
-      <div
+      <button
+        type="button"
+        :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors',
+          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           compact ? 'px-2 py-1 text-xs min-w-[80px]' : 'px-3 py-1.5 text-sm min-w-[100px]',
           'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
           'border-slate-200 dark:border-slate-700',
@@ -147,7 +149,7 @@ const statusBadgeText = computed(() => {
             {{ quickInfo || subtitle || statusText }}
           </span>
         </div>
-      </div>
+      </button>
     </HoverCardTrigger>
 
     <HoverCardContent class="w-80" :align="hoverAlign">
@@ -228,9 +230,11 @@ const statusBadgeText = computed(() => {
   <Popover v-else>
     <PopoverTrigger as-child>
       <!-- New layout: vertical with title on top, status+quickInfo on bottom -->
-      <div
+      <button
+        type="button"
+        :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors',
+          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           compact ? 'px-2 py-1 text-xs min-w-[80px]' : 'px-3 py-1.5 text-sm min-w-[100px]',
           'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
           'border-slate-200 dark:border-slate-700',
@@ -246,7 +250,7 @@ const statusBadgeText = computed(() => {
             {{ quickInfo || subtitle || statusText }}
           </span>
         </div>
-      </div>
+      </button>
     </PopoverTrigger>
 
     <PopoverContent class="w-80" :align="hoverAlign">

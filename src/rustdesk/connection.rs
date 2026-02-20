@@ -23,6 +23,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
 use crate::hid::{HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
+use crate::video::codec_constraints::{
+    encoder_codec_to_id, encoder_codec_to_video_codec, video_codec_to_encoder_codec,
+};
 use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::BitratePreset;
 use crate::video::stream_manager::VideoStreamManager;
@@ -627,7 +630,7 @@ impl Connection {
 
         // Select the best available video codec
         // Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding)
-        let negotiated = self.negotiate_video_codec();
+        let negotiated = self.negotiate_video_codec().await;
         self.negotiated_codec = Some(negotiated);
         info!("Negotiated video codec: {:?}", negotiated);
 
@@ -641,28 +644,51 @@ impl Connection {
 
     /// Negotiate video codec - select the best available encoder
     /// Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding on embedded devices)
-    fn negotiate_video_codec(&self) -> VideoEncoderType {
+    async fn negotiate_video_codec(&self) -> VideoEncoderType {
         let registry = EncoderRegistry::global();
+        let constraints = self.current_codec_constraints().await;
 
         // Check availability in priority order
         // H264 is preferred because it has the best hardware encoder support (RKMPP, VAAPI, etc.)
         // and most RustDesk clients support H264 hardware decoding
-        if registry.is_format_available(VideoEncoderType::H264, false) {
+        if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H264)
+            && registry.is_format_available(VideoEncoderType::H264, false)
+        {
             return VideoEncoderType::H264;
         }
-        if registry.is_format_available(VideoEncoderType::H265, false) {
+        if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H265)
+            && registry.is_format_available(VideoEncoderType::H265, false)
+        {
             return VideoEncoderType::H265;
         }
-        if registry.is_format_available(VideoEncoderType::VP8, false) {
+        if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP8)
+            && registry.is_format_available(VideoEncoderType::VP8, false)
+        {
             return VideoEncoderType::VP8;
         }
-        if registry.is_format_available(VideoEncoderType::VP9, false) {
+        if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP9)
+            && registry.is_format_available(VideoEncoderType::VP9, false)
+        {
             return VideoEncoderType::VP9;
         }
 
-        // Fallback to H264 (should be available via hardware or software encoder)
-        warn!("No video encoder available, defaulting to H264");
-        VideoEncoderType::H264
+        // Fallback to preferred allowed codec
+        let preferred = constraints.preferred_webrtc_codec();
+        warn!(
+            "No allowed encoder available in priority order, falling back to {}",
+            encoder_codec_to_id(video_codec_to_encoder_codec(preferred))
+        );
+        video_codec_to_encoder_codec(preferred)
+    }
+
+    async fn current_codec_constraints(
+        &self,
+    ) -> crate::video::codec_constraints::StreamCodecConstraints {
+        if let Some(ref video_manager) = self.video_manager {
+            video_manager.codec_constraints().await
+        } else {
+            crate::video::codec_constraints::StreamCodecConstraints::unrestricted()
+        }
     }
 
     /// Handle misc message with Arc writer
@@ -729,7 +755,7 @@ impl Connection {
         }
 
         // Check if client sent supported_decoding with a codec preference
-        if let Some(ref supported_decoding) = opt.supported_decoding.as_ref() {
+        if let Some(supported_decoding) = opt.supported_decoding.as_ref() {
             let prefer = supported_decoding.prefer.value();
             debug!("Client codec preference: prefer={}", prefer);
 
@@ -747,6 +773,16 @@ impl Connection {
             if let Some(new_codec) = requested_codec {
                 // Check if this codec is different from current and available
                 if self.negotiated_codec != Some(new_codec) {
+                    let constraints = self.current_codec_constraints().await;
+                    if !constraints.is_webrtc_codec_allowed(encoder_codec_to_video_codec(new_codec))
+                    {
+                        warn!(
+                            "Client requested codec {:?} but it's blocked by constraints: {}",
+                            new_codec, constraints.reason
+                        );
+                        return Ok(());
+                    }
+
                     let registry = EncoderRegistry::global();
                     if registry.is_format_available(new_codec, false) {
                         info!(
@@ -1080,12 +1116,21 @@ impl Connection {
         if success {
             // Dynamically detect available encoders
             let registry = EncoderRegistry::global();
+            let constraints = self.current_codec_constraints().await;
 
             // Check which encoders are available (include software fallback)
-            let h264_available = registry.is_format_available(VideoEncoderType::H264, false);
-            let h265_available = registry.is_format_available(VideoEncoderType::H265, false);
-            let vp8_available = registry.is_format_available(VideoEncoderType::VP8, false);
-            let vp9_available = registry.is_format_available(VideoEncoderType::VP9, false);
+            let h264_available = constraints
+                .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H264)
+                && registry.is_format_available(VideoEncoderType::H264, false);
+            let h265_available = constraints
+                .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H265)
+                && registry.is_format_available(VideoEncoderType::H265, false);
+            let vp8_available = constraints
+                .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP8)
+                && registry.is_format_available(VideoEncoderType::VP8, false);
+            let vp9_available = constraints
+                .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP9)
+                && registry.is_format_available(VideoEncoderType::VP9, false);
 
             info!(
                 "Server encoding capabilities: H264={}, H265={}, VP8={}, VP9={}",
@@ -1352,8 +1397,12 @@ impl Connection {
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
         // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events =
-            convert_mouse_event(me, self.screen_width, self.screen_height, self.relative_mouse_active);
+        let mouse_events = convert_mouse_event(
+            me,
+            self.screen_width,
+            self.screen_height,
+            self.relative_mouse_active,
+        );
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {
@@ -1616,7 +1665,10 @@ async fn run_video_streaming(
             );
         }
         if let Err(e) = video_manager.request_keyframe().await {
-            debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+            debug!(
+                "Failed to request keyframe for connection {}: {}",
+                conn_id, e
+            );
         }
 
         // Inner loop: receives frames from current subscription

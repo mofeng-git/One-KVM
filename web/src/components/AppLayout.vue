@@ -52,7 +52,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-background overflow-hidden">
+  <div class="h-screen h-dvh flex flex-col bg-background overflow-hidden">
     <!-- Header -->
     <header class="shrink-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div class="flex h-14 items-center px-4 max-w-full">
@@ -86,14 +86,14 @@ async function handleLogout() {
           </span>
 
           <!-- Theme Toggle -->
-          <Button variant="ghost" size="icon" @click="toggleTheme">
+          <Button variant="ghost" size="icon" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
             <Sun class="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon class="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span class="sr-only">{{ t('common.toggleTheme') }}</span>
           </Button>
 
           <!-- Language Toggle -->
-          <Button variant="ghost" size="icon" @click="toggleLanguage">
+          <Button variant="ghost" size="icon" :aria-label="t('common.toggleLanguage')" @click="toggleLanguage">
             <Languages class="h-4 w-4" />
             <span class="sr-only">{{ t('common.toggleLanguage') }}</span>
           </Button>
@@ -101,7 +101,7 @@ async function handleLogout() {
           <!-- Mobile Menu -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child class="md:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" :aria-label="t('common.menu')">
                 <Menu class="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -119,7 +119,7 @@ async function handleLogout() {
           </DropdownMenu>
 
           <!-- Logout Button (Desktop) -->
-          <Button variant="ghost" size="icon" class="hidden md:flex" @click="handleLogout">
+          <Button variant="ghost" size="icon" class="hidden md:flex" :aria-label="t('nav.logout')" @click="handleLogout">
             <LogOut class="h-4 w-4" />
             <span class="sr-only">{{ t('nav.logout') }}</span>
           </Button>

@@ -101,6 +101,46 @@ export const systemApi = {
     }),
 }
 
+export type UpdateChannel = 'stable' | 'beta'
+
+export interface UpdateOverviewResponse {
+  success: boolean
+  current_version: string
+  channel: UpdateChannel
+  latest_version: string
+  upgrade_available: boolean
+  target_version?: string
+  notes_between: Array<{
+    version: string
+    published_at: string
+    notes: string[]
+  }>
+}
+
+export interface UpdateStatusResponse {
+  success: boolean
+  phase: 'idle' | 'checking' | 'downloading' | 'verifying' | 'installing' | 'restarting' | 'success' | 'failed'
+  progress: number
+  current_version: string
+  target_version?: string
+  message?: string
+  last_error?: string
+}
+
+export const updateApi = {
+  overview: (channel: UpdateChannel = 'stable') =>
+    request<UpdateOverviewResponse>(`/update/overview?channel=${encodeURIComponent(channel)}`),
+
+  upgrade: (payload: { channel?: UpdateChannel; target_version?: string }) =>
+    request<{ success: boolean; message?: string }>('/update/upgrade', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  status: () =>
+    request<UpdateStatusResponse>('/update/status'),
+}
+
 // Stream API
 export interface VideoCodecInfo {
   id: string
@@ -122,6 +162,19 @@ export interface AvailableCodecsResponse {
   success: boolean
   backends: EncoderBackendInfo[]
   codecs: VideoCodecInfo[]
+}
+
+export interface StreamConstraintsResponse {
+  success: boolean
+  allowed_codecs: string[]
+  locked_codec: string | null
+  disallow_mjpeg: boolean
+  sources: {
+    rustdesk: boolean
+    rtsp: boolean
+  }
+  reason: string
+  current_mode: string
 }
 
 export const streamApi = {
@@ -161,6 +214,9 @@ export const streamApi = {
   getCodecs: () =>
     request<AvailableCodecsResponse>('/stream/codecs'),
 
+  getConstraints: () =>
+    request<StreamConstraintsResponse>('/stream/constraints'),
+
   setBitratePreset: (bitrate_preset: import('@/types/generated').BitratePreset) =>
     request<{ success: boolean; message?: string }>('/stream/bitrate', {
       method: 'POST',
@@ -186,10 +242,10 @@ export const webrtcApi = {
   createSession: () =>
     request<{ session_id: string }>('/webrtc/session', { method: 'POST' }),
 
-  offer: (sdp: string, clientId?: string) =>
+  offer: (sdp: string) =>
     request<{ sdp: string; session_id: string; ice_candidates: IceCandidate[] }>('/webrtc/offer', {
       method: 'POST',
-      body: JSON.stringify({ sdp, client_id: clientId }),
+      body: JSON.stringify({ sdp }),
     }),
 
   addIceCandidate: (sessionId: string, candidate: IceCandidate) =>
@@ -247,17 +303,34 @@ export const hidApi = {
       screen_resolution: [number, number] | null
     }>('/hid/status'),
 
-  keyboard: async (type: 'down' | 'up', key: number, modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }) => {
+  otgSelfCheck: () =>
+    request<{
+      overall_ok: boolean
+      error_count: number
+      warning_count: number
+      hid_backend: string
+      selected_udc: string | null
+      bound_udc: string | null
+      udc_state: string | null
+      udc_speed: string | null
+      available_udcs: string[]
+      other_gadgets: string[]
+      checks: Array<{
+        id: string
+        ok: boolean
+        level: 'info' | 'warn' | 'error'
+        message: string
+        hint?: string
+        path?: string
+      }>
+    }>('/hid/otg/self-check'),
+
+  keyboard: async (type: 'down' | 'up', key: number, modifier?: number) => {
     await ensureHidConnection()
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
       key,
-      modifiers,
+      modifier: (modifier ?? 0) & 0xff,
     }
     await hidWs.sendKeyboard(event)
     return { success: true }
@@ -481,6 +554,25 @@ export const msdApi = {
     }),
 }
 
+interface SerialDeviceOption {
+  path: string
+  name: string
+}
+
+function getSerialDevicePriority(path: string): number {
+  if (/^\/dev\/ttyUSB/i.test(path)) return 0
+  if (/^\/dev\/(ttyS|S)/i.test(path)) return 2
+  return 1
+}
+
+function sortSerialDevices(serialDevices: SerialDeviceOption[]): SerialDeviceOption[] {
+  return [...serialDevices].sort((a, b) => {
+    const priorityDiff = getSerialDevicePriority(a.path) - getSerialDevicePriority(b.path)
+    if (priorityDiff !== 0) return priorityDiff
+    return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
+
 // Config API
 /** @deprecated 使用域特定 API（videoConfigApi, hidConfigApi 等）替代 */
 export const configApi = {
@@ -493,8 +585,8 @@ export const configApi = {
       body: JSON.stringify(updates),
     }),
 
-  listDevices: () =>
-    request<{
+  listDevices: async () => {
+    const result = await request<{
       video: Array<{
         path: string
         name: string
@@ -522,7 +614,13 @@ export const configApi = {
         ttyd_available: boolean
         rustdesk_available: boolean
       }
-    }>('/devices'),
+    }>('/devices')
+
+    return {
+      ...result,
+      serial: sortSerialDevices(result.serial),
+    }
+  },
 }
 
 // 导出新的域分离配置 API
@@ -536,11 +634,15 @@ export {
   audioConfigApi,
   extensionsApi,
   rustdeskConfigApi,
+  rtspConfigApi,
   webConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
   type RustDeskPasswordResponse,
+  type RtspConfigResponse,
+  type RtspConfigUpdate,
+  type RtspStatusResponse,
   type WebConfig,
 } from './config'
 

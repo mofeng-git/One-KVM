@@ -92,11 +92,7 @@ fn is_public_endpoint(path: &str) -> bool {
     // Note: paths here are relative to /api since middleware is applied within the nested router
     matches!(
         path,
-        "/"
-        | "/auth/login"
-        | "/health"
-        | "/setup"
-        | "/setup/init"
+        "/" | "/auth/login" | "/health" | "/setup" | "/setup/init"
     ) || path.starts_with("/assets/")
         || path.starts_with("/static/")
         || path.ends_with(".js")

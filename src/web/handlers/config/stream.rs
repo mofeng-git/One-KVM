@@ -42,5 +42,10 @@ pub async fn update_stream_config(
         tracing::error!("Failed to apply stream config: {}", e);
     }
 
+    // 6. Enforce codec constraints after any stream config update
+    if let Err(e) = super::apply::enforce_stream_codec_constraints(&state).await {
+        tracing::error!("Failed to enforce stream codec constraints: {}", e);
+    }
+
     Ok(Json(StreamConfigResponse::from(&new_stream_config)))
 }

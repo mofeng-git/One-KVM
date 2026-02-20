@@ -106,6 +106,15 @@ pub async fn update_rustdesk_config(
         tracing::error!("Failed to apply RustDesk config: {}", e);
     }
 
+    // Share a non-sensitive summary for frontend UX
+    let constraints = state.stream_manager.codec_constraints().await;
+    if constraints.rustdesk_enabled || constraints.rtsp_enabled {
+        tracing::info!(
+            "Stream codec constraints active after RustDesk update: {}",
+            constraints.reason
+        );
+    }
+
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
@@ -139,7 +148,7 @@ pub async fn regenerate_device_password(
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
-/// 获取设备密码（管理员专用）
+/// 获取设备密码（已认证用户）
 pub async fn get_device_password(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let config = state.config.get().rustdesk.clone();
     Json(serde_json::json!({
