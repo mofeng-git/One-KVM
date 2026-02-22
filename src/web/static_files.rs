@@ -201,7 +201,7 @@ pub fn placeholder_html() -> &'static str {
         <h1>One-KVM</h1>
         <p>Frontend not built yet.</p>
         <p>Please build the frontend or access the API directly.</p>
-        <div class="version">v0.1.0</div>
+        <div class="version">v0.1.6</div>
     </div>
 </body>
 </html>"#
