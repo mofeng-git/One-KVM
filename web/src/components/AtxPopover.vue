@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Power, RotateCcw, CircleDot, Wifi, Send } from 'lucide-vue-next'
+import { atxApi } from '@/api'
 import { atxConfigApi } from '@/api/config'
 
 const emit = defineEmits<{
@@ -34,6 +35,7 @@ const activeTab = ref('atx')
 
 // ATX state
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
+let powerStateTimer: number | null = null
 // Decouple action data from dialog visibility to prevent race conditions
 const pendingAction = ref<'short' | 'long' | 'reset' | null>(null)
 const confirmDialogOpen = ref(false)
@@ -71,6 +73,9 @@ function handleAction() {
   else if (pendingAction.value === 'long') emit('powerLong')
   else if (pendingAction.value === 'reset') emit('reset')
   confirmDialogOpen.value = false
+  setTimeout(() => {
+    refreshPowerState().catch(() => {})
+  }, 1200)
 }
 
 const confirmTitle = computed(() => {
@@ -138,6 +143,29 @@ async function loadWolHistory() {
     wolLoadingHistory.value = false
   }
 }
+
+async function refreshPowerState() {
+  try {
+    const state = await atxApi.status()
+    powerState.value = state.power_status
+  } catch {
+    powerState.value = 'unknown'
+  }
+}
+
+onMounted(() => {
+  refreshPowerState().catch(() => {})
+  powerStateTimer = window.setInterval(() => {
+    refreshPowerState().catch(() => {})
+  }, 3000)
+})
+
+onUnmounted(() => {
+  if (powerStateTimer !== null) {
+    window.clearInterval(powerStateTimer)
+    powerStateTimer = null
+  }
+})
 
 watch(
   () => activeTab.value,
