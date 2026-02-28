@@ -14,7 +14,6 @@ pub mod h264_pipeline;
 pub mod shared_video_pipeline;
 pub mod stream_manager;
 pub mod streamer;
-pub mod v4l2r_capture;
 pub mod video_session;
 
 pub use capture::VideoCapturer;

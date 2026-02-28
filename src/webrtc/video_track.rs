@@ -18,9 +18,10 @@
 
 use bytes::Bytes;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 use webrtc::media::Sample;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -38,6 +39,10 @@ use crate::video::format::Resolution;
 
 /// Default MTU for RTP packets
 const RTP_MTU: usize = 1200;
+/// Low-frequency diagnostic logging interval for H264 frame writes.
+const H264_DEBUG_LOG_INTERVAL: u64 = 120;
+
+static H264_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Video codec type for WebRTC
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -313,7 +318,20 @@ impl UniversalVideoTrack {
     ///
     /// Sends the entire Annex B frame as a single Sample to allow the
     /// H264Payloader to aggregate SPS+PPS into STAP-A packets.
-    async fn write_h264_frame(&self, data: Bytes, _is_keyframe: bool) -> Result<()> {
+    async fn write_h264_frame(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
+        let frame_idx = H264_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+        if is_keyframe || frame_idx % H264_DEBUG_LOG_INTERVAL == 0 {
+            let (stream_format, nal_types) = detect_h264_stream_format_and_nals(&data);
+            info!(
+                "[H264-Track-Debug] frame_idx={} size={} keyframe={} stream_format={} nal_types={:?}",
+                frame_idx,
+                data.len(),
+                is_keyframe,
+                stream_format,
+                nal_types
+            );
+        }
+
         // Send entire Annex B frame as one Sample
         // The H264Payloader in rtp crate will:
         // 1. Parse NAL units from Annex B format
@@ -468,6 +486,49 @@ impl UniversalVideoTrack {
 
         Ok(())
     }
+}
+
+fn detect_h264_stream_format_and_nals(data: &[u8]) -> (&'static str, Vec<u8>) {
+    let mut nal_types: Vec<u8> = Vec::new();
+    let mut i = 0usize;
+
+    while i + 4 <= data.len() {
+        let sc_len = if i + 4 <= data.len()
+            && data[i] == 0
+            && data[i + 1] == 0
+            && data[i + 2] == 0
+            && data[i + 3] == 1
+        {
+            4
+        } else if i + 3 <= data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
+            3
+        } else {
+            i += 1;
+            continue;
+        };
+
+        let nal_start = i + sc_len;
+        if nal_start < data.len() {
+            nal_types.push(data[nal_start] & 0x1F);
+            if nal_types.len() >= 12 {
+                break;
+            }
+        }
+        i = nal_start.saturating_add(1);
+    }
+
+    if !nal_types.is_empty() {
+        return ("annex-b", nal_types);
+    }
+
+    if data.len() >= 5 {
+        let first_len = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
+        if first_len > 0 && first_len + 4 <= data.len() {
+            return ("length-prefixed", vec![data[4] & 0x1F]);
+        }
+    }
+
+    ("unknown", Vec::new())
 }
 
 #[cfg(test)]

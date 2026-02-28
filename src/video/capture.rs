@@ -2,21 +2,24 @@
 //!
 //! Provides async video capture using memory-mapped buffers.
 
-use bytes::Bytes;
-use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
+use bytes::Bytes;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{watch, Mutex};
 use tracing::{debug, error, info, warn};
+use v4l::buffer::Type as BufferType;
+use v4l::io::traits::CaptureStream;
+use v4l::prelude::*;
+use v4l::video::capture::Parameters;
+use v4l::video::Capture;
+use v4l::Format;
 
 use super::format::{PixelFormat, Resolution};
 use super::frame::VideoFrame;
 use crate::error::{AppError, Result};
-use crate::utils::LogThrottler;
-use crate::video::v4l2r_capture::V4l2rCaptureStream;
 
 /// Default number of capture buffers (reduced from 4 to 2 for lower latency)
 const DEFAULT_BUFFER_COUNT: u32 = 2;
@@ -277,15 +280,9 @@ fn run_capture(
             return Ok(());
         }
 
-        let stream = match V4l2rCaptureStream::open(
-            &config.device_path,
-            config.resolution,
-            config.format,
-            config.fps,
-            config.buffer_count,
-            config.timeout,
-        ) {
-            Ok(stream) => stream,
+        // Open device
+        let device = match Device::with_path(&config.device_path) {
+            Ok(d) => d,
             Err(e) => {
                 let err_str = e.to_string();
                 if err_str.contains("busy") || err_str.contains("resource") {
@@ -309,7 +306,34 @@ fn run_capture(
             }
         };
 
-        return run_capture_inner(config, state, stats, stop_flag, stream);
+        // Set format
+        let format = Format::new(
+            config.resolution.width,
+            config.resolution.height,
+            config.format.to_fourcc(),
+        );
+
+        let actual_format = match device.set_format(&format) {
+            Ok(f) => f,
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("busy") || err_str.contains("resource") {
+                    warn!(
+                        "Device busy on set_format attempt {}/{}, retrying in {}ms...",
+                        attempt + 1,
+                        MAX_RETRIES,
+                        RETRY_DELAY_MS
+                    );
+                    std::thread::sleep(Duration::from_millis(RETRY_DELAY_MS));
+                    last_error = Some(AppError::VideoError(format!("Failed to set format: {}", e)));
+                    continue;
+                }
+                return Err(AppError::VideoError(format!("Failed to set format: {}", e)));
+            }
+        };
+
+        // Device opened and format set successfully - proceed with capture
+        return run_capture_inner(config, state, stats, stop_flag, device, actual_format);
     }
 
     // All retries exhausted
@@ -324,15 +348,47 @@ fn run_capture_inner(
     state: &watch::Sender<CaptureState>,
     stats: &Arc<Mutex<CaptureStats>>,
     stop_flag: &AtomicBool,
-    mut stream: V4l2rCaptureStream,
+    device: Device,
+    actual_format: Format,
 ) -> Result<()> {
-    let resolution = stream.resolution();
-    let pixel_format = stream.format();
-    let stride = stream.stride();
     info!(
         "Capture format: {}x{} {:?} stride={}",
-        resolution.width, resolution.height, pixel_format, stride
+        actual_format.width, actual_format.height, actual_format.fourcc, actual_format.stride
     );
+
+
+    // Try to set hardware FPS (V4L2 VIDIOC_S_PARM)
+    if config.fps > 0 {
+        match device.set_params(&Parameters::with_fps(config.fps)) {
+            Ok(actual_params) => {
+                // Extract actual FPS from returned interval (numerator/denominator)
+                let actual_hw_fps = if actual_params.interval.numerator > 0 {
+                    actual_params.interval.denominator / actual_params.interval.numerator
+                } else {
+                    0
+                };
+
+                if actual_hw_fps == config.fps {
+                    info!("Hardware FPS set successfully: {} fps", actual_hw_fps);
+                } else if actual_hw_fps > 0 {
+                    info!(
+                        "Hardware FPS coerced: requested {} fps, got {} fps",
+                        config.fps, actual_hw_fps
+                    );
+                } else {
+                    warn!("Hardware FPS setting returned invalid interval");
+                }
+            }
+            Err(e) => {
+                warn!("Failed to set hardware FPS: {}", e);
+            }
+        }
+    }
+
+    // Create stream with mmap buffers
+    let mut stream =
+        MmapStream::with_buffers(&device, BufferType::VideoCapture, config.buffer_count)
+            .map_err(|e| AppError::VideoError(format!("Failed to create stream: {}", e)))?;
 
     let _ = state.send(CaptureState::Running);
     info!("Capture started");
@@ -341,25 +397,12 @@ fn run_capture_inner(
     let mut fps_frame_count = 0u64;
     let mut fps_window_start = Instant::now();
     let fps_window_duration = Duration::from_secs(1);
-    let mut scratch = Vec::new();
-    let capture_error_throttler = LogThrottler::with_secs(5);
-    let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
-
-    let classify_capture_error = |err: &std::io::Error| -> String {
-        let message = err.to_string();
-        if message.contains("dqbuf failed") && message.contains("EINVAL") {
-            "capture_dqbuf_einval".to_string()
-        } else if message.contains("dqbuf failed") {
-            "capture_dqbuf".to_string()
-        } else {
-            format!("capture_{:?}", err.kind())
-        }
-    };
 
     // Main capture loop
     while !stop_flag.load(Ordering::Relaxed) {
-        let meta = match stream.next_into(&mut scratch) {
-            Ok(meta) => meta,
+        // Try to capture a frame
+        let (_buf, meta) = match stream.next() {
+            Ok(frame_data) => frame_data,
             Err(e) => {
                 if e.kind() == io::ErrorKind::TimedOut {
                     warn!("Capture timeout - no signal?");
@@ -389,30 +432,19 @@ fn run_capture_inner(
                     });
                 }
 
-                let key = classify_capture_error(&e);
-                if capture_error_throttler.should_log(&key) {
-                    let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
-                    if suppressed > 0 {
-                        error!("Capture error: {} (suppressed {} repeats)", e, suppressed);
-                    } else {
-                        error!("Capture error: {}", e);
-                    }
-                } else {
-                    let counter = suppressed_capture_errors.entry(key).or_insert(0);
-                    *counter = counter.saturating_add(1);
-                }
+                error!("Capture error: {}", e);
                 continue;
             }
         };
 
         // Use actual bytes used, not buffer size
-        let frame_size = meta.bytes_used;
+        let frame_size = meta.bytesused as usize;
 
         // Validate frame
         if frame_size < MIN_FRAME_SIZE {
             debug!(
                 "Dropping small frame: {} bytes (bytesused={})",
-                frame_size, meta.bytes_used
+                frame_size, meta.bytesused
             );
             continue;
         }
@@ -437,10 +469,6 @@ fn run_capture_inner(
                 // Provide partial estimate if we have at least 100ms of data
                 s.current_fps = (fps_frame_count as f32 / elapsed.as_secs_f32()).max(0.0);
             }
-        }
-
-        if *state.borrow() == CaptureState::NoSignal {
-            let _ = state.send(CaptureState::Running);
         }
     }
 
@@ -497,37 +525,38 @@ fn grab_single_frame(
     resolution: Resolution,
     format: PixelFormat,
 ) -> Result<VideoFrame> {
-    let mut stream = V4l2rCaptureStream::open(
-        device_path,
-        resolution,
-        format,
-        0,
-        2,
-        Duration::from_secs(DEFAULT_TIMEOUT),
-    )?;
-    let actual_resolution = stream.resolution();
-    let actual_format = stream.format();
-    let actual_stride = stream.stride();
-    let mut scratch = Vec::new();
+    let device = Device::with_path(device_path)
+        .map_err(|e| AppError::VideoError(format!("Failed to open device: {}", e)))?;
+
+    let fmt = Format::new(resolution.width, resolution.height, format.to_fourcc());
+    let actual = device
+        .set_format(&fmt)
+        .map_err(|e| AppError::VideoError(format!("Failed to set format: {}", e)))?;
+
+    let mut stream = MmapStream::with_buffers(&device, BufferType::VideoCapture, 2)
+        .map_err(|e| AppError::VideoError(format!("Failed to create stream: {}", e)))?;
 
     // Try to get a valid frame (skip first few which might be bad)
     for attempt in 0..5 {
-        match stream.next_into(&mut scratch) {
-            Ok(meta) => {
-                if meta.bytes_used >= MIN_FRAME_SIZE {
+        match stream.next() {
+            Ok((buf, _meta)) => {
+                if buf.len() >= MIN_FRAME_SIZE {
+                    let actual_format = PixelFormat::from_fourcc(actual.fourcc).unwrap_or(format);
+
                     return Ok(VideoFrame::new(
-                        Bytes::copy_from_slice(&scratch[..meta.bytes_used]),
-                        actual_resolution,
+                        Bytes::copy_from_slice(buf),
+                        Resolution::new(actual.width, actual.height),
                         actual_format,
-                        actual_stride,
+                        actual.stride,
                         0,
                     ));
                 }
             }
-            Err(e) if attempt == 4 => {
-                return Err(AppError::VideoError(format!("Failed to grab frame: {}", e)));
+            Err(e) => {
+                if attempt == 4 {
+                    return Err(AppError::VideoError(format!("Failed to grab frame: {}", e)));
+                }
             }
-            Err(_) => {}
         }
     }
 
