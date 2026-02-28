@@ -18,6 +18,7 @@
 
 use bytes::Bytes;
 use parking_lot::RwLock as ParkingRwLock;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,28 +27,17 @@ use tracing::{debug, error, info, trace, warn};
 
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
+/// Restart capture stream after this many consecutive timeouts.
+const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
 /// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 /// Validate JPEG header every N frames to reduce overhead
 const JPEG_VALIDATE_INTERVAL: u64 = 30;
-/// Retry count for capture format configuration when device is busy.
-const SET_FORMAT_MAX_RETRIES: usize = 5;
-/// Delay between capture format retry attempts.
-const SET_FORMAT_RETRY_DELAY_MS: u64 = 100;
-/// Low-frequency diagnostic logging interval (in frames).
-const PIPELINE_DEBUG_LOG_INTERVAL: u64 = 120;
 
 use crate::error::{AppError, Result};
+use crate::utils::LogThrottler;
 use crate::video::convert::{Nv12Converter, PixelConverter};
 use crate::video::decoder::MjpegTurboDecoder;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-use hwcodec::ffmpeg_hw::{last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline};
-use v4l::buffer::Type as BufferType;
-use v4l::io::traits::CaptureStream;
-use v4l::prelude::*;
-use v4l::video::Capture;
-use v4l::video::capture::Parameters;
-use v4l::Format;
 use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
 use crate::video::encoder::h265::{
     detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
@@ -58,6 +48,11 @@ use crate::video::encoder::vp8::{detect_best_vp8_encoder, VP8Config, VP8Encoder}
 use crate::video::encoder::vp9::{detect_best_vp9_encoder, VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
+use crate::video::v4l2r_capture::V4l2rCaptureStream;
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use hwcodec::ffmpeg_hw::{
+    last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline,
+};
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -517,7 +512,10 @@ impl SharedVideoPipeline {
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if needs_mjpeg_decode
             && is_rkmpp_encoder
-            && matches!(config.output_codec, VideoEncoderType::H264 | VideoEncoderType::H265)
+            && matches!(
+                config.output_codec,
+                VideoEncoderType::H264 | VideoEncoderType::H265
+            )
         {
             info!(
                 "Initializing FFmpeg HW MJPEG->{} pipeline (no fallback)",
@@ -534,7 +532,11 @@ impl SharedVideoPipeline {
                 thread_count: 1,
             };
             let pipeline = HwMjpegH26xPipeline::new(hw_config).map_err(|e| {
-                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                let detail = if e.is_empty() {
+                    ffmpeg_hw_last_error()
+                } else {
+                    e
+                };
                 AppError::VideoError(format!(
                     "FFmpeg HW MJPEG->{} init failed: {}",
                     config.output_codec, detail
@@ -908,7 +910,11 @@ impl SharedVideoPipeline {
 
     /// Get subscriber count
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.read().iter().filter(|tx| !tx.is_closed()).count()
+        self.subscribers
+            .read()
+            .iter()
+            .filter(|tx| !tx.is_closed())
+            .count()
     }
 
     /// Report that a receiver has lagged behind
@@ -957,7 +963,11 @@ impl SharedVideoPipeline {
                         pipeline
                             .reconfigure(bitrate_kbps as i32, gop as i32)
                             .map_err(|e| {
-                                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                                let detail = if e.is_empty() {
+                                    ffmpeg_hw_last_error()
+                                } else {
+                                    e
+                                };
                                 AppError::VideoError(format!(
                                     "FFmpeg HW reconfigure failed: {}",
                                     detail
@@ -1215,8 +1225,6 @@ impl SharedVideoPipeline {
                 let mut last_fps_time = Instant::now();
                 let mut fps_frame_count: u64 = 0;
                 let mut last_seq = *frame_seq_rx.borrow();
-                let mut encode_no_output_count: u64 = 0;
-                let mut no_subscriber_skip_count: u64 = 0;
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
                     if frame_seq_rx.changed().await.is_err() {
@@ -1232,23 +1240,8 @@ impl SharedVideoPipeline {
                     }
                     last_seq = seq;
 
-                    let subscriber_count = pipeline.subscriber_count();
-                    if subscriber_count == 0 {
-                        no_subscriber_skip_count = no_subscriber_skip_count.wrapping_add(1);
-                        if no_subscriber_skip_count % PIPELINE_DEBUG_LOG_INTERVAL == 0 {
-                            info!(
-                                "[Pipeline-Debug] encoder loop skipped {} times because subscriber_count=0",
-                                no_subscriber_skip_count
-                            );
-                        }
+                    if pipeline.subscriber_count() == 0 {
                         continue;
-                    }
-                    if no_subscriber_skip_count > 0 {
-                        info!(
-                            "[Pipeline-Debug] encoder loop resumed with subscribers after {} empty cycles",
-                            no_subscriber_skip_count
-                        );
-                        no_subscriber_skip_count = 0;
                     }
 
                     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -1268,39 +1261,13 @@ impl SharedVideoPipeline {
 
                     match pipeline.encode_frame_sync(&mut encoder_state, &frame, frame_count) {
                         Ok(Some(encoded_frame)) => {
-                            let encoded_size = encoded_frame.data.len();
-                            let encoded_seq = encoded_frame.sequence;
-                            let encoded_pts = encoded_frame.pts_ms;
-                            let encoded_keyframe = encoded_frame.is_keyframe;
                             let encoded_arc = Arc::new(encoded_frame);
                             pipeline.broadcast_encoded(encoded_arc).await;
-
-                            if encoded_keyframe || frame_count % PIPELINE_DEBUG_LOG_INTERVAL == 0 {
-                                info!(
-                                    "[Pipeline-Debug] encoded+broadcast codec={} frame_idx={} seq={} size={} keyframe={} pts_ms={} subscribers={}",
-                                    encoder_state.codec,
-                                    frame_count,
-                                    encoded_seq,
-                                    encoded_size,
-                                    encoded_keyframe,
-                                    encoded_pts,
-                                    subscriber_count
-                                );
-                            }
 
                             frame_count += 1;
                             fps_frame_count += 1;
                         }
-                        Ok(None) => {
-                            encode_no_output_count = encode_no_output_count.wrapping_add(1);
-                            if encode_no_output_count % PIPELINE_DEBUG_LOG_INTERVAL == 0 {
-                                info!(
-                                    "[Pipeline-Debug] encoder produced no output {} times (codec={})",
-                                    encode_no_output_count,
-                                    encoder_state.codec
-                                );
-                            }
-                        }
+                        Ok(None) => {}
                         Err(e) => {
                             error!("Encoding failed: {}", e);
                         }
@@ -1328,105 +1295,46 @@ impl SharedVideoPipeline {
             let frame_seq_tx = frame_seq_tx.clone();
             let buffer_pool = buffer_pool.clone();
             std::thread::spawn(move || {
-                let device = match Device::with_path(&device_path) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        error!("Failed to open device {:?}: {}", device_path, e);
-                        let _ = pipeline.running.send(false);
-                        pipeline.running_flag.store(false, Ordering::Release);
-                        let _ = frame_seq_tx.send(1);
-                        return;
-                    }
-                };
-
-                let requested_format = Format::new(
-                    config.resolution.width,
-                    config.resolution.height,
-                    config.input_format.to_fourcc(),
-                );
-
-                let mut actual_format_opt = None;
-                let mut last_set_format_error: Option<String> = None;
-                for attempt in 0..SET_FORMAT_MAX_RETRIES {
-                    match device.set_format(&requested_format) {
-                        Ok(format) => {
-                            actual_format_opt = Some(format);
-                            break;
-                        }
-                        Err(e) => {
-                            let err_str = e.to_string();
-                            let is_busy = err_str.contains("busy") || err_str.contains("resource");
-                            last_set_format_error = Some(err_str);
-
-                            if is_busy && attempt + 1 < SET_FORMAT_MAX_RETRIES {
-                                warn!(
-                                    "Capture set_format busy (attempt {}/{}), retrying in {}ms",
-                                    attempt + 1,
-                                    SET_FORMAT_MAX_RETRIES,
-                                    SET_FORMAT_RETRY_DELAY_MS
-                                );
-                                std::thread::sleep(Duration::from_millis(SET_FORMAT_RETRY_DELAY_MS));
-                                continue;
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                let actual_format = match actual_format_opt {
-                    Some(format) => format,
-                    None => {
-                        error!(
-                            "Failed to set capture format: {}",
-                            last_set_format_error
-                                .unwrap_or_else(|| "unknown error".to_string())
-                        );
-                        let _ = pipeline.running.send(false);
-                        pipeline.running_flag.store(false, Ordering::Release);
-                        let _ = frame_seq_tx.send(1);
-                        return;
-                    }
-                };
-
-                let resolution = Resolution::new(actual_format.width, actual_format.height);
-                let pixel_format =
-                    PixelFormat::from_fourcc(actual_format.fourcc).unwrap_or(config.input_format);
-                let stride = actual_format.stride;
-                info!(
-                    "[Pipeline-Debug] capture format applied: {}x{} fourcc={:?} pixel_format={} stride={}",
-                    actual_format.width,
-                    actual_format.height,
-                    actual_format.fourcc,
-                    pixel_format,
-                    stride
-                );
-
-                if config.fps > 0 {
-                    if let Err(e) = device.set_params(&Parameters::with_fps(config.fps)) {
-                        warn!("Failed to set hardware FPS: {}", e);
-                    }
-                }
-
-                let mut stream = match MmapStream::with_buffers(
-                    &device,
-                    BufferType::VideoCapture,
+                let mut stream = match V4l2rCaptureStream::open(
+                    &device_path,
+                    config.resolution,
+                    config.input_format,
+                    config.fps,
                     buffer_count.max(1),
+                    Duration::from_secs(2),
                 ) {
-                    Ok(s) => s,
+                    Ok(stream) => stream,
                     Err(e) => {
-                        error!("Failed to create capture stream: {}", e);
+                        error!("Failed to open capture stream: {}", e);
                         let _ = pipeline.running.send(false);
                         pipeline.running_flag.store(false, Ordering::Release);
                         let _ = frame_seq_tx.send(1);
                         return;
                     }
                 };
+
+                let resolution = stream.resolution();
+                let pixel_format = stream.format();
+                let stride = stream.stride();
 
                 let mut no_subscribers_since: Option<Instant> = None;
                 let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
                 let mut sequence: u64 = 0;
                 let mut validate_counter: u64 = 0;
-                let mut captured_frame_count: u64 = 0;
+                let mut consecutive_timeouts: u32 = 0;
+                let capture_error_throttler = LogThrottler::with_secs(5);
+                let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
+
+                let classify_capture_error = |err: &std::io::Error| -> String {
+                    let message = err.to_string();
+                    if message.contains("dqbuf failed") && message.contains("EINVAL") {
+                        "capture_dqbuf_einval".to_string()
+                    } else if message.contains("dqbuf failed") {
+                        "capture_dqbuf".to_string()
+                    } else {
+                        format!("capture_{:?}", err.kind())
+                    }
+                };
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
                     let subscriber_count = pipeline.subscriber_count();
@@ -1456,59 +1364,78 @@ impl SharedVideoPipeline {
                         no_subscribers_since = None;
                     }
 
-                    let (buf, meta) = match stream.next() {
-                        Ok(frame_data) => frame_data,
+                    let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
+                    let meta = match stream.next_into(&mut owned) {
+                        Ok(meta) => {
+                            consecutive_timeouts = 0;
+                            meta
+                        }
                         Err(e) => {
                             if e.kind() == std::io::ErrorKind::TimedOut {
+                                consecutive_timeouts = consecutive_timeouts.saturating_add(1);
                                 warn!("Capture timeout - no signal?");
+
+                                if consecutive_timeouts >= CAPTURE_TIMEOUT_RESTART_THRESHOLD {
+                                    warn!(
+                                        "Capture timed out {} consecutive times, restarting video pipeline",
+                                        consecutive_timeouts
+                                    );
+                                    let _ = pipeline.running.send(false);
+                                    pipeline.running_flag.store(false, Ordering::Release);
+                                    let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                    break;
+                                }
                             } else {
-                                error!("Capture error: {}", e);
+                                consecutive_timeouts = 0;
+                                let key = classify_capture_error(&e);
+                                if capture_error_throttler.should_log(&key) {
+                                    let suppressed =
+                                        suppressed_capture_errors.remove(&key).unwrap_or(0);
+                                    if suppressed > 0 {
+                                        error!(
+                                            "Capture error: {} (suppressed {} repeats)",
+                                            e, suppressed
+                                        );
+                                    } else {
+                                        error!("Capture error: {}", e);
+                                    }
+                                } else {
+                                    let counter = suppressed_capture_errors.entry(key).or_insert(0);
+                                    *counter = counter.saturating_add(1);
+                                }
                             }
                             continue;
                         }
                     };
 
-                    let frame_size = meta.bytesused as usize;
+                    let frame_size = meta.bytes_used;
                     if frame_size < MIN_CAPTURE_FRAME_SIZE {
                         continue;
                     }
 
                     validate_counter = validate_counter.wrapping_add(1);
                     if pixel_format.is_compressed()
-                        && validate_counter % JPEG_VALIDATE_INTERVAL == 0
-                        && !VideoFrame::is_valid_jpeg_bytes(&buf[..frame_size])
+                        && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
+                        && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
                     {
                         continue;
                     }
 
-                    let mut owned = buffer_pool.take(frame_size);
-                    owned.resize(frame_size, 0);
-                    owned[..frame_size].copy_from_slice(&buf[..frame_size]);
+                    owned.truncate(frame_size);
                     let frame = Arc::new(VideoFrame::from_pooled(
                         Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
                         resolution,
                         pixel_format,
                         stride,
-                        sequence,
+                        meta.sequence,
                     ));
-                    captured_frame_count = captured_frame_count.wrapping_add(1);
-                    if captured_frame_count % PIPELINE_DEBUG_LOG_INTERVAL == 0 {
-                        info!(
-                            "[Pipeline-Debug] captured frames={} last_seq={} last_size={} subscribers={}",
-                            captured_frame_count,
-                            sequence,
-                            frame_size,
-                            subscriber_count
-                        );
-                    }
-                    sequence = sequence.wrapping_add(1);
+                    sequence = meta.sequence.wrapping_add(1);
 
                     {
                         let mut guard = latest_frame.write();
                         *guard = Some(frame);
                     }
                     let _ = frame_seq_tx.send(sequence);
-
                 }
 
                 pipeline.running_flag.store(false, Ordering::Release);
@@ -1573,7 +1500,11 @@ impl SharedVideoPipeline {
             }
 
             let packet = pipeline.encode(raw_frame, pts_ms).map_err(|e| {
-                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                let detail = if e.is_empty() {
+                    ffmpeg_hw_last_error()
+                } else {
+                    e
+                };
                 AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
             })?;
 
@@ -1593,9 +1524,10 @@ impl SharedVideoPipeline {
         }
 
         let decoded_buf = if input_format.is_compressed() {
-            let decoder = state.mjpeg_decoder.as_mut().ok_or_else(|| {
-                AppError::VideoError("MJPEG decoder not initialized".to_string())
-            })?;
+            let decoder = state
+                .mjpeg_decoder
+                .as_mut()
+                .ok_or_else(|| AppError::VideoError("MJPEG decoder not initialized".to_string()))?;
             let decoded = decoder.decode(raw_frame)?;
             Some(decoded)
         } else {
@@ -1625,16 +1557,18 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
-        let encode_result = if needs_yuv420p && state.yuv420p_converter.is_some() {
+        let encode_result = if needs_yuv420p {
             // Software encoder with direct input conversion to YUV420P
-            let conv = state.yuv420p_converter.as_mut().unwrap();
-            let yuv420p_data = conv
-                .convert(raw_frame)
-                .map_err(|e| AppError::VideoError(format!("YUV420P conversion failed: {}", e)))?;
-            encoder.encode_raw(yuv420p_data, pts_ms)
-        } else if state.nv12_converter.is_some() {
+            if let Some(conv) = state.yuv420p_converter.as_mut() {
+                let yuv420p_data = conv.convert(raw_frame).map_err(|e| {
+                    AppError::VideoError(format!("YUV420P conversion failed: {}", e))
+                })?;
+                encoder.encode_raw(yuv420p_data, pts_ms)
+            } else {
+                encoder.encode_raw(raw_frame, pts_ms)
+            }
+        } else if let Some(conv) = state.nv12_converter.as_mut() {
             // Hardware encoder with input conversion to NV12
-            let conv = state.nv12_converter.as_mut().unwrap();
             let nv12_data = conv
                 .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?;

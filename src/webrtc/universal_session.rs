@@ -45,11 +45,9 @@ use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
 
 /// H.265/HEVC MIME type (RFC 7798)
 const MIME_TYPE_H265: &str = "video/H265";
-/// Low-frequency diagnostic logging interval for video receive/send loop.
-const VIDEO_DEBUG_LOG_INTERVAL: u64 = 120;
 
 fn h264_contains_parameter_sets(data: &[u8]) -> bool {
-    // Annex-B path (00 00 01 / 00 00 00 01)
+    // Annex-B start code path
     let mut i = 0usize;
     while i + 4 <= data.len() {
         let sc_len = if i + 4 <= data.len()
@@ -93,46 +91,6 @@ fn h264_contains_parameter_sets(data: &[u8]) -> bool {
     }
 
     false
-}
-
-fn extract_video_sdp_section(sdp: &str) -> String {
-    let mut lines_out: Vec<&str> = Vec::new();
-    let mut in_video = false;
-
-    for line in sdp.lines() {
-        if line.starts_with("m=") {
-            if line.starts_with("m=video") {
-                in_video = true;
-                lines_out.push(line);
-                continue;
-            }
-            if in_video {
-                break;
-            }
-        }
-
-        if !in_video {
-            continue;
-        }
-
-        if line.starts_with("c=")
-            || line.starts_with("a=mid:")
-            || line.starts_with("a=rtpmap:")
-            || line.starts_with("a=fmtp:")
-            || line.starts_with("a=rtcp-fb:")
-            || line.starts_with("a=send")
-            || line.starts_with("a=recv")
-            || line.starts_with("a=inactive")
-        {
-            lines_out.push(line);
-        }
-    }
-
-    if lines_out.is_empty() {
-        "<no video m-section>".to_string()
-    } else {
-        lines_out.join(" | ")
-    }
 }
 
 /// Universal WebRTC session configuration
@@ -679,10 +637,6 @@ impl UniversalSession {
             let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
 
             let mut frames_sent: u64 = 0;
-            let mut frames_received: u64 = 0;
-            let mut codec_mismatch_count: u64 = 0;
-            let mut waiting_keyframe_drop_count: u64 = 0;
-            let mut send_fail_count: u64 = 0;
 
             loop {
                 tokio::select! {
@@ -707,41 +661,12 @@ impl UniversalSession {
                                 break;
                             }
                         };
-                        frames_received = frames_received.wrapping_add(1);
 
                         // Verify codec matches
                         let frame_codec = encoded_frame.codec;
 
                         if frame_codec != expected_codec {
-                            codec_mismatch_count = codec_mismatch_count.wrapping_add(1);
-                            if codec_mismatch_count <= 5
-                                || codec_mismatch_count % VIDEO_DEBUG_LOG_INTERVAL == 0
-                            {
-                                info!(
-                                    "[Session-Debug:{}] codec mismatch count={} expected={} got={} recv_seq={}",
-                                    session_id,
-                                    codec_mismatch_count,
-                                    expected_codec,
-                                    frame_codec,
-                                    encoded_frame.sequence
-                                );
-                            }
                             continue;
-                        }
-
-                        if encoded_frame.is_keyframe
-                            || frames_received % VIDEO_DEBUG_LOG_INTERVAL == 0
-                        {
-                            info!(
-                                "[Session-Debug:{}] received frame recv_count={} sent_count={} seq={} size={} keyframe={} waiting_for_keyframe={}",
-                                session_id,
-                                frames_received,
-                                frames_sent,
-                                encoded_frame.sequence,
-                                encoded_frame.data.len(),
-                                encoded_frame.is_keyframe,
-                                waiting_for_keyframe
-                            );
                         }
 
                         // Debug log for H265 frames
@@ -764,27 +689,16 @@ impl UniversalSession {
                             }
                         }
 
-                        let was_waiting_for_keyframe = waiting_for_keyframe;
                         if waiting_for_keyframe || gap_detected {
                             if encoded_frame.is_keyframe {
                                 waiting_for_keyframe = false;
-                                if was_waiting_for_keyframe || gap_detected {
-                                    info!(
-                                        "[Session-Debug:{}] keyframe accepted seq={} after_wait={} gap_detected={}",
-                                        session_id,
-                                        encoded_frame.sequence,
-                                        was_waiting_for_keyframe,
-                                        gap_detected
-                                    );
-                                }
                             } else {
                                 if gap_detected {
                                     waiting_for_keyframe = true;
                                 }
 
-                                // Some H264 encoders (notably v4l2m2m on certain drivers) emit
-                                // SPS/PPS in a separate non-keyframe access unit right before IDR.
-                                // If we drop it here, browser receives IDR-only (NAL 5) and cannot decode.
+                                // Some H264 encoders output SPS/PPS in a separate non-keyframe AU
+                                // before IDR. Keep this frame so browser can decode the next IDR.
                                 let forward_h264_parameter_frame = waiting_for_keyframe
                                     && expected_codec == VideoEncoderType::H264
                                     && h264_contains_parameter_sets(encoded_frame.data.as_ref());
@@ -796,32 +710,7 @@ impl UniversalSession {
                                     request_keyframe();
                                     last_keyframe_request = now;
                                 }
-
-                                if forward_h264_parameter_frame {
-                                    info!(
-                                        "[Session-Debug:{}] forwarding H264 parameter frame while waiting keyframe seq={} size={}",
-                                        session_id,
-                                        encoded_frame.sequence,
-                                        encoded_frame.data.len()
-                                    );
-                                } else {
-                                    waiting_keyframe_drop_count =
-                                        waiting_keyframe_drop_count.wrapping_add(1);
-                                    if gap_detected
-                                        || waiting_keyframe_drop_count <= 5
-                                        || waiting_keyframe_drop_count
-                                            % VIDEO_DEBUG_LOG_INTERVAL
-                                            == 0
-                                    {
-                                        info!(
-                                            "[Session-Debug:{}] dropping frame while waiting keyframe seq={} keyframe={} gap_detected={} drop_count={}",
-                                            session_id,
-                                            encoded_frame.sequence,
-                                            encoded_frame.is_keyframe,
-                                            gap_detected,
-                                            waiting_keyframe_drop_count
-                                        );
-                                    }
+                                if !forward_h264_parameter_frame {
                                     continue;
                                 }
                             }
@@ -838,33 +727,11 @@ impl UniversalSession {
                             .await;
                         let _ = send_in_flight;
 
-                        if let Err(e) = send_result {
-                            send_fail_count = send_fail_count.wrapping_add(1);
-                            if send_fail_count <= 5 || send_fail_count % VIDEO_DEBUG_LOG_INTERVAL == 0
-                            {
-                                info!(
-                                    "[Session-Debug:{}] track write failed count={} err={}",
-                                    session_id,
-                                    send_fail_count,
-                                    e
-                                );
-                            }
+                        if send_result.is_err() {
+                            // Keep quiet unless debugging send failures elsewhere
                         } else {
                             frames_sent += 1;
                             last_sequence = Some(encoded_frame.sequence);
-                            if encoded_frame.is_keyframe
-                                || frames_sent % VIDEO_DEBUG_LOG_INTERVAL == 0
-                            {
-                                info!(
-                                    "[Session-Debug:{}] sent frame sent_count={} recv_count={} seq={} size={} keyframe={}",
-                                    session_id,
-                                    frames_sent,
-                                    frames_received,
-                                    encoded_frame.sequence,
-                                    encoded_frame.data.len(),
-                                    encoded_frame.is_keyframe
-                                );
-                            }
                         }
                     }
                 }
@@ -983,12 +850,6 @@ impl UniversalSession {
 
     /// Handle SDP offer and create answer
     pub async fn handle_offer(&self, offer: SdpOffer) -> Result<SdpAnswer> {
-        info!(
-            "[SDP-Debug:{}] offer video section: {}",
-            self.session_id,
-            extract_video_sdp_section(&offer.sdp)
-        );
-
         // Log offer for debugging H.265 codec negotiation
         if self.codec == VideoEncoderType::H265 {
             let has_h265 = offer.sdp.to_lowercase().contains("h265")
@@ -1014,12 +875,6 @@ impl UniversalSession {
             .create_answer(None)
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to create answer: {}", e)))?;
-
-        info!(
-            "[SDP-Debug:{}] answer video section: {}",
-            self.session_id,
-            extract_video_sdp_section(&answer.sdp)
-        );
 
         // Log answer for debugging
         if self.codec == VideoEncoderType::H265 {

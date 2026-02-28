@@ -250,8 +250,8 @@ impl WebRtcStreamer {
         }
     }
 
-    fn should_stop_pipeline(session_count: usize) -> bool {
-        session_count == 0
+    fn should_stop_pipeline(session_count: usize, subscriber_count: usize) -> bool {
+        session_count == 0 && subscriber_count == 0
     }
 
     async fn stop_pipeline_if_idle(&self, reason: &str) {
@@ -263,7 +263,7 @@ impl WebRtcStreamer {
         };
 
         let subscriber_count = pipeline.subscriber_count();
-        if Self::should_stop_pipeline(session_count) {
+        if Self::should_stop_pipeline(session_count, subscriber_count) {
             info!(
                 "{} stopping video pipeline (sessions={}, subscribers={})",
                 reason, session_count, subscriber_count
@@ -1005,9 +1005,10 @@ mod tests {
     }
 
     #[test]
-    fn stop_pipeline_requires_no_sessions() {
-        assert!(WebRtcStreamer::should_stop_pipeline(0));
-        assert!(!WebRtcStreamer::should_stop_pipeline(1));
-        assert!(!WebRtcStreamer::should_stop_pipeline(2));
+    fn stop_pipeline_requires_no_sessions_and_no_subscribers() {
+        assert!(WebRtcStreamer::should_stop_pipeline(0, 0));
+        assert!(!WebRtcStreamer::should_stop_pipeline(1, 0));
+        assert!(!WebRtcStreamer::should_stop_pipeline(0, 1));
+        assert!(!WebRtcStreamer::should_stop_pipeline(2, 3));
     }
 }

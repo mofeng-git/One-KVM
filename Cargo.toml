@@ -66,7 +66,7 @@ clap = { version = "4", features = ["derive"] }
 time = "0.3"
 
 # Video capture (V4L2)
-v4l = "0.14"
+v4l2r = "0.0.7"
 
 # JPEG encoding (libjpeg-turbo, SIMD accelerated)
 turbojpeg = "1.3"
