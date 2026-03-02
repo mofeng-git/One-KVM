@@ -46,6 +46,53 @@ use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
 /// H.265/HEVC MIME type (RFC 7798)
 const MIME_TYPE_H265: &str = "video/H265";
 
+fn h264_contains_parameter_sets(data: &[u8]) -> bool {
+    // Annex-B start code path
+    let mut i = 0usize;
+    while i + 4 <= data.len() {
+        let sc_len = if i + 4 <= data.len()
+            && data[i] == 0
+            && data[i + 1] == 0
+            && data[i + 2] == 0
+            && data[i + 3] == 1
+        {
+            4
+        } else if i + 3 <= data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
+            3
+        } else {
+            i += 1;
+            continue;
+        };
+
+        let nal_start = i + sc_len;
+        if nal_start < data.len() {
+            let nal_type = data[nal_start] & 0x1F;
+            if nal_type == 7 || nal_type == 8 {
+                return true;
+            }
+        }
+        i = nal_start.saturating_add(1);
+    }
+
+    // Length-prefixed fallback
+    let mut pos = 0usize;
+    while pos + 4 <= data.len() {
+        let nalu_len =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        pos += 4;
+        if nalu_len == 0 || pos + nalu_len > data.len() {
+            break;
+        }
+        let nal_type = data[pos] & 0x1F;
+        if nal_type == 7 || nal_type == 8 {
+            return true;
+        }
+        pos += nalu_len;
+    }
+
+    false
+}
+
 /// Universal WebRTC session configuration
 #[derive(Debug, Clone)]
 pub struct UniversalSessionConfig {
@@ -649,6 +696,13 @@ impl UniversalSession {
                                 if gap_detected {
                                     waiting_for_keyframe = true;
                                 }
+
+                                // Some H264 encoders output SPS/PPS in a separate non-keyframe AU
+                                // before IDR. Keep this frame so browser can decode the next IDR.
+                                let forward_h264_parameter_frame = waiting_for_keyframe
+                                    && expected_codec == VideoEncoderType::H264
+                                    && h264_contains_parameter_sets(encoded_frame.data.as_ref());
+
                                 let now = Instant::now();
                                 if now.duration_since(last_keyframe_request)
                                     >= Duration::from_millis(200)
@@ -656,7 +710,9 @@ impl UniversalSession {
                                     request_keyframe();
                                     last_keyframe_request = now;
                                 }
-                                continue;
+                                if !forward_h264_parameter_frame {
+                                    continue;
+                                }
                             }
                         }
 
