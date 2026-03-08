@@ -1624,16 +1624,86 @@ function handleKeyUp(e: KeyboardEvent) {
   sendKeyboardEvent('up', hidKey, modifierMask)
 }
 
+function getActiveVideoElement(): HTMLImageElement | HTMLVideoElement | null {
+  return videoMode.value !== 'mjpeg' ? webrtcVideoRef.value : videoRef.value
+}
+
+function getActiveVideoAspectRatio(): number | null {
+  if (videoMode.value !== 'mjpeg') {
+    const video = webrtcVideoRef.value
+    if (video?.videoWidth && video.videoHeight) {
+      return video.videoWidth / video.videoHeight
+    }
+  } else {
+    const image = videoRef.value
+    if (image?.naturalWidth && image.naturalHeight) {
+      return image.naturalWidth / image.naturalHeight
+    }
+  }
+
+  if (!videoAspectRatio.value) return null
+  const [width, height] = videoAspectRatio.value.split('/').map(Number)
+  if (!width || !height) return null
+  return width / height
+}
+
+function getRenderedVideoRect() {
+  const videoElement = getActiveVideoElement()
+  if (!videoElement) return null
+
+  const rect = videoElement.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return null
+
+  const contentAspectRatio = getActiveVideoAspectRatio()
+  if (!contentAspectRatio) {
+    return rect
+  }
+
+  const boxAspectRatio = rect.width / rect.height
+  if (!Number.isFinite(boxAspectRatio) || boxAspectRatio <= 0) {
+    return rect
+  }
+
+  if (boxAspectRatio > contentAspectRatio) {
+    const width = rect.height * contentAspectRatio
+    return {
+      left: rect.left + (rect.width - width) / 2,
+      top: rect.top,
+      width,
+      height: rect.height,
+    }
+  }
+
+  const height = rect.width / contentAspectRatio
+  return {
+    left: rect.left,
+    top: rect.top + (rect.height - height) / 2,
+    width: rect.width,
+    height,
+  }
+}
+
+function getAbsoluteMousePosition(e: MouseEvent) {
+  const rect = getRenderedVideoRect()
+  if (!rect) return null
+
+  const normalizedX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  const normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+
+  return {
+    x: Math.round(normalizedX * 32767),
+    y: Math.round(normalizedY * 32767),
+  }
+}
+
 function handleMouseMove(e: MouseEvent) {
-  // Use the appropriate video element based on current mode (WebRTC for h264/h265/vp8/vp9, MJPEG for mjpeg)
-  const videoElement = videoMode.value !== 'mjpeg' ? webrtcVideoRef.value : videoRef.value
+  const videoElement = getActiveVideoElement()
   if (!videoElement) return
 
   if (mouseMode.value === 'absolute') {
-    // Absolute mode: send absolute coordinates (0-32767 range)
-    const rect = videoElement.getBoundingClientRect()
-    const x = Math.round((e.clientX - rect.left) / rect.width * 32767)
-    const y = Math.round((e.clientY - rect.top) / rect.height * 32767)
+    const absolutePosition = getAbsoluteMousePosition(e)
+    if (!absolutePosition) return
+    const { x, y } = absolutePosition
 
     mousePosition.value = { x, y }
     // Queue for throttled sending (absolute mode: just update pending position)
@@ -1756,6 +1826,15 @@ function handleMouseDown(e: MouseEvent) {
   if (mouseMode.value === 'relative' && !isPointerLocked.value) {
     requestPointerLock()
     return
+  }
+
+  if (mouseMode.value === 'absolute') {
+    const absolutePosition = getAbsoluteMousePosition(e)
+    if (absolutePosition) {
+      mousePosition.value = absolutePosition
+      sendMouseEvent({ type: 'move_abs', ...absolutePosition })
+      pendingMouseMove = null
+    }
   }
 
   const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle'
