@@ -757,6 +757,15 @@ export default {
         udc_speed: 'Device may not be fully enumerated; try reconnecting USB',
       },
     },
+    encoderSelfCheck: {
+      title: 'Hardware Encoding Capability Test',
+      desc: 'Test hardware encoding capability across 720p, 1080p, 2K, and 4K',
+      run: 'Start Test',
+      failed: 'Failed to run hardware encoding capability test',
+      resolution: 'Resolution',
+      currentHardwareEncoder: 'Current Hardware Encoder',
+      none: 'None',
+    },
     // WebRTC / ICE
     webrtcSettings: 'WebRTC Settings',
     webrtcSettingsDesc: 'Configure STUN/TURN servers for NAT traversal',

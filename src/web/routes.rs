@@ -51,6 +51,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/stream/bitrate", post(handlers::stream_set_bitrate))
         .route("/stream/codecs", get(handlers::stream_codecs_list))
         .route("/stream/constraints", get(handlers::stream_constraints_get))
+        .route(
+            "/video/encoder/self-check",
+            get(handlers::video_encoder_self_check),
+        )
         // WebRTC endpoints
         .route("/webrtc/session", post(handlers::webrtc_create_session))
         .route("/webrtc/offer", post(handlers::webrtc_offer))

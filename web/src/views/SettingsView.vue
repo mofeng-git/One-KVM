@@ -24,6 +24,7 @@ import {
   type UpdateOverviewResponse,
   type UpdateStatusResponse,
   type UpdateChannel,
+  type VideoEncoderSelfCheckResponse,
 } from '@/api'
 import type {
   ExtensionsStatus,
@@ -537,6 +538,64 @@ async function onRunOtgSelfCheckClick() {
     }, 160)
   }
   await runOtgSelfCheck()
+}
+
+type VideoEncoderSelfCheckCell = VideoEncoderSelfCheckResponse['rows'][number]['cells'][number]
+type VideoEncoderSelfCheckRow = VideoEncoderSelfCheckResponse['rows'][number]
+
+const videoEncoderSelfCheckLoading = ref(false)
+const videoEncoderSelfCheckResult = ref<VideoEncoderSelfCheckResponse | null>(null)
+const videoEncoderSelfCheckError = ref('')
+const videoEncoderRunButtonPressed = ref(false)
+
+function videoEncoderCell(row: VideoEncoderSelfCheckRow, codecId: string): VideoEncoderSelfCheckCell | undefined {
+  return row.cells.find(cell => cell.codec_id === codecId)
+}
+
+const currentHardwareEncoderText = computed(() =>
+  videoEncoderSelfCheckResult.value?.current_hardware_encoder === 'None'
+    ? t('settings.encoderSelfCheck.none')
+    : (videoEncoderSelfCheckResult.value?.current_hardware_encoder || t('settings.encoderSelfCheck.none'))
+)
+
+function videoEncoderCodecLabel(codecId: string, codecName: string): string {
+  return codecId === 'h265' ? 'H.265' : codecName
+}
+
+function videoEncoderCellClass(ok: boolean | undefined): string {
+  return ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+}
+
+function videoEncoderCellSymbol(ok: boolean | undefined): string {
+  return ok ? '✓' : '✗'
+}
+
+function videoEncoderCellTime(cell: VideoEncoderSelfCheckCell | undefined): string {
+  if (!cell || typeof cell.elapsed_ms !== 'number') return '-'
+  return `${cell.elapsed_ms}ms`
+}
+
+async function runVideoEncoderSelfCheck() {
+  videoEncoderSelfCheckLoading.value = true
+  videoEncoderSelfCheckError.value = ''
+  try {
+    videoEncoderSelfCheckResult.value = await streamApi.encoderSelfCheck()
+  } catch (e) {
+    console.error('Failed to run encoder self-check:', e)
+    videoEncoderSelfCheckError.value = t('settings.encoderSelfCheck.failed')
+  } finally {
+    videoEncoderSelfCheckLoading.value = false
+  }
+}
+
+async function onRunVideoEncoderSelfCheckClick() {
+  if (!videoEncoderSelfCheckLoading.value) {
+    videoEncoderRunButtonPressed.value = true
+    window.setTimeout(() => {
+      videoEncoderRunButtonPressed.value = false
+    }, 160)
+  }
+  await runVideoEncoderSelfCheck()
 }
 
 function alignHidProfileForLowEndpoint() {
@@ -1781,16 +1840,15 @@ onMounted(async () => {
   if (updateRunning.value) {
     startUpdatePolling()
   }
-
-  await runOtgSelfCheck()
 })
 
 watch(updateChannel, async () => {
   await loadUpdateOverview()
 })
 
-watch(() => config.value.hid_backend, async () => {
-  await runOtgSelfCheck()
+watch(() => config.value.hid_backend, () => {
+  otgSelfCheckResult.value = null
+  otgSelfCheckError.value = ''
 })
 </script>
 
@@ -2360,6 +2418,86 @@ watch(() => config.value.hid_backend, async () => {
                   </div>
                 </template>
                 <p v-else-if="otgSelfCheckLoading" class="text-xs text-muted-foreground">
+                  {{ t('common.loading') }}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.encoderSelfCheck.title') }}</CardTitle>
+                  <CardDescription>{{ t('settings.encoderSelfCheck.desc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="videoEncoderSelfCheckLoading"
+                  :class="[
+                    'transition-all duration-150 active:scale-95 active:brightness-95',
+                    videoEncoderRunButtonPressed ? 'scale-95 brightness-95' : ''
+                  ]"
+                  @click="onRunVideoEncoderSelfCheckClick"
+                >
+                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': videoEncoderSelfCheckLoading }" />
+                  {{ t('settings.encoderSelfCheck.run') }}
+                </Button>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p v-if="videoEncoderSelfCheckError" class="text-xs text-red-600 dark:text-red-400">
+                  {{ videoEncoderSelfCheckError }}
+                </p>
+
+                <template v-if="videoEncoderSelfCheckResult">
+                  <div class="text-sm">
+                    {{ t('settings.encoderSelfCheck.currentHardwareEncoder') }}：{{ currentHardwareEncoderText }}
+                  </div>
+
+                  <div class="rounded-md border bg-card">
+                    <table class="w-full table-fixed text-sm">
+                      <thead>
+                        <tr>
+                          <th class="px-2 py-3 text-left font-medium w-[18%]">{{ t('settings.encoderSelfCheck.resolution') }}</th>
+                          <th
+                            v-for="codec in videoEncoderSelfCheckResult.codecs"
+                            :key="codec.id"
+                            class="px-2 py-3 text-center font-medium w-[20.5%]"
+                          >
+                            {{ videoEncoderCodecLabel(codec.id, codec.name) }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="row in videoEncoderSelfCheckResult.rows"
+                          :key="row.resolution_id"
+                        >
+                          <td class="px-2 py-3 align-middle">
+                            <div class="font-medium">{{ row.resolution_label }}</div>
+                          </td>
+                          <td
+                            v-for="codec in videoEncoderSelfCheckResult.codecs"
+                            :key="`${row.resolution_id}-${codec.id}`"
+                            class="px-2 py-3 align-middle"
+                          >
+                            <div
+                              class="flex flex-col items-center justify-center gap-1"
+                              :class="videoEncoderCellClass(videoEncoderCell(row, codec.id)?.ok)"
+                            >
+                              <div class="text-lg leading-none font-semibold">
+                                {{ videoEncoderCellSymbol(videoEncoderCell(row, codec.id)?.ok) }}
+                              </div>
+                              <div class="text-[11px] leading-4 text-foreground/70">
+                                {{ videoEncoderCellTime(videoEncoderCell(row, codec.id)) }}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+                <p v-else-if="videoEncoderSelfCheckLoading" class="text-xs text-muted-foreground">
                   {{ t('common.loading') }}
                 </p>
               </CardContent>

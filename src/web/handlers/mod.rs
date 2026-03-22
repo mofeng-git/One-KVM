@@ -16,7 +16,10 @@ use crate::events::SystemEvent;
 use crate::state::AppState;
 use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
 use crate::video::codec_constraints::codec_to_id;
-use crate::video::encoder::BitratePreset;
+use crate::video::encoder::{
+    build_hardware_self_check_runtime_error, run_hardware_self_check, BitratePreset,
+    VideoEncoderSelfCheckResponse,
+};
 
 // ============================================================================
 // Health & Info
@@ -1846,6 +1849,15 @@ pub async fn stream_codecs_list() -> Json<AvailableCodecsResponse> {
         backends,
         codecs,
     })
+}
+
+/// Run hardware encoder smoke tests across common resolutions/codecs.
+pub async fn video_encoder_self_check() -> Json<VideoEncoderSelfCheckResponse> {
+    let response = tokio::task::spawn_blocking(run_hardware_self_check)
+        .await
+        .unwrap_or_else(|_| build_hardware_self_check_runtime_error());
+
+    Json(response)
 }
 
 /// Query parameters for MJPEG stream

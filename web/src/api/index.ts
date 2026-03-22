@@ -177,6 +177,31 @@ export interface StreamConstraintsResponse {
   current_mode: string
 }
 
+export interface VideoEncoderSelfCheckCodec {
+  id: string
+  name: string
+}
+
+export interface VideoEncoderSelfCheckCell {
+  codec_id: string
+  ok: boolean
+  elapsed_ms?: number | null
+}
+
+export interface VideoEncoderSelfCheckRow {
+  resolution_id: string
+  resolution_label: string
+  width: number
+  height: number
+  cells: VideoEncoderSelfCheckCell[]
+}
+
+export interface VideoEncoderSelfCheckResponse {
+  current_hardware_encoder: string
+  codecs: VideoEncoderSelfCheckCodec[]
+  rows: VideoEncoderSelfCheckRow[]
+}
+
 export const streamApi = {
   status: () =>
     request<{
@@ -216,6 +241,9 @@ export const streamApi = {
 
   getConstraints: () =>
     request<StreamConstraintsResponse>('/stream/constraints'),
+
+  encoderSelfCheck: () =>
+    request<VideoEncoderSelfCheckResponse>('/video/encoder/self-check'),
 
   setBitratePreset: (bitrate_preset: import('@/types/generated').BitratePreset) =>
     request<{ success: boolean; message?: string }>('/stream/bitrate', {

@@ -17,6 +17,7 @@ pub mod h264;
 pub mod h265;
 pub mod jpeg;
 pub mod registry;
+pub mod self_check;
 pub mod traits;
 pub mod vp8;
 pub mod vp9;
@@ -31,6 +32,10 @@ pub use codec::{CodecFrame, VideoCodec, VideoCodecConfig, VideoCodecFactory, Vid
 
 // Encoder registry
 pub use registry::{AvailableEncoder, EncoderBackend, EncoderRegistry, VideoEncoderType};
+pub use self_check::{
+    build_hardware_self_check_runtime_error, run_hardware_self_check, VideoEncoderSelfCheckCell,
+    VideoEncoderSelfCheckCodec, VideoEncoderSelfCheckResponse, VideoEncoderSelfCheckRow,
+};
 
 // H264 encoder
 pub use h264::{H264Config, H264Encoder, H264EncoderType, H264InputFormat};

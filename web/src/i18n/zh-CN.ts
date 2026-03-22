@@ -757,6 +757,15 @@ export default {
         udc_speed: '设备可能未完成枚举，可尝试重插 USB',
       },
     },
+    encoderSelfCheck: {
+      title: '硬件编码能力测试',
+      desc: '按 720p、1080p、2K、4K 测试硬件编码能力',
+      run: '开始测试',
+      failed: '执行硬件编码能力测试失败',
+      resolution: '分辨率',
+      currentHardwareEncoder: '当前硬件编码器',
+      none: '无',
+    },
     // WebRTC / ICE
     webrtcSettings: 'WebRTC 设置',
     webrtcSettingsDesc: '配置 STUN/TURN 服务器以实现 NAT 穿透',
