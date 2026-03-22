@@ -15,6 +15,7 @@ use hwcodec::ffmpeg::AVPixelFormat;
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
+use super::detect_best_codec_for_format;
 use super::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use super::traits::{EncodedFormat, EncodedFrame, Encoder, EncoderConfig};
 use crate::error::{AppError, Result};
@@ -221,43 +222,25 @@ pub fn get_available_h265_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 pub fn detect_best_h265_encoder(width: u32, height: u32) -> (H265EncoderType, Option<String>) {
     let encoders = get_available_h265_encoders(width, height);
 
-    if encoders.is_empty() {
-        warn!("No H.265 encoders available");
-        return (H265EncoderType::None, None);
-    }
-
     // Prefer hardware encoders over software (libx265)
     // Hardware priority: NVENC > QSV > AMF > VAAPI > RKMPP > V4L2 M2M > Software
-    let codec = encoders
-        .iter()
-        .find(|e| !e.name.contains("libx265"))
-        .or_else(|| encoders.first())
-        .unwrap();
-
-    let encoder_type = if codec.name.contains("nvenc") {
-        H265EncoderType::Nvenc
-    } else if codec.name.contains("qsv") {
-        H265EncoderType::Qsv
-    } else if codec.name.contains("amf") {
-        H265EncoderType::Amf
-    } else if codec.name.contains("vaapi") {
-        H265EncoderType::Vaapi
-    } else if codec.name.contains("rkmpp") {
-        H265EncoderType::Rkmpp
-    } else if codec.name.contains("v4l2m2m") {
-        H265EncoderType::V4l2M2m
+    if let Some((encoder_type, codec_name)) =
+        detect_best_codec_for_format(&encoders, DataFormat::H265, |codec| {
+            !codec.name.contains("libx265")
+        })
+    {
+        info!("Selected H.265 encoder: {} ({})", codec_name, encoder_type);
+        (encoder_type, Some(codec_name))
     } else {
-        H265EncoderType::Software // Default to software for unknown
-    };
-
-    info!("Selected H.265 encoder: {} ({})", codec.name, encoder_type);
-    (encoder_type, Some(codec.name.clone()))
+        warn!("No H.265 encoders available");
+        (H265EncoderType::None, None)
+    }
 }
 
 /// Check if H265 hardware encoding is available
 pub fn is_h265_available() -> bool {
     let registry = EncoderRegistry::global();
-    registry.is_format_available(VideoEncoderType::H265, true)
+    registry.is_codec_available(VideoEncoderType::H265)
 }
 
 /// Encoded frame from hwcodec (cloned for ownership)
@@ -268,7 +251,7 @@ pub struct HwEncodeFrame {
     pub key: i32,
 }
 
-/// H.265 encoder using hwcodec (hardware only)
+/// H.265 encoder using hwcodec
 pub struct H265Encoder {
     /// hwcodec encoder instance
     inner: HwEncoder,

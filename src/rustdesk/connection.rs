@@ -652,22 +652,22 @@ impl Connection {
         // H264 is preferred because it has the best hardware encoder support (RKMPP, VAAPI, etc.)
         // and most RustDesk clients support H264 hardware decoding
         if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H264)
-            && registry.is_format_available(VideoEncoderType::H264, false)
+            && registry.is_codec_available(VideoEncoderType::H264)
         {
             return VideoEncoderType::H264;
         }
         if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H265)
-            && registry.is_format_available(VideoEncoderType::H265, false)
+            && registry.is_codec_available(VideoEncoderType::H265)
         {
             return VideoEncoderType::H265;
         }
         if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP8)
-            && registry.is_format_available(VideoEncoderType::VP8, false)
+            && registry.is_codec_available(VideoEncoderType::VP8)
         {
             return VideoEncoderType::VP8;
         }
         if constraints.is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP9)
-            && registry.is_format_available(VideoEncoderType::VP9, false)
+            && registry.is_codec_available(VideoEncoderType::VP9)
         {
             return VideoEncoderType::VP9;
         }
@@ -784,7 +784,7 @@ impl Connection {
                     }
 
                     let registry = EncoderRegistry::global();
-                    if registry.is_format_available(new_codec, false) {
+                    if registry.is_codec_available(new_codec) {
                         info!(
                             "Client requested codec switch: {:?} -> {:?}",
                             self.negotiated_codec, new_codec
@@ -1121,16 +1121,16 @@ impl Connection {
             // Check which encoders are available (include software fallback)
             let h264_available = constraints
                 .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H264)
-                && registry.is_format_available(VideoEncoderType::H264, false);
+                && registry.is_codec_available(VideoEncoderType::H264);
             let h265_available = constraints
                 .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::H265)
-                && registry.is_format_available(VideoEncoderType::H265, false);
+                && registry.is_codec_available(VideoEncoderType::H265);
             let vp8_available = constraints
                 .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP8)
-                && registry.is_format_available(VideoEncoderType::VP8, false);
+                && registry.is_codec_available(VideoEncoderType::VP8);
             let vp9_available = constraints
                 .is_webrtc_codec_allowed(crate::video::encoder::VideoCodecType::VP9)
-                && registry.is_format_available(VideoEncoderType::VP9, false);
+                && registry.is_codec_available(VideoEncoderType::VP9);
 
             info!(
                 "Server encoding capabilities: H264={}, H265={}, VP8={}, VP9={}",

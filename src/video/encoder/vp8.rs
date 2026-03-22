@@ -15,6 +15,7 @@ use hwcodec::ffmpeg::AVPixelFormat;
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
+use super::detect_best_codec_for_format;
 use super::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use super::traits::{EncodedFormat, EncodedFrame, Encoder, EncoderConfig};
 use crate::error::{AppError, Result};
@@ -156,32 +157,24 @@ pub fn get_available_vp8_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 pub fn detect_best_vp8_encoder(width: u32, height: u32) -> (VP8EncoderType, Option<String>) {
     let encoders = get_available_vp8_encoders(width, height);
 
-    if encoders.is_empty() {
-        warn!("No VP8 encoders available");
-        return (VP8EncoderType::None, None);
-    }
-
     // Prefer hardware encoders (VAAPI) over software (libvpx)
-    let codec = encoders
-        .iter()
-        .find(|e| e.name.contains("vaapi"))
-        .or_else(|| encoders.first())
-        .unwrap();
-
-    let encoder_type = if codec.name.contains("vaapi") {
-        VP8EncoderType::Vaapi
+    if let Some((encoder_type, codec_name)) =
+        detect_best_codec_for_format(&encoders, DataFormat::VP8, |codec| {
+            codec.name.contains("vaapi")
+        })
+    {
+        info!("Selected VP8 encoder: {} ({})", codec_name, encoder_type);
+        (encoder_type, Some(codec_name))
     } else {
-        VP8EncoderType::Software // Default to software for unknown
-    };
-
-    info!("Selected VP8 encoder: {} ({})", codec.name, encoder_type);
-    (encoder_type, Some(codec.name.clone()))
+        warn!("No VP8 encoders available");
+        (VP8EncoderType::None, None)
+    }
 }
 
 /// Check if VP8 hardware encoding is available
 pub fn is_vp8_available() -> bool {
     let registry = EncoderRegistry::global();
-    registry.is_format_available(VideoEncoderType::VP8, true)
+    registry.is_codec_available(VideoEncoderType::VP8)
 }
 
 /// Encoded frame from hwcodec (cloned for ownership)
@@ -192,7 +185,7 @@ pub struct HwEncodeFrame {
     pub key: i32,
 }
 
-/// VP8 encoder using hwcodec (hardware only - VAAPI)
+/// VP8 encoder using hwcodec
 pub struct VP8Encoder {
     /// hwcodec encoder instance
     inner: HwEncoder,

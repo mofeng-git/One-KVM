@@ -191,15 +191,14 @@ impl VideoSessionManager {
         *self.frame_source.write().await = Some(rx);
     }
 
-    /// Get available codecs based on hardware capabilities
+    /// Get available codecs based on encoder availability
     pub fn available_codecs(&self) -> Vec<VideoEncoderType> {
         EncoderRegistry::global().selectable_formats()
     }
 
     /// Check if a codec is available
     pub fn is_codec_available(&self, codec: VideoEncoderType) -> bool {
-        let hardware_only = codec.hardware_only();
-        EncoderRegistry::global().is_format_available(codec, hardware_only)
+        EncoderRegistry::global().is_codec_available(codec)
     }
 
     /// Create a new video session
@@ -520,7 +519,7 @@ impl VideoSessionManager {
     /// Get codec info
     pub fn get_codec_info(&self, codec: VideoEncoderType) -> Option<CodecInfo> {
         let registry = EncoderRegistry::global();
-        let encoder = registry.best_encoder(codec, codec.hardware_only())?;
+        let encoder = registry.best_available_encoder(codec)?;
 
         Some(CodecInfo {
             codec_type: codec,

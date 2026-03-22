@@ -86,6 +86,40 @@ impl Default for CodecInfo {
 }
 
 impl CodecInfo {
+    pub fn software(format: DataFormat) -> Option<Self> {
+        match format {
+            H264 => Some(CodecInfo {
+                name: "libx264".to_owned(),
+                mc_name: Default::default(),
+                format: H264,
+                hwdevice: AV_HWDEVICE_TYPE_NONE,
+                priority: Priority::Soft as _,
+            }),
+            H265 => Some(CodecInfo {
+                name: "libx265".to_owned(),
+                mc_name: Default::default(),
+                format: H265,
+                hwdevice: AV_HWDEVICE_TYPE_NONE,
+                priority: Priority::Soft as _,
+            }),
+            VP8 => Some(CodecInfo {
+                name: "libvpx".to_owned(),
+                mc_name: Default::default(),
+                format: VP8,
+                hwdevice: AV_HWDEVICE_TYPE_NONE,
+                priority: Priority::Soft as _,
+            }),
+            VP9 => Some(CodecInfo {
+                name: "libvpx-vp9".to_owned(),
+                mc_name: Default::default(),
+                format: VP9,
+                hwdevice: AV_HWDEVICE_TYPE_NONE,
+                priority: Priority::Soft as _,
+            }),
+            AV1 => None,
+        }
+    }
+
     pub fn prioritized(coders: Vec<CodecInfo>) -> CodecInfos {
         let mut h264: Option<CodecInfo> = None;
         let mut h265: Option<CodecInfo> = None;
@@ -148,34 +182,10 @@ impl CodecInfo {
 
     pub fn soft() -> CodecInfos {
         CodecInfos {
-            h264: Some(CodecInfo {
-                name: "libx264".to_owned(),
-                mc_name: Default::default(),
-                format: H264,
-                hwdevice: AV_HWDEVICE_TYPE_NONE,
-                priority: Priority::Soft as _,
-            }),
-            h265: Some(CodecInfo {
-                name: "libx265".to_owned(),
-                mc_name: Default::default(),
-                format: H265,
-                hwdevice: AV_HWDEVICE_TYPE_NONE,
-                priority: Priority::Soft as _,
-            }),
-            vp8: Some(CodecInfo {
-                name: "libvpx".to_owned(),
-                mc_name: Default::default(),
-                format: VP8,
-                hwdevice: AV_HWDEVICE_TYPE_NONE,
-                priority: Priority::Soft as _,
-            }),
-            vp9: Some(CodecInfo {
-                name: "libvpx-vp9".to_owned(),
-                mc_name: Default::default(),
-                format: VP9,
-                hwdevice: AV_HWDEVICE_TYPE_NONE,
-                priority: Priority::Soft as _,
-            }),
+            h264: CodecInfo::software(H264),
+            h265: CodecInfo::software(H265),
+            vp8: CodecInfo::software(VP8),
+            vp9: CodecInfo::software(VP9),
             av1: None,
         }
     }
@@ -191,6 +201,23 @@ pub struct CodecInfos {
 }
 
 impl CodecInfos {
+    pub fn into_vec(self) -> Vec<CodecInfo> {
+        let mut codecs = Vec::new();
+        if let Some(codec) = self.h264 {
+            codecs.push(codec);
+        }
+        if let Some(codec) = self.h265 {
+            codecs.push(codec);
+        }
+        if let Some(codec) = self.vp8 {
+            codecs.push(codec);
+        }
+        if let Some(codec) = self.vp9 {
+            codecs.push(codec);
+        }
+        codecs
+    }
+
     pub fn serialize(&self) -> Result<String, ()> {
         match serde_json::to_string_pretty(self) {
             Ok(s) => Ok(s),

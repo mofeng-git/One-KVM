@@ -221,23 +221,11 @@ impl WebRtcStreamer {
         use crate::video::encoder::registry::EncoderRegistry;
 
         let registry = EncoderRegistry::global();
-        let mut codecs = vec![];
-
-        // H264 always available (has software fallback)
-        codecs.push(VideoCodecType::H264);
-
-        // Check hardware codecs
-        if registry.is_format_available(VideoEncoderType::H265, true) {
-            codecs.push(VideoCodecType::H265);
-        }
-        if registry.is_format_available(VideoEncoderType::VP8, true) {
-            codecs.push(VideoCodecType::VP8);
-        }
-        if registry.is_format_available(VideoEncoderType::VP9, true) {
-            codecs.push(VideoCodecType::VP9);
-        }
-
-        codecs
+        VideoEncoderType::ordered()
+            .into_iter()
+            .filter(|codec| registry.is_codec_available(*codec))
+            .map(Self::encoder_type_to_codec_type)
+            .collect()
     }
 
     /// Convert VideoCodecType to VideoEncoderType
@@ -247,6 +235,15 @@ impl WebRtcStreamer {
             VideoCodecType::H265 => VideoEncoderType::H265,
             VideoCodecType::VP8 => VideoEncoderType::VP8,
             VideoCodecType::VP9 => VideoEncoderType::VP9,
+        }
+    }
+
+    fn encoder_type_to_codec_type(codec: VideoEncoderType) -> VideoCodecType {
+        match codec {
+            VideoEncoderType::H264 => VideoCodecType::H264,
+            VideoEncoderType::H265 => VideoCodecType::H265,
+            VideoEncoderType::VP8 => VideoCodecType::VP8,
+            VideoEncoderType::VP9 => VideoCodecType::VP9,
         }
     }
 
@@ -577,7 +574,7 @@ impl WebRtcStreamer {
                     VideoCodecType::VP9 => VideoEncoderType::VP9,
                 };
                 EncoderRegistry::global()
-                    .best_encoder(codec_type, false)
+                    .best_available_encoder(codec_type)
                     .map(|e| e.is_hardware)
                     .unwrap_or(false)
             }

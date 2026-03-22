@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use hwcodec::common::{DataFormat, Quality, RateControl};
@@ -28,6 +29,10 @@ pub enum VideoEncoderType {
 }
 
 impl VideoEncoderType {
+    pub const fn ordered() -> [Self; 4] {
+        [Self::H264, Self::H265, Self::VP8, Self::VP9]
+    }
+
     /// Convert to hwcodec DataFormat
     pub fn to_data_format(&self) -> DataFormat {
         match self {
@@ -66,17 +71,6 @@ impl VideoEncoderType {
             VideoEncoderType::H265 => "H.265/HEVC",
             VideoEncoderType::VP8 => "VP8",
             VideoEncoderType::VP9 => "VP9",
-        }
-    }
-
-    /// Check if this format requires hardware-only encoding
-    /// H264 supports software fallback, others require hardware
-    pub fn hardware_only(&self) -> bool {
-        match self {
-            VideoEncoderType::H264 => false,
-            VideoEncoderType::H265 => true,
-            VideoEncoderType::VP8 => true,
-            VideoEncoderType::VP9 => true,
         }
     }
 }
@@ -210,6 +204,76 @@ pub struct EncoderRegistry {
 }
 
 impl EncoderRegistry {
+    fn detect_encoders_with_timeout(ctx: EncodeContext, timeout: Duration) -> Vec<CodecInfo> {
+        use std::sync::mpsc;
+
+        let (tx, rx) = mpsc::channel();
+        let handle = std::thread::Builder::new()
+            .name("ffmpeg-encoder-detect".to_string())
+            .spawn(move || {
+                let result = HwEncoder::available_encoders(ctx, None);
+                let _ = tx.send(result);
+            });
+
+        let Ok(handle) = handle else {
+            warn!("Failed to spawn encoder detection thread");
+            return Vec::new();
+        };
+
+        match rx.recv_timeout(timeout) {
+            Ok(encoders) => {
+                let _ = handle.join();
+                encoders
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                warn!(
+                    "Encoder detection timed out after {}ms, skipping hardware detection",
+                    timeout.as_millis()
+                );
+                std::thread::spawn(move || {
+                    let _ = handle.join();
+                });
+                Vec::new()
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = handle.join();
+                warn!("Encoder detection thread exited unexpectedly");
+                Vec::new()
+            }
+        }
+    }
+
+    fn register_software_fallbacks(&mut self) {
+        info!("Registering software encoders...");
+
+        for format in VideoEncoderType::ordered() {
+            let encoders = self.encoders.entry(format).or_default();
+            if encoders.iter().any(|encoder| !encoder.is_hardware) {
+                continue;
+            }
+
+            let codec_name = match format {
+                VideoEncoderType::H264 => "libx264",
+                VideoEncoderType::H265 => "libx265",
+                VideoEncoderType::VP8 => "libvpx",
+                VideoEncoderType::VP9 => "libvpx-vp9",
+            };
+
+            encoders.push(AvailableEncoder {
+                format,
+                codec_name: codec_name.to_string(),
+                backend: EncoderBackend::Software,
+                priority: 100,
+                is_hardware: false,
+            });
+
+            debug!(
+                "Registered software encoder: {} for {} (priority: {})",
+                codec_name, format, 100
+            );
+        }
+    }
+
     /// Get the global registry instance
     ///
     /// The registry is initialized lazily on first access with 1920x1080 detection.
@@ -257,32 +321,11 @@ impl EncoderRegistry {
         };
 
         const DETECT_TIMEOUT_MS: u64 = 5000;
-
-        // Get all available encoders from hwcodec with a hard timeout
-        let all_encoders = {
-            use std::sync::mpsc;
-            use std::time::Duration;
-
-            info!("Encoder detection timeout: {}ms", DETECT_TIMEOUT_MS);
-
-            let (tx, rx) = mpsc::channel();
-            let ctx_clone = ctx.clone();
-            std::thread::spawn(move || {
-                let result = HwEncoder::available_encoders(ctx_clone, None);
-                let _ = tx.send(result);
-            });
-
-            match rx.recv_timeout(Duration::from_millis(DETECT_TIMEOUT_MS)) {
-                Ok(encoders) => encoders,
-                Err(_) => {
-                    warn!(
-                        "Encoder detection timed out after {}ms, skipping hardware detection",
-                        DETECT_TIMEOUT_MS
-                    );
-                    Vec::new()
-                }
-            }
-        };
+        info!("Encoder detection timeout: {}ms", DETECT_TIMEOUT_MS);
+        let all_encoders = Self::detect_encoders_with_timeout(
+            ctx.clone(),
+            Duration::from_millis(DETECT_TIMEOUT_MS),
+        );
 
         info!("Found {} encoders from hwcodec", all_encoders.len());
 
@@ -305,32 +348,7 @@ impl EncoderRegistry {
             encoders.sort_by_key(|e| e.priority);
         }
 
-        // Register software encoders as fallback
-        info!("Registering software encoders...");
-        let software_encoders = [
-            (VideoEncoderType::H264, "libx264", 100),
-            (VideoEncoderType::H265, "libx265", 100),
-            (VideoEncoderType::VP8, "libvpx", 100),
-            (VideoEncoderType::VP9, "libvpx-vp9", 100),
-        ];
-
-        for (format, codec_name, priority) in software_encoders {
-            self.encoders
-                .entry(format)
-                .or_default()
-                .push(AvailableEncoder {
-                    format,
-                    codec_name: codec_name.to_string(),
-                    backend: EncoderBackend::Software,
-                    priority,
-                    is_hardware: false,
-                });
-
-            debug!(
-                "Registered software encoder: {} for {} (priority: {})",
-                codec_name, format, priority
-            );
-        }
+        self.register_software_fallbacks();
 
         // Log summary
         for (format, encoders) in &self.encoders {
@@ -370,6 +388,10 @@ impl EncoderRegistry {
         )
     }
 
+    pub fn best_available_encoder(&self, format: VideoEncoderType) -> Option<&AvailableEncoder> {
+        self.best_encoder(format, false)
+    }
+
     /// Get all encoders for a format
     pub fn encoders_for_format(&self, format: VideoEncoderType) -> &[AvailableEncoder] {
         self.encoders
@@ -405,31 +427,17 @@ impl EncoderRegistry {
         self.best_encoder(format, hardware_only).is_some()
     }
 
+    pub fn is_codec_available(&self, format: VideoEncoderType) -> bool {
+        self.best_available_encoder(format).is_some()
+    }
+
     /// Get available formats for user selection
     ///
-    /// Returns formats that are actually usable based on their requirements:
-    /// - H264: Available if any encoder exists (hardware or software)
-    /// - H265/VP8/VP9: Available only if hardware encoder exists
     pub fn selectable_formats(&self) -> Vec<VideoEncoderType> {
-        let mut formats = Vec::new();
-
-        // H264 - supports software fallback
-        if self.is_format_available(VideoEncoderType::H264, false) {
-            formats.push(VideoEncoderType::H264);
-        }
-
-        // H265/VP8/VP9 - hardware only
-        for format in [
-            VideoEncoderType::H265,
-            VideoEncoderType::VP8,
-            VideoEncoderType::VP9,
-        ] {
-            if self.is_format_available(format, true) {
-                formats.push(format);
-            }
-        }
-
-        formats
+        VideoEncoderType::ordered()
+            .into_iter()
+            .filter(|format| self.is_codec_available(*format))
+            .collect()
     }
 
     /// Get detection resolution
@@ -534,11 +542,16 @@ mod tests {
     }
 
     #[test]
-    fn test_hardware_only_requirement() {
-        assert!(!VideoEncoderType::H264.hardware_only());
-        assert!(VideoEncoderType::H265.hardware_only());
-        assert!(VideoEncoderType::VP8.hardware_only());
-        assert!(VideoEncoderType::VP9.hardware_only());
+    fn test_codec_ordering() {
+        assert_eq!(
+            VideoEncoderType::ordered(),
+            [
+                VideoEncoderType::H264,
+                VideoEncoderType::H265,
+                VideoEncoderType::VP8,
+                VideoEncoderType::VP9,
+            ]
+        );
     }
 
     #[test]

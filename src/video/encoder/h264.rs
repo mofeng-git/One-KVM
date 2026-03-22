@@ -17,6 +17,8 @@ use hwcodec::ffmpeg::AVPixelFormat;
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
+use super::detect_best_codec_for_format;
+use super::registry::EncoderBackend;
 use super::traits::{EncodedFormat, EncodedFrame, Encoder, EncoderConfig};
 use crate::error::{AppError, Result};
 use crate::video::format::{PixelFormat, Resolution};
@@ -69,21 +71,17 @@ impl std::fmt::Display for H264EncoderType {
 }
 
 /// Map codec name to encoder type
-fn codec_name_to_type(name: &str) -> H264EncoderType {
-    if name.contains("nvenc") {
-        H264EncoderType::Nvenc
-    } else if name.contains("qsv") {
-        H264EncoderType::Qsv
-    } else if name.contains("amf") {
-        H264EncoderType::Amf
-    } else if name.contains("vaapi") {
-        H264EncoderType::Vaapi
-    } else if name.contains("rkmpp") {
-        H264EncoderType::Rkmpp
-    } else if name.contains("v4l2m2m") {
-        H264EncoderType::V4l2M2m
-    } else {
-        H264EncoderType::Software
+impl From<EncoderBackend> for H264EncoderType {
+    fn from(backend: EncoderBackend) -> Self {
+        match backend {
+            EncoderBackend::Nvenc => H264EncoderType::Nvenc,
+            EncoderBackend::Qsv => H264EncoderType::Qsv,
+            EncoderBackend::Amf => H264EncoderType::Amf,
+            EncoderBackend::Vaapi => H264EncoderType::Vaapi,
+            EncoderBackend::Rkmpp => H264EncoderType::Rkmpp,
+            EncoderBackend::V4l2m2m => H264EncoderType::V4l2M2m,
+            EncoderBackend::Software => H264EncoderType::Software,
+        }
     }
 }
 
@@ -215,21 +213,15 @@ pub fn get_available_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 pub fn detect_best_encoder(width: u32, height: u32) -> (H264EncoderType, Option<String>) {
     let encoders = get_available_encoders(width, height);
 
-    if encoders.is_empty() {
+    if let Some((encoder_type, codec_name)) =
+        detect_best_codec_for_format(&encoders, hwcodec::common::DataFormat::H264, |_| true)
+    {
+        info!("Best H.264 encoder: {} ({})", codec_name, encoder_type);
+        (encoder_type, Some(codec_name))
+    } else {
         warn!("No H.264 encoders available from hwcodec");
-        return (H264EncoderType::None, None);
+        (H264EncoderType::None, None)
     }
-
-    // Find H264 encoder (not H265)
-    for codec in &encoders {
-        if codec.format == hwcodec::common::DataFormat::H264 {
-            let encoder_type = codec_name_to_type(&codec.name);
-            info!("Best H.264 encoder: {} ({})", codec.name, encoder_type);
-            return (encoder_type, Some(codec.name.clone()));
-        }
-    }
-
-    (H264EncoderType::None, None)
 }
 
 /// Encoded frame from hwcodec (cloned for ownership)
@@ -321,7 +313,7 @@ impl H264Encoder {
         })?;
 
         let yuv_length = inner.length;
-        let encoder_type = codec_name_to_type(codec_name);
+        let encoder_type = H264EncoderType::from(EncoderBackend::from_codec_name(codec_name));
 
         info!(
             "H.264 encoder created: {} (type: {}, buffer_length: {}, input_format: {:?})",

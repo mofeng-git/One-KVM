@@ -1798,7 +1798,7 @@ pub async fn stream_codecs_list() -> Json<AvailableCodecsResponse> {
     });
 
     // Check H264 availability (supports software fallback)
-    let h264_encoder = registry.best_encoder(VideoEncoderType::H264, false);
+    let h264_encoder = registry.best_available_encoder(VideoEncoderType::H264);
     codecs.push(VideoCodecInfo {
         id: "h264".to_string(),
         name: "H.264 / WebRTC".to_string(),
@@ -1809,7 +1809,7 @@ pub async fn stream_codecs_list() -> Json<AvailableCodecsResponse> {
     });
 
     // Check H265 availability (now supports software too)
-    let h265_encoder = registry.best_encoder(VideoEncoderType::H265, false);
+    let h265_encoder = registry.best_available_encoder(VideoEncoderType::H265);
     codecs.push(VideoCodecInfo {
         id: "h265".to_string(),
         name: "H.265 / WebRTC".to_string(),
@@ -1820,7 +1820,7 @@ pub async fn stream_codecs_list() -> Json<AvailableCodecsResponse> {
     });
 
     // Check VP8 availability (now supports software too)
-    let vp8_encoder = registry.best_encoder(VideoEncoderType::VP8, false);
+    let vp8_encoder = registry.best_available_encoder(VideoEncoderType::VP8);
     codecs.push(VideoCodecInfo {
         id: "vp8".to_string(),
         name: "VP8 / WebRTC".to_string(),
@@ -1831,7 +1831,7 @@ pub async fn stream_codecs_list() -> Json<AvailableCodecsResponse> {
     });
 
     // Check VP9 availability (now supports software too)
-    let vp9_encoder = registry.best_encoder(VideoEncoderType::VP9, false);
+    let vp9_encoder = registry.best_available_encoder(VideoEncoderType::VP9);
     codecs.push(VideoCodecInfo {
         id: "vp9".to_string(),
         name: "VP9 / WebRTC".to_string(),

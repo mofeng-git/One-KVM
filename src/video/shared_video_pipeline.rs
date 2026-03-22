@@ -38,14 +38,12 @@ use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::video::convert::{Nv12Converter, PixelConverter};
 use crate::video::decoder::MjpegTurboDecoder;
-use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
-use crate::video::encoder::h265::{
-    detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
-};
+use crate::video::encoder::h264::{H264Config, H264Encoder, H264InputFormat};
+use crate::video::encoder::h265::{H265Config, H265Encoder, H265InputFormat};
 use crate::video::encoder::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::traits::EncoderConfig;
-use crate::video::encoder::vp8::{detect_best_vp8_encoder, VP8Config, VP8Encoder};
-use crate::video::encoder::vp9::{detect_best_vp9_encoder, VP9Config, VP9Encoder};
+use crate::video::encoder::vp8::{VP8Config, VP8Encoder};
+use crate::video::encoder::vp9::{VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use crate::video::v4l2r_capture::V4l2rCaptureStream;
@@ -389,7 +387,7 @@ impl SharedVideoPipeline {
                         .encoder_with_backend(format, b)
                         .map(|e| e.codec_name.clone()),
                     None => registry
-                        .best_encoder(format, false)
+                        .best_available_encoder(format)
                         .map(|e| e.codec_name.clone()),
                 }
             };
@@ -447,10 +445,7 @@ impl SharedVideoPipeline {
                         ))
                     })?
                 } else {
-                    // Auto select best available encoder
-                    let (_encoder_type, detected) =
-                        detect_best_encoder(config.resolution.width, config.resolution.height);
-                    detected.ok_or_else(|| {
+                    get_codec_name(VideoEncoderType::H264, None).ok_or_else(|| {
                         AppError::VideoError("No H.264 encoder available".to_string())
                     })?
                 }
@@ -472,9 +467,7 @@ impl SharedVideoPipeline {
                         ))
                     })?
                 } else {
-                    let (_encoder_type, detected) =
-                        detect_best_h265_encoder(config.resolution.width, config.resolution.height);
-                    detected.ok_or_else(|| {
+                    get_codec_name(VideoEncoderType::H265, None).ok_or_else(|| {
                         AppError::VideoError("No H.265 encoder available".to_string())
                     })?
                 }
@@ -485,9 +478,7 @@ impl SharedVideoPipeline {
                         AppError::VideoError(format!("Backend {:?} does not support VP8", backend))
                     })?
                 } else {
-                    let (_encoder_type, detected) =
-                        detect_best_vp8_encoder(config.resolution.width, config.resolution.height);
-                    detected.ok_or_else(|| {
+                    get_codec_name(VideoEncoderType::VP8, None).ok_or_else(|| {
                         AppError::VideoError("No VP8 encoder available".to_string())
                     })?
                 }
@@ -498,9 +489,7 @@ impl SharedVideoPipeline {
                         AppError::VideoError(format!("Backend {:?} does not support VP9", backend))
                     })?
                 } else {
-                    let (_encoder_type, detected) =
-                        detect_best_vp9_encoder(config.resolution.width, config.resolution.height);
-                    detected.ok_or_else(|| {
+                    get_codec_name(VideoEncoderType::VP9, None).ok_or_else(|| {
                         AppError::VideoError("No VP9 encoder available".to_string())
                     })?
                 }
