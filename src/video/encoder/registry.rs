@@ -276,12 +276,12 @@ impl EncoderRegistry {
 
     /// Get the global registry instance
     ///
-    /// The registry is initialized lazily on first access with 1920x1080 detection.
+    /// The registry is initialized lazily on first access with 1280x720 detection.
     pub fn global() -> &'static Self {
         static INSTANCE: OnceLock<EncoderRegistry> = OnceLock::new();
         INSTANCE.get_or_init(|| {
             let mut registry = EncoderRegistry::new();
-            registry.detect_encoders(1920, 1080);
+            registry.detect_encoders(1280, 720);
             registry
         })
     }
