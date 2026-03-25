@@ -26,7 +26,7 @@ RUN sed -i 's/ main$/ main contrib non-free/' /etc/apt/sources.list && \
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         apt-get install -y --no-install-recommends \
             libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libxau6 libxdmcp6 libmfx1 \
-            i965-va-driver-shaders intel-media-va-driver-non-free; \
+            i965-va-driver-shaders intel-media-va-driver-non-free vainfo; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
         apt-get install -y --no-install-recommends \
             libdrm2 libva2; \
