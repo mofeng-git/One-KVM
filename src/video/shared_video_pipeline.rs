@@ -31,6 +31,9 @@ const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
 /// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+/// Validate every JPEG frame during startup to avoid poisoning HW decoders
+/// with incomplete UVC warm-up frames.
+const STARTUP_JPEG_VALIDATE_FRAMES: u64 = 3;
 /// Validate JPEG header every N frames to reduce overhead
 const JPEG_VALIDATE_INTERVAL: u64 = 30;
 /// Throttle repeated encoding errors to avoid log flooding
@@ -206,6 +209,11 @@ fn log_encoding_error(
         let counter = suppressed_errors.entry(key).or_insert(0);
         *counter = counter.saturating_add(1);
     }
+}
+
+fn should_validate_jpeg_frame(validate_counter: u64) -> bool {
+    validate_counter <= STARTUP_JPEG_VALIDATE_FRAMES
+        || validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
 }
 
 /// Pipeline statistics
@@ -1463,7 +1471,7 @@ impl SharedVideoPipeline {
 
                     validate_counter = validate_counter.wrapping_add(1);
                     if pixel_format.is_compressed()
-                        && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
+                        && should_validate_jpeg_frame(validate_counter)
                         && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
                     {
                         continue;
@@ -1787,5 +1795,14 @@ mod tests {
 
         let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, BitratePreset::Speed);
         assert_eq!(h265.output_codec, VideoEncoderType::H265);
+    }
+
+    #[test]
+    fn test_startup_jpeg_validation_policy() {
+        assert!(should_validate_jpeg_frame(1));
+        assert!(should_validate_jpeg_frame(2));
+        assert!(should_validate_jpeg_frame(3));
+        assert!(!should_validate_jpeg_frame(4));
+        assert!(should_validate_jpeg_frame(30));
     }
 }
