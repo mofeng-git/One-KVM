@@ -569,7 +569,6 @@ impl Ch9329Backend {
         port.write_all(&packet).map_err(|e| {
             Self::backend_error(format!("Failed to write to CH9329: {}", e), "write_failed")
         })?;
-        trace!("CH9329 TX [cmd=0x{:02X}]: {:02X?}", cmd, packet);
         Ok(())
     }
 
@@ -624,7 +623,6 @@ impl Ch9329Backend {
             match port.read(&mut chunk) {
                 Ok(n) if n > 0 => {
                     pending.extend_from_slice(&chunk[..n]);
-                    trace!("CH9329 RX pending: {:02X?}", pending);
 
                     while let Some((response, consumed)) = Self::try_extract_response(&pending) {
                         pending.drain(..consumed);
