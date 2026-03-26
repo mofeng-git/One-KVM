@@ -33,6 +33,8 @@ const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 /// Validate JPEG header every N frames to reduce overhead
 const JPEG_VALIDATE_INTERVAL: u64 = 30;
+/// Throttle repeated encoding errors to avoid log flooding
+const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
 
 use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
@@ -158,6 +160,51 @@ impl SharedVideoPipelineConfig {
     pub fn with_bitrate_kbps(mut self, bitrate_kbps: u32) -> Self {
         self.bitrate_preset = crate::video::encoder::BitratePreset::from_kbps(bitrate_kbps);
         self
+    }
+}
+
+fn classify_encode_error(err: &AppError) -> String {
+    let message = err.to_string();
+
+    if message.contains("FFmpeg HW encode failed") {
+        if message.contains("avcodec_send_packet failed") && message.contains("ret=-11") {
+            "encode_ffmpeg_hw_send_packet_eagain".to_string()
+        } else if message.contains("avcodec_send_frame failed") && message.contains("ret=-11") {
+            "encode_ffmpeg_hw_send_frame_eagain".to_string()
+        } else if message.contains("avcodec_receive_packet failed") && message.contains("ret=-11") {
+            "encode_ffmpeg_hw_receive_packet_eagain".to_string()
+        } else if message.contains("Resource temporarily unavailable") {
+            "encode_ffmpeg_hw_eagain".to_string()
+        } else if message.contains("avcodec_send_packet failed") {
+            "encode_ffmpeg_hw_send_packet".to_string()
+        } else if message.contains("avcodec_send_frame failed") {
+            "encode_ffmpeg_hw_send_frame".to_string()
+        } else if message.contains("avcodec_receive_packet failed") {
+            "encode_ffmpeg_hw_receive_packet".to_string()
+        } else {
+            "encode_ffmpeg_hw".to_string()
+        }
+    } else {
+        format!("encode_{}", message)
+    }
+}
+
+fn log_encoding_error(
+    throttler: &LogThrottler,
+    suppressed_errors: &mut HashMap<String, u64>,
+    err: &AppError,
+) {
+    let key = classify_encode_error(err);
+    if throttler.should_log(&key) {
+        let suppressed = suppressed_errors.remove(&key).unwrap_or(0);
+        if suppressed > 0 {
+            error!("Encoding failed: {} (suppressed {} repeats)", err, suppressed);
+        } else {
+            error!("Encoding failed: {}", err);
+        }
+    } else {
+        let counter = suppressed_errors.entry(key).or_insert(0);
+        *counter = counter.saturating_add(1);
     }
 }
 
@@ -1070,6 +1117,8 @@ impl SharedVideoPipeline {
             let mut last_fps_time = Instant::now();
             let mut fps_frame_count: u64 = 0;
             let mut running_rx = pipeline.running_rx.clone();
+            let encode_error_throttler = LogThrottler::with_secs(ENCODE_ERROR_THROTTLE_SECS);
+            let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
             // Track when we last had subscribers for auto-stop feature
             let mut no_subscribers_since: Option<Instant> = None;
@@ -1138,7 +1187,11 @@ impl SharedVideoPipeline {
                                     }
                                     Ok(None) => {}
                                     Err(e) => {
-                                        error!("Encoding failed: {}", e);
+                                        log_encoding_error(
+                                            &encode_error_throttler,
+                                            &mut suppressed_encode_errors,
+                                            &e,
+                                        );
                                     }
                                 }
 
@@ -1214,6 +1267,8 @@ impl SharedVideoPipeline {
                 let mut last_fps_time = Instant::now();
                 let mut fps_frame_count: u64 = 0;
                 let mut last_seq = *frame_seq_rx.borrow();
+                let encode_error_throttler = LogThrottler::with_secs(ENCODE_ERROR_THROTTLE_SECS);
+                let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
                     if frame_seq_rx.changed().await.is_err() {
@@ -1258,7 +1313,11 @@ impl SharedVideoPipeline {
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            error!("Encoding failed: {}", e);
+                            log_encoding_error(
+                                &encode_error_throttler,
+                                &mut suppressed_encode_errors,
+                                &e,
+                            );
                         }
                     }
 
