@@ -567,8 +567,9 @@ impl Ch9329Backend {
         data: &[u8],
     ) -> Result<()> {
         let packet = Self::build_packet(address, cmd, data);
-        port.write_all(&packet)
-            .map_err(|e| Self::backend_error(format!("Failed to write to CH9329: {}", e), "write_failed"))?;
+        port.write_all(&packet).map_err(|e| {
+            Self::backend_error(format!("Failed to write to CH9329: {}", e), "write_failed")
+        })?;
         trace!("CH9329 TX [cmd=0x{:02X}]: {:02X?}", cmd, packet);
         Ok(())
     }
@@ -599,7 +600,11 @@ impl Ch9329Backend {
     }
 
     fn expected_response_cmd(cmd: u8, is_error: bool) -> u8 {
-        cmd | if is_error { RESPONSE_ERROR_MASK } else { RESPONSE_SUCCESS_MASK }
+        cmd | if is_error {
+            RESPONSE_ERROR_MASK
+        } else {
+            RESPONSE_SUCCESS_MASK
+        }
     }
 
     fn xfer_packet(
@@ -700,9 +705,9 @@ impl Ch9329Backend {
 
     fn enqueue_command(&self, command: WorkerCommand) -> Result<()> {
         let guard = self.worker_tx.lock();
-        let sender = guard.as_ref().ok_or_else(|| {
-            Self::backend_error("CH9329 worker is not running", "worker_stopped")
-        })?;
+        let sender = guard
+            .as_ref()
+            .ok_or_else(|| Self::backend_error("CH9329 worker is not running", "worker_stopped"))?;
         sender
             .send(command)
             .map_err(|_| Self::backend_error("CH9329 worker stopped", "worker_stopped"))
@@ -765,9 +770,7 @@ impl Ch9329Backend {
                 }
                 Err(err) => {
                     if let AppError::HidError {
-                        reason,
-                        error_code,
-                        ..
+                        reason, error_code, ..
                     } = err
                     {
                         runtime.set_error(reason, error_code);
@@ -894,9 +897,7 @@ impl Ch9329Backend {
             }
             Err(err) => {
                 if let AppError::HidError {
-                    reason,
-                    error_code,
-                    ..
+                    reason, error_code, ..
                 } = &err
                 {
                     runtime.set_error(reason.clone(), error_code.clone());
@@ -912,9 +913,7 @@ impl Ch9329Backend {
                 Ok(WorkerCommand::Packet { cmd, data }) => {
                     if let Err(err) = Self::xfer_packet(port.as_mut(), address, cmd, &data) {
                         if let AppError::HidError {
-                            reason,
-                            error_code,
-                            ..
+                            reason, error_code, ..
                         } = err
                         {
                             runtime.set_error(reason, error_code);
@@ -949,9 +948,7 @@ impl Ch9329Backend {
                     for (cmd, data) in reset_sequence {
                         if let Err(err) = Self::xfer_packet(port.as_mut(), address, cmd, &data) {
                             if let AppError::HidError {
-                                reason,
-                                error_code,
-                                ..
+                                reason, error_code, ..
                             } = err
                             {
                                 runtime.set_error(reason, error_code);
@@ -988,9 +985,7 @@ impl Ch9329Backend {
                         }
                         Err(err) => {
                             if let AppError::HidError {
-                                reason,
-                                error_code,
-                                ..
+                                reason, error_code, ..
                             } = err
                             {
                                 runtime.set_error(reason, error_code);
@@ -1050,14 +1045,7 @@ impl HidBackend for Ch9329Backend {
             .name("ch9329-worker".to_string())
             .spawn(move || {
                 Self::worker_loop(
-                    port_path,
-                    baud_rate,
-                    address,
-                    rx,
-                    chip_info,
-                    led_status,
-                    runtime,
-                    init_tx,
+                    port_path, baud_rate, address, rx, chip_info, led_status, runtime, init_tx,
                 );
             })
             .map_err(|e| AppError::Internal(format!("Failed to spawn CH9329 worker: {}", e)))?;
@@ -1084,7 +1072,10 @@ impl HidBackend for Ch9329Backend {
             Ok(Err(err)) => {
                 let _ = handle.join();
                 self.record_error(
-                    format!("CH9329 not responding on {} @ {} baud: {}", self.port_path, self.baud_rate, err),
+                    format!(
+                        "CH9329 not responding on {} @ {} baud: {}",
+                        self.port_path, self.baud_rate, err
+                    ),
                     "init_failed",
                 );
                 Err(AppError::Internal(format!(
@@ -1398,15 +1389,14 @@ mod tests {
 
     #[test]
     fn test_packet_building() {
-        let backend = Ch9329Backend::new("/dev/null").unwrap();
-
         // Test GET_INFO packet (no data)
-        let packet = backend.build_packet(cmd::GET_INFO, &[]);
+        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::GET_INFO, &[]);
         assert_eq!(packet, vec![0x57, 0xAB, 0x00, 0x01, 0x00, 0x03]);
 
         // Test keyboard packet (8 bytes data)
         let data = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]; // 'A' key
-        let packet = backend.build_packet(cmd::SEND_KB_GENERAL_DATA, &data);
+        let packet =
+            Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
 
         assert_eq!(packet[0], 0x57); // Header
         assert_eq!(packet[1], 0xAB); // Header
@@ -1415,17 +1405,17 @@ mod tests {
         assert_eq!(packet[4], 8); // Length (8 data bytes)
         assert_eq!(&packet[5..13], &data); // Data
                                            // Checksum = 0x57 + 0xAB + 0x00 + 0x02 + 0x08 + 0x00 + 0x00 + 0x04 + ... = 0x10
-        let expected_checksum: u8 = packet[..13].iter().fold(0u8, |acc, &x| acc.wrapping_add(x));
+        let expected_checksum: u8 = packet[..13]
+            .iter()
+            .fold(0u8, |acc: u8, &x| acc.wrapping_add(x));
         assert_eq!(packet[13], expected_checksum);
     }
 
     #[test]
     fn test_relative_mouse_packet() {
-        let backend = Ch9329Backend::new("/dev/null").unwrap();
-
         // Test relative mouse: move right 50 pixels
         let data = [0x01, 0x00, 50u8, 0x00, 0x00];
-        let packet = backend.build_packet(cmd::SEND_MS_REL_DATA, &data);
+        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_MS_REL_DATA, &data);
 
         assert_eq!(packet[0], 0x57);
         assert_eq!(packet[1], 0xAB);

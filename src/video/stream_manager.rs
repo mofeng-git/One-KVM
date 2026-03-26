@@ -532,17 +532,30 @@ impl VideoStreamManager {
             device_path, format, resolution.width, resolution.height, fps, mode
         );
 
+        if mode == StreamMode::WebRTC {
+            // Stop the shared pipeline before replacing the capture source so WebRTC
+            // sessions do not stay attached to a stale frame source.
+            self.webrtc_streamer
+                .update_video_config(resolution, format, fps)
+                .await;
+            info!("WebRTC streamer config updated (pipeline stopped, sessions closed)");
+        }
+
         // Apply to streamer (handles video capture)
         self.streamer
             .apply_video_config(device_path, format, resolution, fps)
             .await?;
 
+        if mode != StreamMode::WebRTC {
+            if let Err(e) = self.start().await {
+                error!("Failed to start streamer after config change: {}", e);
+            } else {
+                info!("Streamer started after config change");
+            }
+        }
+
         // Update WebRTC config if in WebRTC mode
         if mode == StreamMode::WebRTC {
-            self.webrtc_streamer
-                .update_video_config(resolution, format, fps)
-                .await;
-
             let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
                 self.streamer.current_capture_config().await;
             if actual_format != format || actual_resolution != resolution || actual_fps != fps {

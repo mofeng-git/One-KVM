@@ -115,15 +115,6 @@ impl MsdController {
         Ok(())
     }
 
-    /// Get current state as SystemEvent
-    pub async fn current_state_event(&self) -> crate::events::SystemEvent {
-        let state = self.state.read().await;
-        crate::events::SystemEvent::MsdStateChanged {
-            mode: state.mode.clone(),
-            connected: state.connected,
-        }
-    }
-
     /// Get current MSD state
     pub async fn state(&self) -> MsdState {
         self.state.read().await.clone()
@@ -138,6 +129,12 @@ impl MsdController {
     async fn publish_event(&self, event: crate::events::SystemEvent) {
         if let Some(ref bus) = *self.events.read().await {
             bus.publish(event);
+        }
+    }
+
+    async fn mark_device_info_dirty(&self) {
+        if let Some(ref bus) = *self.events.read().await {
+            bus.mark_device_info_dirty();
         }
     }
 
@@ -228,11 +225,7 @@ impl MsdController {
             self.monitor.report_recovered().await;
         }
 
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::Image,
-            connected: true,
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         Ok(())
     }
@@ -303,12 +296,7 @@ impl MsdController {
             self.monitor.report_recovered().await;
         }
 
-        // Publish event
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::Drive,
-            connected: true,
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         Ok(())
     }
@@ -340,11 +328,7 @@ impl MsdController {
         drop(state);
         drop(_op_guard);
 
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::None,
-            connected: false,
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         Ok(())
     }

@@ -16,11 +16,121 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{debug, info, warn};
 
 use crate::events::SystemEvent;
 use crate::state::AppState;
+
+enum BusMessage {
+    Event(SystemEvent),
+    Lagged { topic: String, count: u64 },
+}
+
+fn normalize_topics(topics: &[String]) -> Vec<String> {
+    let mut normalized = topics.to_vec();
+    normalized.sort();
+    normalized.dedup();
+
+    if normalized.iter().any(|topic| topic == "*") {
+        return vec!["*".to_string()];
+    }
+
+    normalized
+        .into_iter()
+        .filter(|topic| {
+            if topic.ends_with(".*") {
+                return true;
+            }
+
+            let Some((prefix, _)) = topic.split_once('.') else {
+                return true;
+            };
+
+            let wildcard = format!("{}.*", prefix);
+            !topics.iter().any(|candidate| candidate == &wildcard)
+        })
+        .collect()
+}
+
+fn is_device_info_topic(topic: &str) -> bool {
+    matches!(topic, "*" | "system.*" | "system.device_info")
+}
+
+fn rebuild_event_tasks(
+    state: &Arc<AppState>,
+    topics: &[String],
+    event_tx: &mpsc::UnboundedSender<BusMessage>,
+    event_tasks: &mut Vec<JoinHandle<()>>,
+) {
+    for task in event_tasks.drain(..) {
+        task.abort();
+    }
+
+    let topics = normalize_topics(topics);
+    let mut device_info_task_added = false;
+    for topic in topics {
+        if is_device_info_topic(&topic) && !device_info_task_added {
+            let mut rx = state.subscribe_device_info();
+            let event_tx = event_tx.clone();
+            event_tasks.push(tokio::spawn(async move {
+                if let Some(snapshot) = rx.borrow().clone() {
+                    if event_tx.send(BusMessage::Event(snapshot)).is_err() {
+                        return;
+                    }
+                }
+
+                loop {
+                    if rx.changed().await.is_err() {
+                        break;
+                    }
+
+                    if let Some(snapshot) = rx.borrow().clone() {
+                        if event_tx.send(BusMessage::Event(snapshot)).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }));
+            device_info_task_added = true;
+        }
+
+        if is_device_info_topic(&topic) && topic != "*" {
+            continue;
+        }
+
+        let Some(mut rx) = state.events.subscribe_topic(&topic) else {
+            warn!("Client subscribed to unknown topic: {}", topic);
+            continue;
+        };
+
+        let event_tx = event_tx.clone();
+        let topic_name = topic.clone();
+        event_tasks.push(tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if event_tx.send(BusMessage::Event(event)).is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                        if event_tx
+                            .send(BusMessage::Lagged {
+                                topic: topic_name.clone(),
+                                count,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        }));
+    }
+}
 
 /// Client-to-server message
 #[derive(Debug, Deserialize)]
@@ -50,15 +160,11 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>
 /// Handle WebSocket connection
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
-
-    // Subscribe to event bus
-    let mut event_rx = state.events.subscribe();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let mut event_tasks: Vec<JoinHandle<()>> = Vec::new();
 
     // Track subscribed topics (default: none until client subscribes)
     let mut subscribed_topics: Vec<String> = vec![];
-
-    // Flag to send device info after first subscribe
-    let mut device_info_sent = false;
 
     info!("WebSocket client connected");
 
@@ -73,18 +179,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     Some(Ok(Message::Text(text))) => {
                         if let Err(e) = handle_client_message(&text, &mut subscribed_topics).await {
                             warn!("Failed to handle client message: {}", e);
-                        }
-
-                        // Send device info after first subscribe
-                        if !device_info_sent && !subscribed_topics.is_empty() {
-                            let device_info = state.get_device_info().await;
-                            if let Ok(json) = serialize_event(&device_info) {
-                                if sender.send(Message::Text(json.into())).await.is_err() {
-                                    warn!("Failed to send device info to client");
-                                    break;
-                                }
-                            }
-                            device_info_sent = true;
+                        } else {
+                            rebuild_event_tasks(
+                                &state,
+                                &subscribed_topics,
+                                &event_tx,
+                                &mut event_tasks,
+                            );
                         }
                     }
                     Some(Ok(Message::Ping(_))) => {
@@ -109,28 +210,29 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             // Receive event from event bus
             event = event_rx.recv() => {
                 match event {
-                    Ok(event) => {
+                    Some(BusMessage::Event(event)) => {
                         // Filter event based on subscribed topics
-                        if should_send_event(&event, &subscribed_topics) {
-                            if let Ok(json) = serialize_event(&event) {
-                                if sender.send(Message::Text(json.into())).await.is_err() {
-                                    warn!("Failed to send event to client, disconnecting");
-                                    break;
-                                }
+                        if let Ok(json) = serialize_event(&event) {
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                warn!("Failed to send event to client, disconnecting");
+                                break;
                             }
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        warn!("WebSocket client lagged by {} events", n);
+                    Some(BusMessage::Lagged { topic, count }) => {
+                        warn!(
+                            "WebSocket client lagged by {} events on topic {}",
+                            count, topic
+                        );
                         // Send error notification to client using SystemEvent::Error
                         let error_event = SystemEvent::Error {
-                            message: format!("Lagged by {} events", n),
+                            message: format!("Lagged by {} events", count),
                         };
                         if let Ok(json) = serialize_event(&error_event) {
                             let _ = sender.send(Message::Text(json.into())).await;
                         }
                     }
-                    Err(_) => {
+                    None => {
                         warn!("Event bus closed");
                         break;
                     }
@@ -145,6 +247,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 }
             }
         }
+    }
+
+    for task in event_tasks {
+        task.abort();
     }
 
     info!("WebSocket handler exiting");
@@ -176,21 +282,6 @@ async fn handle_client_message(
     Ok(())
 }
 
-/// Check if an event should be sent based on subscribed topics
-fn should_send_event(event: &SystemEvent, topics: &[String]) -> bool {
-    if topics.is_empty() {
-        return false;
-    }
-
-    // Fast path: check for wildcard subscription (avoid String allocation)
-    if topics.iter().any(|t| t == "*") {
-        return true;
-    }
-
-    // Check if event matches any subscribed topic
-    topics.iter().any(|topic| event.matches_topic(topic))
-}
-
 /// Serialize event to JSON string
 fn serialize_event(event: &SystemEvent) -> Result<String, serde_json::Error> {
     serde_json::to_string(event)
@@ -199,53 +290,49 @@ fn serialize_event(event: &SystemEvent) -> Result<String, serde_json::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::SystemEvent;
 
     #[test]
-    fn test_should_send_event_wildcard() {
-        let event = SystemEvent::StreamStateChanged {
-            state: "streaming".to_string(),
-            device: None,
-        };
+    fn test_normalize_topics_dedupes_and_sorts() {
+        let topics = vec![
+            "stream.state_changed".to_string(),
+            "stream.state_changed".to_string(),
+            "system.device_info".to_string(),
+        ];
 
-        assert!(should_send_event(&event, &["*".to_string()]));
+        assert_eq!(
+            normalize_topics(&topics),
+            vec![
+                "stream.state_changed".to_string(),
+                "system.device_info".to_string()
+            ]
+        );
     }
 
     #[test]
-    fn test_should_send_event_prefix() {
-        let event = SystemEvent::StreamStateChanged {
-            state: "streaming".to_string(),
-            device: None,
-        };
-
-        assert!(should_send_event(&event, &["stream.*".to_string()]));
-        assert!(!should_send_event(&event, &["msd.*".to_string()]));
+    fn test_normalize_topics_wildcard_wins() {
+        let topics = vec!["*".to_string(), "stream.state_changed".to_string()];
+        assert_eq!(normalize_topics(&topics), vec!["*".to_string()]);
     }
 
     #[test]
-    fn test_should_send_event_exact() {
-        let event = SystemEvent::StreamStateChanged {
-            state: "streaming".to_string(),
-            device: None,
-        };
+    fn test_normalize_topics_drops_exact_when_prefix_exists() {
+        let topics = vec![
+            "stream.*".to_string(),
+            "stream.state_changed".to_string(),
+            "system.device_info".to_string(),
+        ];
 
-        assert!(should_send_event(
-            &event,
-            &["stream.state_changed".to_string()]
-        ));
-        assert!(!should_send_event(
-            &event,
-            &["stream.config_changed".to_string()]
-        ));
+        assert_eq!(
+            normalize_topics(&topics),
+            vec!["stream.*".to_string(), "system.device_info".to_string()]
+        );
     }
 
     #[test]
-    fn test_should_send_event_empty_topics() {
-        let event = SystemEvent::StreamStateChanged {
-            state: "streaming".to_string(),
-            device: None,
-        };
-
-        assert!(!should_send_event(&event, &[]));
+    fn test_is_device_info_topic_matches_expected_topics() {
+        assert!(is_device_info_topic("system.device_info"));
+        assert!(is_device_info_topic("system.*"));
+        assert!(is_device_info_topic("*"));
+        assert!(!is_device_info_topic("stream.*"));
     }
 }

@@ -113,11 +113,11 @@ impl HidRuntimeState {
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tracing::{info, warn};
 use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::EventBus;
 use crate::otg::OtgService;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -358,18 +358,6 @@ impl HidController {
     /// Get current HID runtime state snapshot.
     pub async fn snapshot(&self) -> HidRuntimeState {
         self.runtime_state.read().await.clone()
-    }
-
-    /// Get current state as SystemEvent
-    pub async fn current_state_event(&self) -> crate::events::SystemEvent {
-        let state = self.snapshot().await;
-        SystemEvent::HidStateChanged {
-            backend: state.backend,
-            initialized: state.initialized,
-            online: state.online,
-            error: state.error,
-            error_code: state.error_code,
-        }
     }
 
     /// Reload the HID backend with new type
@@ -707,12 +695,6 @@ async fn apply_runtime_state(
     }
 
     if let Some(events) = events.read().await.as_ref() {
-        events.publish(SystemEvent::HidStateChanged {
-            backend: next.backend,
-            initialized: next.initialized,
-            online: next.online,
-            error: next.error,
-            error_code: next.error_code,
-        });
+        events.mark_device_info_dirty();
     }
 }

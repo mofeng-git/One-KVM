@@ -16,13 +16,40 @@ type EventHandler = (data: any) => void
 
 let wsInstance: WebSocket | null = null
 let handlers = new Map<string, EventHandler[]>()
+let subscribedTopics: string[] = []
 const connected = ref(false)
 const reconnectAttempts = ref(0)
 const networkError = ref(false)
 const networkErrorMessage = ref<string | null>(null)
 
+function getSubscribedTopics(): string[] {
+  return Array.from(handlers.entries())
+    .filter(([, eventHandlers]) => eventHandlers.length > 0)
+    .map(([event]) => event)
+    .sort()
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
+function syncSubscriptions() {
+  const topics = getSubscribedTopics()
+
+  if (arraysEqual(topics, subscribedTopics)) {
+    return
+  }
+
+  subscribedTopics = topics
+
+  if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+    subscribe(topics)
+  }
+}
+
 function connect() {
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+    syncSubscriptions()
     return
   }
 
@@ -37,8 +64,7 @@ function connect() {
       networkErrorMessage.value = null
       reconnectAttempts.value = 0
 
-      // Subscribe to all events by default
-      subscribe(['*'])
+      syncSubscriptions()
     }
 
     wsInstance.onmessage = (e) => {
@@ -78,6 +104,7 @@ function disconnect() {
     wsInstance.close()
     wsInstance = null
   }
+  subscribedTopics = []
 }
 
 function subscribe(topics: string[]) {
@@ -94,6 +121,7 @@ function on(event: string, handler: EventHandler) {
     handlers.set(event, [])
   }
   handlers.get(event)!.push(handler)
+  syncSubscriptions()
 }
 
 function off(event: string, handler: EventHandler) {
@@ -103,7 +131,11 @@ function off(event: string, handler: EventHandler) {
     if (index > -1) {
       eventHandlers.splice(index, 1)
     }
+    if (eventHandlers.length === 0) {
+      handlers.delete(event)
+    }
   }
+  syncSubscriptions()
 }
 
 function handleEvent(payload: WsEvent) {

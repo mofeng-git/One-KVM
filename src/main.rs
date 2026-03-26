@@ -7,7 +7,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use clap::{Parser, ValueEnum};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rustls::crypto::{ring, CryptoProvider};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use one_kvm::atx::AtxController;
@@ -646,6 +646,8 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Extension health check task started");
     }
 
+    state.publish_device_info().await;
+
     // Start device info broadcast task
     // This monitors state change events and broadcasts DeviceInfo to all clients
     spawn_device_info_broadcaster(state.clone(), events);
@@ -854,11 +856,85 @@ fn generate_self_signed_cert() -> anyhow::Result<rcgen::CertifiedKey<rcgen::KeyP
 /// Spawn a background task that monitors state change events
 /// and broadcasts DeviceInfo to all WebSocket clients with debouncing
 fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
-    use one_kvm::events::SystemEvent;
     use std::time::{Duration, Instant};
 
-    let mut rx = events.subscribe();
+    enum DeviceInfoTrigger {
+        Event,
+        Lagged { topic: &'static str, count: u64 },
+    }
+
+    const DEVICE_INFO_TOPICS: &[&str] = &[
+        "stream.state_changed",
+        "stream.config_applied",
+        "stream.mode_ready",
+    ];
     const DEBOUNCE_MS: u64 = 100;
+
+    let (trigger_tx, mut trigger_rx) = mpsc::unbounded_channel();
+
+    for topic in DEVICE_INFO_TOPICS {
+        let Some(mut rx) = events.subscribe_topic(topic) else {
+            tracing::warn!(
+                "DeviceInfo broadcaster missing topic subscription: {}",
+                topic
+            );
+            continue;
+        };
+
+        let trigger_tx = trigger_tx.clone();
+        let topic_name = *topic;
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(_) => {
+                        if trigger_tx.send(DeviceInfoTrigger::Event).is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                        if trigger_tx
+                            .send(DeviceInfoTrigger::Lagged {
+                                topic: topic_name,
+                                count,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+    }
+
+    {
+        let mut dirty_rx = events.subscribe_device_info_dirty();
+        let trigger_tx = trigger_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                match dirty_rx.recv().await {
+                    Ok(()) => {
+                        if trigger_tx.send(DeviceInfoTrigger::Event).is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                        if trigger_tx
+                            .send(DeviceInfoTrigger::Lagged {
+                                topic: "device_info_dirty",
+                                count,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+    }
 
     tokio::spawn(async move {
         let mut last_broadcast = Instant::now() - Duration::from_millis(DEBOUNCE_MS);
@@ -869,32 +945,24 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
             let recv_result = if pending_broadcast {
                 let remaining =
                     DEBOUNCE_MS.saturating_sub(last_broadcast.elapsed().as_millis() as u64);
-                tokio::time::timeout(Duration::from_millis(remaining), rx.recv()).await
+                tokio::time::timeout(Duration::from_millis(remaining), trigger_rx.recv()).await
             } else {
-                Ok(rx.recv().await)
+                Ok(trigger_rx.recv().await)
             };
 
             match recv_result {
-                Ok(Ok(event)) => {
-                    let should_broadcast = matches!(
-                        event,
-                        SystemEvent::StreamStateChanged { .. }
-                            | SystemEvent::StreamConfigApplied { .. }
-                            | SystemEvent::StreamModeReady { .. }
-                            | SystemEvent::HidStateChanged { .. }
-                            | SystemEvent::MsdStateChanged { .. }
-                            | SystemEvent::AtxStateChanged { .. }
-                            | SystemEvent::AudioStateChanged { .. }
-                    );
-                    if should_broadcast {
-                        pending_broadcast = true;
-                    }
-                }
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(n))) => {
-                    tracing::warn!("DeviceInfo broadcaster lagged by {} events", n);
+                Ok(Some(DeviceInfoTrigger::Event)) => {
                     pending_broadcast = true;
                 }
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
+                Ok(Some(DeviceInfoTrigger::Lagged { topic, count })) => {
+                    tracing::warn!(
+                        "DeviceInfo broadcaster lagged by {} events on topic {}",
+                        count,
+                        topic
+                    );
+                    pending_broadcast = true;
+                }
+                Ok(None) => {
                     tracing::info!("Event bus closed, stopping DeviceInfo broadcaster");
                     break;
                 }

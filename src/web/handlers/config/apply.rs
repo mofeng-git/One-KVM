@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use crate::config::*;
 use crate::error::{AppError, Result};
-use crate::events::SystemEvent;
 use crate::rtsp::RtspService;
 use crate::state::AppState;
 use crate::video::codec_constraints::{
@@ -45,73 +44,11 @@ pub async fn apply_video_config(
 
     let resolution = crate::video::format::Resolution::new(new_config.width, new_config.height);
 
-    // Step 1: 更新 WebRTC streamer 配置（停止现有 pipeline 和 sessions）
     state
         .stream_manager
-        .webrtc_streamer()
-        .update_video_config(resolution, format, new_config.fps)
-        .await;
-    tracing::info!("WebRTC streamer config updated");
-
-    // Step 2: 应用视频配置到 streamer（重新创建 capturer）
-    state
-        .stream_manager
-        .streamer()
         .apply_video_config(&device, format, resolution, new_config.fps)
         .await
         .map_err(|e| AppError::VideoError(format!("Failed to apply video config: {}", e)))?;
-    tracing::info!("Video config applied to streamer");
-
-    // Step 3: 重启 streamer（仅 MJPEG 模式）
-    if !state.stream_manager.is_webrtc_enabled().await {
-        if let Err(e) = state.stream_manager.start().await {
-            tracing::error!("Failed to start streamer after config change: {}", e);
-        } else {
-            tracing::info!("Streamer started after config change");
-        }
-    }
-
-    // 配置 WebRTC direct capture（所有模式统一配置）
-    let (device_path, _resolution, _format, _fps, jpeg_quality) = state
-        .stream_manager
-        .streamer()
-        .current_capture_config()
-        .await;
-    if let Some(device_path) = device_path {
-        state
-            .stream_manager
-            .webrtc_streamer()
-            .set_capture_device(device_path, jpeg_quality)
-            .await;
-    } else {
-        tracing::warn!("No capture device configured for WebRTC");
-    }
-
-    if state.stream_manager.is_webrtc_enabled().await {
-        use crate::video::encoder::VideoCodecType;
-        let codec = state
-            .stream_manager
-            .webrtc_streamer()
-            .current_video_codec()
-            .await;
-        let codec_str = match codec {
-            VideoCodecType::H264 => "h264",
-            VideoCodecType::H265 => "h265",
-            VideoCodecType::VP8 => "vp8",
-            VideoCodecType::VP9 => "vp9",
-        }
-        .to_string();
-        let is_hardware = state
-            .stream_manager
-            .webrtc_streamer()
-            .is_hardware_encoding()
-            .await;
-        state.events.publish(SystemEvent::WebRTCReady {
-            transition_id: None,
-            codec: codec_str,
-            hardware: is_hardware,
-        });
-    }
 
     tracing::info!("Video config applied successfully");
     Ok(())

@@ -12,7 +12,6 @@ use tracing::{info, warn};
 use crate::auth::{Session, SESSION_COOKIE};
 use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
-use crate::events::SystemEvent;
 use crate::state::AppState;
 use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
 use crate::video::codec_constraints::codec_to_id;
@@ -936,20 +935,8 @@ pub async fn update_config(
         let resolution =
             crate::video::format::Resolution::new(new_config.video.width, new_config.video.height);
 
-        // Step 1: Update WebRTC streamer config FIRST
-        // This stops the shared pipeline and closes existing sessions BEFORE capturer is recreated
-        // This ensures the pipeline won't be subscribed to a stale frame source
-        state
-            .stream_manager
-            .webrtc_streamer()
-            .update_video_config(resolution, format, new_config.video.fps)
-            .await;
-        tracing::info!("WebRTC streamer config updated (pipeline stopped, sessions closed)");
-
-        // Step 2: Apply video config to streamer (recreates capturer)
         if let Err(e) = state
             .stream_manager
-            .streamer()
             .apply_video_config(&device, format, resolution, new_config.video.fps)
             .await
         {
@@ -962,59 +949,6 @@ pub async fn update_config(
             }));
         }
         tracing::info!("Video config applied successfully");
-
-        // Step 3: Start the streamer to begin capturing frames (MJPEG mode only)
-        if !state.stream_manager.is_webrtc_enabled().await {
-            // This is necessary because apply_video_config only creates the capturer but doesn't start it
-            if let Err(e) = state.stream_manager.start().await {
-                tracing::error!("Failed to start streamer after config change: {}", e);
-                // Don't fail the request - the stream might start later when client connects
-            } else {
-                tracing::info!("Streamer started after config change");
-            }
-        }
-
-        // Configure WebRTC direct capture (all modes)
-        let (device_path, _resolution, _format, _fps, jpeg_quality) = state
-            .stream_manager
-            .streamer()
-            .current_capture_config()
-            .await;
-        if let Some(device_path) = device_path {
-            state
-                .stream_manager
-                .webrtc_streamer()
-                .set_capture_device(device_path, jpeg_quality)
-                .await;
-        } else {
-            tracing::warn!("No capture device configured for WebRTC");
-        }
-
-        if state.stream_manager.is_webrtc_enabled().await {
-            use crate::video::encoder::VideoCodecType;
-            let codec = state
-                .stream_manager
-                .webrtc_streamer()
-                .current_video_codec()
-                .await;
-            let codec_str = match codec {
-                VideoCodecType::H264 => "h264",
-                VideoCodecType::H265 => "h265",
-                VideoCodecType::VP8 => "vp8",
-                VideoCodecType::VP9 => "vp9",
-            }
-            .to_string();
-            let is_hardware = state
-                .stream_manager
-                .webrtc_streamer()
-                .is_hardware_encoding()
-                .await;
-            state.events.publish(SystemEvent::WebRTCReady {
-                transition_id: None,
-                codec: codec_str,
-                hardware: is_hardware,
-            });
-        }
     }
 
     // Stream config processing (encoder backend, bitrate, etc.)

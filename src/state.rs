@@ -1,5 +1,5 @@
 use std::{collections::VecDeque, sync::Arc};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, watch, RwLock};
 
 use crate::atx::AtxController;
 use crate::audio::AudioController;
@@ -58,6 +58,8 @@ pub struct AppState {
     pub extensions: Arc<ExtensionManager>,
     /// Event bus for real-time notifications
     pub events: Arc<EventBus>,
+    /// Latest device info snapshot for WebSocket clients
+    device_info_tx: watch::Sender<Option<SystemEvent>>,
     /// Online update service
     pub update: Arc<UpdateService>,
     /// Shutdown signal sender
@@ -89,6 +91,8 @@ impl AppState {
         shutdown_tx: broadcast::Sender<()>,
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
+        let (device_info_tx, _device_info_rx) = watch::channel(None);
+
         Arc::new(Self {
             config,
             sessions,
@@ -103,6 +107,7 @@ impl AppState {
             rtsp: Arc::new(RwLock::new(rtsp)),
             extensions,
             events,
+            device_info_tx,
             update,
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
@@ -118,6 +123,11 @@ impl AppState {
     /// Subscribe to shutdown signal
     pub fn shutdown_signal(&self) -> broadcast::Receiver<()> {
         self.shutdown_tx.subscribe()
+    }
+
+    /// Subscribe to the latest device info snapshot.
+    pub fn subscribe_device_info(&self) -> watch::Receiver<Option<SystemEvent>> {
+        self.device_info_tx.subscribe()
     }
 
     /// Record revoked session IDs (bounded queue)
@@ -167,7 +177,7 @@ impl AppState {
     /// Publish DeviceInfo event to all connected WebSocket clients
     pub async fn publish_device_info(&self) {
         let device_info = self.get_device_info().await;
-        self.events.publish(device_info);
+        let _ = self.device_info_tx.send(Some(device_info));
     }
 
     /// Collect video device information

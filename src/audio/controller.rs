@@ -13,7 +13,7 @@ use super::encoder::{OpusConfig, OpusFrame};
 use super::monitor::{AudioHealthMonitor, AudioHealthStatus};
 use super::streamer::{AudioStreamer, AudioStreamerConfig};
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::EventBus;
 
 /// Audio quality presets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -139,15 +139,15 @@ impl AudioController {
         }
     }
 
-    /// Set event bus for publishing audio events
+    /// Set event bus for internal state notifications.
     pub async fn set_event_bus(&self, event_bus: Arc<EventBus>) {
         *self.event_bus.write().await = Some(event_bus);
     }
 
-    /// Publish an event to the event bus
-    async fn publish_event(&self, event: SystemEvent) {
+    /// Mark the device-info snapshot as stale.
+    async fn mark_device_info_dirty(&self) {
         if let Some(ref bus) = *self.event_bus.read().await {
-            bus.publish(event);
+            bus.mark_device_info_dirty();
         }
     }
 
@@ -276,11 +276,7 @@ impl AudioController {
                 .report_error(Some(&config.device), &error_msg, "start_failed")
                 .await;
 
-            self.publish_event(SystemEvent::AudioStateChanged {
-                streaming: false,
-                device: None,
-            })
-            .await;
+            self.mark_device_info_dirty().await;
 
             return Err(AppError::AudioError(error_msg));
         }
@@ -292,12 +288,7 @@ impl AudioController {
             self.monitor.report_recovered(Some(&config.device)).await;
         }
 
-        // Publish event
-        self.publish_event(SystemEvent::AudioStateChanged {
-            streaming: true,
-            device: Some(config.device),
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         info!("Audio streaming started");
         Ok(())
@@ -309,12 +300,7 @@ impl AudioController {
             streamer.stop().await?;
         }
 
-        // Publish event
-        self.publish_event(SystemEvent::AudioStateChanged {
-            streaming: false,
-            device: None,
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         info!("Audio streaming stopped");
         Ok(())

@@ -5,9 +5,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::atx::PowerStatus;
-use crate::msd::MsdMode;
-
 // ============================================================================
 // Device Info Structures (for system.device_info event)
 // ============================================================================
@@ -279,35 +276,8 @@ pub enum SystemEvent {
     },
 
     // ============================================================================
-    // HID Events
-    // ============================================================================
-    /// HID backend state changed
-    #[serde(rename = "hid.state_changed")]
-    HidStateChanged {
-        /// Backend type: "otg", "ch9329", "none"
-        backend: String,
-        /// Whether backend is initialized and ready
-        initialized: bool,
-        /// Whether backend is currently online
-        online: bool,
-        /// Error message if any, None if OK
-        error: Option<String>,
-        /// Error code for programmatic handling: "epipe", "eagain", "port_not_found", etc.
-        error_code: Option<String>,
-    },
-
-    // ============================================================================
     // MSD (Mass Storage Device) Events
     // ============================================================================
-    /// MSD state changed
-    #[serde(rename = "msd.state_changed")]
-    MsdStateChanged {
-        /// Operating mode
-        mode: MsdMode,
-        /// Whether storage is connected to target
-        connected: bool,
-    },
-
     /// File upload progress (for large file uploads)
     #[serde(rename = "msd.upload_progress")]
     MsdUploadProgress {
@@ -340,28 +310,6 @@ pub enum SystemEvent {
         progress_pct: Option<f32>,
         /// Download status: "started", "in_progress", "completed", "failed"
         status: String,
-    },
-
-    // ============================================================================
-    // ATX (Power Control) Events
-    // ============================================================================
-    /// ATX power state changed
-    #[serde(rename = "atx.state_changed")]
-    AtxStateChanged {
-        /// Power status
-        power_status: PowerStatus,
-    },
-
-    // ============================================================================
-    // Audio Events
-    // ============================================================================
-    /// Audio state changed (streaming started/stopped)
-    #[serde(rename = "audio.state_changed")]
-    AudioStateChanged {
-        /// Whether audio is currently streaming
-        streaming: bool,
-        /// Current device (None if stopped)
-        device: Option<String>,
     },
 
     /// Complete device information (sent on WebSocket connect and state changes)
@@ -404,12 +352,8 @@ impl SystemEvent {
             Self::StreamModeReady { .. } => "stream.mode_ready",
             Self::WebRTCIceCandidate { .. } => "webrtc.ice_candidate",
             Self::WebRTCIceComplete { .. } => "webrtc.ice_complete",
-            Self::HidStateChanged { .. } => "hid.state_changed",
-            Self::MsdStateChanged { .. } => "msd.state_changed",
             Self::MsdUploadProgress { .. } => "msd.upload_progress",
             Self::MsdDownloadProgress { .. } => "msd.download_progress",
-            Self::AtxStateChanged { .. } => "atx.state_changed",
-            Self::AudioStateChanged { .. } => "audio.state_changed",
             Self::DeviceInfo { .. } => "system.device_info",
             Self::Error { .. } => "error",
         }
@@ -448,12 +392,6 @@ mod tests {
             device: Some("/dev/video0".to_string()),
         };
         assert_eq!(event.event_name(), "stream.state_changed");
-
-        let event = SystemEvent::MsdStateChanged {
-            mode: MsdMode::Image,
-            connected: true,
-        };
-        assert_eq!(event.event_name(), "msd.state_changed");
     }
 
     #[test]
