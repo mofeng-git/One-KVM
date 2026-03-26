@@ -3,15 +3,13 @@
 //! This module provides health monitoring for MSD operations, including:
 //! - ConfigFS operation error tracking
 //! - Image mount/unmount error tracking
-//! - Error notification
+//! - Error state tracking
 //! - Log throttling to prevent log flooding
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// MSD health status
@@ -46,13 +44,10 @@ impl Default for MsdMonitorConfig {
 
 /// MSD health monitor
 ///
-/// Monitors MSD operation health and manages error notifications.
-/// Publishes WebSocket events when operation status changes.
+/// Monitors MSD operation health and manages error state.
 pub struct MsdHealthMonitor {
     /// Current health status
     status: RwLock<MsdHealthStatus>,
-    /// Event bus for notifications
-    events: RwLock<Option<Arc<EventBus>>>,
     /// Log throttler to prevent log flooding
     throttler: LogThrottler,
     /// Configuration
@@ -73,7 +68,6 @@ impl MsdHealthMonitor {
         let throttle_secs = config.log_throttle_secs;
         Self {
             status: RwLock::new(MsdHealthStatus::Healthy),
-            events: RwLock::new(None),
             throttler: LogThrottler::with_secs(throttle_secs),
             config,
             running: AtomicBool::new(false),
@@ -87,17 +81,12 @@ impl MsdHealthMonitor {
         Self::new(MsdMonitorConfig::default())
     }
 
-    /// Set the event bus for broadcasting state changes
-    pub async fn set_event_bus(&self, events: Arc<EventBus>) {
-        *self.events.write().await = Some(events);
-    }
-
     /// Report an error from MSD operations
     ///
     /// This method is called when an MSD operation fails. It:
     /// 1. Updates the health status
     /// 2. Logs the error (with throttling)
-    /// 3. Publishes a WebSocket event if the error is new or changed
+    /// 3. Updates in-memory error state
     ///
     /// # Arguments
     ///
@@ -129,22 +118,12 @@ impl MsdHealthMonitor {
             reason: reason.to_string(),
             error_code: error_code.to_string(),
         };
-
-        // Publish event (only if error changed or first occurrence)
-        if error_changed || count == 1 {
-            if let Some(ref events) = *self.events.read().await {
-                events.publish(SystemEvent::MsdError {
-                    reason: reason.to_string(),
-                    error_code: error_code.to_string(),
-                });
-            }
-        }
     }
 
     /// Report that the MSD has recovered from error
     ///
     /// This method is called when an MSD operation succeeds after errors.
-    /// It resets the error state and publishes a recovery event.
+    /// It resets the error state.
     pub async fn report_recovered(&self) {
         let prev_status = self.status.read().await.clone();
 
@@ -158,11 +137,6 @@ impl MsdHealthMonitor {
             self.throttler.clear_all();
             *self.last_error_code.write().await = None;
             *self.status.write().await = MsdHealthStatus::Healthy;
-
-            // Publish recovery event
-            if let Some(ref events) = *self.events.read().await {
-                events.publish(SystemEvent::MsdRecovered);
-            }
         }
     }
 

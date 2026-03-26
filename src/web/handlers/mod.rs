@@ -2311,8 +2311,12 @@ pub struct HidStatus {
     pub available: bool,
     pub backend: String,
     pub initialized: bool,
+    pub online: bool,
     pub supports_absolute_mouse: bool,
     pub screen_resolution: Option<(u32, u32)>,
+    pub device: Option<String>,
+    pub error: Option<String>,
+    pub error_code: Option<String>,
 }
 
 #[derive(Serialize, Clone, Copy, PartialEq, Eq)]
@@ -3073,19 +3077,17 @@ pub async fn hid_otg_self_check(State(state): State<Arc<AppState>>) -> Json<OtgS
 
 /// Get HID status
 pub async fn hid_status(State(state): State<Arc<AppState>>) -> Json<HidStatus> {
-    let info = state.hid.info().await;
+    let hid = state.hid.snapshot().await;
     Json(HidStatus {
-        available: info.is_some(),
-        backend: info
-            .as_ref()
-            .map(|i| i.name.to_string())
-            .unwrap_or_else(|| "none".to_string()),
-        initialized: info.as_ref().map(|i| i.initialized).unwrap_or(false),
-        supports_absolute_mouse: info
-            .as_ref()
-            .map(|i| i.supports_absolute_mouse)
-            .unwrap_or(false),
-        screen_resolution: info.and_then(|i| i.screen_resolution),
+        available: hid.available,
+        backend: hid.backend,
+        initialized: hid.initialized,
+        online: hid.online,
+        supports_absolute_mouse: hid.supports_absolute_mouse,
+        screen_resolution: hid.screen_resolution,
+        device: hid.device,
+        error: hid.error,
+        error_code: hid.error_code,
     })
 }
 

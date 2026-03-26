@@ -32,6 +32,7 @@ interface HidState {
   available: boolean
   backend: string
   initialized: boolean
+  online: boolean
   supportsAbsoluteMouse: boolean
   device: string | null
   error: string | null
@@ -86,9 +87,11 @@ export interface HidDeviceInfo {
   available: boolean
   backend: string
   initialized: boolean
+  online: boolean
   supports_absolute_mouse: boolean
   device: string | null
   error: string | null
+  error_code?: string | null
 }
 
 export interface MsdDeviceInfo {
@@ -183,10 +186,11 @@ export const useSystemStore = defineStore('system', () => {
         available: state.available,
         backend: state.backend,
         initialized: state.initialized,
+        online: state.online,
         supportsAbsoluteMouse: state.supports_absolute_mouse,
-        device: null,
-        error: null,
-        errorCode: null,
+        device: state.device ?? null,
+        error: state.error ?? null,
+        errorCode: state.error_code ?? null,
       }
       return state
     } catch (e) {
@@ -286,11 +290,11 @@ export const useSystemStore = defineStore('system', () => {
       available: data.hid.available,
       backend: data.hid.backend,
       initialized: data.hid.initialized,
+      online: data.hid.online,
       supportsAbsoluteMouse: data.hid.supports_absolute_mouse,
       device: data.hid.device,
       error: data.hid.error,
-      // system.device_info does not include HID error_code, keep latest one when error still exists.
-      errorCode: data.hid.error ? (hid.value?.errorCode ?? null) : null,
+      errorCode: data.hid.error_code ?? null,
     }
 
     // Update MSD state (optional)
@@ -360,28 +364,6 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  /**
-   * Update HID state from hid.state_changed / hid.device_lost events.
-   */
-  function updateHidStateFromEvent(data: {
-    backend: string
-    initialized: boolean
-    error?: string | null
-    error_code?: string | null
-  }) {
-    const current = hid.value
-    const nextBackend = data.backend || current?.backend || 'unknown'
-    hid.value = {
-      available: nextBackend !== 'none',
-      backend: nextBackend,
-      initialized: data.initialized,
-      supportsAbsoluteMouse: current?.supportsAbsoluteMouse ?? false,
-      device: current?.device ?? null,
-      error: data.error ?? null,
-      errorCode: data.error_code ?? null,
-    }
-  }
-
   return {
     version,
     buildDate,
@@ -406,7 +388,6 @@ export const useSystemStore = defineStore('system', () => {
     updateWsConnection,
     updateHidWsConnection,
     updateFromDeviceInfo,
-    updateHidStateFromEvent,
     updateStreamClients,
     setStreamOnline,
   }

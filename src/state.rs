@@ -178,32 +178,17 @@ impl AppState {
 
     /// Collect HID device information
     async fn collect_hid_info(&self) -> HidDeviceInfo {
-        let info = self.hid.info().await;
-        let backend_type = self.hid.backend_type().await;
+        let state = self.hid.snapshot().await;
 
-        match info {
-            Some(hid_info) => HidDeviceInfo {
-                available: true,
-                backend: hid_info.name.to_string(),
-                initialized: hid_info.initialized,
-                supports_absolute_mouse: hid_info.supports_absolute_mouse,
-                device: match backend_type {
-                    crate::hid::HidBackendType::Ch9329 { ref port, .. } => Some(port.clone()),
-                    _ => None,
-                },
-                error: None,
-            },
-            None => HidDeviceInfo {
-                available: false,
-                backend: backend_type.name_str().to_string(),
-                initialized: false,
-                supports_absolute_mouse: false,
-                device: match backend_type {
-                    crate::hid::HidBackendType::Ch9329 { ref port, .. } => Some(port.clone()),
-                    _ => None,
-                },
-                error: Some("HID backend not available".to_string()),
-            },
+        HidDeviceInfo {
+            available: state.available,
+            backend: state.backend,
+            initialized: state.initialized,
+            online: state.online,
+            supports_absolute_mouse: state.supports_absolute_mouse,
+            device: state.device,
+            error: state.error,
+            error_code: state.error_code,
         }
     }
 
@@ -213,6 +198,7 @@ impl AppState {
         let msd = msd_guard.as_ref()?;
 
         let state = msd.state().await;
+        let error = msd.monitor().error_message().await;
         Some(MsdDeviceInfo {
             available: state.available,
             mode: match state.mode {
@@ -223,7 +209,7 @@ impl AppState {
             .to_string(),
             connected: state.connected,
             image_id: state.current_image.map(|img| img.id),
-            error: None,
+            error,
         })
     }
 

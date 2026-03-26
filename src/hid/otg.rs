@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tracing::{debug, info, trace, warn};
 
-use super::backend::HidBackend;
+use super::backend::{HidBackend, HidBackendStatus};
 use super::keymap;
 use super::types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
@@ -134,8 +134,12 @@ pub struct OtgBackend {
     screen_resolution: parking_lot::RwLock<Option<(u32, u32)>>,
     /// UDC name for state checking (e.g., "fcc00000.usb")
     udc_name: parking_lot::RwLock<Option<String>>,
+    /// Whether the backend has been initialized.
+    initialized: AtomicBool,
     /// Whether the device is currently online (UDC configured and devices accessible)
     online: AtomicBool,
+    /// Last backend error state.
+    last_error: parking_lot::RwLock<Option<(String, String)>>,
     /// Last error log time for throttling (using parking_lot for sync)
     last_error_log: parking_lot::Mutex<std::time::Instant>,
     /// Error count since last successful operation (for log throttling)
@@ -167,11 +171,27 @@ impl OtgBackend {
             led_state: parking_lot::RwLock::new(LedState::default()),
             screen_resolution: parking_lot::RwLock::new(Some((1920, 1080))),
             udc_name: parking_lot::RwLock::new(None),
+            initialized: AtomicBool::new(false),
             online: AtomicBool::new(false),
+            last_error: parking_lot::RwLock::new(None),
             last_error_log: parking_lot::Mutex::new(std::time::Instant::now()),
             error_count: AtomicU8::new(0),
             eagain_count: AtomicU8::new(0),
         })
+    }
+
+    fn clear_error(&self) {
+        *self.last_error.write() = None;
+    }
+
+    fn record_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
+        self.online.store(false, Ordering::Relaxed);
+        *self.last_error.write() = Some((reason.into(), error_code.into()));
+    }
+
+    fn mark_online(&self) {
+        self.online.store(true, Ordering::Relaxed);
+        self.clear_error();
     }
 
     /// Log throttled error message (max once per second)
@@ -308,12 +328,13 @@ impl OtgBackend {
         let path = match path_opt {
             Some(p) => p,
             None => {
-                self.online.store(false, Ordering::Relaxed);
-                return Err(AppError::HidError {
+                let err = AppError::HidError {
                     backend: "otg".to_string(),
                     reason: "Device disabled".to_string(),
                     error_code: "disabled".to_string(),
-                });
+                };
+                self.record_error("Device disabled", "disabled");
+                return Err(err);
             }
         };
 
@@ -328,10 +349,11 @@ impl OtgBackend {
                 );
                 *dev = None;
             }
-            self.online.store(false, Ordering::Relaxed);
+            let reason = format!("Device not found: {}", path.display());
+            self.record_error(reason.clone(), "enoent");
             return Err(AppError::HidError {
                 backend: "otg".to_string(),
-                reason: format!("Device not found: {}", path.display()),
+                reason,
                 error_code: "enoent".to_string(),
             });
         }
@@ -346,12 +368,16 @@ impl OtgBackend {
                 }
                 Err(e) => {
                     warn!("Failed to reopen HID device {}: {}", path.display(), e);
+                    self.record_error(
+                        format!("Failed to reopen HID device {}: {}", path.display(), e),
+                        "not_opened",
+                    );
                     return Err(e);
                 }
             }
         }
 
-        self.online.store(true, Ordering::Relaxed);
+        self.mark_online();
         Ok(())
     }
 
@@ -372,8 +398,8 @@ impl OtgBackend {
     }
 
     /// Convert I/O error to HidError with appropriate error code
-    fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
-        let error_code = match e.raw_os_error() {
+    fn io_error_code(e: &std::io::Error) -> &'static str {
+        match e.raw_os_error() {
             Some(32) => "epipe",      // EPIPE - broken pipe
             Some(108) => "eshutdown", // ESHUTDOWN - transport endpoint shutdown
             Some(11) => "eagain",     // EAGAIN - resource temporarily unavailable
@@ -382,7 +408,11 @@ impl OtgBackend {
             Some(5) => "eio",         // EIO - I/O error
             Some(2) => "enoent",      // ENOENT - no such file or directory
             _ => "io_error",
-        };
+        }
+    }
+
+    fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
+        let error_code = Self::io_error_code(&e);
 
         AppError::HidError {
             backend: "otg".to_string(),
@@ -438,7 +468,7 @@ impl OtgBackend {
             let data = report.to_bytes();
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     debug!("Sent keyboard report: {:02X?}", data);
                     Ok(())
@@ -454,10 +484,13 @@ impl OtgBackend {
                     match error_code {
                         Some(108) => {
                             // ESHUTDOWN - endpoint closed, need to reopen device
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Keyboard ESHUTDOWN, closing for recovery");
                             *dev = None;
+                            self.record_error(
+                                format!("Failed to write keyboard report: {}", e),
+                                "eshutdown",
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write keyboard report",
@@ -469,9 +502,12 @@ impl OtgBackend {
                             Ok(())
                         }
                         _ => {
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Keyboard write error: {}", e);
+                            self.record_error(
+                                format!("Failed to write keyboard report: {}", e),
+                                Self::io_error_code(&e),
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write keyboard report",
@@ -507,7 +543,7 @@ impl OtgBackend {
             let data = [buttons, dx as u8, dy as u8, wheel as u8];
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     trace!("Sent relative mouse report: {:02X?}", data);
                     Ok(())
@@ -521,10 +557,13 @@ impl OtgBackend {
 
                     match error_code {
                         Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Relative mouse ESHUTDOWN, closing for recovery");
                             *dev = None;
+                            self.record_error(
+                                format!("Failed to write mouse report: {}", e),
+                                "eshutdown",
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write mouse report",
@@ -535,9 +574,12 @@ impl OtgBackend {
                             Ok(())
                         }
                         _ => {
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Relative mouse write error: {}", e);
+                            self.record_error(
+                                format!("Failed to write mouse report: {}", e),
+                                Self::io_error_code(&e),
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write mouse report",
@@ -580,7 +622,7 @@ impl OtgBackend {
             ];
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     Ok(())
                 }
@@ -593,10 +635,13 @@ impl OtgBackend {
 
                     match error_code {
                         Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Absolute mouse ESHUTDOWN, closing for recovery");
                             *dev = None;
+                            self.record_error(
+                                format!("Failed to write mouse report: {}", e),
+                                "eshutdown",
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write mouse report",
@@ -607,9 +652,12 @@ impl OtgBackend {
                             Ok(())
                         }
                         _ => {
-                            self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Absolute mouse write error: {}", e);
+                            self.record_error(
+                                format!("Failed to write mouse report: {}", e),
+                                Self::io_error_code(&e),
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write mouse report",
@@ -648,7 +696,7 @@ impl OtgBackend {
                     // Send release (0x0000)
                     let release = [0u8, 0u8];
                     let _ = self.write_with_timeout(file, &release);
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     Ok(())
                 }
@@ -660,9 +708,12 @@ impl OtgBackend {
                     let error_code = e.raw_os_error();
                     match error_code {
                         Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
                             debug!("Consumer control ESHUTDOWN, closing for recovery");
                             *dev = None;
+                            self.record_error(
+                                format!("Failed to write consumer report: {}", e),
+                                "eshutdown",
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write consumer report",
@@ -673,8 +724,11 @@ impl OtgBackend {
                             Ok(())
                         }
                         _ => {
-                            self.online.store(false, Ordering::Relaxed);
                             warn!("Consumer control write error: {}", e);
+                            self.record_error(
+                                format!("Failed to write consumer report: {}", e),
+                                Self::io_error_code(&e),
+                            );
                             Err(Self::io_error_to_hid_error(
                                 e,
                                 "Failed to write consumer report",
@@ -812,7 +866,8 @@ impl HidBackend for OtgBackend {
         }
 
         // Mark as online if all devices opened successfully
-        self.online.store(true, Ordering::Relaxed);
+        self.initialized.store(true, Ordering::Relaxed);
+        self.mark_online();
 
         Ok(())
     }
@@ -935,33 +990,40 @@ impl HidBackend for OtgBackend {
         *self.consumer_dev.lock() = None;
 
         // Gadget cleanup is handled by OtgService, not here
+        self.initialized.store(false, Ordering::Relaxed);
+        self.online.store(false, Ordering::Relaxed);
+        self.clear_error();
 
         info!("OTG backend shutdown");
         Ok(())
     }
 
-    fn health_check(&self) -> Result<()> {
-        if !self.check_devices_exist() {
+    fn status(&self) -> HidBackendStatus {
+        let initialized = self.initialized.load(Ordering::Relaxed);
+        let mut online = initialized && self.online.load(Ordering::Relaxed);
+        let mut error = self.last_error.read().clone();
+
+        if initialized && !self.check_devices_exist() {
+            online = false;
             let missing = self.get_missing_devices();
-            self.online.store(false, Ordering::Relaxed);
-            return Err(AppError::HidError {
-                backend: "otg".to_string(),
-                reason: format!("HID device node missing: {}", missing.join(", ")),
-                error_code: "enoent".to_string(),
-            });
+            error = Some((
+                format!("HID device node missing: {}", missing.join(", ")),
+                "enoent".to_string(),
+            ));
+        } else if initialized && !self.is_udc_configured() {
+            online = false;
+            error = Some((
+                "UDC is not in configured state".to_string(),
+                "udc_not_configured".to_string(),
+            ));
         }
 
-        if !self.is_udc_configured() {
-            self.online.store(false, Ordering::Relaxed);
-            return Err(AppError::HidError {
-                backend: "otg".to_string(),
-                reason: "UDC is not in configured state".to_string(),
-                error_code: "udc_not_configured".to_string(),
-            });
+        HidBackendStatus {
+            initialized,
+            online,
+            error: error.as_ref().map(|(reason, _)| reason.clone()),
+            error_code: error.as_ref().map(|(_, code)| code.clone()),
         }
-
-        self.online.store(true, Ordering::Relaxed);
-        Ok(())
     }
 
     fn supports_absolute_mouse(&self) -> bool {

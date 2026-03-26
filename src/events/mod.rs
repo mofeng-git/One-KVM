@@ -110,17 +110,16 @@ mod tests {
 
         assert_eq!(bus.subscriber_count(), 2);
 
-        bus.publish(SystemEvent::SystemError {
-            module: "test".to_string(),
-            severity: "info".to_string(),
-            message: "test message".to_string(),
+        bus.publish(SystemEvent::StreamStateChanged {
+            state: "ready".to_string(),
+            device: Some("/dev/video0".to_string()),
         });
 
         let event1 = rx1.recv().await.unwrap();
         let event2 = rx2.recv().await.unwrap();
 
-        assert!(matches!(event1, SystemEvent::SystemError { .. }));
-        assert!(matches!(event2, SystemEvent::SystemError { .. }));
+        assert!(matches!(event1, SystemEvent::StreamStateChanged { .. }));
+        assert!(matches!(event2, SystemEvent::StreamStateChanged { .. }));
     }
 
     #[test]
@@ -129,10 +128,9 @@ mod tests {
         assert_eq!(bus.subscriber_count(), 0);
 
         // Should not panic when publishing with no subscribers
-        bus.publish(SystemEvent::SystemError {
-            module: "test".to_string(),
-            severity: "info".to_string(),
-            message: "test".to_string(),
+        bus.publish(SystemEvent::StreamStateChanged {
+            state: "ready".to_string(),
+            device: None,
         });
     }
 }

@@ -141,9 +141,7 @@ impl AudioController {
 
     /// Set event bus for publishing audio events
     pub async fn set_event_bus(&self, event_bus: Arc<EventBus>) {
-        *self.event_bus.write().await = Some(event_bus.clone());
-        // Also set event bus on the monitor for health notifications
-        self.monitor.set_event_bus(event_bus).await;
+        *self.event_bus.write().await = Some(event_bus);
     }
 
     /// Publish an event to the event bus
@@ -207,12 +205,6 @@ impl AudioController {
             config.device = device.to_string();
         }
 
-        // Publish event
-        self.publish_event(SystemEvent::AudioDeviceSelected {
-            device: device.to_string(),
-        })
-        .await;
-
         info!("Audio device selected: {}", device);
 
         // If streaming, restart with new device
@@ -236,12 +228,6 @@ impl AudioController {
         if let Some(ref streamer) = *self.streamer.read().await {
             streamer.set_bitrate(quality.bitrate()).await?;
         }
-
-        // Publish event
-        self.publish_event(SystemEvent::AudioQualityChanged {
-            quality: quality.to_string(),
-        })
-        .await;
 
         info!(
             "Audio quality set to: {:?} ({}bps)",
@@ -408,7 +394,6 @@ impl AudioController {
     /// Update full configuration
     pub async fn update_config(&self, new_config: AudioControllerConfig) -> Result<()> {
         let was_streaming = self.is_streaming().await;
-        let old_config = self.config.read().await.clone();
 
         // Stop streaming if running
         if was_streaming {
@@ -421,21 +406,6 @@ impl AudioController {
         // Restart streaming if it was running and still enabled
         if was_streaming && new_config.enabled {
             self.start_streaming().await?;
-        }
-
-        // Publish events for changes
-        if old_config.device != new_config.device {
-            self.publish_event(SystemEvent::AudioDeviceSelected {
-                device: new_config.device.clone(),
-            })
-            .await;
-        }
-
-        if old_config.quality != new_config.quality {
-            self.publish_event(SystemEvent::AudioQualityChanged {
-                quality: new_config.quality.to_string(),
-            })
-            .await;
         }
 
         Ok(())

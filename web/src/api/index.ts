@@ -327,8 +327,12 @@ export const hidApi = {
       available: boolean
       backend: string
       initialized: boolean
+      online: boolean
       supports_absolute_mouse: boolean
       screen_resolution: [number, number] | null
+      device: string | null
+      error: string | null
+      error_code: string | null
     }>('/hid/status'),
 
   otgSelfCheck: () =>

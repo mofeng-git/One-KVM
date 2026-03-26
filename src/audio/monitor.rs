@@ -3,16 +3,14 @@
 //! This module provides health monitoring for audio capture devices, including:
 //! - Device connectivity checks
 //! - Automatic reconnection on failure
-//! - Error tracking and notification
+//! - Error tracking
 //! - Log throttling to prevent log flooding
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
-use crate::events::{EventBus, SystemEvent};
 use crate::utils::LogThrottler;
 
 /// Audio health status
@@ -58,12 +56,9 @@ impl Default for AudioMonitorConfig {
 /// Audio health monitor
 ///
 /// Monitors audio device health and manages error recovery.
-/// Publishes WebSocket events when device status changes.
 pub struct AudioHealthMonitor {
     /// Current health status
     status: RwLock<AudioHealthStatus>,
-    /// Event bus for notifications
-    events: RwLock<Option<Arc<EventBus>>>,
     /// Log throttler to prevent log flooding
     throttler: LogThrottler,
     /// Configuration
@@ -83,7 +78,6 @@ impl AudioHealthMonitor {
         let throttle_secs = config.log_throttle_secs;
         Self {
             status: RwLock::new(AudioHealthStatus::Healthy),
-            events: RwLock::new(None),
             throttler: LogThrottler::with_secs(throttle_secs),
             config,
             running: AtomicBool::new(false),
@@ -97,24 +91,19 @@ impl AudioHealthMonitor {
         Self::new(AudioMonitorConfig::default())
     }
 
-    /// Set the event bus for broadcasting state changes
-    pub async fn set_event_bus(&self, events: Arc<EventBus>) {
-        *self.events.write().await = Some(events);
-    }
-
     /// Report an error from audio operations
     ///
     /// This method is called when an audio operation fails. It:
     /// 1. Updates the health status
     /// 2. Logs the error (with throttling)
-    /// 3. Publishes a WebSocket event if the error is new or changed
+    /// 3. Updates in-memory error state
     ///
     /// # Arguments
     ///
     /// * `device` - The audio device name (if known)
     /// * `reason` - Human-readable error description
     /// * `error_code` - Error code for programmatic handling
-    pub async fn report_error(&self, device: Option<&str>, reason: &str, error_code: &str) {
+    pub async fn report_error(&self, _device: Option<&str>, reason: &str, error_code: &str) {
         let count = self.retry_count.fetch_add(1, Ordering::Relaxed) + 1;
 
         // Check if error code changed
@@ -141,44 +130,17 @@ impl AudioHealthMonitor {
             error_code: error_code.to_string(),
             retry_count: count,
         };
-
-        // Publish event (only if error changed or first occurrence)
-        if error_changed || count == 1 {
-            if let Some(ref events) = *self.events.read().await {
-                events.publish(SystemEvent::AudioDeviceLost {
-                    device: device.map(|s| s.to_string()),
-                    reason: reason.to_string(),
-                    error_code: error_code.to_string(),
-                });
-            }
-        }
-    }
-
-    /// Report that a reconnection attempt is starting
-    ///
-    /// Publishes a reconnecting event to notify clients.
-    pub async fn report_reconnecting(&self) {
-        let attempt = self.retry_count.load(Ordering::Relaxed);
-
-        // Only publish every 5 attempts to avoid event spam
-        if attempt == 1 || attempt.is_multiple_of(5) {
-            debug!("Audio reconnecting, attempt {}", attempt);
-
-            if let Some(ref events) = *self.events.read().await {
-                events.publish(SystemEvent::AudioReconnecting { attempt });
-            }
-        }
     }
 
     /// Report that the device has recovered
     ///
     /// This method is called when the audio device successfully reconnects.
-    /// It resets the error state and publishes a recovery event.
+    /// It resets the error state.
     ///
     /// # Arguments
     ///
     /// * `device` - The audio device name
-    pub async fn report_recovered(&self, device: Option<&str>) {
+    pub async fn report_recovered(&self, _device: Option<&str>) {
         let prev_status = self.status.read().await.clone();
 
         // Only report recovery if we were in an error state
@@ -191,13 +153,6 @@ impl AudioHealthMonitor {
             self.throttler.clear("audio_");
             *self.last_error_code.write().await = None;
             *self.status.write().await = AudioHealthStatus::Healthy;
-
-            // Publish recovery event
-            if let Some(ref events) = *self.events.read().await {
-                events.publish(SystemEvent::AudioRecovered {
-                    device: device.map(|s| s.to_string()),
-                });
-            }
         }
     }
 

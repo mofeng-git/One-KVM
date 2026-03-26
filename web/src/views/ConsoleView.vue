@@ -81,7 +81,6 @@ const consoleEvents = useConsoleEvents({
   onStreamDeviceLost: handleStreamDeviceLost,
   onStreamRecovered: handleStreamRecovered,
   onDeviceInfo: handleDeviceInfo,
-  onAudioStateChanged: handleAudioStateChanged,
 })
 
 // Video mode state
@@ -251,8 +250,8 @@ const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   if (hidWs.hidUnavailable.value) return 'disconnected'
 
   // Normal status based on system state
-  if (hid?.available && hid.initialized) return 'connected'
-  if (hid?.available && !hid.initialized) return 'connecting'
+  if (hid?.available && hid.online) return 'connected'
+  if (hid?.available && hid.initialized) return 'connecting'
   return 'disconnected'
 })
 
@@ -264,29 +263,54 @@ const hidQuickInfo = computed(() => {
   return mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative')
 })
 
-function hidErrorHint(errorCode?: string | null, backend?: string | null): string {
+function extractCh9329Command(reason?: string | null): string | null {
+  if (!reason) return null
+  const match = reason.match(/cmd 0x([0-9a-f]{2})/i)
+  const cmd = match?.[1]
+  return cmd ? `0x${cmd.toUpperCase()}` : null
+}
+
+function hidErrorHint(errorCode?: string | null, backend?: string | null, reason?: string | null): string {
+  const ch9329Command = extractCh9329Command(reason)
+
   switch (errorCode) {
     case 'udc_not_configured':
       return t('hid.errorHints.udcNotConfigured')
+    case 'disabled':
+      return t('hid.errorHints.disabled')
     case 'enoent':
       return t('hid.errorHints.hidDeviceMissing')
+    case 'not_opened':
+      return t('hid.errorHints.notOpened')
     case 'port_not_found':
-    case 'port_not_opened':
       return t('hid.errorHints.portNotFound')
+    case 'invalid_config':
+      return t('hid.errorHints.invalidConfig')
     case 'no_response':
-      return t('hid.errorHints.noResponse')
+      return t(ch9329Command ? 'hid.errorHints.noResponseWithCmd' : 'hid.errorHints.noResponse', {
+        cmd: ch9329Command ?? '',
+      })
     case 'protocol_error':
     case 'invalid_response':
       return t('hid.errorHints.protocolError')
-    case 'health_check_failed':
-    case 'health_check_join_failed':
-      return t('hid.errorHints.healthCheckFailed')
+    case 'enxio':
+    case 'enodev':
+      return t('hid.errorHints.deviceDisconnected')
     case 'eio':
     case 'epipe':
     case 'eshutdown':
+    case 'io_error':
+    case 'write_failed':
+    case 'read_failed':
       if (backend === 'otg') return t('hid.errorHints.otgIoError')
       if (backend === 'ch9329') return t('hid.errorHints.ch9329IoError')
       return t('hid.errorHints.ioError')
+    case 'serial_error':
+      return t('hid.errorHints.serialError')
+    case 'init_failed':
+      return t('hid.errorHints.initFailed')
+    case 'shutdown':
+      return t('hid.errorHints.shutdown')
     default:
       return ''
   }
@@ -294,8 +318,8 @@ function hidErrorHint(errorCode?: string | null, backend?: string | null): strin
 
 function buildHidErrorMessage(reason?: string | null, errorCode?: string | null, backend?: string | null): string {
   if (!reason && !errorCode) return ''
-  const hint = hidErrorHint(errorCode, backend)
-  if (reason && hint) return `${reason} (${hint})`
+  const hint = hidErrorHint(errorCode, backend, reason)
+  if (hint) return hint
   if (reason) return reason
   return hint || t('common.error')
 }
@@ -314,6 +338,7 @@ const hidDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.device'), value: hid.device || '-' },
     { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
     { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error ? 'error' : hid.initialized ? 'ok' : 'warning' },
+    { label: t('statusCard.online'), value: hid.online ? t('statusCard.yes') : t('statusCard.no'), status: hid.online ? 'ok' : hid.initialized ? 'warning' : 'error' },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
   ]
 
@@ -932,7 +957,21 @@ async function restoreInitialMode(serverMode: VideoMode) {
 }
 
 function handleDeviceInfo(data: any) {
+  const prevAudioStreaming = systemStore.audio?.streaming ?? false
+  const prevAudioDevice = systemStore.audio?.device ?? null
   systemStore.updateFromDeviceInfo(data)
+
+  const nextAudioStreaming = systemStore.audio?.streaming ?? false
+  const nextAudioDevice = systemStore.audio?.device ?? null
+  if (
+    prevAudioStreaming !== nextAudioStreaming ||
+    prevAudioDevice !== nextAudioDevice
+  ) {
+    void handleAudioStateChanged({
+      streaming: nextAudioStreaming,
+      device: nextAudioDevice,
+    })
+  }
 
   // Skip mode sync if video config is being changed
   // This prevents false-positive mode changes during config switching

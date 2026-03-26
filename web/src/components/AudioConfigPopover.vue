@@ -123,8 +123,7 @@ async function applyConfig() {
         }
 
         await audioApi.start()
-        // Note: handleAudioStateChanged in ConsoleView will handle the connection
-        // when it receives the audio.state_changed event with streaming=true
+        // ConsoleView will react when system.device_info reflects streaming=true.
       } catch (startError) {
         // Audio start failed - config was saved but streaming not started
         console.info('[AudioConfig] Audio start failed:', startError)

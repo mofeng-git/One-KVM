@@ -75,6 +75,19 @@ impl HidBackendType {
     }
 }
 
+/// Current runtime status reported by a HID backend.
+#[derive(Debug, Clone, Default)]
+pub struct HidBackendStatus {
+    /// Whether the backend has been initialized and can accept requests.
+    pub initialized: bool,
+    /// Whether the backend is currently online and communicating successfully.
+    pub online: bool,
+    /// Current user-facing error, if any.
+    pub error: Option<String>,
+    /// Current programmatic error code, if any.
+    pub error_code: Option<String>,
+}
+
 /// HID backend trait
 #[async_trait]
 pub trait HidBackend: Send + Sync {
@@ -104,12 +117,8 @@ pub trait HidBackend: Send + Sync {
     /// Shutdown the backend
     async fn shutdown(&self) -> Result<()>;
 
-    /// Perform backend health check.
-    ///
-    /// Default implementation assumes backend is healthy.
-    fn health_check(&self) -> Result<()> {
-        Ok(())
-    }
+    /// Get the current backend runtime status.
+    fn status(&self) -> HidBackendStatus;
 
     /// Check if backend supports absolute mouse positioning
     fn supports_absolute_mouse(&self) -> bool {

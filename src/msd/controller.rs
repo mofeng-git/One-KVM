@@ -131,9 +131,7 @@ impl MsdController {
 
     /// Set event bus for broadcasting state changes
     pub async fn set_event_bus(&self, events: std::sync::Arc<crate::events::EventBus>) {
-        *self.events.write().await = Some(events.clone());
-        // Also set event bus on the monitor for health notifications
-        self.monitor.set_event_bus(events).await;
+        *self.events.write().await = Some(events);
     }
 
     /// Publish an event to the event bus
@@ -229,15 +227,6 @@ impl MsdController {
         if self.monitor.is_error().await {
             self.monitor.report_recovered().await;
         }
-
-        // Publish events
-        self.publish_event(crate::events::SystemEvent::MsdImageMounted {
-            image_id: image.id.clone(),
-            image_name: image.name.clone(),
-            size: image.size,
-            cdrom,
-        })
-        .await;
 
         self.publish_event(crate::events::SystemEvent::MsdStateChanged {
             mode: MsdMode::Image,
@@ -350,10 +339,6 @@ impl MsdController {
         // Release the lock before publishing events
         drop(state);
         drop(_op_guard);
-
-        // Publish events
-        self.publish_event(crate::events::SystemEvent::MsdImageUnmounted)
-            .await;
 
         self.publish_event(crate::events::SystemEvent::MsdStateChanged {
             mode: MsdMode::None,

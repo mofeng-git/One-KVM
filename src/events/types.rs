@@ -2,7 +2,6 @@
 //!
 //! Defines all event types that can be broadcast through the event bus.
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -45,12 +44,16 @@ pub struct HidDeviceInfo {
     pub backend: String,
     /// Whether backend is initialized and ready
     pub initialized: bool,
+    /// Whether backend is currently online
+    pub online: bool,
     /// Whether absolute mouse positioning is supported
     pub supports_absolute_mouse: bool,
     /// Device path (e.g., serial port for CH9329)
     pub device: Option<String>,
     /// Error message if any, None if OK
     pub error: Option<String>,
+    /// Error code if any, None if OK
+    pub error_code: Option<String>,
 }
 
 /// MSD device information
@@ -285,48 +288,12 @@ pub enum SystemEvent {
         backend: String,
         /// Whether backend is initialized and ready
         initialized: bool,
+        /// Whether backend is currently online
+        online: bool,
         /// Error message if any, None if OK
         error: Option<String>,
         /// Error code for programmatic handling: "epipe", "eagain", "port_not_found", etc.
         error_code: Option<String>,
-    },
-
-    /// HID backend is being switched
-    #[serde(rename = "hid.backend_switching")]
-    HidBackendSwitching {
-        /// Current backend
-        from: String,
-        /// New backend
-        to: String,
-    },
-
-    /// HID device lost (device file missing or I/O error)
-    #[serde(rename = "hid.device_lost")]
-    HidDeviceLost {
-        /// Backend type: "otg", "ch9329"
-        backend: String,
-        /// Device path that was lost (e.g., /dev/hidg0 or /dev/ttyUSB0)
-        device: Option<String>,
-        /// Human-readable reason for loss
-        reason: String,
-        /// Error code: "epipe", "eshutdown", "eagain", "enxio", "port_not_found", "io_error"
-        error_code: String,
-    },
-
-    /// HID device is reconnecting
-    #[serde(rename = "hid.reconnecting")]
-    HidReconnecting {
-        /// Backend type: "otg", "ch9329"
-        backend: String,
-        /// Current retry attempt number
-        attempt: u32,
-    },
-
-    /// HID device has recovered after error
-    #[serde(rename = "hid.recovered")]
-    HidRecovered {
-        /// Backend type: "otg", "ch9329"
-        backend: String,
     },
 
     // ============================================================================
@@ -340,23 +307,6 @@ pub enum SystemEvent {
         /// Whether storage is connected to target
         connected: bool,
     },
-
-    /// Image has been mounted
-    #[serde(rename = "msd.image_mounted")]
-    MsdImageMounted {
-        /// Image ID
-        image_id: String,
-        /// Image filename
-        image_name: String,
-        /// Image size in bytes
-        size: u64,
-        /// Mount as CD-ROM (read-only)
-        cdrom: bool,
-    },
-
-    /// Image has been unmounted
-    #[serde(rename = "msd.image_unmounted")]
-    MsdImageUnmounted,
 
     /// File upload progress (for large file uploads)
     #[serde(rename = "msd.upload_progress")]
@@ -392,28 +342,6 @@ pub enum SystemEvent {
         status: String,
     },
 
-    /// USB gadget connection status changed (host connected/disconnected)
-    #[serde(rename = "msd.usb_status_changed")]
-    MsdUsbStatusChanged {
-        /// Whether host is connected to USB device
-        connected: bool,
-        /// USB device state from kernel (e.g., "configured", "not attached")
-        device_state: String,
-    },
-
-    /// MSD operation error (configfs, image mount, etc.)
-    #[serde(rename = "msd.error")]
-    MsdError {
-        /// Human-readable reason for error
-        reason: String,
-        /// Error code: "configfs_error", "image_not_found", "mount_failed", "io_error"
-        error_code: String,
-    },
-
-    /// MSD has recovered after error
-    #[serde(rename = "msd.recovered")]
-    MsdRecovered,
-
     // ============================================================================
     // ATX (Power Control) Events
     // ============================================================================
@@ -422,15 +350,6 @@ pub enum SystemEvent {
     AtxStateChanged {
         /// Power status
         power_status: PowerStatus,
-    },
-
-    /// ATX action was executed
-    #[serde(rename = "atx.action_executed")]
-    AtxActionExecuted {
-        /// Action: "short", "long", "reset"
-        action: String,
-        /// When the action was executed
-        timestamp: DateTime<Utc>,
     },
 
     // ============================================================================
@@ -443,79 +362,6 @@ pub enum SystemEvent {
         streaming: bool,
         /// Current device (None if stopped)
         device: Option<String>,
-    },
-
-    /// Audio device was selected
-    #[serde(rename = "audio.device_selected")]
-    AudioDeviceSelected {
-        /// Selected device name
-        device: String,
-    },
-
-    /// Audio quality was changed
-    #[serde(rename = "audio.quality_changed")]
-    AudioQualityChanged {
-        /// New quality setting: "voice", "balanced", "high"
-        quality: String,
-    },
-
-    /// Audio device lost (capture error or device disconnected)
-    #[serde(rename = "audio.device_lost")]
-    AudioDeviceLost {
-        /// Audio device name (e.g., "hw:0,0")
-        device: Option<String>,
-        /// Human-readable reason for loss
-        reason: String,
-        /// Error code: "device_busy", "device_disconnected", "capture_error", "io_error"
-        error_code: String,
-    },
-
-    /// Audio device is reconnecting
-    #[serde(rename = "audio.reconnecting")]
-    AudioReconnecting {
-        /// Current retry attempt number
-        attempt: u32,
-    },
-
-    /// Audio device has recovered after error
-    #[serde(rename = "audio.recovered")]
-    AudioRecovered {
-        /// Audio device name
-        device: Option<String>,
-    },
-
-    // ============================================================================
-    // System Events
-    // ============================================================================
-    /// A device was added (hot-plug)
-    #[serde(rename = "system.device_added")]
-    SystemDeviceAdded {
-        /// Device type: "video", "audio", "hid", etc.
-        device_type: String,
-        /// Device path
-        device_path: String,
-        /// Device name/description
-        device_name: String,
-    },
-
-    /// A device was removed (hot-unplug)
-    #[serde(rename = "system.device_removed")]
-    SystemDeviceRemoved {
-        /// Device type
-        device_type: String,
-        /// Device path that was removed
-        device_path: String,
-    },
-
-    /// System error or warning
-    #[serde(rename = "system.error")]
-    SystemError {
-        /// Module that generated the error: "stream", "hid", "msd", "atx"
-        module: String,
-        /// Severity: "warning", "error", "critical"
-        severity: String,
-        /// Error message
-        message: String,
     },
 
     /// Complete device information (sent on WebSocket connect and state changes)
@@ -559,29 +405,11 @@ impl SystemEvent {
             Self::WebRTCIceCandidate { .. } => "webrtc.ice_candidate",
             Self::WebRTCIceComplete { .. } => "webrtc.ice_complete",
             Self::HidStateChanged { .. } => "hid.state_changed",
-            Self::HidBackendSwitching { .. } => "hid.backend_switching",
-            Self::HidDeviceLost { .. } => "hid.device_lost",
-            Self::HidReconnecting { .. } => "hid.reconnecting",
-            Self::HidRecovered { .. } => "hid.recovered",
             Self::MsdStateChanged { .. } => "msd.state_changed",
-            Self::MsdImageMounted { .. } => "msd.image_mounted",
-            Self::MsdImageUnmounted => "msd.image_unmounted",
             Self::MsdUploadProgress { .. } => "msd.upload_progress",
             Self::MsdDownloadProgress { .. } => "msd.download_progress",
-            Self::MsdUsbStatusChanged { .. } => "msd.usb_status_changed",
-            Self::MsdError { .. } => "msd.error",
-            Self::MsdRecovered => "msd.recovered",
             Self::AtxStateChanged { .. } => "atx.state_changed",
-            Self::AtxActionExecuted { .. } => "atx.action_executed",
             Self::AudioStateChanged { .. } => "audio.state_changed",
-            Self::AudioDeviceSelected { .. } => "audio.device_selected",
-            Self::AudioQualityChanged { .. } => "audio.quality_changed",
-            Self::AudioDeviceLost { .. } => "audio.device_lost",
-            Self::AudioReconnecting { .. } => "audio.reconnecting",
-            Self::AudioRecovered { .. } => "audio.recovered",
-            Self::SystemDeviceAdded { .. } => "system.device_added",
-            Self::SystemDeviceRemoved { .. } => "system.device_removed",
-            Self::SystemError { .. } => "system.error",
             Self::DeviceInfo { .. } => "system.device_info",
             Self::Error { .. } => "error",
         }
@@ -621,13 +449,11 @@ mod tests {
         };
         assert_eq!(event.event_name(), "stream.state_changed");
 
-        let event = SystemEvent::MsdImageMounted {
-            image_id: "123".to_string(),
-            image_name: "ubuntu.iso".to_string(),
-            size: 1024,
-            cdrom: true,
+        let event = SystemEvent::MsdStateChanged {
+            mode: MsdMode::Image,
+            connected: true,
         };
-        assert_eq!(event.event_name(), "msd.image_mounted");
+        assert_eq!(event.event_name(), "msd.state_changed");
     }
 
     #[test]

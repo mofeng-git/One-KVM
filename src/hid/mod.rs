@@ -16,13 +16,11 @@ pub mod ch9329;
 pub mod consumer;
 pub mod datachannel;
 pub mod keymap;
-pub mod monitor;
 pub mod otg;
 pub mod types;
 pub mod websocket;
 
-pub use backend::{HidBackend, HidBackendType};
-pub use monitor::{HidHealthMonitor, HidHealthStatus, HidMonitorConfig};
+pub use backend::{HidBackend, HidBackendStatus, HidBackendType};
 pub use otg::LedState;
 pub use types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,
@@ -33,7 +31,7 @@ pub use types::{
 #[derive(Debug, Clone)]
 pub struct HidInfo {
     /// Backend name
-    pub name: &'static str,
+    pub name: String,
     /// Whether backend is initialized
     pub initialized: bool,
     /// Whether absolute mouse positioning is supported
@@ -42,12 +40,84 @@ pub struct HidInfo {
     pub screen_resolution: Option<(u32, u32)>,
 }
 
+/// Unified HID runtime state used by snapshots and events.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HidRuntimeState {
+    /// Whether a backend is configured and expected to exist.
+    pub available: bool,
+    /// Stable backend key: "otg", "ch9329", "none".
+    pub backend: String,
+    /// Whether the backend is currently initialized and operational.
+    pub initialized: bool,
+    /// Whether the backend is currently online.
+    pub online: bool,
+    /// Whether absolute mouse positioning is supported.
+    pub supports_absolute_mouse: bool,
+    /// Screen resolution for absolute mouse mode.
+    pub screen_resolution: Option<(u32, u32)>,
+    /// Device path associated with the backend, if any.
+    pub device: Option<String>,
+    /// Current user-facing error, if any.
+    pub error: Option<String>,
+    /// Current programmatic error code, if any.
+    pub error_code: Option<String>,
+}
+
+impl HidRuntimeState {
+    fn from_backend_type(backend_type: &HidBackendType) -> Self {
+        Self {
+            available: !matches!(backend_type, HidBackendType::None),
+            backend: backend_type.name_str().to_string(),
+            initialized: false,
+            online: false,
+            supports_absolute_mouse: false,
+            screen_resolution: None,
+            device: device_for_backend_type(backend_type),
+            error: None,
+            error_code: None,
+        }
+    }
+
+    fn from_backend(backend_type: &HidBackendType, backend: &dyn HidBackend) -> Self {
+        let status = backend.status();
+        Self {
+            available: !matches!(backend_type, HidBackendType::None),
+            backend: backend_type.name_str().to_string(),
+            initialized: status.initialized,
+            online: status.online,
+            supports_absolute_mouse: backend.supports_absolute_mouse(),
+            screen_resolution: backend.screen_resolution(),
+            device: device_for_backend_type(backend_type),
+            error: status.error,
+            error_code: status.error_code,
+        }
+    }
+
+    fn with_error(
+        backend_type: &HidBackendType,
+        current: &Self,
+        reason: impl Into<String>,
+        error_code: impl Into<String>,
+    ) -> Self {
+        let mut next = current.clone();
+        next.available = !matches!(backend_type, HidBackendType::None);
+        next.backend = backend_type.name_str().to_string();
+        next.initialized = false;
+        next.online = false;
+        next.device = device_for_backend_type(backend_type);
+        next.error = Some(reason.into());
+        next.error_code = Some(error_code.into());
+        next
+    }
+}
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{info, warn};
+use tokio::sync::RwLock;
 
 use crate::error::{AppError, Result};
+use crate::events::{EventBus, SystemEvent};
 use crate::otg::OtgService;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -56,7 +126,6 @@ use tokio::task::JoinHandle;
 
 const HID_EVENT_QUEUE_CAPACITY: usize = 64;
 const HID_EVENT_SEND_TIMEOUT_MS: u64 = 30;
-const HID_HEALTH_CHECK_INTERVAL_MS: u64 = 1000;
 
 #[derive(Debug)]
 enum HidEvent {
@@ -75,9 +144,9 @@ pub struct HidController {
     /// Backend type (mutable for reload)
     backend_type: Arc<RwLock<HidBackendType>>,
     /// Event bus for broadcasting state changes (optional)
-    events: tokio::sync::RwLock<Option<Arc<crate::events::EventBus>>>,
-    /// Health monitor for error tracking and recovery
-    monitor: Arc<HidHealthMonitor>,
+    events: Arc<tokio::sync::RwLock<Option<Arc<EventBus>>>>,
+    /// Unified HID runtime state.
+    runtime_state: Arc<RwLock<HidRuntimeState>>,
     /// HID event queue sender (non-blocking)
     hid_tx: mpsc::Sender<HidEvent>,
     /// HID event queue receiver (moved into worker on first start)
@@ -88,10 +157,8 @@ pub struct HidController {
     pending_move_flag: Arc<AtomicBool>,
     /// Worker task handle
     hid_worker: Mutex<Option<JoinHandle<()>>>,
-    /// Health check task handle
-    hid_health_checker: Mutex<Option<JoinHandle<()>>>,
-    /// Backend availability fast flag
-    backend_available: AtomicBool,
+    /// Backend initialization fast flag
+    backend_available: Arc<AtomicBool>,
 }
 
 impl HidController {
@@ -103,24 +170,23 @@ impl HidController {
         Self {
             otg_service,
             backend: Arc::new(RwLock::new(None)),
-            backend_type: Arc::new(RwLock::new(backend_type)),
-            events: tokio::sync::RwLock::new(None),
-            monitor: Arc::new(HidHealthMonitor::with_defaults()),
+            backend_type: Arc::new(RwLock::new(backend_type.clone())),
+            events: Arc::new(tokio::sync::RwLock::new(None)),
+            runtime_state: Arc::new(RwLock::new(HidRuntimeState::from_backend_type(
+                &backend_type,
+            ))),
             hid_tx,
             hid_rx: Mutex::new(Some(hid_rx)),
             pending_move: Arc::new(parking_lot::Mutex::new(None)),
             pending_move_flag: Arc::new(AtomicBool::new(false)),
             hid_worker: Mutex::new(None),
-            hid_health_checker: Mutex::new(None),
-            backend_available: AtomicBool::new(false),
+            backend_available: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Set event bus for broadcasting state changes
-    pub async fn set_event_bus(&self, events: Arc<crate::events::EventBus>) {
-        *self.events.write().await = Some(events.clone());
-        // Also set event bus on the monitor for health notifications
-        self.monitor.set_event_bus(events).await;
+    pub async fn set_event_bus(&self, events: Arc<EventBus>) {
+        *self.events.write().await = Some(events);
     }
 
     /// Initialize the HID backend
@@ -157,13 +223,27 @@ impl HidController {
             }
         };
 
-        backend.init().await?;
+        if let Err(e) = backend.init().await {
+            self.backend_available.store(false, Ordering::Release);
+            let error_state = {
+                let backend_type = self.backend_type.read().await.clone();
+                let current = self.runtime_state.read().await.clone();
+                HidRuntimeState::with_error(
+                    &backend_type,
+                    &current,
+                    format!("Failed to initialize HID backend: {}", e),
+                    "init_failed",
+                )
+            };
+            self.apply_runtime_state(error_state).await;
+            return Err(e);
+        }
+
         *self.backend.write().await = Some(backend);
-        self.backend_available.store(true, Ordering::Release);
+        self.sync_runtime_state_from_backend().await;
 
         // Start HID event worker (once)
         self.start_event_worker().await;
-        self.start_health_checker().await;
 
         info!("HID backend initialized: {:?}", backend_type);
         Ok(())
@@ -172,14 +252,25 @@ impl HidController {
     /// Shutdown the HID backend and release resources
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down HID controller");
-        self.stop_health_checker().await;
 
         // Close the backend
-        *self.backend.write().await = None;
+        if let Some(backend) = self.backend.write().await.take() {
+            if let Err(e) = backend.shutdown().await {
+                warn!("Error shutting down HID backend: {}", e);
+            }
+        }
         self.backend_available.store(false, Ordering::Release);
+        let backend_type = self.backend_type.read().await.clone();
+        let mut shutdown_state = HidRuntimeState::from_backend_type(&backend_type);
+        if matches!(backend_type, HidBackendType::None) {
+            shutdown_state.available = false;
+        } else {
+            shutdown_state.error = Some("HID backend stopped".to_string());
+            shutdown_state.error_code = Some("shutdown".to_string());
+        }
+        self.apply_runtime_state(shutdown_state).await;
 
         // If OTG backend, notify OtgService to disable HID
-        let backend_type = self.backend_type.read().await.clone();
         if matches!(backend_type, HidBackendType::Otg) {
             if let Some(ref otg_service) = self.otg_service {
                 info!("Disabling HID functions in OtgService");
@@ -241,7 +332,7 @@ impl HidController {
 
     /// Check if backend is available
     pub async fn is_available(&self) -> bool {
-        self.backend.read().await.is_some()
+        self.backend_available.load(Ordering::Acquire)
     }
 
     /// Get backend type
@@ -251,60 +342,40 @@ impl HidController {
 
     /// Get backend info
     pub async fn info(&self) -> Option<HidInfo> {
-        let backend = self.backend.read().await;
-        backend.as_ref().map(|b| HidInfo {
-            name: b.name(),
-            initialized: true,
-            supports_absolute_mouse: b.supports_absolute_mouse(),
-            screen_resolution: b.screen_resolution(),
+        let state = self.runtime_state.read().await.clone();
+        if !state.available {
+            return None;
+        }
+
+        Some(HidInfo {
+            name: state.backend,
+            initialized: state.initialized,
+            supports_absolute_mouse: state.supports_absolute_mouse,
+            screen_resolution: state.screen_resolution,
         })
+    }
+
+    /// Get current HID runtime state snapshot.
+    pub async fn snapshot(&self) -> HidRuntimeState {
+        self.runtime_state.read().await.clone()
     }
 
     /// Get current state as SystemEvent
     pub async fn current_state_event(&self) -> crate::events::SystemEvent {
-        let backend = self.backend.read().await;
-        let backend_type = self.backend_type().await;
-        let (backend_name, initialized) = match backend.as_ref() {
-            Some(b) => (b.name(), true),
-            None => (backend_type.name_str(), false),
-        };
-
-        // Include error information from monitor
-        let (error, error_code) = match self.monitor.status().await {
-            HidHealthStatus::Error {
-                reason, error_code, ..
-            } => (Some(reason), Some(error_code)),
-            _ => (None, None),
-        };
-
-        crate::events::SystemEvent::HidStateChanged {
-            backend: backend_name.to_string(),
-            initialized,
-            error,
-            error_code,
+        let state = self.snapshot().await;
+        SystemEvent::HidStateChanged {
+            backend: state.backend,
+            initialized: state.initialized,
+            online: state.online,
+            error: state.error,
+            error_code: state.error_code,
         }
-    }
-
-    /// Get the health monitor reference
-    pub fn monitor(&self) -> &Arc<HidHealthMonitor> {
-        &self.monitor
-    }
-
-    /// Get current health status
-    pub async fn health_status(&self) -> HidHealthStatus {
-        self.monitor.status().await
-    }
-
-    /// Check if the HID backend is healthy
-    pub async fn is_healthy(&self) -> bool {
-        self.monitor.is_healthy().await
     }
 
     /// Reload the HID backend with new type
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {
         info!("Reloading HID backend: {:?}", new_backend_type);
         self.backend_available.store(false, Ordering::Release);
-        self.stop_health_checker().await;
 
         // Shutdown existing backend first
         if let Some(backend) = self.backend.write().await.take() {
@@ -403,27 +474,21 @@ impl HidController {
 
         *self.backend.write().await = new_backend;
 
+        if matches!(new_backend_type, HidBackendType::None) {
+            *self.backend_type.write().await = HidBackendType::None;
+            self.apply_runtime_state(HidRuntimeState::from_backend_type(&HidBackendType::None))
+                .await;
+            return Ok(());
+        }
+
         if self.backend.read().await.is_some() {
             info!("HID backend reloaded successfully: {:?}", new_backend_type);
-            self.backend_available.store(true, Ordering::Release);
             self.start_event_worker().await;
-            self.start_health_checker().await;
 
             // Update backend_type on success
             *self.backend_type.write().await = new_backend_type.clone();
 
-            // Reset monitor state on successful reload
-            self.monitor.reset().await;
-
-            // Publish HID state changed event
-            let backend_name = new_backend_type.name_str().to_string();
-            self.publish_event(crate::events::SystemEvent::HidStateChanged {
-                backend: backend_name,
-                initialized: true,
-                error: None,
-                error_code: None,
-            })
-            .await;
+            self.sync_runtime_state_from_backend().await;
 
             Ok(())
         } else {
@@ -433,14 +498,14 @@ impl HidController {
             // Update backend_type even on failure (to reflect the attempted change)
             *self.backend_type.write().await = new_backend_type.clone();
 
-            // Publish event with initialized=false
-            self.publish_event(crate::events::SystemEvent::HidStateChanged {
-                backend: new_backend_type.name_str().to_string(),
-                initialized: false,
-                error: Some("Failed to initialize HID backend".to_string()),
-                error_code: Some("init_failed".to_string()),
-            })
-            .await;
+            let current = self.runtime_state.read().await.clone();
+            let error_state = HidRuntimeState::with_error(
+                &new_backend_type,
+                &current,
+                "Failed to initialize HID backend",
+                "init_failed",
+            );
+            self.apply_runtime_state(error_state).await;
 
             Err(AppError::Internal(
                 "Failed to reload HID backend".to_string(),
@@ -448,11 +513,22 @@ impl HidController {
         }
     }
 
-    /// Publish event to event bus if available
-    async fn publish_event(&self, event: crate::events::SystemEvent) {
-        if let Some(events) = self.events.read().await.as_ref() {
-            events.publish(event);
-        }
+    async fn apply_runtime_state(&self, next: HidRuntimeState) {
+        apply_runtime_state(&self.runtime_state, &self.events, next).await;
+    }
+
+    async fn sync_runtime_state_from_backend(&self) {
+        let backend_opt = self.backend.read().await.clone();
+        let backend_type = self.backend_type.read().await.clone();
+
+        let next = match backend_opt.as_ref() {
+            Some(backend) => HidRuntimeState::from_backend(&backend_type, backend.as_ref()),
+            None => HidRuntimeState::from_backend_type(&backend_type),
+        };
+
+        self.backend_available
+            .store(next.initialized, Ordering::Release);
+        self.apply_runtime_state(next).await;
     }
 
     async fn start_event_worker(&self) {
@@ -468,8 +544,10 @@ impl HidController {
         };
 
         let backend = self.backend.clone();
-        let monitor = self.monitor.clone();
         let backend_type = self.backend_type.clone();
+        let runtime_state = self.runtime_state.clone();
+        let events = self.events.clone();
+        let backend_available = self.backend_available.clone();
         let pending_move = self.pending_move.clone();
         let pending_move_flag = self.pending_move_flag.clone();
 
@@ -481,7 +559,15 @@ impl HidController {
                     None => break,
                 };
 
-                process_hid_event(event, &backend, &monitor, &backend_type).await;
+                process_hid_event(
+                    event,
+                    &backend,
+                    &backend_type,
+                    &runtime_state,
+                    &events,
+                    backend_available.as_ref(),
+                )
+                .await;
 
                 // After each event, flush latest move if pending
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
@@ -490,8 +576,10 @@ impl HidController {
                         process_hid_event(
                             HidEvent::Mouse(move_event),
                             &backend,
-                            &monitor,
                             &backend_type,
+                            &runtime_state,
+                            &events,
+                            backend_available.as_ref(),
                         )
                         .await;
                     }
@@ -500,87 +588,6 @@ impl HidController {
         });
 
         *worker_guard = Some(handle);
-    }
-
-    async fn start_health_checker(&self) {
-        let mut checker_guard = self.hid_health_checker.lock().await;
-        if checker_guard.is_some() {
-            return;
-        }
-
-        let backend = self.backend.clone();
-        let backend_type = self.backend_type.clone();
-        let monitor = self.monitor.clone();
-
-        let handle = tokio::spawn(async move {
-            let mut ticker =
-                tokio::time::interval(Duration::from_millis(HID_HEALTH_CHECK_INTERVAL_MS));
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-            loop {
-                ticker.tick().await;
-
-                let backend_opt = backend.read().await.clone();
-                let Some(active_backend) = backend_opt else {
-                    continue;
-                };
-
-                let backend_name = backend_type.read().await.name_str().to_string();
-                let result =
-                    tokio::task::spawn_blocking(move || active_backend.health_check()).await;
-
-                match result {
-                    Ok(Ok(())) => {
-                        if monitor.is_error().await {
-                            monitor.report_recovered(&backend_name).await;
-                        }
-                    }
-                    Ok(Err(AppError::HidError {
-                        backend,
-                        reason,
-                        error_code,
-                    })) => {
-                        monitor
-                            .report_error(&backend, None, &reason, &error_code)
-                            .await;
-                    }
-                    Ok(Err(e)) => {
-                        monitor
-                            .report_error(
-                                &backend_name,
-                                None,
-                                &format!("HID health check failed: {}", e),
-                                "health_check_failed",
-                            )
-                            .await;
-                    }
-                    Err(e) => {
-                        monitor
-                            .report_error(
-                                &backend_name,
-                                None,
-                                &format!("HID health check task failed: {}", e),
-                                "health_check_join_failed",
-                            )
-                            .await;
-                    }
-                }
-            }
-        });
-
-        *checker_guard = Some(handle);
-    }
-
-    async fn stop_health_checker(&self) {
-        let handle_opt = {
-            let mut checker_guard = self.hid_health_checker.lock().await;
-            checker_guard.take()
-        };
-
-        if let Some(handle) = handle_opt {
-            handle.abort();
-            let _ = handle.await;
-        }
     }
 
     fn enqueue_mouse_move(&self, event: MouseEvent) -> Result<()> {
@@ -625,8 +632,10 @@ impl HidController {
 async fn process_hid_event(
     event: HidEvent,
     backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
-    monitor: &Arc<HidHealthMonitor>,
     backend_type: &Arc<RwLock<HidBackendType>>,
+    runtime_state: &Arc<RwLock<HidRuntimeState>>,
+    events: &Arc<tokio::sync::RwLock<Option<Arc<EventBus>>>>,
+    backend_available: &AtomicBool,
 ) {
     let backend_opt = backend.read().await.clone();
     let backend = match backend_opt {
@@ -634,13 +643,14 @@ async fn process_hid_event(
         None => return,
     };
 
+    let backend_for_send = backend.clone();
     let result = tokio::task::spawn_blocking(move || {
         futures::executor::block_on(async move {
             match event {
-                HidEvent::Keyboard(ev) => backend.send_keyboard(ev).await,
-                HidEvent::Mouse(ev) => backend.send_mouse(ev).await,
-                HidEvent::Consumer(ev) => backend.send_consumer(ev).await,
-                HidEvent::Reset => backend.reset().await,
+                HidEvent::Keyboard(ev) => backend_for_send.send_keyboard(ev).await,
+                HidEvent::Mouse(ev) => backend_for_send.send_mouse(ev).await,
+                HidEvent::Consumer(ev) => backend_for_send.send_consumer(ev).await,
+                HidEvent::Reset => backend_for_send.reset().await,
             }
         })
     })
@@ -652,31 +662,57 @@ async fn process_hid_event(
     };
 
     match result {
-        Ok(_) => {
-            if monitor.is_error().await {
-                let backend_type = backend_type.read().await;
-                monitor.report_recovered(backend_type.name_str()).await;
-            }
-        }
+        Ok(_) => {}
         Err(e) => {
-            if let AppError::HidError {
-                ref backend,
-                ref reason,
-                ref error_code,
-            } = e
-            {
-                if error_code != "eagain_retry" {
-                    monitor
-                        .report_error(backend, None, reason, error_code)
-                        .await;
-                }
-            }
+            warn!("HID event processing failed: {}", e);
         }
     }
+
+    let backend_kind = backend_type.read().await.clone();
+    let next = HidRuntimeState::from_backend(&backend_kind, backend.as_ref());
+    backend_available.store(next.initialized, Ordering::Release);
+    apply_runtime_state(runtime_state, events, next).await;
 }
 
 impl Default for HidController {
     fn default() -> Self {
         Self::new(HidBackendType::None, None)
+    }
+}
+
+fn device_for_backend_type(backend_type: &HidBackendType) -> Option<String> {
+    match backend_type {
+        HidBackendType::Ch9329 { port, .. } => Some(port.clone()),
+        _ => None,
+    }
+}
+
+async fn apply_runtime_state(
+    runtime_state: &Arc<RwLock<HidRuntimeState>>,
+    events: &Arc<tokio::sync::RwLock<Option<Arc<EventBus>>>>,
+    next: HidRuntimeState,
+) {
+    let changed = {
+        let mut guard = runtime_state.write().await;
+        if *guard == next {
+            false
+        } else {
+            *guard = next.clone();
+            true
+        }
+    };
+
+    if !changed {
+        return;
+    }
+
+    if let Some(events) = events.read().await.as_ref() {
+        events.publish(SystemEvent::HidStateChanged {
+            backend: next.backend,
+            initialized: next.initialized,
+            online: next.online,
+            error: next.error,
+            error_code: next.error_code,
+        });
     }
 }

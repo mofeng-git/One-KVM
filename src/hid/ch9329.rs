@@ -21,11 +21,13 @@ use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread;
 use std::time::{Duration, Instant};
-use tracing::{debug, info, trace, warn};
+use tracing::{info, trace, warn};
 
-use super::backend::HidBackend;
+use super::backend::{HidBackend, HidBackendStatus};
 use super::keymap;
 use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
 use crate::error::{AppError, Result};
@@ -56,14 +58,14 @@ const MAX_DATA_LEN: usize = 64;
 /// CH9329 absolute mouse resolution
 const CH9329_MOUSE_RESOLUTION: u32 = 4096;
 
-/// Default retry count for failed operations
-const DEFAULT_RETRY_COUNT: u32 = 3;
+/// How often the worker probes the chip when idle.
+const PROBE_INTERVAL_MS: u64 = 100;
 
-/// Reset wait time in milliseconds (after software reset)
-const RESET_WAIT_MS: u64 = 2000;
+/// How long the worker waits before reopening the serial port after a failure.
+const RECONNECT_DELAY_MS: u64 = 2000;
 
-/// Cooldown between retries in milliseconds
-const RETRY_COOLDOWN_MS: u64 = 100;
+/// Initial startup wait for the worker to confirm CH9329 is reachable.
+const INIT_WAIT_MS: u64 = 3000;
 
 /// CH9329 command codes
 #[allow(dead_code)]
@@ -361,14 +363,47 @@ const MAX_PACKET_SIZE: usize = 70;
 // CH9329 Backend Implementation
 // ============================================================================
 
+#[derive(Default)]
+struct Ch9329RuntimeState {
+    initialized: AtomicBool,
+    online: AtomicBool,
+    last_error: RwLock<Option<(String, String)>>,
+    last_success: Mutex<Option<Instant>>,
+}
+
+impl Ch9329RuntimeState {
+    fn clear_error(&self) {
+        *self.last_error.write() = None;
+    }
+
+    fn set_online(&self) {
+        self.online.store(true, Ordering::Relaxed);
+        *self.last_success.lock() = Some(Instant::now());
+        self.clear_error();
+    }
+
+    fn set_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
+        self.online.store(false, Ordering::Relaxed);
+        *self.last_error.write() = Some((reason.into(), error_code.into()));
+    }
+}
+
+enum WorkerCommand {
+    Packet { cmd: u8, data: Vec<u8> },
+    ResetState,
+    Shutdown,
+}
+
 /// CH9329 HID backend
 pub struct Ch9329Backend {
     /// Serial port path
     port_path: String,
     /// Baud rate
     baud_rate: u32,
-    /// Serial port handle
-    port: Mutex<Option<Box<dyn serialport::SerialPort>>>,
+    /// Worker command sender
+    worker_tx: Mutex<Option<mpsc::Sender<WorkerCommand>>>,
+    /// Background worker thread
+    worker_handle: Mutex<Option<thread::JoinHandle<()>>>,
     /// Current keyboard state
     keyboard_state: Mutex<KeyboardReport>,
     /// Current mouse button state
@@ -378,9 +413,9 @@ pub struct Ch9329Backend {
     /// Screen height for absolute mouse coordinate conversion
     screen_height: u32,
     /// Cached chip information
-    chip_info: RwLock<Option<ChipInfo>>,
+    chip_info: Arc<RwLock<Option<ChipInfo>>>,
     /// LED status cache
-    led_status: RwLock<LedStatus>,
+    led_status: Arc<RwLock<LedStatus>>,
     /// Device address (default 0x00)
     address: u8,
     /// Last absolute mouse X position (CH9329 coordinate: 0-4095)
@@ -389,14 +424,8 @@ pub struct Ch9329Backend {
     last_abs_y: AtomicU16,
     /// Whether relative mouse mode is active (set by incoming events)
     relative_mouse_active: AtomicBool,
-    /// Consecutive error count
-    error_count: AtomicU32,
-    /// Whether a reset is in progress
-    reset_in_progress: AtomicBool,
-    /// Last successful communication time
-    last_success: Mutex<Option<Instant>>,
-    /// Maximum retry count for failed operations
-    max_retries: u32,
+    /// Shared runtime status updated only by the worker.
+    runtime: Arc<Ch9329RuntimeState>,
 }
 
 impl Ch9329Backend {
@@ -410,22 +439,32 @@ impl Ch9329Backend {
         Ok(Self {
             port_path: port_path.to_string(),
             baud_rate,
-            port: Mutex::new(None),
+            worker_tx: Mutex::new(None),
+            worker_handle: Mutex::new(None),
             keyboard_state: Mutex::new(KeyboardReport::default()),
             mouse_buttons: AtomicU8::new(0),
             screen_width: 1920,
             screen_height: 1080,
-            chip_info: RwLock::new(None),
-            led_status: RwLock::new(LedStatus::default()),
+            chip_info: Arc::new(RwLock::new(None)),
+            led_status: Arc::new(RwLock::new(LedStatus::default())),
             address: DEFAULT_ADDR,
             last_abs_x: AtomicU16::new(0),
             last_abs_y: AtomicU16::new(0),
             relative_mouse_active: AtomicBool::new(false),
-            error_count: AtomicU32::new(0),
-            reset_in_progress: AtomicBool::new(false),
-            last_success: Mutex::new(None),
-            max_retries: DEFAULT_RETRY_COUNT,
+            runtime: Arc::new(Ch9329RuntimeState::default()),
         })
+    }
+
+    fn record_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
+        self.runtime.set_error(reason, error_code);
+    }
+
+    fn mark_online(&self) {
+        self.runtime.set_online();
+    }
+
+    fn clear_error(&self) {
+        self.runtime.clear_error();
     }
 
     /// Check if the serial port device file exists
@@ -436,11 +475,6 @@ impl Ch9329Backend {
     /// Get the serial port path
     pub fn port_path(&self) -> &str {
         &self.port_path
-    }
-
-    /// Check if the port is currently open
-    pub fn is_port_open(&self) -> bool {
-        self.port.lock().is_some()
     }
 
     /// Convert serialport error to HidError
@@ -459,48 +493,12 @@ impl Ch9329Backend {
         }
     }
 
-    /// Try to reconnect to the serial port
-    ///
-    /// This method is called when the device is detected as lost.
-    /// It will attempt to reopen the port and verify the CH9329 is responding.
-    pub fn try_reconnect(&self) -> Result<()> {
-        // First check if device file exists
-        if !self.check_port_exists() {
-            return Err(AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: format!("Serial port {} not found", self.port_path),
-                error_code: "port_not_found".to_string(),
-            });
+    fn backend_error(reason: impl Into<String>, error_code: impl Into<String>) -> AppError {
+        AppError::HidError {
+            backend: "ch9329".to_string(),
+            reason: reason.into(),
+            error_code: error_code.into(),
         }
-
-        // Close existing port if any
-        *self.port.lock() = None;
-
-        // Try to open the port
-        let port = serialport::new(&self.port_path, self.baud_rate)
-            .timeout(Duration::from_millis(RESPONSE_TIMEOUT_MS))
-            .open()
-            .map_err(|e| Self::serial_error_to_hid_error(e, "Failed to open serial port"))?;
-
-        *self.port.lock() = Some(port);
-        info!(
-            "CH9329 serial port reopened: {} @ {} baud",
-            self.port_path, self.baud_rate
-        );
-
-        // Verify connection with GET_INFO command
-        self.query_chip_info().map_err(|e| {
-            // Close the port on failure
-            *self.port.lock() = None;
-            AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: format!("CH9329 not responding after reconnect: {}", e),
-                error_code: "no_response".to_string(),
-            }
-        })?;
-
-        info!("CH9329 successfully reconnected");
-        Ok(())
     }
 
     /// Calculate checksum for CH9329 packet (sum of ALL bytes including header)
@@ -514,7 +512,7 @@ impl Ch9329Backend {
     /// Packet format: `[Header 0x57 0xAB] [Address] [Command] [Length] [Data] [Checksum]`
     /// Returns the packet buffer and the actual length
     #[inline]
-    fn build_packet_buf(&self, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
+    fn build_packet_buf(address: u8, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
         debug_assert!(
             data.len() <= MAX_DATA_LEN,
             "Data too long for CH9329 packet"
@@ -528,7 +526,7 @@ impl Ch9329Backend {
         packet[0] = PACKET_HEADER[0];
         packet[1] = PACKET_HEADER[1];
         // Address (1 byte)
-        packet[2] = self.address;
+        packet[2] = address;
         // Command (1 byte)
         packet[3] = cmd;
         // Length (1 byte) - data length only
@@ -543,120 +541,217 @@ impl Ch9329Backend {
     }
 
     /// Build a CH9329 packet (legacy Vec version for compatibility)
-    fn build_packet(&self, cmd: u8, data: &[u8]) -> Vec<u8> {
-        let (buf, len) = self.build_packet_buf(cmd, data);
+    fn build_packet(address: u8, cmd: u8, data: &[u8]) -> Vec<u8> {
+        let (buf, len) = Self::build_packet_buf(address, cmd, data);
         buf[..len].to_vec()
     }
 
-    /// Send a packet to the CH9329 (internal, no retry)
-    fn send_packet_raw(&self, cmd: u8, data: &[u8]) -> Result<()> {
-        let (packet, packet_len) = self.build_packet_buf(cmd, data);
-
-        let mut port_guard = self.port.lock();
-        if let Some(ref mut port) = *port_guard {
-            port.write_all(&packet[..packet_len])
-                .map_err(|e| AppError::HidError {
-                    backend: "ch9329".to_string(),
-                    reason: format!("Failed to write to CH9329: {}", e),
-                    error_code: "write_failed".to_string(),
-                })?;
-            // Only log mouse button events at debug level to avoid flooding
-            if cmd == cmd::SEND_MS_ABS_DATA && data.len() >= 2 && data[1] != 0 {
-                debug!(
-                    "CH9329 TX [cmd=0x{:02X}]: {:02X?}",
-                    cmd,
-                    &packet[..packet_len]
-                );
-            }
-            Ok(())
-        } else {
-            Err(AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: "CH9329 port not opened".to_string(),
-                error_code: "port_not_opened".to_string(),
-            })
+    fn open_port(port_path: &str, baud_rate: u32) -> Result<Box<dyn serialport::SerialPort>> {
+        if !std::path::Path::new(port_path).exists() {
+            return Err(Self::backend_error(
+                format!("Serial port {} not found", port_path),
+                "port_not_found",
+            ));
         }
+
+        serialport::new(port_path, baud_rate)
+            .timeout(Duration::from_millis(RESPONSE_TIMEOUT_MS))
+            .open()
+            .map_err(|e| Self::serial_error_to_hid_error(e, "Failed to open serial port"))
     }
 
-    /// Send a packet to the CH9329 with automatic retry and reset on failure
-    fn send_packet(&self, cmd: u8, data: &[u8]) -> Result<()> {
-        // Don't retry reset commands to avoid infinite loops
-        if cmd == cmd::RESET {
-            return self.send_packet_raw(cmd, data);
+    fn write_packet(
+        port: &mut dyn serialport::SerialPort,
+        address: u8,
+        cmd: u8,
+        data: &[u8],
+    ) -> Result<()> {
+        let packet = Self::build_packet(address, cmd, data);
+        port.write_all(&packet)
+            .map_err(|e| Self::backend_error(format!("Failed to write to CH9329: {}", e), "write_failed"))?;
+        trace!("CH9329 TX [cmd=0x{:02X}]: {:02X?}", cmd, packet);
+        Ok(())
+    }
+
+    fn try_extract_response(buffer: &[u8]) -> Option<(Response, usize)> {
+        let mut offset = 0;
+        while offset + 6 <= buffer.len() {
+            if buffer[offset] != PACKET_HEADER[0] || buffer[offset + 1] != PACKET_HEADER[1] {
+                offset += 1;
+                continue;
+            }
+
+            let len = buffer[offset + 4] as usize;
+            let frame_len = 6 + len;
+            if offset + frame_len > buffer.len() {
+                return None;
+            }
+
+            let frame = &buffer[offset..offset + frame_len];
+            if let Some(response) = Response::parse(frame) {
+                return Some((response, offset + frame_len));
+            }
+
+            offset += 1;
         }
 
-        let mut last_error = None;
+        None
+    }
 
-        for attempt in 0..self.max_retries {
-            match self.send_packet_raw(cmd, data) {
-                Ok(()) => {
-                    // Success - reset error count and update last success time
-                    self.error_count.store(0, Ordering::Relaxed);
-                    *self.last_success.lock() = Some(Instant::now());
-                    return Ok(());
-                }
-                Err(e) => {
-                    let count = self.error_count.fetch_add(1, Ordering::Relaxed) + 1;
-                    last_error = Some(e);
+    fn expected_response_cmd(cmd: u8, is_error: bool) -> u8 {
+        cmd | if is_error { RESPONSE_ERROR_MASK } else { RESPONSE_SUCCESS_MASK }
+    }
 
-                    if attempt + 1 < self.max_retries {
-                        debug!(
-                            "CH9329 send failed (attempt {}/{}), error count: {}",
-                            attempt + 1,
-                            self.max_retries,
-                            count
-                        );
+    fn xfer_packet(
+        port: &mut dyn serialport::SerialPort,
+        address: u8,
+        cmd: u8,
+        data: &[u8],
+    ) -> Result<Response> {
+        Self::write_packet(port, address, cmd, data)?;
 
-                        // Try reset if we have multiple consecutive errors
-                        if count >= 2 && !self.reset_in_progress.load(Ordering::Relaxed) {
-                            if let Err(reset_err) = self.try_reset_and_recover() {
-                                warn!("CH9329 reset failed: {}", reset_err);
-                            }
-                        } else {
-                            // Brief cooldown before retry
-                            std::thread::sleep(Duration::from_millis(RETRY_COOLDOWN_MS));
+        let mut pending = Vec::with_capacity(128);
+        let deadline = Instant::now() + Duration::from_millis(RESPONSE_TIMEOUT_MS);
+        let expected_ok = Self::expected_response_cmd(cmd, false);
+        let expected_err = Self::expected_response_cmd(cmd, true);
+
+        loop {
+            let mut chunk = [0u8; 128];
+            match port.read(&mut chunk) {
+                Ok(n) if n > 0 => {
+                    pending.extend_from_slice(&chunk[..n]);
+                    trace!("CH9329 RX pending: {:02X?}", pending);
+
+                    while let Some((response, consumed)) = Self::try_extract_response(&pending) {
+                        pending.drain(..consumed);
+                        if response.cmd == expected_ok || response.cmd == expected_err {
+                            return Ok(response);
                         }
+
+                        trace!(
+                            "CH9329 ignored out-of-order response: expected 0x{:02X}/0x{:02X}, got 0x{:02X}",
+                            expected_ok,
+                            expected_err,
+                            response.cmd
+                        );
+                    }
+
+                    if pending.len() > MAX_PACKET_SIZE * 4 {
+                        let keep = MAX_PACKET_SIZE;
+                        pending.drain(..pending.len().saturating_sub(keep));
                     }
                 }
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(e) => {
+                    return Err(Self::backend_error(
+                        format!("Failed to read from CH9329: {}", e),
+                        "read_failed",
+                    ));
+                }
             }
-        }
 
-        // All retries exhausted
-        Err(last_error.unwrap_or_else(|| AppError::HidError {
-            backend: "ch9329".to_string(),
-            reason: "Send failed after all retries".to_string(),
-            error_code: "max_retries_exceeded".to_string(),
-        }))
+            if Instant::now() >= deadline {
+                return Err(Self::backend_error(
+                    format!("No matching response from CH9329 for cmd 0x{:02X}", cmd),
+                    "no_response",
+                ));
+            }
+
+            thread::sleep(Duration::from_millis(1));
+        }
     }
 
-    /// Try to reset the CH9329 chip and recover communication
-    ///
-    /// This method:
-    /// 1. Sends RESET command (0x00 0x0F 0x00)
-    /// 2. Waits for chip to reboot (2 seconds)
-    /// 3. Verifies communication with GET_INFO
-    fn try_reset_and_recover(&self) -> Result<()> {
-        // Prevent concurrent resets
-        if self.reset_in_progress.swap(true, Ordering::SeqCst) {
-            debug!("CH9329 reset already in progress, skipping");
-            return Ok(());
+    fn try_best_effort_reset(port: &mut dyn serialport::SerialPort, address: u8) {
+        if let Err(err) = Self::write_packet(port, address, cmd::RESET, &[]) {
+            trace!("CH9329 best-effort reset failed: {}", err);
+        }
+    }
+
+    fn query_chip_info_on_port(
+        port: &mut dyn serialport::SerialPort,
+        address: u8,
+    ) -> Result<ChipInfo> {
+        let response = Self::xfer_packet(port, address, cmd::GET_INFO, &[])?;
+        if response.is_error {
+            let reason = response
+                .error_code
+                .map(|e| format!("CH9329 error response: {}", e))
+                .unwrap_or_else(|| "CH9329 returned error response".to_string());
+            return Err(Self::backend_error(reason, "protocol_error"));
         }
 
-        info!("CH9329: Attempting automatic reset and recovery");
+        ChipInfo::from_response(&response.data)
+            .ok_or_else(|| Self::backend_error("Failed to parse chip info", "invalid_response"))
+    }
 
-        let result = (|| {
-            // Send reset command directly (bypass retry logic)
-            self.send_packet_raw(cmd::RESET, &[])?;
+    fn update_chip_info_cache(
+        chip_info: &Arc<RwLock<Option<ChipInfo>>>,
+        led_status: &Arc<RwLock<LedStatus>>,
+        info: ChipInfo,
+    ) {
+        *chip_info.write() = Some(info.clone());
+        *led_status.write() = LedStatus {
+            num_lock: info.num_lock,
+            caps_lock: info.caps_lock,
+            scroll_lock: info.scroll_lock,
+        };
+    }
 
-            // Wait for chip to reset (2 seconds as per reference implementation)
-            info!("CH9329: Waiting {}ms for chip to reset...", RESET_WAIT_MS);
-            std::thread::sleep(Duration::from_millis(RESET_WAIT_MS));
+    fn enqueue_command(&self, command: WorkerCommand) -> Result<()> {
+        let guard = self.worker_tx.lock();
+        let sender = guard.as_ref().ok_or_else(|| {
+            Self::backend_error("CH9329 worker is not running", "worker_stopped")
+        })?;
+        sender
+            .send(command)
+            .map_err(|_| Self::backend_error("CH9329 worker stopped", "worker_stopped"))
+    }
 
-            // Verify communication
-            match self.query_chip_info() {
-                Ok(info) => {
+    fn send_packet(&self, cmd: u8, data: &[u8]) -> Result<()> {
+        self.enqueue_command(WorkerCommand::Packet {
+            cmd,
+            data: data.to_vec(),
+        })
+    }
+
+    pub fn error_count(&self) -> u32 {
+        0
+    }
+
+    /// Check if device communication is healthy (recent successful operation)
+    pub fn is_healthy(&self) -> bool {
+        if let Some(last) = *self.runtime.last_success.lock() {
+            last.elapsed() < Duration::from_secs(30)
+        } else {
+            false
+        }
+    }
+
+    fn worker_reconnect_loop(
+        rx: &mpsc::Receiver<WorkerCommand>,
+        port_path: &str,
+        baud_rate: u32,
+        address: u8,
+        chip_info: &Arc<RwLock<Option<ChipInfo>>>,
+        led_status: &Arc<RwLock<LedStatus>>,
+        runtime: &Arc<Ch9329RuntimeState>,
+    ) -> Option<Box<dyn serialport::SerialPort>> {
+        loop {
+            match rx.recv_timeout(Duration::from_millis(RECONNECT_DELAY_MS)) {
+                Ok(WorkerCommand::Shutdown) => return None,
+                Ok(_) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+
+            match Self::open_port(port_path, baud_rate).and_then(|mut port| {
+                let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
+                Ok((port, info))
+            }) {
+                Ok((port, info)) => {
                     info!(
-                        "CH9329: Recovery successful, chip version: {}, USB: {}",
+                        "CH9329 reconnected: {}, USB: {}",
                         info.version,
                         if info.usb_connected {
                             "connected"
@@ -664,124 +759,39 @@ impl Ch9329Backend {
                             "disconnected"
                         }
                     );
-                    // Reset error count on successful recovery
-                    self.error_count.store(0, Ordering::Relaxed);
-                    *self.last_success.lock() = Some(Instant::now());
-                    Ok(())
+                    Self::update_chip_info_cache(chip_info, led_status, info);
+                    runtime.set_online();
+                    return Some(port);
                 }
-                Err(e) => {
-                    warn!("CH9329: Recovery verification failed: {}", e);
-                    Err(e)
-                }
-            }
-        })();
-
-        self.reset_in_progress.store(false, Ordering::SeqCst);
-        result
-    }
-
-    /// Get current error count
-    pub fn error_count(&self) -> u32 {
-        self.error_count.load(Ordering::Relaxed)
-    }
-
-    /// Check if device communication is healthy (recent successful operation)
-    pub fn is_healthy(&self) -> bool {
-        if let Some(last) = *self.last_success.lock() {
-            // Consider healthy if last success was within 30 seconds
-            last.elapsed() < Duration::from_secs(30)
-        } else {
-            false
-        }
-    }
-
-    /// Send a packet and read response
-    fn send_and_receive(&self, cmd: u8, data: &[u8]) -> Result<Response> {
-        let packet = self.build_packet(cmd, data);
-
-        let mut port_guard = self.port.lock();
-        if let Some(ref mut port) = *port_guard {
-            // Send packet
-            port.write_all(&packet)
-                .map_err(|e| AppError::Internal(format!("Failed to write to CH9329: {}", e)))?;
-            trace!("CH9329 TX: {:02X?}", packet);
-
-            // Wait for response - use shorter delay for faster response
-            // CH9329 typically responds within 5ms
-            std::thread::sleep(Duration::from_millis(5));
-
-            // Read response
-            let mut response_buf = [0u8; 128];
-            match port.read(&mut response_buf) {
-                Ok(n) if n > 0 => {
-                    trace!("CH9329 RX: {:02X?}", &response_buf[..n]);
-                    if let Some(response) = Response::parse(&response_buf[..n]) {
-                        if response.is_error {
-                            if let Some(err) = response.error_code {
-                                warn!("CH9329 error response: {}", err);
-                            }
-                        }
-                        return Ok(response);
+                Err(err) => {
+                    if let AppError::HidError {
+                        reason,
+                        error_code,
+                        ..
+                    } = err
+                    {
+                        runtime.set_error(reason, error_code);
                     }
-                    Err(AppError::Internal("Invalid CH9329 response".to_string()))
                 }
-                Ok(_) => Err(AppError::Internal("No response from CH9329".to_string())),
-                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    // Timeout is acceptable for some commands
-                    debug!("CH9329 response timeout (may be normal)");
-                    Err(AppError::Internal("CH9329 response timeout".to_string()))
-                }
-                Err(e) => Err(AppError::Internal(format!(
-                    "Failed to read from CH9329: {}",
-                    e
-                ))),
             }
-        } else {
-            Err(AppError::Internal("CH9329 port not opened".to_string()))
         }
     }
-
-    fn update_chip_info_cache(&self, response: &Response) -> Result<ChipInfo> {
-        if let Some(info) = ChipInfo::from_response(&response.data) {
-            *self.chip_info.write() = Some(info.clone());
-            *self.led_status.write() = LedStatus {
-                num_lock: info.num_lock,
-                caps_lock: info.caps_lock,
-                scroll_lock: info.scroll_lock,
-            };
-            Ok(info)
-        } else {
-            Err(AppError::Internal("Failed to parse chip info".to_string()))
-        }
-    }
-
-    // ========================================================================
-    // Public API
-    // ========================================================================
 
     /// Get cached chip information
     pub fn get_chip_info(&self) -> Option<ChipInfo> {
         self.chip_info.read().clone()
     }
 
-    /// Query and update chip information
     pub fn query_chip_info(&self) -> Result<ChipInfo> {
-        let response = self.send_and_receive(cmd::GET_INFO, &[])?;
-
-        info!(
-            "CH9329 GET_INFO response: cmd=0x{:02X}, data={:02X?}, is_error={}",
-            response.cmd, response.data, response.is_error
-        );
-
-        if response.is_error {
-            let reason = response
-                .error_code
-                .map(|e| format!("CH9329 error response: {}", e))
-                .unwrap_or_else(|| "CH9329 returned error response".to_string());
-            return Err(AppError::Internal(reason));
+        if let Some(info) = self.get_chip_info() {
+            return Ok(info);
         }
 
-        self.update_chip_info_cache(&response)
+        let error = self.runtime.last_error.read().clone();
+        Err(match error {
+            Some((reason, error_code)) => Self::backend_error(reason, error_code),
+            None => Self::backend_error("CH9329 info unavailable", "not_ready"),
+        })
     }
 
     /// Get cached LED status
@@ -789,57 +799,19 @@ impl Ch9329Backend {
         *self.led_status.read()
     }
 
-    /// Software reset the chip
-    ///
-    /// Sends reset command and waits for chip to reboot.
-    /// Use `try_reset_and_recover` for automatic recovery with verification.
     pub fn software_reset(&self) -> Result<()> {
-        info!("CH9329: Sending software reset command");
-        self.send_packet_raw(cmd::RESET, &[])?;
-
-        // Wait for chip to reset (2 seconds as per Python reference)
-        info!("CH9329: Waiting {}ms for chip to reset...", RESET_WAIT_MS);
-        std::thread::sleep(Duration::from_millis(RESET_WAIT_MS));
-
-        Ok(())
+        self.send_packet(cmd::RESET, &[])
     }
 
-    /// Force reset and verify recovery
-    ///
-    /// Public wrapper for try_reset_and_recover.
-    pub fn reset_and_verify(&self) -> Result<()> {
-        self.try_reset_and_recover()
-    }
-
-    /// Restore factory default configuration
     pub fn restore_factory_defaults(&self) -> Result<()> {
-        info!("CH9329: Restoring factory defaults");
-        let response = self.send_and_receive(cmd::SET_DEFAULT_CFG, &[])?;
-
-        if response.is_success() {
-            Ok(())
-        } else {
-            Err(AppError::Internal(
-                "Failed to restore factory defaults".to_string(),
-            ))
-        }
+        self.send_packet(cmd::SET_DEFAULT_CFG, &[])
     }
 
-    // ========================================================================
-    // HID Commands
-    // ========================================================================
-
-    /// Send keyboard report via CH9329
     fn send_keyboard_report(&self, report: &KeyboardReport) -> Result<()> {
-        // CH9329 keyboard packet: 8 bytes (modifier, reserved, key1-6)
         let data = report.to_bytes();
         self.send_packet(cmd::SEND_KB_GENERAL_DATA, &data)
     }
 
-    /// Send multimedia keyboard key
-    ///
-    /// For ACPI keys (Power/Sleep/Wake): data = [0x01, acpi_byte]
-    /// For other multimedia keys: data = [0x02, byte2, byte3, byte4]
     pub fn send_media_key(&self, data: &[u8]) -> Result<()> {
         if data.len() < 2 || data.len() > 4 {
             return Err(AppError::Internal(
@@ -849,7 +821,6 @@ impl Ch9329Backend {
         self.send_packet(cmd::SEND_KB_MEDIA_DATA, data)
     }
 
-    /// Send ACPI key (Power, Sleep, Wake)
     pub fn send_acpi_key(&self, power: bool, sleep: bool, wake: bool) -> Result<()> {
         let mut byte = 0u8;
         if power {
@@ -864,23 +835,15 @@ impl Ch9329Backend {
         self.send_media_key(&[0x01, byte])
     }
 
-    /// Release all media keys
     pub fn release_media_keys(&self) -> Result<()> {
         self.send_media_key(&[0x02, 0x00, 0x00, 0x00])
     }
 
-    /// Send relative mouse report via CH9329
-    ///
-    /// Data format: [0x01, buttons, dx, dy, wheel]
     fn send_mouse_relative(&self, buttons: u8, dx: i8, dy: i8, wheel: i8) -> Result<()> {
         let data = [0x01, buttons, dx as u8, dy as u8, wheel as u8];
         self.send_packet(cmd::SEND_MS_REL_DATA, &data)
     }
 
-    /// Send absolute mouse report via CH9329
-    ///
-    /// Data format: [0x02, buttons, x_lo, x_hi, y_lo, y_hi, wheel]
-    /// Coordinate range: 0-4095
     fn send_mouse_absolute(&self, buttons: u8, x: u16, y: u16, wheel: i8) -> Result<()> {
         let data = [
             0x02,
@@ -891,21 +854,171 @@ impl Ch9329Backend {
             (y >> 8) as u8,
             wheel as u8,
         ];
-
-        // Use send_packet which has retry logic built-in
         self.send_packet(cmd::SEND_MS_ABS_DATA, &data)?;
-
         trace!("CH9329 mouse: buttons=0x{:02X} pos=({},{})", buttons, x, y);
-
         Ok(())
     }
 
-    /// Send custom HID data
     pub fn send_custom_hid(&self, data: &[u8]) -> Result<()> {
         if data.len() > MAX_DATA_LEN {
             return Err(AppError::Internal("Custom HID data too long".to_string()));
         }
         self.send_packet(cmd::SEND_MY_HID_DATA, data)
+    }
+
+    fn worker_loop(
+        port_path: String,
+        baud_rate: u32,
+        address: u8,
+        rx: mpsc::Receiver<WorkerCommand>,
+        chip_info: Arc<RwLock<Option<ChipInfo>>>,
+        led_status: Arc<RwLock<LedStatus>>,
+        runtime: Arc<Ch9329RuntimeState>,
+        init_tx: mpsc::Sender<Result<ChipInfo>>,
+    ) {
+        runtime.initialized.store(true, Ordering::Relaxed);
+
+        let mut port = match Self::open_port(&port_path, baud_rate).and_then(|mut port| {
+            let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
+            Ok((port, info))
+        }) {
+            Ok((port, info)) => {
+                info!(
+                    "CH9329 serial port opened: {} @ {} baud",
+                    port_path, baud_rate
+                );
+                Self::update_chip_info_cache(&chip_info, &led_status, info.clone());
+                runtime.set_online();
+                let _ = init_tx.send(Ok(info));
+                port
+            }
+            Err(err) => {
+                if let AppError::HidError {
+                    reason,
+                    error_code,
+                    ..
+                } = &err
+                {
+                    runtime.set_error(reason.clone(), error_code.clone());
+                }
+                let _ = init_tx.send(Err(err));
+                runtime.initialized.store(false, Ordering::Relaxed);
+                return;
+            }
+        };
+
+        loop {
+            match rx.recv_timeout(Duration::from_millis(PROBE_INTERVAL_MS)) {
+                Ok(WorkerCommand::Packet { cmd, data }) => {
+                    if let Err(err) = Self::xfer_packet(port.as_mut(), address, cmd, &data) {
+                        if let AppError::HidError {
+                            reason,
+                            error_code,
+                            ..
+                        } = err
+                        {
+                            runtime.set_error(reason, error_code);
+                        }
+
+                        Self::try_best_effort_reset(port.as_mut(), address);
+
+                        let Some(new_port) = Self::worker_reconnect_loop(
+                            &rx,
+                            &port_path,
+                            baud_rate,
+                            address,
+                            &chip_info,
+                            &led_status,
+                            &runtime,
+                        ) else {
+                            break;
+                        };
+                        port = new_port;
+                    } else {
+                        runtime.set_online();
+                    }
+                }
+                Ok(WorkerCommand::ResetState) => {
+                    let reset_sequence = [
+                        (cmd::SEND_KB_GENERAL_DATA, vec![0; 8]),
+                        (cmd::SEND_MS_ABS_DATA, vec![0x02, 0, 0, 0, 0, 0, 0]),
+                        (cmd::SEND_KB_MEDIA_DATA, vec![0x02, 0x00, 0x00, 0x00]),
+                    ];
+
+                    let mut reset_failed = false;
+                    for (cmd, data) in reset_sequence {
+                        if let Err(err) = Self::xfer_packet(port.as_mut(), address, cmd, &data) {
+                            if let AppError::HidError {
+                                reason,
+                                error_code,
+                                ..
+                            } = err
+                            {
+                                runtime.set_error(reason, error_code);
+                            }
+                            reset_failed = true;
+                            Self::try_best_effort_reset(port.as_mut(), address);
+                            break;
+                        }
+                    }
+
+                    if reset_failed {
+                        let Some(new_port) = Self::worker_reconnect_loop(
+                            &rx,
+                            &port_path,
+                            baud_rate,
+                            address,
+                            &chip_info,
+                            &led_status,
+                            &runtime,
+                        ) else {
+                            break;
+                        };
+                        port = new_port;
+                    } else {
+                        runtime.set_online();
+                    }
+                }
+                Ok(WorkerCommand::Shutdown) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    match Self::query_chip_info_on_port(port.as_mut(), address) {
+                        Ok(info) => {
+                            Self::update_chip_info_cache(&chip_info, &led_status, info);
+                            runtime.set_online();
+                        }
+                        Err(err) => {
+                            if let AppError::HidError {
+                                reason,
+                                error_code,
+                                ..
+                            } = err
+                            {
+                                runtime.set_error(reason, error_code);
+                            }
+
+                            Self::try_best_effort_reset(port.as_mut(), address);
+
+                            let Some(new_port) = Self::worker_reconnect_loop(
+                                &rx,
+                                &port_path,
+                                baud_rate,
+                                address,
+                                &chip_info,
+                                &led_status,
+                                &runtime,
+                            ) else {
+                                break;
+                            };
+                            port = new_port;
+                        }
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        runtime.online.store(false, Ordering::Relaxed);
+        runtime.initialized.store(false, Ordering::Relaxed);
     }
 }
 
@@ -920,51 +1033,74 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn init(&self) -> Result<()> {
-        // Open serial port
-        let port = serialport::new(&self.port_path, self.baud_rate)
-            .timeout(Duration::from_millis(RESPONSE_TIMEOUT_MS))
-            .open()
-            .map_err(|e| {
-                AppError::Internal(format!(
-                    "Failed to open serial port {}: {}",
-                    self.port_path, e
+        if self.worker_handle.lock().is_some() {
+            return Ok(());
+        }
+
+        let (tx, rx) = mpsc::channel();
+        let (init_tx, init_rx) = mpsc::channel();
+        let port_path = self.port_path.clone();
+        let baud_rate = self.baud_rate;
+        let address = self.address;
+        let chip_info = self.chip_info.clone();
+        let led_status = self.led_status.clone();
+        let runtime = self.runtime.clone();
+
+        let handle = thread::Builder::new()
+            .name("ch9329-worker".to_string())
+            .spawn(move || {
+                Self::worker_loop(
+                    port_path,
+                    baud_rate,
+                    address,
+                    rx,
+                    chip_info,
+                    led_status,
+                    runtime,
+                    init_tx,
+                );
+            })
+            .map_err(|e| AppError::Internal(format!("Failed to spawn CH9329 worker: {}", e)))?;
+
+        match init_rx.recv_timeout(Duration::from_millis(INIT_WAIT_MS)) {
+            Ok(Ok(info)) => {
+                info!(
+                    "CH9329 chip detected: {}, USB: {}, LEDs: NumLock={}, CapsLock={}, ScrollLock={}",
+                    info.version,
+                    if info.usb_connected {
+                        "connected"
+                    } else {
+                        "disconnected"
+                    },
+                    info.num_lock,
+                    info.caps_lock,
+                    info.scroll_lock
+                );
+                *self.worker_tx.lock() = Some(tx);
+                *self.worker_handle.lock() = Some(handle);
+                self.mark_online();
+                Ok(())
+            }
+            Ok(Err(err)) => {
+                let _ = handle.join();
+                self.record_error(
+                    format!("CH9329 not responding on {} @ {} baud: {}", self.port_path, self.baud_rate, err),
+                    "init_failed",
+                );
+                Err(AppError::Internal(format!(
+                    "CH9329 not responding on {} @ {} baud: {}",
+                    self.port_path, self.baud_rate, err
+                )))
+            }
+            Err(_) => {
+                let _ = tx.send(WorkerCommand::Shutdown);
+                let _ = handle.join();
+                self.record_error("Timed out waiting for CH9329 worker init", "init_timeout");
+                Err(AppError::Internal(
+                    "Timed out waiting for CH9329 initialization".to_string(),
                 ))
-            })?;
-
-        *self.port.lock() = Some(port);
-        info!(
-            "CH9329 serial port opened: {} @ {} baud",
-            self.port_path, self.baud_rate
-        );
-
-        // Query chip info to verify connection
-        // If this fails, the device is not usable (wrong baud rate, not connected, etc.)
-        let info = self.query_chip_info().map_err(|e| {
-            // Close port on failure
-            *self.port.lock() = None;
-            AppError::Internal(format!(
-                "CH9329 not responding on {} @ {} baud: {}",
-                self.port_path, self.baud_rate, e
-            ))
-        })?;
-
-        info!(
-            "CH9329 chip detected: {}, USB: {}, LEDs: NumLock={}, CapsLock={}, ScrollLock={}",
-            info.version,
-            if info.usb_connected {
-                "connected"
-            } else {
-                "disconnected"
-            },
-            info.num_lock,
-            info.caps_lock,
-            info.scroll_lock
-        );
-
-        // Initialize last success timestamp
-        *self.last_success.lock() = Some(Instant::now());
-
-        Ok(())
+            }
+        }
     }
 
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
@@ -1104,64 +1240,41 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        // Reset before closing
-        self.reset().await?;
-
-        // Close port
-        *self.port.lock() = None;
+        let _ = self.enqueue_command(WorkerCommand::ResetState);
+        let sender = self.worker_tx.lock().take();
+        if let Some(sender) = sender {
+            let _ = sender.send(WorkerCommand::Shutdown);
+        }
+        if let Some(handle) = self.worker_handle.lock().take() {
+            let _ = handle.join();
+        }
+        self.runtime.initialized.store(false, Ordering::Relaxed);
+        self.runtime.online.store(false, Ordering::Relaxed);
+        self.clear_error();
 
         info!("CH9329 backend shutdown");
         Ok(())
     }
 
-    fn health_check(&self) -> Result<()> {
-        if !self.check_port_exists() {
-            return Err(AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: format!("Serial port {} not found", self.port_path),
-                error_code: "port_not_found".to_string(),
-            });
+    fn status(&self) -> HidBackendStatus {
+        let initialized = self.runtime.initialized.load(Ordering::Relaxed);
+        let mut online = initialized && self.runtime.online.load(Ordering::Relaxed);
+        let mut error = self.runtime.last_error.read().clone();
+
+        if initialized && !self.check_port_exists() {
+            online = false;
+            error = Some((
+                format!("Serial port {} not found", self.port_path),
+                "port_not_found".to_string(),
+            ));
         }
 
-        if !self.is_port_open() {
-            return Err(AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: "CH9329 serial port is not open".to_string(),
-                error_code: "port_not_opened".to_string(),
-            });
+        HidBackendStatus {
+            initialized,
+            online,
+            error: error.as_ref().map(|(reason, _)| reason.clone()),
+            error_code: error.as_ref().map(|(_, code)| code.clone()),
         }
-
-        let response =
-            self.send_and_receive(cmd::GET_INFO, &[])
-                .map_err(|e| AppError::HidError {
-                    backend: "ch9329".to_string(),
-                    reason: format!("CH9329 health check failed: {}", e),
-                    error_code: "no_response".to_string(),
-                })?;
-
-        if response.is_error {
-            let reason = response
-                .error_code
-                .map(|e| format!("CH9329 error response: {}", e))
-                .unwrap_or_else(|| "CH9329 returned error response".to_string());
-            return Err(AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason,
-                error_code: "protocol_error".to_string(),
-            });
-        }
-
-        self.update_chip_info_cache(&response)
-            .map_err(|e| AppError::HidError {
-                backend: "ch9329".to_string(),
-                reason: format!("CH9329 invalid response: {}", e),
-                error_code: "invalid_response".to_string(),
-            })?;
-
-        self.error_count.store(0, Ordering::Relaxed);
-        *self.last_success.lock() = Some(Instant::now());
-
-        Ok(())
     }
 
     fn supports_absolute_mouse(&self) -> bool {
