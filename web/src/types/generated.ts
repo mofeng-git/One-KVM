@@ -118,7 +118,7 @@ export enum AtxDriverType {
 	Gpio = "gpio",
 	/** USB HID relay module */
 	UsbRelay = "usbrelay",
-	/** Serial/COM port relay (LCUS type) */
+	/** Serial/COM port relay (taobao LCUS type) */
 	Serial = "serial",
 	/** Disabled / Not configured */
 	None = "none",
@@ -149,6 +149,7 @@ export interface AtxKeyConfig {
 	 * Pin or channel number:
 	 * - For GPIO: GPIO pin number
 	 * - For USB Relay: relay channel (0-based)
+	 * - For Serial Relay (LCUS): relay channel (1-based)
 	 */
 	pin: number;
 	/** Active level (only applicable to GPIO, ignored for USB Relay) */
@@ -444,11 +445,11 @@ export interface AtxConfigUpdate {
 /** Available ATX devices for discovery */
 export interface AtxDevices {
 	/** Available GPIO chips (/dev/gpiochip*) */
-	/** Available Serial ports (/dev/ttyUSB*) */
-	serial_ports: string[];
 	gpio_chips: string[];
 	/** Available USB HID relay devices (/dev/hidraw*) */
 	usb_relays: string[];
+	/** Available Serial ports (/dev/ttyUSB*) */
+	serial_ports: string[];
 }
 
 export interface AudioConfigUpdate {
@@ -623,19 +624,19 @@ export interface RustDeskConfigUpdate {
 	device_password?: string;
 }
 
-/** Stream 配置响应（包含 has_turn_password 字段） */
+/** Stream configuration response (includes has_turn_password) */
 export interface StreamConfigResponse {
 	mode: StreamMode;
 	encoder: EncoderType;
 	bitrate_preset: BitratePreset;
-	/** 是否有公共 ICE 服务器可用（编译时确定） */
+	/** Whether public ICE servers are available (compile-time decision) */
 	has_public_ice_servers: boolean;
-	/** 当前是否正在使用公共 ICE 服务器（STUN/TURN 都为空时） */
+	/** Whether public ICE servers are currently in use (when STUN/TURN are unset) */
 	using_public_ice_servers: boolean;
 	stun_server?: string;
 	turn_server?: string;
 	turn_username?: string;
-	/** 指示是否已设置 TURN 密码（实际密码不返回） */
+	/** Indicates whether TURN password has been configured (password is not returned) */
 	has_turn_password: boolean;
 }
 
@@ -688,3 +689,130 @@ export interface WebConfigUpdate {
 	bind_address?: string;
 	https_enabled?: boolean;
 }
+
+/**
+ * Shared canonical keyboard key identifiers used across frontend and backend.
+ * 
+ * The enum names intentionally mirror `KeyboardEvent.code` style values so the
+ * browser, virtual keyboard, and HID backend can all speak the same language.
+ */
+export enum CanonicalKey {
+	KeyA = "KeyA",
+	KeyB = "KeyB",
+	KeyC = "KeyC",
+	KeyD = "KeyD",
+	KeyE = "KeyE",
+	KeyF = "KeyF",
+	KeyG = "KeyG",
+	KeyH = "KeyH",
+	KeyI = "KeyI",
+	KeyJ = "KeyJ",
+	KeyK = "KeyK",
+	KeyL = "KeyL",
+	KeyM = "KeyM",
+	KeyN = "KeyN",
+	KeyO = "KeyO",
+	KeyP = "KeyP",
+	KeyQ = "KeyQ",
+	KeyR = "KeyR",
+	KeyS = "KeyS",
+	KeyT = "KeyT",
+	KeyU = "KeyU",
+	KeyV = "KeyV",
+	KeyW = "KeyW",
+	KeyX = "KeyX",
+	KeyY = "KeyY",
+	KeyZ = "KeyZ",
+	Digit1 = "Digit1",
+	Digit2 = "Digit2",
+	Digit3 = "Digit3",
+	Digit4 = "Digit4",
+	Digit5 = "Digit5",
+	Digit6 = "Digit6",
+	Digit7 = "Digit7",
+	Digit8 = "Digit8",
+	Digit9 = "Digit9",
+	Digit0 = "Digit0",
+	Enter = "Enter",
+	Escape = "Escape",
+	Backspace = "Backspace",
+	Tab = "Tab",
+	Space = "Space",
+	Minus = "Minus",
+	Equal = "Equal",
+	BracketLeft = "BracketLeft",
+	BracketRight = "BracketRight",
+	Backslash = "Backslash",
+	Semicolon = "Semicolon",
+	Quote = "Quote",
+	Backquote = "Backquote",
+	Comma = "Comma",
+	Period = "Period",
+	Slash = "Slash",
+	CapsLock = "CapsLock",
+	F1 = "F1",
+	F2 = "F2",
+	F3 = "F3",
+	F4 = "F4",
+	F5 = "F5",
+	F6 = "F6",
+	F7 = "F7",
+	F8 = "F8",
+	F9 = "F9",
+	F10 = "F10",
+	F11 = "F11",
+	F12 = "F12",
+	PrintScreen = "PrintScreen",
+	ScrollLock = "ScrollLock",
+	Pause = "Pause",
+	Insert = "Insert",
+	Home = "Home",
+	PageUp = "PageUp",
+	Delete = "Delete",
+	End = "End",
+	PageDown = "PageDown",
+	ArrowRight = "ArrowRight",
+	ArrowLeft = "ArrowLeft",
+	ArrowDown = "ArrowDown",
+	ArrowUp = "ArrowUp",
+	NumLock = "NumLock",
+	NumpadDivide = "NumpadDivide",
+	NumpadMultiply = "NumpadMultiply",
+	NumpadSubtract = "NumpadSubtract",
+	NumpadAdd = "NumpadAdd",
+	NumpadEnter = "NumpadEnter",
+	Numpad1 = "Numpad1",
+	Numpad2 = "Numpad2",
+	Numpad3 = "Numpad3",
+	Numpad4 = "Numpad4",
+	Numpad5 = "Numpad5",
+	Numpad6 = "Numpad6",
+	Numpad7 = "Numpad7",
+	Numpad8 = "Numpad8",
+	Numpad9 = "Numpad9",
+	Numpad0 = "Numpad0",
+	NumpadDecimal = "NumpadDecimal",
+	IntlBackslash = "IntlBackslash",
+	ContextMenu = "ContextMenu",
+	F13 = "F13",
+	F14 = "F14",
+	F15 = "F15",
+	F16 = "F16",
+	F17 = "F17",
+	F18 = "F18",
+	F19 = "F19",
+	F20 = "F20",
+	F21 = "F21",
+	F22 = "F22",
+	F23 = "F23",
+	F24 = "F24",
+	ControlLeft = "ControlLeft",
+	ShiftLeft = "ShiftLeft",
+	AltLeft = "AltLeft",
+	MetaLeft = "MetaLeft",
+	ControlRight = "ControlRight",
+	ShiftRight = "ShiftRight",
+	AltRight = "AltRight",
+	MetaRight = "MetaRight",
+}
+

@@ -5,8 +5,8 @@
 use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{ControlKey, KeyEvent, MouseEvent};
 use crate::hid::{
-    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent as OneKvmMouseEvent,
-    MouseEventType,
+    CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton,
+    MouseEvent as OneKvmMouseEvent, MouseEventType,
 };
 use protobuf::Enum;
 
@@ -217,11 +217,11 @@ pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
     // Handle control keys
     if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
         if let Some(key) = control_key_to_hid(ck.value()) {
+            let key = CanonicalKey::from_hid_usage(key)?;
             return Some(KeyboardEvent {
                 event_type,
                 key,
                 modifiers,
-                is_usb_hid: true, // Already converted to USB HID code
             });
         }
     }
@@ -230,11 +230,11 @@ pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
     if let Some(ke_union::Union::Chr(chr)) = &event.union {
         // chr contains USB HID scancode on Windows, X11 keycode on Linux
         if let Some(key) = keycode_to_hid(*chr) {
+            let key = CanonicalKey::from_hid_usage(key)?;
             return Some(KeyboardEvent {
                 event_type,
                 key,
                 modifiers,
-                is_usb_hid: true, // Already converted to USB HID code
             });
         }
     }
@@ -608,6 +608,6 @@ mod tests {
 
         let kb_event = result.unwrap();
         assert_eq!(kb_event.event_type, KeyEventType::Down);
-        assert_eq!(kb_event.key, 0x28); // Return key USB HID code
+        assert_eq!(kb_event.key, CanonicalKey::Enter);
     }
 }

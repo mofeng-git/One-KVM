@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::keyboard::CanonicalKey;
+
 /// Keyboard event type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -105,34 +107,29 @@ pub struct KeyboardEvent {
     /// Event type (down/up)
     #[serde(rename = "type")]
     pub event_type: KeyEventType,
-    /// Key code (USB HID usage code or JavaScript key code)
-    pub key: u8,
+    /// Canonical keyboard key identifier shared across frontend and backend
+    pub key: CanonicalKey,
     /// Modifier keys state
     #[serde(default)]
     pub modifiers: KeyboardModifiers,
-    /// If true, key is already USB HID code (skip js_to_usb conversion)
-    #[serde(default)]
-    pub is_usb_hid: bool,
 }
 
 impl KeyboardEvent {
-    /// Create a key down event (JS keycode, needs conversion)
-    pub fn key_down(key: u8, modifiers: KeyboardModifiers) -> Self {
+    /// Create a key down event
+    pub fn key_down(key: CanonicalKey, modifiers: KeyboardModifiers) -> Self {
         Self {
             event_type: KeyEventType::Down,
             key,
             modifiers,
-            is_usb_hid: false,
         }
     }
 
-    /// Create a key up event (JS keycode, needs conversion)
-    pub fn key_up(key: u8, modifiers: KeyboardModifiers) -> Self {
+    /// Create a key up event
+    pub fn key_up(key: CanonicalKey, modifiers: KeyboardModifiers) -> Self {
         Self {
             event_type: KeyEventType::Up,
             key,
             modifiers,
-            is_usb_hid: false,
         }
     }
 }

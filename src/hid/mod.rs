@@ -15,12 +15,13 @@ pub mod backend;
 pub mod ch9329;
 pub mod consumer;
 pub mod datachannel;
-pub mod keymap;
+pub mod keyboard;
 pub mod otg;
 pub mod types;
 pub mod websocket;
 
 pub use backend::{HidBackend, HidBackendStatus, HidBackendType};
+pub use keyboard::CanonicalKey;
 pub use otg::LedState;
 pub use types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,

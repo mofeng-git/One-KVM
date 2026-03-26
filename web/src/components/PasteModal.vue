@@ -69,24 +69,24 @@ async function typeChar(char: string, signal: AbortSignal): Promise<boolean> {
     return true
   }
 
-  const { hidCode, shift } = mapping
+  const { key, shift } = mapping
   const modifier = shift ? 0x02 : 0
 
   try {
     // Send keydown
-    await hidApi.keyboard('down', hidCode, modifier)
+    await hidApi.keyboard('down', key, modifier)
 
     // Small delay between down and up to ensure key is registered
     await sleep(5)
 
     if (signal.aborted) {
       // Even if aborted, still send keyup to release the key
-      await hidApi.keyboard('up', hidCode, modifier)
+      await hidApi.keyboard('up', key, modifier)
       return false
     }
 
     // Send keyup
-    await hidApi.keyboard('up', hidCode, modifier)
+    await hidApi.keyboard('up', key, modifier)
 
     // Additional small delay after keyup to ensure it's processed
     await sleep(2)
@@ -96,7 +96,7 @@ async function typeChar(char: string, signal: AbortSignal): Promise<boolean> {
     console.error('[Paste] Failed to type character:', char, error)
     // Try to release the key even on error
     try {
-      await hidApi.keyboard('up', hidCode, modifier)
+      await hidApi.keyboard('up', key, modifier)
     } catch {
       // Ignore cleanup errors
     }

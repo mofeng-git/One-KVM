@@ -12,8 +12,9 @@ import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, authApi } from '@/api'
+import { CanonicalKey } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
-import { keyboardEventToHidCode, updateModifierMaskForHidKey } from '@/lib/keyboardMappings'
+import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
@@ -117,7 +118,7 @@ const myClientId = generateUUID()
 
 // HID state
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
-const pressedKeys = ref<string[]>([])
+const pressedKeys = ref<CanonicalKey[]>([])
 const keyboardLed = ref({
   capsLock: false,
 })
@@ -1539,7 +1540,7 @@ function handleHidError(_error: any, _operation: string) {
 }
 
 // HID channel selection: use WebRTC DataChannel when available, fallback to WebSocket
-function sendKeyboardEvent(type: 'down' | 'up', key: number, modifier?: number) {
+function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
   // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
@@ -1618,22 +1619,21 @@ function handleKeyDown(e: KeyboardEvent) {
     })
   }
 
-  const keyName = e.key === ' ' ? 'Space' : e.key
-  if (!pressedKeys.value.includes(keyName)) {
-    pressedKeys.value = [...pressedKeys.value, keyName]
-  }
-
   keyboardLed.value.capsLock = e.getModifierState('CapsLock')
 
-  const hidKey = keyboardEventToHidCode(e.code, e.key)
-  if (hidKey === undefined) {
+  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
+  if (canonicalKey === undefined) {
     console.warn(`[HID] Unmapped key down: code=${e.code}, key=${e.key}`)
     return
   }
 
-  const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, true)
+  if (!pressedKeys.value.includes(canonicalKey)) {
+    pressedKeys.value = [...pressedKeys.value, canonicalKey]
+  }
+
+  const modifierMask = updateModifierMaskForKey(activeModifierMask.value, canonicalKey, true)
   activeModifierMask.value = modifierMask
-  sendKeyboardEvent('down', hidKey, modifierMask)
+  sendKeyboardEvent('down', canonicalKey, modifierMask)
 }
 
 function handleKeyUp(e: KeyboardEvent) {
@@ -1649,18 +1649,17 @@ function handleKeyUp(e: KeyboardEvent) {
     e.stopPropagation()
   }
 
-  const keyName = e.key === ' ' ? 'Space' : e.key
-  pressedKeys.value = pressedKeys.value.filter(k => k !== keyName)
-
-  const hidKey = keyboardEventToHidCode(e.code, e.key)
-  if (hidKey === undefined) {
+  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
+  if (canonicalKey === undefined) {
     console.warn(`[HID] Unmapped key up: code=${e.code}, key=${e.key}`)
     return
   }
 
-  const modifierMask = updateModifierMaskForHidKey(activeModifierMask.value, hidKey, false)
+  pressedKeys.value = pressedKeys.value.filter(k => k !== canonicalKey)
+
+  const modifierMask = updateModifierMaskForKey(activeModifierMask.value, canonicalKey, false)
   activeModifierMask.value = modifierMask
-  sendKeyboardEvent('up', hidKey, modifierMask)
+  sendKeyboardEvent('up', canonicalKey, modifierMask)
 }
 
 function getActiveVideoElement(): HTMLImageElement | HTMLVideoElement | null {
@@ -2016,18 +2015,18 @@ function handleToggleVirtualKeyboard() {
 }
 
 // Virtual keyboard key event handlers
-function handleVirtualKeyDown(key: string) {
+function handleVirtualKeyDown(key: CanonicalKey) {
   // Add to pressedKeys for InfoBar display
   if (!pressedKeys.value.includes(key)) {
     pressedKeys.value = [...pressedKeys.value, key]
   }
   // Toggle CapsLock state when virtual keyboard presses CapsLock
-  if (key === 'CapsLock') {
+  if (key === CanonicalKey.CapsLock) {
     keyboardLed.value.capsLock = !keyboardLed.value.capsLock
   }
 }
 
-function handleVirtualKeyUp(key: string) {
+function handleVirtualKeyUp(key: CanonicalKey) {
   // Remove from pressedKeys
   pressedKeys.value = pressedKeys.value.filter(k => k !== key)
 }
@@ -2485,6 +2484,8 @@ onUnmounted(() => {
         v-if="virtualKeyboardVisible"
         v-model:visible="virtualKeyboardVisible"
         v-model:attached="virtualKeyboardAttached"
+        :caps-lock="keyboardLed.capsLock"
+        :pressed-keys="pressedKeys"
         @key-down="handleVirtualKeyDown"
         @key-up="handleVirtualKeyUp"
       />

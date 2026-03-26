@@ -4,12 +4,13 @@ import { useI18n } from 'vue-i18n'
 import Keyboard from 'simple-keyboard'
 import 'simple-keyboard/build/css/index.css'
 import { hidApi } from '@/api'
+import { CanonicalKey } from '@/types/generated'
 import {
   keys,
   consumerKeys,
   latchingKeys,
   modifiers,
-  updateModifierMaskForHidKey,
+  updateModifierMaskForKey,
   type KeyName,
   type ConsumerKeyName,
 } from '@/lib/keyboardMappings'
@@ -23,13 +24,15 @@ import {
 const props = defineProps<{
   visible: boolean
   attached?: boolean
+  capsLock?: boolean
+  pressedKeys?: CanonicalKey[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'update:attached', value: boolean): void
-  (e: 'keyDown', key: string): void
-  (e: 'keyUp', key: string): void
+  (e: 'keyDown', key: CanonicalKey): void
+  (e: 'keyUp', key: CanonicalKey): void
 }>()
 
 const { t } = useI18n()
@@ -45,11 +48,15 @@ const arrowsKeyboard = ref<Keyboard | null>(null)
 
 // Pressed keys tracking
 const pressedModifiers = ref<number>(0)
-const keysDown = ref<string[]>([])
+const keysDown = ref<CanonicalKey[]>([])
 
 // Shift state for display
 const isShiftActive = computed(() => {
   return (pressedModifiers.value & 0x22) !== 0
+})
+
+const areLettersUppercase = computed(() => {
+  return Boolean(props.capsLock) !== isShiftActive.value
 })
 
 const layoutName = computed(() => {
@@ -63,7 +70,12 @@ const keyNamesForDownKeys = computed(() => {
     .filter(([_, mask]) => (activeModifierMask & mask) !== 0)
     .map(([name]) => name)
 
-  return [...modifierNames, ...keysDown.value, ' ']
+  return Array.from(new Set([
+    ...modifierNames,
+    ...(props.pressedKeys ?? []),
+    ...keysDown.value,
+    ...(props.capsLock ? ['CapsLock'] : []),
+  ]))
 })
 
 // Dragging state (for floating mode)
@@ -88,7 +100,7 @@ const keyboardLayout = {
       'Tab KeyQ KeyW KeyE KeyR KeyT KeyY KeyU KeyI KeyO KeyP BracketLeft BracketRight Backslash',
       'CapsLock KeyA KeyS KeyD KeyF KeyG KeyH KeyJ KeyK KeyL Semicolon Quote Enter',
       'ShiftLeft KeyZ KeyX KeyC KeyV KeyB KeyN KeyM Comma Period Slash ShiftRight',
-      'ControlLeft MetaLeft AltLeft Space AltGr MetaRight Menu ControlRight',
+      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight',
     ],
     shift: [
       'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
@@ -97,7 +109,7 @@ const keyboardLayout = {
       'Tab (KeyQ) (KeyW) (KeyE) (KeyR) (KeyT) (KeyY) (KeyU) (KeyI) (KeyO) (KeyP) (BracketLeft) (BracketRight) (Backslash)',
       'CapsLock (KeyA) (KeyS) (KeyD) (KeyF) (KeyG) (KeyH) (KeyJ) (KeyK) (KeyL) (Semicolon) (Quote) Enter',
       'ShiftLeft (KeyZ) (KeyX) (KeyC) (KeyV) (KeyB) (KeyN) (KeyM) (Comma) (Period) (Slash) ShiftRight',
-      'ControlLeft MetaLeft AltLeft Space AltGr MetaRight Menu ControlRight',
+      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight',
     ],
   },
   control: {
@@ -148,11 +160,10 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     ShiftLeft: 'Shift',
     ShiftRight: 'Shift',
     AltLeft: 'Alt',
-    AltRight: 'Alt',
-    AltGr: 'AltGr',
+    AltRight: 'AltGr',
     MetaLeft: metaLabel,
     MetaRight: metaLabel,
-    Menu: 'Menu',
+    ContextMenu: 'Menu',
 
     // Special keys
     Escape: 'Esc',
@@ -187,20 +198,60 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     F9: 'F9', F10: 'F10', F11: 'F11', F12: 'F12',
 
     // Letters
-    KeyA: 'a', KeyB: 'b', KeyC: 'c', KeyD: 'd', KeyE: 'e',
-    KeyF: 'f', KeyG: 'g', KeyH: 'h', KeyI: 'i', KeyJ: 'j',
-    KeyK: 'k', KeyL: 'l', KeyM: 'm', KeyN: 'n', KeyO: 'o',
-    KeyP: 'p', KeyQ: 'q', KeyR: 'r', KeyS: 's', KeyT: 't',
-    KeyU: 'u', KeyV: 'v', KeyW: 'w', KeyX: 'x', KeyY: 'y',
-    KeyZ: 'z',
+    KeyA: areLettersUppercase.value ? 'A' : 'a',
+    KeyB: areLettersUppercase.value ? 'B' : 'b',
+    KeyC: areLettersUppercase.value ? 'C' : 'c',
+    KeyD: areLettersUppercase.value ? 'D' : 'd',
+    KeyE: areLettersUppercase.value ? 'E' : 'e',
+    KeyF: areLettersUppercase.value ? 'F' : 'f',
+    KeyG: areLettersUppercase.value ? 'G' : 'g',
+    KeyH: areLettersUppercase.value ? 'H' : 'h',
+    KeyI: areLettersUppercase.value ? 'I' : 'i',
+    KeyJ: areLettersUppercase.value ? 'J' : 'j',
+    KeyK: areLettersUppercase.value ? 'K' : 'k',
+    KeyL: areLettersUppercase.value ? 'L' : 'l',
+    KeyM: areLettersUppercase.value ? 'M' : 'm',
+    KeyN: areLettersUppercase.value ? 'N' : 'n',
+    KeyO: areLettersUppercase.value ? 'O' : 'o',
+    KeyP: areLettersUppercase.value ? 'P' : 'p',
+    KeyQ: areLettersUppercase.value ? 'Q' : 'q',
+    KeyR: areLettersUppercase.value ? 'R' : 'r',
+    KeyS: areLettersUppercase.value ? 'S' : 's',
+    KeyT: areLettersUppercase.value ? 'T' : 't',
+    KeyU: areLettersUppercase.value ? 'U' : 'u',
+    KeyV: areLettersUppercase.value ? 'V' : 'v',
+    KeyW: areLettersUppercase.value ? 'W' : 'w',
+    KeyX: areLettersUppercase.value ? 'X' : 'x',
+    KeyY: areLettersUppercase.value ? 'Y' : 'y',
+    KeyZ: areLettersUppercase.value ? 'Z' : 'z',
 
-    // Capital letters
-    '(KeyA)': 'A', '(KeyB)': 'B', '(KeyC)': 'C', '(KeyD)': 'D', '(KeyE)': 'E',
-    '(KeyF)': 'F', '(KeyG)': 'G', '(KeyH)': 'H', '(KeyI)': 'I', '(KeyJ)': 'J',
-    '(KeyK)': 'K', '(KeyL)': 'L', '(KeyM)': 'M', '(KeyN)': 'N', '(KeyO)': 'O',
-    '(KeyP)': 'P', '(KeyQ)': 'Q', '(KeyR)': 'R', '(KeyS)': 'S', '(KeyT)': 'T',
-    '(KeyU)': 'U', '(KeyV)': 'V', '(KeyW)': 'W', '(KeyX)': 'X', '(KeyY)': 'Y',
-    '(KeyZ)': 'Z',
+    // Letter labels in the shifted layout follow CapsLock xor Shift too
+    '(KeyA)': areLettersUppercase.value ? 'A' : 'a',
+    '(KeyB)': areLettersUppercase.value ? 'B' : 'b',
+    '(KeyC)': areLettersUppercase.value ? 'C' : 'c',
+    '(KeyD)': areLettersUppercase.value ? 'D' : 'd',
+    '(KeyE)': areLettersUppercase.value ? 'E' : 'e',
+    '(KeyF)': areLettersUppercase.value ? 'F' : 'f',
+    '(KeyG)': areLettersUppercase.value ? 'G' : 'g',
+    '(KeyH)': areLettersUppercase.value ? 'H' : 'h',
+    '(KeyI)': areLettersUppercase.value ? 'I' : 'i',
+    '(KeyJ)': areLettersUppercase.value ? 'J' : 'j',
+    '(KeyK)': areLettersUppercase.value ? 'K' : 'k',
+    '(KeyL)': areLettersUppercase.value ? 'L' : 'l',
+    '(KeyM)': areLettersUppercase.value ? 'M' : 'm',
+    '(KeyN)': areLettersUppercase.value ? 'N' : 'n',
+    '(KeyO)': areLettersUppercase.value ? 'O' : 'o',
+    '(KeyP)': areLettersUppercase.value ? 'P' : 'p',
+    '(KeyQ)': areLettersUppercase.value ? 'Q' : 'q',
+    '(KeyR)': areLettersUppercase.value ? 'R' : 'r',
+    '(KeyS)': areLettersUppercase.value ? 'S' : 's',
+    '(KeyT)': areLettersUppercase.value ? 'T' : 't',
+    '(KeyU)': areLettersUppercase.value ? 'U' : 'u',
+    '(KeyV)': areLettersUppercase.value ? 'V' : 'v',
+    '(KeyW)': areLettersUppercase.value ? 'W' : 'w',
+    '(KeyX)': areLettersUppercase.value ? 'X' : 'x',
+    '(KeyY)': areLettersUppercase.value ? 'Y' : 'y',
+    '(KeyZ)': areLettersUppercase.value ? 'Z' : 'z',
 
     // Numbers
     Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
@@ -303,47 +354,47 @@ async function onKeyDown(key: string) {
   const keyCode = keys[cleanKey as KeyName]
 
   // Handle latching keys (Caps Lock, etc.)
-  if ((latchingKeys as readonly string[]).includes(cleanKey)) {
-    emit('keyDown', cleanKey)
+  if (latchingKeys.some(latchingKey => latchingKey === keyCode)) {
+    emit('keyDown', keyCode)
     const currentMask = pressedModifiers.value & 0xff
     await sendKeyPress(keyCode, true, currentMask)
     setTimeout(() => {
       sendKeyPress(keyCode, false, currentMask)
-      emit('keyUp', cleanKey)
+      emit('keyUp', keyCode)
     }, 100)
     return
   }
 
   // Handle modifier keys (toggle)
-  if (cleanKey in modifiers) {
-    const mask = modifiers[cleanKey as keyof typeof modifiers]
+  const mask = modifiers[keyCode] ?? 0
+  if (mask !== 0) {
     const isCurrentlyDown = (pressedModifiers.value & mask) !== 0
 
     if (isCurrentlyDown) {
       const nextMask = pressedModifiers.value & ~mask
       pressedModifiers.value = nextMask
       await sendKeyPress(keyCode, false, nextMask)
-      emit('keyUp', cleanKey)
+      emit('keyUp', keyCode)
     } else {
       const nextMask = pressedModifiers.value | mask
       pressedModifiers.value = nextMask
       await sendKeyPress(keyCode, true, nextMask)
-      emit('keyDown', cleanKey)
+      emit('keyDown', keyCode)
     }
     updateKeyboardButtonTheme()
     return
   }
 
   // Regular key: press and release
-  keysDown.value.push(cleanKey)
-  emit('keyDown', cleanKey)
+  keysDown.value.push(keyCode)
+  emit('keyDown', keyCode)
   const currentMask = pressedModifiers.value & 0xff
   await sendKeyPress(keyCode, true, currentMask)
   updateKeyboardButtonTheme()
   setTimeout(async () => {
-    keysDown.value = keysDown.value.filter(k => k !== cleanKey)
+    keysDown.value = keysDown.value.filter(k => k !== keyCode)
     await sendKeyPress(keyCode, false, currentMask)
-    emit('keyUp', cleanKey)
+    emit('keyUp', keyCode)
     updateKeyboardButtonTheme()
   }, 50)
 }
@@ -352,7 +403,7 @@ async function onKeyUp() {
   // Not used for now - we handle up in onKeyDown with setTimeout
 }
 
-async function sendKeyPress(keyCode: number, press: boolean, modifierMask: number) {
+async function sendKeyPress(keyCode: CanonicalKey, press: boolean, modifierMask: number) {
   try {
     await hidApi.keyboard(press ? 'down' : 'up', keyCode, modifierMask & 0xff)
   } catch (err) {
@@ -372,7 +423,7 @@ async function executeMacro(steps: MacroStep[]) {
     for (const mod of step.modifiers) {
       if (mod in keys) {
         const modHid = keys[mod as KeyName]
-        macroModifierMask = updateModifierMaskForHidKey(macroModifierMask, modHid, true)
+        macroModifierMask = updateModifierMaskForKey(macroModifierMask, modHid, true)
         await sendKeyPress(modHid, true, macroModifierMask)
       }
     }
@@ -394,7 +445,7 @@ async function executeMacro(steps: MacroStep[]) {
     for (const mod of step.modifiers) {
       if (mod in keys) {
         const modHid = keys[mod as KeyName]
-        macroModifierMask = updateModifierMaskForHidKey(macroModifierMask, modHid, false)
+        macroModifierMask = updateModifierMaskForKey(macroModifierMask, modHid, false)
         await sendKeyPress(modHid, false, macroModifierMask)
       }
     }
@@ -421,8 +472,12 @@ function updateKeyboardButtonTheme() {
 }
 
 // Update layout when shift state changes
-watch(layoutName, (name) => {
-  mainKeyboard.value?.setOptions({ layoutName: name })
+watch([layoutName, () => props.capsLock], ([name]) => {
+  mainKeyboard.value?.setOptions({
+    layoutName: name,
+    display: keyDisplayMap.value,
+  })
+  updateKeyboardButtonTheme()
 })
 
 // Initialize keyboards with unique selectors
@@ -835,12 +890,12 @@ onUnmounted(() => {
   min-width: 55px;
 }
 
-.vkb .simple-keyboard .hg-button[data-skbtn="AltGr"] {
+.vkb .simple-keyboard .hg-button[data-skbtn="AltRight"] {
   flex-grow: 1.25;
   min-width: 55px;
 }
 
-.vkb .simple-keyboard .hg-button[data-skbtn="Menu"] {
+.vkb .simple-keyboard .hg-button[data-skbtn="ContextMenu"] {
   flex-grow: 1.25;
   min-width: 55px;
 }
@@ -1194,8 +1249,8 @@ html.dark .hg-theme-default .hg-button.down-key,
   .vkb .simple-keyboard .hg-button[data-skbtn="MetaLeft"],
   .vkb .simple-keyboard .hg-button[data-skbtn="MetaRight"],
   .vkb .simple-keyboard .hg-button[data-skbtn="AltLeft"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="AltGr"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="Menu"] {
+  .vkb .simple-keyboard .hg-button[data-skbtn="AltRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ContextMenu"] {
     min-width: 46px;
   }
 

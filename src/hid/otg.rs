@@ -29,7 +29,6 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tracing::{debug, info, trace, warn};
 
 use super::backend::{HidBackend, HidBackendStatus};
-use super::keymap;
 use super::types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
 };
@@ -873,18 +872,13 @@ impl HidBackend for OtgBackend {
     }
 
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
-        // Convert JS keycode to USB HID if needed (skip if already USB HID)
-        let usb_key = if event.is_usb_hid {
-            event.key
-        } else {
-            keymap::js_to_usb(event.key).unwrap_or(event.key)
-        };
+        let usb_key = event.key.to_hid_usage();
 
         // Handle modifier keys separately
-        if keymap::is_modifier_key(usb_key) {
+        if event.key.is_modifier() {
             let mut state = self.keyboard_state.lock();
 
-            if let Some(bit) = keymap::modifier_bit(usb_key) {
+            if let Some(bit) = event.key.modifier_bit() {
                 match event.event_type {
                     KeyEventType::Down => state.modifiers |= bit,
                     KeyEventType::Up => state.modifiers &= !bit,

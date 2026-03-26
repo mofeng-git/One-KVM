@@ -1,157 +1,128 @@
-// Key codes and modifiers correspond to definitions in the
-// [Linux USB HID gadget driver](https://www.kernel.org/doc/Documentation/usb/gadget_hid.txt)
-// [Universal Serial Bus HID Usage Tables: Section 10](https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf)
+import { CanonicalKey } from '@/types/generated'
 
 export const keys = {
-  // Letters
-  KeyA: 0x04,
-  KeyB: 0x05,
-  KeyC: 0x06,
-  KeyD: 0x07,
-  KeyE: 0x08,
-  KeyF: 0x09,
-  KeyG: 0x0a,
-  KeyH: 0x0b,
-  KeyI: 0x0c,
-  KeyJ: 0x0d,
-  KeyK: 0x0e,
-  KeyL: 0x0f,
-  KeyM: 0x10,
-  KeyN: 0x11,
-  KeyO: 0x12,
-  KeyP: 0x13,
-  KeyQ: 0x14,
-  KeyR: 0x15,
-  KeyS: 0x16,
-  KeyT: 0x17,
-  KeyU: 0x18,
-  KeyV: 0x19,
-  KeyW: 0x1a,
-  KeyX: 0x1b,
-  KeyY: 0x1c,
-  KeyZ: 0x1d,
-
-  // Numbers
-  Digit1: 0x1e,
-  Digit2: 0x1f,
-  Digit3: 0x20,
-  Digit4: 0x21,
-  Digit5: 0x22,
-  Digit6: 0x23,
-  Digit7: 0x24,
-  Digit8: 0x25,
-  Digit9: 0x26,
-  Digit0: 0x27,
-
-  // Control keys
-  Enter: 0x28,
-  Escape: 0x29,
-  Backspace: 0x2a,
-  Tab: 0x2b,
-  Space: 0x2c,
-
-  // Symbols
-  Minus: 0x2d,
-  Equal: 0x2e,
-  BracketLeft: 0x2f,
-  BracketRight: 0x30,
-  Backslash: 0x31,
-  Semicolon: 0x33,
-  Quote: 0x34,
-  Backquote: 0x35,
-  Comma: 0x36,
-  Period: 0x37,
-  Slash: 0x38,
-
-  // Lock keys
-  CapsLock: 0x39,
-
-  // Function keys
-  F1: 0x3a,
-  F2: 0x3b,
-  F3: 0x3c,
-  F4: 0x3d,
-  F5: 0x3e,
-  F6: 0x3f,
-  F7: 0x40,
-  F8: 0x41,
-  F9: 0x42,
-  F10: 0x43,
-  F11: 0x44,
-  F12: 0x45,
-
-  // Control cluster
-  PrintScreen: 0x46,
-  ScrollLock: 0x47,
-  Pause: 0x48,
-  Insert: 0x49,
-  Home: 0x4a,
-  PageUp: 0x4b,
-  Delete: 0x4c,
-  End: 0x4d,
-  PageDown: 0x4e,
-
-  // Arrow keys
-  ArrowRight: 0x4f,
-  ArrowLeft: 0x50,
-  ArrowDown: 0x51,
-  ArrowUp: 0x52,
-
-  // Numpad
-  NumLock: 0x53,
-  NumpadDivide: 0x54,
-  NumpadMultiply: 0x55,
-  NumpadSubtract: 0x56,
-  NumpadAdd: 0x57,
-  NumpadEnter: 0x58,
-  Numpad1: 0x59,
-  Numpad2: 0x5a,
-  Numpad3: 0x5b,
-  Numpad4: 0x5c,
-  Numpad5: 0x5d,
-  Numpad6: 0x5e,
-  Numpad7: 0x5f,
-  Numpad8: 0x60,
-  Numpad9: 0x61,
-  Numpad0: 0x62,
-  NumpadDecimal: 0x63,
-
-  // Non-US keys
-  IntlBackslash: 0x64,
-  ContextMenu: 0x65,
-  Menu: 0x65,
-  Application: 0x65,
-
-  // Extended function keys
-  F13: 0x68,
-  F14: 0x69,
-  F15: 0x6a,
-  F16: 0x6b,
-  F17: 0x6c,
-  F18: 0x6d,
-  F19: 0x6e,
-  F20: 0x6f,
-  F21: 0x70,
-  F22: 0x71,
-  F23: 0x72,
-  F24: 0x73,
-
-  // Modifiers (these are special - HID codes 0xE0-0xE7)
-  ControlLeft: 0xe0,
-  ShiftLeft: 0xe1,
-  AltLeft: 0xe2,
-  MetaLeft: 0xe3,
-  ControlRight: 0xe4,
-  ShiftRight: 0xe5,
-  AltRight: 0xe6,
-  AltGr: 0xe6,
-  MetaRight: 0xe7,
+  KeyA: CanonicalKey.KeyA,
+  KeyB: CanonicalKey.KeyB,
+  KeyC: CanonicalKey.KeyC,
+  KeyD: CanonicalKey.KeyD,
+  KeyE: CanonicalKey.KeyE,
+  KeyF: CanonicalKey.KeyF,
+  KeyG: CanonicalKey.KeyG,
+  KeyH: CanonicalKey.KeyH,
+  KeyI: CanonicalKey.KeyI,
+  KeyJ: CanonicalKey.KeyJ,
+  KeyK: CanonicalKey.KeyK,
+  KeyL: CanonicalKey.KeyL,
+  KeyM: CanonicalKey.KeyM,
+  KeyN: CanonicalKey.KeyN,
+  KeyO: CanonicalKey.KeyO,
+  KeyP: CanonicalKey.KeyP,
+  KeyQ: CanonicalKey.KeyQ,
+  KeyR: CanonicalKey.KeyR,
+  KeyS: CanonicalKey.KeyS,
+  KeyT: CanonicalKey.KeyT,
+  KeyU: CanonicalKey.KeyU,
+  KeyV: CanonicalKey.KeyV,
+  KeyW: CanonicalKey.KeyW,
+  KeyX: CanonicalKey.KeyX,
+  KeyY: CanonicalKey.KeyY,
+  KeyZ: CanonicalKey.KeyZ,
+  Digit1: CanonicalKey.Digit1,
+  Digit2: CanonicalKey.Digit2,
+  Digit3: CanonicalKey.Digit3,
+  Digit4: CanonicalKey.Digit4,
+  Digit5: CanonicalKey.Digit5,
+  Digit6: CanonicalKey.Digit6,
+  Digit7: CanonicalKey.Digit7,
+  Digit8: CanonicalKey.Digit8,
+  Digit9: CanonicalKey.Digit9,
+  Digit0: CanonicalKey.Digit0,
+  Enter: CanonicalKey.Enter,
+  Escape: CanonicalKey.Escape,
+  Backspace: CanonicalKey.Backspace,
+  Tab: CanonicalKey.Tab,
+  Space: CanonicalKey.Space,
+  Minus: CanonicalKey.Minus,
+  Equal: CanonicalKey.Equal,
+  BracketLeft: CanonicalKey.BracketLeft,
+  BracketRight: CanonicalKey.BracketRight,
+  Backslash: CanonicalKey.Backslash,
+  Semicolon: CanonicalKey.Semicolon,
+  Quote: CanonicalKey.Quote,
+  Backquote: CanonicalKey.Backquote,
+  Comma: CanonicalKey.Comma,
+  Period: CanonicalKey.Period,
+  Slash: CanonicalKey.Slash,
+  CapsLock: CanonicalKey.CapsLock,
+  F1: CanonicalKey.F1,
+  F2: CanonicalKey.F2,
+  F3: CanonicalKey.F3,
+  F4: CanonicalKey.F4,
+  F5: CanonicalKey.F5,
+  F6: CanonicalKey.F6,
+  F7: CanonicalKey.F7,
+  F8: CanonicalKey.F8,
+  F9: CanonicalKey.F9,
+  F10: CanonicalKey.F10,
+  F11: CanonicalKey.F11,
+  F12: CanonicalKey.F12,
+  PrintScreen: CanonicalKey.PrintScreen,
+  ScrollLock: CanonicalKey.ScrollLock,
+  Pause: CanonicalKey.Pause,
+  Insert: CanonicalKey.Insert,
+  Home: CanonicalKey.Home,
+  PageUp: CanonicalKey.PageUp,
+  Delete: CanonicalKey.Delete,
+  End: CanonicalKey.End,
+  PageDown: CanonicalKey.PageDown,
+  ArrowRight: CanonicalKey.ArrowRight,
+  ArrowLeft: CanonicalKey.ArrowLeft,
+  ArrowDown: CanonicalKey.ArrowDown,
+  ArrowUp: CanonicalKey.ArrowUp,
+  NumLock: CanonicalKey.NumLock,
+  NumpadDivide: CanonicalKey.NumpadDivide,
+  NumpadMultiply: CanonicalKey.NumpadMultiply,
+  NumpadSubtract: CanonicalKey.NumpadSubtract,
+  NumpadAdd: CanonicalKey.NumpadAdd,
+  NumpadEnter: CanonicalKey.NumpadEnter,
+  Numpad1: CanonicalKey.Numpad1,
+  Numpad2: CanonicalKey.Numpad2,
+  Numpad3: CanonicalKey.Numpad3,
+  Numpad4: CanonicalKey.Numpad4,
+  Numpad5: CanonicalKey.Numpad5,
+  Numpad6: CanonicalKey.Numpad6,
+  Numpad7: CanonicalKey.Numpad7,
+  Numpad8: CanonicalKey.Numpad8,
+  Numpad9: CanonicalKey.Numpad9,
+  Numpad0: CanonicalKey.Numpad0,
+  NumpadDecimal: CanonicalKey.NumpadDecimal,
+  IntlBackslash: CanonicalKey.IntlBackslash,
+  ContextMenu: CanonicalKey.ContextMenu,
+  F13: CanonicalKey.F13,
+  F14: CanonicalKey.F14,
+  F15: CanonicalKey.F15,
+  F16: CanonicalKey.F16,
+  F17: CanonicalKey.F17,
+  F18: CanonicalKey.F18,
+  F19: CanonicalKey.F19,
+  F20: CanonicalKey.F20,
+  F21: CanonicalKey.F21,
+  F22: CanonicalKey.F22,
+  F23: CanonicalKey.F23,
+  F24: CanonicalKey.F24,
+  ControlLeft: CanonicalKey.ControlLeft,
+  ShiftLeft: CanonicalKey.ShiftLeft,
+  AltLeft: CanonicalKey.AltLeft,
+  MetaLeft: CanonicalKey.MetaLeft,
+  ControlRight: CanonicalKey.ControlRight,
+  ShiftRight: CanonicalKey.ShiftRight,
+  AltRight: CanonicalKey.AltRight,
+  MetaRight: CanonicalKey.MetaRight,
 } as const
 
 export type KeyName = keyof typeof keys
 
 // Consumer Control Usage codes (for multimedia keys)
-// These are sent via a separate Consumer Control HID report
 export const consumerKeys = {
   PlayPause: 0x00cd,
   Stop: 0x00b7,
@@ -164,68 +135,152 @@ export const consumerKeys = {
 
 export type ConsumerKeyName = keyof typeof consumerKeys
 
-// Modifier bitmasks for HID report byte 0
-export const modifiers = {
-  ControlLeft: 0x01,
-  ShiftLeft: 0x02,
-  AltLeft: 0x04,
-  MetaLeft: 0x08,
-  ControlRight: 0x10,
-  ShiftRight: 0x20,
-  AltRight: 0x40,
-  AltGr: 0x40,
-  MetaRight: 0x80,
-} as const
-
-export type ModifierName = keyof typeof modifiers
-
-// Map HID key codes to modifier bitmasks
-export const hidKeyToModifierMask: Record<number, number> = {
-  0xe0: 0x01, // ControlLeft
-  0xe1: 0x02, // ShiftLeft
-  0xe2: 0x04, // AltLeft
-  0xe3: 0x08, // MetaLeft
-  0xe4: 0x10, // ControlRight
-  0xe5: 0x20, // ShiftRight
-  0xe6: 0x40, // AltRight
-  0xe7: 0x80, // MetaRight
+export const modifiers: Partial<Record<CanonicalKey, number>> = {
+  [CanonicalKey.ControlLeft]: 0x01,
+  [CanonicalKey.ShiftLeft]: 0x02,
+  [CanonicalKey.AltLeft]: 0x04,
+  [CanonicalKey.MetaLeft]: 0x08,
+  [CanonicalKey.ControlRight]: 0x10,
+  [CanonicalKey.ShiftRight]: 0x20,
+  [CanonicalKey.AltRight]: 0x40,
+  [CanonicalKey.MetaRight]: 0x80,
 }
 
-// Update modifier mask when a HID modifier key is pressed/released.
-export function updateModifierMaskForHidKey(mask: number, hidKey: number, press: boolean): number {
-  const bit = hidKeyToModifierMask[hidKey] ?? 0
+export const keyToHidUsage = {
+  [CanonicalKey.KeyA]: 0x04,
+  [CanonicalKey.KeyB]: 0x05,
+  [CanonicalKey.KeyC]: 0x06,
+  [CanonicalKey.KeyD]: 0x07,
+  [CanonicalKey.KeyE]: 0x08,
+  [CanonicalKey.KeyF]: 0x09,
+  [CanonicalKey.KeyG]: 0x0a,
+  [CanonicalKey.KeyH]: 0x0b,
+  [CanonicalKey.KeyI]: 0x0c,
+  [CanonicalKey.KeyJ]: 0x0d,
+  [CanonicalKey.KeyK]: 0x0e,
+  [CanonicalKey.KeyL]: 0x0f,
+  [CanonicalKey.KeyM]: 0x10,
+  [CanonicalKey.KeyN]: 0x11,
+  [CanonicalKey.KeyO]: 0x12,
+  [CanonicalKey.KeyP]: 0x13,
+  [CanonicalKey.KeyQ]: 0x14,
+  [CanonicalKey.KeyR]: 0x15,
+  [CanonicalKey.KeyS]: 0x16,
+  [CanonicalKey.KeyT]: 0x17,
+  [CanonicalKey.KeyU]: 0x18,
+  [CanonicalKey.KeyV]: 0x19,
+  [CanonicalKey.KeyW]: 0x1a,
+  [CanonicalKey.KeyX]: 0x1b,
+  [CanonicalKey.KeyY]: 0x1c,
+  [CanonicalKey.KeyZ]: 0x1d,
+  [CanonicalKey.Digit1]: 0x1e,
+  [CanonicalKey.Digit2]: 0x1f,
+  [CanonicalKey.Digit3]: 0x20,
+  [CanonicalKey.Digit4]: 0x21,
+  [CanonicalKey.Digit5]: 0x22,
+  [CanonicalKey.Digit6]: 0x23,
+  [CanonicalKey.Digit7]: 0x24,
+  [CanonicalKey.Digit8]: 0x25,
+  [CanonicalKey.Digit9]: 0x26,
+  [CanonicalKey.Digit0]: 0x27,
+  [CanonicalKey.Enter]: 0x28,
+  [CanonicalKey.Escape]: 0x29,
+  [CanonicalKey.Backspace]: 0x2a,
+  [CanonicalKey.Tab]: 0x2b,
+  [CanonicalKey.Space]: 0x2c,
+  [CanonicalKey.Minus]: 0x2d,
+  [CanonicalKey.Equal]: 0x2e,
+  [CanonicalKey.BracketLeft]: 0x2f,
+  [CanonicalKey.BracketRight]: 0x30,
+  [CanonicalKey.Backslash]: 0x31,
+  [CanonicalKey.Semicolon]: 0x33,
+  [CanonicalKey.Quote]: 0x34,
+  [CanonicalKey.Backquote]: 0x35,
+  [CanonicalKey.Comma]: 0x36,
+  [CanonicalKey.Period]: 0x37,
+  [CanonicalKey.Slash]: 0x38,
+  [CanonicalKey.CapsLock]: 0x39,
+  [CanonicalKey.F1]: 0x3a,
+  [CanonicalKey.F2]: 0x3b,
+  [CanonicalKey.F3]: 0x3c,
+  [CanonicalKey.F4]: 0x3d,
+  [CanonicalKey.F5]: 0x3e,
+  [CanonicalKey.F6]: 0x3f,
+  [CanonicalKey.F7]: 0x40,
+  [CanonicalKey.F8]: 0x41,
+  [CanonicalKey.F9]: 0x42,
+  [CanonicalKey.F10]: 0x43,
+  [CanonicalKey.F11]: 0x44,
+  [CanonicalKey.F12]: 0x45,
+  [CanonicalKey.PrintScreen]: 0x46,
+  [CanonicalKey.ScrollLock]: 0x47,
+  [CanonicalKey.Pause]: 0x48,
+  [CanonicalKey.Insert]: 0x49,
+  [CanonicalKey.Home]: 0x4a,
+  [CanonicalKey.PageUp]: 0x4b,
+  [CanonicalKey.Delete]: 0x4c,
+  [CanonicalKey.End]: 0x4d,
+  [CanonicalKey.PageDown]: 0x4e,
+  [CanonicalKey.ArrowRight]: 0x4f,
+  [CanonicalKey.ArrowLeft]: 0x50,
+  [CanonicalKey.ArrowDown]: 0x51,
+  [CanonicalKey.ArrowUp]: 0x52,
+  [CanonicalKey.NumLock]: 0x53,
+  [CanonicalKey.NumpadDivide]: 0x54,
+  [CanonicalKey.NumpadMultiply]: 0x55,
+  [CanonicalKey.NumpadSubtract]: 0x56,
+  [CanonicalKey.NumpadAdd]: 0x57,
+  [CanonicalKey.NumpadEnter]: 0x58,
+  [CanonicalKey.Numpad1]: 0x59,
+  [CanonicalKey.Numpad2]: 0x5a,
+  [CanonicalKey.Numpad3]: 0x5b,
+  [CanonicalKey.Numpad4]: 0x5c,
+  [CanonicalKey.Numpad5]: 0x5d,
+  [CanonicalKey.Numpad6]: 0x5e,
+  [CanonicalKey.Numpad7]: 0x5f,
+  [CanonicalKey.Numpad8]: 0x60,
+  [CanonicalKey.Numpad9]: 0x61,
+  [CanonicalKey.Numpad0]: 0x62,
+  [CanonicalKey.NumpadDecimal]: 0x63,
+  [CanonicalKey.IntlBackslash]: 0x64,
+  [CanonicalKey.ContextMenu]: 0x65,
+  [CanonicalKey.F13]: 0x68,
+  [CanonicalKey.F14]: 0x69,
+  [CanonicalKey.F15]: 0x6a,
+  [CanonicalKey.F16]: 0x6b,
+  [CanonicalKey.F17]: 0x6c,
+  [CanonicalKey.F18]: 0x6d,
+  [CanonicalKey.F19]: 0x6e,
+  [CanonicalKey.F20]: 0x6f,
+  [CanonicalKey.F21]: 0x70,
+  [CanonicalKey.F22]: 0x71,
+  [CanonicalKey.F23]: 0x72,
+  [CanonicalKey.F24]: 0x73,
+  [CanonicalKey.ControlLeft]: 0xe0,
+  [CanonicalKey.ShiftLeft]: 0xe1,
+  [CanonicalKey.AltLeft]: 0xe2,
+  [CanonicalKey.MetaLeft]: 0xe3,
+  [CanonicalKey.ControlRight]: 0xe4,
+  [CanonicalKey.ShiftRight]: 0xe5,
+  [CanonicalKey.AltRight]: 0xe6,
+  [CanonicalKey.MetaRight]: 0xe7,
+} as const satisfies Record<CanonicalKey, number>
+
+export function canonicalKeyToHidUsage(key: CanonicalKey): number {
+  return keyToHidUsage[key]
+}
+
+export function updateModifierMaskForKey(mask: number, key: CanonicalKey, press: boolean): number {
+  const bit = modifiers[key] ?? 0
   if (bit === 0) return mask
   return press ? (mask | bit) : (mask & ~bit)
 }
 
-// Keys that latch (toggle state) instead of being held
-export const latchingKeys = ['CapsLock', 'ScrollLock', 'NumLock'] as const
-
-// Modifier key names
-export const modifierKeyNames = [
-  'ControlLeft',
-  'ControlRight',
-  'ShiftLeft',
-  'ShiftRight',
-  'AltLeft',
-  'AltRight',
-  'AltGr',
-  'MetaLeft',
-  'MetaRight',
+export const latchingKeys = [
+  CanonicalKey.CapsLock,
+  CanonicalKey.ScrollLock,
+  CanonicalKey.NumLock,
 ] as const
-
-// Check if a key is a modifier
-export function isModifierKey(keyName: string): keyName is ModifierName {
-  return keyName in modifiers
-}
-
-// Get modifier bitmask for a key name
-export function getModifierMask(keyName: string): number {
-  if (keyName in modifiers) {
-    return modifiers[keyName as ModifierName]
-  }
-  return 0
-}
 
 // Normalize browser-specific KeyboardEvent.code variants.
 export function normalizeKeyboardCode(code: string, key: string): string {
@@ -238,18 +293,10 @@ export function normalizeKeyboardCode(code: string, key: string): string {
   return code
 }
 
-// Convert KeyboardEvent.code/key to USB HID usage code.
-export function keyboardEventToHidCode(code: string, key: string): number | undefined {
+export function keyboardEventToCanonicalKey(code: string, key: string): CanonicalKey | undefined {
   const normalizedCode = normalizeKeyboardCode(code, key)
-  return keys[normalizedCode as KeyName]
-}
-
-// Decode modifier byte into individual states
-export function decodeModifiers(modifier: number) {
-  return {
-    isShiftActive: (modifier & 0x22) !== 0, // ShiftLeft | ShiftRight
-    isControlActive: (modifier & 0x11) !== 0, // ControlLeft | ControlRight
-    isAltActive: (modifier & 0x44) !== 0, // AltLeft | AltRight
-    isMetaActive: (modifier & 0x88) !== 0, // MetaLeft | MetaRight
+  if (normalizedCode in keys) {
+    return keys[normalizedCode as KeyName]
   }
+  return undefined
 }

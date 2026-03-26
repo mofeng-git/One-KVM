@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { CanonicalKey } from '@/types/generated'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{
-  pressedKeys?: string[]
+  pressedKeys?: CanonicalKey[]
   capsLock?: boolean
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
@@ -18,13 +19,14 @@ const keyNameMap: Record<string, string> = {
   MetaLeft: 'Win', MetaRight: 'Win',
   ControlLeft: 'Ctrl', ControlRight: 'Ctrl',
   ShiftLeft: 'Shift', ShiftRight: 'Shift',
-  AltLeft: 'Alt', AltRight: 'Alt',
+  AltLeft: 'Alt', AltRight: 'AltGr',
   CapsLock: 'Caps', NumLock: 'Num', ScrollLock: 'Scroll',
   Backspace: 'Back', Delete: 'Del',
   ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
   Escape: 'Esc', Enter: 'Enter', Tab: 'Tab', Space: 'Space',
   PageUp: 'PgUp', PageDown: 'PgDn',
   Insert: 'Ins', Home: 'Home', End: 'End',
+  ContextMenu: 'Menu',
 }
 
 const keysDisplay = computed(() => {

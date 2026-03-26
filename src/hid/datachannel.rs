@@ -9,7 +9,7 @@
 //!
 //! Keyboard event (type 0x01):
 //! - Byte 1: Event type (0x00 = down, 0x01 = up)
-//! - Byte 2: Key code (USB HID usage code)
+//! - Byte 2: Canonical key code (stable One-KVM key id aligned with HID usage)
 //! - Byte 3: Modifiers bitmask
 //!   - Bit 0: Left Ctrl
 //!   - Bit 1: Left Shift
@@ -38,7 +38,8 @@ use tracing::warn;
 
 use super::types::ConsumerEvent;
 use super::{
-    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent, MouseEventType,
+    CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,
+    MouseEventType,
 };
 
 /// Message types
@@ -101,7 +102,13 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         }
     };
 
-    let key = data[1];
+    let key = match CanonicalKey::from_hid_usage(data[1]) {
+        Some(key) => key,
+        None => {
+            warn!("Unknown canonical keyboard key code: 0x{:02X}", data[1]);
+            return None;
+        }
+    };
     let modifiers_byte = data[2];
 
     let modifiers = KeyboardModifiers {
@@ -119,7 +126,6 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         event_type,
         key,
         modifiers,
-        is_usb_hid: true, // WebRTC/WebSocket HID channel sends USB HID usages
     }))
 }
 
@@ -193,7 +199,7 @@ pub fn encode_keyboard_event(event: &KeyboardEvent) -> Vec<u8> {
 
     let modifiers = event.modifiers.to_hid_byte();
 
-    vec![MSG_KEYBOARD, event_type, event.key, modifiers]
+    vec![MSG_KEYBOARD, event_type, event.key.to_hid_usage(), modifiers]
 }
 
 /// Encode a mouse event to binary format (for sending to client if needed)
@@ -242,10 +248,9 @@ mod tests {
         match event {
             HidChannelEvent::Keyboard(kb) => {
                 assert!(matches!(kb.event_type, KeyEventType::Down));
-                assert_eq!(kb.key, 0x04);
+                assert_eq!(kb.key, CanonicalKey::KeyA);
                 assert!(kb.modifiers.left_ctrl);
                 assert!(!kb.modifiers.left_shift);
-                assert!(kb.is_usb_hid);
             }
             _ => panic!("Expected keyboard event"),
         }
@@ -270,7 +275,7 @@ mod tests {
     fn test_encode_keyboard() {
         let event = KeyboardEvent {
             event_type: KeyEventType::Down,
-            key: 0x04,
+            key: CanonicalKey::KeyA,
             modifiers: KeyboardModifiers {
                 left_ctrl: true,
                 left_shift: false,
@@ -281,7 +286,6 @@ mod tests {
                 right_alt: false,
                 right_meta: false,
             },
-            is_usb_hid: true,
         };
 
         let encoded = encode_keyboard_event(&event);

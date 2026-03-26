@@ -1,6 +1,7 @@
 // API client for One-KVM backend
 
 import { request, ApiError } from './request'
+import type { CanonicalKey } from '@/types/generated'
 
 const API_BASE = '/api'
 
@@ -357,7 +358,7 @@ export const hidApi = {
       }>
     }>('/hid/otg/self-check'),
 
-  keyboard: async (type: 'down' | 'up', key: number, modifier?: number) => {
+  keyboard: async (type: 'down' | 'up', key: CanonicalKey, modifier?: number) => {
     await ensureHidConnection()
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',

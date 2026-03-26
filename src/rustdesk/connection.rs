@@ -22,7 +22,7 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
-use crate::hid::{HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
+use crate::hid::{CanonicalKey, HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
 use crate::video::codec_constraints::{
     encoder_codec_to_id, encoder_codec_to_video_codec, video_codec_to_encoder_codec,
 };
@@ -1328,15 +1328,13 @@ impl Connection {
                 );
                 let caps_down = KeyboardEvent {
                     event_type: KeyEventType::Down,
-                    key: 0x39, // USB HID CapsLock
+                    key: CanonicalKey::CapsLock,
                     modifiers: KeyboardModifiers::default(),
-                    is_usb_hid: true,
                 };
                 let caps_up = KeyboardEvent {
                     event_type: KeyEventType::Up,
-                    key: 0x39,
+                    key: CanonicalKey::CapsLock,
                     modifiers: KeyboardModifiers::default(),
-                    is_usb_hid: true,
                 };
                 if let Err(e) = hid.send_keyboard(caps_down).await {
                     warn!("Failed to send CapsLock down: {}", e);
@@ -1351,7 +1349,7 @@ impl Connection {
         if let Some(kb_event) = convert_key_event(ke) {
             debug!(
                 "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
-                kb_event.key,
+                kb_event.key.to_hid_usage(),
                 kb_event.event_type,
                 kb_event.modifiers.to_hid_byte()
             );
