@@ -174,6 +174,10 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
 
   if (videoError.value) return 'error'
   if (videoLoading.value) return 'connecting'
+  if (videoMode.value !== 'mjpeg') {
+    if (webrtc.isConnecting.value) return 'connecting'
+    if (webrtc.isConnected.value) return 'connected'
+  }
   if (systemStore.stream?.online) return 'connected'
   return 'disconnected'
 })

@@ -71,13 +71,13 @@ fn rebuild_event_tasks(
     let mut device_info_task_added = false;
     for topic in topics {
         if is_device_info_topic(&topic) && !device_info_task_added {
+            let state = state.clone();
             let mut rx = state.subscribe_device_info();
             let event_tx = event_tx.clone();
             event_tasks.push(tokio::spawn(async move {
-                if let Some(snapshot) = rx.borrow().clone() {
-                    if event_tx.send(BusMessage::Event(snapshot)).is_err() {
-                        return;
-                    }
+                let snapshot = state.get_device_info().await;
+                if event_tx.send(BusMessage::Event(snapshot)).is_err() {
+                    return;
                 }
 
                 loop {
