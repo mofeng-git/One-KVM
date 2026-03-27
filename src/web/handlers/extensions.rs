@@ -4,7 +4,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use typeshare::typeshare;
 
@@ -323,28 +323,4 @@ pub async fn update_easytier_config(
     }
 
     Ok(Json(new_config.extensions.easytier.clone()))
-}
-
-// ============================================================================
-// Ttyd status for console (simplified)
-// ============================================================================
-
-/// Simple ttyd status for console view
-#[typeshare]
-#[derive(Debug, Serialize)]
-pub struct TtydStatus {
-    pub available: bool,
-    pub running: bool,
-}
-
-/// Get ttyd status for console view
-/// GET /api/extensions/ttyd/status
-pub async fn get_ttyd_status(State(state): State<Arc<AppState>>) -> Json<TtydStatus> {
-    let mgr = &state.extensions;
-    let status = mgr.status(ExtensionId::Ttyd).await;
-
-    Json(TtydStatus {
-        available: mgr.check_available(ExtensionId::Ttyd),
-        running: status.is_running(),
-    })
 }

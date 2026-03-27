@@ -118,12 +118,18 @@ export interface AudioDeviceInfo {
   error: string | null
 }
 
+export interface TtydDeviceInfo {
+  available: boolean
+  running: boolean
+}
+
 export interface DeviceInfoEvent {
   video: VideoDeviceInfo
   hid: HidDeviceInfo
   msd: MsdDeviceInfo | null
   atx: AtxDeviceInfo | null
   audio: AudioDeviceInfo | null
+  ttyd: TtydDeviceInfo
 }
 
 export const useSystemStore = defineStore('system', () => {

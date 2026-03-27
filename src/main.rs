@@ -576,6 +576,8 @@ async fn main() -> anyhow::Result<()> {
         data_dir.clone(),
     );
 
+    extensions.set_event_bus(events.clone()).await;
+
     // Start RustDesk service if enabled
     if let Some(ref service) = rustdesk {
         if let Err(e) = service.start().await {

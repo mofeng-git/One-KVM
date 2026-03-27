@@ -1371,8 +1371,7 @@ mod tests {
 
         // Test keyboard packet (8 bytes data)
         let data = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]; // 'A' key
-        let packet =
-            Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
+        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
 
         assert_eq!(packet[0], 0x57); // Header
         assert_eq!(packet[1], 0xAB); // Header

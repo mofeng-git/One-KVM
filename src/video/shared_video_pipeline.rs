@@ -196,7 +196,10 @@ fn log_encoding_error(
     if throttler.should_log(&key) {
         let suppressed = suppressed_errors.remove(&key).unwrap_or(0);
         if suppressed > 0 {
-            error!("Encoding failed: {} (suppressed {} repeats)", err, suppressed);
+            error!(
+                "Encoding failed: {} (suppressed {} repeats)",
+                err, suppressed
+            );
         } else {
             error!("Encoding failed: {}", err);
         }

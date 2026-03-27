@@ -100,6 +100,15 @@ pub struct AudioDeviceInfo {
     pub error: Option<String>,
 }
 
+/// ttyd status information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TtydDeviceInfo {
+    /// Whether ttyd binary is available
+    pub available: bool,
+    /// Whether ttyd is currently running
+    pub running: bool,
+}
+
 /// Per-client statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientStats {
@@ -325,6 +334,8 @@ pub enum SystemEvent {
         atx: Option<AtxDeviceInfo>,
         /// Audio device information (None if audio not enabled)
         audio: Option<AudioDeviceInfo>,
+        /// ttyd status information
+        ttyd: TtydDeviceInfo,
     },
 
     /// WebSocket error notification (for connection-level errors like lag)

@@ -197,10 +197,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             patch(handlers::extensions::update_ttyd_config),
         )
         .route(
-            "/extensions/ttyd/status",
-            get(handlers::extensions::get_ttyd_status),
-        )
-        .route(
             "/extensions/gostc/config",
             patch(handlers::extensions::update_gostc_config),
         )

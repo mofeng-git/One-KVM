@@ -11,7 +11,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
-import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, authApi } from '@/api'
+import { streamApi, hidApi, atxApi, atxConfigApi, authApi } from '@/api'
 import { CanonicalKey } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
@@ -162,7 +162,6 @@ const changingPassword = ref(false)
 // ttyd (web terminal) state
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
-let ttydPollInterval: ReturnType<typeof setInterval> | null = null
 
 // Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
@@ -965,6 +964,7 @@ function handleDeviceInfo(data: any) {
   const prevAudioStreaming = systemStore.audio?.streaming ?? false
   const prevAudioDevice = systemStore.audio?.device ?? null
   systemStore.updateFromDeviceInfo(data)
+  ttydStatus.value = data.ttyd ?? null
 
   const nextAudioStreaming = systemStore.audio?.streaming ?? false
   const nextAudioDevice = systemStore.audio?.device ?? null
@@ -1484,14 +1484,6 @@ async function handleChangePassword() {
 }
 
 // ttyd (web terminal) functions
-async function fetchTtydStatus() {
-  try {
-    ttydStatus.value = await extensionsApi.getTtydStatus()
-  } catch {
-    ttydStatus.value = null
-  }
-}
-
 function openTerminal() {
   if (!ttydStatus.value?.running) return
   showTerminalDialog.value = true
@@ -2112,10 +2104,6 @@ onMounted(async () => {
     document.documentElement.classList.add('dark')
   }
 
-  // Fetch ttyd status initially and poll every 10 seconds
-  fetchTtydStatus()
-  ttydPollInterval = setInterval(fetchTtydStatus, 10000)
-
   // Note: Video mode is now synced from server via device_info event
   // The handleDeviceInfo function will automatically switch to the server's mode
   // localStorage preference is only used when server mode matches
@@ -2140,12 +2128,6 @@ onUnmounted(() => {
   if (mouseFlushTimer !== null) {
     clearTimeout(mouseFlushTimer)
     mouseFlushTimer = null
-  }
-
-  // Clear ttyd poll interval
-  if (ttydPollInterval) {
-    clearInterval(ttydPollInterval)
-    ttydPollInterval = null
   }
 
   // Clear all timers

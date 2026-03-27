@@ -667,12 +667,6 @@ export interface TtydConfigUpdate {
 	shell?: string;
 }
 
-/** Simple ttyd status for console view */
-export interface TtydStatus {
-	available: boolean;
-	running: boolean;
-}
-
 export interface VideoConfigUpdate {
 	device?: string;
 	format?: string;

@@ -7,9 +7,9 @@ use crate::auth::{SessionStore, UserStore};
 use crate::config::ConfigStore;
 use crate::events::{
     AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, MsdDeviceInfo, SystemEvent,
-    VideoDeviceInfo,
+    TtydDeviceInfo, VideoDeviceInfo,
 };
-use crate::extensions::ExtensionManager;
+use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
 use crate::msd::MsdController;
 use crate::otg::OtgService;
@@ -157,12 +157,13 @@ impl AppState {
     /// Uses tokio::join! to collect all device info in parallel for better performance.
     pub async fn get_device_info(&self) -> SystemEvent {
         // Collect all device info in parallel
-        let (video, hid, msd, atx, audio) = tokio::join!(
+        let (video, hid, msd, atx, audio, ttyd) = tokio::join!(
             self.collect_video_info(),
             self.collect_hid_info(),
             self.collect_msd_info(),
             self.collect_atx_info(),
             self.collect_audio_info(),
+            self.collect_ttyd_info(),
         );
 
         SystemEvent::DeviceInfo {
@@ -171,6 +172,7 @@ impl AppState {
             msd,
             atx,
             audio,
+            ttyd,
         }
     }
 
@@ -261,5 +263,15 @@ impl AppState {
             quality: status.quality.to_string(),
             error: status.error,
         })
+    }
+
+    /// Collect ttyd status information
+    async fn collect_ttyd_info(&self) -> TtydDeviceInfo {
+        let status = self.extensions.status(ExtensionId::Ttyd).await;
+
+        TtydDeviceInfo {
+            available: self.extensions.check_available(ExtensionId::Ttyd),
+            running: status.is_running(),
+        }
     }
 }

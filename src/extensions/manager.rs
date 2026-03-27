@@ -10,6 +10,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
 
 use super::types::*;
+use crate::events::EventBus;
 
 /// Maximum number of log lines to keep per extension
 const LOG_BUFFER_SIZE: usize = 200;
@@ -31,6 +32,7 @@ pub struct ExtensionManager {
     processes: RwLock<HashMap<ExtensionId, ExtensionProcess>>,
     /// Cached availability status (checked once at startup)
     availability: HashMap<ExtensionId, bool>,
+    event_bus: RwLock<Option<Arc<EventBus>>>,
 }
 
 impl Default for ExtensionManager {
@@ -51,6 +53,22 @@ impl ExtensionManager {
         Self {
             processes: RwLock::new(HashMap::new()),
             availability,
+            event_bus: RwLock::new(None),
+        }
+    }
+
+    /// Set event bus for ttyd status notifications.
+    pub async fn set_event_bus(&self, event_bus: Arc<EventBus>) {
+        *self.event_bus.write().await = Some(event_bus);
+    }
+
+    async fn mark_ttyd_status_dirty(&self, id: ExtensionId) {
+        if id != ExtensionId::Ttyd {
+            return;
+        }
+
+        if let Some(ref event_bus) = *self.event_bus.read().await {
+            event_bus.mark_device_info_dirty();
         }
     }
 
@@ -65,17 +83,38 @@ impl ExtensionManager {
             return ExtensionStatus::Unavailable;
         }
 
-        let processes = self.processes.read().await;
-        match processes.get(&id) {
-            Some(proc) => {
-                if let Some(pid) = proc.child.id() {
-                    ExtensionStatus::Running { pid }
-                } else {
-                    ExtensionStatus::Stopped
+        let mut processes = self.processes.write().await;
+        let exited = {
+            let Some(proc) = processes.get_mut(&id) else {
+                return ExtensionStatus::Stopped;
+            };
+
+            match proc.child.try_wait() {
+                Ok(Some(status)) => {
+                    tracing::info!("Extension {} exited with status {}", id, status);
+                    true
+                }
+                Ok(None) => {
+                    return match proc.child.id() {
+                        Some(pid) => ExtensionStatus::Running { pid },
+                        None => ExtensionStatus::Stopped,
+                    };
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to query status for {}: {}", id, e);
+                    return match proc.child.id() {
+                        Some(pid) => ExtensionStatus::Running { pid },
+                        None => ExtensionStatus::Stopped,
+                    };
                 }
             }
-            None => ExtensionStatus::Stopped,
+        };
+
+        if exited {
+            processes.remove(&id);
         }
+
+        ExtensionStatus::Stopped
     }
 
     /// Start an extension with the given configuration
@@ -134,6 +173,8 @@ impl ExtensionManager {
 
         let mut processes = self.processes.write().await;
         processes.insert(id, ExtensionProcess { child, logs });
+        drop(processes);
+        self.mark_ttyd_status_dirty(id).await;
 
         Ok(())
     }
@@ -146,6 +187,8 @@ impl ExtensionManager {
             if let Err(e) = proc.child.kill().await {
                 tracing::warn!("Failed to kill {}: {}", id, e);
             }
+            drop(processes);
+            self.mark_ttyd_status_dirty(id).await;
         }
         Ok(())
     }

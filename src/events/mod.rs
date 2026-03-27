@@ -7,7 +7,7 @@ pub mod types;
 
 pub use types::{
     AtxDeviceInfo, AudioDeviceInfo, ClientStats, HidDeviceInfo, MsdDeviceInfo, SystemEvent,
-    VideoDeviceInfo,
+    TtydDeviceInfo, VideoDeviceInfo,
 };
 
 use tokio::sync::broadcast;

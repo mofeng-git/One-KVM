@@ -199,7 +199,12 @@ pub fn encode_keyboard_event(event: &KeyboardEvent) -> Vec<u8> {
 
     let modifiers = event.modifiers.to_hid_byte();
 
-    vec![MSG_KEYBOARD, event_type, event.key.to_hid_usage(), modifiers]
+    vec![
+        MSG_KEYBOARD,
+        event_type,
+        event.key.to_hid_usage(),
+        modifiers,
+    ]
 }
 
 /// Encode a mouse event to binary format (for sending to client if needed)

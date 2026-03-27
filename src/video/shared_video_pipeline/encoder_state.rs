@@ -159,7 +159,9 @@ impl MjpegDecoderKind {
     }
 }
 
-pub(super) fn build_encoder_state(config: &SharedVideoPipelineConfig) -> Result<EncoderThreadState> {
+pub(super) fn build_encoder_state(
+    config: &SharedVideoPipelineConfig,
+) -> Result<EncoderThreadState> {
     let registry = EncoderRegistry::global();
 
     let get_codec_name =
@@ -408,8 +410,10 @@ pub(super) fn build_encoder_state(config: &SharedVideoPipelineConfig) -> Result<
                     backend, codec_name
                 );
             }
-            let encoder =
-                VP8Encoder::with_codec(VP8Config::low_latency(config.resolution, config.bitrate_kbps()), &codec_name)?;
+            let encoder = VP8Encoder::with_codec(
+                VP8Config::low_latency(config.resolution, config.bitrate_kbps()),
+                &codec_name,
+            )?;
             info!("Created VP8 encoder: {}", encoder.codec_name());
             Box::new(VP8EncoderWrapper(encoder))
         }
@@ -421,8 +425,10 @@ pub(super) fn build_encoder_state(config: &SharedVideoPipelineConfig) -> Result<
                     backend, codec_name
                 );
             }
-            let encoder =
-                VP9Encoder::with_codec(VP9Config::low_latency(config.resolution, config.bitrate_kbps()), &codec_name)?;
+            let encoder = VP9Encoder::with_codec(
+                VP9Config::low_latency(config.resolution, config.bitrate_kbps()),
+                &codec_name,
+            )?;
             info!("Created VP9 encoder: {}", encoder.codec_name());
             Box::new(VP9EncoderWrapper(encoder))
         }
@@ -505,7 +511,10 @@ pub(super) fn build_encoder_state(config: &SharedVideoPipelineConfig) -> Result<
     })
 }
 
-fn h264_direct_input_format(codec_name: &str, input_format: PixelFormat) -> Option<H264InputFormat> {
+fn h264_direct_input_format(
+    codec_name: &str,
+    input_format: PixelFormat,
+) -> Option<H264InputFormat> {
     if codec_name.contains("rkmpp") {
         match input_format {
             PixelFormat::Yuyv => Some(H264InputFormat::Yuyv422),
@@ -531,7 +540,10 @@ fn h264_direct_input_format(codec_name: &str, input_format: PixelFormat) -> Opti
     }
 }
 
-fn h265_direct_input_format(codec_name: &str, input_format: PixelFormat) -> Option<H265InputFormat> {
+fn h265_direct_input_format(
+    codec_name: &str,
+    input_format: PixelFormat,
+) -> Option<H265InputFormat> {
     if codec_name.contains("rkmpp") {
         match input_format {
             PixelFormat::Yuyv => Some(H265InputFormat::Yuyv422),

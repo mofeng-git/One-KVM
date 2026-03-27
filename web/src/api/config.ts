@@ -30,7 +30,6 @@ import type {
   GostcConfigUpdate,
   EasytierConfig,
   EasytierConfigUpdate,
-  TtydStatus,
 } from '@/types/generated'
 
 import { request } from './request'
@@ -235,11 +234,6 @@ export const extensionsApi = {
    */
   logs: (id: string, lines = 100) =>
     request<ExtensionLogs>(`/extensions/${id}/logs?lines=${lines}`),
-
-  /**
-   * 获取 ttyd 状态（简化版，用于控制台）
-   */
-  getTtydStatus: () => request<TtydStatus>('/extensions/ttyd/status'),
 
   /**
    * 更新 ttyd 配置
