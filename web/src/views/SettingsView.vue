@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
@@ -83,6 +84,7 @@ import {
 } from 'lucide-vue-next'
 
 const { t, te, locale } = useI18n()
+const route = useRoute()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
@@ -92,6 +94,21 @@ const activeSection = ref('appearance')
 const mobileMenuOpen = ref(false)
 const loading = ref(false)
 const saved = ref(false)
+const SETTINGS_SECTION_IDS = new Set([
+  'appearance',
+  'account',
+  'access',
+  'video',
+  'hid',
+  'msd',
+  'atx',
+  'environment',
+  'ext-ttyd',
+  'ext-rustdesk',
+  'ext-rtsp',
+  'ext-remote-access',
+  'about',
+])
 
 // Navigation structure
 const navGroups = computed(() => [
@@ -133,6 +150,10 @@ const navGroups = computed(() => [
 function selectSection(id: string) {
   activeSection.value = id
   mobileMenuOpen.value = false
+}
+
+function normalizeSettingsSection(value: unknown): string | null {
+  return typeof value === 'string' && SETTINGS_SECTION_IDS.has(value) ? value : null
 }
 
 // Theme
@@ -1850,6 +1871,13 @@ watch(() => config.value.hid_backend, () => {
   otgSelfCheckResult.value = null
   otgSelfCheckError.value = ''
 })
+
+watch(() => route.query.tab, (tab) => {
+  const section = normalizeSettingsSection(tab)
+  if (section && activeSection.value !== section) {
+    selectSection(section)
+  }
+}, { immediate: true })
 </script>
 
 <template>

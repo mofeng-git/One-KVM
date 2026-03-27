@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
@@ -137,6 +137,8 @@ let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas be
 
 // Cursor visibility (from localStorage, updated via storage event)
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
+let interactionListenersBound = false
+const isConsoleActive = ref(false)
 
 function syncMouseModeFromConfig() {
   const mouseAbsolute = configStore.hid?.mouse_absolute
@@ -610,6 +612,7 @@ function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise
 
 function shouldSuppressAutoReconnect(): boolean {
   return videoMode.value === 'mjpeg'
+    || !isConsoleActive.value
     || videoSession.localSwitching.value
     || videoSession.backendSwitching.value
     || videoRestarting.value
@@ -1951,6 +1954,10 @@ function handlePointerLockError() {
   isPointerLocked.value = false
 }
 
+function handleFullscreenChange() {
+  isFullscreen.value = !!document.fullscreenElement
+}
+
 function handleBlur() {
   pressedKeys.value = []
   activeModifierMask.value = 0
@@ -2001,6 +2008,71 @@ function handleMouseSendIntervalChange(e: Event) {
 function handleMouseSendIntervalStorage(e: StorageEvent) {
   if (e.key !== 'hidMouseThrottle') return
   setMouseMoveSendInterval(loadMouseMoveSendIntervalFromStorage())
+}
+
+function registerInteractionListeners() {
+  if (interactionListenersBound) return
+
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+  window.addEventListener('blur', handleBlur)
+  window.addEventListener('mouseup', handleWindowMouseUp)
+  window.addEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
+  window.addEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
+  window.addEventListener('storage', handleMouseSendIntervalStorage)
+
+  document.addEventListener('pointerlockchange', handlePointerLockChange)
+  document.addEventListener('pointerlockerror', handlePointerLockError)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+  interactionListenersBound = true
+}
+
+function unregisterInteractionListeners() {
+  if (!interactionListenersBound) return
+
+  window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('blur', handleBlur)
+  window.removeEventListener('mouseup', handleWindowMouseUp)
+  window.removeEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
+  window.removeEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
+  window.removeEventListener('storage', handleMouseSendIntervalStorage)
+
+  document.removeEventListener('pointerlockchange', handlePointerLockChange)
+  document.removeEventListener('pointerlockerror', handlePointerLockError)
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+
+  interactionListenersBound = false
+}
+
+async function activateConsoleView() {
+  isConsoleActive.value = true
+  registerInteractionListeners()
+
+  if (videoMode.value !== 'mjpeg' && webrtc.videoTrack.value) {
+    await nextTick()
+    await rebindWebRTCVideo()
+    return
+  }
+
+  if (
+    videoMode.value !== 'mjpeg'
+    && !webrtc.isConnected.value
+    && !webrtc.isConnecting.value
+    && !videoSession.localSwitching.value
+    && !videoSession.backendSwitching.value
+    && !initialModeRestoreInProgress
+  ) {
+    await connectWebRTCOnly(videoMode.value)
+  }
+}
+
+function deactivateConsoleView() {
+  isConsoleActive.value = false
+  handleBlur()
+  exitPointerLock()
+  unregisterInteractionListeners()
 }
 
 // ActionBar handlers
@@ -2074,28 +2146,10 @@ onMounted(async () => {
     syncMouseModeFromConfig()
   }).catch(() => {})
 
-  window.addEventListener('keydown', handleKeyDown)
-  window.addEventListener('keyup', handleKeyUp)
-  window.addEventListener('blur', handleBlur)
-  window.addEventListener('mouseup', handleWindowMouseUp)
-
   setMouseMoveSendInterval(loadMouseMoveSendIntervalFromStorage())
-
-  // Listen for cursor visibility changes from HidConfigPopover
-  window.addEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
-  window.addEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
-  window.addEventListener('storage', handleMouseSendIntervalStorage)
 
   watch(() => configStore.hid?.mouse_absolute, () => {
     syncMouseModeFromConfig()
-  })
-
-  // Pointer Lock event listeners
-  document.addEventListener('pointerlockchange', handlePointerLockChange)
-  document.addEventListener('pointerlockerror', handlePointerLockError)
-
-  document.addEventListener('fullscreenchange', () => {
-    isFullscreen.value = !!document.fullscreenElement
   })
 
   const storedTheme = localStorage.getItem('theme')
@@ -2118,7 +2172,17 @@ onMounted(async () => {
   }
 })
 
+onActivated(() => {
+  void activateConsoleView()
+})
+
+onDeactivated(() => {
+  deactivateConsoleView()
+})
+
 onUnmounted(() => {
+  deactivateConsoleView()
+
   // Reset initial device info flag
   initialDeviceInfoReceived = false
   initialModeRestoreDone = false
@@ -2154,18 +2218,6 @@ onUnmounted(() => {
 
   // Exit pointer lock if active
   exitPointerLock()
-
-  window.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('keyup', handleKeyUp)
-  window.removeEventListener('blur', handleBlur)
-  window.removeEventListener('mouseup', handleWindowMouseUp)
-  window.removeEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
-  window.removeEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
-  window.removeEventListener('storage', handleMouseSendIntervalStorage)
-
-  // Remove pointer lock event listeners
-  document.removeEventListener('pointerlockchange', handlePointerLockChange)
-  document.removeEventListener('pointerlockerror', handlePointerLockError)
 })
 </script>
 

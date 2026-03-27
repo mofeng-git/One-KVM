@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { KeepAlive, onMounted, watch } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
@@ -56,5 +56,10 @@ watch(
 </script>
 
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component, route }">
+    <KeepAlive v-if="authStore.isAuthenticated">
+      <component :is="Component" v-if="route.name === 'Console'" />
+    </KeepAlive>
+    <component :is="Component" v-if="route.name !== 'Console' || !authStore.isAuthenticated" />
+  </RouterView>
 </template>
