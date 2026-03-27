@@ -6,7 +6,7 @@
 //! - Error tracking
 //! - Log throttling to prevent log flooding
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -63,9 +63,6 @@ pub struct AudioHealthMonitor {
     throttler: LogThrottler,
     /// Configuration
     config: AudioMonitorConfig,
-    /// Whether monitoring is active (reserved for future use)
-    #[allow(dead_code)]
-    running: AtomicBool,
     /// Current retry count
     retry_count: AtomicU32,
     /// Last error code (for change detection)
@@ -80,7 +77,6 @@ impl AudioHealthMonitor {
             status: RwLock::new(AudioHealthStatus::Healthy),
             throttler: LogThrottler::with_secs(throttle_secs),
             config,
-            running: AtomicBool::new(false),
             retry_count: AtomicU32::new(0),
             last_error_code: RwLock::new(None),
         }

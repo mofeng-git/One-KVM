@@ -12,7 +12,6 @@
 //!     │
 //!     ├── MJPEG Mode
 //!     │       └── Streamer ──► MjpegStreamHandler
-//!     │           (Future: MjpegStreamer with WsAudio/WsHid)
 //!     │
 //!     └── WebRTC Mode
 //!             └── WebRtcStreamer ──► H264SessionManager
@@ -211,21 +210,7 @@ impl VideoStreamManager {
             }
         }
 
-        // Configure WebRTC capture source after initialization
-        let (device_path, resolution, format, fps, jpeg_quality) =
-            self.streamer.current_capture_config().await;
-        info!(
-            "WebRTC capture config after init: {}x{} {:?} @ {}fps",
-            resolution.width, resolution.height, format, fps
-        );
-        self.webrtc_streamer
-            .update_video_config(resolution, format, fps)
-            .await;
-        if let Some(device_path) = device_path {
-            self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
-                .await;
-        }
+        self.sync_webrtc_capture_source("after init").await;
 
         Ok(())
     }
@@ -351,11 +336,17 @@ impl VideoStreamManager {
             }
         }
 
+        self.sync_webrtc_capture_source("for WebRTC ensure").await;
+
+        Ok(())
+    }
+
+    async fn sync_webrtc_capture_source(&self, reason: &str) {
         let (device_path, resolution, format, fps, jpeg_quality) =
             self.streamer.current_capture_config().await;
         info!(
-            "Configuring WebRTC capture: {}x{} {:?} @ {}fps",
-            resolution.width, resolution.height, format, fps
+            "Syncing WebRTC capture source {}: {}x{} {:?} @ {}fps",
+            reason, resolution.width, resolution.height, format, fps
         );
         self.webrtc_streamer
             .update_video_config(resolution, format, fps)
@@ -364,9 +355,9 @@ impl VideoStreamManager {
             self.webrtc_streamer
                 .set_capture_device(device_path, jpeg_quality)
                 .await;
+        } else {
+            warn!("No capture device configured while syncing WebRTC capture source");
         }
-
-        Ok(())
     }
 
     /// Internal implementation of mode switching (called with lock held)
@@ -471,22 +462,7 @@ impl VideoStreamManager {
                     }
                 }
 
-                let (device_path, resolution, format, fps, jpeg_quality) =
-                    self.streamer.current_capture_config().await;
-                info!(
-                    "Configuring WebRTC capture pipeline: {}x{} {:?} @ {}fps",
-                    resolution.width, resolution.height, format, fps
-                );
-                self.webrtc_streamer
-                    .update_video_config(resolution, format, fps)
-                    .await;
-                if let Some(device_path) = device_path {
-                    self.webrtc_streamer
-                        .set_capture_device(device_path, jpeg_quality)
-                        .await;
-                } else {
-                    warn!("No capture device configured for WebRTC");
-                }
+                self.sync_webrtc_capture_source("for WebRTC mode").await;
 
                 let codec = self.webrtc_streamer.current_video_codec().await;
                 let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
@@ -603,19 +579,7 @@ impl VideoStreamManager {
                     self.streamer.init_auto().await?;
                 }
 
-                // Synchronize WebRTC config with current capture config
-                let (device_path, resolution, format, fps, jpeg_quality) =
-                    self.streamer.current_capture_config().await;
-                self.webrtc_streamer
-                    .update_video_config(resolution, format, fps)
-                    .await;
-                if let Some(device_path) = device_path {
-                    self.webrtc_streamer
-                        .set_capture_device(device_path, jpeg_quality)
-                        .await;
-                } else {
-                    warn!("No capture device configured for WebRTC");
-                }
+                self.sync_webrtc_capture_source("before start").await;
             }
         }
 
@@ -760,24 +724,10 @@ impl VideoStreamManager {
         }
 
         // 2. Synchronize WebRTC config with capture config
-        let (device_path, resolution, format, fps, jpeg_quality) =
-            self.streamer.current_capture_config().await;
-        tracing::info!(
-            "Connecting encoded frame subscription: {}x{} {:?} @ {}fps",
-            resolution.width,
-            resolution.height,
-            format,
-            fps
-        );
-        self.webrtc_streamer
-            .update_video_config(resolution, format, fps)
+        let (device_path, _, _, _, _) = self.streamer.current_capture_config().await;
+        self.sync_webrtc_capture_source("for encoded frame subscription")
             .await;
-        if let Some(device_path) = device_path {
-            self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
-                .await;
-        } else {
-            tracing::warn!("No capture device configured for encoded frames");
+        if device_path.is_none() {
             return None;
         }
 

@@ -41,10 +41,6 @@ const PACKET_HEADER: [u8; 2] = [0x57, 0xAB];
 /// Default address (accepts any address)
 const DEFAULT_ADDR: u8 = 0x00;
 
-/// Broadcast address (no response required)
-#[allow(dead_code)]
-const BROADCAST_ADDR: u8 = 0xFF;
-
 /// Default baud rate for CH9329
 pub const DEFAULT_BAUD_RATE: u32 = 9600;
 
@@ -67,7 +63,6 @@ const RECONNECT_DELAY_MS: u64 = 2000;
 const INIT_WAIT_MS: u64 = 3000;
 
 /// CH9329 command codes
-#[allow(dead_code)]
 pub mod cmd {
     /// Get chip version, USB status, and LED status
     pub const GET_INFO: u8 = 0x01;
@@ -81,16 +76,6 @@ pub mod cmd {
     pub const SEND_MS_REL_DATA: u8 = 0x05;
     /// Send custom HID data
     pub const SEND_MY_HID_DATA: u8 = 0x06;
-    /// Read custom HID data (sent by chip automatically)
-    pub const READ_MY_HID_DATA: u8 = 0x87;
-    /// Get parameter configuration
-    pub const GET_PARA_CFG: u8 = 0x08;
-    /// Set parameter configuration
-    pub const SET_PARA_CFG: u8 = 0x09;
-    /// Get USB string descriptor
-    pub const GET_USB_STRING: u8 = 0x0A;
-    /// Set USB string descriptor
-    pub const SET_USB_STRING: u8 = 0x0B;
     /// Restore factory default configuration
     pub const SET_DEFAULT_CFG: u8 = 0x0C;
     /// Software reset
@@ -98,7 +83,6 @@ pub mod cmd {
 }
 
 /// Response command mask (success = cmd | 0x80, error = cmd | 0xC0)
-#[allow(dead_code)]
 const RESPONSE_SUCCESS_MASK: u8 = 0x80;
 const RESPONSE_ERROR_MASK: u8 = 0xC0;
 

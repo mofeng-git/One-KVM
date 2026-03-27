@@ -6,7 +6,7 @@
 //! - Error state tracking
 //! - Log throttling to prevent log flooding
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -50,12 +50,6 @@ pub struct MsdHealthMonitor {
     status: RwLock<MsdHealthStatus>,
     /// Log throttler to prevent log flooding
     throttler: LogThrottler,
-    /// Configuration
-    #[allow(dead_code)]
-    config: MsdMonitorConfig,
-    /// Whether monitoring is active (reserved for future use)
-    #[allow(dead_code)]
-    running: AtomicBool,
     /// Error count (for tracking)
     error_count: AtomicU32,
     /// Last error code (for change detection)
@@ -69,8 +63,6 @@ impl MsdHealthMonitor {
         Self {
             status: RwLock::new(MsdHealthStatus::Healthy),
             throttler: LogThrottler::with_secs(throttle_secs),
-            config,
-            running: AtomicBool::new(false),
             error_count: AtomicU32::new(0),
             last_error_code: RwLock::new(None),
         }

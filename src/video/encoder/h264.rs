@@ -244,9 +244,6 @@ pub struct H264Encoder {
     codec_name: String,
     /// Frame counter
     frame_count: u64,
-    /// YUV420P buffer for input (reserved for future use)
-    #[allow(dead_code)]
-    yuv_buffer: Vec<u8>,
     /// Required YUV buffer length from hwcodec
     yuv_length: i32,
 }
@@ -326,7 +323,6 @@ impl H264Encoder {
             encoder_type,
             codec_name: codec_name.to_string(),
             frame_count: 0,
-            yuv_buffer: vec![0u8; yuv_length as usize],
             yuv_length,
         })
     }

@@ -37,12 +37,6 @@ const H265_NAL_SPS: u8 = 33;
 const H265_NAL_PPS: u8 = 34;
 const H265_NAL_AUD: u8 = 35;
 const H265_NAL_FILLER: u8 = 38;
-#[allow(dead_code)]
-const H265_NAL_SEI_PREFIX: u8 = 39; // PREFIX_SEI_NUT
-#[allow(dead_code)]
-const H265_NAL_SEI_SUFFIX: u8 = 40; // SUFFIX_SEI_NUT
-#[allow(dead_code)]
-const H265_NAL_AP: u8 = 48; // Aggregation Packet
 const H265_NAL_FU: u8 = 49; // Fragmentation Unit
 
 /// H.265 NAL header size
@@ -50,11 +44,6 @@ const H265_NAL_HEADER_SIZE: usize = 2;
 
 /// FU header size (1 byte after NAL header)
 const H265_FU_HEADER_SIZE: usize = 1;
-
-/// Fixed PayloadHdr for FU packets: Type=49, LayerID=0, TID=1
-/// This matches the rtp crate's FRAG_PAYLOAD_HDR
-#[allow(dead_code)]
-const FU_PAYLOAD_HDR: [u8; 2] = [0x62, 0x01];
 
 /// Fixed PayloadHdr for AP packets: Type=48, LayerID=0, TID=1
 /// This matches the rtp crate's AGGR_PAYLOAD_HDR

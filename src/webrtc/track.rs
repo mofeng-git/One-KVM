@@ -262,8 +262,6 @@ impl Default for AudioTrackConfig {
 
 /// Audio track for WebRTC streaming
 pub struct AudioTrack {
-    #[allow(dead_code)]
-    config: AudioTrackConfig,
     /// RTP track
     track: Arc<TrackLocalStaticRTP>,
     /// Running flag
@@ -284,7 +282,6 @@ impl AudioTrack {
         let (running_tx, _) = watch::channel(false);
 
         Self {
-            config,
             track,
             running: Arc::new(running_tx),
         }

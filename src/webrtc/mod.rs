@@ -9,7 +9,7 @@
 //!
 //! Architecture:
 //! ```text
-//! VideoCapturer (MJPEG/YUYV)
+//! V4L2 capture
 //!        |
 //!        v
 //! SharedVideoPipeline (decode -> convert -> encode)
