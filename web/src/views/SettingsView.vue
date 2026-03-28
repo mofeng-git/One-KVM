@@ -39,6 +39,7 @@ import type {
 } from '@/types/generated'
 import { setLanguage } from '@/i18n'
 import { useClipboard } from '@/composables/useClipboard'
+import { getVideoFormatState } from '@/lib/video-format-support'
 import AppLayout from '@/components/AppLayout.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -780,6 +781,21 @@ const availableFormats = computed(() => {
   return selectedDevice.value.formats
 })
 
+const availableFormatOptions = computed(() => {
+  return availableFormats.value.map(format => {
+    const state = getVideoFormatState(format.format, 'config', config.value.encoder_backend)
+    return {
+      ...format,
+      state,
+      disabled: state === 'unsupported',
+    }
+  })
+})
+
+const selectableFormats = computed(() => {
+  return availableFormatOptions.value.filter(format => !format.disabled)
+})
+
 const selectedFormat = computed(() => {
   if (!selectedDevice.value || !config.value.video_format) return null
   return selectedDevice.value.formats.find(f => f.format === config.value.video_format)
@@ -810,17 +826,22 @@ const availableFps = computed(() => {
   return currentRes ? currentRes.fps : []
 })
 
-// Watch for device change to set default format
-watch(() => config.value.video_device, () => {
-  if (availableFormats.value.length > 0) {
-    const isValid = availableFormats.value.some(f => f.format === config.value.video_format)
-    if (!isValid) {
-      config.value.video_format = availableFormats.value[0]?.format || ''
+// Keep the selected format aligned with currently selectable formats.
+watch(
+  selectableFormats,
+  () => {
+    if (selectableFormats.value.length === 0) {
+      config.value.video_format = ''
+      return
     }
-  } else {
-    config.value.video_format = ''
-  }
-})
+
+    const isValid = selectableFormats.value.some(f => f.format === config.value.video_format)
+    if (!isValid) {
+      config.value.video_format = selectableFormats.value[0]?.format || ''
+    }
+  },
+  { deep: true },
+)
 
 // Watch for format change to set default resolution
 watch(() => config.value.video_format, () => {
@@ -2091,7 +2112,14 @@ watch(() => route.query.tab, (tab) => {
                   <Label for="video-format">{{ t('settings.videoFormat') }}</Label>
                   <select id="video-format" v-model="config.video_format" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_device">
                     <option value="">{{ t('settings.selectFormat') }}</option>
-                    <option v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">{{ fmt.format }} - {{ fmt.description }}</option>
+                    <option
+                      v-for="fmt in availableFormatOptions"
+                      :key="fmt.format"
+                      :value="fmt.format"
+                      :disabled="fmt.disabled"
+                    >
+                      {{ fmt.format }} - {{ fmt.description }}{{ fmt.disabled ? t('common.notSupportedYet') : '' }}
+                    </option>
                   </select>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">

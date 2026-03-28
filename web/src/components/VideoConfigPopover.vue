@@ -27,6 +27,7 @@ import {
   type BitratePreset,
   type StreamConstraintsResponse,
 } from '@/api'
+import { getVideoFormatState, isVideoFormatSelectable } from '@/lib/video-format-support'
 import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
@@ -167,6 +168,12 @@ const isBrowserSupported = (codecId: string): boolean => {
   return browserSupportedCodecs.value.has(codecId)
 }
 
+const getFormatState = (formatName: string) =>
+  getVideoFormatState(formatName, props.videoMode, currentEncoderBackend.value)
+
+const isFormatUnsupported = (formatName: string): boolean =>
+  getFormatState(formatName) === 'unsupported'
+
 // Translate backend name for display
 const translateBackendName = (backend: string | undefined): string => {
   if (!backend) return ''
@@ -189,6 +196,10 @@ const hasHighFps = (format: { resolutions: { fps: number[] }[] }): boolean => {
 
 // Check if a format is recommended based on video mode
 const isFormatRecommended = (formatName: string): boolean => {
+  if (!isVideoFormatSelectable(formatName, props.videoMode, currentEncoderBackend.value)) {
+    return false
+  }
+
   const formats = availableFormats.value
   const upperFormat = formatName.toUpperCase()
 
@@ -225,12 +236,7 @@ const isFormatRecommended = (formatName: string): boolean => {
 // Check if a format is not recommended for current video mode
 // In WebRTC mode, compressed formats (MJPEG/JPEG) are not recommended
 const isFormatNotRecommended = (formatName: string): boolean => {
-  const upperFormat = formatName.toUpperCase()
-  // WebRTC mode: MJPEG/JPEG are not recommended (require decoding before encoding)
-  if (props.videoMode !== 'mjpeg') {
-    return upperFormat === 'MJPEG' || upperFormat === 'JPEG'
-  }
-  return false
+  return getFormatState(formatName) === 'not_recommended'
 }
 
 // Selected values (mode comes from props)
@@ -303,6 +309,14 @@ const availableFormats = computed(() => {
   return device?.formats || []
 })
 
+const availableFormatOptions = computed(() => {
+  return availableFormats.value.map(format => ({
+    ...format,
+    state: getFormatState(format.format),
+    disabled: isFormatUnsupported(format.format),
+  }))
+})
+
 const availableResolutions = computed(() => {
   const format = availableFormats.value.find(f => f.format === selectedFormat.value)
   return format?.resolutions || []
@@ -317,8 +331,8 @@ const availableFps = computed(() => {
 
 // Get selected format description for display in trigger
 const selectedFormatInfo = computed(() => {
-  const format = availableFormats.value.find(f => f.format === selectedFormat.value)
-  return format ? { description: format.description, format: format.format } : null
+  const format = availableFormatOptions.value.find(f => f.format === selectedFormat.value)
+  return format
 })
 
 // Get selected codec info for display in trigger
@@ -423,6 +437,37 @@ function handleVideoModeChange(mode: unknown) {
   emit('update:videoMode', mode as VideoMode)
 }
 
+function findFirstSelectableFormat(
+  formats: VideoDevice['formats'],
+): VideoDevice['formats'][number] | undefined {
+  return formats.find(format =>
+    isVideoFormatSelectable(format.format, props.videoMode, currentEncoderBackend.value),
+  )
+}
+
+function clearFormatSelection() {
+  selectedFormat.value = ''
+  selectedResolution.value = ''
+  selectedFps.value = 30
+}
+
+function selectFormatWithDefaults(format: string) {
+  if (isFormatUnsupported(format)) return
+
+  selectedFormat.value = format
+
+  const formatData = availableFormats.value.find(f => f.format === format)
+  const resolution = formatData?.resolutions[0]
+  if (!resolution) {
+    selectedResolution.value = ''
+    selectedFps.value = 30
+    return
+  }
+
+  selectedResolution.value = `${resolution.width}x${resolution.height}`
+  selectedFps.value = resolution.fps[0] || 30
+}
+
 // Handle device change
 function handleDeviceChange(devicePath: unknown) {
   if (typeof devicePath !== 'string') return
@@ -431,31 +476,22 @@ function handleDeviceChange(devicePath: unknown) {
 
   // Auto-select first format
   const device = devices.value.find(d => d.path === devicePath)
-  if (device?.formats[0]) {
-    selectedFormat.value = device.formats[0].format
-
-    // Auto-select first resolution
-    const resolution = device.formats[0].resolutions[0]
-    if (resolution) {
-      selectedResolution.value = `${resolution.width}x${resolution.height}`
-      selectedFps.value = resolution.fps[0] || 30
-    }
+  const format = device ? findFirstSelectableFormat(device.formats) : undefined
+  if (!format) {
+    clearFormatSelection()
+    return
   }
+
+  selectFormatWithDefaults(format.format)
 }
 
 // Handle format change
 function handleFormatChange(format: unknown) {
   if (typeof format !== 'string') return
-  selectedFormat.value = format
-  isDirty.value = true
+  if (isFormatUnsupported(format)) return
 
-  // Auto-select first resolution for this format
-  const formatData = availableFormats.value.find(f => f.format === format)
-  if (formatData?.resolutions[0]) {
-    const resolution = formatData.resolutions[0]
-    selectedResolution.value = `${resolution.width}x${resolution.height}`
-    selectedFps.value = resolution.fps[0] || 30
-  }
+  selectFormatWithDefaults(format)
+  isDirty.value = true
 }
 
 // Handle resolution change
@@ -567,6 +603,29 @@ watch(currentConfig, () => {
   if (props.open && isDirty.value) return
   syncFromCurrentIfChanged()
 }, { deep: true })
+
+watch(
+  [availableFormatOptions, () => props.videoMode, currentEncoderBackend],
+  () => {
+    if (!selectedDevice.value) return
+
+    const currentFormat = availableFormatOptions.value.find(
+      format => format.format === selectedFormat.value,
+    )
+    if (currentFormat && !currentFormat.disabled) {
+      return
+    }
+
+    const fallback = availableFormatOptions.value.find(format => !format.disabled)
+    if (!fallback) {
+      clearFormatSelection()
+      return
+    }
+
+    selectFormatWithDefaults(fallback.format)
+  },
+  { deep: true },
+)
 </script>
 
 <template>
@@ -771,6 +830,12 @@ watch(currentConfig, () => {
                 <div v-if="selectedFormatInfo" class="flex items-center gap-1.5 truncate">
                   <span class="truncate">{{ selectedFormatInfo.description }}</span>
                   <span
+                    v-if="selectedFormatInfo.state === 'unsupported'"
+                    class="shrink-0 text-muted-foreground"
+                  >
+                    {{ t('common.notSupportedYet') }}
+                  </span>
+                  <span
                     v-if="isFormatRecommended(selectedFormatInfo.format)"
                     class="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 shrink-0"
                   >
@@ -787,13 +852,20 @@ watch(currentConfig, () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  v-for="format in availableFormats"
+                  v-for="format in availableFormatOptions"
                   :key="format.format"
                   :value="format.format"
-                  class="text-xs"
+                  :disabled="format.disabled"
+                  :class="['text-xs', { 'opacity-50': format.disabled }]"
                 >
                   <div class="flex items-center gap-2">
                     <span>{{ format.description }}</span>
+                    <span
+                      v-if="format.state === 'unsupported'"
+                      class="text-muted-foreground"
+                    >
+                      {{ t('common.notSupportedYet') }}
+                    </span>
                     <span
                       v-if="isFormatRecommended(format.format)"
                       class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"

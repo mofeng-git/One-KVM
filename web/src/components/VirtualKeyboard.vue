@@ -26,6 +26,7 @@ const props = defineProps<{
   attached?: boolean
   capsLock?: boolean
   pressedKeys?: CanonicalKey[]
+  consumerEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -718,7 +719,7 @@ onUnmounted(() => {
       <!-- Keyboard body -->
       <div class="vkb-body">
         <!-- Media keys row -->
-        <div class="vkb-media-row">
+        <div v-if="props.consumerEnabled !== false" class="vkb-media-row">
           <button
             v-for="key in mediaKeys"
             :key="key"

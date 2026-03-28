@@ -32,6 +32,7 @@ export default {
     menu: 'Menu',
     optional: 'Optional',
     recommended: 'Recommended',
+    notSupportedYet: ' (Not Yet Supported)',
     create: 'Create',
     creating: 'Creating...',
     deleting: 'Deleting...',

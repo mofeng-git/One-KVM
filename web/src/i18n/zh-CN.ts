@@ -32,6 +32,7 @@ export default {
     menu: '菜单',
     optional: '可选',
     recommended: '推荐',
+    notSupportedYet: '（尚未支持）',
     create: '创建',
     creating: '创建中...',
     deleting: '删除中...',

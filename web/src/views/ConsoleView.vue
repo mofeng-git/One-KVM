@@ -12,7 +12,7 @@ import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, atxConfigApi, authApi } from '@/api'
-import { CanonicalKey } from '@/types/generated'
+import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
 import { toast } from 'vue-sonner'
@@ -156,6 +156,12 @@ function syncMouseModeFromConfig() {
 const virtualKeyboardVisible = ref(false)
 const virtualKeyboardAttached = ref(true)
 const statsSheetOpen = ref(false)
+const virtualKeyboardConsumerEnabled = computed(() => {
+  const hid = configStore.hid
+  if (!hid) return true
+  if (hid.backend !== HidBackend.Otg) return true
+  return hid.otg_functions?.consumer !== false
+})
 
 // Change password dialog state
 const changePasswordDialogOpen = ref(false)
@@ -2528,6 +2534,7 @@ onUnmounted(() => {
         v-model:attached="virtualKeyboardAttached"
         :caps-lock="keyboardLed.capsLock"
         :pressed-keys="pressedKeys"
+        :consumer-enabled="virtualKeyboardConsumerEnabled"
         @key-down="handleVirtualKeyDown"
         @key-up="handleVirtualKeyUp"
       />
