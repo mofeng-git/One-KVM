@@ -397,6 +397,10 @@ impl OtgService {
             return Ok(());
         }
 
+        if let Err(e) = super::configfs::ensure_libcomposite_loaded() {
+            warn!("Failed to ensure libcomposite is available: {}", e);
+        }
+
         // Check if OTG is available
         if !Self::is_available() {
             let error = "OTG not available: ConfigFS not mounted or no UDC found".to_string();

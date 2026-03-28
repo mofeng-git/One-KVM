@@ -3,6 +3,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
+use std::process::Command;
 
 use crate::error::{AppError, Result};
 
@@ -27,6 +28,42 @@ pub const USB_BCD_USB: u16 = 0x0200;
 /// Check if ConfigFS is available
 pub fn is_configfs_available() -> bool {
     Path::new(CONFIGFS_PATH).exists()
+}
+
+/// Ensure libcomposite support is available for USB gadget operations.
+///
+/// This is a best-effort runtime fallback for systems where `libcomposite`
+/// is built as a module and not loaded yet. It does not try to mount configfs;
+/// mounting remains an explicit system responsibility.
+pub fn ensure_libcomposite_loaded() -> Result<()> {
+    if is_configfs_available() {
+        return Ok(());
+    }
+
+    if !Path::new("/sys/module/libcomposite").exists() {
+        let status = Command::new("modprobe")
+            .arg("libcomposite")
+            .status()
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to run modprobe libcomposite: {}", e))
+            })?;
+
+        if !status.success() {
+            return Err(AppError::Internal(format!(
+                "modprobe libcomposite failed with status {}",
+                status
+            )));
+        }
+    }
+
+    if is_configfs_available() {
+        Ok(())
+    } else {
+        Err(AppError::Internal(
+            "libcomposite is not available after modprobe; check configfs mount and kernel support"
+                .to_string(),
+        ))
+    }
 }
 
 /// Find available UDC (USB Device Controller)
