@@ -241,6 +241,7 @@ const videoDetails = computed<StatusDetail[]>(() => {
 
 const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
   const hid = systemStore.hid
+  if (hid?.errorCode === 'udc_not_configured') return 'disconnected'
   if (hid?.error) return 'error'
 
   // In WebRTC mode, check DataChannel status first
@@ -348,11 +349,13 @@ const hidDetails = computed<StatusDetail[]>(() => {
   const hid = systemStore.hid
   if (!hid) return []
   const errorMessage = buildHidErrorMessage(hid.error, hid.errorCode, hid.backend)
+  const hidErrorStatus: StatusDetail['status'] =
+    hid.errorCode === 'udc_not_configured' ? 'warning' : 'error'
 
   const details: StatusDetail[] = [
     { label: t('statusCard.device'), value: hid.device || '-' },
     { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
-    { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error ? 'error' : hid.initialized ? 'ok' : 'warning' },
+    { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error && hid.errorCode !== 'udc_not_configured' ? 'error' : hid.initialized ? 'ok' : 'warning' },
     { label: t('statusCard.online'), value: hid.online ? t('statusCard.yes') : t('statusCard.no'), status: hid.online ? 'ok' : hid.initialized ? 'warning' : 'error' },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
     {
@@ -365,10 +368,10 @@ const hidDetails = computed<StatusDetail[]>(() => {
   ]
 
   if (hid.errorCode) {
-    details.push({ label: t('statusCard.errorCode'), value: hid.errorCode, status: 'error' })
+    details.push({ label: t('statusCard.errorCode'), value: hid.errorCode, status: hidErrorStatus })
   }
   if (errorMessage) {
-    details.push({ label: t('common.error'), value: errorMessage, status: 'error' })
+    details.push({ label: t('common.error'), value: errorMessage, status: hidErrorStatus })
   }
 
   // Add HID channel info based on video mode

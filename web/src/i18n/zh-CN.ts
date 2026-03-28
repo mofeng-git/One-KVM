@@ -363,7 +363,7 @@ export default {
     recovered: 'HID 已恢复',
     recoveredDesc: '{backend} HID 设备已成功重连',
     errorHints: {
-      udcNotConfigured: '被控机尚未完成 USB 枚举',
+      udcNotConfigured: 'OTG 已就绪，等待被控机连接并完成 USB 枚举',
       disabled: 'HID 后端已禁用',
       hidDeviceMissing: '未找到 HID 设备节点，可尝试重启 HID 服务',
       notOpened: 'HID 设备尚未打开，可尝试重启 HID 服务',

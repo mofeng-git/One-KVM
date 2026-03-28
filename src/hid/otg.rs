@@ -141,7 +141,7 @@ pub struct OtgBackend {
     /// Screen resolution for absolute mouse (using parking_lot::RwLock for sync access)
     screen_resolution: parking_lot::RwLock<Option<(u32, u32)>>,
     /// UDC name for state checking (e.g., "fcc00000.usb")
-    udc_name: parking_lot::RwLock<Option<String>>,
+    udc_name: Arc<parking_lot::RwLock<Option<String>>>,
     /// Whether the backend has been initialized.
     initialized: AtomicBool,
     /// Whether the device is currently online (UDC configured and devices accessible)
@@ -156,10 +156,10 @@ pub struct OtgBackend {
     eagain_count: AtomicU8,
     /// Runtime change notifier.
     runtime_notify_tx: watch::Sender<()>,
-    /// LED listener stop flag.
-    led_worker_stop: Arc<AtomicBool>,
-    /// Keyboard LED listener thread.
-    led_worker: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Runtime monitor stop flag.
+    runtime_worker_stop: Arc<AtomicBool>,
+    /// Runtime monitor thread.
+    runtime_worker: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 /// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
@@ -186,7 +186,7 @@ impl OtgBackend {
             mouse_buttons: AtomicU8::new(0),
             led_state: Arc::new(parking_lot::RwLock::new(LedState::default())),
             screen_resolution: parking_lot::RwLock::new(Some((1920, 1080))),
-            udc_name: parking_lot::RwLock::new(paths.udc),
+            udc_name: Arc::new(parking_lot::RwLock::new(paths.udc)),
             initialized: AtomicBool::new(false),
             online: AtomicBool::new(false),
             last_error: parking_lot::RwLock::new(None),
@@ -194,8 +194,8 @@ impl OtgBackend {
             error_count: AtomicU8::new(0),
             eagain_count: AtomicU8::new(0),
             runtime_notify_tx,
-            led_worker_stop: Arc::new(AtomicBool::new(false)),
-            led_worker: Mutex::new(None),
+            runtime_worker_stop: Arc::new(AtomicBool::new(false)),
+            runtime_worker: Mutex::new(None),
         })
     }
 
@@ -297,13 +297,16 @@ impl OtgBackend {
         *self.udc_name.write() = Some(udc.to_string());
     }
 
-    /// Check if the UDC is in "configured" state
-    ///
-    /// This is based on PiKVM's `__is_udc_configured()` method.
-    /// The UDC state file indicates whether the USB host has enumerated and configured the gadget.
-    pub fn is_udc_configured(&self) -> bool {
-        let udc_name = self.udc_name.read();
-        if let Some(ref udc) = *udc_name {
+    fn read_udc_configured(udc_name: &parking_lot::RwLock<Option<String>>) -> bool {
+        let current_udc = udc_name.read().clone().or_else(Self::find_udc);
+        if let Some(udc) = current_udc {
+            {
+                let mut guard = udc_name.write();
+                if guard.as_ref() != Some(&udc) {
+                    *guard = Some(udc.clone());
+                }
+            }
+
             let state_path = format!("/sys/class/udc/{}/state", udc);
             match fs::read_to_string(&state_path) {
                 Ok(content) => {
@@ -313,24 +316,20 @@ impl OtgBackend {
                 }
                 Err(e) => {
                     debug!("Failed to read UDC state from {}: {}", state_path, e);
-                    // If we can't read the state, assume it might be configured
-                    // to avoid blocking operations unnecessarily
                     true
                 }
             }
         } else {
-            // No UDC name set, try to auto-detect
-            if let Some(udc) = Self::find_udc() {
-                drop(udc_name);
-                *self.udc_name.write() = Some(udc.clone());
-                let state_path = format!("/sys/class/udc/{}/state", udc);
-                fs::read_to_string(&state_path)
-                    .map(|s| s.trim().to_lowercase() == "configured")
-                    .unwrap_or(true)
-            } else {
-                true
-            }
+            true
         }
+    }
+
+    /// Check if the UDC is in "configured" state
+    ///
+    /// This is based on PiKVM's `__is_udc_configured()` method.
+    /// The UDC state file indicates whether the USB host has enumerated and configured the gadget.
+    pub fn is_udc_configured(&self) -> bool {
+        Self::read_udc_configured(&self.udc_name)
     }
 
     /// Find the first available UDC
@@ -824,107 +823,131 @@ impl OtgBackend {
         }
     }
 
-    fn start_led_worker(&self) {
-        if !self.keyboard_leds_enabled {
-            return;
+    fn poll_keyboard_led_once(
+        file: &mut Option<File>,
+        path: &PathBuf,
+        led_state: &Arc<parking_lot::RwLock<LedState>>,
+    ) -> bool {
+        if file.is_none() {
+            match OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(path)
+            {
+                Ok(opened) => {
+                    *file = Some(opened);
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to open OTG keyboard LED listener {}: {}",
+                        path.display(),
+                        err
+                    );
+                    thread::sleep(Duration::from_millis(500));
+                    return false;
+                }
+            }
         }
 
-        let Some(path) = self.keyboard_path.clone() else {
-            return;
+        let Some(file_ref) = file.as_mut() else {
+            return false;
         };
 
-        let mut worker = self.led_worker.lock();
+        let mut pollfd = [PollFd::new(
+            file_ref.as_fd(),
+            PollFlags::POLLIN | PollFlags::POLLERR | PollFlags::POLLHUP,
+        )];
+
+        match poll(&mut pollfd, PollTimeout::from(500u16)) {
+            Ok(0) => false,
+            Ok(_) => {
+                let Some(revents) = pollfd[0].revents() else {
+                    return false;
+                };
+
+                if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP) {
+                    *file = None;
+                    return true;
+                }
+
+                if !revents.contains(PollFlags::POLLIN) {
+                    return false;
+                }
+
+                let mut buf = [0u8; 1];
+                match file_ref.read(&mut buf) {
+                    Ok(1) => {
+                        let next = LedState::from_byte(buf[0]);
+                        let mut guard = led_state.write();
+                        if *guard == next {
+                            false
+                        } else {
+                            *guard = next;
+                            true
+                        }
+                    }
+                    Ok(_) => false,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => false,
+                    Err(err) => {
+                        warn!("OTG keyboard LED listener read failed: {}", err);
+                        *file = None;
+                        true
+                    }
+                }
+            }
+            Err(err) => {
+                warn!("OTG keyboard LED listener poll failed: {}", err);
+                *file = None;
+                true
+            }
+        }
+    }
+
+    fn start_runtime_worker(&self) {
+        let mut worker = self.runtime_worker.lock();
         if worker.is_some() {
             return;
         }
 
-        self.led_worker_stop.store(false, Ordering::Relaxed);
-        let stop = self.led_worker_stop.clone();
+        self.runtime_worker_stop.store(false, Ordering::Relaxed);
+        let stop = self.runtime_worker_stop.clone();
+        let keyboard_leds_enabled = self.keyboard_leds_enabled;
+        let keyboard_path = self.keyboard_path.clone();
         let led_state = self.led_state.clone();
+        let udc_name = self.udc_name.clone();
         let runtime_notify_tx = self.runtime_notify_tx.clone();
 
         let handle = thread::Builder::new()
-            .name("otg-led-listener".to_string())
+            .name("otg-runtime-monitor".to_string())
             .spawn(move || {
+                let mut last_udc_configured = Some(Self::read_udc_configured(&udc_name));
+                let mut keyboard_led_file: Option<File> = None;
+
                 while !stop.load(Ordering::Relaxed) {
-                    let mut file = match OpenOptions::new()
-                        .read(true)
-                        .custom_flags(libc::O_NONBLOCK)
-                        .open(&path)
-                    {
-                        Ok(file) => file,
-                        Err(err) => {
-                            warn!(
-                                "Failed to open OTG keyboard LED listener {}: {}",
-                                path.display(),
-                                err
-                            );
-                            let _ = runtime_notify_tx.send(());
-                            thread::sleep(Duration::from_millis(500));
-                            continue;
-                        }
-                    };
+                    let mut changed = false;
 
-                    while !stop.load(Ordering::Relaxed) {
-                        let mut pollfd = [PollFd::new(
-                            file.as_fd(),
-                            PollFlags::POLLIN | PollFlags::POLLERR | PollFlags::POLLHUP,
-                        )];
-
-                        match poll(&mut pollfd, PollTimeout::from(500u16)) {
-                            Ok(0) => continue,
-                            Ok(_) => {
-                                let Some(revents) = pollfd[0].revents() else {
-                                    continue;
-                                };
-
-                                if revents.contains(PollFlags::POLLERR)
-                                    || revents.contains(PollFlags::POLLHUP)
-                                {
-                                    let _ = runtime_notify_tx.send(());
-                                    break;
-                                }
-
-                                if !revents.contains(PollFlags::POLLIN) {
-                                    continue;
-                                }
-
-                                let mut buf = [0u8; 1];
-                                match file.read(&mut buf) {
-                                    Ok(1) => {
-                                        let next = LedState::from_byte(buf[0]);
-                                        let changed = {
-                                            let mut guard = led_state.write();
-                                            if *guard == next {
-                                                false
-                                            } else {
-                                                *guard = next;
-                                                true
-                                            }
-                                        };
-                                        if changed {
-                                            let _ = runtime_notify_tx.send(());
-                                        }
-                                    }
-                                    Ok(_) => {}
-                                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
-                                    Err(err) => {
-                                        warn!("OTG keyboard LED listener read failed: {}", err);
-                                        let _ = runtime_notify_tx.send(());
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                warn!("OTG keyboard LED listener poll failed: {}", err);
-                                let _ = runtime_notify_tx.send(());
-                                break;
-                            }
-                        }
+                    let current_udc_configured = Self::read_udc_configured(&udc_name);
+                    if last_udc_configured != Some(current_udc_configured) {
+                        last_udc_configured = Some(current_udc_configured);
+                        changed = true;
                     }
 
-                    if !stop.load(Ordering::Relaxed) {
-                        thread::sleep(Duration::from_millis(100));
+                    if keyboard_leds_enabled {
+                        if let Some(path) = keyboard_path.as_ref() {
+                            changed |= Self::poll_keyboard_led_once(
+                                &mut keyboard_led_file,
+                                path,
+                                &led_state,
+                            );
+                        } else {
+                            thread::sleep(Duration::from_millis(500));
+                        }
+                    } else {
+                        thread::sleep(Duration::from_millis(500));
+                    }
+
+                    if changed {
+                        let _ = runtime_notify_tx.send(());
                     }
                 }
             });
@@ -934,14 +957,14 @@ impl OtgBackend {
                 *worker = Some(handle);
             }
             Err(err) => {
-                warn!("Failed to spawn OTG keyboard LED listener: {}", err);
+                warn!("Failed to spawn OTG runtime monitor: {}", err);
             }
         }
     }
 
-    fn stop_led_worker(&self) {
-        self.led_worker_stop.store(true, Ordering::Relaxed);
-        if let Some(handle) = self.led_worker.lock().take() {
+    fn stop_runtime_worker(&self) {
+        self.runtime_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.runtime_worker.lock().take() {
             let _ = handle.join();
         }
     }
@@ -1034,7 +1057,7 @@ impl HidBackend for OtgBackend {
         // Mark as online if all devices opened successfully
         self.initialized.store(true, Ordering::Relaxed);
         self.notify_runtime_changed();
-        self.start_led_worker();
+        self.start_runtime_worker();
         self.mark_online();
 
         Ok(())
@@ -1143,7 +1166,7 @@ impl HidBackend for OtgBackend {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        self.stop_led_worker();
+        self.stop_runtime_worker();
 
         // Reset before closing
         self.reset().await?;
@@ -1195,8 +1218,8 @@ pub fn is_otg_available() -> bool {
 /// Implement Drop for OtgBackend to close device files
 impl Drop for OtgBackend {
     fn drop(&mut self) {
-        self.led_worker_stop.store(true, Ordering::Relaxed);
-        if let Some(handle) = self.led_worker.get_mut().take() {
+        self.runtime_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.runtime_worker.get_mut().take() {
             let _ = handle.join();
         }
         // Close device files

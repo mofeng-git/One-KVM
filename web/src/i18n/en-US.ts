@@ -363,7 +363,7 @@ export default {
     recovered: 'HID Recovered',
     recoveredDesc: '{backend} HID device reconnected successfully',
     errorHints: {
-      udcNotConfigured: 'Target host has not finished USB enumeration yet',
+      udcNotConfigured: 'OTG is ready, waiting for the target host to connect and finish USB enumeration',
       disabled: 'HID backend is disabled',
       hidDeviceMissing: 'HID gadget device node is missing, try restarting HID service',
       notOpened: 'HID device is not open, try restarting HID service',
