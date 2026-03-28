@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
-  supportedLanguages,
   setLanguage,
   getCurrentLanguage,
   type SupportedLocale,
@@ -13,13 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Monitor, Lock, Eye, EyeOff, User, Languages } from 'lucide-vue-next'
+import { Monitor, Lock, Eye, EyeOff, User } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -33,7 +26,7 @@ const showPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
 
-function switchLanguage(lang: SupportedLocale) {
+function handleLanguageChange(lang: SupportedLocale) {
   currentLanguage.value = lang
   setLanguage(lang)
 }
@@ -67,28 +60,21 @@ async function handleLogin() {
 <template>
   <div class="min-h-screen min-h-dvh flex items-center justify-center bg-background p-4">
     <Card class="relative w-full max-w-sm">
-      <div class="absolute top-4 right-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="gap-2">
-              <Languages class="w-4 h-4" />
-              <span class="text-sm">
-                {{ supportedLanguages.find((l) => l.code === currentLanguage)?.name }}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              v-for="lang in supportedLanguages"
-              :key="lang.code"
-              :class="{ 'bg-accent': lang.code === currentLanguage }"
-              @click="switchLanguage(lang.code)"
-            >
-              <span class="mr-2">{{ lang.flag }}</span>
-              {{ lang.name }}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div class="absolute top-4 right-4 flex gap-2">
+        <Button
+          :variant="currentLanguage === 'zh-CN' ? 'default' : 'outline'"
+          size="sm"
+          @click="handleLanguageChange('zh-CN')"
+        >
+          中文
+        </Button>
+        <Button
+          :variant="currentLanguage === 'en-US' ? 'default' : 'outline'"
+          size="sm"
+          @click="handleLanguageChange('en-US')"
+        >
+          English
+        </Button>
       </div>
 
       <CardHeader class="space-y-2 pt-10 text-center sm:pt-12">
@@ -96,7 +82,7 @@ async function handleLogin() {
           <Monitor class="w-8 h-8 text-primary" />
         </div>
         <CardTitle class="text-xl sm:text-2xl">One-KVM</CardTitle>
-        <CardDescription>{{ t('auth.loginPrompt') }}</CardDescription>
+        <CardDescription>{{ t('auth.login') }}</CardDescription>
       </CardHeader>
 
       <CardContent>
