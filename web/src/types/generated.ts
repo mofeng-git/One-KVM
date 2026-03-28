@@ -58,18 +58,26 @@ export interface OtgDescriptorConfig {
 export enum OtgHidProfile {
 	/** Full HID device set (keyboard + relative mouse + absolute mouse + consumer control) */
 	Full = "full",
-	/** Full HID device set without MSD */
-	FullNoMsd = "full_no_msd",
 	/** Full HID device set without consumer control */
 	FullNoConsumer = "full_no_consumer",
-	/** Full HID device set without consumer control and MSD */
-	FullNoConsumerNoMsd = "full_no_consumer_no_msd",
 	/** Legacy profile: only keyboard */
 	LegacyKeyboard = "legacy_keyboard",
 	/** Legacy profile: only relative mouse */
 	LegacyMouseRelative = "legacy_mouse_relative",
 	/** Custom function selection */
 	Custom = "custom",
+}
+
+/** OTG endpoint budget policy. */
+export enum OtgEndpointBudget {
+	/** Derive a safe default from the selected UDC. */
+	Auto = "auto",
+	/** Limit OTG gadget functions to 5 endpoints. */
+	Five = "five",
+	/** Limit OTG gadget functions to 6 endpoints. */
+	Six = "six",
+	/** Do not impose a software endpoint budget. */
+	Unlimited = "unlimited",
 }
 
 /** OTG HID function selection (used when profile is Custom) */
@@ -84,18 +92,18 @@ export interface OtgHidFunctions {
 export interface HidConfig {
 	/** HID backend type */
 	backend: HidBackend;
-	/** OTG keyboard device path */
-	otg_keyboard: string;
-	/** OTG mouse device path */
-	otg_mouse: string;
 	/** OTG UDC (USB Device Controller) name */
 	otg_udc?: string;
 	/** OTG USB device descriptor configuration */
 	otg_descriptor?: OtgDescriptorConfig;
 	/** OTG HID function profile */
 	otg_profile?: OtgHidProfile;
+	/** OTG endpoint budget policy */
+	otg_endpoint_budget?: OtgEndpointBudget;
 	/** OTG HID function selection (used when profile is Custom) */
 	otg_functions?: OtgHidFunctions;
+	/** Enable keyboard LED/status feedback for OTG keyboard */
+	otg_keyboard_leds?: boolean;
 	/** CH9329 serial port */
 	ch9329_port: string;
 	/** CH9329 baud rate */
@@ -580,7 +588,9 @@ export interface HidConfigUpdate {
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
 	otg_profile?: OtgHidProfile;
+	otg_endpoint_budget?: OtgEndpointBudget;
 	otg_functions?: OtgHidFunctionsUpdate;
+	otg_keyboard_leds?: boolean;
 	mouse_absolute?: boolean;
 }
 

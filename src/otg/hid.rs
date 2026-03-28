@@ -7,14 +7,15 @@ use super::configfs::{
     create_dir, create_symlink, remove_dir, remove_file, write_bytes, write_file,
 };
 use super::function::{FunctionMeta, GadgetFunction};
-use super::report_desc::{CONSUMER_CONTROL, KEYBOARD, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
+use super::report_desc::{
+    CONSUMER_CONTROL, KEYBOARD, KEYBOARD_WITH_LED, MOUSE_ABSOLUTE, MOUSE_RELATIVE,
+};
 use crate::error::Result;
 
 /// HID function type
 #[derive(Debug, Clone)]
 pub enum HidFunctionType {
-    /// Keyboard (no LED feedback)
-    /// Uses 1 endpoint: IN
+    /// Keyboard
     Keyboard,
     /// Relative mouse (traditional mouse movement)
     /// Uses 1 endpoint: IN
@@ -28,7 +29,7 @@ pub enum HidFunctionType {
 }
 
 impl HidFunctionType {
-    /// Get endpoints required for this function type
+    /// Get the base endpoint cost for this function type.
     pub fn endpoints(&self) -> u8 {
         match self {
             HidFunctionType::Keyboard => 1,
@@ -59,7 +60,7 @@ impl HidFunctionType {
     }
 
     /// Get report length in bytes
-    pub fn report_length(&self) -> u8 {
+    pub fn report_length(&self, _keyboard_leds: bool) -> u8 {
         match self {
             HidFunctionType::Keyboard => 8,
             HidFunctionType::MouseRelative => 4,
@@ -69,9 +70,15 @@ impl HidFunctionType {
     }
 
     /// Get report descriptor
-    pub fn report_desc(&self) -> &'static [u8] {
+    pub fn report_desc(&self, keyboard_leds: bool) -> &'static [u8] {
         match self {
-            HidFunctionType::Keyboard => KEYBOARD,
+            HidFunctionType::Keyboard => {
+                if keyboard_leds {
+                    KEYBOARD_WITH_LED
+                } else {
+                    KEYBOARD
+                }
+            }
             HidFunctionType::MouseRelative => MOUSE_RELATIVE,
             HidFunctionType::MouseAbsolute => MOUSE_ABSOLUTE,
             HidFunctionType::ConsumerControl => CONSUMER_CONTROL,
@@ -98,15 +105,18 @@ pub struct HidFunction {
     func_type: HidFunctionType,
     /// Cached function name (avoids repeated allocation)
     name: String,
+    /// Whether keyboard LED/status feedback is enabled.
+    keyboard_leds: bool,
 }
 
 impl HidFunction {
     /// Create a keyboard function
-    pub fn keyboard(instance: u8) -> Self {
+    pub fn keyboard(instance: u8, keyboard_leds: bool) -> Self {
         Self {
             instance,
             func_type: HidFunctionType::Keyboard,
             name: format!("hid.usb{}", instance),
+            keyboard_leds,
         }
     }
 
@@ -116,6 +126,7 @@ impl HidFunction {
             instance,
             func_type: HidFunctionType::MouseRelative,
             name: format!("hid.usb{}", instance),
+            keyboard_leds: false,
         }
     }
 
@@ -125,6 +136,7 @@ impl HidFunction {
             instance,
             func_type: HidFunctionType::MouseAbsolute,
             name: format!("hid.usb{}", instance),
+            keyboard_leds: false,
         }
     }
 
@@ -134,6 +146,7 @@ impl HidFunction {
             instance,
             func_type: HidFunctionType::ConsumerControl,
             name: format!("hid.usb{}", instance),
+            keyboard_leds: false,
         }
     }
 
@@ -181,11 +194,14 @@ impl GadgetFunction for HidFunction {
         )?;
         write_file(
             &func_path.join("report_length"),
-            &self.func_type.report_length().to_string(),
+            &self.func_type.report_length(self.keyboard_leds).to_string(),
         )?;
 
         // Write report descriptor
-        write_bytes(&func_path.join("report_desc"), self.func_type.report_desc())?;
+        write_bytes(
+            &func_path.join("report_desc"),
+            self.func_type.report_desc(self.keyboard_leds),
+        )?;
 
         debug!(
             "Created HID function: {} at {}",
@@ -232,14 +248,15 @@ mod tests {
         assert_eq!(HidFunctionType::MouseRelative.endpoints(), 1);
         assert_eq!(HidFunctionType::MouseAbsolute.endpoints(), 1);
 
-        assert_eq!(HidFunctionType::Keyboard.report_length(), 8);
-        assert_eq!(HidFunctionType::MouseRelative.report_length(), 4);
-        assert_eq!(HidFunctionType::MouseAbsolute.report_length(), 6);
+        assert_eq!(HidFunctionType::Keyboard.report_length(false), 8);
+        assert_eq!(HidFunctionType::Keyboard.report_length(true), 8);
+        assert_eq!(HidFunctionType::MouseRelative.report_length(false), 4);
+        assert_eq!(HidFunctionType::MouseAbsolute.report_length(false), 6);
     }
 
     #[test]
     fn test_hid_function_names() {
-        let kb = HidFunction::keyboard(0);
+        let kb = HidFunction::keyboard(0, false);
         assert_eq!(kb.name(), "hid.usb0");
         assert_eq!(kb.device_path(), PathBuf::from("/dev/hidg0"));
 

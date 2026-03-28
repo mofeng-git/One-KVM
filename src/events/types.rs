@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::hid::LedState;
+
 // ============================================================================
 // Device Info Structures (for system.device_info event)
 // ============================================================================
@@ -45,6 +47,10 @@ pub struct HidDeviceInfo {
     pub online: bool,
     /// Whether absolute mouse positioning is supported
     pub supports_absolute_mouse: bool,
+    /// Whether keyboard LED/status feedback is enabled.
+    pub keyboard_leds_enabled: bool,
+    /// Last known keyboard LED state.
+    pub led_state: LedState,
     /// Device path (e.g., serial port for CH9329)
     pub device: Option<String>,
     /// Error message if any, None if OK

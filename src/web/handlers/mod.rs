@@ -598,36 +598,12 @@ pub struct SetupRequest {
     pub hid_ch9329_baudrate: Option<u32>,
     pub hid_otg_udc: Option<String>,
     pub hid_otg_profile: Option<String>,
+    pub hid_otg_endpoint_budget: Option<crate::config::OtgEndpointBudget>,
+    pub hid_otg_keyboard_leds: Option<bool>,
+    pub msd_enabled: Option<bool>,
     // Extension settings
     pub ttyd_enabled: Option<bool>,
     pub rustdesk_enabled: Option<bool>,
-}
-
-fn normalize_otg_profile_for_low_endpoint(config: &mut AppConfig) {
-    if !matches!(config.hid.backend, crate::config::HidBackend::Otg) {
-        return;
-    }
-    let udc = crate::otg::configfs::resolve_udc_name(config.hid.otg_udc.as_deref());
-    let Some(udc) = udc else {
-        return;
-    };
-    if !crate::otg::configfs::is_low_endpoint_udc(&udc) {
-        return;
-    }
-    match config.hid.otg_profile {
-        crate::config::OtgHidProfile::Full => {
-            config.hid.otg_profile = crate::config::OtgHidProfile::FullNoConsumer;
-        }
-        crate::config::OtgHidProfile::FullNoMsd => {
-            config.hid.otg_profile = crate::config::OtgHidProfile::FullNoConsumerNoMsd;
-        }
-        crate::config::OtgHidProfile::Custom => {
-            if config.hid.otg_functions.consumer {
-                config.hid.otg_functions.consumer = false;
-            }
-        }
-        _ => {}
-    }
 }
 
 pub async fn setup_init(
@@ -703,31 +679,18 @@ pub async fn setup_init(
                 config.hid.otg_udc = Some(udc);
             }
             if let Some(profile) = req.hid_otg_profile.clone() {
-                config.hid.otg_profile = match profile.as_str() {
-                    "full" => crate::config::OtgHidProfile::Full,
-                    "full_no_msd" => crate::config::OtgHidProfile::FullNoMsd,
-                    "full_no_consumer" => crate::config::OtgHidProfile::FullNoConsumer,
-                    "full_no_consumer_no_msd" => crate::config::OtgHidProfile::FullNoConsumerNoMsd,
-                    "legacy_keyboard" => crate::config::OtgHidProfile::LegacyKeyboard,
-                    "legacy_mouse_relative" => crate::config::OtgHidProfile::LegacyMouseRelative,
-                    "custom" => crate::config::OtgHidProfile::Custom,
-                    _ => config.hid.otg_profile.clone(),
-                };
-                if matches!(config.hid.backend, crate::config::HidBackend::Otg) {
-                    match config.hid.otg_profile {
-                        crate::config::OtgHidProfile::Full
-                        | crate::config::OtgHidProfile::FullNoConsumer => {
-                            config.msd.enabled = true;
-                        }
-                        crate::config::OtgHidProfile::FullNoMsd
-                        | crate::config::OtgHidProfile::FullNoConsumerNoMsd
-                        | crate::config::OtgHidProfile::LegacyKeyboard
-                        | crate::config::OtgHidProfile::LegacyMouseRelative => {
-                            config.msd.enabled = false;
-                        }
-                        crate::config::OtgHidProfile::Custom => {}
-                    }
+                if let Some(parsed) = crate::config::OtgHidProfile::from_legacy_str(&profile) {
+                    config.hid.otg_profile = parsed;
                 }
+            }
+            if let Some(budget) = req.hid_otg_endpoint_budget {
+                config.hid.otg_endpoint_budget = budget;
+            }
+            if let Some(enabled) = req.hid_otg_keyboard_leds {
+                config.hid.otg_keyboard_leds = enabled;
+            }
+            if let Some(enabled) = req.msd_enabled {
+                config.msd.enabled = enabled;
             }
 
             // Extension settings
@@ -737,29 +700,18 @@ pub async fn setup_init(
             if let Some(enabled) = req.rustdesk_enabled {
                 config.rustdesk.enabled = enabled;
             }
-
-            normalize_otg_profile_for_low_endpoint(config);
         })
         .await?;
 
     // Get updated config for HID reload
     let new_config = state.config.get();
 
-    if matches!(new_config.hid.backend, crate::config::HidBackend::Otg) {
-        let mut hid_functions = new_config.hid.effective_otg_functions();
-        if let Some(udc) = crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
-        {
-            if crate::otg::configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
-                tracing::warn!(
-                    "UDC {} has low endpoint resources, disabling consumer control",
-                    udc
-                );
-                hid_functions.consumer = false;
-            }
-        }
-        if let Err(e) = state.otg_service.update_hid_functions(hid_functions).await {
-            tracing::warn!("Failed to apply HID functions during setup: {}", e);
-        }
+    if let Err(e) = state
+        .otg_service
+        .apply_config(&new_config.hid, &new_config.msd)
+        .await
+    {
+        tracing::warn!("Failed to apply OTG config during setup: {}", e);
     }
 
     tracing::info!(
@@ -881,8 +833,10 @@ pub async fn update_config(
     let new_config: AppConfig = serde_json::from_value(merged)
         .map_err(|e| AppError::BadRequest(format!("Invalid config format: {}", e)))?;
 
-    let mut new_config = new_config;
-    normalize_otg_profile_for_low_endpoint(&mut new_config);
+    let new_config = new_config;
+    new_config
+        .hid
+        .validate_otg_endpoint_budget(new_config.msd.enabled)?;
 
     // Apply the validated config
     state.config.set(new_config.clone()).await?;
@@ -910,232 +864,76 @@ pub async fn update_config(
     // Get new config for device reloading
     let new_config = state.config.get();
 
-    // Video config processing - always reload if section was sent
     if has_video {
-        tracing::info!("Video config sent, applying settings...");
-
-        let device = new_config
-            .video
-            .device
-            .clone()
-            .ok_or_else(|| AppError::BadRequest("video_device is required".to_string()))?;
-
-        // Map to PixelFormat/Resolution
-        let format = new_config
-            .video
-            .format
-            .as_ref()
-            .and_then(|f| {
-                serde_json::from_value::<crate::video::format::PixelFormat>(
-                    serde_json::Value::String(f.clone()),
-                )
-                .ok()
-            })
-            .unwrap_or(crate::video::format::PixelFormat::Mjpeg);
-        let resolution =
-            crate::video::format::Resolution::new(new_config.video.width, new_config.video.height);
-
-        if let Err(e) = state
-            .stream_manager
-            .apply_video_config(&device, format, resolution, new_config.video.fps)
-            .await
+        if let Err(e) =
+            config::apply::apply_video_config(&state, &old_config.video, &new_config.video).await
         {
             tracing::error!("Failed to apply video config: {}", e);
-            // Rollback config on failure
             state.config.set((*old_config).clone()).await?;
             return Ok(Json(LoginResponse {
                 success: false,
                 message: Some(format!("Video configuration invalid: {}", e)),
             }));
         }
-        tracing::info!("Video config applied successfully");
     }
 
-    // Stream config processing (encoder backend, bitrate, etc.)
     if has_stream {
-        tracing::info!("Stream config sent, applying encoder settings...");
-
-        // Update WebRTC streamer encoder backend
-        let encoder_backend = new_config.stream.encoder.to_backend();
-        tracing::info!(
-            "Updating encoder backend to: {:?} (from config: {:?})",
-            encoder_backend,
-            new_config.stream.encoder
-        );
-
-        state
-            .stream_manager
-            .webrtc_streamer()
-            .update_encoder_backend(encoder_backend)
-            .await;
-
-        // Update bitrate if changed
-        state
-            .stream_manager
-            .webrtc_streamer()
-            .set_bitrate_preset(new_config.stream.bitrate_preset)
-            .await
-            .ok(); // Ignore error if no active stream
-
-        tracing::info!(
-            "Stream config applied: encoder={:?}, bitrate={}",
-            new_config.stream.encoder,
-            new_config.stream.bitrate_preset
-        );
+        if let Err(e) =
+            config::apply::apply_stream_config(&state, &old_config.stream, &new_config.stream).await
+        {
+            tracing::error!("Failed to apply stream config: {}", e);
+            state.config.set((*old_config).clone()).await?;
+            return Ok(Json(LoginResponse {
+                success: false,
+                message: Some(format!("Stream configuration invalid: {}", e)),
+            }));
+        }
     }
 
-    // HID config processing - always reload if section was sent
     if has_hid {
-        tracing::info!("HID config sent, reloading HID backend...");
-
-        // Determine new backend type
-        let new_hid_backend = match new_config.hid.backend {
-            crate::config::HidBackend::Otg => crate::hid::HidBackendType::Otg,
-            crate::config::HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
-                port: new_config.hid.ch9329_port.clone(),
-                baud_rate: new_config.hid.ch9329_baudrate,
-            },
-            crate::config::HidBackend::None => crate::hid::HidBackendType::None,
-        };
-
-        // Reload HID backend - return success=false on error
-        if let Err(e) = state.hid.reload(new_hid_backend).await {
+        if let Err(e) =
+            config::apply::apply_hid_config(&state, &old_config.hid, &new_config.hid).await
+        {
             tracing::error!("HID reload failed: {}", e);
-            // Rollback config on failure
             state.config.set((*old_config).clone()).await?;
             return Ok(Json(LoginResponse {
                 success: false,
                 message: Some(format!("HID configuration invalid: {}", e)),
             }));
         }
-
-        tracing::info!(
-            "HID backend reloaded successfully: {:?}",
-            new_config.hid.backend
-        );
     }
 
-    // Audio config processing - always reload if section was sent
     if has_audio {
-        tracing::info!("Audio config sent, applying settings...");
-
-        // Create audio controller config from new config
-        let audio_config = crate::audio::AudioControllerConfig {
-            enabled: new_config.audio.enabled,
-            device: new_config.audio.device.clone(),
-            quality: crate::audio::AudioQuality::from_str(&new_config.audio.quality),
-        };
-
-        // Update audio controller
-        if let Err(e) = state.audio.update_config(audio_config).await {
-            tracing::error!("Audio config update failed: {}", e);
-            // Don't rollback config for audio errors - it's not critical
-            // Just log the error
-        } else {
-            tracing::info!(
-                "Audio config applied: enabled={}, device={}",
-                new_config.audio.enabled,
-                new_config.audio.device
-            );
-        }
-
-        // Also update WebRTC audio enabled state
-        if let Err(e) = state
-            .stream_manager
-            .set_webrtc_audio_enabled(new_config.audio.enabled)
-            .await
+        if let Err(e) =
+            config::apply::apply_audio_config(&state, &old_config.audio, &new_config.audio).await
         {
-            tracing::warn!("Failed to update WebRTC audio state: {}", e);
-        } else {
-            tracing::info!("WebRTC audio enabled: {}", new_config.audio.enabled);
-        }
-
-        // Reconnect audio sources for existing WebRTC sessions
-        // This is needed because the audio controller was restarted with new config
-        if new_config.audio.enabled {
-            state.stream_manager.reconnect_webrtc_audio_sources().await;
+            tracing::warn!("Audio config update failed: {}", e);
         }
     }
 
-    // MSD config processing - reload if enabled state or directory changed
     if has_msd {
-        tracing::info!("MSD config sent, checking if reload needed...");
-        tracing::debug!("Old MSD config: {:?}", old_config.msd);
-        tracing::debug!("New MSD config: {:?}", new_config.msd);
-
-        let old_msd_enabled = old_config.msd.enabled;
-        let new_msd_enabled = new_config.msd.enabled;
-        let msd_dir_changed = old_config.msd.msd_dir != new_config.msd.msd_dir;
-
-        tracing::info!(
-            "MSD enabled: old={}, new={}",
-            old_msd_enabled,
-            new_msd_enabled
-        );
-        if msd_dir_changed {
-            tracing::info!("MSD directory changed: {}", new_config.msd.msd_dir);
+        if let Err(e) =
+            config::apply::apply_msd_config(&state, &old_config.msd, &new_config.msd).await
+        {
+            tracing::error!("MSD initialization failed: {}", e);
+            state.config.set((*old_config).clone()).await?;
+            return Ok(Json(LoginResponse {
+                success: false,
+                message: Some(format!("MSD initialization failed: {}", e)),
+            }));
         }
+    }
 
-        // Ensure MSD directories exist (msd/images, msd/ventoy)
-        let msd_dir = new_config.msd.msd_dir_path();
-        if let Err(e) = std::fs::create_dir_all(msd_dir.join("images")) {
-            tracing::warn!("Failed to create MSD images directory: {}", e);
-        }
-        if let Err(e) = std::fs::create_dir_all(msd_dir.join("ventoy")) {
-            tracing::warn!("Failed to create MSD ventoy directory: {}", e);
-        }
-
-        let needs_reload = old_msd_enabled != new_msd_enabled || msd_dir_changed;
-        if !needs_reload {
-            tracing::info!(
-                "MSD enabled state unchanged ({}) and directory unchanged, no reload needed",
-                new_msd_enabled
-            );
-        } else if new_msd_enabled {
-            tracing::info!("(Re)initializing MSD...");
-
-            // Shutdown existing controller if present
-            let mut msd_guard = state.msd.write().await;
-            if let Some(msd) = msd_guard.as_mut() {
-                if let Err(e) = msd.shutdown().await {
-                    tracing::warn!("MSD shutdown failed: {}", e);
-                }
-            }
-            *msd_guard = None;
-            drop(msd_guard);
-
-            let msd = crate::msd::MsdController::new(
-                state.otg_service.clone(),
-                new_config.msd.msd_dir_path(),
-            );
-            if let Err(e) = msd.init().await {
-                tracing::error!("MSD initialization failed: {}", e);
-                // Rollback config on failure
-                state.config.set((*old_config).clone()).await?;
-                return Ok(Json(LoginResponse {
-                    success: false,
-                    message: Some(format!("MSD initialization failed: {}", e)),
-                }));
-            }
-
-            // Set event bus
-            let events = state.events.clone();
-            msd.set_event_bus(events).await;
-
-            // Store the initialized controller
-            *state.msd.write().await = Some(msd);
-            tracing::info!("MSD initialized successfully");
-        } else {
-            tracing::info!("MSD disabled in config, shutting down...");
-
-            let mut msd_guard = state.msd.write().await;
-            if let Some(msd) = msd_guard.as_mut() {
-                if let Err(e) = msd.shutdown().await {
-                    tracing::warn!("MSD shutdown failed: {}", e);
-                }
-            }
-            *msd_guard = None;
-            tracing::info!("MSD shutdown complete");
+    if has_atx {
+        if let Err(e) =
+            config::apply::apply_atx_config(&state, &old_config.atx, &new_config.atx).await
+        {
+            tracing::error!("ATX configuration invalid: {}", e);
+            state.config.set((*old_config).clone()).await?;
+            return Ok(Json(LoginResponse {
+                success: false,
+                message: Some(format!("ATX configuration invalid: {}", e)),
+            }));
         }
     }
 
@@ -2247,6 +2045,8 @@ pub struct HidStatus {
     pub initialized: bool,
     pub online: bool,
     pub supports_absolute_mouse: bool,
+    pub keyboard_leds_enabled: bool,
+    pub led_state: crate::hid::LedState,
     pub screen_resolution: Option<(u32, u32)>,
     pub device: Option<String>,
     pub error: Option<String>,
@@ -3018,6 +2818,8 @@ pub async fn hid_status(State(state): State<Arc<AppState>>) -> Json<HidStatus> {
         initialized: hid.initialized,
         online: hid.online,
         supports_absolute_mouse: hid.supports_absolute_mouse,
+        keyboard_leds_enabled: hid.keyboard_leds_enabled,
+        led_state: hid.led_state,
         screen_resolution: hid.screen_resolution,
         device: hid.device,
         error: hid.error,

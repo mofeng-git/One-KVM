@@ -2,7 +2,9 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 
+use super::otg::LedState;
 use super::types::{ConsumerEvent, KeyboardEvent, MouseEvent};
 use crate::error::Result;
 
@@ -76,12 +78,22 @@ impl HidBackendType {
 }
 
 /// Current runtime status reported by a HID backend.
-#[derive(Debug, Clone, Default)]
-pub struct HidBackendStatus {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HidBackendRuntimeSnapshot {
     /// Whether the backend has been initialized and can accept requests.
     pub initialized: bool,
     /// Whether the backend is currently online and communicating successfully.
     pub online: bool,
+    /// Whether absolute mouse positioning is supported.
+    pub supports_absolute_mouse: bool,
+    /// Whether keyboard LED/status feedback is currently enabled.
+    pub keyboard_leds_enabled: bool,
+    /// Last known keyboard LED state.
+    pub led_state: LedState,
+    /// Screen resolution for absolute mouse mode.
+    pub screen_resolution: Option<(u32, u32)>,
+    /// Device identifier associated with the backend, if any.
+    pub device: Option<String>,
     /// Current user-facing error, if any.
     pub error: Option<String>,
     /// Current programmatic error code, if any.
@@ -91,9 +103,6 @@ pub struct HidBackendStatus {
 /// HID backend trait
 #[async_trait]
 pub trait HidBackend: Send + Sync {
-    /// Get backend name
-    fn name(&self) -> &'static str;
-
     /// Initialize the backend
     async fn init(&self) -> Result<()>;
 
@@ -117,18 +126,11 @@ pub trait HidBackend: Send + Sync {
     /// Shutdown the backend
     async fn shutdown(&self) -> Result<()>;
 
-    /// Get the current backend runtime status.
-    fn status(&self) -> HidBackendStatus;
+    /// Get the current backend runtime snapshot.
+    fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot;
 
-    /// Check if backend supports absolute mouse positioning
-    fn supports_absolute_mouse(&self) -> bool {
-        false
-    }
-
-    /// Get screen resolution (for absolute mouse)
-    fn screen_resolution(&self) -> Option<(u32, u32)> {
-        None
-    }
+    /// Subscribe to backend runtime changes.
+    fn subscribe_runtime(&self) -> watch::Receiver<()>;
 
     /// Set screen resolution (for absolute mouse)
     fn set_screen_resolution(&mut self, _width: u32, _height: u32) {}

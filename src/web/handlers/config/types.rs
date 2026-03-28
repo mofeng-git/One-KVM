@@ -307,7 +307,9 @@ pub struct HidConfigUpdate {
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub otg_profile: Option<OtgHidProfile>,
+    pub otg_endpoint_budget: Option<OtgEndpointBudget>,
     pub otg_functions: Option<OtgHidFunctionsUpdate>,
+    pub otg_keyboard_leds: Option<bool>,
     pub mouse_absolute: Option<bool>,
 }
 
@@ -346,8 +348,14 @@ impl HidConfigUpdate {
         if let Some(profile) = self.otg_profile.clone() {
             config.otg_profile = profile;
         }
+        if let Some(budget) = self.otg_endpoint_budget {
+            config.otg_endpoint_budget = budget;
+        }
         if let Some(ref functions) = self.otg_functions {
             functions.apply_to(&mut config.otg_functions);
+        }
+        if let Some(enabled) = self.otg_keyboard_leds {
+            config.otg_keyboard_leds = enabled;
         }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;

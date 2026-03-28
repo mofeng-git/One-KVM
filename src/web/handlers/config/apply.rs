@@ -12,6 +12,26 @@ use crate::video::codec_constraints::{
     enforce_constraints_with_stream_manager, StreamCodecConstraints,
 };
 
+fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
+    match config.backend {
+        HidBackend::Otg => crate::hid::HidBackendType::Otg,
+        HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
+            port: config.ch9329_port.clone(),
+            baud_rate: config.ch9329_baudrate,
+        },
+        HidBackend::None => crate::hid::HidBackendType::None,
+    }
+}
+
+async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
+    let config = state.config.get();
+    state
+        .otg_service
+        .apply_config(&config.hid, &config.msd)
+        .await
+        .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
+}
+
 /// 应用 Video 配置变更
 pub async fn apply_video_config(
     state: &Arc<AppState>,
@@ -125,56 +145,26 @@ pub async fn apply_hid_config(
     old_config: &HidConfig,
     new_config: &HidConfig,
 ) -> Result<()> {
-    // 检查 OTG 描述符是否变更
+    let current_msd_enabled = state.config.get().msd.enabled;
+    new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
+
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
-    let old_hid_functions = old_config.effective_otg_functions();
-    let mut new_hid_functions = new_config.effective_otg_functions();
-
-    // Low-endpoint UDCs (e.g., musb) cannot handle consumer control endpoints reliably
-    if new_config.backend == HidBackend::Otg {
-        if let Some(udc) = crate::otg::configfs::resolve_udc_name(new_config.otg_udc.as_deref()) {
-            if crate::otg::configfs::is_low_endpoint_udc(&udc) && new_hid_functions.consumer {
-                tracing::warn!(
-                    "UDC {} has low endpoint resources, disabling consumer control",
-                    udc
-                );
-                new_hid_functions.consumer = false;
-            }
-        }
-    }
-
+    let old_hid_functions = old_config.constrained_otg_functions();
+    let new_hid_functions = new_config.constrained_otg_functions();
     let hid_functions_changed = old_hid_functions != new_hid_functions;
+    let keyboard_leds_changed =
+        old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
+    let endpoint_budget_changed =
+        old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit();
 
-    if new_config.backend == HidBackend::Otg && new_hid_functions.is_empty() {
-        return Err(AppError::BadRequest(
-            "OTG HID functions cannot be empty".to_string(),
-        ));
-    }
-
-    // 如果描述符变更且当前使用 OTG 后端，需要重建 Gadget
-    if descriptor_changed && new_config.backend == HidBackend::Otg {
-        tracing::info!("OTG descriptor changed, updating gadget...");
-        if let Err(e) = state
-            .otg_service
-            .update_descriptor(&new_config.otg_descriptor)
-            .await
-        {
-            tracing::error!("Failed to update OTG descriptor: {}", e);
-            return Err(AppError::Config(format!(
-                "OTG descriptor update failed: {}",
-                e
-            )));
-        }
-        tracing::info!("OTG descriptor updated successfully");
-    }
-
-    // 检查是否需要重载 HID 后端
     if old_config.backend == new_config.backend
         && old_config.ch9329_port == new_config.ch9329_port
         && old_config.ch9329_baudrate == new_config.ch9329_baudrate
         && old_config.otg_udc == new_config.otg_udc
         && !descriptor_changed
         && !hid_functions_changed
+        && !keyboard_leds_changed
+        && !endpoint_budget_changed
     {
         tracing::info!("HID config unchanged, skipping reload");
         return Ok(());
@@ -182,30 +172,27 @@ pub async fn apply_hid_config(
 
     tracing::info!("Applying HID config changes...");
 
-    if new_config.backend == HidBackend::Otg
-        && (hid_functions_changed || old_config.backend != HidBackend::Otg)
-    {
+    let new_hid_backend = hid_backend_type(new_config);
+    let transitioning_away_from_otg =
+        old_config.backend == HidBackend::Otg && new_config.backend != HidBackend::Otg;
+
+    if transitioning_away_from_otg {
         state
-            .otg_service
-            .update_hid_functions(new_hid_functions.clone())
+            .hid
+            .reload(new_hid_backend.clone())
             .await
-            .map_err(|e| AppError::Config(format!("OTG HID function update failed: {}", e)))?;
+            .map_err(|e| AppError::Config(format!("HID reload failed: {}", e)))?;
     }
 
-    let new_hid_backend = match new_config.backend {
-        HidBackend::Otg => crate::hid::HidBackendType::Otg,
-        HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
-            port: new_config.ch9329_port.clone(),
-            baud_rate: new_config.ch9329_baudrate,
-        },
-        HidBackend::None => crate::hid::HidBackendType::None,
-    };
+    reconcile_otg_from_store(state).await?;
 
-    state
-        .hid
-        .reload(new_hid_backend)
-        .await
-        .map_err(|e| AppError::Config(format!("HID reload failed: {}", e)))?;
+    if !transitioning_away_from_otg {
+        state
+            .hid
+            .reload(new_hid_backend)
+            .await
+            .map_err(|e| AppError::Config(format!("HID reload failed: {}", e)))?;
+    }
 
     tracing::info!(
         "HID backend reloaded successfully: {:?}",
@@ -221,6 +208,12 @@ pub async fn apply_msd_config(
     old_config: &MsdConfig,
     new_config: &MsdConfig,
 ) -> Result<()> {
+    state
+        .config
+        .get()
+        .hid
+        .validate_otg_endpoint_budget(new_config.enabled)?;
+
     tracing::info!("MSD config sent, checking if reload needed...");
     tracing::debug!("Old MSD config: {:?}", old_config);
     tracing::debug!("New MSD config: {:?}", new_config);
@@ -260,6 +253,8 @@ pub async fn apply_msd_config(
     if new_msd_enabled {
         tracing::info!("(Re)initializing MSD...");
 
+        reconcile_otg_from_store(state).await?;
+
         // Shutdown existing controller if present
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
@@ -295,6 +290,17 @@ pub async fn apply_msd_config(
         }
         *msd_guard = None;
         tracing::info!("MSD shutdown complete");
+
+        reconcile_otg_from_store(state).await?;
+    }
+
+    let current_config = state.config.get();
+    if current_config.hid.backend == HidBackend::Otg && old_msd_enabled != new_msd_enabled {
+        state
+            .hid
+            .reload(crate::hid::HidBackendType::Otg)
+            .await
+            .map_err(|e| AppError::Config(format!("OTG HID reload failed: {}", e)))?;
     }
 
     Ok(())

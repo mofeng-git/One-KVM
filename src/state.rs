@@ -198,6 +198,8 @@ impl AppState {
             initialized: state.initialized,
             online: state.online,
             supports_absolute_mouse: state.supports_absolute_mouse,
+            keyboard_leds_enabled: state.keyboard_leds_enabled,
+            led_state: state.led_state,
             device: state.device,
             error: state.error,
             error_code: state.error_code,

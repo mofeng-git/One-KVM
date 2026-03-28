@@ -18,7 +18,7 @@ use one_kvm::events::EventBus;
 use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
 use one_kvm::msd::MsdController;
-use one_kvm::otg::{configfs, OtgService};
+use one_kvm::otg::OtgService;
 use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
@@ -319,32 +319,9 @@ async fn main() -> anyhow::Result<()> {
     let otg_service = Arc::new(OtgService::new());
     tracing::info!("OTG Service created");
 
-    // Pre-enable OTG functions to avoid gadget recreation (prevents kernel crashes)
-    let will_use_otg_hid = matches!(config.hid.backend, config::HidBackend::Otg);
-    let will_use_msd = config.msd.enabled;
-
-    if will_use_otg_hid {
-        let mut hid_functions = config.hid.effective_otg_functions();
-        if let Some(udc) = configfs::resolve_udc_name(config.hid.otg_udc.as_deref()) {
-            if configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
-                tracing::warn!(
-                    "UDC {} has low endpoint resources, disabling consumer control",
-                    udc
-                );
-                hid_functions.consumer = false;
-            }
-        }
-        if let Err(e) = otg_service.update_hid_functions(hid_functions).await {
-            tracing::warn!("Failed to apply HID functions: {}", e);
-        }
-        if let Err(e) = otg_service.enable_hid().await {
-            tracing::warn!("Failed to pre-enable HID: {}", e);
-        }
-    }
-    if will_use_msd {
-        if let Err(e) = otg_service.enable_msd().await {
-            tracing::warn!("Failed to pre-enable MSD: {}", e);
-        }
+    // Reconcile OTG once from the persisted config so controllers only consume its result.
+    if let Err(e) = otg_service.apply_config(&config.hid, &config.msd).await {
+        tracing::warn!("Failed to apply OTG config: {}", e);
     }
 
     // Create HID controller based on config

@@ -119,9 +119,12 @@ const myClientId = generateUUID()
 // HID state
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
 const pressedKeys = ref<CanonicalKey[]>([])
-const keyboardLed = ref({
-  capsLock: false,
-})
+const keyboardLed = computed(() => ({
+  capsLock: systemStore.hid?.ledState.capsLock ?? false,
+  numLock: systemStore.hid?.ledState.numLock ?? false,
+  scrollLock: systemStore.hid?.ledState.scrollLock ?? false,
+}))
+const keyboardLedEnabled = computed(() => systemStore.hid?.keyboardLedsEnabled ?? false)
 const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
@@ -346,6 +349,13 @@ const hidDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error ? 'error' : hid.initialized ? 'ok' : 'warning' },
     { label: t('statusCard.online'), value: hid.online ? t('statusCard.yes') : t('statusCard.no'), status: hid.online ? 'ok' : hid.initialized ? 'warning' : 'error' },
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
+    {
+      label: t('settings.otgKeyboardLeds'),
+      value: hid.keyboardLedsEnabled
+        ? `Caps:${hid.ledState.capsLock ? t('common.on') : t('common.off')} Num:${hid.ledState.numLock ? t('common.on') : t('common.off')} Scroll:${hid.ledState.scrollLock ? t('common.on') : t('common.off')}`
+        : t('infobar.keyboardLedUnavailable'),
+      status: hid.keyboardLedsEnabled ? 'ok' : undefined,
+    },
   ]
 
   if (hid.errorCode) {
@@ -1618,8 +1628,6 @@ function handleKeyDown(e: KeyboardEvent) {
     })
   }
 
-  keyboardLed.value.capsLock = e.getModifierState('CapsLock')
-
   const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
   if (canonicalKey === undefined) {
     console.warn(`[HID] Unmapped key down: code=${e.code}, key=${e.key}`)
@@ -2088,10 +2096,6 @@ function handleVirtualKeyDown(key: CanonicalKey) {
   if (!pressedKeys.value.includes(key)) {
     pressedKeys.value = [...pressedKeys.value, key]
   }
-  // Toggle CapsLock state when virtual keyboard presses CapsLock
-  if (key === CanonicalKey.CapsLock) {
-    keyboardLed.value.capsLock = !keyboardLed.value.capsLock
-  }
 }
 
 function handleVirtualKeyUp(key: CanonicalKey) {
@@ -2536,6 +2540,9 @@ onUnmounted(() => {
     <InfoBar
       :pressed-keys="pressedKeys"
       :caps-lock="keyboardLed.capsLock"
+      :num-lock="keyboardLed.numLock"
+      :scroll-lock="keyboardLed.scrollLock"
+      :keyboard-led-enabled="keyboardLedEnabled"
       :mouse-position="mousePosition"
       :debug-mode="false"
     />

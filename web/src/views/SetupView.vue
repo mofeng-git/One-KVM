@@ -97,7 +97,12 @@ const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
 const hidOtgProfile = ref('full')
+const otgMsdEnabled = ref(true)
+const otgEndpointBudget = ref<'five' | 'six' | 'unlimited'>('six')
+const otgKeyboardLeds = ref(true)
 const otgProfileTouched = ref(false)
+const otgEndpointBudgetTouched = ref(false)
+const otgKeyboardLedsTouched = ref(false)
 const showAdvancedOtg = ref(false)
 
 // Extension settings
@@ -203,24 +208,86 @@ const availableFps = computed(() => {
   return resolution?.fps || []
 })
 
-const isLowEndpointUdc = computed(() => {
-  if (otgUdc.value) {
-    return /musb/i.test(otgUdc.value)
+function defaultOtgEndpointBudgetForUdc(udc?: string): 'five' | 'six' {
+  return /musb/i.test(udc || '') ? 'five' : 'six'
+}
+
+function endpointLimitForBudget(budget: 'five' | 'six' | 'unlimited'): number | null {
+  if (budget === 'unlimited') return null
+  return budget === 'five' ? 5 : 6
+}
+
+const otgRequiredEndpoints = computed(() => {
+  if (hidBackend.value !== 'otg') return 0
+  const functions = {
+    keyboard: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_keyboard',
+    mouseRelative: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_mouse_relative',
+    mouseAbsolute: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer',
+    consumer: hidOtgProfile.value === 'full',
   }
-  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
+  let endpoints = 0
+  if (functions.keyboard) {
+    endpoints += 1
+    if (otgKeyboardLeds.value) endpoints += 1
+  }
+  if (functions.mouseRelative) endpoints += 1
+  if (functions.mouseAbsolute) endpoints += 1
+  if (functions.consumer) endpoints += 1
+  if (otgMsdEnabled.value) endpoints += 2
+  return endpoints
 })
 
-function applyOtgProfileDefault() {
-  if (otgProfileTouched.value) return
+const otgProfileHasKeyboard = computed(() =>
+  hidOtgProfile.value === 'full'
+  || hidOtgProfile.value === 'full_no_consumer'
+  || hidOtgProfile.value === 'legacy_keyboard'
+)
+
+const isOtgEndpointBudgetValid = computed(() => {
+  const limit = endpointLimitForBudget(otgEndpointBudget.value)
+  return limit === null || otgRequiredEndpoints.value <= limit
+})
+
+const otgEndpointUsageText = computed(() => {
+  const limit = endpointLimitForBudget(otgEndpointBudget.value)
+  if (limit === null) {
+    return t('settings.otgEndpointUsageUnlimited', { used: otgRequiredEndpoints.value })
+  }
+  return t('settings.otgEndpointUsage', { used: otgRequiredEndpoints.value, limit })
+})
+
+function applyOtgDefaults() {
   if (hidBackend.value !== 'otg') return
-  const preferred = isLowEndpointUdc.value ? 'full_no_consumer' : 'full'
-  if (hidOtgProfile.value === preferred) return
-  hidOtgProfile.value = preferred
+
+  const recommendedBudget = defaultOtgEndpointBudgetForUdc(otgUdc.value)
+  if (!otgEndpointBudgetTouched.value) {
+    otgEndpointBudget.value = recommendedBudget
+  }
+  if (!otgProfileTouched.value) {
+    hidOtgProfile.value = 'full_no_consumer'
+  }
+  if (!otgKeyboardLedsTouched.value) {
+    otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
+  }
 }
 
 function onOtgProfileChange(value: unknown) {
   hidOtgProfile.value = typeof value === 'string' ? value : 'full'
   otgProfileTouched.value = true
+}
+
+function onOtgEndpointBudgetChange(value: unknown) {
+  otgEndpointBudget.value =
+    value === 'five' || value === 'six' || value === 'unlimited' ? value : 'six'
+  otgEndpointBudgetTouched.value = true
+  if (!otgKeyboardLedsTouched.value) {
+    otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
+  }
+}
+
+function onOtgKeyboardLedsChange(value: boolean) {
+  otgKeyboardLeds.value = value
+  otgKeyboardLedsTouched.value = true
 }
 
 // Common baud rates for CH9329
@@ -338,16 +405,16 @@ watch(hidBackend, (newBackend) => {
   if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
     otgUdc.value = devices.value.udc[0]?.name || ''
   }
-  applyOtgProfileDefault()
+  applyOtgDefaults()
 })
 
 watch(otgUdc, () => {
-  applyOtgProfileDefault()
+  applyOtgDefaults()
 })
 
 watch(showAdvancedOtg, (open) => {
   if (open) {
-    applyOtgProfileDefault()
+    applyOtgDefaults()
   }
 })
 
@@ -370,7 +437,7 @@ onMounted(async () => {
     if (result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
     }
-    applyOtgProfileDefault()
+    applyOtgDefaults()
 
     // Auto-select audio device if available (and no video device to trigger watch)
     if (result.audio.length > 0 && !audioDevice.value) {
@@ -461,6 +528,13 @@ function validateStep3(): boolean {
     error.value = t('setup.selectUdc')
     return false
   }
+  if (hidBackend.value === 'otg' && !isOtgEndpointBudgetValid.value) {
+    error.value = t('settings.otgEndpointExceeded', {
+      used: otgRequiredEndpoints.value,
+      limit: otgEndpointBudget.value === 'unlimited' ? t('settings.otgEndpointBudgetUnlimited') : otgEndpointBudget.value === 'five' ? '5' : '6',
+    })
+    return false
+  }
   return true
 }
 
@@ -523,6 +597,9 @@ async function handleSetup() {
   if (hidBackend.value === 'otg' && otgUdc.value) {
     setupData.hid_otg_udc = otgUdc.value
     setupData.hid_otg_profile = hidOtgProfile.value
+    setupData.hid_otg_endpoint_budget = otgEndpointBudget.value
+    setupData.hid_otg_keyboard_leds = otgKeyboardLeds.value
+    setupData.msd_enabled = otgMsdEnabled.value
   }
 
   // Encoder backend setting
@@ -990,16 +1067,47 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="full">{{ t('settings.otgProfileFull') }}</SelectItem>
-                        <SelectItem value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</SelectItem>
                         <SelectItem value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</SelectItem>
-                        <SelectItem value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</SelectItem>
                         <SelectItem value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</SelectItem>
                         <SelectItem value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <p v-if="isLowEndpointUdc" class="text-xs text-amber-600 dark:text-amber-400">
-                    {{ t('setup.otgLowEndpointHint') }}
+                  <div class="space-y-2">
+                    <Label for="otgEndpointBudget">{{ t('settings.otgEndpointBudget') }}</Label>
+                    <Select :model-value="otgEndpointBudget" @update:modelValue="onOtgEndpointBudgetChange">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="five">5</SelectItem>
+                        <SelectItem value="six">6</SelectItem>
+                        <SelectItem value="unlimited">{{ t('settings.otgEndpointBudgetUnlimited') }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p class="text-xs text-muted-foreground">
+                      {{ otgEndpointUsageText }}
+                    </p>
+                  </div>
+                  <div class="flex items-center justify-between rounded-md border border-border/60 p-3">
+                    <div>
+                      <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
+                      <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
+                    </div>
+                    <Switch :model-value="otgKeyboardLeds" :disabled="!otgProfileHasKeyboard" @update:model-value="onOtgKeyboardLedsChange" />
+                  </div>
+                  <div class="flex items-center justify-between rounded-md border border-border/60 p-3">
+                    <div>
+                      <Label>{{ t('settings.otgFunctionMsd') }}</Label>
+                      <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
+                    </div>
+                    <Switch v-model="otgMsdEnabled" />
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('settings.otgEndpointBudgetHint') }}
+                  </p>
+                  <p v-if="!isOtgEndpointBudgetValid" class="text-xs text-amber-600 dark:text-amber-400">
+                    {{ t('settings.otgEndpointExceeded', { used: otgRequiredEndpoints, limit: otgEndpointBudget === 'unlimited' ? t('settings.otgEndpointBudgetUnlimited') : otgEndpointBudget === 'five' ? '5' : '6' }) }}
                   </p>
                 </div>
               </div>

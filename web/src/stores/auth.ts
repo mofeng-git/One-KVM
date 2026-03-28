@@ -85,6 +85,9 @@ export const useAuthStore = defineStore('auth', () => {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
+    hid_otg_endpoint_budget?: string
+    hid_otg_keyboard_leds?: boolean
+    msd_enabled?: boolean
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean

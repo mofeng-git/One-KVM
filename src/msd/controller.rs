@@ -19,9 +19,6 @@ use super::types::{DownloadProgress, DownloadStatus, DriveInfo, ImageInfo, MsdMo
 use crate::error::{AppError, Result};
 use crate::otg::{MsdFunction, MsdLunConfig, OtgService};
 
-/// USB Gadget path (system constant)
-const GADGET_PATH: &str = "/sys/kernel/config/usb_gadget/one-kvm";
-
 /// MSD Controller
 pub struct MsdController {
     /// OTG Service reference
@@ -83,9 +80,11 @@ impl MsdController {
             warn!("Failed to create ventoy directory: {}", e);
         }
 
-        // 2. Request MSD function from OtgService
-        info!("Requesting MSD function from OtgService");
-        let msd_func = self.otg_service.enable_msd().await?;
+        // 2. Get active MSD function from OtgService
+        info!("Fetching MSD function from OtgService");
+        let msd_func = self.otg_service.msd_function().await.ok_or_else(|| {
+            AppError::Internal("MSD function is not active in OtgService".to_string())
+        })?;
 
         // 3. Store function handle
         *self.msd_function.write().await = Some(msd_func);
@@ -190,7 +189,7 @@ impl MsdController {
             MsdLunConfig::disk(image.path.clone(), read_only)
         };
 
-        let gadget_path = PathBuf::from(GADGET_PATH);
+        let gadget_path = self.active_gadget_path().await?;
         if let Some(ref msd) = *self.msd_function.read().await {
             if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
                 let error_msg = format!("Failed to configure LUN: {}", e);
@@ -264,7 +263,7 @@ impl MsdController {
         // Configure LUN as read-write disk
         let config = MsdLunConfig::disk(self.drive_path.clone(), false);
 
-        let gadget_path = PathBuf::from(GADGET_PATH);
+        let gadget_path = self.active_gadget_path().await?;
         if let Some(ref msd) = *self.msd_function.read().await {
             if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
                 let error_msg = format!("Failed to configure LUN: {}", e);
@@ -313,7 +312,7 @@ impl MsdController {
             return Ok(());
         }
 
-        let gadget_path = PathBuf::from(GADGET_PATH);
+        let gadget_path = self.active_gadget_path().await?;
         if let Some(ref msd) = *self.msd_function.read().await {
             msd.disconnect_lun_async(&gadget_path, 0).await?;
         }
@@ -512,6 +511,13 @@ impl MsdController {
         downloads.keys().cloned().collect()
     }
 
+    async fn active_gadget_path(&self) -> Result<PathBuf> {
+        self.otg_service
+            .gadget_path()
+            .await
+            .ok_or_else(|| AppError::Internal("OTG gadget path is not available".to_string()))
+    }
+
     /// Shutdown the controller
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down MSD controller");
@@ -521,11 +527,7 @@ impl MsdController {
             warn!("Error disconnecting during shutdown: {}", e);
         }
 
-        // 2. Notify OtgService to disable MSD
-        info!("Disabling MSD function in OtgService");
-        self.otg_service.disable_msd().await?;
-
-        // 3. Clear local state
+        // 2. Clear local state
         *self.msd_function.write().await = None;
 
         let mut state = self.state.write().await;

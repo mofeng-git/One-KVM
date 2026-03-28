@@ -86,6 +86,9 @@ export const systemApi = {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
+    hid_otg_endpoint_budget?: string
+    hid_otg_keyboard_leds?: boolean
+    msd_enabled?: boolean
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean
@@ -330,6 +333,14 @@ export const hidApi = {
       initialized: boolean
       online: boolean
       supports_absolute_mouse: boolean
+      keyboard_leds_enabled: boolean
+      led_state: {
+        num_lock: boolean
+        caps_lock: boolean
+        scroll_lock: boolean
+        compose: boolean
+        kana: boolean
+      }
       screen_resolution: [number, number] | null
       device: string | null
       error: string | null

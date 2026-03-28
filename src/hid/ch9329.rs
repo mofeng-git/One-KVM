@@ -25,9 +25,11 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::sync::watch;
 use tracing::{info, trace, warn};
 
-use super::backend::{HidBackend, HidBackendStatus};
+use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
+use super::otg::LedState;
 use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
 use crate::error::{AppError, Result};
 
@@ -180,7 +182,7 @@ impl ChipInfo {
 }
 
 /// Keyboard LED status
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LedStatus {
     pub num_lock: bool,
     pub caps_lock: bool,
@@ -346,28 +348,73 @@ const MAX_PACKET_SIZE: usize = 70;
 // CH9329 Backend Implementation
 // ============================================================================
 
-#[derive(Default)]
 struct Ch9329RuntimeState {
     initialized: AtomicBool,
     online: AtomicBool,
     last_error: RwLock<Option<(String, String)>>,
-    last_success: Mutex<Option<Instant>>,
+    notify_tx: watch::Sender<()>,
 }
 
 impl Ch9329RuntimeState {
+    fn new() -> Self {
+        let (notify_tx, _notify_rx) = watch::channel(());
+        Self {
+            initialized: AtomicBool::new(false),
+            online: AtomicBool::new(false),
+            last_error: RwLock::new(None),
+            notify_tx,
+        }
+    }
+
+    fn subscribe(&self) -> watch::Receiver<()> {
+        self.notify_tx.subscribe()
+    }
+
+    fn notify(&self) {
+        let _ = self.notify_tx.send(());
+    }
+
     fn clear_error(&self) {
-        *self.last_error.write() = None;
+        let mut guard = self.last_error.write();
+        if guard.is_some() {
+            *guard = None;
+            self.notify();
+        }
     }
 
     fn set_online(&self) {
-        self.online.store(true, Ordering::Relaxed);
-        *self.last_success.lock() = Some(Instant::now());
-        self.clear_error();
+        let was_online = self.online.swap(true, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let cleared_error = error.take().is_some();
+        drop(error);
+        if !was_online || cleared_error {
+            self.notify();
+        }
     }
 
     fn set_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
-        self.online.store(false, Ordering::Relaxed);
-        *self.last_error.write() = Some((reason.into(), error_code.into()));
+        let reason = reason.into();
+        let error_code = error_code.into();
+        let was_online = self.online.swap(false, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let changed = error.as_ref() != Some(&(reason.clone(), error_code.clone()));
+        *error = Some((reason, error_code));
+        drop(error);
+        if was_online || changed {
+            self.notify();
+        }
+    }
+
+    fn set_initialized(&self, initialized: bool) {
+        if self.initialized.swap(initialized, Ordering::Relaxed) != initialized {
+            self.notify();
+        }
+    }
+
+    fn set_offline(&self) {
+        if self.online.swap(false, Ordering::Relaxed) {
+            self.notify();
+        }
     }
 }
 
@@ -434,7 +481,7 @@ impl Ch9329Backend {
             last_abs_x: AtomicU16::new(0),
             last_abs_y: AtomicU16::new(0),
             relative_mouse_active: AtomicBool::new(false),
-            runtime: Arc::new(Ch9329RuntimeState::default()),
+            runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
 
@@ -442,22 +489,9 @@ impl Ch9329Backend {
         self.runtime.set_error(reason, error_code);
     }
 
-    fn mark_online(&self) {
-        self.runtime.set_online();
-    }
-
-    fn clear_error(&self) {
-        self.runtime.clear_error();
-    }
-
     /// Check if the serial port device file exists
     pub fn check_port_exists(&self) -> bool {
         std::path::Path::new(&self.port_path).exists()
-    }
-
-    /// Get the serial port path
-    pub fn port_path(&self) -> &str {
-        &self.port_path
     }
 
     /// Convert serialport error to HidError
@@ -675,23 +709,33 @@ impl Ch9329Backend {
         chip_info: &Arc<RwLock<Option<ChipInfo>>>,
         led_status: &Arc<RwLock<LedStatus>>,
         info: ChipInfo,
-    ) {
-        *chip_info.write() = Some(info.clone());
-        *led_status.write() = LedStatus {
+    ) -> bool {
+        let next_led_status = LedStatus {
             num_lock: info.num_lock,
             caps_lock: info.caps_lock,
             scroll_lock: info.scroll_lock,
         };
+        *chip_info.write() = Some(info);
+        let mut led_guard = led_status.write();
+        let changed = *led_guard != next_led_status;
+        *led_guard = next_led_status;
+        changed
     }
 
     fn enqueue_command(&self, command: WorkerCommand) -> Result<()> {
         let guard = self.worker_tx.lock();
-        let sender = guard
-            .as_ref()
-            .ok_or_else(|| Self::backend_error("CH9329 worker is not running", "worker_stopped"))?;
-        sender
-            .send(command)
-            .map_err(|_| Self::backend_error("CH9329 worker stopped", "worker_stopped"))
+        let Some(sender) = guard.as_ref() else {
+            self.record_error("CH9329 worker is not running", "worker_stopped");
+            return Err(Self::backend_error(
+                "CH9329 worker is not running",
+                "worker_stopped",
+            ));
+        };
+
+        sender.send(command).map_err(|_| {
+            self.record_error("CH9329 worker stopped", "worker_stopped");
+            Self::backend_error("CH9329 worker stopped", "worker_stopped")
+        })
     }
 
     fn send_packet(&self, cmd: u8, data: &[u8]) -> Result<()> {
@@ -699,19 +743,6 @@ impl Ch9329Backend {
             cmd,
             data: data.to_vec(),
         })
-    }
-
-    pub fn error_count(&self) -> u32 {
-        0
-    }
-
-    /// Check if device communication is healthy (recent successful operation)
-    pub fn is_healthy(&self) -> bool {
-        if let Some(last) = *self.runtime.last_success.lock() {
-            last.elapsed() < Duration::from_secs(30)
-        } else {
-            false
-        }
     }
 
     fn worker_reconnect_loop(
@@ -745,7 +776,9 @@ impl Ch9329Backend {
                             "disconnected"
                         }
                     );
-                    Self::update_chip_info_cache(chip_info, led_status, info);
+                    if Self::update_chip_info_cache(chip_info, led_status, info) {
+                        runtime.notify();
+                    }
                     runtime.set_online();
                     return Some(port);
                 }
@@ -761,36 +794,6 @@ impl Ch9329Backend {
         }
     }
 
-    /// Get cached chip information
-    pub fn get_chip_info(&self) -> Option<ChipInfo> {
-        self.chip_info.read().clone()
-    }
-
-    pub fn query_chip_info(&self) -> Result<ChipInfo> {
-        if let Some(info) = self.get_chip_info() {
-            return Ok(info);
-        }
-
-        let error = self.runtime.last_error.read().clone();
-        Err(match error {
-            Some((reason, error_code)) => Self::backend_error(reason, error_code),
-            None => Self::backend_error("CH9329 info unavailable", "not_ready"),
-        })
-    }
-
-    /// Get cached LED status
-    pub fn get_led_status(&self) -> LedStatus {
-        *self.led_status.read()
-    }
-
-    pub fn software_reset(&self) -> Result<()> {
-        self.send_packet(cmd::RESET, &[])
-    }
-
-    pub fn restore_factory_defaults(&self) -> Result<()> {
-        self.send_packet(cmd::SET_DEFAULT_CFG, &[])
-    }
-
     fn send_keyboard_report(&self, report: &KeyboardReport) -> Result<()> {
         let data = report.to_bytes();
         self.send_packet(cmd::SEND_KB_GENERAL_DATA, &data)
@@ -803,20 +806,6 @@ impl Ch9329Backend {
             ));
         }
         self.send_packet(cmd::SEND_KB_MEDIA_DATA, data)
-    }
-
-    pub fn send_acpi_key(&self, power: bool, sleep: bool, wake: bool) -> Result<()> {
-        let mut byte = 0u8;
-        if power {
-            byte |= 0x01;
-        }
-        if sleep {
-            byte |= 0x02;
-        }
-        if wake {
-            byte |= 0x04;
-        }
-        self.send_media_key(&[0x01, byte])
     }
 
     pub fn release_media_keys(&self) -> Result<()> {
@@ -843,13 +832,6 @@ impl Ch9329Backend {
         Ok(())
     }
 
-    pub fn send_custom_hid(&self, data: &[u8]) -> Result<()> {
-        if data.len() > MAX_DATA_LEN {
-            return Err(AppError::Internal("Custom HID data too long".to_string()));
-        }
-        self.send_packet(cmd::SEND_MY_HID_DATA, data)
-    }
-
     fn worker_loop(
         port_path: String,
         baud_rate: u32,
@@ -860,7 +842,7 @@ impl Ch9329Backend {
         runtime: Arc<Ch9329RuntimeState>,
         init_tx: mpsc::Sender<Result<ChipInfo>>,
     ) {
-        runtime.initialized.store(true, Ordering::Relaxed);
+        runtime.set_initialized(true);
 
         let mut port = match Self::open_port(&port_path, baud_rate).and_then(|mut port| {
             let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
@@ -871,7 +853,9 @@ impl Ch9329Backend {
                     "CH9329 serial port opened: {} @ {} baud",
                     port_path, baud_rate
                 );
-                Self::update_chip_info_cache(&chip_info, &led_status, info.clone());
+                if Self::update_chip_info_cache(&chip_info, &led_status, info.clone()) {
+                    runtime.notify();
+                }
                 runtime.set_online();
                 let _ = init_tx.send(Ok(info));
                 port
@@ -884,7 +868,7 @@ impl Ch9329Backend {
                     runtime.set_error(reason.clone(), error_code.clone());
                 }
                 let _ = init_tx.send(Err(err));
-                runtime.initialized.store(false, Ordering::Relaxed);
+                runtime.set_initialized(false);
                 return;
             }
         };
@@ -961,7 +945,9 @@ impl Ch9329Backend {
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     match Self::query_chip_info_on_port(port.as_mut(), address) {
                         Ok(info) => {
-                            Self::update_chip_info_cache(&chip_info, &led_status, info);
+                            if Self::update_chip_info_cache(&chip_info, &led_status, info) {
+                                runtime.notify();
+                            }
                             runtime.set_online();
                         }
                         Err(err) => {
@@ -993,8 +979,8 @@ impl Ch9329Backend {
             }
         }
 
-        runtime.online.store(false, Ordering::Relaxed);
-        runtime.initialized.store(false, Ordering::Relaxed);
+        runtime.set_offline();
+        runtime.set_initialized(false);
     }
 }
 
@@ -1004,10 +990,6 @@ impl Ch9329Backend {
 
 #[async_trait]
 impl HidBackend for Ch9329Backend {
-    fn name(&self) -> &'static str {
-        "CH9329 Serial"
-    }
-
     async fn init(&self) -> Result<()> {
         if self.worker_handle.lock().is_some() {
             return Ok(());
@@ -1047,7 +1029,7 @@ impl HidBackend for Ch9329Backend {
                 );
                 *self.worker_tx.lock() = Some(tx);
                 *self.worker_handle.lock() = Some(handle);
-                self.mark_online();
+                self.runtime.set_online();
                 Ok(())
             }
             Ok(Err(err)) => {
@@ -1215,15 +1197,15 @@ impl HidBackend for Ch9329Backend {
         if let Some(handle) = self.worker_handle.lock().take() {
             let _ = handle.join();
         }
-        self.runtime.initialized.store(false, Ordering::Relaxed);
-        self.runtime.online.store(false, Ordering::Relaxed);
-        self.clear_error();
+        self.runtime.set_offline();
+        self.runtime.set_initialized(false);
+        self.runtime.clear_error();
 
         info!("CH9329 backend shutdown");
         Ok(())
     }
 
-    fn status(&self) -> HidBackendStatus {
+    fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
         let initialized = self.runtime.initialized.load(Ordering::Relaxed);
         let mut online = initialized && self.runtime.online.load(Ordering::Relaxed);
         let mut error = self.runtime.last_error.read().clone();
@@ -1236,25 +1218,36 @@ impl HidBackend for Ch9329Backend {
             ));
         }
 
-        HidBackendStatus {
+        HidBackendRuntimeSnapshot {
             initialized,
             online,
+            supports_absolute_mouse: true,
+            keyboard_leds_enabled: true,
+            led_state: {
+                let led = *self.led_status.read();
+                LedState {
+                    num_lock: led.num_lock,
+                    caps_lock: led.caps_lock,
+                    scroll_lock: led.scroll_lock,
+                    compose: false,
+                    kana: false,
+                }
+            },
+            screen_resolution: Some((self.screen_width, self.screen_height)),
+            device: Some(self.port_path.clone()),
             error: error.as_ref().map(|(reason, _)| reason.clone()),
             error_code: error.as_ref().map(|(_, code)| code.clone()),
         }
     }
 
-    fn supports_absolute_mouse(&self) -> bool {
-        true
-    }
-
-    fn screen_resolution(&self) -> Option<(u32, u32)> {
-        Some((self.screen_width, self.screen_height))
+    fn subscribe_runtime(&self) -> watch::Receiver<()> {
+        self.runtime.subscribe()
     }
 
     fn set_screen_resolution(&mut self, width: u32, height: u32) {
         self.screen_width = width;
         self.screen_height = height;
+        self.runtime.notify();
     }
 }
 

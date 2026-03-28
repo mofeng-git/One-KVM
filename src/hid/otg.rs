@@ -1,10 +1,12 @@
 //! OTG USB Gadget HID backend
 //!
 //! This backend uses Linux USB Gadget API to emulate USB HID devices.
-//! It creates and manages three HID devices:
-//! - hidg0: Keyboard (8-byte reports, with LED feedback)
-//! - hidg1: Relative Mouse (4-byte reports)
-//! - hidg2: Absolute Mouse (6-byte reports)
+//! It opens the HID gadget device nodes created by `OtgService`.
+//! Depending on the configured OTG profile, this may include:
+//! - hidg0: Keyboard
+//! - hidg1: Relative Mouse
+//! - hidg2: Absolute Mouse
+//! - hidg3: Consumer Control Keyboard
 //!
 //! Requirements:
 //! - USB OTG/Device controller (UDC)
@@ -20,15 +22,20 @@
 use async_trait::async_trait;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use tokio::sync::watch;
 use tracing::{debug, info, trace, warn};
 
-use super::backend::{HidBackend, HidBackendStatus};
+use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
 use super::types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
 };
@@ -45,7 +52,7 @@ enum DeviceType {
 }
 
 /// Keyboard LED state
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct LedState {
     /// Num Lock LED
     pub num_lock: bool,
@@ -123,12 +130,14 @@ pub struct OtgBackend {
     mouse_abs_dev: Mutex<Option<File>>,
     /// Consumer control device file
     consumer_dev: Mutex<Option<File>>,
+    /// Whether keyboard LED/status feedback is enabled.
+    keyboard_leds_enabled: bool,
     /// Current keyboard state
     keyboard_state: Mutex<KeyboardReport>,
     /// Current mouse button state
     mouse_buttons: AtomicU8,
     /// Last known LED state (using parking_lot::RwLock for sync access)
-    led_state: parking_lot::RwLock<LedState>,
+    led_state: Arc<parking_lot::RwLock<LedState>>,
     /// Screen resolution for absolute mouse (using parking_lot::RwLock for sync access)
     screen_resolution: parking_lot::RwLock<Option<(u32, u32)>>,
     /// UDC name for state checking (e.g., "fcc00000.usb")
@@ -145,6 +154,12 @@ pub struct OtgBackend {
     error_count: AtomicU8,
     /// Consecutive EAGAIN count (for offline threshold detection)
     eagain_count: AtomicU8,
+    /// Runtime change notifier.
+    runtime_notify_tx: watch::Sender<()>,
+    /// LED listener stop flag.
+    led_worker_stop: Arc<AtomicBool>,
+    /// Keyboard LED listener thread.
+    led_worker: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 /// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
@@ -156,6 +171,7 @@ impl OtgBackend {
     /// This is the ONLY way to create an OtgBackend - it no longer manages
     /// the USB gadget itself. The gadget must already be set up by OtgService.
     pub fn from_handles(paths: HidDevicePaths) -> Result<Self> {
+        let (runtime_notify_tx, _runtime_notify_rx) = watch::channel(());
         Ok(Self {
             keyboard_path: paths.keyboard,
             mouse_rel_path: paths.mouse_relative,
@@ -165,32 +181,57 @@ impl OtgBackend {
             mouse_rel_dev: Mutex::new(None),
             mouse_abs_dev: Mutex::new(None),
             consumer_dev: Mutex::new(None),
+            keyboard_leds_enabled: paths.keyboard_leds_enabled,
             keyboard_state: Mutex::new(KeyboardReport::default()),
             mouse_buttons: AtomicU8::new(0),
-            led_state: parking_lot::RwLock::new(LedState::default()),
+            led_state: Arc::new(parking_lot::RwLock::new(LedState::default())),
             screen_resolution: parking_lot::RwLock::new(Some((1920, 1080))),
-            udc_name: parking_lot::RwLock::new(None),
+            udc_name: parking_lot::RwLock::new(paths.udc),
             initialized: AtomicBool::new(false),
             online: AtomicBool::new(false),
             last_error: parking_lot::RwLock::new(None),
             last_error_log: parking_lot::Mutex::new(std::time::Instant::now()),
             error_count: AtomicU8::new(0),
             eagain_count: AtomicU8::new(0),
+            runtime_notify_tx,
+            led_worker_stop: Arc::new(AtomicBool::new(false)),
+            led_worker: Mutex::new(None),
         })
     }
 
+    fn notify_runtime_changed(&self) {
+        let _ = self.runtime_notify_tx.send(());
+    }
+
     fn clear_error(&self) {
-        *self.last_error.write() = None;
+        let mut error = self.last_error.write();
+        if error.is_some() {
+            *error = None;
+            self.notify_runtime_changed();
+        }
     }
 
     fn record_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
-        self.online.store(false, Ordering::Relaxed);
-        *self.last_error.write() = Some((reason.into(), error_code.into()));
+        let reason = reason.into();
+        let error_code = error_code.into();
+        let was_online = self.online.swap(false, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let changed = error.as_ref() != Some(&(reason.clone(), error_code.clone()));
+        *error = Some((reason, error_code));
+        drop(error);
+        if was_online || changed {
+            self.notify_runtime_changed();
+        }
     }
 
     fn mark_online(&self) {
-        self.online.store(true, Ordering::Relaxed);
-        self.clear_error();
+        let was_online = self.online.swap(true, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let cleared_error = error.take().is_some();
+        drop(error);
+        if !was_online || cleared_error {
+            self.notify_runtime_changed();
+        }
     }
 
     /// Log throttled error message (max once per second)
@@ -303,11 +344,6 @@ impl OtgBackend {
             }
         }
         None
-    }
-
-    /// Check if device is online
-    pub fn is_online(&self) -> bool {
-        self.online.load(Ordering::Relaxed)
     }
 
     /// Ensure a device is open and ready for I/O
@@ -750,49 +786,180 @@ impl OtgBackend {
         self.send_consumer_report(event.usage)
     }
 
-    /// Read keyboard LED state (non-blocking)
-    pub fn read_led_state(&self) -> Result<Option<LedState>> {
-        let mut dev = self.keyboard_dev.lock();
-        if let Some(ref mut file) = *dev {
-            let mut buf = [0u8; 1];
-            match file.read(&mut buf) {
-                Ok(1) => {
-                    let state = LedState::from_byte(buf[0]);
-                    // Update LED state (using parking_lot RwLock)
-                    *self.led_state.write() = state;
-                    Ok(Some(state))
-                }
-                Ok(_) => Ok(None), // No data available
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-                Err(e) => Err(AppError::Internal(format!(
-                    "Failed to read LED state: {}",
-                    e
-                ))),
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Get last known LED state
     pub fn led_state(&self) -> LedState {
         *self.led_state.read()
+    }
+
+    fn build_runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+        let initialized = self.initialized.load(Ordering::Relaxed);
+        let mut online = initialized && self.online.load(Ordering::Relaxed);
+        let mut error = self.last_error.read().clone();
+
+        if initialized && !self.check_devices_exist() {
+            online = false;
+            let missing = self.get_missing_devices();
+            error = Some((
+                format!("HID device node missing: {}", missing.join(", ")),
+                "enoent".to_string(),
+            ));
+        } else if initialized && !self.is_udc_configured() {
+            online = false;
+            error = Some((
+                "UDC is not in configured state".to_string(),
+                "udc_not_configured".to_string(),
+            ));
+        }
+
+        HidBackendRuntimeSnapshot {
+            initialized,
+            online,
+            supports_absolute_mouse: self.mouse_abs_path.as_ref().is_some_and(|p| p.exists()),
+            keyboard_leds_enabled: self.keyboard_leds_enabled,
+            led_state: self.led_state(),
+            screen_resolution: *self.screen_resolution.read(),
+            device: self.udc_name.read().clone(),
+            error: error.as_ref().map(|(reason, _)| reason.clone()),
+            error_code: error.as_ref().map(|(_, code)| code.clone()),
+        }
+    }
+
+    fn start_led_worker(&self) {
+        if !self.keyboard_leds_enabled {
+            return;
+        }
+
+        let Some(path) = self.keyboard_path.clone() else {
+            return;
+        };
+
+        let mut worker = self.led_worker.lock();
+        if worker.is_some() {
+            return;
+        }
+
+        self.led_worker_stop.store(false, Ordering::Relaxed);
+        let stop = self.led_worker_stop.clone();
+        let led_state = self.led_state.clone();
+        let runtime_notify_tx = self.runtime_notify_tx.clone();
+
+        let handle = thread::Builder::new()
+            .name("otg-led-listener".to_string())
+            .spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    let mut file = match OpenOptions::new()
+                        .read(true)
+                        .custom_flags(libc::O_NONBLOCK)
+                        .open(&path)
+                    {
+                        Ok(file) => file,
+                        Err(err) => {
+                            warn!(
+                                "Failed to open OTG keyboard LED listener {}: {}",
+                                path.display(),
+                                err
+                            );
+                            let _ = runtime_notify_tx.send(());
+                            thread::sleep(Duration::from_millis(500));
+                            continue;
+                        }
+                    };
+
+                    while !stop.load(Ordering::Relaxed) {
+                        let mut pollfd = [PollFd::new(
+                            file.as_fd(),
+                            PollFlags::POLLIN | PollFlags::POLLERR | PollFlags::POLLHUP,
+                        )];
+
+                        match poll(&mut pollfd, PollTimeout::from(500u16)) {
+                            Ok(0) => continue,
+                            Ok(_) => {
+                                let Some(revents) = pollfd[0].revents() else {
+                                    continue;
+                                };
+
+                                if revents.contains(PollFlags::POLLERR)
+                                    || revents.contains(PollFlags::POLLHUP)
+                                {
+                                    let _ = runtime_notify_tx.send(());
+                                    break;
+                                }
+
+                                if !revents.contains(PollFlags::POLLIN) {
+                                    continue;
+                                }
+
+                                let mut buf = [0u8; 1];
+                                match file.read(&mut buf) {
+                                    Ok(1) => {
+                                        let next = LedState::from_byte(buf[0]);
+                                        let changed = {
+                                            let mut guard = led_state.write();
+                                            if *guard == next {
+                                                false
+                                            } else {
+                                                *guard = next;
+                                                true
+                                            }
+                                        };
+                                        if changed {
+                                            let _ = runtime_notify_tx.send(());
+                                        }
+                                    }
+                                    Ok(_) => {}
+                                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                                    Err(err) => {
+                                        warn!("OTG keyboard LED listener read failed: {}", err);
+                                        let _ = runtime_notify_tx.send(());
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                warn!("OTG keyboard LED listener poll failed: {}", err);
+                                let _ = runtime_notify_tx.send(());
+                                break;
+                            }
+                        }
+                    }
+
+                    if !stop.load(Ordering::Relaxed) {
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                }
+            });
+
+        match handle {
+            Ok(handle) => {
+                *worker = Some(handle);
+            }
+            Err(err) => {
+                warn!("Failed to spawn OTG keyboard LED listener: {}", err);
+            }
+        }
+    }
+
+    fn stop_led_worker(&self) {
+        self.led_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.led_worker.lock().take() {
+            let _ = handle.join();
+        }
     }
 }
 
 #[async_trait]
 impl HidBackend for OtgBackend {
-    fn name(&self) -> &'static str {
-        "OTG USB Gadget"
-    }
-
     async fn init(&self) -> Result<()> {
         info!("Initializing OTG HID backend");
 
-        // Auto-detect UDC name for state checking
-        if let Some(udc) = Self::find_udc() {
-            info!("Auto-detected UDC: {}", udc);
-            self.set_udc_name(&udc);
+        // Auto-detect UDC name for state checking only if OtgService did not provide one
+        if self.udc_name.read().is_none() {
+            if let Some(udc) = Self::find_udc() {
+                info!("Auto-detected UDC: {}", udc);
+                self.set_udc_name(&udc);
+            }
+        } else if let Some(udc) = self.udc_name.read().clone() {
+            info!("Using configured UDC: {}", udc);
         }
 
         // Wait for devices to appear (they should already exist from OtgService)
@@ -866,6 +1033,8 @@ impl HidBackend for OtgBackend {
 
         // Mark as online if all devices opened successfully
         self.initialized.store(true, Ordering::Relaxed);
+        self.notify_runtime_changed();
+        self.start_led_worker();
         self.mark_online();
 
         Ok(())
@@ -974,6 +1143,8 @@ impl HidBackend for OtgBackend {
     }
 
     async fn shutdown(&self) -> Result<()> {
+        self.stop_led_worker();
+
         // Reset before closing
         self.reset().await?;
 
@@ -987,53 +1158,27 @@ impl HidBackend for OtgBackend {
         self.initialized.store(false, Ordering::Relaxed);
         self.online.store(false, Ordering::Relaxed);
         self.clear_error();
+        self.notify_runtime_changed();
 
         info!("OTG backend shutdown");
         Ok(())
     }
 
-    fn status(&self) -> HidBackendStatus {
-        let initialized = self.initialized.load(Ordering::Relaxed);
-        let mut online = initialized && self.online.load(Ordering::Relaxed);
-        let mut error = self.last_error.read().clone();
-
-        if initialized && !self.check_devices_exist() {
-            online = false;
-            let missing = self.get_missing_devices();
-            error = Some((
-                format!("HID device node missing: {}", missing.join(", ")),
-                "enoent".to_string(),
-            ));
-        } else if initialized && !self.is_udc_configured() {
-            online = false;
-            error = Some((
-                "UDC is not in configured state".to_string(),
-                "udc_not_configured".to_string(),
-            ));
-        }
-
-        HidBackendStatus {
-            initialized,
-            online,
-            error: error.as_ref().map(|(reason, _)| reason.clone()),
-            error_code: error.as_ref().map(|(_, code)| code.clone()),
-        }
+    fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+        self.build_runtime_snapshot()
     }
 
-    fn supports_absolute_mouse(&self) -> bool {
-        self.mouse_abs_path.as_ref().is_some_and(|p| p.exists())
+    fn subscribe_runtime(&self) -> watch::Receiver<()> {
+        self.runtime_notify_tx.subscribe()
     }
 
     async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
         self.send_consumer_report(event.usage)
     }
 
-    fn screen_resolution(&self) -> Option<(u32, u32)> {
-        *self.screen_resolution.read()
-    }
-
     fn set_screen_resolution(&mut self, width: u32, height: u32) {
         *self.screen_resolution.write() = Some((width, height));
+        self.notify_runtime_changed();
     }
 }
 
@@ -1050,6 +1195,10 @@ pub fn is_otg_available() -> bool {
 /// Implement Drop for OtgBackend to close device files
 impl Drop for OtgBackend {
     fn drop(&mut self) {
+        self.led_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.led_worker.get_mut().take() {
+            let _ = handle.join();
+        }
         // Close device files
         // Note: Gadget cleanup is handled by OtgService, not here
         *self.keyboard_dev.lock() = None;

@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils'
 const props = defineProps<{
   pressedKeys?: CanonicalKey[]
   capsLock?: boolean
+  numLock?: boolean
+  scrollLock?: boolean
+  keyboardLedEnabled?: boolean
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
   compact?: boolean
@@ -42,12 +45,21 @@ const keysDisplay = computed(() => {
     <!-- Compact mode for small screens -->
     <div v-if="compact" class="flex items-center justify-between text-xs px-2 py-0.5">
       <!-- LED indicator only in compact mode -->
-      <div class="flex items-center gap-1">
+      <div v-if="keyboardLedEnabled" class="flex items-center gap-1">
         <span
           v-if="capsLock"
           class="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium"
         >C</span>
-        <span v-else class="text-muted-foreground/40 text-[10px]">-</span>
+        <span v-else class="text-muted-foreground/40 text-[10px]">C</span>
+        <span
+          :class="numLock ? 'px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium' : 'text-muted-foreground/40 text-[10px]'"
+        >N</span>
+        <span
+          :class="scrollLock ? 'px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium' : 'text-muted-foreground/40 text-[10px]'"
+        >S</span>
+      </div>
+      <div v-else class="text-[10px] text-muted-foreground/60">
+        {{ t('infobar.keyboardLedUnavailable') }}
       </div>
       <!-- Keys in compact mode -->
       <div v-if="keysDisplay" class="text-[10px] text-muted-foreground truncate max-w-[150px]">
@@ -72,16 +84,39 @@ const keysDisplay = computed(() => {
         </div>
       </div>
 
-      <!-- Right side: Caps Lock LED state -->
+      <!-- Right side: Keyboard LED states -->
       <div class="flex items-center shrink-0">
-        <div
-          :class="cn(
-            'px-2 py-1 select-none transition-colors',
-            capsLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
-          )"
-        >
-          <span class="hidden sm:inline">{{ t('infobar.caps') }}</span>
-          <span class="sm:hidden">C</span>
+        <template v-if="keyboardLedEnabled">
+          <div
+            :class="cn(
+              'px-2 py-1 select-none transition-colors',
+              capsLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
+            )"
+          >
+            <span class="hidden sm:inline">{{ t('infobar.caps') }}</span>
+            <span class="sm:hidden">C</span>
+          </div>
+          <div
+            :class="cn(
+              'px-2 py-1 select-none transition-colors',
+              numLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
+            )"
+          >
+            <span class="hidden sm:inline">{{ t('infobar.num') }}</span>
+            <span class="sm:hidden">N</span>
+          </div>
+          <div
+            :class="cn(
+              'px-2 py-1 select-none transition-colors',
+              scrollLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
+            )"
+          >
+            <span class="hidden sm:inline">{{ t('infobar.scroll') }}</span>
+            <span class="sm:hidden">S</span>
+          </div>
+        </template>
+        <div v-else class="px-3 py-1 text-muted-foreground/60">
+          {{ t('infobar.keyboardLedUnavailable') }}
         </div>
       </div>
     </div>

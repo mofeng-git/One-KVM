@@ -148,13 +148,11 @@ impl Default for OtgDescriptorConfig {
 pub enum OtgHidProfile {
     /// Full HID device set (keyboard + relative mouse + absolute mouse + consumer control)
     #[default]
+    #[serde(alias = "full_no_msd")]
     Full,
-    /// Full HID device set without MSD
-    FullNoMsd,
     /// Full HID device set without consumer control
+    #[serde(alias = "full_no_consumer_no_msd")]
     FullNoConsumer,
-    /// Full HID device set without consumer control and MSD
-    FullNoConsumerNoMsd,
     /// Legacy profile: only keyboard
     LegacyKeyboard,
     /// Legacy profile: only relative mouse
@@ -163,9 +161,52 @@ pub enum OtgHidProfile {
     Custom,
 }
 
+/// OTG endpoint budget policy.
+#[typeshare]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum OtgEndpointBudget {
+    /// Derive a safe default from the selected UDC.
+    #[default]
+    Auto,
+    /// Limit OTG gadget functions to 5 endpoints.
+    Five,
+    /// Limit OTG gadget functions to 6 endpoints.
+    Six,
+    /// Do not impose a software endpoint budget.
+    Unlimited,
+}
+
+impl OtgEndpointBudget {
+    pub fn default_for_udc_name(udc: Option<&str>) -> Self {
+        if udc.is_some_and(crate::otg::configfs::is_low_endpoint_udc) {
+            Self::Five
+        } else {
+            Self::Six
+        }
+    }
+
+    pub fn resolved(self, udc: Option<&str>) -> Self {
+        match self {
+            Self::Auto => Self::default_for_udc_name(udc),
+            other => other,
+        }
+    }
+
+    pub fn endpoint_limit(self, udc: Option<&str>) -> Option<u8> {
+        match self.resolved(udc) {
+            Self::Five => Some(5),
+            Self::Six => Some(6),
+            Self::Unlimited => None,
+            Self::Auto => unreachable!("auto budget must be resolved before use"),
+        }
+    }
+}
+
 /// OTG HID function selection (used when profile is Custom)
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct OtgHidFunctions {
     pub keyboard: bool,
@@ -214,6 +255,26 @@ impl OtgHidFunctions {
     pub fn is_empty(&self) -> bool {
         !self.keyboard && !self.mouse_relative && !self.mouse_absolute && !self.consumer
     }
+
+    pub fn endpoint_cost(&self, keyboard_leds: bool) -> u8 {
+        let mut endpoints = 0;
+        if self.keyboard {
+            endpoints += 1;
+            if keyboard_leds {
+                endpoints += 1;
+            }
+        }
+        if self.mouse_relative {
+            endpoints += 1;
+        }
+        if self.mouse_absolute {
+            endpoints += 1;
+        }
+        if self.consumer {
+            endpoints += 1;
+        }
+        endpoints
+    }
 }
 
 impl Default for OtgHidFunctions {
@@ -223,12 +284,21 @@ impl Default for OtgHidFunctions {
 }
 
 impl OtgHidProfile {
+    pub fn from_legacy_str(value: &str) -> Option<Self> {
+        match value {
+            "full" | "full_no_msd" => Some(Self::Full),
+            "full_no_consumer" | "full_no_consumer_no_msd" => Some(Self::FullNoConsumer),
+            "legacy_keyboard" => Some(Self::LegacyKeyboard),
+            "legacy_mouse_relative" => Some(Self::LegacyMouseRelative),
+            "custom" => Some(Self::Custom),
+            _ => None,
+        }
+    }
+
     pub fn resolve_functions(&self, custom: &OtgHidFunctions) -> OtgHidFunctions {
         match self {
             Self::Full => OtgHidFunctions::full(),
-            Self::FullNoMsd => OtgHidFunctions::full(),
             Self::FullNoConsumer => OtgHidFunctions::full_no_consumer(),
-            Self::FullNoConsumerNoMsd => OtgHidFunctions::full_no_consumer(),
             Self::LegacyKeyboard => OtgHidFunctions::legacy_keyboard(),
             Self::LegacyMouseRelative => OtgHidFunctions::legacy_mouse_relative(),
             Self::Custom => custom.clone(),
@@ -243,10 +313,6 @@ impl OtgHidProfile {
 pub struct HidConfig {
     /// HID backend type
     pub backend: HidBackend,
-    /// OTG keyboard device path
-    pub otg_keyboard: String,
-    /// OTG mouse device path
-    pub otg_mouse: String,
     /// OTG UDC (USB Device Controller) name
     pub otg_udc: Option<String>,
     /// OTG USB device descriptor configuration
@@ -255,9 +321,15 @@ pub struct HidConfig {
     /// OTG HID function profile
     #[serde(default)]
     pub otg_profile: OtgHidProfile,
+    /// OTG endpoint budget policy
+    #[serde(default)]
+    pub otg_endpoint_budget: OtgEndpointBudget,
     /// OTG HID function selection (used when profile is Custom)
     #[serde(default)]
     pub otg_functions: OtgHidFunctions,
+    /// Enable keyboard LED/status feedback for OTG keyboard
+    #[serde(default)]
+    pub otg_keyboard_leds: bool,
     /// CH9329 serial port
     pub ch9329_port: String,
     /// CH9329 baud rate
@@ -270,12 +342,12 @@ impl Default for HidConfig {
     fn default() -> Self {
         Self {
             backend: HidBackend::None,
-            otg_keyboard: "/dev/hidg0".to_string(),
-            otg_mouse: "/dev/hidg1".to_string(),
             otg_udc: None,
             otg_descriptor: OtgDescriptorConfig::default(),
             otg_profile: OtgHidProfile::default(),
+            otg_endpoint_budget: OtgEndpointBudget::default(),
             otg_functions: OtgHidFunctions::default(),
+            otg_keyboard_leds: false,
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
             mouse_absolute: true,
@@ -286,6 +358,62 @@ impl Default for HidConfig {
 impl HidConfig {
     pub fn effective_otg_functions(&self) -> OtgHidFunctions {
         self.otg_profile.resolve_functions(&self.otg_functions)
+    }
+
+    pub fn resolved_otg_udc(&self) -> Option<String> {
+        crate::otg::configfs::resolve_udc_name(self.otg_udc.as_deref())
+    }
+
+    pub fn resolved_otg_endpoint_budget(&self) -> OtgEndpointBudget {
+        self.otg_endpoint_budget
+            .resolved(self.resolved_otg_udc().as_deref())
+    }
+
+    pub fn resolved_otg_endpoint_limit(&self) -> Option<u8> {
+        self.otg_endpoint_budget
+            .endpoint_limit(self.resolved_otg_udc().as_deref())
+    }
+
+    pub fn effective_otg_keyboard_leds(&self) -> bool {
+        self.otg_keyboard_leds && self.effective_otg_functions().keyboard
+    }
+
+    pub fn constrained_otg_functions(&self) -> OtgHidFunctions {
+        self.effective_otg_functions()
+    }
+
+    pub fn effective_otg_required_endpoints(&self, msd_enabled: bool) -> u8 {
+        let functions = self.effective_otg_functions();
+        let mut endpoints = functions.endpoint_cost(self.effective_otg_keyboard_leds());
+        if msd_enabled {
+            endpoints += 2;
+        }
+        endpoints
+    }
+
+    pub fn validate_otg_endpoint_budget(&self, msd_enabled: bool) -> crate::error::Result<()> {
+        if self.backend != HidBackend::Otg {
+            return Ok(());
+        }
+
+        let functions = self.effective_otg_functions();
+        if functions.is_empty() {
+            return Err(crate::error::AppError::BadRequest(
+                "OTG HID functions cannot be empty".to_string(),
+            ));
+        }
+
+        let required = self.effective_otg_required_endpoints(msd_enabled);
+        if let Some(limit) = self.resolved_otg_endpoint_limit() {
+            if required > limit {
+                return Err(crate::error::AppError::BadRequest(format!(
+                    "OTG selection requires {} endpoints, but the configured limit is {}",
+                    required, limit
+                )));
+            }
+        }
+
+        Ok(())
     }
 }
 

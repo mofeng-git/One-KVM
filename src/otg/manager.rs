@@ -19,7 +19,7 @@ use crate::error::{AppError, Result};
 const REBIND_DELAY_MS: u64 = 300;
 
 /// USB Gadget device descriptor configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GadgetDescriptor {
     pub vendor_id: u16,
     pub product_id: u16,
@@ -131,8 +131,8 @@ impl OtgGadgetManager {
 
     /// Add keyboard function
     /// Returns the expected device path (e.g., /dev/hidg0)
-    pub fn add_keyboard(&mut self) -> Result<PathBuf> {
-        let func = HidFunction::keyboard(self.hid_instance);
+    pub fn add_keyboard(&mut self, keyboard_leds: bool) -> Result<PathBuf> {
+        let func = HidFunction::keyboard(self.hid_instance, keyboard_leds);
         let device_path = func.device_path();
         self.add_function(Box::new(func))?;
         self.hid_instance += 1;
@@ -245,12 +245,8 @@ impl OtgGadgetManager {
         Ok(())
     }
 
-    /// Bind gadget to UDC
-    pub fn bind(&mut self) -> Result<()> {
-        let udc = Self::find_udc().ok_or_else(|| {
-            AppError::Internal("No USB Device Controller (UDC) found".to_string())
-        })?;
-
+    /// Bind gadget to a specific UDC
+    pub fn bind(&mut self, udc: &str) -> Result<()> {
         // Recreate config symlinks before binding to avoid kernel gadget issues after rebind
         if let Err(e) = self.recreate_config_links() {
             warn!("Failed to recreate gadget config links before bind: {}", e);
@@ -258,7 +254,7 @@ impl OtgGadgetManager {
 
         info!("Binding gadget to UDC: {}", udc);
         write_file(&self.gadget_path.join("UDC"), &udc)?;
-        self.bound_udc = Some(udc);
+        self.bound_udc = Some(udc.to_string());
         std::thread::sleep(std::time::Duration::from_millis(REBIND_DELAY_MS));
 
         Ok(())
@@ -504,7 +500,7 @@ mod tests {
         let mut manager = OtgGadgetManager::with_config("test", 8);
 
         // Keyboard uses 1 endpoint
-        let _ = manager.add_keyboard();
+        let _ = manager.add_keyboard(false);
         assert_eq!(manager.endpoint_allocator.used(), 1);
 
         // Mouse uses 1 endpoint each

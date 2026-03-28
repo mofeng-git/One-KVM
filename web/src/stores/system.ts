@@ -34,6 +34,12 @@ interface HidState {
   initialized: boolean
   online: boolean
   supportsAbsoluteMouse: boolean
+  keyboardLedsEnabled: boolean
+  ledState: {
+    numLock: boolean
+    capsLock: boolean
+    scrollLock: boolean
+  }
   device: string | null
   error: string | null
   errorCode: string | null
@@ -89,6 +95,14 @@ export interface HidDeviceInfo {
   initialized: boolean
   online: boolean
   supports_absolute_mouse: boolean
+  keyboard_leds_enabled: boolean
+  led_state: {
+    num_lock: boolean
+    caps_lock: boolean
+    scroll_lock: boolean
+    compose: boolean
+    kana: boolean
+  }
   device: string | null
   error: string | null
   error_code?: string | null
@@ -194,6 +208,12 @@ export const useSystemStore = defineStore('system', () => {
         initialized: state.initialized,
         online: state.online,
         supportsAbsoluteMouse: state.supports_absolute_mouse,
+        keyboardLedsEnabled: state.keyboard_leds_enabled,
+        ledState: {
+          numLock: state.led_state.num_lock,
+          capsLock: state.led_state.caps_lock,
+          scrollLock: state.led_state.scroll_lock,
+        },
         device: state.device ?? null,
         error: state.error ?? null,
         errorCode: state.error_code ?? null,
@@ -298,6 +318,12 @@ export const useSystemStore = defineStore('system', () => {
       initialized: data.hid.initialized,
       online: data.hid.online,
       supportsAbsoluteMouse: data.hid.supports_absolute_mouse,
+      keyboardLedsEnabled: data.hid.keyboard_leds_enabled,
+      ledState: {
+        numLock: data.hid.led_state.num_lock,
+        capsLock: data.hid.led_state.caps_lock,
+        scrollLock: data.hid.led_state.scroll_lock,
+      },
       device: data.hid.device,
       error: data.hid.error,
       errorCode: data.hid.error_code ?? null,

@@ -33,6 +33,7 @@ import type {
   AtxDriverType,
   ActiveLevel,
   AtxDevices,
+  OtgEndpointBudget,
   OtgHidProfile,
   OtgHidFunctions,
 } from '@/types/generated'
@@ -326,13 +327,15 @@ const config = ref({
   hid_serial_device: '',
   hid_serial_baudrate: 9600,
   hid_otg_udc: '',
-  hid_otg_profile: 'full' as OtgHidProfile,
+  hid_otg_profile: 'custom' as OtgHidProfile,
+  hid_otg_endpoint_budget: 'six' as OtgEndpointBudget,
   hid_otg_functions: {
     keyboard: true,
     mouse_relative: true,
     mouse_absolute: true,
     consumer: true,
   } as OtgHidFunctions,
+  hid_otg_keyboard_leds: false,
   msd_enabled: false,
   msd_dir: '',
   encoder_backend: 'auto',
@@ -345,20 +348,6 @@ const config = ref({
 
 // Tracks whether TURN password is configured on the server
 const hasTurnPassword = ref(false)
-const configLoaded = ref(false)
-const devicesLoaded = ref(false)
-const hidProfileAligned = ref(false)
-
-const isLowEndpointUdc = computed(() => {
-  if (config.value.hid_otg_udc) {
-    return /musb/i.test(config.value.hid_otg_udc)
-  }
-  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
-})
-
-const showLowEndpointHint = computed(() =>
-  config.value.hid_backend === 'otg' && isLowEndpointUdc.value
-)
 
 type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
 type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
@@ -619,28 +608,80 @@ async function onRunVideoEncoderSelfCheckClick() {
   await runVideoEncoderSelfCheck()
 }
 
-function alignHidProfileForLowEndpoint() {
-  if (hidProfileAligned.value) return
-  if (!configLoaded.value || !devicesLoaded.value) return
-  if (config.value.hid_backend !== 'otg') {
-    hidProfileAligned.value = true
-    return
+function defaultOtgEndpointBudgetForUdc(udc?: string): OtgEndpointBudget {
+  return /musb/i.test(udc || '') ? 'five' as OtgEndpointBudget : 'six' as OtgEndpointBudget
+}
+
+function normalizeOtgEndpointBudget(budget: OtgEndpointBudget | undefined, udc?: string): OtgEndpointBudget {
+  if (!budget || budget === 'auto') {
+    return defaultOtgEndpointBudgetForUdc(udc)
   }
-  if (!isLowEndpointUdc.value) {
-    hidProfileAligned.value = true
-    return
+  return budget
+}
+
+function endpointLimitForBudget(budget: OtgEndpointBudget): number | null {
+  if (budget === 'unlimited') return null
+  return budget === 'five' ? 5 : 6
+}
+
+const effectiveOtgFunctions = computed(() => ({ ...config.value.hid_otg_functions }))
+
+const otgEndpointLimit = computed(() =>
+  endpointLimitForBudget(config.value.hid_otg_endpoint_budget)
+)
+
+const otgRequiredEndpoints = computed(() => {
+  if (config.value.hid_backend !== 'otg') return 0
+  const functions = effectiveOtgFunctions.value
+  let endpoints = 0
+  if (functions.keyboard) {
+    endpoints += 1
+    if (config.value.hid_otg_keyboard_leds) endpoints += 1
   }
-  if (config.value.hid_otg_profile === 'full') {
-    config.value.hid_otg_profile = 'full_no_consumer' as OtgHidProfile
-  } else if (config.value.hid_otg_profile === 'full_no_msd') {
-    config.value.hid_otg_profile = 'full_no_consumer_no_msd' as OtgHidProfile
+  if (functions.mouse_relative) endpoints += 1
+  if (functions.mouse_absolute) endpoints += 1
+  if (functions.consumer) endpoints += 1
+  if (config.value.msd_enabled) endpoints += 2
+  return endpoints
+})
+
+const isOtgEndpointBudgetValid = computed(() => {
+  if (config.value.hid_backend !== 'otg') return true
+  const limit = otgEndpointLimit.value
+  return limit === null || otgRequiredEndpoints.value <= limit
+})
+
+const otgEndpointUsageText = computed(() => {
+  const limit = otgEndpointLimit.value
+  if (limit === null) {
+    return t('settings.otgEndpointUsageUnlimited', { used: otgRequiredEndpoints.value })
   }
-  hidProfileAligned.value = true
+  return t('settings.otgEndpointUsage', { used: otgRequiredEndpoints.value, limit })
+})
+
+const showOtgEndpointBudgetHint = computed(() =>
+  config.value.hid_backend === 'otg'
+)
+
+const isKeyboardLedToggleDisabled = computed(() =>
+  config.value.hid_backend !== 'otg' || !effectiveOtgFunctions.value.keyboard
+)
+
+function describeEndpointBudget(budget: OtgEndpointBudget): string {
+  switch (budget) {
+    case 'five':
+      return '5'
+    case 'six':
+      return '6'
+    case 'unlimited':
+      return t('settings.otgEndpointBudgetUnlimited')
+    default:
+      return '6'
+  }
 }
 
 const isHidFunctionSelectionValid = computed(() => {
   if (config.value.hid_backend !== 'otg') return true
-  if (config.value.hid_otg_profile !== 'custom') return true
   const f = config.value.hid_otg_functions
   return !!(f.keyboard || f.mouse_relative || f.mouse_absolute || f.consumer)
 })
@@ -946,25 +987,8 @@ async function saveConfig() {
 
     // HID config
     if (activeSection.value === 'hid') {
-      if (!isHidFunctionSelectionValid.value) {
+      if (!isHidFunctionSelectionValid.value || !isOtgEndpointBudgetValid.value) {
         return
-      }
-      let desiredMsdEnabled = config.value.msd_enabled
-      if (config.value.hid_backend === 'otg') {
-        if (config.value.hid_otg_profile === 'full') {
-          desiredMsdEnabled = true
-        } else if (config.value.hid_otg_profile === 'full_no_msd') {
-          desiredMsdEnabled = false
-        } else if (config.value.hid_otg_profile === 'full_no_consumer') {
-          desiredMsdEnabled = true
-        } else if (config.value.hid_otg_profile === 'full_no_consumer_no_msd') {
-          desiredMsdEnabled = false
-        } else if (
-          config.value.hid_otg_profile === 'legacy_keyboard'
-          || config.value.hid_otg_profile === 'legacy_mouse_relative'
-        ) {
-          desiredMsdEnabled = false
-        }
       }
       const hidUpdate: any = {
         backend: config.value.hid_backend as any,
@@ -980,16 +1004,15 @@ async function saveConfig() {
           product: otgProduct.value || 'One-KVM USB Device',
           serial_number: otgSerialNumber.value || undefined,
         }
-        hidUpdate.otg_profile = config.value.hid_otg_profile
+        hidUpdate.otg_profile = 'custom'
+        hidUpdate.otg_endpoint_budget = config.value.hid_otg_endpoint_budget
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
+        hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
       savePromises.push(configStore.updateHid(hidUpdate))
-      if (config.value.msd_enabled !== desiredMsdEnabled) {
-        config.value.msd_enabled = desiredMsdEnabled
-      }
       savePromises.push(
         configStore.updateMsd({
-          enabled: desiredMsdEnabled,
+          enabled: config.value.msd_enabled,
         })
       )
     }
@@ -1034,13 +1057,15 @@ async function loadConfig() {
       hid_serial_device: hid.ch9329_port || '',
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
       hid_otg_udc: hid.otg_udc || '',
-      hid_otg_profile: (hid.otg_profile || 'full') as OtgHidProfile,
+      hid_otg_profile: 'custom' as OtgHidProfile,
+      hid_otg_endpoint_budget: normalizeOtgEndpointBudget(hid.otg_endpoint_budget, hid.otg_udc || ''),
       hid_otg_functions: {
         keyboard: hid.otg_functions?.keyboard ?? true,
         mouse_relative: hid.otg_functions?.mouse_relative ?? true,
         mouse_absolute: hid.otg_functions?.mouse_absolute ?? true,
         consumer: hid.otg_functions?.consumer ?? true,
       } as OtgHidFunctions,
+      hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       encoder_backend: stream.encoder || 'auto',
@@ -1065,9 +1090,6 @@ async function loadConfig() {
 
   } catch (e) {
     console.error('Failed to load config:', e)
-  } finally {
-    configLoaded.value = true
-    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -1076,9 +1098,6 @@ async function loadDevices() {
     devices.value = await configApi.listDevices()
   } catch (e) {
     console.error('Failed to load devices:', e)
-  } finally {
-    devicesLoaded.value = true
-    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -2230,63 +2249,75 @@ watch(() => route.query.tab, (tab) => {
                       <p class="text-sm text-muted-foreground">{{ t('settings.otgHidProfileDesc') }}</p>
                     </div>
                     <div class="space-y-2">
-                      <Label for="otg-profile">{{ t('settings.profile') }}</Label>
-                      <select id="otg-profile" v-model="config.hid_otg_profile" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                        <option value="full">{{ t('settings.otgProfileFull') }}</option>
-                        <option value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</option>
-                        <option value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</option>
-                        <option value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</option>
-                        <option value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</option>
-                        <option value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</option>
-                        <option value="custom">{{ t('settings.otgProfileCustom') }}</option>
+                      <Label for="otg-endpoint-budget">{{ t('settings.otgEndpointBudget') }}</Label>
+                      <select id="otg-endpoint-budget" v-model="config.hid_otg_endpoint_budget" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                        <option value="five">5</option>
+                        <option value="six">6</option>
+                        <option value="unlimited">{{ t('settings.otgEndpointBudgetUnlimited') }}</option>
                       </select>
+                      <p class="text-xs text-muted-foreground">{{ otgEndpointUsageText }}</p>
                     </div>
-                    <div v-if="config.hid_otg_profile === 'custom'" class="space-y-3 rounded-md border border-border/60 p-3">
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
+                    <div class="space-y-3">
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.mouse_relative" />
                         </div>
-                        <Switch v-model="config.hid_otg_functions.keyboard" />
+                        <Separator />
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.mouse_absolute" />
+                        </div>
                       </div>
-                      <Separator />
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.keyboard" />
                         </div>
-                        <Switch v-model="config.hid_otg_functions.mouse_relative" />
+                        <Separator />
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.consumer" />
+                        </div>
+                        <Separator />
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_keyboard_leds" :disabled="isKeyboardLedToggleDisabled" />
+                        </div>
                       </div>
-                      <Separator />
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMsd') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.msd_enabled" />
                         </div>
-                        <Switch v-model="config.hid_otg_functions.mouse_absolute" />
-                      </div>
-                      <Separator />
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
-                        </div>
-                        <Switch v-model="config.hid_otg_functions.consumer" />
-                      </div>
-                      <Separator />
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <Label>{{ t('settings.otgFunctionMsd') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
-                        </div>
-                        <Switch v-model="config.msd_enabled" />
                       </div>
                     </div>
                     <p class="text-xs text-amber-600 dark:text-amber-400">
                       {{ t('settings.otgProfileWarning') }}
                     </p>
-                    <p v-if="showLowEndpointHint" class="text-xs text-amber-600 dark:text-amber-400">
-                      {{ t('settings.otgLowEndpointHint') }}
+                    <p v-if="showOtgEndpointBudgetHint" class="text-xs text-muted-foreground">
+                      {{ t('settings.otgEndpointBudgetHint') }}
+                    </p>
+                    <p v-if="!isOtgEndpointBudgetValid" class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.otgEndpointExceeded', { used: otgRequiredEndpoints, limit: describeEndpointBudget(config.hid_otg_endpoint_budget) }) }}
                     </p>
                   </div>
                   <Separator class="my-4" />
