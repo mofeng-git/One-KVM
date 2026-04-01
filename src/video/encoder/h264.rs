@@ -13,7 +13,7 @@ use std::sync::Once;
 use tracing::{debug, error, info, warn};
 
 use hwcodec::common::{Quality, RateControl};
-use hwcodec::ffmpeg::AVPixelFormat;
+use hwcodec::ffmpeg::{resolve_pixel_format, AVPixelFormat};
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
@@ -195,7 +195,7 @@ pub fn get_available_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
         mc_name: None,
         width: width as i32,
         height: height as i32,
-        pixfmt: AVPixelFormat::AV_PIX_FMT_YUV420P,
+        pixfmt: resolve_pixel_format("yuv420p", AVPixelFormat::AV_PIX_FMT_YUV420P),
         align: 1,
         fps: 30,
         gop: 30,
@@ -273,16 +273,17 @@ impl H264Encoder {
         let height = config.base.resolution.height;
 
         // Select pixel format based on config
-        let pixfmt = match config.input_format {
-            H264InputFormat::Nv12 => AVPixelFormat::AV_PIX_FMT_NV12,
-            H264InputFormat::Nv21 => AVPixelFormat::AV_PIX_FMT_NV21,
-            H264InputFormat::Nv16 => AVPixelFormat::AV_PIX_FMT_NV16,
-            H264InputFormat::Nv24 => AVPixelFormat::AV_PIX_FMT_NV24,
-            H264InputFormat::Yuv420p => AVPixelFormat::AV_PIX_FMT_YUV420P,
-            H264InputFormat::Yuyv422 => AVPixelFormat::AV_PIX_FMT_YUYV422,
-            H264InputFormat::Rgb24 => AVPixelFormat::AV_PIX_FMT_RGB24,
-            H264InputFormat::Bgr24 => AVPixelFormat::AV_PIX_FMT_BGR24,
+        let (pixfmt_name, pixfmt_fallback) = match config.input_format {
+            H264InputFormat::Nv12 => ("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
+            H264InputFormat::Nv21 => ("nv21", AVPixelFormat::AV_PIX_FMT_NV21),
+            H264InputFormat::Nv16 => ("nv16", AVPixelFormat::AV_PIX_FMT_NV16),
+            H264InputFormat::Nv24 => ("nv24", AVPixelFormat::AV_PIX_FMT_NV24),
+            H264InputFormat::Yuv420p => ("yuv420p", AVPixelFormat::AV_PIX_FMT_YUV420P),
+            H264InputFormat::Yuyv422 => ("yuyv422", AVPixelFormat::AV_PIX_FMT_YUYV422),
+            H264InputFormat::Rgb24 => ("rgb24", AVPixelFormat::AV_PIX_FMT_RGB24),
+            H264InputFormat::Bgr24 => ("bgr24", AVPixelFormat::AV_PIX_FMT_BGR24),
         };
+        let pixfmt = resolve_pixel_format(pixfmt_name, pixfmt_fallback);
 
         info!(
             "Creating H.264 encoder: {} at {}x{} @ {} kbps (input: {:?})",

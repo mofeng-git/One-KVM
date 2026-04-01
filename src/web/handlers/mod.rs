@@ -1001,7 +1001,7 @@ pub struct VideoFormat {
 pub struct VideoResolution {
     pub width: u32,
     pub height: u32,
-    pub fps: Vec<u32>,
+    pub fps: Vec<f64>,
 }
 
 #[derive(Serialize)]

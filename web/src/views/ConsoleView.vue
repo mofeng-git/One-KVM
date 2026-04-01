@@ -17,6 +17,7 @@ import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
+import { formatFpsValue } from '@/lib/fps'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
 
 // Components
@@ -25,6 +26,7 @@ import ActionBar from '@/components/ActionBar.vue'
 import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -50,16 +52,14 @@ import {
   LogOut,
   Sun,
   Moon,
-  Languages,
   ChevronDown,
   Terminal,
   ExternalLink,
   KeyRound,
   Loader2,
 } from 'lucide-vue-next'
-import { setLanguage } from '@/i18n'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
@@ -212,7 +212,7 @@ const videoQuickInfo = computed(() => {
   const stream = systemStore.stream
   if (!stream?.resolution) return ''
   const resShort = getResolutionShortName(stream.resolution[0], stream.resolution[1])
-  return `${resShort} ${backendFps.value}fps`
+  return `${resShort} ${formatFpsValue(backendFps.value)}fps`
 })
 
 const videoDetails = computed<StatusDetail[]>(() => {
@@ -227,8 +227,8 @@ const videoDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.mode'), value: modeDisplay, status: 'ok' },
     { label: t('statusCard.format'), value: stream.format || 'MJPEG' },
     { label: t('statusCard.resolution'), value: stream.resolution ? `${stream.resolution[0]}x${stream.resolution[1]}` : '-' },
-    { label: t('statusCard.targetFps'), value: String(stream.targetFps ?? 0) },
-    { label: t('statusCard.fps'), value: String(receivedFps), status: receivedFps > 5 ? 'ok' : receivedFps > 0 ? 'warning' : undefined },
+    { label: t('statusCard.targetFps'), value: formatFpsValue(stream.targetFps ?? 0) },
+    { label: t('statusCard.fps'), value: formatFpsValue(receivedFps), status: receivedFps > 5 ? 'ok' : receivedFps > 0 ? 'warning' : undefined },
   ]
 
   // Show network error if WebSocket has network issue
@@ -875,7 +875,7 @@ async function handleStreamConfigApplied(data: any) {
   videoRestarting.value = false
 
   toast.success(t('console.videoRestarted'), {
-    description: `${data.device} - ${data.resolution[0]}x${data.resolution[1]} @ ${data.fps}fps`,
+    description: `${data.device} - ${data.resolution[0]}x${data.resolution[1]} @ ${formatFpsValue(data.fps)}fps`,
     duration: 3000,
   })
 }
@@ -1456,12 +1456,6 @@ function toggleTheme() {
   isDark.value = !isDark.value
   document.documentElement.classList.toggle('dark', isDark.value)
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
-
-// Language toggle
-function toggleLanguage() {
-  const newLang = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
-  setLanguage(newLang)
 }
 
 // Logout
@@ -2306,9 +2300,7 @@ onUnmounted(() => {
             </Button>
 
             <!-- Language Toggle -->
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleLanguage')" @click="toggleLanguage">
-              <Languages class="h-4 w-4" />
-            </Button>
+            <LanguageToggleButton class="h-8 w-8 hidden md:flex" />
 
             <!-- User Menu -->
             <DropdownMenu>
@@ -2324,9 +2316,13 @@ onUnmounted(() => {
                   <Moon v-else class="h-4 w-4 mr-2" />
                   {{ isDark ? t('settings.lightMode') : t('settings.darkMode') }}
                 </DropdownMenuItem>
-                <DropdownMenuItem class="md:hidden" @click="toggleLanguage">
-                  <Languages class="h-4 w-4 mr-2" />
-                  {{ locale === 'zh-CN' ? 'English' : '中文' }}
+                <DropdownMenuItem as-child class="md:hidden p-0">
+                  <LanguageToggleButton
+                    label-mode="next"
+                    size="sm"
+                    variant="ghost"
+                    class="w-full justify-start rounded-sm px-2 py-1.5 font-normal shadow-none"
+                  />
                 </DropdownMenuItem>
                 <DropdownMenuSeparator class="md:hidden" />
                 <DropdownMenuItem @click="changePasswordDialogOpen = true">

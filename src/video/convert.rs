@@ -190,87 +190,70 @@ pub struct PixelConverter {
     resolution: Resolution,
     /// Output buffer (reused across conversions)
     output_buffer: Yuv420pBuffer,
+    /// Scratch buffer for split chroma planes when converting semiplanar 4:2:2 / 4:4:4 input.
+    uv_split_buffer: Vec<u8>,
 }
 
 impl PixelConverter {
-    /// Create a new converter for YUYV → YUV420P
-    pub fn yuyv_to_yuv420p(resolution: Resolution) -> Self {
+    fn new(src_format: PixelFormat, dst_format: PixelFormat, resolution: Resolution) -> Self {
+        let max_uv_plane_size = (resolution.width * resolution.height) as usize;
         Self {
-            src_format: PixelFormat::Yuyv,
-            dst_format: PixelFormat::Yuv420,
+            src_format,
+            dst_format,
             resolution,
             output_buffer: Yuv420pBuffer::new(resolution),
+            uv_split_buffer: vec![0u8; max_uv_plane_size * 2],
         }
+    }
+
+    /// Create a new converter for YUYV → YUV420P
+    pub fn yuyv_to_yuv420p(resolution: Resolution) -> Self {
+        Self::new(PixelFormat::Yuyv, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for UYVY → YUV420P
     pub fn uyvy_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Uyvy,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Uyvy, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for YVYU → YUV420P
     pub fn yvyu_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Yvyu,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Yvyu, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for NV12 → YUV420P
     pub fn nv12_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Nv12,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Nv12, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for NV21 → YUV420P
     pub fn nv21_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Nv21,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Nv21, PixelFormat::Yuv420, resolution)
+    }
+
+    /// Create a new converter for NV16 → YUV420P
+    pub fn nv16_to_yuv420p(resolution: Resolution) -> Self {
+        Self::new(PixelFormat::Nv16, PixelFormat::Yuv420, resolution)
+    }
+
+    /// Create a new converter for NV24 → YUV420P
+    pub fn nv24_to_yuv420p(resolution: Resolution) -> Self {
+        Self::new(PixelFormat::Nv24, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for YVU420 → YUV420P (swap U and V planes)
     pub fn yvu420_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Yvu420,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Yvu420, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for RGB24 → YUV420P
     pub fn rgb24_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Rgb24,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Rgb24, PixelFormat::Yuv420, resolution)
     }
 
     /// Create a new converter for BGR24 → YUV420P
     pub fn bgr24_to_yuv420p(resolution: Resolution) -> Self {
-        Self {
-            src_format: PixelFormat::Bgr24,
-            dst_format: PixelFormat::Yuv420,
-            resolution,
-            output_buffer: Yuv420pBuffer::new(resolution),
-        }
+        Self::new(PixelFormat::Bgr24, PixelFormat::Yuv420, resolution)
     }
 
     /// Convert a frame and return reference to the output buffer
@@ -303,6 +286,12 @@ impl PixelConverter {
                     .map_err(|e| {
                         AppError::VideoError(format!("libyuv conversion failed: {}", e))
                     })?;
+            }
+            (PixelFormat::Nv16, PixelFormat::Yuv420) => {
+                self.convert_nv16_to_yuv420p(input)?;
+            }
+            (PixelFormat::Nv24, PixelFormat::Yuv420) => {
+                self.convert_nv24_to_yuv420p(input)?;
             }
             (PixelFormat::Rgb24, PixelFormat::Yuv420) => {
                 libyuv::rgb24_to_i420(input, self.output_buffer.as_bytes_mut(), width, height)
@@ -429,6 +418,102 @@ impl PixelConverter {
 
         Ok(())
     }
+
+    /// Convert NV16 (4:2:2 semiplanar) → YUV420P using libyuv split + I422 downsample
+    fn convert_nv16_to_yuv420p(&mut self, nv16: &[u8]) -> Result<()> {
+        let width = self.resolution.width as usize;
+        let height = self.resolution.height as usize;
+        let y_size = width * height;
+        let uv_size = y_size;
+
+        if nv16.len() < y_size + uv_size {
+            return Err(AppError::VideoError(format!(
+                "NV16 data too small: {} < {}",
+                nv16.len(),
+                y_size + uv_size
+            )));
+        }
+
+        let src_uv = &nv16[y_size..y_size + uv_size];
+        let chroma_plane_size = y_size / 2;
+        let (u_plane_422, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
+        let (v_plane_422, _) = rest.split_at_mut(chroma_plane_size);
+
+        libyuv::split_uv_plane(
+            src_uv,
+            width as i32,
+            u_plane_422,
+            (width / 2) as i32,
+            v_plane_422,
+            (width / 2) as i32,
+            (width / 2) as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV16 split failed: {}", e)))?;
+
+        libyuv::i422_to_i420_planar(
+            &nv16[..y_size],
+            width as i32,
+            u_plane_422,
+            (width / 2) as i32,
+            v_plane_422,
+            (width / 2) as i32,
+            self.output_buffer.as_bytes_mut(),
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV16→I420 failed: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Convert NV24 (4:4:4 semiplanar) → YUV420P using libyuv split + I444 downsample
+    fn convert_nv24_to_yuv420p(&mut self, nv24: &[u8]) -> Result<()> {
+        let width = self.resolution.width as usize;
+        let height = self.resolution.height as usize;
+        let y_size = width * height;
+        let uv_size = y_size * 2;
+
+        if nv24.len() < y_size + uv_size {
+            return Err(AppError::VideoError(format!(
+                "NV24 data too small: {} < {}",
+                nv24.len(),
+                y_size + uv_size
+            )));
+        }
+
+        let src_uv = &nv24[y_size..y_size + uv_size];
+        let chroma_plane_size = y_size;
+        let (u_plane_444, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
+        let (v_plane_444, _) = rest.split_at_mut(chroma_plane_size);
+
+        libyuv::split_uv_plane(
+            src_uv,
+            (width * 2) as i32,
+            u_plane_444,
+            width as i32,
+            v_plane_444,
+            width as i32,
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV24 split failed: {}", e)))?;
+
+        libyuv::i444_to_i420_planar(
+            &nv24[..y_size],
+            width as i32,
+            u_plane_444,
+            width as i32,
+            v_plane_444,
+            width as i32,
+            self.output_buffer.as_bytes_mut(),
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV24→I420 failed: {}", e)))?;
+
+        Ok(())
+    }
 }
 
 /// Calculate YUV420P buffer size for a given resolution
@@ -519,6 +604,16 @@ impl Nv12Converter {
         }
     }
 
+    /// Create a new converter for NV24 → NV12
+    pub fn nv24_to_nv12(resolution: Resolution) -> Self {
+        Self {
+            src_format: PixelFormat::Nv24,
+            resolution,
+            output_buffer: Nv12Buffer::new(resolution),
+            i420_buffer: None,
+        }
+    }
+
     /// Convert a frame and return reference to the output buffer
     pub fn convert(&mut self, input: &[u8]) -> Result<&[u8]> {
         let width = self.resolution.width as i32;
@@ -546,6 +641,16 @@ impl Nv12Converter {
             PixelFormat::Nv16 => {
                 let dst = self.output_buffer.as_bytes_mut();
                 Self::convert_nv16_to_nv12_with_dims(
+                    self.resolution.width as usize,
+                    self.resolution.height as usize,
+                    input,
+                    dst,
+                )?;
+                return Ok(self.output_buffer.as_bytes());
+            }
+            PixelFormat::Nv24 => {
+                let dst = self.output_buffer.as_bytes_mut();
+                Self::convert_nv24_to_nv12_with_dims(
                     self.resolution.width as usize,
                     self.resolution.height as usize,
                     input,
@@ -629,6 +734,57 @@ impl Nv12Converter {
             for i in 0..dst_row_bytes {
                 let sum = src_row0[i] as u16 + src_row1[i] as u16;
                 dst_row[i] = (sum / 2) as u8;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn convert_nv24_to_nv12_with_dims(
+        width: usize,
+        height: usize,
+        input: &[u8],
+        dst: &mut [u8],
+    ) -> Result<()> {
+        let y_size = width * height;
+        let uv_size_nv24 = y_size * 2;
+        let uv_size_nv12 = y_size / 2;
+
+        if input.len() < y_size + uv_size_nv24 {
+            return Err(AppError::VideoError(format!(
+                "NV24 data too small: {} < {}",
+                input.len(),
+                y_size + uv_size_nv24
+            )));
+        }
+
+        dst[..y_size].copy_from_slice(&input[..y_size]);
+
+        let src_uv = &input[y_size..y_size + uv_size_nv24];
+        let dst_uv = &mut dst[y_size..y_size + uv_size_nv12];
+        let dst_rows = height / 2;
+
+        for row in 0..dst_rows {
+            let src_row0 = &src_uv[row * 2 * width * 2..row * 2 * width * 2 + width * 2];
+            let src_row1 =
+                &src_uv[(row * 2 + 1) * width * 2..(row * 2 + 1) * width * 2 + width * 2];
+            let dst_row = &mut dst_uv[row * width..row * width + width];
+
+            for pair in 0..(width / 2) {
+                let src_idx0 = pair * 4;
+                let src_idx1 = src_idx0 + 2;
+                let dst_idx = pair * 2;
+
+                dst_row[dst_idx] = ((src_row0[src_idx0] as u32
+                    + src_row0[src_idx1] as u32
+                    + src_row1[src_idx0] as u32
+                    + src_row1[src_idx1] as u32)
+                    / 4) as u8;
+                dst_row[dst_idx + 1] = ((src_row0[src_idx0 + 1] as u32
+                    + src_row0[src_idx1 + 1] as u32
+                    + src_row1[src_idx0 + 1] as u32
+                    + src_row1[src_idx1 + 1] as u32)
+                    / 4) as u8;
             }
         }
 

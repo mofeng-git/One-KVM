@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { WebRTCStats } from '@/composables/useWebRTC'
+import { formatFpsValue } from '@/lib/fps'
 
 const { t } = useI18n()
 
@@ -547,7 +548,7 @@ onUnmounted(() => {
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.frameRate') }}</h4>
               <span class="text-xs text-muted-foreground">
-                {{ currentStats.fps }} fps
+                {{ formatFpsValue(currentStats.fps) }} fps
               </span>
             </div>
             <p class="text-xs text-muted-foreground">

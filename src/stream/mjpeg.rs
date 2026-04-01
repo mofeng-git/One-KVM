@@ -318,6 +318,12 @@ impl MjpegStreamHandler {
             PixelFormat::Nv12 => encoder
                 .encode_nv12(frame.data(), sequence)
                 .map_err(|e| format!("NV12 encode failed: {}", e))?,
+            PixelFormat::Nv16 => encoder
+                .encode_nv16(frame.data(), sequence)
+                .map_err(|e| format!("NV16 encode failed: {}", e))?,
+            PixelFormat::Nv24 => encoder
+                .encode_nv24(frame.data(), sequence)
+                .map_err(|e| format!("NV24 encode failed: {}", e))?,
             PixelFormat::Rgb24 => encoder
                 .encode_rgb(frame.data(), sequence)
                 .map_err(|e| format!("RGB encode failed: {}", e))?,

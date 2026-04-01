@@ -30,14 +30,25 @@ static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
     *length = offset[1] + linesize[2] * height / 2;
     break;
   case AV_PIX_FMT_NV12:
+  case AV_PIX_FMT_NV21:
     offset[0] = linesize[0] * height;
     *length = offset[0] + linesize[1] * height / 2;
+    break;
+  case AV_PIX_FMT_NV16:
+  case AV_PIX_FMT_NV24:
+    offset[0] = linesize[0] * height;
+    *length = offset[0] + linesize[1] * height;
     break;
   case AV_PIX_FMT_YUYV422:
   case AV_PIX_FMT_YVYU422:
   case AV_PIX_FMT_UYVY422:
     // Packed YUV 4:2:2 formats: single plane, 2 bytes per pixel
     // linesize[0] = width * 2 (YUYV/YVYU/UYVY are interleaved)
+    offset[0] = 0;  // Only one plane
+    *length = linesize[0] * height;
+    break;
+  case AV_PIX_FMT_RGB24:
+  case AV_PIX_FMT_BGR24:
     offset[0] = 0;  // Only one plane
     *length = linesize[0] * height;
     break;
@@ -397,9 +408,23 @@ private:
                  const int *const offset) {
     switch (frame->format) {
     case AV_PIX_FMT_NV12:
+    case AV_PIX_FMT_NV21:
       if (data_length <
           frame->height * (frame->linesize[0] + frame->linesize[1] / 2)) {
-        LOG_ERROR(std::string("fill_frame: NV12 data length error. data_length:") +
+        LOG_ERROR(std::string("fill_frame: NV12/NV21 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
+                  ", linesize[1]:" + std::to_string(frame->linesize[1]));
+        return -1;
+      }
+      frame->data[0] = data;
+      frame->data[1] = data + offset[0];
+      break;
+    case AV_PIX_FMT_NV16:
+    case AV_PIX_FMT_NV24:
+      if (data_length <
+          frame->height * (frame->linesize[0] + frame->linesize[1])) {
+        LOG_ERROR(std::string("fill_frame: NV16/NV24 data length error. data_length:") +
                   std::to_string(data_length) +
                   ", linesize[0]:" + std::to_string(frame->linesize[0]) +
                   ", linesize[1]:" + std::to_string(frame->linesize[1]));
@@ -429,6 +454,17 @@ private:
       // Packed YUV 4:2:2 formats: single plane, linesize[0] = width * 2
       if (data_length < frame->height * frame->linesize[0]) {
         LOG_ERROR(std::string("fill_frame: YUYV422 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
+                  ", height:" + std::to_string(frame->height));
+        return -1;
+      }
+      frame->data[0] = data;
+      break;
+    case AV_PIX_FMT_RGB24:
+    case AV_PIX_FMT_BGR24:
+      if (data_length < frame->height * frame->linesize[0]) {
+        LOG_ERROR(std::string("fill_frame: RGB24/BGR24 data length error. data_length:") +
                   std::to_string(data_length) +
                   ", linesize[0]:" + std::to_string(frame->linesize[0]) +
                   ", height:" + std::to_string(frame->height));

@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,12 +19,10 @@ import {
   LogOut,
   Sun,
   Moon,
-  Languages,
   Menu,
 } from 'lucide-vue-next'
-import { setLanguage } from '@/i18n'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -38,11 +37,6 @@ function toggleTheme() {
   const isDark = document.documentElement.classList.contains('dark')
   document.documentElement.classList.toggle('dark', !isDark)
   localStorage.setItem('theme', isDark ? 'light' : 'dark')
-}
-
-function toggleLanguage() {
-  const newLang = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
-  setLanguage(newLang)
 }
 
 async function handleLogout() {
@@ -93,10 +87,7 @@ async function handleLogout() {
           </Button>
 
           <!-- Language Toggle -->
-          <Button variant="ghost" size="icon" :aria-label="t('common.toggleLanguage')" @click="toggleLanguage">
-            <Languages class="h-4 w-4" />
-            <span class="sr-only">{{ t('common.toggleLanguage') }}</span>
-          </Button>
+          <LanguageToggleButton />
 
           <!-- Mobile Menu -->
           <DropdownMenu>

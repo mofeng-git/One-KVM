@@ -11,7 +11,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use hwcodec::common::{DataFormat, Quality, RateControl};
-use hwcodec::ffmpeg::AVPixelFormat;
+use hwcodec::ffmpeg::{resolve_pixel_format, AVPixelFormat};
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
@@ -309,7 +309,7 @@ impl EncoderRegistry {
             mc_name: None,
             width: width as i32,
             height: height as i32,
-            pixfmt: AVPixelFormat::AV_PIX_FMT_NV12,
+            pixfmt: resolve_pixel_format("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
             align: 1,
             fps: 30,
             gop: 30,

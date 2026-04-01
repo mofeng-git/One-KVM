@@ -14,6 +14,7 @@ use v4l2r::ioctl::{
     QBuffer, QueryBuffer, V4l2Buffer,
 };
 use v4l2r::memory::{MemoryType, MmapHandle};
+use v4l2r::nix::errno::Errno;
 use v4l2r::{Format as V4l2rFormat, PixelFormat as V4l2rPixelFormat, QueueType};
 
 use crate::error::{AppError, Result};
@@ -91,8 +92,11 @@ impl V4l2rCaptureStream {
             });
 
         if fps > 0 {
-            if let Err(e) = set_fps(&fd, queue, fps) {
-                warn!("Failed to set hardware FPS: {}", e);
+            match set_fps(&fd, queue, fps) {
+                Ok(()) => {}
+                Err(ioctl::GParmError::IoctlError(err))
+                    if matches!(err, Errno::ENOTTY | Errno::ENOSYS | Errno::EOPNOTSUPP) => {}
+                Err(e) => warn!("Failed to set hardware FPS: {}", e),
             }
         }
 
@@ -258,7 +262,7 @@ impl Drop for V4l2rCaptureStream {
     }
 }
 
-fn set_fps(fd: &File, queue: QueueType, fps: u32) -> Result<()> {
+fn set_fps(fd: &File, queue: QueueType, fps: u32) -> std::result::Result<(), ioctl::GParmError> {
     let mut params = unsafe { std::mem::zeroed::<v4l2_streamparm>() };
     params.type_ = queue as u32;
     params.parm = v4l2_streamparm__bindgen_ty_1 {
@@ -271,7 +275,6 @@ fn set_fps(fd: &File, queue: QueueType, fps: u32) -> Result<()> {
         },
     };
 
-    let _actual: v4l2_streamparm = ioctl::s_parm(fd, params)
-        .map_err(|e| AppError::VideoError(format!("Failed to set FPS: {}", e)))?;
+    let _actual: v4l2_streamparm = ioctl::s_parm(fd, params)?;
     Ok(())
 }

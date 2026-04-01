@@ -5,7 +5,6 @@
 use crate::common::DataFormat::{self, *};
 use crate::ffmpeg::{
     AVHWDeviceType::{self, *},
-    AVPixelFormat,
 };
 use serde_derive::{Deserialize, Serialize};
 use std::ffi::c_int;
@@ -234,7 +233,7 @@ impl CodecInfos {
 }
 
 pub fn ffmpeg_linesize_offset_length(
-    pixfmt: AVPixelFormat,
+    pixfmt: i32,
     width: usize,
     height: usize,
     align: usize,
@@ -247,7 +246,7 @@ pub fn ffmpeg_linesize_offset_length(
     length.resize(1, 0);
     unsafe {
         if ffmpeg_ram_get_linesize_offset_length(
-            pixfmt as _,
+            pixfmt,
             width as _,
             height as _,
             align as _,

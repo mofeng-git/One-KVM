@@ -34,10 +34,12 @@ fn generate_bindings(cpp_dir: &Path) {
         .allowlist_function("I420Copy")
         // I422 conversions
         .allowlist_function("I422ToI420")
+        .allowlist_function("I444ToI420")
         // NV12/NV21 conversions
         .allowlist_function("NV12ToI420")
         .allowlist_function("NV21ToI420")
         .allowlist_function("NV12Copy")
+        .allowlist_function("SplitUVPlane")
         // ARGB/BGRA conversions
         .allowlist_function("ARGBToI420")
         .allowlist_function("ARGBToNV12")
@@ -53,6 +55,7 @@ fn generate_bindings(cpp_dir: &Path) {
         // YUV to RGB conversions
         .allowlist_function("I420ToRGB24")
         .allowlist_function("I420ToARGB")
+        .allowlist_function("H444ToARGB")
         .allowlist_function("NV12ToRGB24")
         .allowlist_function("NV12ToARGB")
         .allowlist_function("YUY2ToARGB")

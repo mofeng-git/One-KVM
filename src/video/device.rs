@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
-use v4l2r::bindings::{v4l2_frmivalenum, v4l2_frmsizeenum};
+use v4l2r::bindings::{
+    v4l2_bt_timings, v4l2_dv_timings, v4l2_frmivalenum, v4l2_frmsizeenum, v4l2_streamparm,
+    V4L2_DV_BT_656_1120,
+};
 use v4l2r::ioctl::{
     self, Capabilities, Capability as V4l2rCapability, FormatIterator, FrmIvalTypes, FrmSizeTypes,
 };
@@ -14,6 +17,7 @@ use v4l2r::nix::errno::Errno;
 use v4l2r::{Format as V4l2rFormat, QueueType};
 
 use super::format::{PixelFormat, Resolution};
+use super::is_rk_hdmirx_driver;
 use crate::error::{AppError, Result};
 
 const DEVICE_PROBE_TIMEOUT_MS: u64 = 400;
@@ -57,11 +61,11 @@ pub struct FormatInfo {
 pub struct ResolutionInfo {
     pub width: u32,
     pub height: u32,
-    pub fps: Vec<u32>,
+    pub fps: Vec<f64>,
 }
 
 impl ResolutionInfo {
-    pub fn new(width: u32, height: u32, fps: Vec<u32>) -> Self {
+    pub fn new(width: u32, height: u32, fps: Vec<f64>) -> Self {
         Self { width, height, fps }
     }
 
@@ -143,7 +147,11 @@ impl VideoDevice {
             read_write: flags.contains(Capabilities::READWRITE),
         };
 
-        let formats = self.enumerate_formats()?;
+        let formats = if is_rk_hdmirx_driver(&caps.driver, &caps.card) {
+            self.enumerate_current_format_only()?
+        } else {
+            self.enumerate_formats()?
+        };
 
         // Determine if this is likely an HDMI capture card
         let is_capture_card = Self::detect_capture_card(&caps.card, &caps.driver, &formats);
@@ -176,6 +184,15 @@ impl VideoDevice {
             // Try to convert FourCC to our PixelFormat
             if let Some(format) = PixelFormat::from_v4l2r(desc.pixelformat) {
                 let resolutions = self.enumerate_resolutions(desc.pixelformat)?;
+                let is_current_format = self.current_active_format() == Some(format);
+
+                if resolutions.is_empty() && !is_current_format {
+                    debug!(
+                        "Skipping format {:?} ({}): not usable for current active mode",
+                        desc.pixelformat, desc.description
+                    );
+                    continue;
+                }
 
                 formats.push(FormatInfo {
                     format,
@@ -196,9 +213,38 @@ impl VideoDevice {
         Ok(formats)
     }
 
+    fn enumerate_current_format_only(&self) -> Result<Vec<FormatInfo>> {
+        let current = self.get_format()?;
+        let Some(format) = PixelFormat::from_v4l2r(current.pixelformat) else {
+            debug!(
+                "Current active format {:?} is not supported by One-KVM, falling back to full enumeration",
+                current.pixelformat
+            );
+            return self.enumerate_formats();
+        };
+
+        let description = self
+            .format_description(current.pixelformat)
+            .unwrap_or_else(|| format.to_string());
+
+        let mut resolutions = self.enumerate_resolutions(current.pixelformat)?;
+        if resolutions.is_empty() {
+            if let Some(current_mode) = self.current_mode_resolution_info() {
+                resolutions.push(current_mode);
+            }
+        }
+
+        Ok(vec![FormatInfo {
+            format,
+            resolutions,
+            description,
+        }])
+    }
+
     /// Enumerate resolutions for a specific format
     fn enumerate_resolutions(&self, fourcc: v4l2r::PixelFormat) -> Result<Vec<ResolutionInfo>> {
         let mut resolutions = Vec::new();
+        let mut should_fallback_to_current_mode = false;
 
         let mut index = 0u32;
         loop {
@@ -241,10 +287,35 @@ impl VideoDevice {
                         e,
                         v4l2r::ioctl::FrameSizeError::IoctlError(err) if err == Errno::EINVAL
                     );
-                    if !is_einval {
+                    let is_unsupported = matches!(
+                        e,
+                        v4l2r::ioctl::FrameSizeError::IoctlError(err)
+                            if matches!(err, Errno::ENOTTY | Errno::ENOSYS | Errno::EOPNOTSUPP)
+                    );
+                    if is_unsupported && resolutions.is_empty() {
+                        should_fallback_to_current_mode = true;
+                    }
+                    if !is_einval && !is_unsupported {
                         debug!("Failed to enumerate frame sizes for {:?}: {}", fourcc, e);
                     }
                     break;
+                }
+            }
+        }
+
+        if should_fallback_to_current_mode {
+            if let Some(resolution) = self.current_mode_resolution_info() {
+                if self.format_works_for_resolution(fourcc, resolution.width, resolution.height) {
+                    debug!(
+                        "Falling back to current active mode for {:?}: {}x{} @ {:?} fps",
+                        fourcc, resolution.width, resolution.height, resolution.fps
+                    );
+                    resolutions.push(resolution);
+                } else {
+                    debug!(
+                        "Skipping current-mode fallback for {:?}: TRY_FMT rejected {}x{}",
+                        fourcc, resolution.width, resolution.height
+                    );
                 }
             }
         }
@@ -262,8 +333,9 @@ impl VideoDevice {
         fourcc: v4l2r::PixelFormat,
         width: u32,
         height: u32,
-    ) -> Result<Vec<u32>> {
+    ) -> Result<Vec<f64>> {
         let mut fps_list = Vec::new();
+        let mut should_fallback_to_current_mode = false;
 
         let mut index = 0u32;
         loop {
@@ -274,15 +346,18 @@ impl VideoDevice {
                     if let Some(interval) = interval.intervals() {
                         match interval {
                             FrmIvalTypes::Discrete(fraction) => {
-                                if fraction.numerator > 0 {
-                                    let fps = fraction.denominator / fraction.numerator;
+                                if fraction.numerator > 0 && fraction.denominator > 0 {
+                                    let fps =
+                                        fraction.denominator as f64 / fraction.numerator as f64;
                                     fps_list.push(fps);
                                 }
                             }
                             FrmIvalTypes::StepWise(step) => {
-                                if step.max.numerator > 0 {
-                                    let min_fps = step.max.denominator / step.max.numerator;
-                                    let max_fps = step.min.denominator / step.min.numerator;
+                                if step.max.numerator > 0 && step.max.denominator > 0 {
+                                    let min_fps =
+                                        step.max.denominator as f64 / step.max.numerator as f64;
+                                    let max_fps =
+                                        step.min.denominator as f64 / step.min.numerator as f64;
                                     fps_list.push(min_fps);
                                     if max_fps != min_fps {
                                         fps_list.push(max_fps);
@@ -298,7 +373,15 @@ impl VideoDevice {
                         e,
                         v4l2r::ioctl::FrameIntervalsError::IoctlError(err) if err == Errno::EINVAL
                     );
-                    if !is_einval {
+                    let is_unsupported = matches!(
+                        e,
+                        v4l2r::ioctl::FrameIntervalsError::IoctlError(err)
+                            if matches!(err, Errno::ENOTTY | Errno::ENOSYS | Errno::EOPNOTSUPP)
+                    );
+                    if is_unsupported && fps_list.is_empty() {
+                        should_fallback_to_current_mode = true;
+                    }
+                    if !is_einval && !is_unsupported {
                         debug!(
                             "Failed to enumerate frame intervals for {:?} {}x{}: {}",
                             fourcc, width, height, e
@@ -309,8 +392,11 @@ impl VideoDevice {
             }
         }
 
-        fps_list.sort_by(|a, b| b.cmp(a));
-        fps_list.dedup();
+        if should_fallback_to_current_mode {
+            fps_list.extend(self.current_mode_fps());
+        }
+
+        normalize_fps_list(&mut fps_list);
         Ok(fps_list)
     }
 
@@ -424,6 +510,105 @@ impl VideoDevice {
     /// Get the inner device reference (for advanced usage)
     pub fn inner(&self) -> &File {
         &self.fd
+    }
+
+    fn current_mode_resolution_info(&self) -> Option<ResolutionInfo> {
+        let (width, height) = self
+            .current_dv_timings_mode()
+            .map(|(width, height, _)| (width, height))
+            .or_else(|| self.current_format_resolution())?;
+        Some(ResolutionInfo::new(width, height, self.current_mode_fps()))
+    }
+
+    fn current_mode_fps(&self) -> Vec<f64> {
+        let mut fps = Vec::new();
+
+        if let Some(frame_rate) = self.current_parm_fps() {
+            fps.push(frame_rate);
+        }
+
+        if let Some((_, _, Some(frame_rate))) = self.current_dv_timings_mode() {
+            fps.push(frame_rate);
+        }
+
+        normalize_fps_list(&mut fps);
+        fps
+    }
+
+    fn current_parm_fps(&self) -> Option<f64> {
+        let queue = self.capture_queue_type().ok()?;
+        let params: v4l2_streamparm = ioctl::g_parm(&self.fd, queue).ok()?;
+        let capture = unsafe { params.parm.capture };
+        let timeperframe = capture.timeperframe;
+        if timeperframe.numerator == 0 || timeperframe.denominator == 0 {
+            return None;
+        }
+        Some(timeperframe.denominator as f64 / timeperframe.numerator as f64)
+    }
+
+    fn current_dv_timings_mode(&self) -> Option<(u32, u32, Option<f64>)> {
+        let timings = ioctl::query_dv_timings::<v4l2_dv_timings>(&self.fd)
+            .or_else(|_| ioctl::g_dv_timings::<v4l2_dv_timings>(&self.fd))
+            .ok()?;
+
+        if timings.type_ != V4L2_DV_BT_656_1120 {
+            return None;
+        }
+
+        let bt = unsafe { timings.__bindgen_anon_1.bt };
+        if bt.width == 0 || bt.height == 0 {
+            return None;
+        }
+
+        Some((bt.width, bt.height, dv_timings_fps(&bt)))
+    }
+
+    fn current_format_resolution(&self) -> Option<(u32, u32)> {
+        let format = self.get_format().ok()?;
+        if format.width == 0 || format.height == 0 {
+            return None;
+        }
+        Some((format.width, format.height))
+    }
+
+    fn current_active_format(&self) -> Option<PixelFormat> {
+        let format = self.get_format().ok()?;
+        PixelFormat::from_v4l2r(format.pixelformat)
+    }
+
+    fn format_description(&self, fourcc: v4l2r::PixelFormat) -> Option<String> {
+        let queue = self.capture_queue_type().ok()?;
+        FormatIterator::new(&self.fd, queue)
+            .find(|desc| desc.pixelformat == fourcc)
+            .map(|desc| desc.description)
+    }
+
+    fn format_works_for_resolution(
+        &self,
+        fourcc: v4l2r::PixelFormat,
+        width: u32,
+        height: u32,
+    ) -> bool {
+        let queue = match self.capture_queue_type() {
+            Ok(queue) => queue,
+            Err(_) => return false,
+        };
+
+        let mut fmt = match ioctl::g_fmt::<V4l2rFormat>(&self.fd, queue) {
+            Ok(fmt) => fmt,
+            Err(_) => return false,
+        };
+
+        fmt.width = width;
+        fmt.height = height;
+        fmt.pixelformat = fourcc;
+
+        let actual = match ioctl::try_fmt::<_, V4l2rFormat>(&self.fd, (queue, &fmt)) {
+            Ok(actual) => actual,
+            Err(_) => return false,
+        };
+
+        actual.pixelformat == fourcc && actual.width == width && actual.height == height
     }
 
     fn capture_queue_type(&self) -> Result<QueueType> {
@@ -586,6 +771,36 @@ fn extract_uevent_value(content: &str, key: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn dv_timings_fps(bt: &v4l2_bt_timings) -> Option<f64> {
+    let total_width = bt.width + bt.hfrontporch + bt.hsync + bt.hbackporch;
+    let total_height = if bt.interlaced != 0 {
+        bt.height
+            + bt.vfrontporch
+            + bt.vsync
+            + bt.vbackporch
+            + bt.il_vfrontporch
+            + bt.il_vsync
+            + bt.il_vbackporch
+    } else {
+        bt.height + bt.vfrontporch + bt.vsync + bt.vbackporch
+    };
+
+    if bt.pixelclock == 0 || total_width == 0 || total_height == 0 {
+        return None;
+    }
+
+    Some(bt.pixelclock as f64 / total_width as f64 / total_height as f64)
+}
+
+fn normalize_fps_list(fps_list: &mut Vec<f64>) {
+    fps_list.retain(|fps| fps.is_finite() && *fps > 0.0);
+    for fps in fps_list.iter_mut() {
+        *fps = (*fps * 100.0).round() / 100.0;
+    }
+    fps_list.sort_by(|a, b| b.total_cmp(a));
+    fps_list.dedup_by(|a, b| (*a - *b).abs() < 0.01);
 }
 
 /// Find the best video device for KVM use

@@ -599,6 +599,14 @@ fn converters_for_pipeline(
                 info!("Using NV21->YUV420P converter");
                 Ok((None, Some(PixelConverter::nv21_to_yuv420p(resolution))))
             }
+            PixelFormat::Nv16 => {
+                info!("Using NV16->YUV420P converter");
+                Ok((None, Some(PixelConverter::nv16_to_yuv420p(resolution))))
+            }
+            PixelFormat::Nv24 => {
+                info!("Using NV24->YUV420P converter");
+                Ok((None, Some(PixelConverter::nv24_to_yuv420p(resolution))))
+            }
             PixelFormat::Rgb24 => {
                 info!("Using RGB24->YUV420P converter");
                 Ok((None, Some(PixelConverter::rgb24_to_yuv420p(resolution))))
@@ -630,6 +638,10 @@ fn converters_for_pipeline(
         PixelFormat::Nv16 => {
             info!("Using NV16->NV12 converter");
             Ok((Some(Nv12Converter::nv16_to_nv12(resolution)), None))
+        }
+        PixelFormat::Nv24 => {
+            info!("Using NV24->NV12 converter");
+            Ok((Some(Nv12Converter::nv24_to_nv12(resolution)), None))
         }
         PixelFormat::Yuv420 => {
             info!("Using YUV420P->NV12 converter");

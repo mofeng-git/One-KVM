@@ -268,9 +268,6 @@ export default {
     // Help tooltips
     ch9329Help: 'CH9329 是一款串口转 HID 芯片，通过串口连接到主机。适用于大多数硬件配置。',
     otgHelp: 'USB OTG 模式通过 USB 设备控制器直接模拟 HID 设备。需要硬件支持 USB OTG 功能。',
-    otgAdvanced: '高级：OTG 预设',
-    otgProfile: '初始 HID 预设',
-    otgProfileDesc: '选择 OTG HID 的初始预设，后续可在设置中修改。',
     otgLowEndpointHint: '检测到低端点 UDC，将自动禁用多媒体键盘。',
     videoDeviceHelp: '选择用于捕获远程主机画面的视频采集设备。通常是 HDMI 采集卡。',
     videoFormatHelp: 'MJPEG 格式兼容性最好，H.264/H.265 带宽占用更低但需要编码支持。',

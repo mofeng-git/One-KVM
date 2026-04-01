@@ -38,6 +38,7 @@ use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
 use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
+use crate::video::is_rk_hdmirx_device;
 use crate::video::streamer::{Streamer, StreamerState};
 use crate::webrtc::WebRtcStreamer;
 
@@ -427,7 +428,8 @@ impl VideoStreamManager {
                         device.formats.iter().map(|f| f.format).collect();
 
                     // If current format is not MJPEG and device supports MJPEG, switch to it
-                    if current_format != PixelFormat::Mjpeg
+                    if !is_rk_hdmirx_device(&device)
+                        && current_format != PixelFormat::Mjpeg
                         && available_formats.contains(&PixelFormat::Mjpeg)
                     {
                         info!("Auto-switching to MJPEG format for MJPEG mode");

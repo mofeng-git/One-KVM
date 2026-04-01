@@ -268,9 +268,6 @@ export default {
     // Help tooltips
     ch9329Help: 'CH9329 is a serial-to-HID chip connected via serial port. Works with most hardware configurations.',
     otgHelp: 'USB OTG mode emulates HID devices directly through USB Device Controller. Requires hardware OTG support.',
-    otgAdvanced: 'Advanced: OTG Preset',
-    otgProfile: 'Initial HID Preset',
-    otgProfileDesc: 'Choose the initial OTG HID preset. You can change this later in Settings.',
     otgLowEndpointHint: 'Detected low-endpoint UDC; Consumer Control Keyboard will be disabled automatically.',
     videoDeviceHelp: 'Select the video capture device for capturing the remote host display. Usually an HDMI capture card.',
     videoFormatHelp: 'MJPEG has best compatibility. H.264/H.265 uses less bandwidth but requires encoding support.',

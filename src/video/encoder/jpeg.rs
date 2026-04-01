@@ -1,6 +1,6 @@
 //! JPEG encoder implementation
 //!
-//! Provides JPEG encoding for raw video frames (YUYV, NV12, RGB, BGR)
+//! Provides JPEG encoding for raw video frames (YUYV, NV12, NV16, NV24, RGB, BGR)
 //! Uses libyuv for SIMD-accelerated color space conversion to I420,
 //! then turbojpeg for direct YUV encoding (skips internal color conversion).
 
@@ -14,7 +14,7 @@ use crate::video::format::{PixelFormat, Resolution};
 ///
 /// Encoding pipeline (all SIMD accelerated):
 /// ```text
-/// YUYV/NV12/BGR24/RGB24 ──libyuv──> I420 ──turbojpeg──> JPEG
+/// YUYV/NV12/NV16/NV24/BGR24/RGB24 ──libyuv──> I420 ──turbojpeg──> JPEG
 /// ```
 ///
 /// Note: This encoder is NOT thread-safe due to turbojpeg limitations.
@@ -24,6 +24,10 @@ pub struct JpegEncoder {
     compressor: turbojpeg::Compressor,
     /// I420 buffer for YUV encoding (Y + U + V planes)
     i420_buffer: Vec<u8>,
+    /// Scratch buffer for split chroma planes when converting semiplanar 4:2:2 / 4:4:4 input.
+    uv_split_buffer: Vec<u8>,
+    /// BGRA buffer used when a source format needs explicit YUV matrix expansion before JPEG.
+    bgra_buffer: Vec<u8>,
 }
 
 impl JpegEncoder {
@@ -34,6 +38,8 @@ impl JpegEncoder {
         let height = resolution.height as usize;
         // I420: Y = width*height, U = width*height/4, V = width*height/4
         let i420_size = width * height * 3 / 2;
+        let max_uv_plane_size = width * height;
+        let bgra_size = width * height * 4;
 
         let mut compressor = turbojpeg::Compressor::new().map_err(|e| {
             AppError::VideoError(format!("Failed to create turbojpeg compressor: {}", e))
@@ -47,6 +53,8 @@ impl JpegEncoder {
             config,
             compressor,
             i420_buffer: vec![0u8; i420_size],
+            uv_split_buffer: vec![0u8; max_uv_plane_size * 2],
+            bgra_buffer: vec![0u8; bgra_size],
         })
     }
 
@@ -84,6 +92,36 @@ impl JpegEncoder {
         let jpeg_data = self
             .compressor
             .compress_yuv_to_vec(yuv_image)
+            .map_err(|e| AppError::VideoError(format!("JPEG compression failed: {}", e)))?;
+
+        Ok(EncodedFrame::jpeg(
+            Bytes::from(jpeg_data),
+            self.config.resolution,
+            sequence,
+        ))
+    }
+
+    /// Encode BGRA buffer to JPEG using turbojpeg's RGB path.
+    #[inline]
+    fn encode_bgra_to_jpeg(&mut self, sequence: u64) -> Result<EncodedFrame> {
+        let width = self.config.resolution.width as usize;
+        let height = self.config.resolution.height as usize;
+
+        self.compressor
+            .set_subsamp(turbojpeg::Subsamp::Sub2x2)
+            .map_err(|e| AppError::VideoError(format!("Failed to set JPEG subsampling: {}", e)))?;
+
+        let image = turbojpeg::Image {
+            pixels: self.bgra_buffer.as_slice(),
+            width,
+            pitch: width * 4,
+            height,
+            format: turbojpeg::PixelFormat::BGRA,
+        };
+
+        let jpeg_data = self
+            .compressor
+            .compress_to_vec(image)
             .map_err(|e| AppError::VideoError(format!("JPEG compression failed: {}", e)))?;
 
         Ok(EncodedFrame::jpeg(
@@ -133,6 +171,101 @@ impl JpegEncoder {
             .map_err(|e| AppError::VideoError(format!("libyuv NV12→I420 failed: {}", e)))?;
 
         self.encode_i420_to_jpeg(sequence)
+    }
+
+    /// Encode NV16 frame to JPEG
+    pub fn encode_nv16(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
+        let width = self.config.resolution.width as usize;
+        let height = self.config.resolution.height as usize;
+        let y_size = width * height;
+        let uv_size = y_size;
+        let expected_size = y_size + uv_size;
+
+        if data.len() < expected_size {
+            return Err(AppError::VideoError(format!(
+                "NV16 data too small: {} < {}",
+                data.len(),
+                expected_size
+            )));
+        }
+
+        let src_uv = &data[y_size..expected_size];
+        let chroma_plane_size = y_size / 2;
+        let (u_plane_422, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
+        let (v_plane_422, _) = rest.split_at_mut(chroma_plane_size);
+
+        libyuv::split_uv_plane(
+            src_uv,
+            width as i32,
+            u_plane_422,
+            (width / 2) as i32,
+            v_plane_422,
+            (width / 2) as i32,
+            (width / 2) as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV16 split failed: {}", e)))?;
+
+        libyuv::i422_to_i420_planar(
+            &data[..y_size],
+            width as i32,
+            u_plane_422,
+            (width / 2) as i32,
+            v_plane_422,
+            (width / 2) as i32,
+            &mut self.i420_buffer,
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV16→I420 failed: {}", e)))?;
+
+        self.encode_i420_to_jpeg(sequence)
+    }
+
+    /// Encode NV24 frame to JPEG
+    pub fn encode_nv24(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
+        let width = self.config.resolution.width as usize;
+        let height = self.config.resolution.height as usize;
+        let y_size = width * height;
+        let uv_size = y_size * 2;
+        let expected_size = y_size + uv_size;
+
+        if data.len() < expected_size {
+            return Err(AppError::VideoError(format!(
+                "NV24 data too small: {} < {}",
+                data.len(),
+                expected_size
+            )));
+        }
+
+        let src_uv = &data[y_size..expected_size];
+        let chroma_plane_size = y_size;
+        let (u_plane_444, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
+        let (v_plane_444, _) = rest.split_at_mut(chroma_plane_size);
+
+        libyuv::split_uv_plane(
+            src_uv,
+            (width * 2) as i32,
+            u_plane_444,
+            width as i32,
+            v_plane_444,
+            width as i32,
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV24 split failed: {}", e)))?;
+
+        libyuv::h444_to_bgra(
+            &data[..y_size],
+            u_plane_444,
+            v_plane_444,
+            &mut self.bgra_buffer,
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("libyuv NV24(H444)→BGRA failed: {}", e)))?;
+
+        self.encode_bgra_to_jpeg(sequence)
     }
 
     /// Encode RGB24 frame to JPEG
@@ -192,6 +325,8 @@ impl crate::video::encoder::traits::Encoder for JpegEncoder {
         match self.config.input_format {
             PixelFormat::Yuyv | PixelFormat::Yvyu => self.encode_yuyv(data, sequence),
             PixelFormat::Nv12 => self.encode_nv12(data, sequence),
+            PixelFormat::Nv16 => self.encode_nv16(data, sequence),
+            PixelFormat::Nv24 => self.encode_nv24(data, sequence),
             PixelFormat::Rgb24 => self.encode_rgb(data, sequence),
             PixelFormat::Bgr24 => self.encode_bgr(data, sequence),
             _ => Err(AppError::VideoError(format!(
@@ -211,6 +346,8 @@ impl crate::video::encoder::traits::Encoder for JpegEncoder {
             PixelFormat::Yuyv
                 | PixelFormat::Yvyu
                 | PixelFormat::Nv12
+                | PixelFormat::Nv16
+                | PixelFormat::Nv24
                 | PixelFormat::Rgb24
                 | PixelFormat::Bgr24
         )

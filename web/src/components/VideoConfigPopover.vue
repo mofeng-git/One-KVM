@@ -28,6 +28,7 @@ import {
   type StreamConstraintsResponse,
 } from '@/api'
 import { getVideoFormatState, isVideoFormatSelectable } from '@/lib/video-format-support'
+import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
@@ -549,7 +550,7 @@ async function applyVideoConfig() {
       format: selectedFormat.value,
       width,
       height,
-      fps: selectedFps.value,
+      fps: toConfigFps(selectedFps.value),
     })
 
     toast.success(t('config.applied'))
@@ -926,7 +927,7 @@ watch(
                   :value="String(fps)"
                   class="text-xs"
                 >
-                  {{ fps }} FPS
+                  {{ formatFpsLabel(fps) }}
                 </SelectItem>
               </SelectContent>
             </Select>

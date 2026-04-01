@@ -24,3 +24,11 @@ pub use shared_video_pipeline::{
 };
 pub use stream_manager::VideoStreamManager;
 pub use streamer::{Streamer, StreamerState};
+
+pub(crate) fn is_rk_hdmirx_driver(driver: &str, card: &str) -> bool {
+    driver.eq_ignore_ascii_case("rk_hdmirx") || card.eq_ignore_ascii_case("rk_hdmirx")
+}
+
+pub(crate) fn is_rk_hdmirx_device(device: &device::VideoDeviceInfo) -> bool {
+    is_rk_hdmirx_driver(&device.driver, &device.card)
+}

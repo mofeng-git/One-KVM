@@ -37,10 +37,11 @@ import type {
   OtgHidProfile,
   OtgHidFunctions,
 } from '@/types/generated'
-import { setLanguage } from '@/i18n'
+import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import AppLayout from '@/components/AppLayout.vue'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -85,7 +86,7 @@ import {
   Radio,
 } from 'lucide-vue-next'
 
-const { t, te, locale } = useI18n()
+const { t, te } = useI18n()
 const route = useRoute()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
@@ -902,13 +903,6 @@ function setTheme(newTheme: 'light' | 'dark' | 'system') {
   }
 }
 
-// Language handling
-function handleLanguageChange(lang: string) {
-  if (lang === 'zh-CN' || lang === 'en-US') {
-    setLanguage(lang)
-  }
-}
-
 // Account updates
 async function changeUsername() {
   usernameError.value = ''
@@ -991,7 +985,7 @@ async function saveConfig() {
           format: config.value.video_format || undefined,
           width: config.value.video_width,
           height: config.value.video_height,
-          fps: config.value.video_fps,
+          fps: toConfigFps(config.value.video_fps),
         })
       )
       // Save Stream/Encoder and STUN/TURN config together
@@ -2022,9 +2016,8 @@ watch(() => route.query.tab, (tab) => {
                 <CardDescription>{{ t('settings.languageDesc') }}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div class="flex gap-2">
-                  <Button :variant="locale === 'zh-CN' ? 'default' : 'outline'" size="sm" @click="handleLanguageChange('zh-CN')">中文</Button>
-                  <Button :variant="locale === 'en-US' ? 'default' : 'outline'" size="sm" @click="handleLanguageChange('en-US')">English</Button>
+                <div class="flex">
+                  <LanguageToggleButton variant="outline" size="sm" label-mode="current" />
                 </div>
               </CardContent>
             </Card>
@@ -2132,8 +2125,8 @@ watch(() => route.query.tab, (tab) => {
                   <div class="space-y-2">
                     <Label for="video-fps">{{ t('settings.frameRate') }}</Label>
                     <select id="video-fps" v-model.number="config.video_fps" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_format">
-                      <option v-for="fps in availableFps" :key="fps" :value="fps">{{ fps }} FPS</option>
-                      <option v-if="!availableFps.includes(config.video_fps)" :value="config.video_fps">{{ config.video_fps }} FPS</option>
+                      <option v-for="fps in availableFps" :key="fps" :value="fps">{{ formatFpsLabel(fps) }}</option>
+                      <option v-if="!availableFps.includes(config.video_fps)" :value="config.video_fps">{{ formatFpsLabel(config.video_fps) }}</option>
                     </select>
                   </div>
                 </div>

@@ -11,7 +11,7 @@ use std::sync::Once;
 use tracing::{debug, error, info, warn};
 
 use hwcodec::common::{DataFormat, Quality, RateControl};
-use hwcodec::ffmpeg::AVPixelFormat;
+use hwcodec::ffmpeg::{resolve_pixel_format, AVPixelFormat};
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
 
@@ -133,7 +133,7 @@ pub fn get_available_vp8_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
         mc_name: None,
         width: width as i32,
         height: height as i32,
-        pixfmt: AVPixelFormat::AV_PIX_FMT_NV12,
+        pixfmt: resolve_pixel_format("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
         align: 1,
         fps: 30,
         gop: 30,
@@ -244,16 +244,25 @@ impl VP8Encoder {
         let height = config.base.resolution.height;
 
         // Software encoders (libvpx) require YUV420P, hardware (VAAPI) uses NV12
-        let (pixfmt, actual_input_format) = if is_software {
-            (AVPixelFormat::AV_PIX_FMT_YUV420P, VP8InputFormat::Yuv420p)
+        let (pixfmt_name, pixfmt_fallback, actual_input_format) = if is_software {
+            (
+                "yuv420p",
+                AVPixelFormat::AV_PIX_FMT_YUV420P,
+                VP8InputFormat::Yuv420p,
+            )
         } else {
             match config.input_format {
-                VP8InputFormat::Nv12 => (AVPixelFormat::AV_PIX_FMT_NV12, VP8InputFormat::Nv12),
-                VP8InputFormat::Yuv420p => {
-                    (AVPixelFormat::AV_PIX_FMT_YUV420P, VP8InputFormat::Yuv420p)
+                VP8InputFormat::Nv12 => {
+                    ("nv12", AVPixelFormat::AV_PIX_FMT_NV12, VP8InputFormat::Nv12)
                 }
+                VP8InputFormat::Yuv420p => (
+                    "yuv420p",
+                    AVPixelFormat::AV_PIX_FMT_YUV420P,
+                    VP8InputFormat::Yuv420p,
+                ),
             }
         };
+        let pixfmt = resolve_pixel_format(pixfmt_name, pixfmt_fallback);
 
         info!(
             "Creating VP8 encoder: {} at {}x{} @ {} kbps (input: {:?})",

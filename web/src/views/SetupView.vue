@@ -4,12 +4,8 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { configApi, streamApi, type EncoderBackendInfo } from '@/api'
-import {
-  supportedLanguages,
-  setLanguage,
-  getCurrentLanguage,
-  type SupportedLocale,
-} from '@/i18n'
+import { formatFpsLabel, toConfigFps } from '@/lib/fps'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,12 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   HoverCard,
   HoverCardContent,
@@ -44,21 +34,12 @@ import {
   Keyboard,
   Check,
   HelpCircle,
-  Languages,
   Puzzle,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
-
-// Language switcher
-const currentLanguage = ref<SupportedLocale>(getCurrentLanguage())
-
-function switchLanguage(lang: SupportedLocale) {
-  currentLanguage.value = lang
-  setLanguage(lang)
-}
 
 // Steps: 1 = Account, 2 = Audio/Video, 3 = HID, 4 = Extensions
 const step = ref(1)
@@ -96,14 +77,10 @@ const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
-const hidOtgProfile = ref('full')
+const hidOtgProfile = ref('full_no_consumer')
 const otgMsdEnabled = ref(true)
 const otgEndpointBudget = ref<'five' | 'six' | 'unlimited'>('six')
 const otgKeyboardLeds = ref(true)
-const otgProfileTouched = ref(false)
-const otgEndpointBudgetTouched = ref(false)
-const otgKeyboardLedsTouched = ref(false)
-const showAdvancedOtg = ref(false)
 
 // Extension settings
 const ttydEnabled = ref(false)
@@ -237,57 +214,17 @@ const otgRequiredEndpoints = computed(() => {
   return endpoints
 })
 
-const otgProfileHasKeyboard = computed(() =>
-  hidOtgProfile.value === 'full'
-  || hidOtgProfile.value === 'full_no_consumer'
-  || hidOtgProfile.value === 'legacy_keyboard'
-)
-
 const isOtgEndpointBudgetValid = computed(() => {
   const limit = endpointLimitForBudget(otgEndpointBudget.value)
   return limit === null || otgRequiredEndpoints.value <= limit
 })
 
-const otgEndpointUsageText = computed(() => {
-  const limit = endpointLimitForBudget(otgEndpointBudget.value)
-  if (limit === null) {
-    return t('settings.otgEndpointUsageUnlimited', { used: otgRequiredEndpoints.value })
-  }
-  return t('settings.otgEndpointUsage', { used: otgRequiredEndpoints.value, limit })
-})
-
 function applyOtgDefaults() {
   if (hidBackend.value !== 'otg') return
 
-  const recommendedBudget = defaultOtgEndpointBudgetForUdc(otgUdc.value)
-  if (!otgEndpointBudgetTouched.value) {
-    otgEndpointBudget.value = recommendedBudget
-  }
-  if (!otgProfileTouched.value) {
-    hidOtgProfile.value = 'full_no_consumer'
-  }
-  if (!otgKeyboardLedsTouched.value) {
-    otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
-  }
-}
-
-function onOtgProfileChange(value: unknown) {
-  hidOtgProfile.value = typeof value === 'string' ? value : 'full'
-  otgProfileTouched.value = true
-}
-
-function onOtgEndpointBudgetChange(value: unknown) {
-  otgEndpointBudget.value =
-    value === 'five' || value === 'six' || value === 'unlimited' ? value : 'six'
-  otgEndpointBudgetTouched.value = true
-  if (!otgKeyboardLedsTouched.value) {
-    otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
-  }
-}
-
-function onOtgKeyboardLedsChange(value: boolean) {
-  otgKeyboardLeds.value = value
-  otgKeyboardLedsTouched.value = true
+  otgEndpointBudget.value = defaultOtgEndpointBudgetForUdc(otgUdc.value)
+  hidOtgProfile.value = 'full_no_consumer'
+  otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
 }
 
 // Common baud rates for CH9329
@@ -410,12 +347,6 @@ watch(hidBackend, (newBackend) => {
 
 watch(otgUdc, () => {
   applyOtgDefaults()
-})
-
-watch(showAdvancedOtg, (open) => {
-  if (open) {
-    applyOtgDefaults()
-  }
 })
 
 onMounted(async () => {
@@ -585,7 +516,7 @@ async function handleSetup() {
     setupData.video_height = height
   }
   if (videoFps.value) {
-    setupData.video_fps = videoFps.value
+    setupData.video_fps = toConfigFps(videoFps.value)
   }
 
   // HID settings
@@ -637,27 +568,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="gap-2">
-              <Languages class="w-4 h-4" />
-              <span class="text-sm">
-                {{ supportedLanguages.find((l) => l.code === currentLanguage)?.name }}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              v-for="lang in supportedLanguages"
-              :key="lang.code"
-              :class="{ 'bg-accent': lang.code === currentLanguage }"
-              @click="switchLanguage(lang.code)"
-            >
-              <span class="mr-2">{{ lang.flag }}</span>
-              {{ lang.name }}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <LanguageToggleButton />
       </div>
 
       <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
@@ -879,7 +790,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem v-for="fps in availableFps" :key="fps" :value="fps">
-                      {{ fps }} FPS
+                      {{ formatFpsLabel(fps) }}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -1038,78 +949,6 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <p v-if="!devices.udc.length" class="text-xs text-muted-foreground">
                   {{ t('setup.noUdcDevices') }}
                 </p>
-              </div>
-
-              <div class="mt-2 border rounded-lg">
-                <button
-                  type="button"
-                  class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
-                  :aria-label="t('setup.advancedOtg')"
-                  @click="showAdvancedOtg = !showAdvancedOtg"
-                >
-                  <span class="text-sm font-medium">
-                    {{ t('setup.otgAdvanced') }} ({{ t('common.optional') }})
-                  </span>
-                  <ChevronRight
-                    class="h-4 w-4 transition-transform duration-200"
-                    :class="{ 'rotate-90': showAdvancedOtg }"
-                  />
-                </button>
-                <div v-if="showAdvancedOtg" class="px-3 pb-3 space-y-3">
-                  <p class="text-xs text-muted-foreground">
-                    {{ t('setup.otgProfileDesc') }}
-                  </p>
-                  <div class="space-y-2">
-                    <Label for="otgProfile">{{ t('setup.otgProfile') }}</Label>
-                    <Select :model-value="hidOtgProfile" @update:modelValue="onOtgProfileChange">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="full">{{ t('settings.otgProfileFull') }}</SelectItem>
-                        <SelectItem value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</SelectItem>
-                        <SelectItem value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</SelectItem>
-                        <SelectItem value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div class="space-y-2">
-                    <Label for="otgEndpointBudget">{{ t('settings.otgEndpointBudget') }}</Label>
-                    <Select :model-value="otgEndpointBudget" @update:modelValue="onOtgEndpointBudgetChange">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="five">5</SelectItem>
-                        <SelectItem value="six">6</SelectItem>
-                        <SelectItem value="unlimited">{{ t('settings.otgEndpointBudgetUnlimited') }}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p class="text-xs text-muted-foreground">
-                      {{ otgEndpointUsageText }}
-                    </p>
-                  </div>
-                  <div class="flex items-center justify-between rounded-md border border-border/60 p-3">
-                    <div>
-                      <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
-                      <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
-                    </div>
-                    <Switch :model-value="otgKeyboardLeds" :disabled="!otgProfileHasKeyboard" @update:model-value="onOtgKeyboardLedsChange" />
-                  </div>
-                  <div class="flex items-center justify-between rounded-md border border-border/60 p-3">
-                    <div>
-                      <Label>{{ t('settings.otgFunctionMsd') }}</Label>
-                      <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
-                    </div>
-                    <Switch v-model="otgMsdEnabled" />
-                  </div>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t('settings.otgEndpointBudgetHint') }}
-                  </p>
-                  <p v-if="!isOtgEndpointBudgetValid" class="text-xs text-amber-600 dark:text-amber-400">
-                    {{ t('settings.otgEndpointExceeded', { used: otgRequiredEndpoints, limit: otgEndpointBudget === 'unlimited' ? t('settings.otgEndpointBudgetUnlimited') : otgEndpointBudget === 'five' ? '5' : '6' }) }}
-                  </p>
-                </div>
               </div>
             </div>
           </div>

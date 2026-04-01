@@ -58,6 +58,15 @@ int I422ToI420(const uint8_t* src_y, int src_stride_y,
                uint8_t* dst_v, int dst_stride_v,
                int width, int height);
 
+// I444 (YUV444P) -> I420 (YUV420P) with horizontal and vertical chroma downsampling
+int I444ToI420(const uint8_t* src_y, int src_stride_y,
+               const uint8_t* src_u, int src_stride_u,
+               const uint8_t* src_v, int src_stride_v,
+               uint8_t* dst_y, int dst_stride_y,
+               uint8_t* dst_u, int dst_stride_u,
+               uint8_t* dst_v, int dst_stride_v,
+               int width, int height);
+
 // I420 -> NV12
 int I420ToNV12(const uint8_t* src_y, int src_stride_y,
                const uint8_t* src_u, int src_stride_u,
@@ -93,6 +102,12 @@ int NV21ToI420(const uint8_t* src_y, int src_stride_y,
                uint8_t* dst_u, int dst_stride_u,
                uint8_t* dst_v, int dst_stride_v,
                int width, int height);
+
+// Split interleaved UV plane into separate U and V planes
+void SplitUVPlane(const uint8_t* src_uv, int src_stride_uv,
+                  uint8_t* dst_u, int dst_stride_u,
+                  uint8_t* dst_v, int dst_stride_v,
+                  int width, int height);
 
 // ----------------------------------------------------------------------------
 // ARGB/BGRA conversions (32-bit RGB)
@@ -175,6 +190,13 @@ int I420ToRGB24(const uint8_t* src_y, int src_stride_y,
 
 // I420 -> ARGB (BGRA)
 int I420ToARGB(const uint8_t* src_y, int src_stride_y,
+               const uint8_t* src_u, int src_stride_u,
+               const uint8_t* src_v, int src_stride_v,
+               uint8_t* dst_argb, int dst_stride_argb,
+               int width, int height);
+
+// H444 (BT.709 limited-range YUV444P) -> ARGB (BGRA)
+int H444ToARGB(const uint8_t* src_y, int src_stride_y,
                const uint8_t* src_u, int src_stride_u,
                const uint8_t* src_v, int src_stride_v,
                uint8_t* dst_argb, int dst_stride_argb,

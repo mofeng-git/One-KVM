@@ -6,7 +6,7 @@
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ffi.rs"));
 
 use serde_derive::{Deserialize, Serialize};
-use std::env;
+use std::{env, ffi::CString};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AVHWDeviceType {
@@ -57,6 +57,22 @@ pub(crate) fn init_av_log() {
         av_log_set_level(parse_ffmpeg_log_level());
         hwcodec_set_av_log_callback();
     });
+}
+
+pub fn resolve_pixel_format(name: &str, fallback: AVPixelFormat) -> i32 {
+    let c_name = match CString::new(name) {
+        Ok(name) => name,
+        Err(_) => return fallback as i32,
+    };
+
+    unsafe {
+        let resolved = av_get_pix_fmt(c_name.as_ptr());
+        if resolved >= 0 {
+            resolved
+        } else {
+            fallback as i32
+        }
+    }
 }
 
 fn parse_ffmpeg_log_level() -> i32 {

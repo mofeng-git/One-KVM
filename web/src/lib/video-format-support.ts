@@ -8,6 +8,8 @@ const MJPEG_MODE_SUPPORTED_FORMATS = new Set([
   'YUYV',
   'YVYU',
   'NV12',
+  'NV16',
+  'NV24',
   'RGB24',
   'BGR24',
 ])
@@ -20,6 +22,7 @@ const CONFIG_SUPPORTED_FORMATS = new Set([
   'NV12',
   'NV21',
   'NV16',
+  'NV24',
   'YUV420',
   'RGB24',
   'BGR24',
@@ -32,6 +35,7 @@ const WEBRTC_SUPPORTED_FORMATS = new Set([
   'NV12',
   'NV21',
   'NV16',
+  'NV24',
   'YUV420',
   'RGB24',
   'BGR24',
@@ -45,14 +49,10 @@ function isCompressedFormat(formatName: string): boolean {
   return formatName === 'MJPEG' || formatName === 'JPEG'
 }
 
-function isRkmppBackend(backendId?: string): boolean {
-  return backendId?.toLowerCase() === 'rkmpp'
-}
-
 export function getVideoFormatState(
   formatName: string,
   context: VideoFormatSupportContext,
-  encoderBackend = 'auto',
+  _encoderBackend = 'auto',
 ): VideoFormatState {
   const normalizedFormat = normalizeFormat(formatName)
 
@@ -64,25 +64,11 @@ export function getVideoFormatState(
     if (CONFIG_SUPPORTED_FORMATS.has(normalizedFormat)) {
       return 'supported'
     }
-    if (
-      normalizedFormat === 'NV24'
-      && isRkmppBackend(encoderBackend)
-    ) {
-      return 'supported'
-    }
     return 'unsupported'
   }
 
   if (WEBRTC_SUPPORTED_FORMATS.has(normalizedFormat)) {
     return isCompressedFormat(normalizedFormat) ? 'not_recommended' : 'supported'
-  }
-
-  if (
-    normalizedFormat === 'NV24'
-    && isRkmppBackend(encoderBackend)
-    && (context === 'h264' || context === 'h265')
-  ) {
-    return 'supported'
   }
 
   return 'unsupported'

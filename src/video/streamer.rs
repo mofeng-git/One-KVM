@@ -14,6 +14,7 @@ use tracing::{debug, error, info, trace, warn};
 use super::device::{enumerate_devices, find_best_device, VideoDeviceInfo};
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
+use super::is_rk_hdmirx_device;
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, SystemEvent};
 use crate::stream::MjpegStreamHandler;
@@ -269,24 +270,8 @@ impl Streamer {
             .find(|d| d.path.to_string_lossy() == device_path)
             .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?;
 
-        // Validate format
-        let fmt_info = device
-            .formats
-            .iter()
-            .find(|f| f.format == format)
-            .ok_or_else(|| AppError::VideoError("Requested format not supported".to_string()))?;
-
-        // Validate resolution
-        if !fmt_info.resolutions.is_empty()
-            && !fmt_info
-                .resolutions
-                .iter()
-                .any(|r| r.width == resolution.width && r.height == resolution.height)
-        {
-            return Err(AppError::VideoError(
-                "Requested resolution not supported".to_string(),
-            ));
-        }
+        let (format, resolution) =
+            self.resolve_capture_config(&device, format, resolution)?;
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
         // This prevents race conditions where clients try to reconnect and reopen the device
@@ -385,6 +370,14 @@ impl Streamer {
         device: &VideoDeviceInfo,
         preferred: PixelFormat,
     ) -> Result<PixelFormat> {
+        if is_rk_hdmirx_device(device) {
+            return device
+                .formats
+                .first()
+                .map(|f| f.format)
+                .ok_or_else(|| AppError::VideoError("No supported formats found".to_string()));
+        }
+
         // Check if preferred format is available
         if device.formats.iter().any(|f| f.format == preferred) {
             return Ok(preferred);
@@ -411,6 +404,14 @@ impl Streamer {
             .find(|f| &f.format == format)
             .ok_or_else(|| AppError::VideoError("Format not found".to_string()))?;
 
+        if is_rk_hdmirx_device(device) {
+            return Ok(format_info
+                .resolutions
+                .first()
+                .map(|r| r.resolution())
+                .unwrap_or(preferred));
+        }
+
         // Check if preferred resolution is available
         if format_info.resolutions.is_empty()
             || format_info
@@ -427,6 +428,17 @@ impl Streamer {
             .first()
             .map(|r| r.resolution())
             .ok_or_else(|| AppError::VideoError("No resolutions available".to_string()))
+    }
+
+    fn resolve_capture_config(
+        &self,
+        device: &VideoDeviceInfo,
+        requested_format: PixelFormat,
+        requested_resolution: Resolution,
+    ) -> Result<(PixelFormat, Resolution)> {
+        let format = self.select_format(device, requested_format)?;
+        let resolution = self.select_resolution(device, &format, requested_resolution)?;
+        Ok((format, resolution))
     }
 
     /// Restart capture for recovery (direct capture path)

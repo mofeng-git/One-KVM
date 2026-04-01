@@ -243,7 +243,8 @@ fn enumerate_candidate_codecs(ctx: &EncodeContext) -> Vec<CodecInfo> {
     }
 
     codecs.retain(|codec| {
-        !(ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P && codec.name.contains("qsv"))
+        !(ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P as i32
+            && codec.name.contains("qsv"))
     });
     codecs
 }
@@ -428,7 +429,7 @@ pub struct EncodeContext {
     pub mc_name: Option<String>,
     pub width: i32,
     pub height: i32,
-    pub pixfmt: AVPixelFormat,
+    pub pixfmt: i32,
     pub align: i32,
     pub fps: i32,
     pub gop: i32,
@@ -483,7 +484,7 @@ impl Encoder {
                 CString::new(mc_name.as_str()).map_err(|_| ())?.as_ptr(),
                 ctx.width,
                 ctx.height,
-                ctx.pixfmt as c_int,
+                ctx.pixfmt,
                 ctx.align,
                 ctx.fps,
                 ctx.gop,

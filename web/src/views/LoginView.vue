@@ -3,15 +3,11 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import {
-  setLanguage,
-  getCurrentLanguage,
-  type SupportedLocale,
-} from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Monitor, Lock, Eye, EyeOff, User } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -19,17 +15,11 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const currentLanguage = ref<SupportedLocale>(getCurrentLanguage())
 const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
-
-function handleLanguageChange(lang: SupportedLocale) {
-  currentLanguage.value = lang
-  setLanguage(lang)
-}
 
 async function handleLogin() {
   if (!username.value) {
@@ -60,21 +50,8 @@ async function handleLogin() {
 <template>
   <div class="min-h-screen min-h-dvh flex items-center justify-center bg-background p-4">
     <Card class="relative w-full max-w-sm">
-      <div class="absolute top-4 right-4 flex gap-2">
-        <Button
-          :variant="currentLanguage === 'zh-CN' ? 'default' : 'outline'"
-          size="sm"
-          @click="handleLanguageChange('zh-CN')"
-        >
-          中文
-        </Button>
-        <Button
-          :variant="currentLanguage === 'en-US' ? 'default' : 'outline'"
-          size="sm"
-          @click="handleLanguageChange('en-US')"
-        >
-          English
-        </Button>
+      <div class="absolute top-4 right-4">
+        <LanguageToggleButton />
       </div>
 
       <CardHeader class="space-y-2 pt-10 text-center sm:pt-12">

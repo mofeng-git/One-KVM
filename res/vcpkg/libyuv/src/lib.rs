@@ -297,6 +297,94 @@ pub fn i422_to_i420_planar(
     ))
 }
 
+/// Convert I444 (YUV444P) to I420 (YUV420P) with separate planes and explicit strides
+/// This performs horizontal and vertical chroma downsampling using SIMD
+pub fn i444_to_i420_planar(
+    src_y: &[u8],
+    src_y_stride: i32,
+    src_u: &[u8],
+    src_u_stride: i32,
+    src_v: &[u8],
+    src_v_stride: i32,
+    dst: &mut [u8],
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    if width % 2 != 0 || height % 2 != 0 {
+        return Err(YuvError::InvalidDimensions);
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let y_size = w * h;
+    let uv_size = (w / 2) * (h / 2);
+
+    if dst.len() < i420_size(w, h) {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    call_yuv!(I444ToI420(
+        src_y.as_ptr(),
+        src_y_stride,
+        src_u.as_ptr(),
+        src_u_stride,
+        src_v.as_ptr(),
+        src_v_stride,
+        dst.as_mut_ptr(),
+        width,
+        dst[y_size..].as_mut_ptr(),
+        width / 2,
+        dst[y_size + uv_size..].as_mut_ptr(),
+        width / 2,
+        width,
+        height,
+    ))
+}
+
+/// Split an interleaved UV plane into separate U and V planes using libyuv SIMD helpers.
+///
+/// `width` is the number of chroma samples per row, not the number of source bytes.
+pub fn split_uv_plane(
+    src_uv: &[u8],
+    src_stride_uv: i32,
+    dst_u: &mut [u8],
+    dst_stride_u: i32,
+    dst_v: &mut [u8],
+    dst_stride_v: i32,
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    if width <= 0 || height <= 0 {
+        return Err(YuvError::InvalidDimensions);
+    }
+
+    let width = width as usize;
+    let height = height as usize;
+    let src_required = (src_stride_uv as usize).saturating_mul(height);
+    let dst_u_required = (dst_stride_u as usize).saturating_mul(height);
+    let dst_v_required = (dst_stride_v as usize).saturating_mul(height);
+
+    if src_uv.len() < src_required || dst_u.len() < dst_u_required || dst_v.len() < dst_v_required
+    {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    unsafe {
+        SplitUVPlane(
+            src_uv.as_ptr(),
+            src_stride_uv,
+            dst_u.as_mut_ptr(),
+            dst_stride_u,
+            dst_v.as_mut_ptr(),
+            dst_stride_v,
+            width as i32,
+            height as i32,
+        );
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // I420 <-> NV12 conversions
 // ============================================================================
@@ -754,6 +842,41 @@ pub fn i420_to_bgra(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Resu
         width / 2,
         src[y_size + uv_size..].as_ptr(),
         width / 2,
+        dst.as_mut_ptr(),
+        width * 4,
+        width,
+        height,
+    ))
+}
+
+/// Convert H444 (BT.709 limited-range YUV444P) to BGRA.
+pub fn h444_to_bgra(
+    src_y: &[u8],
+    src_u: &[u8],
+    src_v: &[u8],
+    dst: &mut [u8],
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    let w = width as usize;
+    let h = height as usize;
+    let plane_size = w * h;
+
+    if src_y.len() < plane_size || src_u.len() < plane_size || src_v.len() < plane_size {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    if dst.len() < argb_size(w, h) {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    call_yuv!(H444ToARGB(
+        src_y.as_ptr(),
+        width,
+        src_u.as_ptr(),
+        width,
+        src_v.as_ptr(),
+        width,
         dst.as_mut_ptr(),
         width * 4,
         width,
