@@ -270,8 +270,7 @@ impl Streamer {
             .find(|d| d.path.to_string_lossy() == device_path)
             .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?;
 
-        let (format, resolution) =
-            self.resolve_capture_config(&device, format, resolution)?;
+        let (format, resolution) = self.resolve_capture_config(&device, format, resolution)?;
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
         // This prevents race conditions where clients try to reconnect and reopen the device
@@ -807,9 +806,7 @@ impl Streamer {
                                 // Soft-restart after exponential back-off.
                                 if let Some(since) = no_signal_since {
                                     let backoff_secs = NOSIGNAL_SOFT_RESTART_SECS
-                                        .saturating_mul(
-                                            2u64.pow(no_signal_restart_count.min(2)),
-                                        )
+                                        .saturating_mul(2u64.pow(no_signal_restart_count.min(2)))
                                         .min(30);
                                     if since.elapsed().as_secs() >= backoff_secs {
                                         info!(
@@ -858,10 +855,7 @@ impl Streamer {
                         if capture_error_throttler.should_log(&key) {
                             let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
                             if suppressed > 0 {
-                                error!(
-                                    "Capture error: {} (suppressed {} repeats)",
-                                    e, suppressed
-                                );
+                                error!("Capture error: {} (suppressed {} repeats)", e, suppressed);
                             } else {
                                 error!("Capture error: {}", e);
                             }
@@ -991,9 +985,8 @@ impl Streamer {
     /// resolution / format change on the source side is picked up before
     /// the capture stream is re-opened.
     pub async fn re_init_device(self: &Arc<Self>, device_path: &str) -> Result<()> {
-        let device = VideoDevice::open_readonly(device_path).map_err(|e| {
-            AppError::VideoError(format!("Cannot open device for re-init: {}", e))
-        })?;
+        let device = VideoDevice::open_readonly(device_path)
+            .map_err(|e| AppError::VideoError(format!("Cannot open device for re-init: {}", e)))?;
         let device_info = device.info()?;
 
         let (format, resolution) = {

@@ -318,18 +318,26 @@ impl H265Encoder {
             )
         } else {
             match config.input_format {
-                H265InputFormat::Nv12 => {
-                    ("nv12", AVPixelFormat::AV_PIX_FMT_NV12, H265InputFormat::Nv12)
-                }
-                H265InputFormat::Nv21 => {
-                    ("nv21", AVPixelFormat::AV_PIX_FMT_NV21, H265InputFormat::Nv21)
-                }
-                H265InputFormat::Nv16 => {
-                    ("nv16", AVPixelFormat::AV_PIX_FMT_NV16, H265InputFormat::Nv16)
-                }
-                H265InputFormat::Nv24 => {
-                    ("nv24", AVPixelFormat::AV_PIX_FMT_NV24, H265InputFormat::Nv24)
-                }
+                H265InputFormat::Nv12 => (
+                    "nv12",
+                    AVPixelFormat::AV_PIX_FMT_NV12,
+                    H265InputFormat::Nv12,
+                ),
+                H265InputFormat::Nv21 => (
+                    "nv21",
+                    AVPixelFormat::AV_PIX_FMT_NV21,
+                    H265InputFormat::Nv21,
+                ),
+                H265InputFormat::Nv16 => (
+                    "nv16",
+                    AVPixelFormat::AV_PIX_FMT_NV16,
+                    H265InputFormat::Nv16,
+                ),
+                H265InputFormat::Nv24 => (
+                    "nv24",
+                    AVPixelFormat::AV_PIX_FMT_NV24,
+                    H265InputFormat::Nv24,
+                ),
                 H265InputFormat::Yuv420p => (
                     "yuv420p",
                     AVPixelFormat::AV_PIX_FMT_YUV420P,
@@ -340,12 +348,16 @@ impl H265Encoder {
                     AVPixelFormat::AV_PIX_FMT_YUYV422,
                     H265InputFormat::Yuyv422,
                 ),
-                H265InputFormat::Rgb24 => {
-                    ("rgb24", AVPixelFormat::AV_PIX_FMT_RGB24, H265InputFormat::Rgb24)
-                }
-                H265InputFormat::Bgr24 => {
-                    ("bgr24", AVPixelFormat::AV_PIX_FMT_BGR24, H265InputFormat::Bgr24)
-                }
+                H265InputFormat::Rgb24 => (
+                    "rgb24",
+                    AVPixelFormat::AV_PIX_FMT_RGB24,
+                    H265InputFormat::Rgb24,
+                ),
+                H265InputFormat::Bgr24 => (
+                    "bgr24",
+                    AVPixelFormat::AV_PIX_FMT_BGR24,
+                    H265InputFormat::Bgr24,
+                ),
             }
         };
         let pixfmt = resolve_pixel_format(pixfmt_name, pixfmt_fallback);

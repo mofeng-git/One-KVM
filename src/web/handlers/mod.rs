@@ -1295,12 +1295,15 @@ pub async fn stream_mode_set(
     // switch_mode_transaction treats this as "no switch needed" since StreamMode
     // is still WebRTC, so we handle codec change + event emission here.
     let current_mode = state.stream_manager.current_mode().await;
-    let prev_codec = state.stream_manager.webrtc_streamer().current_video_codec().await;
+    let prev_codec = state
+        .stream_manager
+        .webrtc_streamer()
+        .current_video_codec()
+        .await;
 
     let codec_changed = video_codec.is_some_and(|c| c != prev_codec);
-    let is_codec_only_switch = current_mode == StreamMode::WebRTC
-        && new_mode == StreamMode::WebRTC
-        && codec_changed;
+    let is_codec_only_switch =
+        current_mode == StreamMode::WebRTC && new_mode == StreamMode::WebRTC && codec_changed;
 
     if let Some(codec) = video_codec {
         info!("Setting WebRTC video codec to {:?}", codec);
@@ -1321,11 +1324,7 @@ pub async fn stream_mode_set(
 
         state
             .stream_manager
-            .notify_codec_switch(
-                &transition_id,
-                requested_mode_str,
-                &codec_to_id(prev_codec),
-            )
+            .notify_codec_switch(&transition_id, requested_mode_str, &codec_to_id(prev_codec))
             .await;
 
         return Ok(Json(StreamModeResponse {

@@ -9,9 +9,12 @@ use std::time::Instant;
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tracing::{error, info, warn};
 
-use super::capture::{AudioCapturer, AudioConfig, CaptureState};
+use super::capture::{AudioCapturer, AudioConfig, AudioFrame, CaptureState};
 use super::encoder::{OpusConfig, OpusEncoder, OpusFrame};
+use super::resample::Opus48kPcmBuffer;
 use crate::error::{AppError, Result};
+use bytemuck;
+use bytes::Bytes;
 
 /// Audio stream state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -254,6 +257,9 @@ impl AudioStreamer {
 
         info!("Audio stream task started");
 
+        let mut to_48k: Option<Opus48kPcmBuffer> = None;
+        let mut queued_48k: Vec<i16> = Vec::new();
+
         loop {
             // Check stop flag (atomic, no async lock needed)
             if stop_flag.load(Ordering::Relaxed) {
@@ -273,27 +279,56 @@ impl AudioStreamer {
 
             match recv_result {
                 Ok(Ok(audio_frame)) => {
-                    // Encode to Opus
-                    let opus_result = {
-                        let mut enc_guard = encoder.lock().await;
-                        (*enc_guard)
-                            .as_mut()
-                            .map(|enc| enc.encode_frame(&audio_frame))
+                    if to_48k.is_none() {
+                        to_48k = Some(Opus48kPcmBuffer::new(
+                            audio_frame.sample_rate,
+                            audio_frame.channels,
+                        ));
+                    }
+                    let pipeline = match to_48k.as_mut() {
+                        Some(p) => p,
+                        None => continue,
                     };
 
-                    match opus_result {
-                        Some(Ok(opus_frame)) => {
-                            // Publish latest frame to subscribers
-                            if opus_tx.receiver_count() > 0 {
-                                let _ = opus_tx.send(Some(Arc::new(opus_frame)));
+                    let samples: &[i16] = match bytemuck::try_cast_slice(&audio_frame.data) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            warn!("Audio frame size not multiple of 2; skipping");
+                            continue;
+                        }
+                    };
+                    if !samples.is_empty() {
+                        pipeline.push_interleaved(samples);
+                    }
+                    pipeline.pop_opus_frames(&mut queued_48k);
+
+                    while queued_48k.len() >= 960 * 2 {
+                        let pcm_20ms =
+                            Bytes::copy_from_slice(bytemuck::cast_slice(&queued_48k[..960 * 2]));
+                        queued_48k.drain(..960 * 2);
+
+                        let frame_48k = AudioFrame::new_interleaved(pcm_20ms, 2, 48000, 0);
+
+                        let opus_result = {
+                            let mut enc_guard = encoder.lock().await;
+                            (*enc_guard)
+                                .as_mut()
+                                .map(|enc| enc.encode_frame(&frame_48k))
+                        };
+
+                        match opus_result {
+                            Some(Ok(opus_frame)) => {
+                                if opus_tx.receiver_count() > 0 {
+                                    let _ = opus_tx.send(Some(Arc::new(opus_frame)));
+                                }
                             }
-                        }
-                        Some(Err(e)) => {
-                            error!("Opus encode error: {}", e);
-                        }
-                        None => {
-                            warn!("Encoder not available");
-                            break;
+                            Some(Err(e)) => {
+                                error!("Opus encode error: {}", e);
+                            }
+                            None => {
+                                warn!("Encoder not available");
+                                break;
+                            }
                         }
                     }
                 }

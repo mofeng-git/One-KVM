@@ -381,7 +381,7 @@ impl AudioController {
     pub async fn update_config(&self, new_config: AudioControllerConfig) -> Result<()> {
         let was_streaming = self.is_streaming().await;
 
-        // Stop streaming if running
+        // Stop streaming if running (device/quality/enabled may all change)
         if was_streaming {
             self.stop_streaming().await?;
         }
@@ -389,8 +389,10 @@ impl AudioController {
         // Update config
         *self.config.write().await = new_config.clone();
 
-        // Restart streaming if it was running and still enabled
-        if was_streaming && new_config.enabled {
+        // Start whenever audio is enabled — not only when we were already streaming.
+        // Otherwise PATCH /config/audio alone leaves enabled=true with no capture until
+        // POST /audio/start, which races WebRTC reconnect and matches "apply twice" reports.
+        if new_config.enabled {
             self.start_streaming().await?;
         }
 

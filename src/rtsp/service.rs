@@ -1142,11 +1142,7 @@ fn rtp_timestamp_increment(frame_duration: Duration) -> u32 {
 }
 
 /// Prefer PTS-based RTP time when it advances; otherwise step by `frame_duration` in 90 kHz units.
-fn monotonic_rtp_timestamp(
-    pts_ms: i64,
-    last: &mut u32,
-    frame_duration: Duration,
-) -> u32 {
+fn monotonic_rtp_timestamp(pts_ms: i64, last: &mut u32, frame_duration: Duration) -> u32 {
     let from_pts = pts_to_rtp_timestamp(pts_ms);
     let inc = rtp_timestamp_increment(frame_duration);
     let ts = if from_pts > *last {

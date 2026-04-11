@@ -97,12 +97,14 @@ pub struct AudioFrame {
 }
 
 impl AudioFrame {
-    pub fn new(data: Bytes, config: &AudioConfig, sequence: u64) -> Self {
+    /// One capture block: `sample_rate` must be the **hardware** rate (e.g. ALSA `actual_rate`).
+    pub fn new_interleaved(data: Bytes, channels: u32, sample_rate: u32, sequence: u64) -> Self {
+        let bps = 2 * channels;
         Self {
-            samples: data.len() as u32 / config.bytes_per_sample(),
+            samples: data.len() as u32 / bps,
             data,
-            sample_rate: config.sample_rate,
-            channels: config.channels,
+            sample_rate,
+            channels,
             sequence,
             timestamp: Instant::now(),
         }
@@ -285,10 +287,17 @@ fn run_capture(
         .map(|h| h.get_rate().unwrap_or(config.sample_rate))
         .unwrap_or(config.sample_rate);
 
-    info!(
-        "Audio capture configured: {}Hz {}ch (requested {}Hz)",
-        actual_rate, config.channels, config.sample_rate
-    );
+    if actual_rate != config.sample_rate {
+        info!(
+            "ALSA sample rate differs from requested ({}Hz vs {}Hz); streamer will resample to 48000Hz for Opus",
+            actual_rate, config.sample_rate
+        );
+    } else {
+        info!(
+            "Audio capture configured: {}Hz {}ch (requested {}Hz)",
+            actual_rate, config.channels, config.sample_rate
+        );
+    }
 
     // Prepare for capture
     pcm.prepare()
@@ -296,9 +305,17 @@ fn run_capture(
 
     let _ = state.send(CaptureState::Running);
 
-    // Allocate buffer - use u8 directly for zero-copy
-    let frame_bytes = config.bytes_per_frame();
-    let mut buffer = vec![0u8; frame_bytes];
+    // Sized from actual period — `readi` may return up to ~one period of frames per call.
+    let period_frames = pcm
+        .hw_params_current()
+        .ok()
+        .and_then(|h| h.get_period_size().ok())
+        .map(|f| f as usize)
+        .unwrap_or(1024)
+        .max(256);
+    let buf_frames = period_frames.saturating_mul(4).max(2048);
+    let bytes_per_frame = (config.channels as usize) * 2;
+    let mut buffer = vec![0u8; buf_frames * bytes_per_frame];
 
     // Capture loop
     while !stop_flag.load(Ordering::Relaxed) {
@@ -337,8 +354,12 @@ fn run_capture(
 
                 // Directly use the buffer slice (already in correct byte format)
                 let seq = sequence.fetch_add(1, Ordering::Relaxed);
-                let frame =
-                    AudioFrame::new(Bytes::copy_from_slice(&buffer[..byte_count]), config, seq);
+                let frame = AudioFrame::new_interleaved(
+                    Bytes::copy_from_slice(&buffer[..byte_count]),
+                    config.channels,
+                    actual_rate,
+                    seq,
+                );
 
                 // Send to subscribers
                 if frame_tx.receiver_count() > 0 {
