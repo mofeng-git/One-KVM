@@ -498,6 +498,9 @@ async fn stream_video_interleaved(
     let mut h265_payloader = H265Payloader::new();
     let mut ctrl_read_buf = [0u8; RTSP_BUF_SIZE];
     let mut ctrl_buffer = Vec::with_capacity(RTSP_BUF_SIZE);
+    // RTP timestamps must increase; pts_ms is often 0 for many frames (capture→encode jitter),
+    // which yields a flat RTP timestamp and breaks VLC/ffplay.
+    let mut last_rtp_timestamp: u32 = 0;
 
     loop {
         tokio::select! {
@@ -529,7 +532,11 @@ async fn stream_video_interleaved(
                     update_parameter_sets(&mut params, &frame);
                 }
 
-                let rtp_timestamp = pts_to_rtp_timestamp(frame.pts_ms);
+                let rtp_timestamp = monotonic_rtp_timestamp(
+                    frame.pts_ms,
+                    &mut last_rtp_timestamp,
+                    frame.duration,
+                );
 
                 let payloads: Vec<Bytes> = match rtsp_codec {
                     RtspCodec::H264 => h264_payloader
@@ -1128,6 +1135,29 @@ fn pts_to_rtp_timestamp(pts_ms: i64) -> u32 {
     ((pts_ms as u64 * RTP_CLOCK_RATE as u64) / 1000) as u32
 }
 
+/// 90 kHz ticks per frame from nominal duration (at least 1).
+fn rtp_timestamp_increment(frame_duration: Duration) -> u32 {
+    let inc = (frame_duration.as_secs_f64() * f64::from(RTP_CLOCK_RATE)).round() as u32;
+    inc.max(1)
+}
+
+/// Prefer PTS-based RTP time when it advances; otherwise step by `frame_duration` in 90 kHz units.
+fn monotonic_rtp_timestamp(
+    pts_ms: i64,
+    last: &mut u32,
+    frame_duration: Duration,
+) -> u32 {
+    let from_pts = pts_to_rtp_timestamp(pts_ms);
+    let inc = rtp_timestamp_increment(frame_duration);
+    let ts = if from_pts > *last {
+        from_pts
+    } else {
+        last.wrapping_add(inc)
+    };
+    *last = ts;
+    ts
+}
+
 fn generate_session_id() -> String {
     let mut rng = rand::rng();
     let value: u64 = rng.random();
@@ -1197,6 +1227,28 @@ mod tests {
         drop(server);
         let response = read_response_from_duplex(client).await;
         assert_eq!(response.status(), rtsp::StatusCode::MethodNotAllowed);
+    }
+
+    #[test]
+    fn monotonic_rtp_timestamp_steps_when_pts_stays_zero() {
+        let d = Duration::from_millis(33);
+        let mut last = 0u32;
+        let a = monotonic_rtp_timestamp(0, &mut last, d);
+        let b = monotonic_rtp_timestamp(0, &mut last, d);
+        let c = monotonic_rtp_timestamp(0, &mut last, d);
+        assert!(a > 0);
+        assert!(b > a);
+        assert!(c > b);
+    }
+
+    #[test]
+    fn monotonic_rtp_timestamp_uses_pts_when_it_advances() {
+        let d = Duration::from_millis(33);
+        let mut last = 0u32;
+        let a = monotonic_rtp_timestamp(1000, &mut last, d);
+        assert_eq!(a, 90_000);
+        let b = monotonic_rtp_timestamp(2000, &mut last, d);
+        assert_eq!(b, 180_000);
     }
 
     #[test]
