@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tokio::sync::Mutex;
 
 use super::AppConfig;
 use crate::error::{AppError, Result};
@@ -18,6 +19,8 @@ pub struct ConfigStore {
     /// Lock-free cache using ArcSwap for zero-cost reads
     cache: Arc<ArcSwap<AppConfig>>,
     change_tx: broadcast::Sender<ConfigChange>,
+    /// Serializes `set` / `update` so concurrent PATCH handlers cannot clobber each other
+    write_lock: Arc<Mutex<()>>,
 }
 
 /// Configuration change event
@@ -59,6 +62,7 @@ impl ConfigStore {
             pool,
             cache,
             change_tx,
+            write_lock: Arc::new(Mutex::new(())),
         })
     }
 
@@ -191,6 +195,7 @@ impl ConfigStore {
 
     /// Set entire configuration
     pub async fn set(&self, config: AppConfig) -> Result<()> {
+        let _guard = self.write_lock.lock().await;
         Self::save_config_to_db(&self.pool, &config).await?;
         self.cache.store(Arc::new(config));
 
@@ -204,13 +209,13 @@ impl ConfigStore {
 
     /// Update configuration with a closure
     ///
-    /// Note: This uses a read-modify-write pattern. For concurrent updates,
-    /// the last write wins. This is acceptable for configuration changes
-    /// which are infrequent and typically user-initiated.
+    /// Uses read-modify-write under a mutex so concurrent `update` / `set` calls are serialized
+    /// and merged correctly (each closure sees the latest stored config).
     pub async fn update<F>(&self, f: F) -> Result<()>
     where
         F: FnOnce(&mut AppConfig),
     {
+        let _guard = self.write_lock.lock().await;
         // Load current config, clone it for modification
         let current = self.cache.load();
         let mut config = (**current).clone();

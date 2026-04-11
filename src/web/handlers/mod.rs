@@ -1282,7 +1282,26 @@ pub async fn stream_mode_set(
         }
     }
 
-    // Set video codec if switching to WebRTC mode with specific codec
+    let requested_mode_str = match (&new_mode, &video_codec) {
+        (StreamMode::Mjpeg, _) => "mjpeg",
+        (StreamMode::WebRTC, Some(VideoCodecType::H264)) => "h264",
+        (StreamMode::WebRTC, Some(VideoCodecType::H265)) => "h265",
+        (StreamMode::WebRTC, Some(VideoCodecType::VP8)) => "vp8",
+        (StreamMode::WebRTC, Some(VideoCodecType::VP9)) => "vp9",
+        (StreamMode::WebRTC, None) => "webrtc",
+    };
+
+    // Detect codec-only switch: already in WebRTC mode, just changing codec.
+    // switch_mode_transaction treats this as "no switch needed" since StreamMode
+    // is still WebRTC, so we handle codec change + event emission here.
+    let current_mode = state.stream_manager.current_mode().await;
+    let prev_codec = state.stream_manager.webrtc_streamer().current_video_codec().await;
+
+    let codec_changed = video_codec.is_some_and(|c| c != prev_codec);
+    let is_codec_only_switch = current_mode == StreamMode::WebRTC
+        && new_mode == StreamMode::WebRTC
+        && codec_changed;
+
     if let Some(codec) = video_codec {
         info!("Setting WebRTC video codec to {:?}", codec);
         if let Err(e) = state
@@ -1295,21 +1314,33 @@ pub async fn stream_mode_set(
         }
     }
 
+    // For codec-only switch, emit events directly instead of going through
+    // switch_mode_transaction (which short-circuits when mode is unchanged).
+    if is_codec_only_switch {
+        let transition_id = uuid::Uuid::new_v4().to_string();
+
+        state
+            .stream_manager
+            .notify_codec_switch(
+                &transition_id,
+                requested_mode_str,
+                &codec_to_id(prev_codec),
+            )
+            .await;
+
+        return Ok(Json(StreamModeResponse {
+            success: true,
+            mode: requested_mode_str.to_string(),
+            transition_id: Some(transition_id),
+            switching: false,
+            message: Some(format!("Codec switched to {}", requested_mode_str)),
+        }));
+    }
+
     let tx = state
         .stream_manager
         .switch_mode_transaction(new_mode.clone())
         .await?;
-
-    // Return the requested codec identifier (for UI display). The actual active mode
-    // may differ if the request was rejected due to an in-progress switch.
-    let requested_mode_str = match (&new_mode, &video_codec) {
-        (StreamMode::Mjpeg, _) => "mjpeg",
-        (StreamMode::WebRTC, Some(VideoCodecType::H264)) => "h264",
-        (StreamMode::WebRTC, Some(VideoCodecType::H265)) => "h265",
-        (StreamMode::WebRTC, Some(VideoCodecType::VP8)) => "vp8",
-        (StreamMode::WebRTC, Some(VideoCodecType::VP9)) => "vp9",
-        (StreamMode::WebRTC, None) => "webrtc",
-    };
 
     let active_mode_str = match state.stream_manager.current_mode().await {
         StreamMode::Mjpeg => "mjpeg".to_string(),

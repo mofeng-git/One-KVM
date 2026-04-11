@@ -787,6 +787,22 @@ impl WebRtcStreamer {
         count
     }
 
+    /// Close all sessions and wait for the video pipeline to fully release the
+    /// capture device. Use this when the caller needs the V4L2 device immediately
+    /// afterwards (e.g. switching to MJPEG mode).
+    pub async fn close_all_sessions_and_release_device(&self) -> usize {
+        let count = self.close_all_sessions().await;
+
+        if let Some(ref pipeline) = *self.video_pipeline.read().await {
+            pipeline
+                .stop_and_wait(std::time::Duration::from_secs(3))
+                .await;
+        }
+        *self.video_pipeline.write().await = None;
+
+        count
+    }
+
     /// Get session count
     pub async fn session_count(&self) -> usize {
         self.sessions.read().await.len()

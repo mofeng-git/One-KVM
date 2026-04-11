@@ -844,13 +844,46 @@ impl SharedVideoPipeline {
         }
     }
 
-    /// Stop the pipeline
+    /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)
     pub fn stop(&self) {
         if *self.running_rx.borrow() {
             let _ = self.running.send(false);
             self.running_flag.store(false, Ordering::Release);
             self.clear_cmd_tx();
             info!("Stopping video pipeline");
+        }
+    }
+
+    /// Stop the pipeline and wait for the capture thread to fully exit.
+    ///
+    /// This ensures the V4L2 device is released before returning, which is
+    /// necessary when another consumer (e.g. MJPEG streamer) needs to open
+    /// the same device immediately after.
+    pub async fn stop_and_wait(&self, timeout: std::time::Duration) {
+        self.stop();
+        let mut rx = self.running_watch();
+        if !*rx.borrow() {
+            // Capture thread may still be running from a previous `stop()` call.
+            // Wait for the "Video pipeline stopped" log (thread sets running=false
+            // at exit), unless it already happened.
+        }
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if !self.running_flag.load(Ordering::Acquire) {
+                // Flag is cleared, but the capture thread may still be unwinding
+                // (dropping the V4L2 stream). Give it a brief moment.
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                break;
+            }
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                warn!(
+                    "Timed out waiting for video pipeline to stop after {:?}",
+                    timeout
+                );
+                break;
+            }
+            let _ = tokio::time::timeout(remaining, rx.changed()).await;
         }
     }
 

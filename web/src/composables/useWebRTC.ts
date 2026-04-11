@@ -334,15 +334,14 @@ async function addRemoteIceCandidate(candidate: IceCandidate) {
 async function flushPendingRemoteIce() {
   if (!peerConnection || !sessionId || !peerConnection.remoteDescription) return
 
-  const remaining: WebRTCIceCandidateEvent[] = []
-  for (const event of pendingRemoteCandidates) {
+  const queued = pendingRemoteCandidates
+  pendingRemoteCandidates = []
+
+  for (const event of queued) {
     if (event.session_id === sessionId) {
       await addRemoteIceCandidate(event.candidate)
-    } else {
-      // Drop candidates for old sessions
     }
   }
-  pendingRemoteCandidates = remaining
 
   if (pendingRemoteIceComplete.has(sessionId)) {
     pendingRemoteIceComplete.delete(sessionId)
@@ -546,10 +545,8 @@ async function connect(): Promise<boolean> {
         }
       }
 
-      // 等待连接真正建立（最多等待 15 秒）
-      // 直接检查 peerConnection.connectionState 而不是 reactive state
-      // 因为 TypeScript 不知道 state 会被 onconnectionstatechange 回调异步修改
-      const connectionTimeout = 15000
+      // Wait for connection to establish (5s for LAN, sufficient for most scenarios)
+      const connectionTimeout = 5000
       const pollInterval = 100
       let waited = 0
       connectStage.value = 'waiting_connection'
@@ -568,7 +565,6 @@ async function connect(): Promise<boolean> {
         waited += pollInterval
       }
 
-      // 超时
       throw new Error('Connection timeout waiting for ICE negotiation')
     } catch (err) {
       state.value = 'failed'

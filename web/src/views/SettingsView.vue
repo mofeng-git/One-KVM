@@ -974,33 +974,29 @@ async function saveConfig() {
   saved.value = false
 
   try {
-    // Save only config related to the active section
-    const savePromises: Promise<unknown>[] = []
+    // Save only config related to the active section.
+    // Sequential awaits: backend ConfigStore uses read-modify-write; parallel PATCH
+    // requests could overwrite each other's section (last writer wins on full JSON).
 
     // Video config (including encoder and WebRTC/STUN/TURN settings)
     if (activeSection.value === 'video') {
-      savePromises.push(
-        configStore.updateVideo({
-          device: config.value.video_device || undefined,
-          format: config.value.video_format || undefined,
-          width: config.value.video_width,
-          height: config.value.video_height,
-          fps: toConfigFps(config.value.video_fps),
-        })
-      )
-      // Save Stream/Encoder and STUN/TURN config together
-      savePromises.push(
-        configStore.updateStream({
-          encoder: config.value.encoder_backend as any,
-          stun_server: config.value.stun_server || undefined,
-          turn_server: config.value.turn_server || undefined,
-          turn_username: config.value.turn_username || undefined,
-          turn_password: config.value.turn_password || undefined,
-        })
-      )
+      await configStore.updateVideo({
+        device: config.value.video_device || undefined,
+        format: config.value.video_format || undefined,
+        width: config.value.video_width,
+        height: config.value.video_height,
+        fps: toConfigFps(config.value.video_fps),
+      })
+      await configStore.updateStream({
+        encoder: config.value.encoder_backend as any,
+        stun_server: config.value.stun_server || undefined,
+        turn_server: config.value.turn_server || undefined,
+        turn_username: config.value.turn_username || undefined,
+        turn_password: config.value.turn_password || undefined,
+      })
     }
 
-    // HID config
+    // HID config (includes MSD enable — same gadget; must not race with updateHid)
     if (activeSection.value === 'hid') {
       if (!isHidFunctionSelectionValid.value || !isOtgEndpointBudgetValid.value) {
         return
@@ -1024,24 +1020,20 @@ async function saveConfig() {
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      savePromises.push(configStore.updateHid(hidUpdate))
-      savePromises.push(
-        configStore.updateMsd({
-          enabled: config.value.msd_enabled,
-        })
-      )
+      await configStore.updateHid(hidUpdate)
+      await configStore.updateMsd({
+        enabled: config.value.msd_enabled,
+      })
     }
 
     // MSD config
     if (activeSection.value === 'msd') {
-      savePromises.push(
-        configStore.updateMsd({
-          msd_dir: config.value.msd_dir || undefined,
-        })
-      )
+      await configStore.updateMsd({
+        msd_dir: config.value.msd_dir || undefined,
+      })
     }
 
-    await Promise.all(savePromises)
+    await loadConfig()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch (e) {

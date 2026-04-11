@@ -404,8 +404,11 @@ impl VideoStreamManager {
                 }
             }
             StreamMode::WebRTC => {
-                info!("Closing all WebRTC sessions");
-                let closed = self.webrtc_streamer.close_all_sessions().await;
+                info!("Closing all WebRTC sessions and releasing capture device");
+                let closed = self
+                    .webrtc_streamer
+                    .close_all_sessions_and_release_device()
+                    .await;
                 if closed > 0 {
                     info!("Closed {} WebRTC sessions", closed);
                 }
@@ -779,6 +782,61 @@ impl VideoStreamManager {
     /// Request a keyframe from the shared video pipeline
     pub async fn request_keyframe(&self) -> crate::error::Result<()> {
         self.webrtc_streamer.request_keyframe().await
+    }
+
+    /// Notify frontend about a codec-only switch (WebRTC mode unchanged, codec changed).
+    ///
+    /// `set_video_codec` already rebuilt the pipeline synchronously, so we just
+    /// emit the events the frontend waits on: `StreamModeChanged`, `WebRTCReady`,
+    /// and `StreamModeReady`.
+    ///
+    /// Events are spawned asynchronously so the HTTP response (carrying the
+    /// `transition_id`) reaches the client before the WebSocket events, giving
+    /// the frontend time to call `registerTransition()` first.
+    pub async fn notify_codec_switch(
+        self: &Arc<Self>,
+        transition_id: &str,
+        new_codec_str: &str,
+        previous_codec_str: &str,
+    ) {
+        let manager = Arc::clone(self);
+        let transition_id = transition_id.to_string();
+        let new_codec = new_codec_str.to_string();
+        let prev_codec = previous_codec_str.to_string();
+
+        tokio::spawn(async move {
+            // Small yield to ensure the HTTP response is flushed first.
+            tokio::task::yield_now().await;
+
+            manager
+                .publish_event(SystemEvent::StreamModeChanged {
+                    transition_id: Some(transition_id.clone()),
+                    mode: new_codec.clone(),
+                    previous_mode: prev_codec.clone(),
+                })
+                .await;
+
+            let is_hardware = manager.webrtc_streamer.is_hardware_encoding().await;
+            manager
+                .publish_event(SystemEvent::WebRTCReady {
+                    transition_id: Some(transition_id.clone()),
+                    codec: new_codec.clone(),
+                    hardware: is_hardware,
+                })
+                .await;
+
+            manager
+                .publish_event(SystemEvent::StreamModeReady {
+                    transition_id: transition_id.clone(),
+                    mode: new_codec.clone(),
+                })
+                .await;
+
+            info!(
+                "Codec switch notified: {} -> {} (transition: {})",
+                prev_codec, new_codec, transition_id
+            );
+        });
     }
 
     /// Publish event to event bus

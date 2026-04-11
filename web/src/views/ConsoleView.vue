@@ -1312,18 +1312,17 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       }
     }
 
-    // Step 3: Connect WebRTC with retry
-    let retries = 3
+    // Step 3: Connect WebRTC with retry (backoff between retries)
+    const MAX_ATTEMPTS = 3
+    const RETRY_DELAYS = [200, 800]
     let success = false
-    while (retries > 0 && !success) {
-      success = await connectWebRTCSerial('switchToWebRTC')
-      if (!success) {
-        retries--
-        if (retries > 0) {
-          console.log(`[WebRTC] Connection failed, retrying (${retries} attempts left)`)
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
+    for (let attempt = 0; attempt < MAX_ATTEMPTS && !success; attempt++) {
+      if (attempt > 0) {
+        const delay = RETRY_DELAYS[attempt - 1] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]
+        console.log(`[WebRTC] Connection failed, retrying in ${delay}ms (${MAX_ATTEMPTS - attempt} attempts left)`)
+        await new Promise(resolve => setTimeout(resolve, delay))
       }
+      success = await connectWebRTCSerial('switchToWebRTC')
     }
     if (success) {
       toast.success(t('console.webrtcConnected'), {
@@ -1526,10 +1525,22 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     }, 1000)
   }
 
+  // Handle direct 'failed' state (ICE or DTLS failure)
+  // Allow one automatic retry before marking as failed, consistent with
+  // the disconnected->reconnect path that allows 2 failures.
   if (newState === 'failed' && videoMode.value !== 'mjpeg') {
     webrtcReconnectFailures += 1
-    if (webrtcReconnectFailures >= 1) {
+    if (webrtcReconnectFailures >= 2) {
       markWebRTCFailure(t('console.webrtcFailed'))
+    } else {
+      webrtcReconnectTimeout = setTimeout(async () => {
+        if (videoMode.value !== 'mjpeg' && webrtc.state.value !== 'connected') {
+          const success = await connectWebRTCSerial('auto reconnect after failed')
+          if (!success) {
+            markWebRTCFailure(t('console.webrtcFailed'))
+          }
+        }
+      }, 1000)
     }
   }
 })
@@ -2154,6 +2165,10 @@ function unregisterInteractionListeners() {
 async function activateConsoleView() {
   isConsoleActive.value = true
   registerInteractionListeners()
+
+  // REST snapshot: returning from Settings (or other routes) may have missed WS device_info
+  void systemStore.fetchAllStates()
+  void configStore.refreshHid().then(() => syncMouseModeFromConfig()).catch(() => {})
 
   // Ensure HID WebSocket is connected when console becomes active
   if (!hidWs.connected.value) {
