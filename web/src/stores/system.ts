@@ -259,6 +259,30 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchStreamState() {
+    try {
+      const [status, modeResp] = await Promise.all([
+        streamApi.status(),
+        streamApi.getMode().catch(() => ({ mode: 'mjpeg' }))
+      ])
+      stream.value = {
+        online: status.state === 'streaming',
+        active: status.state !== 'uninitialized',
+        device: status.device,
+        format: status.format,
+        resolution: status.resolution,
+        targetFps: status.target_fps,
+        clients: status.clients,
+        streamMode: modeResp.mode || 'mjpeg',
+        error: status.state === 'error' ? 'Stream error' : null,
+      }
+      return status
+    } catch (e) {
+      console.error('Failed to fetch stream state:', e)
+      throw e
+    }
+  }
+
   async function fetchAllStates() {
     loading.value = true
     error.value = null
@@ -266,7 +290,8 @@ export const useSystemStore = defineStore('system', () => {
     try {
       await Promise.all([
         fetchSystemInfo(),
-        // HID state is updated via WebSocket device_info event
+        fetchStreamState().catch(() => null),
+        fetchHidState().catch(() => null),
         fetchAtxState().catch(() => null),
         fetchMsdState().catch(() => null),
       ])

@@ -96,6 +96,7 @@ const videoLoading = ref(true)
 const videoError = ref(false)
 const videoErrorMessage = ref('')
 const videoRestarting = ref(false) // Track if video is restarting due to config change
+const mjpegFrameReceived = ref(false) // Whether MJPEG stream has received at least one frame
 
 // Video aspect ratio (dynamically updated from actual video dimensions)
 // Using string format "width/height" to let browser handle the ratio calculation
@@ -188,6 +189,11 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
     if (webrtc.isConnecting.value) return 'connecting'
     if (webrtc.isConnected.value) return 'connected'
   }
+  // MJPEG: check if frames have actually arrived (frontend-side detection)
+  // This is more reliable than relying on stream.online from backend,
+  // which can be stale due to the debounce delay in device_info broadcaster.
+  // Also handles browsers that don't fire img.onload for multipart MJPEG streams.
+  if (videoMode.value === 'mjpeg' && mjpegFrameReceived.value) return 'connected'
   if (systemStore.stream?.online) return 'connected'
   return 'disconnected'
 })
@@ -680,6 +686,7 @@ function handleVideoLoad() {
   // MJPEG video frame loaded successfully - update stream online status
   // This fixes the timing issue where device_info event may arrive before stream is fully active
   if (videoMode.value === 'mjpeg') {
+    mjpegFrameReceived.value = true
     systemStore.setStreamOnline(true)
     // Update aspect ratio from MJPEG image dimensions
     const img = videoRef.value
@@ -758,6 +765,7 @@ function handleVideoError() {
 
   // Show loading state immediately
   videoLoading.value = true
+  mjpegFrameReceived.value = false
 
   // Auto-retry with exponential backoff (infinite retry, capped delay)
   retryCount++
@@ -1062,6 +1070,7 @@ function refreshVideo() {
   backendFps.value = 0
   videoError.value = false
   videoErrorMessage.value = ''
+  mjpegFrameReceived.value = false
 
   // Update timestamp to force MJPEG reconnection via reactive URL
   isRefreshingVideo = true
@@ -2060,6 +2069,11 @@ function unregisterInteractionListeners() {
 async function activateConsoleView() {
   isConsoleActive.value = true
   registerInteractionListeners()
+
+  // Ensure HID WebSocket is connected when console becomes active
+  if (!hidWs.connected.value) {
+    hidWs.connect().catch(() => {})
+  }
 
   if (videoMode.value !== 'mjpeg' && webrtc.videoTrack.value) {
     await nextTick()

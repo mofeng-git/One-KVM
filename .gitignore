@@ -42,3 +42,4 @@ CLAUDE.md
 secrets.toml
 .env
 /docs/
+web/package-lock.json
