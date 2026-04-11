@@ -364,8 +364,7 @@ pub fn split_uv_plane(
     let dst_u_required = (dst_stride_u as usize).saturating_mul(height);
     let dst_v_required = (dst_stride_v as usize).saturating_mul(height);
 
-    if src_uv.len() < src_required || dst_u.len() < dst_u_required || dst_v.len() < dst_v_required
-    {
+    if src_uv.len() < src_required || dst_u.len() < dst_u_required || dst_v.len() < dst_v_required {
         return Err(YuvError::BufferTooSmall);
     }
 

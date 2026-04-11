@@ -3,9 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::common::DataFormat::{self, *};
-use crate::ffmpeg::{
-    AVHWDeviceType::{self, *},
-};
+use crate::ffmpeg::AVHWDeviceType::{self, *};
 use serde_derive::{Deserialize, Serialize};
 use std::ffi::c_int;
 

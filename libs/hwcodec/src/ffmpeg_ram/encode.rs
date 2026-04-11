@@ -243,8 +243,7 @@ fn enumerate_candidate_codecs(ctx: &EncodeContext) -> Vec<CodecInfo> {
     }
 
     codecs.retain(|codec| {
-        !(ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P as i32
-            && codec.name.contains("qsv"))
+        !(ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P as i32 && codec.name.contains("qsv"))
     });
     codecs
 }
