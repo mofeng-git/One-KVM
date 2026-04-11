@@ -563,6 +563,16 @@ impl VideoDevice {
         Some((bt.width, bt.height, dv_timings_fps(&bt)))
     }
 
+    /// Query current DV timings resolution for runtime change detection.
+    ///
+    /// Returns the active resolution reported by DV timings (used by CSI/HDMI bridges
+    /// such as TC358743, rk_hdmirx, etc.).  Returns `None` when the device does not
+    /// support DV timings or no signal is detected.
+    pub fn query_dv_timings_resolution(&self) -> Option<Resolution> {
+        let (w, h, _fps) = self.current_dv_timings_mode()?;
+        Some(Resolution::new(w, h))
+    }
+
     fn current_format_resolution(&self) -> Option<(u32, u32)> {
         let format = self.get_format().ok()?;
         if format.width == 0 || format.height == 0 {

@@ -31,8 +31,12 @@ use self::encoder_state::{build_encoder_state, EncoderThreadState};
 
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
-/// Restart capture stream after this many consecutive timeouts.
+/// After this many consecutive timeouts, log a prominent warning.
 const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
+/// After this many consecutive timeouts, actually stop the pipeline.
+/// Setting this high (60 × 2 s poll = ~120 s) keeps WebRTC sessions alive
+/// while the source is temporarily unavailable (e.g. resolution change/reboot).
+const CAPTURE_TIMEOUT_STOP_THRESHOLD: u32 = 60;
 /// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 /// Validate every JPEG frame during startup to avoid poisoning HW decoders
@@ -576,9 +580,16 @@ impl SharedVideoPipeline {
                                 consecutive_timeouts = consecutive_timeouts.saturating_add(1);
                                 warn!("Capture timeout - no signal?");
 
-                                if consecutive_timeouts >= CAPTURE_TIMEOUT_RESTART_THRESHOLD {
+                                if consecutive_timeouts == CAPTURE_TIMEOUT_RESTART_THRESHOLD {
                                     warn!(
-                                        "Capture timed out {} consecutive times, restarting video pipeline",
+                                        "Capture timed out {} consecutive times – no signal?",
+                                        consecutive_timeouts
+                                    );
+                                }
+
+                                if consecutive_timeouts >= CAPTURE_TIMEOUT_STOP_THRESHOLD {
+                                    warn!(
+                                        "Capture timed out {} consecutive times, stopping video pipeline",
                                         consecutive_timeouts
                                     );
                                     let _ = pipeline.running.send(false);

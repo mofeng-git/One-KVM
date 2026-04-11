@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
 
-use super::device::{enumerate_devices, find_best_device, VideoDeviceInfo};
+use super::device::{enumerate_devices, find_best_device, VideoDevice, VideoDeviceInfo};
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use super::is_rk_hdmirx_device;
@@ -620,12 +620,22 @@ impl Streamer {
         Ok(())
     }
 
-    /// Direct capture loop for MJPEG mode (single loop, no broadcast)
-    fn run_direct_capture(self: Arc<Self>, device_path: PathBuf, config: StreamerConfig) {
+    /// Direct capture loop for MJPEG mode.
+    ///
+    /// The outer `'session` loop allows "soft restarts": when no signal has been
+    /// detected for `NOSIGNAL_SOFT_RESTART_SECS` the capture stream is closed and
+    /// re-opened (re-probing format/resolution) without going through the full
+    /// DeviceLost recovery path.  This handles the common CSI/HDMI-bridge case where
+    /// the source switches resolution and the driver requires a new `s_fmt` call.
+    fn run_direct_capture(self: Arc<Self>, device_path: PathBuf, _initial_config: StreamerConfig) {
         const MAX_RETRIES: u32 = 5;
         const RETRY_DELAY_MS: u64 = 200;
         const IDLE_STOP_DELAY_SECS: u64 = 5;
         const BUFFER_COUNT: u32 = 2;
+        /// After this many seconds without signal, close+re-open the device.
+        const NOSIGNAL_SOFT_RESTART_SECS: u64 = 8;
+        /// Placeholder frame re-send interval while in NoSignal state (iterations of 100 ms).
+        const NOSIGNAL_PLACEHOLDER_INTERVAL: u32 = 10; // every ~1 s
 
         let handle = tokio::runtime::Handle::current();
         let mut last_state = StreamerState::Streaming;
@@ -640,222 +650,375 @@ impl Streamer {
             }
         };
 
-        let mut stream_opt: Option<V4l2rCaptureStream> = None;
-        let mut last_error: Option<String> = None;
+        // How many soft-restart cycles have been attempted (for exponential back-off).
+        let mut no_signal_restart_count: u32 = 0;
 
-        for attempt in 0..MAX_RETRIES {
+        'session: loop {
             if self.direct_stop.load(Ordering::Relaxed) {
-                self.direct_active.store(false, Ordering::SeqCst);
-                return;
+                break 'session;
             }
 
-            match V4l2rCaptureStream::open(
-                &device_path,
-                config.resolution,
-                config.format,
-                config.fps,
-                BUFFER_COUNT,
-                Duration::from_secs(2),
-            ) {
-                Ok(stream) => {
-                    stream_opt = Some(stream);
-                    break;
+            // Re-read config at the start of each session so that a re_init_device()
+            // call (from a previous soft-restart or recovery) is reflected here.
+            let config = handle.block_on(async { self.config.read().await.clone() });
+
+            // ── Open the capture stream ─────────────────────────────────────────
+            let mut stream_opt: Option<V4l2rCaptureStream> = None;
+            let mut last_error: Option<String> = None;
+
+            for attempt in 0..MAX_RETRIES {
+                if self.direct_stop.load(Ordering::Relaxed) {
+                    self.direct_active.store(false, Ordering::SeqCst);
+                    return;
                 }
-                Err(e) => {
-                    let err_str = e.to_string();
-                    if err_str.contains("busy") || err_str.contains("resource") {
-                        warn!(
-                            "Device busy on attempt {}/{}, retrying in {}ms...",
-                            attempt + 1,
-                            MAX_RETRIES,
-                            RETRY_DELAY_MS
-                        );
-                        std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
+
+                match V4l2rCaptureStream::open(
+                    &device_path,
+                    config.resolution,
+                    config.format,
+                    config.fps,
+                    BUFFER_COUNT,
+                    Duration::from_secs(2),
+                ) {
+                    Ok(stream) => {
+                        stream_opt = Some(stream);
+                        break;
+                    }
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        if err_str.contains("busy") || err_str.contains("resource") {
+                            warn!(
+                                "Device busy on attempt {}/{}, retrying in {}ms...",
+                                attempt + 1,
+                                MAX_RETRIES,
+                                RETRY_DELAY_MS
+                            );
+                            std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
+                            last_error = Some(err_str);
+                            continue;
+                        }
                         last_error = Some(err_str);
-                        continue;
-                    }
-                    last_error = Some(err_str);
-                    break;
-                }
-            }
-        }
-
-        let mut stream = match stream_opt {
-            Some(stream) => stream,
-            None => {
-                error!(
-                    "Failed to open device {:?}: {}",
-                    device_path,
-                    last_error.unwrap_or_else(|| "unknown error".to_string())
-                );
-                self.mjpeg_handler.set_offline();
-                set_state(StreamerState::Error);
-                self.direct_active.store(false, Ordering::SeqCst);
-                self.current_fps.store(0, Ordering::Relaxed);
-                return;
-            }
-        };
-
-        let resolution = stream.resolution();
-        let pixel_format = stream.format();
-        let stride = stream.stride();
-
-        info!(
-            "Capture format: {}x{} {:?} stride={}",
-            resolution.width, resolution.height, pixel_format, stride
-        );
-
-        let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
-        let mut signal_present = true;
-        let mut validate_counter: u64 = 0;
-        let mut idle_since: Option<std::time::Instant> = None;
-
-        let mut fps_frame_count: u64 = 0;
-        let mut last_fps_time = std::time::Instant::now();
-        let capture_error_throttler = LogThrottler::with_secs(5);
-        let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
-
-        let classify_capture_error = |err: &std::io::Error| -> String {
-            let message = err.to_string();
-            if message.contains("dqbuf failed") && message.contains("EINVAL") {
-                "capture_dqbuf_einval".to_string()
-            } else if message.contains("dqbuf failed") {
-                "capture_dqbuf".to_string()
-            } else {
-                format!("capture_{:?}", err.kind())
-            }
-        };
-
-        while !self.direct_stop.load(Ordering::Relaxed) {
-            let mjpeg_clients = self.mjpeg_handler.client_count();
-            if mjpeg_clients == 0 {
-                if idle_since.is_none() {
-                    idle_since = Some(std::time::Instant::now());
-                    trace!("No active video consumers, starting idle timer");
-                } else if let Some(since) = idle_since {
-                    if since.elapsed().as_secs() >= IDLE_STOP_DELAY_SECS {
-                        info!(
-                            "No active video consumers for {}s, stopping capture",
-                            IDLE_STOP_DELAY_SECS
-                        );
-                        self.mjpeg_handler.set_offline();
-                        set_state(StreamerState::Ready);
                         break;
                     }
                 }
-            } else if idle_since.is_some() {
-                trace!("Video consumers active, resetting idle timer");
-                idle_since = None;
             }
 
-            let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
-            let meta = match stream.next_into(&mut owned) {
-                Ok(meta) => meta,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::TimedOut {
-                        if signal_present {
-                            signal_present = false;
-                            self.mjpeg_handler.set_offline();
-                            set_state(StreamerState::NoSignal);
-                            self.current_fps.store(0, Ordering::Relaxed);
-                            fps_frame_count = 0;
-                            last_fps_time = std::time::Instant::now();
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
-                    }
-
-                    let is_device_lost = match e.raw_os_error() {
-                        Some(6) => true,   // ENXIO
-                        Some(19) => true,  // ENODEV
-                        Some(5) => true,   // EIO
-                        Some(32) => true,  // EPIPE
-                        Some(108) => true, // ESHUTDOWN
-                        _ => false,
-                    };
-
-                    if is_device_lost {
-                        error!("Video device lost: {} - {}", device_path.display(), e);
-                        self.mjpeg_handler.set_offline();
-                        handle.block_on(async {
-                            *self.last_lost_device.write().await =
-                                Some(device_path.display().to_string());
-                            *self.last_lost_reason.write().await = Some(e.to_string());
-                        });
-                        set_state(StreamerState::DeviceLost);
-                        handle.block_on(async {
-                            let streamer = Arc::clone(&self);
-                            tokio::spawn(async move {
-                                streamer.start_device_recovery_internal().await;
-                            });
-                        });
-                        break;
-                    }
-
-                    let key = classify_capture_error(&e);
-                    if capture_error_throttler.should_log(&key) {
-                        let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
-                        if suppressed > 0 {
-                            error!("Capture error: {} (suppressed {} repeats)", e, suppressed);
-                        } else {
-                            error!("Capture error: {}", e);
-                        }
-                    } else {
-                        let counter = suppressed_capture_errors.entry(key).or_insert(0);
-                        *counter = counter.saturating_add(1);
-                    }
-                    continue;
+            let mut stream = match stream_opt {
+                Some(stream) => stream,
+                None => {
+                    error!(
+                        "Failed to open device {:?}: {}",
+                        device_path,
+                        last_error.unwrap_or_else(|| "unknown error".to_string())
+                    );
+                    self.mjpeg_handler.set_offline();
+                    set_state(StreamerState::Error);
+                    break 'session;
                 }
             };
 
-            let frame_size = meta.bytes_used;
-            if frame_size < MIN_CAPTURE_FRAME_SIZE {
-                continue;
-            }
+            let resolution = stream.resolution();
+            let pixel_format = stream.format();
+            let stride = stream.stride();
 
-            validate_counter = validate_counter.wrapping_add(1);
-            if pixel_format.is_compressed()
-                && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
-                && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
-            {
-                continue;
-            }
-
-            owned.truncate(frame_size);
-            let frame = VideoFrame::from_pooled(
-                Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
-                resolution,
-                pixel_format,
-                stride,
-                meta.sequence,
+            info!(
+                "Capture format: {}x{} {:?} stride={}",
+                resolution.width, resolution.height, pixel_format, stride
             );
 
-            if !signal_present {
-                signal_present = true;
-                self.mjpeg_handler.set_online();
-                set_state(StreamerState::Streaming);
+            let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
+            let mut signal_present = true;
+            let mut validate_counter: u64 = 0;
+            let mut idle_since: Option<std::time::Instant> = None;
+
+            let mut fps_frame_count: u64 = 0;
+            let mut last_fps_time = std::time::Instant::now();
+            let capture_error_throttler = LogThrottler::with_secs(5);
+            let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
+
+            let classify_capture_error = |err: &std::io::Error| -> String {
+                let message = err.to_string();
+                if message.contains("dqbuf failed") && message.contains("EINVAL") {
+                    "capture_dqbuf_einval".to_string()
+                } else if message.contains("dqbuf failed") {
+                    "capture_dqbuf".to_string()
+                } else {
+                    format!("capture_{:?}", err.kind())
+                }
+            };
+
+            // None = signal is present; Some(Instant) = when signal was first lost.
+            let mut no_signal_since: Option<std::time::Instant> = None;
+            // Counter for periodic placeholder pushes during NoSignal.
+            let mut nosignal_placeholder_counter: u32 = 0;
+            // Whether the inner 'capture loop should trigger a soft restart.
+            let mut need_soft_restart = false;
+
+            // ── Inner capture loop ──────────────────────────────────────────────
+            'capture: while !self.direct_stop.load(Ordering::Relaxed) {
+                let mjpeg_clients = self.mjpeg_handler.client_count();
+                if mjpeg_clients == 0 {
+                    if idle_since.is_none() {
+                        idle_since = Some(std::time::Instant::now());
+                        trace!("No active video consumers, starting idle timer");
+                    } else if let Some(since) = idle_since {
+                        if since.elapsed().as_secs() >= IDLE_STOP_DELAY_SECS {
+                            info!(
+                                "No active video consumers for {}s, stopping capture",
+                                IDLE_STOP_DELAY_SECS
+                            );
+                            self.mjpeg_handler.set_offline();
+                            set_state(StreamerState::Ready);
+                            break 'capture;
+                        }
+                    }
+                } else if idle_since.is_some() {
+                    trace!("Video consumers active, resetting idle timer");
+                    idle_since = None;
+                }
+
+                let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
+                let meta = match stream.next_into(&mut owned) {
+                    Ok(meta) => meta,
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            if signal_present {
+                                signal_present = false;
+                                // Don't call set_offline() – instead keep the MJPEG stream
+                                // alive by pushing a placeholder frame so clients stay
+                                // connected and see the "no signal" image.
+                                self.mjpeg_handler.push_no_signal_placeholder();
+                                set_state(StreamerState::NoSignal);
+                                no_signal_since = Some(std::time::Instant::now());
+                                self.current_fps.store(0, Ordering::Relaxed);
+                                fps_frame_count = 0;
+                                last_fps_time = std::time::Instant::now();
+                                nosignal_placeholder_counter = 0;
+                            } else {
+                                // Already in NoSignal – re-send placeholder periodically so
+                                // the HTTP keepalive timer does not expire.
+                                nosignal_placeholder_counter =
+                                    nosignal_placeholder_counter.wrapping_add(1);
+                                if nosignal_placeholder_counter >= NOSIGNAL_PLACEHOLDER_INTERVAL {
+                                    nosignal_placeholder_counter = 0;
+                                    self.mjpeg_handler.push_no_signal_placeholder();
+                                }
+
+                                // Soft-restart after exponential back-off.
+                                if let Some(since) = no_signal_since {
+                                    let backoff_secs = NOSIGNAL_SOFT_RESTART_SECS
+                                        .saturating_mul(
+                                            2u64.pow(no_signal_restart_count.min(2)),
+                                        )
+                                        .min(30);
+                                    if since.elapsed().as_secs() >= backoff_secs {
+                                        info!(
+                                            "NoSignal for {}s, attempting soft restart (attempt {})",
+                                            backoff_secs,
+                                            no_signal_restart_count + 1
+                                        );
+                                        need_soft_restart = true;
+                                        break 'capture;
+                                    }
+                                }
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            continue 'capture;
+                        }
+
+                        let is_device_lost = match e.raw_os_error() {
+                            Some(6) => true,   // ENXIO
+                            Some(19) => true,  // ENODEV
+                            Some(5) => true,   // EIO
+                            Some(32) => true,  // EPIPE
+                            Some(108) => true, // ESHUTDOWN
+                            _ => false,
+                        };
+
+                        if is_device_lost {
+                            error!("Video device lost: {} - {}", device_path.display(), e);
+                            self.mjpeg_handler.set_offline();
+                            handle.block_on(async {
+                                *self.last_lost_device.write().await =
+                                    Some(device_path.display().to_string());
+                                *self.last_lost_reason.write().await = Some(e.to_string());
+                            });
+                            set_state(StreamerState::DeviceLost);
+                            handle.block_on(async {
+                                let streamer = Arc::clone(&self);
+                                tokio::spawn(async move {
+                                    streamer.start_device_recovery_internal().await;
+                                });
+                            });
+                            break 'capture;
+                        }
+
+                        let key = classify_capture_error(&e);
+                        if capture_error_throttler.should_log(&key) {
+                            let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
+                            if suppressed > 0 {
+                                error!(
+                                    "Capture error: {} (suppressed {} repeats)",
+                                    e, suppressed
+                                );
+                            } else {
+                                error!("Capture error: {}", e);
+                            }
+                        } else {
+                            let counter = suppressed_capture_errors.entry(key).or_insert(0);
+                            *counter = counter.saturating_add(1);
+                        }
+                        continue 'capture;
+                    }
+                };
+
+                let frame_size = meta.bytes_used;
+                if frame_size < MIN_CAPTURE_FRAME_SIZE {
+                    continue 'capture;
+                }
+
+                validate_counter = validate_counter.wrapping_add(1);
+                if pixel_format.is_compressed()
+                    && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
+                    && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
+                {
+                    continue 'capture;
+                }
+
+                owned.truncate(frame_size);
+                let frame = VideoFrame::from_pooled(
+                    Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
+                    resolution,
+                    pixel_format,
+                    stride,
+                    meta.sequence,
+                );
+
+                if !signal_present {
+                    signal_present = true;
+                    no_signal_since = None;
+                    no_signal_restart_count = 0;
+                    // Stream was kept online (placeholder pushes), just update state.
+                    set_state(StreamerState::Streaming);
+                }
+
+                self.mjpeg_handler.update_frame(frame);
+
+                fps_frame_count += 1;
+                let fps_elapsed = last_fps_time.elapsed();
+                if fps_elapsed >= std::time::Duration::from_secs(1) {
+                    let current_fps = fps_frame_count as f32 / fps_elapsed.as_secs_f32();
+                    fps_frame_count = 0;
+                    last_fps_time = std::time::Instant::now();
+                    self.current_fps
+                        .store((current_fps * 100.0) as u32, Ordering::Relaxed);
+                }
+            } // 'capture
+
+            // ── After inner loop ────────────────────────────────────────────────
+            // The stream is dropped here, releasing the device FD.
+            drop(stream);
+
+            if self.direct_stop.load(Ordering::Relaxed) {
+                break 'session;
             }
 
-            self.mjpeg_handler.update_frame(frame);
-
-            fps_frame_count += 1;
-            let fps_elapsed = last_fps_time.elapsed();
-            if fps_elapsed >= std::time::Duration::from_secs(1) {
-                let current_fps = fps_frame_count as f32 / fps_elapsed.as_secs_f32();
-                fps_frame_count = 0;
-                last_fps_time = std::time::Instant::now();
-                self.current_fps
-                    .store((current_fps * 100.0) as u32, Ordering::Relaxed);
+            if !need_soft_restart {
+                // Normal exit (idle / device-lost / stop).
+                break 'session;
             }
-        }
+
+            // ── Soft restart path ───────────────────────────────────────────────
+            no_signal_restart_count = no_signal_restart_count.saturating_add(1);
+
+            // Re-probe the device to pick up a changed resolution/format.
+            match VideoDevice::open_readonly(&device_path).and_then(|d| d.info()) {
+                Ok(device_info) => {
+                    handle.block_on(async {
+                        let fmt;
+                        let res;
+                        {
+                            let cfg = self.config.read().await;
+                            fmt = self
+                                .select_format(&device_info, cfg.format)
+                                .unwrap_or(cfg.format);
+                            res = self
+                                .select_resolution(&device_info, &fmt, cfg.resolution)
+                                .unwrap_or(cfg.resolution);
+                        }
+                        {
+                            let mut cfg = self.config.write().await;
+                            cfg.format = fmt;
+                            cfg.resolution = res;
+                        }
+                        *self.current_device.write().await = Some(device_info);
+                        info!(
+                            "Soft restart: re-probed device → {}x{} {:?}",
+                            res.width, res.height, fmt
+                        );
+                    });
+                }
+                Err(e) => {
+                    warn!("Soft restart: failed to re-probe device: {}", e);
+                    // Brief wait before retrying to avoid spinning.
+                    let wait = 2u64.pow(no_signal_restart_count.min(3));
+                    std::thread::sleep(Duration::from_secs(wait));
+                }
+            }
+
+            // Reset no_signal_since so the back-off timer is fresh for the new session.
+            // no_signal_since will be re-set if the new session immediately times out.
+
+            // Continue 'session → re-open V4l2rCaptureStream with updated config.
+        } // 'session
 
         self.direct_active.store(false, Ordering::SeqCst);
         self.current_fps.store(0, Ordering::Relaxed);
     }
 
-    /// Check if streaming
+    /// Check if streaming (or in NoSignal state — capture thread is still running)
     pub async fn is_streaming(&self) -> bool {
-        self.state().await == StreamerState::Streaming
+        matches!(
+            self.state().await,
+            StreamerState::Streaming | StreamerState::NoSignal
+        )
+    }
+
+    /// Re-probe a device and update the stored config/device info.
+    ///
+    /// Called during recovery or after a NoSignal soft restart so that a
+    /// resolution / format change on the source side is picked up before
+    /// the capture stream is re-opened.
+    pub async fn re_init_device(self: &Arc<Self>, device_path: &str) -> Result<()> {
+        let device = VideoDevice::open_readonly(device_path).map_err(|e| {
+            AppError::VideoError(format!("Cannot open device for re-init: {}", e))
+        })?;
+        let device_info = device.info()?;
+
+        let (format, resolution) = {
+            let config = self.config.read().await;
+            let fmt = self
+                .select_format(&device_info, config.format)
+                .unwrap_or(config.format);
+            let res = self
+                .select_resolution(&device_info, &fmt, config.resolution)
+                .unwrap_or(config.resolution);
+            (fmt, res)
+        };
+
+        {
+            let mut cfg = self.config.write().await;
+            cfg.format = format;
+            cfg.resolution = resolution;
+        }
+        *self.current_device.write().await = Some(device_info);
+
+        info!(
+            "Device re-initialized: {}x{} {:?}",
+            resolution.width, resolution.height, format
+        );
+        Ok(())
     }
 
     /// Get stream statistics
@@ -995,6 +1158,15 @@ impl Streamer {
                 if !device_exists {
                     debug!("Device {} not present yet", device_path);
                     continue;
+                }
+
+                // Re-probe device to pick up resolution/format changes
+                if let Err(e) = streamer.re_init_device(&device_path).await {
+                    debug!(
+                        "Failed to re-probe device format (attempt {}): {}",
+                        attempt, e
+                    );
+                    // Don't skip – device exists, try restart anyway
                 }
 
                 // Try to restart capture

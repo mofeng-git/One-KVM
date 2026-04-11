@@ -3,19 +3,63 @@
 //! Manages video frame distribution and per-client statistics.
 
 use arc_swap::ArcSwap;
+use bytes::Bytes;
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
 use crate::video::encoder::traits::{Encoder, EncoderConfig};
 use crate::video::encoder::JpegEncoder;
-use crate::video::format::PixelFormat;
+use crate::video::format::{PixelFormat, Resolution};
 use crate::video::VideoFrame;
+
+/// Cached "no signal" placeholder JPEG (640×360 dark-gray image).
+/// Generated once on first use and reused for all NoSignal frames.
+static NO_SIGNAL_JPEG: OnceLock<Bytes> = OnceLock::new();
+
+/// Generate a minimal "no signal" JPEG (640×360, dark gray background).
+/// Uses turbojpeg directly to produce a valid JPEG without additional deps.
+fn generate_no_signal_jpeg() -> Bytes {
+    const W: usize = 640;
+    const H: usize = 360;
+
+    let y_size = W * H;
+    let uv_size = y_size / 4;
+    let mut i420 = vec![0u8; y_size + uv_size * 2];
+
+    // Y = 32 (dark gray, above the 16 black floor so it is clearly visible)
+    i420[..y_size].fill(32);
+    // U and V = 128 (neutral chroma → no colour tint)
+    i420[y_size..].fill(128);
+
+    match turbojpeg::Compressor::new() {
+        Ok(mut compressor) => {
+            let _ = compressor.set_quality(70);
+            let yuv = turbojpeg::YuvImage {
+                pixels: i420.as_slice(),
+                width: W,
+                height: H,
+                align: 1,
+                subsamp: turbojpeg::Subsamp::Sub2x2,
+            };
+            match compressor.compress_yuv_to_vec(yuv) {
+                Ok(jpeg) => Bytes::from(jpeg),
+                Err(_) => Bytes::new(),
+            }
+        }
+        Err(_) => Bytes::new(),
+    }
+}
+
+/// Return a reference to the cached no-signal JPEG bytes.
+fn no_signal_jpeg() -> &'static Bytes {
+    NO_SIGNAL_JPEG.get_or_init(generate_no_signal_jpeg)
+}
 
 /// Client ID type (UUID string)
 pub type ClientId = String;
@@ -351,6 +395,34 @@ impl MjpegStreamHandler {
     /// Set stream offline
     pub fn set_offline(&self) {
         self.online.store(false, Ordering::SeqCst);
+        let _ = self.frame_notify.send(());
+    }
+
+    /// Push a "no signal" placeholder JPEG to all connected MJPEG clients.
+    ///
+    /// Unlike `set_offline()`, this keeps the stream marked as **online** so
+    /// that HTTP clients remain connected and see the placeholder image instead
+    /// of a black/empty screen.  Call this whenever the capture thread enters
+    /// the `NoSignal` state.
+    pub fn push_no_signal_placeholder(&self) {
+        let jpeg = no_signal_jpeg();
+        if jpeg.is_empty() {
+            return;
+        }
+
+        let frame = VideoFrame::new(
+            jpeg.clone(),
+            Resolution::new(640, 360),
+            PixelFormat::Mjpeg,
+            0,
+            self.sequence.fetch_add(1, Ordering::Relaxed),
+        );
+
+        // Store as current frame so late-joining clients get it immediately.
+        self.current_frame.store(Arc::new(Some(frame)));
+        // Ensure stream is marked online so the HTTP handler keeps iterating.
+        self.online.store(true, Ordering::SeqCst);
+        // Wake up waiting HTTP clients.
         let _ = self.frame_notify.send(());
     }
 

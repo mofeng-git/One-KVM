@@ -567,6 +567,12 @@ const MAX_CONSECUTIVE_ERRORS = 2 // If 2+ errors in grace period, it's a real pr
 let pendingWebRTCReadyGate = false
 let webrtcConnectTask: Promise<boolean> | null = null
 
+// WebRTC auto-reconnect on device-lost/recovery
+let webrtcRecoveryTimerId: number | null = null
+let webrtcRecoveryAttempts = 0
+const MAX_WEBRTC_RECOVERY_ATTEMPTS = 8
+const WEBRTC_RECOVERY_BASE_DELAY = 2000
+
 // Last-frame overlay (prevents black flash during mode switches)
 const frameOverlayUrl = ref<string | null>(null)
 
@@ -781,9 +787,78 @@ function handleVideoError() {
 function handleStreamDeviceLost(data: { device: string; reason: string }) {
   videoError.value = true
   videoErrorMessage.value = t('console.deviceLostDesc', { device: data.device, reason: data.reason })
+
+  // In WebRTC mode, the pipeline will attempt to restart itself.
+  // Start an exponential-backoff reconnect loop so the session is
+  // re-established automatically once the backend is ready again.
+  if (videoMode.value !== 'mjpeg') {
+    scheduleWebRTCRecovery()
+  }
+}
+
+function scheduleWebRTCRecovery() {
+  // Clear any previous timer
+  if (webrtcRecoveryTimerId !== null) {
+    clearTimeout(webrtcRecoveryTimerId)
+    webrtcRecoveryTimerId = null
+  }
+
+  if (webrtcRecoveryAttempts >= MAX_WEBRTC_RECOVERY_ATTEMPTS) {
+    console.warn('[Recovery] Max WebRTC recovery attempts reached, giving up')
+    webrtcRecoveryAttempts = 0
+    return
+  }
+
+  const delay = Math.min(
+    WEBRTC_RECOVERY_BASE_DELAY * Math.pow(2, webrtcRecoveryAttempts),
+    30000,
+  )
+
+  console.log(
+    `[Recovery] Scheduling WebRTC reconnect attempt ${webrtcRecoveryAttempts + 1}/${MAX_WEBRTC_RECOVERY_ATTEMPTS} in ${delay}ms`,
+  )
+
+  webrtcRecoveryTimerId = window.setTimeout(async () => {
+    webrtcRecoveryTimerId = null
+    webrtcRecoveryAttempts++
+
+    // Only reconnect if we are still in a WebRTC mode and error state
+    if (videoMode.value === 'mjpeg' || !videoError.value) {
+      webrtcRecoveryAttempts = 0
+      return
+    }
+
+    console.log(`[Recovery] Attempting WebRTC reconnect (attempt ${webrtcRecoveryAttempts})`)
+    try {
+      await webrtc.disconnect()
+      const ok = await connectWebRTCSerial('device-recovery')
+      if (ok) {
+        console.log('[Recovery] WebRTC reconnected successfully')
+        videoError.value = false
+        videoErrorMessage.value = ''
+        webrtcRecoveryAttempts = 0
+      } else {
+        // Retry
+        scheduleWebRTCRecovery()
+      }
+    } catch {
+      scheduleWebRTCRecovery()
+    }
+  }, delay)
+}
+
+function cancelWebRTCRecovery() {
+  if (webrtcRecoveryTimerId !== null) {
+    clearTimeout(webrtcRecoveryTimerId)
+    webrtcRecoveryTimerId = null
+  }
+  webrtcRecoveryAttempts = 0
 }
 
 function handleStreamRecovered(_data: { device: string }) {
+  // Cancel any pending recovery timer – backend is back
+  cancelWebRTCRecovery()
+
   // Reset video error state
   videoError.value = false
   videoErrorMessage.value = ''
@@ -918,6 +993,16 @@ function handleStreamStateChanged(data: any) {
   if (data.state === 'error') {
     videoError.value = true
     videoErrorMessage.value = t('console.streamError')
+  } else if (data.state === 'recovering' && videoMode.value !== 'mjpeg') {
+    // Backend is in the DeviceLost recovery loop; start WebRTC reconnect if not already scheduled.
+    if (webrtcRecoveryTimerId === null && webrtcRecoveryAttempts === 0) {
+      scheduleWebRTCRecovery()
+    }
+  } else if (data.state === 'streaming' || data.state === 'no_signal') {
+    // Backend stream is alive; cancel any pending recovery timers.
+    if (data.state === 'streaming') {
+      cancelWebRTCRecovery()
+    }
   }
 }
 
@@ -2224,6 +2309,7 @@ onUnmounted(() => {
     clearTimeout(gracePeriodTimeoutId)
     gracePeriodTimeoutId = null
   }
+  cancelWebRTCRecovery()
   videoSession.clearWaiters()
 
   // Reset counters
