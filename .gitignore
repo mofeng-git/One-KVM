@@ -30,6 +30,7 @@ Thumbs.db
 
 # Build artifacts
 /dist/
+/build-staging
 
 # Frontend (built files)
 /web/node_modules/
