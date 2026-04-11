@@ -8,13 +8,15 @@ use serialport::SerialPort;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, info};
 
 use super::types::{ActiveLevel, AtxDriverType, AtxKeyConfig};
 use crate::error::{AppError, Result};
+
+pub type SharedSerialHandle = Arc<Mutex<Box<dyn SerialPort>>>;
 
 /// Timing constants for ATX operations
 pub mod timing {
@@ -39,8 +41,8 @@ pub struct AtxKeyExecutor {
     gpio_handle: Mutex<Option<LineHandle>>,
     /// Cached USB relay file handle to avoid repeated open/close syscalls
     usb_relay_handle: Mutex<Option<File>>,
-    /// Cached Serial port handle
-    serial_handle: Mutex<Option<Box<dyn SerialPort>>>,
+    /// Cached Serial port handle (can be shared across power/reset executors)
+    serial_handle: Mutex<Option<SharedSerialHandle>>,
     initialized: AtomicBool,
 }
 
@@ -54,6 +56,26 @@ impl AtxKeyExecutor {
             serial_handle: Mutex::new(None),
             initialized: AtomicBool::new(false),
         }
+    }
+
+    /// Create a new executor with a pre-opened shared serial handle.
+    pub fn new_with_shared_serial(config: AtxKeyConfig, serial_handle: SharedSerialHandle) -> Self {
+        Self {
+            config,
+            gpio_handle: Mutex::new(None),
+            usb_relay_handle: Mutex::new(None),
+            serial_handle: Mutex::new(Some(serial_handle)),
+            initialized: AtomicBool::new(false),
+        }
+    }
+
+    /// Open a serial relay device and wrap it for shared use.
+    pub fn open_shared_serial(device: &str, baud_rate: u32) -> Result<SharedSerialHandle> {
+        let port = serialport::new(device, baud_rate)
+            .timeout(Duration::from_millis(100))
+            .open()
+            .map_err(|e| AppError::Internal(format!("Serial port open failed: {}", e)))?;
+        Ok(Arc::new(Mutex::new(port)))
     }
 
     /// Check if this executor is configured
@@ -181,14 +203,11 @@ impl AtxKeyExecutor {
             self.config.device, self.config.pin
         );
 
-        let baud_rate = self.config.baud_rate;
-
-        let port = serialport::new(&self.config.device, baud_rate)
-            .timeout(Duration::from_millis(100))
-            .open()
-            .map_err(|e| AppError::Internal(format!("Serial port open failed: {}", e)))?;
-
-        *self.serial_handle.lock().unwrap() = Some(port);
+        let existing_handle = self.serial_handle.lock().unwrap().as_ref().cloned();
+        if existing_handle.is_none() {
+            let shared = Self::open_shared_serial(&self.config.device, self.config.baud_rate)?;
+            *self.serial_handle.lock().unwrap() = Some(shared);
+        }
 
         // Ensure relay is off initially
         self.send_serial_relay_command(false)?;
@@ -337,10 +356,14 @@ impl AtxKeyExecutor {
         // OFF: A0 01 00 A1
         let cmd = [0xA0, channel, state, checksum];
 
-        let mut guard = self.serial_handle.lock().unwrap();
-        let port = guard
-            .as_mut()
+        let serial_handle = self
+            .serial_handle
+            .lock()
+            .unwrap()
+            .as_ref()
+            .cloned()
             .ok_or_else(|| AppError::Internal("Serial relay not initialized".to_string()))?;
+        let mut port = serial_handle.lock().unwrap();
 
         port.write_all(&cmd)
             .map_err(|e| AppError::Internal(format!("Serial relay write failed: {}", e)))?;

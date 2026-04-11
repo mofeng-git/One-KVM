@@ -43,32 +43,93 @@ pub struct AtxController {
 }
 
 impl AtxController {
-    async fn init_components(inner: &mut AtxInner) {
-        // Initialize power executor
-        if inner.config.power.is_configured() {
-            let mut executor = AtxKeyExecutor::new(inner.config.power.clone());
-            if let Err(e) = executor.init().await {
-                warn!("Failed to initialize power executor: {}", e);
-            } else {
-                info!(
-                    "Power executor initialized: {:?} on {} pin {}",
-                    inner.config.power.driver, inner.config.power.device, inner.config.power.pin
-                );
-                inner.power_executor = Some(executor);
-            }
-        }
+    fn should_share_serial_device(power: &AtxKeyConfig, reset: &AtxKeyConfig) -> bool {
+        power.is_configured()
+            && reset.is_configured()
+            && power.driver == super::types::AtxDriverType::Serial
+            && reset.driver == super::types::AtxDriverType::Serial
+            && !power.device.is_empty()
+            && power.device == reset.device
+            && power.baud_rate == reset.baud_rate
+    }
 
-        // Initialize reset executor
-        if inner.config.reset.is_configured() {
-            let mut executor = AtxKeyExecutor::new(inner.config.reset.clone());
-            if let Err(e) = executor.init().await {
-                warn!("Failed to initialize reset executor: {}", e);
-            } else {
-                info!(
-                    "Reset executor initialized: {:?} on {} pin {}",
-                    inner.config.reset.driver, inner.config.reset.device, inner.config.reset.pin
-                );
-                inner.reset_executor = Some(executor);
+    async fn init_components(inner: &mut AtxInner) {
+        if Self::should_share_serial_device(&inner.config.power, &inner.config.reset) {
+            match AtxKeyExecutor::open_shared_serial(
+                &inner.config.power.device,
+                inner.config.power.baud_rate,
+            ) {
+                Ok(shared_serial) => {
+                    let mut power_executor = AtxKeyExecutor::new_with_shared_serial(
+                        inner.config.power.clone(),
+                        shared_serial.clone(),
+                    );
+                    if let Err(e) = power_executor.init().await {
+                        warn!("Failed to initialize power executor: {}", e);
+                    } else {
+                        info!(
+                            "Power executor initialized: {:?} on {} pin {}",
+                            inner.config.power.driver,
+                            inner.config.power.device,
+                            inner.config.power.pin
+                        );
+                        inner.power_executor = Some(power_executor);
+                    }
+
+                    let mut reset_executor = AtxKeyExecutor::new_with_shared_serial(
+                        inner.config.reset.clone(),
+                        shared_serial,
+                    );
+                    if let Err(e) = reset_executor.init().await {
+                        warn!("Failed to initialize reset executor: {}", e);
+                    } else {
+                        info!(
+                            "Reset executor initialized: {:?} on {} pin {}",
+                            inner.config.reset.driver,
+                            inner.config.reset.device,
+                            inner.config.reset.pin
+                        );
+                        inner.reset_executor = Some(reset_executor);
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to open shared serial device {} for ATX power/reset: {}",
+                        inner.config.power.device, e
+                    );
+                }
+            }
+        } else {
+            // Initialize power executor
+            if inner.config.power.is_configured() {
+                let mut executor = AtxKeyExecutor::new(inner.config.power.clone());
+                if let Err(e) = executor.init().await {
+                    warn!("Failed to initialize power executor: {}", e);
+                } else {
+                    info!(
+                        "Power executor initialized: {:?} on {} pin {}",
+                        inner.config.power.driver,
+                        inner.config.power.device,
+                        inner.config.power.pin
+                    );
+                    inner.power_executor = Some(executor);
+                }
+            }
+
+            // Initialize reset executor
+            if inner.config.reset.is_configured() {
+                let mut executor = AtxKeyExecutor::new(inner.config.reset.clone());
+                if let Err(e) = executor.init().await {
+                    warn!("Failed to initialize reset executor: {}", e);
+                } else {
+                    info!(
+                        "Reset executor initialized: {:?} on {} pin {}",
+                        inner.config.reset.driver,
+                        inner.config.reset.device,
+                        inner.config.reset.pin
+                    );
+                    inner.reset_executor = Some(executor);
+                }
             }
         }
 
@@ -260,5 +321,51 @@ impl AtxController {
             power_status,
             led_supported: inner.led_sensor.is_some(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::atx::AtxDriverType;
+
+    #[test]
+    fn test_should_share_serial_device_true() {
+        let power = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 1,
+            active_level: super::super::types::ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let reset = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 2,
+            active_level: super::super::types::ActiveLevel::High,
+            baud_rate: 9600,
+        };
+
+        assert!(AtxController::should_share_serial_device(&power, &reset));
+    }
+
+    #[test]
+    fn test_should_share_serial_device_false_on_different_baud() {
+        let power = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 1,
+            active_level: super::super::types::ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let reset = AtxKeyConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            pin: 2,
+            active_level: super::super::types::ActiveLevel::High,
+            baud_rate: 115200,
+        };
+
+        assert!(!AtxController::should_share_serial_device(&power, &reset));
     }
 }
