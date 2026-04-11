@@ -18,7 +18,6 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
   DialogContent,
@@ -294,8 +293,8 @@ onMounted(async () => {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent side="right" class="w-full sm:max-w-lg overflow-hidden flex flex-col">
-      <SheetHeader>
+    <SheetContent side="right" class="w-full sm:max-w-lg overflow-hidden flex flex-col h-[dvh]">
+      <SheetHeader class="shrink-0">
         <div class="flex items-center justify-between pr-8">
           <div>
             <SheetTitle class="flex items-center gap-2">
@@ -314,10 +313,10 @@ onMounted(async () => {
         </div>
       </SheetHeader>
 
-      <Separator class="my-4" />
+      <Separator class="my-4 shrink-0" />
 
-      <Tabs v-model="activeTab" class="flex-1 flex flex-col overflow-hidden">
-        <TabsList class="w-full grid grid-cols-2">
+      <Tabs v-model="activeTab" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <TabsList class="w-full grid grid-cols-2 shrink-0">
           <TabsTrigger value="images">
             <Disc class="h-4 w-4 mr-1.5" />
             {{ t('msd.images') }}
@@ -328,11 +327,11 @@ onMounted(async () => {
           </TabsTrigger>
         </TabsList>
 
-        <ScrollArea class="flex-1 mt-4">
+        <div class="flex-1 min-h-0 mt-4 flex flex-col">
           <!-- Images Tab -->
-          <TabsContent value="images" class="m-0 space-y-4">
+          <TabsContent value="images" class="flex-1 min-h-0 m-0 flex flex-col space-y-4">
             <!-- Upload Area -->
-            <div class="space-y-3">
+            <div class="shrink-0 space-y-3">
               <label class="block">
                 <input
                   type="file"
@@ -352,7 +351,7 @@ onMounted(async () => {
             </div>
 
             <!-- Options -->
-            <div class="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+            <div class="shrink-0 flex items-center gap-4 p-3 rounded-lg bg-muted/50">
               <div class="flex items-center gap-2">
                 <Switch id="cdrom" v-model:checked="cdromMode" />
                 <Label for="cdrom" class="text-xs">{{ t('msd.cdromMode') }}</Label>
@@ -364,63 +363,65 @@ onMounted(async () => {
             </div>
 
             <!-- Image List -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
+            <div class="flex-1 min-h-0 flex flex-col space-y-2">
+              <div class="shrink-0 flex items-center justify-between">
                 <h4 class="text-sm font-medium">{{ t('msd.imageList') }}</h4>
                 <Button variant="ghost" size="icon" class="h-7 w-7" @click="loadImages">
                   <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loadingImages }" />
                 </Button>
               </div>
 
-              <div v-if="images.length === 0" class="text-center py-6 text-muted-foreground text-sm">
+              <div v-if="images.length === 0" class="shrink-0 text-center py-6 text-muted-foreground text-sm">
                 {{ t('msd.noImages') }}
               </div>
 
-              <div v-else class="space-y-1.5">
-                <div
-                  v-for="image in images"
-                  :key="image.id"
-                  class="flex items-center justify-between p-2.5 rounded-lg border hover:bg-accent/50 transition-colors"
-                >
-                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    <Disc class="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium truncate">{{ image.name }}</p>
-                      <p class="text-xs text-muted-foreground">
-                        {{ formatBytes(image.size) }}
-                      </p>
+              <ScrollArea v-else class="flex-1 min-h-0 pr-4">
+                <div class="space-y-1.5">
+                  <div
+                    v-for="image in images"
+                    :key="image.id"
+                    class="flex items-center justify-between p-2.5 rounded-lg border hover:bg-accent/50 transition-colors"
+                  >
+                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                      <Disc class="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div class="min-w-0">
+                        <p class="text-sm font-medium truncate">{{ image.name }}</p>
+                        <p class="text-xs text-muted-foreground">
+                          {{ formatBytes(image.size) }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Button
+                        v-if="!msdConnected || systemStore.msd?.imageId !== image.id"
+                        variant="outline"
+                        size="sm"
+                        class="h-7 text-xs"
+                        @click="connectImage(image)"
+                      >
+                        <Link class="h-3.5 w-3.5 mr-1" />
+                        {{ t('msd.connect') }}
+                      </Button>
+                      <Badge v-else variant="default" class="text-xs">{{ t('common.connected') }}</Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7 text-destructive"
+                        @click="confirmDelete('image', image.id, image.name)"
+                      >
+                        <Trash2 class="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
-                  <div class="flex items-center gap-1 shrink-0">
-                    <Button
-                      v-if="!msdConnected || systemStore.msd?.imageId !== image.id"
-                      variant="outline"
-                      size="sm"
-                      class="h-7 text-xs"
-                      @click="connectImage(image)"
-                    >
-                      <Link class="h-3.5 w-3.5 mr-1" />
-                      {{ t('msd.connect') }}
-                    </Button>
-                    <Badge v-else variant="default" class="text-xs">{{ t('common.connected') }}</Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7 text-destructive"
-                      @click="confirmDelete('image', image.id, image.name)"
-                    >
-                      <Trash2 class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
                 </div>
-              </div>
+              </ScrollArea>
             </div>
           </TabsContent>
 
           <!-- Drive Tab -->
-          <TabsContent value="drive" class="m-0 space-y-4">
+          <TabsContent value="drive" class="flex-1 min-h-0 m-0 flex flex-col space-y-4">
             <template v-if="!driveInitialized">
-              <div class="text-center py-8 space-y-4">
+              <div class="shrink-0 text-center py-8 space-y-4">
                 <HardDrive class="h-10 w-10 mx-auto text-muted-foreground" />
                 <p class="text-sm text-muted-foreground">{{ t('msd.driveNotInitialized') }}</p>
                 <Button size="sm" @click="initializeDrive">
@@ -431,7 +432,7 @@ onMounted(async () => {
 
             <template v-else>
               <!-- Drive Info -->
-              <div class="p-3 rounded-lg bg-muted/50 space-y-2">
+              <div class="shrink-0 p-3 rounded-lg bg-muted/50 space-y-2">
                 <div class="flex items-center justify-between">
                   <div class="space-y-0.5">
                     <p class="text-xs text-muted-foreground">{{ t('msd.driveSize') }}: {{ (driveInfo?.size || 0) / 1024 / 1024 }}MB</p>
@@ -459,9 +460,9 @@ onMounted(async () => {
               </div>
 
               <!-- File Browser -->
-              <div class="space-y-2">
+              <div class="flex-1 min-h-0 flex flex-col space-y-2">
                 <!-- Toolbar -->
-                <div class="flex items-center justify-between gap-2">
+                <div class="shrink-0 flex items-center justify-between gap-2">
                   <div class="flex items-center gap-1 min-w-0 flex-1">
                     <Button
                       v-if="currentPath !== '/'"
@@ -485,7 +486,7 @@ onMounted(async () => {
                       </template>
                     </nav>
                   </div>
-                  <div class="flex items-center gap-1 shrink-0">
+                  <div class="shrink-0 flex items-center gap-1 shrink-0">
                     <label>
                       <input type="file" class="hidden" :disabled="uploadingFile" @change="handleFileUpload" />
                       <Button variant="ghost" size="icon" as="span" class="h-7 w-7 cursor-pointer">
@@ -501,59 +502,61 @@ onMounted(async () => {
                   </div>
                 </div>
 
-                <Progress v-if="uploadingFile" :model-value="fileUploadProgress" class="h-1" />
+                <Progress v-if="uploadingFile" :model-value="fileUploadProgress" class="h-1 shrink-0" />
 
                 <!-- File List -->
-                <div v-if="driveFiles.length === 0" class="text-center py-6 text-muted-foreground text-sm">
+                <div v-if="driveFiles.length === 0" class="shrink-0 text-center py-6 text-muted-foreground text-sm">
                   {{ t('msd.emptyFolder') }}
                 </div>
 
-                <div v-else class="space-y-1">
-                  <div
-                    v-for="file in driveFiles"
-                    :key="file.path"
-                    class="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50 transition-colors"
-                  >
+                <ScrollArea v-else class="flex-1 min-h-0 pr-4">
+                  <div class="space-y-1">
                     <div
-                      class="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
-                      @click="file.is_dir && navigateTo(file.path)"
+                      v-for="file in driveFiles"
+                      :key="file.path"
+                      class="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50 transition-colors"
                     >
-                      <Folder v-if="file.is_dir" class="h-4 w-4 text-blue-500 shrink-0" />
-                      <File v-else class="h-4 w-4 text-muted-foreground shrink-0" />
-                      <div class="min-w-0">
-                        <p class="text-sm font-medium truncate">{{ file.name }}</p>
-                        <p v-if="!file.is_dir" class="text-xs text-muted-foreground">
-                          {{ formatBytes(file.size) }}
-                        </p>
+                      <div
+                        class="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                        @click="file.is_dir && navigateTo(file.path)"
+                      >
+                        <Folder v-if="file.is_dir" class="h-4 w-4 text-blue-500 shrink-0" />
+                        <File v-else class="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium truncate">{{ file.name }}</p>
+                          <p v-if="!file.is_dir" class="text-xs text-muted-foreground">
+                            {{ formatBytes(file.size) }}
+                          </p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-0.5 shrink-0">
+                        <Button
+                          v-if="!file.is_dir"
+                          variant="ghost"
+                          size="icon"
+                          class="h-7 w-7"
+                          as="a"
+                          :href="msdApi.downloadDriveFile(file.path)"
+                          download
+                        >
+                          <Download class="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-7 w-7 text-destructive"
+                          @click="confirmDelete('file', file.path, file.name)"
+                        >
+                          <Trash2 class="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
-                    <div class="flex items-center gap-0.5 shrink-0">
-                      <Button
-                        v-if="!file.is_dir"
-                        variant="ghost"
-                        size="icon"
-                        class="h-7 w-7"
-                        as="a"
-                        :href="msdApi.downloadDriveFile(file.path)"
-                        download
-                      >
-                        <Download class="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="h-7 w-7 text-destructive"
-                        @click="confirmDelete('file', file.path, file.name)"
-                      >
-                        <Trash2 class="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
                   </div>
-                </div>
+                </ScrollArea>
               </div>
             </template>
           </TabsContent>
-        </ScrollArea>
+        </div>
       </Tabs>
     </SheetContent>
   </Sheet>
@@ -588,3 +591,28 @@ onMounted(async () => {
     </DialogContent>
   </Dialog>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* For Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+</style>
