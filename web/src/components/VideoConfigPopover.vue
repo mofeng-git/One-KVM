@@ -632,12 +632,12 @@ watch(
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-        <Monitor class="h-4 w-4" />
+      <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
+        <Monitor class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="w-[320px] p-3" align="start">
+    <PopoverContent class="w-[min(320px,92vw)] p-3" align="start">
       <div class="space-y-3">
         <h4 class="text-sm font-medium">{{ t('actionbar.videoConfig') }}</h4>
 

@@ -121,7 +121,7 @@ impl Default for TtydConfig {
 pub struct GostcConfig {
     /// Enable auto-start
     pub enabled: bool,
-    /// Server address (e.g., gostc.mofeng.run)
+    /// Server address (hostname or IP)
     pub addr: String,
     /// Client key from GOSTC management panel
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -134,7 +134,7 @@ impl Default for GostcConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            addr: "gostc.mofeng.run".to_string(),
+            addr: String::new(),
             key: String::new(),
             tls: true,
         }

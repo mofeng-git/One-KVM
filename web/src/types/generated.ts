@@ -289,7 +289,11 @@ export interface StreamConfig {
 	turn_password?: string;
 }
 
-/** Web server configuration */
+/**
+ * Web server configuration persisted in the database (includes on-disk TLS paths).
+ * 
+ * The HTTP API for `/api/config/web` uses `WebConfigResponse` instead: no path fields, includes `has_custom_cert`.
+ */
 export interface WebConfig {
 	/** HTTP port */
 	http_port: number;
@@ -321,7 +325,7 @@ export interface TtydConfig {
 export interface GostcConfig {
 	/** Enable auto-start */
 	enabled: boolean;
-	/** Server address (e.g., gostc.mofeng.run) */
+	/** Server address (hostname or IP) */
 	addr: string;
 	/** Client key from GOSTC management panel */
 	key: string;
@@ -686,12 +690,33 @@ export interface VideoConfigUpdate {
 	quality?: number;
 }
 
+/**
+ * Web server settings returned by `GET` / `PATCH /api/config/web`.
+ * 
+ * Public API shape: certificate paths on disk are not exposed. The full stored model is `WebConfig` in `config::schema`.
+ */
+export interface WebConfigResponse {
+	http_port: number;
+	https_port: number;
+	bind_addresses: string[];
+	bind_address: string;
+	https_enabled: boolean;
+	/** Whether a custom TLS certificate is active (non-empty cert + key paths in stored config). */
+	has_custom_cert: boolean;
+}
+
 export interface WebConfigUpdate {
 	http_port?: number;
 	https_port?: number;
 	bind_addresses?: string[];
 	bind_address?: string;
 	https_enabled?: boolean;
+	/** PEM-encoded certificate content (must be provided together with ssl_key_pem) */
+	ssl_cert_pem?: string;
+	/** PEM-encoded private key content (must be provided together with ssl_cert_pem) */
+	ssl_key_pem?: string;
+	/** Set to true to remove the custom certificate and revert to self-signed */
+	clear_custom_cert?: boolean;
 }
 
 /**

@@ -256,12 +256,14 @@ pub async fn update_gostc_config(
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.gostc.enabled;
     let has_key = !new_config.extensions.gostc.key.is_empty();
+    let has_addr = !new_config.extensions.gostc.addr.trim().is_empty();
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Gostc).await.ok();
     } else if !was_enabled
         && is_enabled
         && has_key
+        && has_addr
         && state.extensions.check_available(ExtensionId::Gostc)
     {
         state

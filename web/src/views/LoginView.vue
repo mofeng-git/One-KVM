@@ -7,13 +7,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
-import { Monitor, Lock, Eye, EyeOff, User } from 'lucide-vue-next'
+import BrandMark from '@/components/BrandMark.vue'
+import { Lock, Eye, EyeOff, User, CircleHelp } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+/** Map backend English messages to locale strings (API returns fixed English copy). */
+function localizedLoginError(raw: string | null): string {
+  if (!raw) return t('auth.loginFailed')
+  if (raw.includes('Invalid username or password')) return t('auth.invalidPassword')
+  if (raw.includes('System not initialized')) return t('auth.systemNotInitialized')
+  return raw
+}
 
 const username = ref('')
 const password = ref('')
@@ -40,7 +50,7 @@ async function handleLogin() {
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
   } else {
-    error.value = authStore.error || t('auth.loginFailed')
+    error.value = localizedLoginError(authStore.error)
   }
 
   loading.value = false
@@ -55,8 +65,8 @@ async function handleLogin() {
       </div>
 
       <CardHeader class="space-y-2 pt-10 text-center sm:pt-12">
-        <div class="inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto">
-          <Monitor class="w-8 h-8 text-primary" />
+        <div class="mx-auto flex justify-center">
+          <BrandMark size="xl" />
         </div>
         <CardTitle class="text-xl sm:text-2xl">One-KVM</CardTitle>
         <CardDescription>{{ t('auth.login') }}</CardDescription>
@@ -107,6 +117,25 @@ async function handleLogin() {
             <span v-if="loading">{{ t('common.loading') }}</span>
             <span v-else>{{ t('auth.login') }}</span>
           </Button>
+
+          <div class="text-right">
+            <Popover>
+              <PopoverTrigger as-child>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {{ t('auth.forgotPassword') }}
+                  <CircleHelp class="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent class="w-80 p-3" align="end">
+                <p class="text-xs text-muted-foreground">
+                  {{ t('auth.forgotPasswordHint') }}
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
         </form>
       </CardContent>
     </Card>

@@ -1,10 +1,11 @@
 use std::collections::HashSet;
+use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum_server::tls_rustls::RustlsConfig;
-use clap::{Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rustls::crypto::{ring, CryptoProvider};
 use tokio::sync::{broadcast, mpsc};
@@ -49,6 +50,10 @@ enum LogLevel {
 #[command(name = "one-kvm")]
 #[command(version, about = "A  open and lightweight IP-KVM solution", long_about = None)]
 struct CliArgs {
+    /// User management commands
+    #[command(subcommand)]
+    command: Option<CliCommand>,
+
     /// Listen address (overrides database config)
     #[arg(short = 'a', long, value_name = "ADDRESS")]
     address: Option<String>,
@@ -86,6 +91,24 @@ struct CliArgs {
     verbose: u8,
 }
 
+#[derive(Subcommand, Debug)]
+enum CliCommand {
+    /// Manage local users
+    User(UserCommand),
+}
+
+#[derive(Args, Debug)]
+struct UserCommand {
+    #[command(subcommand)]
+    action: UserAction,
+}
+
+#[derive(Subcommand, Debug)]
+enum UserAction {
+    /// Set password for the single local user (interactive terminal prompt)
+    SetPassword,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Parse command line arguments
@@ -101,8 +124,14 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting One-KVM v{}", env!("CARGO_PKG_VERSION"));
 
     // Determine data directory (CLI arg takes precedence)
-    let data_dir = args.data_dir.unwrap_or_else(get_data_dir);
+    let data_dir = args.data_dir.clone().unwrap_or_else(get_data_dir);
     tracing::info!("Data directory: {}", data_dir.display());
+
+    // Run one-off CLI command and exit.
+    if let Some(command) = args.command {
+        run_cli_command(command, data_dir).await?;
+        return Ok(());
+    }
 
     // Ensure data directory exists
     tokio::fs::create_dir_all(&data_dir).await?;
@@ -763,6 +792,81 @@ fn get_data_dir() -> PathBuf {
 
     // Default to system configuration directory
     PathBuf::from("/etc/one-kvm")
+}
+
+async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Result<()> {
+    tokio::fs::create_dir_all(&data_dir).await?;
+    let db_path = data_dir.join("one-kvm.db");
+    let config_store = ConfigStore::new(&db_path).await?;
+    let users = UserStore::new(config_store.pool().clone());
+    let sessions = SessionStore::new(config_store.pool().clone(), 0);
+
+    match command {
+        CliCommand::User(user) => run_user_action(user.action, &users, &sessions).await,
+    }
+}
+
+async fn run_user_action(
+    action: UserAction,
+    users: &UserStore,
+    sessions: &SessionStore,
+) -> anyhow::Result<()> {
+    match action {
+        UserAction::SetPassword => set_user_password(users, sessions).await,
+    }
+}
+
+async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow::Result<()> {
+    let all = users.list().await?;
+    let user = match all.len() {
+        0 => anyhow::bail!("No local user exists yet; complete setup in the web UI first."),
+        1 => &all[0],
+        _ => anyhow::bail!(
+            "Expected exactly one local user (single-user design), found {}. Remove extra users from the database or contact support.",
+            all.len()
+        ),
+    };
+
+    let new_password = read_new_password_interactive()?;
+    if new_password.len() < 4 {
+        anyhow::bail!("Password must be at least 4 characters");
+    }
+
+    users.update_password(&user.id, &new_password).await?;
+    let revoked = sessions.delete_by_user_id(&user.id).await?;
+
+    tracing::info!(
+        "Password updated for user '{}' and {} sessions revoked",
+        user.username,
+        revoked
+    );
+    println!(
+        "Password updated for user '{}' (revoked {} sessions).",
+        user.username, revoked
+    );
+    Ok(())
+}
+
+fn read_new_password_interactive() -> anyhow::Result<String> {
+    let once = |label: &str| -> anyhow::Result<String> {
+        print!("{}", label);
+        std::io::stdout().flush()?;
+
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line)?;
+        let s = line.trim_end_matches(['\r', '\n']).to_string();
+        if s.is_empty() {
+            anyhow::bail!("Password cannot be empty");
+        }
+        Ok(s)
+    };
+
+    let a = once("New password: ")?;
+    let b = once("Confirm password: ")?;
+    if a != b {
+        anyhow::bail!("Passwords do not match");
+    }
+    Ok(a)
 }
 
 /// Resolve bind IPs from config, preferring bind_addresses when set.

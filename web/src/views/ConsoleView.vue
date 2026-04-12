@@ -27,6 +27,7 @@ import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -46,7 +47,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Monitor,
   MonitorOff,
   RefreshCw,
   LogOut,
@@ -224,25 +224,23 @@ const videoQuickInfo = computed(() => {
 const videoDetails = computed<StatusDetail[]>(() => {
   const stream = systemStore.stream
   if (!stream) return []
-  // Use backend-provided FPS from WebSocket
   const receivedFps = backendFps.value
-  // Display mode: use local videoMode which is synced with server
-  const modeDisplay = videoMode.value === 'mjpeg' ? 'MJPEG' : `${videoMode.value.toUpperCase()} (WebRTC)`
-  const details: StatusDetail[] = [
+
+  // Input (capture) format → output (delivery) mode
+  const inputFmt = stream.format || 'MJPEG'
+  const outputFmt = videoMode.value === 'mjpeg' ? 'MJPEG' : `${videoMode.value.toUpperCase()} (WebRTC)`
+  const formatDisplay = inputFmt === outputFmt ? inputFmt : `${inputFmt} → ${outputFmt}`
+
+  // Target / actual FPS combined
+  const fpsDisplay = `${formatFpsValue(stream.targetFps ?? 0)} / ${formatFpsValue(receivedFps)}`
+  const fpsStatus: StatusDetail['status'] = receivedFps > 5 ? 'ok' : receivedFps > 0 ? 'warning' : undefined
+
+  return [
     { label: t('statusCard.device'), value: stream.device || '-' },
-    { label: t('statusCard.mode'), value: modeDisplay, status: 'ok' },
-    { label: t('statusCard.format'), value: stream.format || 'MJPEG' },
+    { label: t('statusCard.format'), value: formatDisplay },
     { label: t('statusCard.resolution'), value: stream.resolution ? `${stream.resolution[0]}x${stream.resolution[1]}` : '-' },
-    { label: t('statusCard.targetFps'), value: formatFpsValue(stream.targetFps ?? 0) },
-    { label: t('statusCard.fps'), value: formatFpsValue(receivedFps), status: receivedFps > 5 ? 'ok' : receivedFps > 0 ? 'warning' : undefined },
+    { label: t('statusCard.fps'), value: fpsDisplay, status: fpsStatus },
   ]
-
-  // Show network error if WebSocket has network issue
-  if (wsNetworkError.value) {
-    details.push({ label: t('statusCard.connection'), value: t('statusCard.networkError'), status: 'warning' })
-  }
-
-  return details
 })
 
 const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
@@ -358,54 +356,59 @@ const hidDetails = computed<StatusDetail[]>(() => {
   const hidErrorStatus: StatusDetail['status'] =
     hid.errorCode === 'udc_not_configured' ? 'warning' : 'error'
 
-  const details: StatusDetail[] = [
-    { label: t('statusCard.device'), value: hid.device || '-' },
-    { label: t('statusCard.backend'), value: hid.backend || t('common.unknown') },
-    { label: t('statusCard.initialized'), value: hid.initialized ? t('statusCard.yes') : t('statusCard.no'), status: hid.error && hid.errorCode !== 'udc_not_configured' ? 'error' : hid.initialized ? 'ok' : 'warning' },
-    { label: t('statusCard.online'), value: hid.online ? t('statusCard.yes') : t('statusCard.no'), status: hid.online ? 'ok' : hid.initialized ? 'warning' : 'error' },
-    { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
-    {
-      label: t('settings.otgKeyboardLeds'),
-      value: hid.keyboardLedsEnabled
-        ? `Caps:${hid.ledState.capsLock ? t('common.on') : t('common.off')} Num:${hid.ledState.numLock ? t('common.on') : t('common.off')} Scroll:${hid.ledState.scrollLock ? t('common.on') : t('common.off')}`
-        : t('infobar.keyboardLedUnavailable'),
-      status: hid.keyboardLedsEnabled ? 'ok' : undefined,
-    },
-  ]
+  const details: StatusDetail[] = []
 
-  if (hid.errorCode) {
-    details.push({ label: t('statusCard.errorCode'), value: hid.errorCode, status: hidErrorStatus })
-  }
+  // Backend + device combined
+  const backendStr = hid.backend || t('common.unknown')
+  const deviceStr = hid.device ? ` @ ${hid.device}` : ''
+  details.push({ label: t('statusCard.backend'), value: `${backendStr}${deviceStr}` })
+
+  // Error message (with error code as suffix when present) OR normal-state info
   if (errorMessage) {
-    details.push({ label: t('common.error'), value: errorMessage, status: hidErrorStatus })
+    const codeSuffix = hid.errorCode ? ` (${hid.errorCode})` : ''
+    details.push({ label: t('common.error'), value: `${errorMessage}${codeSuffix}`, status: hidErrorStatus })
+  } else if (hid.online) {
+    details.push({ label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' })
+    if (hid.keyboardLedsEnabled) {
+      details.push({
+        label: t('settings.otgKeyboardLeds'),
+        value: `Caps:${hid.ledState.capsLock ? t('common.on') : t('common.off')} Num:${hid.ledState.numLock ? t('common.on') : t('common.off')} Scroll:${hid.ledState.scrollLock ? t('common.on') : t('common.off')}`,
+        status: 'ok',
+      })
+    }
   }
 
-  // Add HID channel info based on video mode
+  // Channel (merged with availability / connection state)
+  let channelValue: string
+  let channelStatus: StatusDetail['status']
   if (videoMode.value !== 'mjpeg') {
-    // WebRTC mode - show DataChannel status
     if (webrtc.dataChannelReady.value) {
-      details.push({ label: t('statusCard.channel'), value: 'DataChannel (WebRTC)', status: 'ok' })
+      channelValue = 'DataChannel (WebRTC)'
+      channelStatus = 'ok'
     } else if (webrtc.isConnecting.value || webrtc.isConnected.value) {
-      details.push({ label: t('statusCard.channel'), value: 'DataChannel', status: 'warning' })
+      channelValue = 'DataChannel'
+      channelStatus = 'warning'
     } else {
-      // Fallback to WebSocket
-      details.push({ label: t('statusCard.channel'), value: 'WebSocket (fallback)', status: hidWs.connected.value ? 'ok' : 'warning' })
+      channelValue = 'WebSocket (fallback)'
+      channelStatus = hidWs.connected.value ? 'ok' : 'warning'
     }
   } else {
-    // MJPEG mode - WebSocket HID
-    details.push({ label: t('statusCard.channel'), value: 'WebSocket', status: hidWs.connected.value ? 'ok' : 'warning' })
+    channelValue = 'WebSocket'
+    channelStatus = hidWs.connected.value ? 'ok' : 'warning'
   }
-
-  // Add connection status for WebSocket (only relevant for MJPEG or fallback)
   if (videoMode.value === 'mjpeg' || !webrtc.dataChannelReady.value) {
     if (hidWs.networkError.value) {
-      details.push({ label: t('statusCard.connection'), value: t('statusCard.networkError'), status: 'warning' })
+      channelValue += ` (${t('statusCard.networkError')})`
+      channelStatus = 'warning'
     } else if (!hidWs.connected.value) {
-      details.push({ label: t('statusCard.connection'), value: t('statusCard.disconnected'), status: 'warning' })
+      channelValue += ` (${t('statusCard.disconnected')})`
+      channelStatus = 'warning'
     } else if (hidWs.hidUnavailable.value) {
-      details.push({ label: t('statusCard.availability'), value: t('statusCard.hidUnavailable'), status: 'warning' })
+      channelValue += ` (${t('statusCard.hidUnavailable')})`
+      channelStatus = 'warning'
     }
   }
+  details.push({ label: t('statusCard.channel'), value: channelValue, status: channelStatus })
 
   return details
 })
@@ -2347,18 +2350,42 @@ onUnmounted(() => {
   <div class="h-screen h-dvh flex flex-col bg-background">
     <!-- Header -->
     <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="px-4">
-        <div class="h-14 flex items-center justify-between">
+      <div class="px-2 sm:px-4">
+        <div class="h-10 sm:h-14 flex items-center justify-between">
           <!-- Left: Logo -->
-          <div class="flex items-center gap-6">
-            <div class="flex items-center gap-2">
-              <Monitor class="h-6 w-6 text-primary" />
-              <span class="font-bold text-lg">One-KVM</span>
+          <div class="flex items-center gap-2 sm:gap-6">
+            <div class="flex items-center gap-1.5 sm:gap-2">
+              <BrandMark size="md" class="hidden sm:block" />
+              <BrandMark size="sm" class="sm:hidden" />
+              <span class="font-bold text-sm sm:text-lg">One-KVM</span>
+            </div>
+
+            <!-- Mobile Status Indicators (inline, minimal) -->
+            <div class="flex md:hidden items-center gap-1">
+              <StatusCard
+                :title="t('statusCard.video')"
+                type="video"
+                :status="videoStatus"
+                :quick-info="videoQuickInfo"
+                :error-message="videoErrorMessage"
+                :details="videoDetails"
+                compact
+              />
+
+              <StatusCard
+                :title="t('statusCard.hid')"
+                type="hid"
+                :status="hidStatus"
+                :quick-info="hidQuickInfo"
+                :details="hidDetails"
+                :hover-align="hidHoverAlign"
+                compact
+              />
             </div>
           </div>
 
           <!-- Right: Status Cards + User Menu -->
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1 sm:gap-2">
             <div class="hidden md:flex items-center gap-2">
               <!-- Video Status -->
               <StatusCard
@@ -2420,9 +2447,9 @@ onUnmounted(() => {
             <!-- User Menu -->
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="outline" size="sm" class="gap-1.5">
-                  <span class="text-xs max-w-[100px] truncate">{{ authStore.user || 'admin' }}</span>
-                  <ChevronDown class="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 h-7 sm:h-9 px-2 sm:px-3">
+                  <span class="text-xs max-w-[60px] sm:max-w-[100px] truncate">{{ authStore.user || 'admin' }}</span>
+                  <ChevronDown class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -2451,60 +2478,6 @@ onUnmounted(() => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        </div>
-
-        <!-- Mobile Status Row -->
-        <div class="md:hidden pb-2">
-          <div class="flex items-center gap-2 overflow-x-auto">
-            <div class="shrink-0">
-              <StatusCard
-                :title="t('statusCard.video')"
-                type="video"
-                :status="videoStatus"
-                :quick-info="videoQuickInfo"
-                :error-message="videoErrorMessage"
-                :details="videoDetails"
-                compact
-              />
-            </div>
-
-            <div v-if="systemStore.audio?.available" class="shrink-0">
-              <StatusCard
-                :title="t('statusCard.audio')"
-                type="audio"
-                :status="audioStatus"
-                :quick-info="audioQuickInfo"
-                :error-message="audioErrorMessage"
-                :details="audioDetails"
-                compact
-              />
-            </div>
-
-            <div class="shrink-0">
-              <StatusCard
-                :title="t('statusCard.hid')"
-                type="hid"
-                :status="hidStatus"
-                :quick-info="hidQuickInfo"
-                :details="hidDetails"
-                :hover-align="hidHoverAlign"
-                compact
-              />
-            </div>
-
-            <div v-if="showMsdStatusCard" class="shrink-0">
-              <StatusCard
-                :title="t('statusCard.msd')"
-                type="msd"
-                :status="msdStatus"
-                :quick-info="msdQuickInfo"
-                :error-message="msdErrorMessage"
-                :details="msdDetails"
-                hover-align="end"
-                compact
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -2539,7 +2512,7 @@ onUnmounted(() => {
       />
 
       <!-- Video Container -->
-      <div class="relative h-full w-full flex items-center justify-center p-2 sm:p-4">
+      <div class="relative h-full w-full flex items-center justify-center p-1 sm:p-4">
         <div
           ref="videoContainerRef"
           class="relative bg-black overflow-hidden flex items-center justify-center"
@@ -2547,8 +2520,7 @@ onUnmounted(() => {
             aspectRatio: videoAspectRatio ?? '16/9',
             maxWidth: '100%',
             maxHeight: '100%',
-            minWidth: '320px',
-            minHeight: '180px',
+            minHeight: '120px',
           }"
           :class="{
             'opacity-60': videoLoading || videoError,
@@ -2602,11 +2574,11 @@ onUnmounted(() => {
                 <div class="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-pulse" style="top: 50%; animation-duration: 1.5s;" />
               </div>
 
-              <Spinner class="h-16 w-16 text-white mb-4" />
-              <p class="text-white/90 text-lg font-medium">
+              <Spinner class="h-10 w-10 sm:h-16 sm:w-16 text-white mb-2 sm:mb-4" />
+              <p class="text-white/90 text-sm sm:text-lg font-medium text-center px-4">
                 {{ webrtcLoadingMessage }}
               </p>
-              <p class="text-white/50 text-sm mt-2">
+              <p class="text-white/50 text-xs sm:text-sm mt-1 sm:mt-2">
                 {{ t('console.pleaseWait') }}
               </p>
             </div>
@@ -2618,10 +2590,10 @@ onUnmounted(() => {
               v-if="videoError && !videoLoading"
               class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-white gap-4 transition-opacity duration-300 p-4"
             >
-              <MonitorOff class="h-16 w-16 text-slate-400" />
-              <div class="text-center max-w-md">
-                <p class="font-medium text-lg mb-2">{{ t('console.connectionFailed') }}</p>
-                <p class="text-sm text-slate-300 mb-3">{{ t('console.connectionFailedDesc') }}</p>
+              <MonitorOff class="h-10 w-10 sm:h-16 sm:w-16 text-slate-400" />
+              <div class="text-center max-w-md px-2">
+                <p class="font-medium text-sm sm:text-lg mb-1 sm:mb-2">{{ t('console.connectionFailed') }}</p>
+                <p class="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">{{ t('console.connectionFailedDesc') }}</p>
                 <!-- Expandable error details -->
                 <div v-if="videoErrorMessage" class="bg-slate-800/60 rounded-lg p-3 text-left">
                   <p class="text-xs text-slate-400 mb-1">{{ t('console.errorDetails') }}:</p>
@@ -2679,22 +2651,22 @@ onUnmounted(() => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
-        <DialogHeader class="px-4 py-3 border-b shrink-0">
+      <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
+        <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
-              <Terminal class="h-5 w-5" />
-              {{ t('extensions.ttyd.title') }}
+              <Terminal class="h-4 w-4 sm:h-5 sm:w-5" />
+              <span class="text-sm sm:text-base">{{ t('extensions.ttyd.title') }}</span>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              class="h-8 w-8 mr-8"
+              class="h-7 w-7 sm:h-8 sm:w-8 mr-6 sm:mr-8"
               @click="openTerminalInNewTab"
               :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
-              <ExternalLink class="h-4 w-4" />
+              <ExternalLink class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
           </DialogTitle>
         </DialogHeader>
@@ -2712,11 +2684,11 @@ onUnmounted(() => {
 
     <!-- Change Password Dialog -->
     <Dialog v-model:open="changePasswordDialogOpen">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="w-[95vw] max-w-md">
         <DialogHeader>
           <DialogTitle>{{ t('auth.changePassword') }}</DialogTitle>
         </DialogHeader>
-        <div class="space-y-4 py-4">
+        <div class="space-y-3 sm:space-y-4 py-2 sm:py-4">
           <div class="space-y-2">
             <Label for="currentPassword">{{ t('auth.currentPassword') }}</Label>
             <Input

@@ -1,21 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Monitor,
-  Settings,
   LogOut,
   Sun,
   Moon,
@@ -23,15 +20,9 @@ import {
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
-
-const navItems = computed(() => [
-  { path: '/', name: 'Console', icon: Monitor, label: t('nav.console') },
-  { path: '/settings', name: 'Settings', icon: Settings, label: t('nav.settings') },
-])
 
 function toggleTheme() {
   const isDark = document.documentElement.classList.contains('dark')
@@ -49,38 +40,22 @@ async function handleLogout() {
   <div class="h-screen h-dvh flex flex-col bg-background overflow-hidden">
     <!-- Header -->
     <header class="shrink-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex h-14 items-center px-4 max-w-full">
+      <div class="flex h-11 sm:h-14 items-center px-3 sm:px-4 max-w-full">
         <!-- Logo -->
-        <RouterLink to="/" class="flex items-center gap-2 font-semibold">
-          <Monitor class="h-5 w-5" />
+        <RouterLink to="/" class="flex items-center gap-1.5 sm:gap-2 font-semibold">
+          <BrandMark size="sm" />
           <span class="hidden sm:inline">One-KVM</span>
         </RouterLink>
 
-        <!-- Navigation -->
-        <nav class="hidden md:flex items-center gap-1 ml-6">
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors"
-            :class="route.path === item.path
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'"
-          >
-            <component :is="item.icon" class="h-4 w-4" />
-            {{ item.label }}
-          </RouterLink>
-        </nav>
-
         <!-- Right Side -->
-        <div class="flex items-center gap-2 ml-auto">
+        <div class="flex items-center gap-1 sm:gap-2 ml-auto">
           <!-- Version Badge -->
           <span v-if="systemStore.version" class="hidden sm:inline text-xs text-muted-foreground">
             v{{ systemStore.version }}
           </span>
 
           <!-- Theme Toggle -->
-          <Button variant="ghost" size="icon" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
+          <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
             <Sun class="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon class="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span class="sr-only">{{ t('common.toggleTheme') }}</span>
@@ -92,16 +67,11 @@ async function handleLogout() {
           <!-- Mobile Menu -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child class="md:hidden">
-              <Button variant="ghost" size="icon" :aria-label="t('common.menu')">
+              <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.menu')">
                 <Menu class="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem v-for="item in navItems" :key="item.path" @click="router.push(item.path)">
-                <component :is="item.icon" class="h-4 w-4 mr-2" />
-                {{ item.label }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem @click="handleLogout">
                 <LogOut class="h-4 w-4 mr-2" />
                 {{ t('nav.logout') }}
@@ -110,7 +80,7 @@ async function handleLogout() {
           </DropdownMenu>
 
           <!-- Logout Button (Desktop) -->
-          <Button variant="ghost" size="icon" class="hidden md:flex" :aria-label="t('nav.logout')" @click="handleLogout">
+          <Button variant="ghost" size="icon" class="hidden md:flex h-8 w-8" :aria-label="t('nav.logout')" @click="handleLogout">
             <LogOut class="h-4 w-4" />
             <span class="sr-only">{{ t('nav.logout') }}</span>
           </Button>

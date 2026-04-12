@@ -1202,12 +1202,17 @@ html.dark .hg-theme-default .hg-button.down-key,
 }
 
 @media (max-width: 640px) {
+  .vkb-body {
+    padding: 4px;
+    gap: 4px;
+  }
+
   .vkb .simple-keyboard .hg-button {
-    height: 30px;
+    height: 28px;
     font-size: 10px;
-    padding: 0 4px;
-    margin: 0 1px 3px 0;
-    min-width: 26px;
+    padding: 0 3px;
+    margin: 0 1px 2px 0;
+    min-width: 24px;
   }
 
   .vkb .simple-keyboard .hg-button.combination-key {
@@ -1272,6 +1277,85 @@ html.dark .hg-theme-default .hg-button.down-key,
     padding: 4px 8px;
     font-size: 14px;
     min-width: 32px;
+  }
+}
+
+@media (max-width: 400px) {
+  .vkb .simple-keyboard .hg-button {
+    height: 26px;
+    font-size: 9px;
+    padding: 0 2px;
+    margin: 0 1px 2px 0;
+    min-width: 20px;
+    border-radius: 4px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Space"] {
+    min-width: 100px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Tab"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Backslash"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="(Backslash)"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="CapsLock"] {
+    min-width: 44px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Enter"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"] {
+    min-width: 50px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="ControlLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ControlRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="MetaLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="MetaRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="AltLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="AltRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ContextMenu"] {
+    min-width: 34px;
+  }
+
+  .vkb .simple-keyboard .hg-button.combination-key {
+    font-size: 8px;
+    height: 22px;
+    padding: 0 4px;
+  }
+
+  .kb-control-container .hg-button {
+    min-width: 34px !important;
+  }
+
+  .kb-arrows-container .hg-button {
+    min-width: 30px !important;
+    width: 30px !important;
+  }
+
+  .vkb-media-btn {
+    padding: 3px 6px;
+    font-size: 12px;
+    min-width: 28px;
+  }
+
+  .vkb-header {
+    padding: 2px 6px;
+    min-height: 24px;
+  }
+
+  .vkb-btn {
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+
+  .vkb-os-btn {
+    padding: 1px 6px;
+    font-size: 9px;
+  }
+
+  .vkb-title {
+    font-size: 10px;
   }
 }
 

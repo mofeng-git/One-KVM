@@ -8,10 +8,14 @@ const API_BASE = '/api'
 // Auth API
 export const authApi = {
   login: (username: string, password: string) =>
-    request<{ success: boolean; message?: string }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    }),
+    request<{ success: boolean; message?: string }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      },
+      { toastOnError: false },
+    ),
 
   logout: () =>
     request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
@@ -688,6 +692,7 @@ export {
   type RtspConfigUpdate,
   type RtspStatusResponse,
   type WebConfig,
+  type WebConfigUpdate,
 } from './config'
 
 // 导出生成的类型

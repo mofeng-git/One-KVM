@@ -703,7 +703,9 @@ impl StreamConfig {
     }
 }
 
-/// Web server configuration
+/// Web server configuration persisted in the database (includes on-disk TLS paths).
+///
+/// The HTTP API for `/api/config/web` uses `WebConfigResponse` instead: no path fields, includes `has_custom_cert`.
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]

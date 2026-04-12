@@ -126,6 +126,15 @@ impl SessionStore {
         Ok(result.rows_affected())
     }
 
+    /// Delete all sessions for a specific user
+    pub async fn delete_by_user_id(&self, user_id: &str) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM sessions WHERE user_id = ?1")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
+
     /// List all session IDs
     pub async fn list_ids(&self) -> Result<Vec<String>> {
         let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM sessions")

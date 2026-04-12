@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { configApi, streamApi, type EncoderBackendInfo } from '@/api'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +25,6 @@ import {
 } from '@/components/ui/hover-card'
 import { Switch } from '@/components/ui/switch'
 import {
-  Monitor,
   Eye,
   EyeOff,
   ChevronRight,
@@ -572,10 +572,8 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
       </div>
 
       <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
-        <div
-          class="inline-flex items-center justify-center w-16 h-16 mx-auto rounded-full bg-primary/10"
-        >
-          <Monitor class="w-8 h-8 text-primary" />
+        <div class="mx-auto flex justify-center">
+          <BrandMark size="xl" />
         </div>
         <CardTitle class="text-xl sm:text-2xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>

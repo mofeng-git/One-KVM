@@ -3,7 +3,8 @@ use crate::error::AppError;
 use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
 use crate::video::encoder::BitratePreset;
-use serde::Deserialize;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use typeshare::typeshare;
 
@@ -660,6 +661,26 @@ impl AudioConfigUpdate {
 }
 
 // ===== RustDesk Config =====
+
+/// hbbs/hbbr `-k` relay key: standard Base64 encoding of exactly 32 bytes (typically 44 chars with padding).
+fn validate_rustdesk_relay_key(key: &str) -> Result<(), AppError> {
+    let decoded = STANDARD.decode(key.as_bytes()).map_err(|_| {
+        AppError::BadRequest(
+            "Relay key must be standard Base64 (32 raw bytes, e.g. hbbs/hbbr -k output)".into(),
+        )
+    })?;
+    if decoded.len() != 32 {
+        return Err(AppError::BadRequest(
+            format!(
+                "Relay key must decode to exactly 32 bytes (got {} bytes after Base64 decode)",
+                decoded.len()
+            )
+            .into(),
+        ));
+    }
+    Ok(())
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct RustDeskConfigUpdate {
@@ -698,6 +719,12 @@ impl RustDeskConfigUpdate {
                 ));
             }
         }
+        if let Some(ref key) = self.relay_key {
+            let trimmed = key.trim();
+            if !trimmed.is_empty() {
+                validate_rustdesk_relay_key(trimmed)?;
+            }
+        }
         Ok(())
     }
 
@@ -716,10 +743,11 @@ impl RustDeskConfigUpdate {
             };
         }
         if let Some(ref key) = self.relay_key {
-            config.relay_key = if key.is_empty() {
+            let trimmed = key.trim();
+            config.relay_key = if trimmed.is_empty() {
                 None
             } else {
-                Some(key.clone())
+                Some(trimmed.to_string())
             };
         }
         if let Some(ref password) = self.device_password {
@@ -849,6 +877,45 @@ impl RtspConfigUpdate {
 }
 
 // ===== Web Config =====
+
+/// Web server settings returned by `GET` / `PATCH /api/config/web`.
+///
+/// Public API shape: certificate paths on disk are not exposed. The full stored model is `WebConfig` in `config::schema`.
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfigResponse {
+    pub http_port: u16,
+    pub https_port: u16,
+    pub bind_addresses: Vec<String>,
+    pub bind_address: String,
+    pub https_enabled: bool,
+    /// Whether a custom TLS certificate is active (non-empty cert + key paths in stored config).
+    pub has_custom_cert: bool,
+}
+
+impl WebConfigResponse {
+    pub fn from_stored(web: &WebConfig) -> Self {
+        let has_custom_cert = web
+            .ssl_cert_path
+            .as_deref()
+            .map(|p| !p.is_empty())
+            .unwrap_or(false)
+            && web
+                .ssl_key_path
+                .as_deref()
+                .map(|p| !p.is_empty())
+                .unwrap_or(false);
+        Self {
+            http_port: web.http_port,
+            https_port: web.https_port,
+            bind_addresses: web.bind_addresses.clone(),
+            bind_address: web.bind_address.clone(),
+            https_enabled: web.https_enabled,
+            has_custom_cert,
+        }
+    }
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct WebConfigUpdate {
@@ -857,6 +924,12 @@ pub struct WebConfigUpdate {
     pub bind_addresses: Option<Vec<String>>,
     pub bind_address: Option<String>,
     pub https_enabled: Option<bool>,
+    /// PEM-encoded certificate content (must be provided together with ssl_key_pem)
+    pub ssl_cert_pem: Option<String>,
+    /// PEM-encoded private key content (must be provided together with ssl_cert_pem)
+    pub ssl_key_pem: Option<String>,
+    /// Set to true to remove the custom certificate and revert to self-signed
+    pub clear_custom_cert: Option<bool>,
 }
 
 impl WebConfigUpdate {
@@ -883,6 +956,22 @@ impl WebConfigUpdate {
                 return Err(AppError::BadRequest("Invalid bind address".into()));
             }
         }
+        // Cert and key must be provided together (cryptographic validity is checked in the
+        // handler via `RustlsConfig::from_pem`, same stack as the running HTTPS server).
+        match (&self.ssl_cert_pem, &self.ssl_key_pem) {
+            (Some(_cert), Some(_key)) => {}
+            (Some(_), None) => {
+                return Err(AppError::BadRequest(
+                    "ssl_key_pem is required when ssl_cert_pem is provided".into(),
+                ));
+            }
+            (None, Some(_)) => {
+                return Err(AppError::BadRequest(
+                    "ssl_cert_pem is required when ssl_key_pem is provided".into(),
+                ));
+            }
+            (None, None) => {}
+        }
         Ok(())
     }
 
@@ -907,6 +996,8 @@ impl WebConfigUpdate {
         if let Some(enabled) = self.https_enabled {
             config.https_enabled = enabled;
         }
+        // ssl_cert_pem, ssl_key_pem, clear_custom_cert are handled at the handler level
+        // (they require async file I/O before updating config paths)
     }
 }
 
@@ -987,5 +1078,31 @@ mod tests {
         };
 
         assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn rustdesk_relay_key_accepts_hbbs_style_base64_32_bytes() {
+        let update = RustDeskConfigUpdate {
+            enabled: None,
+            rendezvous_server: None,
+            relay_server: None,
+            relay_key: Some("pLU0pEj2IZnNVKzrIO1pIdwGA3dOVJJLkFIYGOCGH1E=".to_string()),
+            device_password: None,
+        };
+        assert!(update.validate().is_ok());
+    }
+
+    #[test]
+    fn rustdesk_relay_key_rejects_non_32_byte_payload() {
+        // Standard Base64 for 16 zero bytes (not 32).
+        let not_32 = "AAAAAAAAAAAAAAAAAAAAAA==".to_string();
+        let update = RustDeskConfigUpdate {
+            enabled: None,
+            rendezvous_server: None,
+            relay_server: None,
+            relay_key: Some(not_32),
+            device_password: None,
+        };
+        assert!(update.validate().is_err());
     }
 }

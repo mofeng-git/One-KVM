@@ -134,21 +134,30 @@ const statusBadgeText = computed(() => {
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
           'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          compact ? 'px-2 py-1 text-xs min-w-[80px]' : 'px-3 py-1.5 text-sm min-w-[100px]',
+          compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
           'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
           'border-slate-200 dark:border-slate-700',
           status === 'error' && 'border-red-300 dark:border-red-800'
         )"
       >
-        <!-- Top: Title -->
-        <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
-        <!-- Bottom: Status dot + Quick info -->
-        <div class="flex items-center gap-1.5">
-          <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
-          <span class="text-[11px] text-muted-foreground leading-tight truncate">
-            {{ quickInfo || subtitle || statusText }}
-          </span>
-        </div>
+        <template v-if="compact">
+          <!-- Compact: single row with dot + abbreviated title -->
+          <div class="flex items-center gap-1">
+            <span :class="cn('h-1.5 w-1.5 rounded-full shrink-0', statusColor)" />
+            <span class="text-[10px] text-muted-foreground leading-tight truncate">{{ title }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <!-- Top: Title -->
+          <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
+          <!-- Bottom: Status dot + Quick info -->
+          <div class="flex items-center gap-1.5">
+            <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
+            <span class="text-[11px] text-muted-foreground leading-tight truncate">
+              {{ quickInfo || subtitle || statusText }}
+            </span>
+          </div>
+        </template>
       </button>
     </HoverCardTrigger>
 
@@ -188,17 +197,6 @@ const statusBadgeText = computed(() => {
           </div>
         </div>
 
-        <!-- Error Message -->
-        <div
-          v-if="status === 'error' && errorMessage"
-          class="p-2 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-        >
-          <p class="text-xs text-red-600 dark:text-red-400">
-            <AlertCircle class="h-3.5 w-3.5 inline mr-1" />
-            {{ errorMessage }}
-          </p>
-        </div>
-
         <!-- Details -->
         <div v-if="details && details.length > 0" class="space-y-2">
           <Separator />
@@ -206,12 +204,12 @@ const statusBadgeText = computed(() => {
             <div
               v-for="(detail, index) in details"
               :key="index"
-              class="flex items-center justify-between text-xs"
+              class="flex items-start justify-between gap-3 text-xs"
             >
-              <span class="text-muted-foreground">{{ detail.label }}</span>
+              <span class="text-muted-foreground shrink-0">{{ detail.label }}</span>
               <span
                 :class="cn(
-                  'font-medium',
+                  'font-medium text-right break-words min-w-0',
                   detail.status === 'ok' ? 'text-green-600 dark:text-green-400' :
                   detail.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
                   detail.status === 'error' ? 'text-red-600 dark:text-red-400' :
@@ -235,25 +233,34 @@ const statusBadgeText = computed(() => {
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
           'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          compact ? 'px-2 py-1 text-xs min-w-[80px]' : 'px-3 py-1.5 text-sm min-w-[100px]',
+          compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
           'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
           'border-slate-200 dark:border-slate-700',
           status === 'error' && 'border-red-300 dark:border-red-800'
         )"
       >
-        <!-- Top: Title -->
-        <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
-        <!-- Bottom: Status dot + Quick info -->
-        <div class="flex items-center gap-1.5">
-          <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
-          <span class="text-[11px] text-muted-foreground leading-tight truncate">
-            {{ quickInfo || subtitle || statusText }}
-          </span>
-        </div>
+        <template v-if="compact">
+          <!-- Compact: single row with dot + abbreviated title -->
+          <div class="flex items-center gap-1">
+            <span :class="cn('h-1.5 w-1.5 rounded-full shrink-0', statusColor)" />
+            <span class="text-[10px] text-muted-foreground leading-tight truncate">{{ title }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <!-- Top: Title -->
+          <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
+          <!-- Bottom: Status dot + Quick info -->
+          <div class="flex items-center gap-1.5">
+            <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
+            <span class="text-[11px] text-muted-foreground leading-tight truncate">
+              {{ quickInfo || subtitle || statusText }}
+            </span>
+          </div>
+        </template>
       </button>
     </PopoverTrigger>
 
-    <PopoverContent class="w-80" :align="hoverAlign">
+    <PopoverContent class="w-[min(320px,90vw)]" :align="hoverAlign">
       <div class="space-y-3">
         <!-- Header -->
         <div class="flex items-center gap-3">
@@ -289,17 +296,6 @@ const statusBadgeText = computed(() => {
           </div>
         </div>
 
-        <!-- Error Message -->
-        <div
-          v-if="status === 'error' && errorMessage"
-          class="p-2 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-        >
-          <p class="text-xs text-red-600 dark:text-red-400">
-            <AlertCircle class="h-3.5 w-3.5 inline mr-1" />
-            {{ errorMessage }}
-          </p>
-        </div>
-
         <!-- Details -->
         <div v-if="details && details.length > 0" class="space-y-2">
           <Separator />
@@ -307,12 +303,12 @@ const statusBadgeText = computed(() => {
             <div
               v-for="(detail, index) in details"
               :key="index"
-              class="flex items-center justify-between text-xs"
+              class="flex items-start justify-between gap-3 text-xs"
             >
-              <span class="text-muted-foreground">{{ detail.label }}</span>
+              <span class="text-muted-foreground shrink-0">{{ detail.label }}</span>
               <span
                 :class="cn(
-                  'font-medium',
+                  'font-medium text-right break-words min-w-0',
                   detail.status === 'ok' ? 'text-green-600 dark:text-green-400' :
                   detail.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
                   detail.status === 'error' ? 'text-red-600 dark:text-red-400' :

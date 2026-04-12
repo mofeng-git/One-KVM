@@ -30,6 +30,8 @@ import type {
   GostcConfigUpdate,
   EasytierConfig,
   EasytierConfigUpdate,
+  WebConfigResponse,
+  WebConfigUpdate,
 } from '@/types/generated'
 
 import { request } from './request'
@@ -384,36 +386,24 @@ export const rtspConfigApi = {
 }
 
 // ===== Web 服务器配置 API =====
+// `/config/web` 使用 `WebConfigResponse` / `WebConfigUpdate`（由 typeshare 自 Rust 生成）。
 
-/** Web 服务器配置 */
-export interface WebConfig {
-  http_port: number
-  https_port: number
-  bind_addresses: string[]
-  bind_address: string
-  https_enabled: boolean
-}
+/** REST `/config/web` 响应（`WebConfigResponse` 别名，兼容旧命名） */
+export type WebConfig = WebConfigResponse
 
-/** Web 服务器配置更新 */
-export interface WebConfigUpdate {
-  http_port?: number
-  https_port?: number
-  bind_addresses?: string[]
-  bind_address?: string
-  https_enabled?: boolean
-}
+export type { WebConfigUpdate }
 
 export const webConfigApi = {
   /**
    * 获取 Web 服务器配置
    */
-  get: () => request<WebConfig>('/config/web'),
+  get: () => request<WebConfigResponse>('/config/web'),
 
   /**
-   * 更新 Web 服务器配置
+   * 更新 Web 服务器配置（含可选的证书上传）
    */
   update: (config: WebConfigUpdate) =>
-    request<WebConfig>('/config/web', {
+    request<WebConfigResponse>('/config/web', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),

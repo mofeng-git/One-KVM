@@ -50,6 +50,8 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -84,6 +86,7 @@ import {
   Copy,
   ScreenShare,
   Radio,
+  Globe,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -100,7 +103,7 @@ const saved = ref(false)
 const SETTINGS_SECTION_IDS = new Set([
   'appearance',
   'account',
-  'access',
+  'network',
   'video',
   'hid',
   'msd',
@@ -120,7 +123,7 @@ const navGroups = computed(() => [
     items: [
       { id: 'appearance', label: t('settings.appearance'), icon: Sun },
       { id: 'account', label: t('settings.account'), icon: User },
-      { id: 'access', label: t('settings.access'), icon: Lock },
+      { id: 'network', label: t('settings.network'), icon: Globe },
     ]
   },
   {
@@ -156,7 +159,9 @@ function selectSection(id: string) {
 }
 
 function normalizeSettingsSection(value: unknown): string | null {
-  return typeof value === 'string' && SETTINGS_SECTION_IDS.has(value) ? value : null
+  if (typeof value !== 'string') return null
+  if (value === 'access-control') return 'account'
+  return SETTINGS_SECTION_IDS.has(value) ? value : null
 }
 
 // Theme
@@ -205,7 +210,7 @@ const showTerminalDialog = ref(false)
 // Extension config (local edit state)
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
-  gostc: { enabled: false, addr: 'gostc.mofeng.run', key: '', tls: true },
+  gostc: { enabled: false, addr: '', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
 })
 
@@ -258,10 +263,22 @@ const webServerConfig = ref<WebConfig>({
   bind_address: '0.0.0.0',
   bind_addresses: ['0.0.0.0'],
   https_enabled: false,
+  has_custom_cert: false,
 })
 const webServerLoading = ref(false)
+// SSL certificate state
+const sslCertPem = ref('')
+const sslKeyPem = ref('')
+const certSaving = ref(false)
+const certClearing = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
+// Auto-restart flow (no dialog needed for web-config saves)
+const autoRestarting = ref(false)
+const autoRestartFailed = ref(false)
+// For HTTPS targets: can't poll (self-signed cert), show manual link instead
+const autoRestartManualUrl = ref<string | null>(null)
+const autoRestartCountdown = ref(0)
 const updateChannel = ref<UpdateChannel>('stable')
 const updateOverview = ref<UpdateOverviewResponse | null>(null)
 const updateStatus = ref<UpdateStatusResponse | null>(null)
@@ -297,6 +314,18 @@ const effectiveBindAddresses = computed(() => {
     return bindLocalIpv6.value ? ['127.0.0.1', '::1'] : ['127.0.0.1']
   }
   return normalizeBindAddresses(bindAddressList.value)
+})
+
+/** 预览当前配置生效后的访问 URL（取第一个非通配地址显示） */
+const previewAccessUrl = computed(() => {
+  const https = webServerConfig.value.https_enabled
+  const port = https ? webServerConfig.value.https_port : webServerConfig.value.http_port
+  const scheme = https ? 'https' : 'http'
+  // 对通配地址，用当前浏览器 hostname 替代
+  const addrs = effectiveBindAddresses.value
+  const firstAddr = addrs.find(a => a !== '0.0.0.0' && a !== '::') ?? window.location.hostname
+  const host = firstAddr.includes(':') ? `[${firstAddr}]` : firstAddr
+  return `${scheme}://${host}:${port}`
 })
 
 // Config
@@ -1435,6 +1464,12 @@ function normalizeRustdeskServer(value: string, defaultPort: number): string | u
   return `${trimmed}:${defaultPort}`
 }
 
+/** Strip line breaks from pasted keys; empty means “do not change” on PATCH. */
+function normalizeRustdeskRelayKey(value: string): string | undefined {
+  const cleaned = value.replace(/\r?\n/g, '').trim()
+  return cleaned || undefined
+}
+
 function normalizeRtspPath(path: string): string {
   return path.trim().replace(/^\/+|\/+$/g, '') || 'live'
 }
@@ -1496,16 +1531,15 @@ async function saveWebServerConfig() {
   if (bindAddressError.value) return
   webServerLoading.value = true
   try {
-    const update = {
+    const updated = await configStore.updateWeb({
       http_port: webServerConfig.value.http_port,
       https_port: webServerConfig.value.https_port,
       https_enabled: webServerConfig.value.https_enabled,
       bind_addresses: effectiveBindAddresses.value,
-    }
-    const updated = await configStore.updateWeb(update)
+    })
     webServerConfig.value = updated
     applyBindStateFromConfig(updated)
-    showRestartDialog.value = true
+    await triggerAutoRestart()
   } catch (e) {
     console.error('Failed to save web server config:', e)
   } finally {
@@ -1513,23 +1547,123 @@ async function saveWebServerConfig() {
   }
 }
 
+async function saveCertificate() {
+  if (!sslCertPem.value.trim() || !sslKeyPem.value.trim()) return
+  certSaving.value = true
+  try {
+    const updated = await configStore.updateWeb({
+      ssl_cert_pem: sslCertPem.value,
+      ssl_key_pem: sslKeyPem.value,
+    })
+    webServerConfig.value = updated
+    sslCertPem.value = ''
+    sslKeyPem.value = ''
+    await triggerAutoRestart()
+  } catch (e) {
+    console.error('Failed to save certificate:', e)
+  } finally {
+    certSaving.value = false
+  }
+}
+
+async function clearCertificate() {
+  certClearing.value = true
+  try {
+    const updated = await configStore.updateWeb({ clear_custom_cert: true })
+    webServerConfig.value = updated
+    await triggerAutoRestart()
+  } catch (e) {
+    console.error('Failed to clear certificate:', e)
+  } finally {
+    certClearing.value = false
+  }
+}
+
+/** 手动点重启按钮（仅用于弹窗场景，保留兼容） */
 async function restartServer() {
   restarting.value = true
   try {
     await systemApi.restart()
-    // Wait for server to restart, then reload page
     setTimeout(() => {
       const protocol = webServerConfig.value.https_enabled ? 'https' : 'http'
       const port = webServerConfig.value.https_enabled
         ? webServerConfig.value.https_port
         : webServerConfig.value.http_port
       const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
-      const newUrl = `${protocol}://${host}:${port}`
-      window.location.href = newUrl
+      window.location.href = `${protocol}://${host}:${port}`
     }, 3000)
   } catch (e) {
     console.error('Failed to restart server:', e)
     restarting.value = false
+  }
+}
+
+/** 轮询目标地址 /api/health，最多等待 maxMs 毫秒 */
+async function pollUntilReady(targetOrigin: string, maxMs = 30000): Promise<boolean> {
+  const deadline = Date.now() + maxMs
+  const healthUrl = targetOrigin.replace(/\/$/, '') + '/api/health'
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 800))
+    try {
+      const ctrl = new AbortController()
+      const tid = setTimeout(() => ctrl.abort(), 1500)
+      const res = await fetch(healthUrl, { signal: ctrl.signal })
+      clearTimeout(tid)
+      if (res.ok) return true
+    } catch {
+      // server still restarting — keep polling
+    }
+  }
+  return false
+}
+
+/**
+ * 保存网络配置后自动重启并跳转。
+ *
+ * - HTTP 目标：轮询 /api/health，服务恢复后自动跳转。
+ * - HTTPS 目标：自签名证书导致 fetch 被浏览器拦截（ERR_CERT_AUTHORITY_INVALID），
+ *   无法自动轮询。改为倒计时结束后展示跳转链接，由用户点击并在浏览器中手动接受证书。
+ */
+async function triggerAutoRestart() {
+  const https = webServerConfig.value.https_enabled
+  const port = https ? webServerConfig.value.https_port : webServerConfig.value.http_port
+  const protocol = https ? 'https' : 'http'
+  const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
+  const targetOrigin = `${protocol}://${host}:${port}`
+
+  autoRestarting.value = true
+  autoRestartFailed.value = false
+  autoRestartManualUrl.value = null
+
+  try {
+    await systemApi.restart()
+
+    if (https) {
+      // HTTPS：浏览器拒绝自签名证书，无法轮询。
+      // 等待固定时间后展示手动跳转链接。
+      const WAIT_SEC = 6
+      autoRestartCountdown.value = WAIT_SEC
+      for (let i = WAIT_SEC - 1; i >= 0; i--) {
+        await new Promise(r => setTimeout(r, 1000))
+        autoRestartCountdown.value = i
+      }
+      autoRestartManualUrl.value = targetOrigin
+      autoRestarting.value = false
+    } else {
+      // HTTP：可以安全轮询，服务恢复后自动跳转。
+      await new Promise(r => setTimeout(r, 1200))
+      const ready = await pollUntilReady(targetOrigin)
+      if (ready) {
+        window.location.href = targetOrigin
+      } else {
+        autoRestartFailed.value = true
+        autoRestarting.value = false
+      }
+    }
+  } catch (e) {
+    console.error('Auto restart failed:', e)
+    autoRestartFailed.value = true
+    autoRestarting.value = false
   }
 }
 
@@ -1642,7 +1776,7 @@ async function saveRustdeskConfig() {
       enabled: rustdeskLocalConfig.value.enabled,
       rendezvous_server: rendezvousServer,
       relay_server: relayServer,
-      relay_key: rustdeskLocalConfig.value.relay_key || undefined,
+      relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
     })
     await loadRustdeskConfig()
     // Clear relay_key input after save (it's a password field)
@@ -1919,16 +2053,16 @@ watch(() => route.query.tab, (tab) => {
   <AppLayout>
     <div class="flex h-full overflow-hidden">
       <!-- Mobile Header -->
-      <div class="lg:hidden fixed top-16 left-0 right-0 z-20 flex items-center px-4 py-3 border-b bg-background">
+      <div class="lg:hidden fixed top-11 sm:top-14 left-0 right-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background">
         <Sheet v-model:open="mobileMenuOpen">
           <SheetTrigger as-child>
-            <Button variant="ghost" size="icon" class="mr-2 h-9 w-9">
+            <Button variant="ghost" size="icon" class="mr-1.5 sm:mr-2 h-8 w-8 sm:h-9 sm:w-9">
               <Menu class="h-4 w-4" />
               <span class="sr-only">{{ t('common.menu') }}</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" class="w-72 p-0">
-            <div class="p-6">
+            <div class="p-4 sm:p-6">
               <h2 class="text-lg font-semibold mb-4">{{ t('settings.title') }}</h2>
               <nav class="space-y-6">
                 <div v-for="group in navGroups" :key="group.title" class="space-y-1">
@@ -1954,7 +2088,7 @@ watch(() => route.query.tab, (tab) => {
             </div>
           </SheetContent>
         </Sheet>
-        <h1 class="text-lg font-semibold">{{ t('settings.title') }}</h1>
+        <h1 class="text-base sm:text-lg font-semibold">{{ t('settings.title') }}</h1>
       </div>
 
       <!-- Desktop Sidebar -->
@@ -1987,7 +2121,7 @@ watch(() => route.query.tab, (tab) => {
 
       <!-- Main Content -->
       <main class="flex-1 overflow-y-auto">
-        <div class="max-w-2xl mx-auto p-6 lg:p-8 pt-20 lg:pt-8 space-y-6">
+        <div class="max-w-2xl mx-auto p-3 sm:p-6 lg:p-8 pt-16 sm:pt-20 lg:pt-8 space-y-4 sm:space-y-6">
 
           <!-- Appearance Section -->
           <div v-show="activeSection === 'appearance'" class="space-y-6">
@@ -1997,15 +2131,15 @@ watch(() => route.query.tab, (tab) => {
                 <CardDescription>{{ t('settings.themeDesc') }}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                   <Button :variant="theme === 'light' ? 'default' : 'outline'" size="sm" @click="setTheme('light')">
-                    <Sun class="h-4 w-4 mr-2" />{{ t('settings.lightMode') }}
+                    <Sun class="h-4 w-4 mr-1.5" />{{ t('settings.lightMode') }}
                   </Button>
                   <Button :variant="theme === 'dark' ? 'default' : 'outline'" size="sm" @click="setTheme('dark')">
-                    <Moon class="h-4 w-4 mr-2" />{{ t('settings.darkMode') }}
+                    <Moon class="h-4 w-4 mr-1.5" />{{ t('settings.darkMode') }}
                   </Button>
                   <Button :variant="theme === 'system' ? 'default' : 'outline'" size="sm" @click="setTheme('system')">
-                    <Monitor class="h-4 w-4 mr-2" />{{ t('settings.systemMode') }}
+                    <Monitor class="h-4 w-4 mr-1.5" />{{ t('settings.systemMode') }}
                   </Button>
                 </div>
               </CardContent>
@@ -2073,6 +2207,31 @@ watch(() => route.query.tab, (tab) => {
                 <p v-else-if="passwordSaved" class="text-xs text-emerald-600">{{ t('common.success') }}</p>
                 <div class="flex justify-end">
                   <Button @click="changePassword" :disabled="passwordSaving">
+                    <Save class="h-4 w-4 mr-2" />
+                    {{ t('common.save') }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.authSettings') }}</CardTitle>
+                <CardDescription>{{ t('settings.authSettingsDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.allowMultipleSessions') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.allowMultipleSessionsDesc') }}</p>
+                  </div>
+                  <Switch
+                    v-model="authConfig.single_user_allow_multiple_sessions"
+                    :disabled="authConfigLoading"
+                  />
+                </div>
+                <div class="flex justify-end pt-2">
+                  <Button @click="saveAuthConfig" :disabled="authConfigLoading">
                     <Save class="h-4 w-4 mr-2" />
                     {{ t('common.save') }}
                   </Button>
@@ -2585,14 +2744,70 @@ watch(() => route.query.tab, (tab) => {
             </Card>
           </div>
 
-          <!-- Access Section -->
-          <div v-show="activeSection === 'access'" class="space-y-6">
+          <!-- Network Section -->
+          <div v-show="activeSection === 'network'" class="space-y-6">
+
+            <!-- Auto-restart: restarting progress -->
+            <div
+              v-if="autoRestarting"
+              class="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-sm"
+            >
+              <RefreshCw class="h-4 w-4 animate-spin text-primary shrink-0" />
+              <div class="flex-1 min-w-0">
+                <p class="font-medium">{{ t('settings.autoRestarting') }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ webServerConfig.https_enabled
+                    ? t('settings.autoRestartingHttpsDesc', { sec: autoRestartCountdown })
+                    : t('settings.autoRestartingDesc') }}
+                </p>
+              </div>
+              <span v-if="webServerConfig.https_enabled && autoRestartCountdown > 0"
+                class="tabular-nums text-lg font-bold text-primary shrink-0">
+                {{ autoRestartCountdown }}
+              </span>
+            </div>
+
+            <!-- Auto-restart: HTTPS manual redirect (cert must be accepted by user) -->
+            <div
+              v-if="autoRestartManualUrl"
+              class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-4 space-y-3"
+            >
+              <div class="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                <Lock class="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p class="font-medium">{{ t('settings.httpsManualRedirectTitle') }}</p>
+                  <p class="text-xs mt-0.5 opacity-80">{{ t('settings.httpsManualRedirectDesc') }}</p>
+                </div>
+              </div>
+              <a
+                :href="autoRestartManualUrl"
+                class="flex items-center justify-center gap-2 w-full rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 transition-colors"
+              >
+                <ExternalLink class="h-4 w-4" />
+                {{ autoRestartManualUrl }}
+              </a>
+            </div>
+
+            <!-- Auto-restart: failure / timeout -->
+            <div
+              v-if="autoRestartFailed"
+              class="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+            >
+              <p class="text-destructive">{{ t('settings.autoRestartFailed') }}</p>
+              <Button variant="outline" size="sm" @click="triggerAutoRestart">
+                <RefreshCw class="h-3 w-3 mr-1" />
+                {{ t('common.retry') }}
+              </Button>
+            </div>
+
+            <!-- Port Configuration Card -->
             <Card>
               <CardHeader>
-                <CardTitle>{{ t('settings.webServer') }}</CardTitle>
-                <CardDescription>{{ t('settings.webServerDesc') }}</CardDescription>
+                <CardTitle>{{ t('settings.portConfig') }}</CardTitle>
+                <CardDescription>{{ t('settings.portConfigDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
+                <!-- HTTPS toggle -->
                 <div class="flex items-center justify-between">
                   <div class="space-y-0.5">
                     <Label>{{ t('settings.httpsEnabled') }}</Label>
@@ -2603,91 +2818,212 @@ watch(() => route.query.tab, (tab) => {
 
                 <Separator />
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="space-y-2">
-                    <Label>{{ t('settings.httpPort') }}</Label>
-                    <Input v-model.number="webServerConfig.http_port" type="number" min="1" max="65535" />
+                <!-- Single active-port input, label follows the HTTPS toggle -->
+                <div class="flex items-end gap-3">
+                  <div class="space-y-2 flex-1 max-w-[180px]">
+                    <Label>
+                      {{ webServerConfig.https_enabled ? t('settings.httpsPort') : t('settings.httpPort') }}
+                    </Label>
+                    <Input
+                      v-if="webServerConfig.https_enabled"
+                      v-model.number="webServerConfig.https_port"
+                      type="number" min="1" max="65535"
+                    />
+                    <Input
+                      v-else
+                      v-model.number="webServerConfig.http_port"
+                      type="number" min="1" max="65535"
+                    />
                   </div>
-                  <div class="space-y-2">
-                    <Label>{{ t('settings.httpsPort') }}</Label>
-                    <Input v-model.number="webServerConfig.https_port" type="number" min="1" max="65535" />
+                  <!-- Inactive-port reference (read-only hint) -->
+                  <div class="space-y-2 flex-1 max-w-[180px]">
+                    <Label class="text-muted-foreground text-xs">
+                      {{ webServerConfig.https_enabled ? t('settings.httpPortReserved') : t('settings.httpsPortReserved') }}
+                    </Label>
+                    <Input
+                      v-if="webServerConfig.https_enabled"
+                      v-model.number="webServerConfig.http_port"
+                      type="number" min="1" max="65535"
+                      class="opacity-50"
+                    />
+                    <Input
+                      v-else
+                      v-model.number="webServerConfig.https_port"
+                      type="number" min="1" max="65535"
+                      class="opacity-50"
+                    />
                   </div>
                 </div>
 
-                <div class="space-y-2">
-                  <Label>{{ t('settings.bindMode') }}</Label>
-                  <select v-model="bindMode" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="all">{{ t('settings.bindModeAll') }}</option>
-                    <option value="loopback">{{ t('settings.bindModeLocal') }}</option>
-                    <option value="custom">{{ t('settings.bindModeCustom') }}</option>
-                  </select>
-                  <p class="text-sm text-muted-foreground">{{ t('settings.bindModeDesc') }}</p>
+                <!-- Preview URL -->
+                <div class="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+                  <span class="text-muted-foreground shrink-0">{{ t('settings.previewUrl') }}:</span>
+                  <span class="font-mono text-xs break-all">{{ previewAccessUrl }}</span>
                 </div>
 
-                <div v-if="bindMode === 'all'" class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.bindIpv6') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.bindAllDesc') }}</p>
-                  </div>
-                  <Switch v-model="bindAllIpv6" />
-                </div>
-
-                <div v-if="bindMode === 'loopback'" class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.bindIpv6') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.bindLocalDesc') }}</p>
-                  </div>
-                  <Switch v-model="bindLocalIpv6" />
-                </div>
-
-                <div v-if="bindMode === 'custom'" class="space-y-2">
-                  <Label>{{ t('settings.bindAddressList') }}</Label>
-                  <div class="space-y-2">
-                    <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
-                      <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
-                      <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeBindAddress(i)">
-                        <Trash2 class="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <Button variant="outline" size="sm" @click="addBindAddress">
-                      <Plus class="h-4 w-4 mr-1" />
-                      {{ t('settings.addBindAddress') }}
-                    </Button>
-                  </div>
-                  <p class="text-xs text-muted-foreground">{{ t('settings.bindAddressListDesc') }}</p>
-                  <p v-if="bindAddressError" class="text-xs text-destructive">{{ bindAddressError }}</p>
-                </div>
-
-                <div class="flex justify-end pt-4">
-                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ t('common.save') }}
+                <!-- Save row -->
+                <div class="flex items-center justify-between pt-2">
+                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
+                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || autoRestarting">
+                    <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                    <Save v-else class="h-4 w-4 mr-2" />
+                    {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
                   </Button>
                 </div>
               </CardContent>
             </Card>
+
+            <!-- Listen Address Card -->
             <Card>
               <CardHeader>
-                <CardTitle>{{ t('settings.authSettings') }}</CardTitle>
-                <CardDescription>{{ t('settings.authSettingsDesc') }}</CardDescription>
+                <CardTitle>{{ t('settings.listenAddress') }}</CardTitle>
+                <CardDescription>{{ t('settings.listenAddressDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.allowMultipleSessions') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.allowMultipleSessionsDesc') }}</p>
+                <RadioGroup v-model="bindMode" class="space-y-3">
+                  <!-- All addresses -->
+                  <div class="space-y-2">
+                    <div class="flex items-start gap-3">
+                      <RadioGroupItem value="all" id="bind-all" class="mt-0.5" />
+                      <div class="flex-1">
+                        <Label for="bind-all" class="cursor-pointer">{{ t('settings.bindModeAll') }}</Label>
+                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeAllDesc') }}</p>
+                      </div>
+                    </div>
+                    <div v-if="bindMode === 'all'" class="ml-7 flex items-center justify-between rounded-md border border-dashed px-3 py-2">
+                      <Label class="text-sm font-normal">{{ t('settings.bindIpv6') }}</Label>
+                      <Switch v-model="bindAllIpv6" />
+                    </div>
                   </div>
-                  <Switch
-                    v-model="authConfig.single_user_allow_multiple_sessions"
-                    :disabled="authConfigLoading"
+
+                  <Separator />
+
+                  <!-- Loopback only -->
+                  <div class="space-y-2">
+                    <div class="flex items-start gap-3">
+                      <RadioGroupItem value="loopback" id="bind-loopback" class="mt-0.5" />
+                      <div class="flex-1">
+                        <Label for="bind-loopback" class="cursor-pointer">{{ t('settings.bindModeLocal') }}</Label>
+                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeLocalDesc') }}</p>
+                      </div>
+                    </div>
+                    <div v-if="bindMode === 'loopback'" class="ml-7 flex items-center justify-between rounded-md border border-dashed px-3 py-2">
+                      <Label class="text-sm font-normal">{{ t('settings.bindIpv6') }}</Label>
+                      <Switch v-model="bindLocalIpv6" />
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <!-- Custom addresses -->
+                  <div class="space-y-2">
+                    <div class="flex items-start gap-3">
+                      <RadioGroupItem value="custom" id="bind-custom" class="mt-0.5" />
+                      <div class="flex-1">
+                        <Label for="bind-custom" class="cursor-pointer">{{ t('settings.bindModeCustom') }}</Label>
+                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeCustomDesc') }}</p>
+                      </div>
+                    </div>
+                    <div v-if="bindMode === 'custom'" class="ml-7 space-y-2">
+                      <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
+                        <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
+                        <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeBindAddress(i)">
+                          <Trash2 class="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Button variant="outline" size="sm" @click="addBindAddress">
+                        <Plus class="h-4 w-4 mr-1" />
+                        {{ t('settings.addBindAddress') }}
+                      </Button>
+                      <p v-if="bindAddressError" class="text-xs text-destructive">{{ bindAddressError }}</p>
+                    </div>
+                  </div>
+                </RadioGroup>
+
+                <!-- Effective addresses preview -->
+                <div v-if="effectiveBindAddresses.length > 0" class="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+                  <span class="text-muted-foreground shrink-0">{{ t('settings.effectiveAddresses') }}:</span>
+                  <span class="font-mono text-xs break-all">{{ effectiveBindAddresses.join(', ') }}</span>
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
+                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError || autoRestarting">
+                    <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                    <Save v-else class="h-4 w-4 mr-2" />
+                    {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <!-- SSL Certificate Card -->
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-3">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.sslCertificate') }}</CardTitle>
+                  <CardDescription>{{ t('settings.sslCertificateDesc') }}</CardDescription>
+                </div>
+                <Badge :variant="webServerConfig.has_custom_cert ? 'default' : 'secondary'" class="mt-1 shrink-0">
+                  {{ webServerConfig.has_custom_cert ? t('settings.sslCertCustom') : t('settings.sslCertSelfSigned') }}
+                </Badge>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <!-- Active custom cert notice -->
+                <div
+                  v-if="webServerConfig.has_custom_cert"
+                  class="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3 py-2"
+                >
+                  <div class="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+                    <Check class="h-4 w-4 shrink-0" />
+                    {{ t('settings.sslCertActive') }}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive hover:text-destructive h-7 text-xs"
+                    :disabled="certClearing || autoRestarting"
+                    @click="clearCertificate"
+                  >
+                    <RefreshCw v-if="certClearing || autoRestarting" class="h-3 w-3 mr-1 animate-spin" />
+                    <Trash2 v-else class="h-3 w-3 mr-1" />
+                    {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertClear') }}
+                  </Button>
+                </div>
+
+                <!-- Certificate textarea -->
+                <div class="space-y-2">
+                  <Label>{{ t('settings.sslCertPem') }}</Label>
+                  <Textarea
+                    v-model="sslCertPem"
+                    :placeholder="t('settings.sslCertPemPlaceholder')"
+                    class="font-mono text-xs min-h-[110px] resize-y"
+                    spellcheck="false"
+                    autocomplete="off"
                   />
                 </div>
-                <Separator />
-                <p class="text-xs text-muted-foreground">{{ t('settings.singleUserSessionNote') }}</p>
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveAuthConfig" :disabled="authConfigLoading">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ t('common.save') }}
+
+                <!-- Key textarea -->
+                <div class="space-y-2">
+                  <Label>{{ t('settings.sslKeyPem') }}</Label>
+                  <Textarea
+                    v-model="sslKeyPem"
+                    :placeholder="t('settings.sslKeyPemPlaceholder')"
+                    class="font-mono text-xs min-h-[110px] resize-y"
+                    spellcheck="false"
+                    autocomplete="off"
+                  />
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
+                  <Button
+                    :disabled="certSaving || autoRestarting || !sslCertPem.trim() || !sslKeyPem.trim()"
+                    @click="saveCertificate"
+                  >
+                    <RefreshCw v-if="certSaving || autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                    <Save v-else class="h-4 w-4 mr-2" />
+                    {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
                   </Button>
                 </div>
               </CardContent>
@@ -3089,7 +3425,7 @@ watch(() => route.query.tab, (tab) => {
                         v-if="!isExtRunning(extensions?.gostc?.status)"
                         size="sm"
                         @click="startExtension('gostc')"
-                        :disabled="extensionsLoading || !extConfig.gostc.key"
+                        :disabled="extensionsLoading || !extConfig.gostc.key || !extConfig.gostc.addr?.trim()"
                       >
                         <Play class="h-4 w-4 mr-1" />
                         {{ t('extensions.start') }}
@@ -3115,7 +3451,7 @@ watch(() => route.query.tab, (tab) => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
-                      <Input v-model="extConfig.gostc.addr" class="sm:col-span-3" placeholder="gostc.mofeng.run" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                      <Input v-model="extConfig.gostc.addr" class="sm:col-span-3" :placeholder="t('extensions.gostc.addrPlaceholder')" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
@@ -3461,7 +3797,11 @@ watch(() => route.query.tab, (tab) => {
                     <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.relay_key"
-                        type="password"
+                        type="text"
+                        maxlength="44"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="font-mono"
                         :placeholder="rustdeskStatus?.config?.has_relay_key ? t('extensions.rustdesk.relayKeySet') : t('extensions.rustdesk.relayKeyPlaceholder')"
                       />
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayKeyHint') }}</p>
@@ -3636,12 +3976,12 @@ watch(() => route.query.tab, (tab) => {
               </CardHeader>
               <CardContent>
                 <div class="space-y-3">
-                  <div class="flex justify-between items-center py-2 border-b">
-                    <span class="text-sm text-muted-foreground">{{ t('settings.hostname') }}</span>
-                    <span class="text-sm font-medium">{{ systemStore.deviceInfo.hostname }}</span>
+                  <div class="flex justify-between items-center py-2 border-b gap-2">
+                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.hostname') }}</span>
+                    <span class="text-sm font-medium truncate">{{ systemStore.deviceInfo.hostname }}</span>
                   </div>
-                  <div class="flex justify-between items-center py-2 border-b">
-                    <span class="text-sm text-muted-foreground">{{ t('settings.cpuModel') }}</span>
+                  <div class="flex justify-between items-center py-2 border-b gap-2">
+                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.cpuModel') }}</span>
                     <span class="text-sm font-medium truncate max-w-[60%] text-right">{{ systemStore.deviceInfo.cpu_model }}</span>
                   </div>
                   <div class="flex justify-between items-center py-2 border-b">
@@ -3668,20 +4008,18 @@ watch(() => route.query.tab, (tab) => {
               </CardContent>
             </Card>
 
-            <p class="text-xs text-muted-foreground text-center">{{ t('settings.builtWith') }}</p>
+            <p class="text-xs text-muted-foreground text-center">@2025-2026 SilentWind</p>
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-4 pb-2 bg-background border-t -mx-6 px-6 lg:-mx-8 lg:px-8">
-            <div class="flex justify-end">
-              <div class="flex items-center gap-3">
-                <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400">
-                  {{ t('settings.otgFunctionMinWarning') }}
-                </p>
-                <Button :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
+          <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-2 bg-background border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <div class="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+              <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400 flex-1 min-w-0">
+                {{ t('settings.otgFunctionMinWarning') }}
+              </p>
+              <Button class="shrink-0" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
                 <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
-                </Button>
-              </div>
+              </Button>
             </div>
           </div>
 
@@ -3691,17 +4029,17 @@ watch(() => route.query.tab, (tab) => {
 
     <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="w-[95vw] max-w-5xl h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
-        <DialogHeader class="px-4 py-3 border-b shrink-0">
+      <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
+        <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
-              <Terminal class="h-5 w-5" />
-              {{ t('extensions.ttyd.title') }}
+              <Terminal class="h-4 w-4 sm:h-5 sm:w-5" />
+              <span class="text-sm sm:text-base">{{ t('extensions.ttyd.title') }}</span>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              class="h-8 w-8 mr-8"
+              class="h-7 w-7 sm:h-8 sm:w-8 mr-6 sm:mr-8"
               @click="openTerminalInNewTab"
               :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"

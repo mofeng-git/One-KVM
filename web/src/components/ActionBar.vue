@@ -23,6 +23,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
   ClipboardPaste,
   HardDrive,
   Keyboard,
@@ -74,6 +80,7 @@ const emit = defineEmits<{
   (e: 'openTerminal'): void
 }>()
 
+// Desktop toolbar popover/dialog state
 const pasteOpen = ref(false)
 const atxOpen = ref(false)
 const videoPopoverOpen = ref(false)
@@ -81,13 +88,52 @@ const hidPopoverOpen = ref(false)
 const audioPopoverOpen = ref(false)
 const msdDialogOpen = ref(false)
 const extensionOpen = ref(false)
+
+// Mobile Sheet state — opened from the overflow menu.
+// We use Sheet (bottom drawer) instead of Popover because Popover relies on an
+// anchor element that is hidden / clipped on small screens, causing it to
+// immediately close after opening.
+const mobileAtxOpen = ref(false)
+const mobilePasteOpen = ref(false)
+
+// Timestamps used to suppress spurious "interact-outside" events that arrive
+// within ~300 ms of the Sheet opening (e.g. delayed synthetic pointer events
+// from the same touch gesture that opened the overflow menu).
+const mobileAtxOpenTime = ref(0)
+const mobilePasteOpenTime = ref(0)
+
+const OPEN_GUARD_MS = 350
+
+const guardOutside = (openTime: number, e: Event) => {
+  if (Date.now() - openTime < OPEN_GUARD_MS) {
+    e.preventDefault()
+  }
+}
+
+// On mobile, clicking a DropdownMenuItem generates pointer events that can
+// immediately dismiss any overlay opened in the same tick. Close the dropdown
+// first, then open the target after a short delay.
+const openFromOverflow = (setter: () => void) => {
+  overflowMenuOpen.value = false
+  setTimeout(setter, 50)
+}
+
+const openMobileAtx = () => openFromOverflow(() => {
+  mobileAtxOpen.value = true
+  mobileAtxOpenTime.value = Date.now()
+})
+
+const openMobilePaste = () => openFromOverflow(() => {
+  mobilePasteOpen.value = true
+  mobilePasteOpenTime.value = Date.now()
+})
 </script>
 
 <template>
   <div class="w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-1.5">
-      <!-- Left side buttons -->
-      <div class="flex flex-wrap items-center gap-1.5 w-full sm:flex-1 sm:min-w-0">
+    <div class="flex items-center px-2 sm:px-4 py-1 sm:py-1.5">
+      <!-- Left side buttons — overflow hidden so it never pushes into right side -->
+      <div class="flex items-center gap-0.5 sm:gap-1.5 flex-1 min-w-0 overflow-hidden">
         <!-- Video Config - Always visible -->
         <VideoConfigPopover
           v-model:open="videoPopoverOpen"
@@ -95,7 +141,7 @@ const extensionOpen = ref(false)
           @update:video-mode="emit('update:videoMode', $event)"
         />
 
-        <!-- Audio Config - Always visible -->
+        <!-- Audio Config - Always visible (xs shows icon only) -->
         <AudioConfigPopover v-model:open="audioPopoverOpen" />
 
         <!-- HID Config - Always visible -->
@@ -105,112 +151,123 @@ const extensionOpen = ref(false)
           @update:mouse-mode="emit('toggleMouseMode')"
         />
 
-        <!-- Virtual Media (MSD) - Hidden on small screens, shown in overflow -->
-        <!-- Also hidden when HID backend is CH9329 (no USB gadget support) -->
-        <TooltipProvider v-if="showMsd" class="hidden sm:block">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="msdDialogOpen = true">
-                <HardDrive class="h-4 w-4" />
-                <span class="hidden md:inline">{{ t('actionbar.virtualMedia') }}</span>
+        <!-- Virtual Media (MSD) - Hidden below md, shown in overflow -->
+        <div v-if="showMsd" class="hidden md:block">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="msdDialogOpen = true">
+                  <HardDrive class="h-4 w-4" />
+                  <span class="hidden lg:inline">{{ t('actionbar.virtualMedia') }}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ t('actionbar.virtualMediaTip') }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        <!-- ATX Power Control - Hidden below md; shown as Sheet on mobile -->
+        <div class="hidden md:block">
+          <Popover v-model:open="atxOpen">
+            <PopoverTrigger as-child>
+              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
+                <Power class="h-4 w-4" />
+                <span class="hidden lg:inline">{{ t('actionbar.power') }}</span>
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{{ t('actionbar.virtualMediaTip') }}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+            </PopoverTrigger>
+            <PopoverContent class="w-[min(280px,90vw)] p-0" align="start">
+              <AtxPopover
+                @close="atxOpen = false"
+                @power-short="emit('powerShort')"
+                @power-long="emit('powerLong')"
+                @reset="emit('reset')"
+                @wol="(mac) => emit('wol', mac)"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
 
-        <!-- ATX Power Control - Hidden on small screens -->
-        <Popover v-model:open="atxOpen" class="hidden sm:block">
-          <PopoverTrigger as-child>
-            <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-              <Power class="h-4 w-4" />
-              <span class="hidden md:inline">{{ t('actionbar.power') }}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-[280px] p-0" align="start">
-            <AtxPopover
-              @close="atxOpen = false"
-              @power-short="emit('powerShort')"
-              @power-long="emit('powerLong')"
-              @reset="emit('reset')"
-              @wol="(mac) => emit('wol', mac)"
-            />
-          </PopoverContent>
-        </Popover>
-
-        <!-- Paste Text - Hidden on small screens -->
-        <Popover v-model:open="pasteOpen" class="hidden md:block">
-          <PopoverTrigger as-child>
-            <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-              <ClipboardPaste class="h-4 w-4" />
-              <span class="hidden lg:inline">{{ t('actionbar.paste') }}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-[400px] p-0" align="start">
-            <PasteModal @close="pasteOpen = false" />
-          </PopoverContent>
-        </Popover>
+        <!-- Paste Text - Hidden below lg; shown as Sheet on mobile -->
+        <div class="hidden lg:block">
+          <Popover v-model:open="pasteOpen">
+            <PopoverTrigger as-child>
+              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
+                <ClipboardPaste class="h-4 w-4" />
+                <span class="hidden xl:inline">{{ t('actionbar.paste') }}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-[min(400px,90vw)] p-0" align="start">
+              <PasteModal @close="pasteOpen = false" />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
-      <!-- Right side buttons -->
-      <div class="flex items-center gap-1.5 w-full justify-end sm:w-auto sm:ml-auto shrink-0">
-        <!-- Extension Menu - Hidden on small screens -->
-        <Popover v-model:open="extensionOpen" class="hidden lg:block">
-          <PopoverTrigger as-child>
-            <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-              <Cable class="h-4 w-4" />
-              <span class="hidden xl:inline">{{ t('actionbar.extension') }}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-48 p-1" align="start">
-            <div class="space-y-0.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="w-full justify-start gap-2 h-8"
-                :disabled="!props.ttydRunning"
-                @click="extensionOpen = false; emit('openTerminal')"
-              >
-                <Terminal class="h-4 w-4" />
-                {{ t('extensions.ttyd.title') }}
+      <!-- Right side buttons — always shrink-0, never compressed -->
+      <div class="flex items-center gap-0.5 sm:gap-1.5 shrink-0 ml-1 sm:ml-2">
+        <!-- Extension Menu - Hidden below xl -->
+        <div class="hidden xl:block">
+          <Popover v-model:open="extensionOpen">
+            <PopoverTrigger as-child>
+              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
+                <Cable class="h-4 w-4" />
+                {{ t('actionbar.extension') }}
               </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+            </PopoverTrigger>
+            <PopoverContent class="w-48 p-1" align="start">
+              <div class="space-y-0.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="w-full justify-start gap-2 h-8"
+                  :disabled="!props.ttydRunning"
+                  @click="extensionOpen = false; emit('openTerminal')"
+                >
+                  <Terminal class="h-4 w-4" />
+                  {{ t('extensions.ttyd.title') }}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
-        <!-- Settings - Hidden on small screens -->
-        <TooltipProvider class="hidden lg:block">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
-                <Settings class="h-4 w-4" />
-                <span class="hidden xl:inline">{{ t('actionbar.settings') }}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{{ t('actionbar.settingsTip') }}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <!-- Settings - Hidden below xl -->
+        <div class="hidden xl:block">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
+                  <Settings class="h-4 w-4" />
+                  {{ t('actionbar.settings') }}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ t('actionbar.settingsTip') }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
-        <!-- Connection Stats - Hidden on very small screens -->
-        <TooltipProvider class="hidden sm:block">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="emit('toggleStats')">
-                <BarChart3 class="h-4 w-4" />
-                <span class="hidden xl:inline">{{ t('actionbar.stats') }}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{{ t('actionbar.statsTip') }}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <!-- Connection Stats - Hidden below md -->
+        <div class="hidden md:block">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="emit('toggleStats')">
+                  <BarChart3 class="h-4 w-4" />
+                  <span class="hidden xl:inline">{{ t('actionbar.stats') }}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ t('actionbar.statsTip') }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
-        <div class="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+        <div class="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden md:block" />
 
         <!-- Virtual Keyboard - Always visible (important for mobile) -->
         <TooltipProvider>
@@ -219,10 +276,10 @@ const extensionOpen = ref(false)
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-8 gap-1.5 text-xs"
+                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
                 @click="emit('toggleVirtualKeyboard')"
               >
-                <Keyboard class="h-4 w-4" />
+                <Keyboard class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 <span class="hidden xl:inline">{{ t('actionbar.keyboard') }}</span>
               </Button>
             </TooltipTrigger>
@@ -239,10 +296,10 @@ const extensionOpen = ref(false)
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-8 gap-1.5 text-xs"
+                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
                 @click="emit('toggleFullscreen')"
               >
-                <Maximize class="h-4 w-4" />
+                <Maximize class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 <span class="hidden xl:inline">{{ t('actionbar.fullscreen') }}</span>
               </Button>
             </TooltipTrigger>
@@ -252,52 +309,52 @@ const extensionOpen = ref(false)
           </Tooltip>
         </TooltipProvider>
 
-        <!-- Overflow Menu - Shows hidden items on small screens -->
+        <!-- Overflow Menu - Shows hidden items on smaller screens -->
         <DropdownMenu v-model:open="overflowMenuOpen">
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="h-8 w-8 p-0 lg:hidden">
-              <MoreHorizontal class="h-4 w-4" />
+            <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-8 p-0 xl:hidden">
+              <MoreHorizontal class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-48">
-            <!-- MSD - Mobile only, hidden when CH9329 backend -->
-            <DropdownMenuItem v-if="showMsd" class="sm:hidden" @click="msdDialogOpen = true; overflowMenuOpen = false">
+            <!-- MSD - Below md, hidden when CH9329 backend -->
+            <DropdownMenuItem v-if="showMsd" class="md:hidden" @click="openFromOverflow(() => msdDialogOpen = true)">
               <HardDrive class="h-4 w-4 mr-2" />
               {{ t('actionbar.virtualMedia') }}
             </DropdownMenuItem>
 
-            <!-- ATX - Mobile only -->
-            <DropdownMenuItem class="sm:hidden" @click="atxOpen = true; overflowMenuOpen = false">
+            <!-- ATX - Opens a Sheet on mobile (below md) -->
+            <DropdownMenuItem class="md:hidden" @click="openMobileAtx">
               <Power class="h-4 w-4 mr-2" />
               {{ t('actionbar.power') }}
             </DropdownMenuItem>
 
-            <!-- Paste - Tablet and below -->
-            <DropdownMenuItem class="md:hidden" @click="pasteOpen = true; overflowMenuOpen = false">
+            <!-- Paste - Opens a Sheet on mobile (below lg) -->
+            <DropdownMenuItem class="lg:hidden" @click="openMobilePaste">
               <ClipboardPaste class="h-4 w-4 mr-2" />
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
 
-            <DropdownMenuSeparator class="lg:hidden" />
+            <DropdownMenuSeparator />
 
-            <!-- Stats - Mobile only -->
-            <DropdownMenuItem class="sm:hidden" @click="emit('toggleStats'); overflowMenuOpen = false">
+            <!-- Stats - Below md -->
+            <DropdownMenuItem class="md:hidden" @click="openFromOverflow(() => emit('toggleStats'))">
               <BarChart3 class="h-4 w-4 mr-2" />
               {{ t('actionbar.stats') }}
             </DropdownMenuItem>
 
-            <!-- Extension - Tablet and below -->
+            <!-- Extension - Below xl -->
             <DropdownMenuItem
-              class="lg:hidden"
+              class="xl:hidden"
               :disabled="!props.ttydRunning"
-              @click="emit('openTerminal'); overflowMenuOpen = false"
+              @click="openFromOverflow(() => emit('openTerminal'))"
             >
               <Terminal class="h-4 w-4 mr-2" />
               {{ t('extensions.ttyd.title') }}
             </DropdownMenuItem>
 
-            <!-- Settings - Tablet and below -->
-            <DropdownMenuItem class="lg:hidden" @click="router.push('/settings'); overflowMenuOpen = false">
+            <!-- Settings - Below xl -->
+            <DropdownMenuItem class="xl:hidden" @click="openFromOverflow(() => router.push('/settings'))">
               <Settings class="h-4 w-4 mr-2" />
               {{ t('actionbar.settings') }}
             </DropdownMenuItem>
@@ -309,4 +366,41 @@ const extensionOpen = ref(false)
 
   <!-- MSD Dialog -->
   <MsdDialog v-if="showMsd" v-model:open="msdDialogOpen" />
+
+  <!-- Mobile ATX Sheet — used when ATX is opened from the overflow menu.
+       A Sheet avoids the Popover anchor-positioning issues on mobile. -->
+  <Sheet v-model:open="mobileAtxOpen">
+    <SheetContent
+      side="bottom"
+      class="max-h-[90dvh] overflow-y-auto"
+      @pointer-down-outside="(e) => guardOutside(mobileAtxOpenTime, e)"
+      @interact-outside="(e) => guardOutside(mobileAtxOpenTime, e)"
+    >
+      <SheetHeader class="mb-2">
+        <SheetTitle>{{ t('actionbar.power') }}</SheetTitle>
+      </SheetHeader>
+      <AtxPopover
+        @close="mobileAtxOpen = false"
+        @power-short="emit('powerShort')"
+        @power-long="emit('powerLong')"
+        @reset="emit('reset')"
+        @wol="(mac) => emit('wol', mac)"
+      />
+    </SheetContent>
+  </Sheet>
+
+  <!-- Mobile Paste Sheet — used when Paste is opened from the overflow menu. -->
+  <Sheet v-model:open="mobilePasteOpen">
+    <SheetContent
+      side="bottom"
+      class="max-h-[90dvh] overflow-y-auto"
+      @pointer-down-outside="(e) => guardOutside(mobilePasteOpenTime, e)"
+      @interact-outside="(e) => guardOutside(mobilePasteOpenTime, e)"
+    >
+      <SheetHeader class="mb-2">
+        <SheetTitle>{{ t('actionbar.paste') }}</SheetTitle>
+      </SheetHeader>
+      <PasteModal @close="mobilePasteOpen = false" />
+    </SheetContent>
+  </Sheet>
 </template>

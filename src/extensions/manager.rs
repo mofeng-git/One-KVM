@@ -280,6 +280,9 @@ impl ExtensionManager {
 
             ExtensionId::Gostc => {
                 let c = &config.gostc;
+                if c.addr.trim().is_empty() {
+                    return Err("GOSTC server address is required".into());
+                }
                 if c.key.is_empty() {
                     return Err("GOSTC client key is required".into());
                 }
@@ -291,10 +294,8 @@ impl ExtensionManager {
                     args.push("--tls=true".to_string());
                 }
 
-                // Add server address
-                if !c.addr.is_empty() {
-                    args.extend(["-addr".to_string(), c.addr.clone()]);
-                }
+                // Server address (validated non-empty above)
+                args.extend(["-addr".to_string(), c.addr.trim().to_string()]);
 
                 // Add client key
                 args.extend(["-key".to_string(), c.key.clone()]);
@@ -375,7 +376,11 @@ impl ExtensionManager {
             .filter_map(|id| {
                 let should_run = match id {
                     ExtensionId::Ttyd => config.ttyd.enabled,
-                    ExtensionId::Gostc => config.gostc.enabled && !config.gostc.key.is_empty(),
+                    ExtensionId::Gostc => {
+                        config.gostc.enabled
+                            && !config.gostc.key.is_empty()
+                            && !config.gostc.addr.trim().is_empty()
+                    }
                     ExtensionId::Easytier => {
                         config.easytier.enabled && !config.easytier.network_name.is_empty()
                     }
@@ -435,6 +440,7 @@ impl ExtensionManager {
 
         if config.gostc.enabled
             && !config.gostc.key.is_empty()
+            && !config.gostc.addr.trim().is_empty()
             && self.check_available(ExtensionId::Gostc)
         {
             start_futures.push(Box::pin(async {

@@ -27,8 +27,6 @@ import type {
   StreamConfigUpdate,
   VideoConfig,
   VideoConfigUpdate,
-  WebConfig,
-  WebConfigUpdate,
 } from '@/types/generated'
 import type {
   RtspConfigResponse as ApiRtspConfigResponse,
@@ -38,6 +36,8 @@ import type {
   RustDeskConfigUpdate as ApiRustDeskConfigUpdate,
   RustDeskStatusResponse as ApiRustDeskStatusResponse,
   RustDeskPasswordResponse as ApiRustDeskPasswordResponse,
+  WebConfig,
+  WebConfigUpdate,
 } from '@/api'
 
 function normalizeErrorMessage(error: unknown): string {
