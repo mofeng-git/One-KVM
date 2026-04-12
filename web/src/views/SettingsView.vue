@@ -236,8 +236,16 @@ const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
   username: '',
   password: '',
 })
+
+function formatHostForUrl(hostname: string): string {
+  if (!hostname) return '127.0.0.1'
+  return hostname.includes(':') && !hostname.startsWith('[')
+    ? `[${hostname}]`
+    : hostname
+}
+
 const rtspStreamUrl = computed(() => {
-  const host = window.location.hostname || '127.0.0.1'
+  const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
   const path = (rtspLocalConfig.value.path || 'live').trim().replace(/^\/+|\/+$/g, '') || 'live'
   const port = Number(rtspLocalConfig.value.port) || 8554
   return `rtsp://${host}:${port}/${path}`
@@ -1515,7 +1523,8 @@ async function restartServer() {
       const port = webServerConfig.value.https_enabled
         ? webServerConfig.value.https_port
         : webServerConfig.value.http_port
-      const newUrl = `${protocol}://${window.location.hostname}:${port}`
+      const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
+      const newUrl = `${protocol}://${host}:${port}`
       window.location.href = newUrl
     }, 3000)
   } catch (e) {
