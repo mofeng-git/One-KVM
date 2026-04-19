@@ -7,8 +7,8 @@
 //! - Metadata management
 //! - Download from URL
 
-use chrono::Utc;
 use futures::StreamExt;
+use time::OffsetDateTime;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -87,9 +87,10 @@ impl ImageManager {
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| {
-                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap_or_else(Utc::now)
+                OffsetDateTime::from_unix_timestamp(d.as_secs() as i64)
+                    .unwrap_or_else(|_| OffsetDateTime::now_utc())
             })
-            .unwrap_or_else(Utc::now);
+            .unwrap_or_else(OffsetDateTime::now_utc);
 
         Some(ImageInfo {
             id,

@@ -1,8 +1,9 @@
-use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
+use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
+use super::rfc3339;
 use crate::error::Result;
 
 /// Session data
@@ -10,15 +11,17 @@ use crate::error::Result;
 pub struct Session {
     pub id: String,
     pub user_id: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub expires_at: OffsetDateTime,
     pub data: Option<serde_json::Value>,
 }
 
 impl Session {
     /// Check if session is expired
     pub fn is_expired(&self) -> bool {
-        Utc::now() > self.expires_at
+        OffsetDateTime::now_utc() > self.expires_at
     }
 }
 
@@ -40,11 +43,12 @@ impl SessionStore {
 
     /// Create a new session
     pub async fn create(&self, user_id: &str) -> Result<Session> {
+        let now = OffsetDateTime::now_utc();
         let session = Session {
             id: Uuid::new_v4().to_string(),
             user_id: user_id.to_string(),
-            created_at: Utc::now(),
-            expires_at: Utc::now() + self.default_ttl,
+            created_at: now,
+            expires_at: now + self.default_ttl,
             data: None,
         };
 
@@ -56,8 +60,8 @@ impl SessionStore {
         )
         .bind(&session.id)
         .bind(&session.user_id)
-        .bind(session.created_at.to_rfc3339())
-        .bind(session.expires_at.to_rfc3339())
+        .bind(rfc3339::format(session.created_at))
+        .bind(rfc3339::format(session.expires_at))
         .bind(session.data.as_ref().map(|d| d.to_string()))
         .execute(&self.pool)
         .await?;
@@ -79,12 +83,8 @@ impl SessionStore {
                 let session = Session {
                     id,
                     user_id,
-                    created_at: DateTime::parse_from_rfc3339(&created_at)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    expires_at: DateTime::parse_from_rfc3339(&expires_at)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
+                    created_at: rfc3339::parse(&created_at),
+                    expires_at: rfc3339::parse(&expires_at),
                     data: data.and_then(|d| serde_json::from_str(&d).ok()),
                 };
 
@@ -110,7 +110,7 @@ impl SessionStore {
 
     /// Delete all expired sessions
     pub async fn cleanup_expired(&self) -> Result<u64> {
-        let now = Utc::now().to_rfc3339();
+        let now = rfc3339::format(OffsetDateTime::now_utc());
         let result = sqlx::query("DELETE FROM sessions WHERE expires_at < ?1")
             .bind(now)
             .execute(&self.pool)
@@ -145,9 +145,9 @@ impl SessionStore {
 
     /// Extend session expiration
     pub async fn extend(&self, session_id: &str) -> Result<()> {
-        let new_expires = Utc::now() + self.default_ttl;
+        let new_expires = OffsetDateTime::now_utc() + self.default_ttl;
         sqlx::query("UPDATE sessions SET expires_at = ?1 WHERE id = ?2")
-            .bind(new_expires.to_rfc3339())
+            .bind(rfc3339::format(new_expires))
             .bind(session_id)
             .execute(&self.pool)
             .await?;

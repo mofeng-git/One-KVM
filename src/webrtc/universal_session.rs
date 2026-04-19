@@ -589,6 +589,9 @@ impl UniversalSession {
         mut frame_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>,
         request_keyframe: Arc<dyn Fn() + Send + Sync + 'static>,
     ) {
+        if let Some(handle) = self.video_receiver_handle.lock().await.take() {
+            handle.abort();
+        }
         info!(
             "Starting {} session {} with shared encoder",
             self.codec, self.session_id
@@ -749,7 +752,7 @@ impl UniversalSession {
     /// Start receiving Opus audio frames
     pub async fn start_audio_from_opus(
         &self,
-        mut opus_rx: tokio::sync::watch::Receiver<Option<std::sync::Arc<OpusFrame>>>,
+        mut opus_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<OpusFrame>>,
     ) {
         let audio_track = match &self.audio_track {
             Some(track) => track.clone(),
@@ -805,15 +808,13 @@ impl UniversalSession {
                         }
                     }
 
-                    result = opus_rx.changed() => {
-                        if result.is_err() {
-                            info!("Opus channel closed for session {}", session_id);
-                            break;
-                        }
-
-                        let opus_frame = match opus_rx.borrow().clone() {
+                    result = opus_rx.recv() => {
+                        let opus_frame = match result {
                             Some(frame) => frame,
-                            None => continue,
+                            None => {
+                                info!("Opus mpsc closed for session {}", session_id);
+                                break;
+                            }
                         };
 
                         // 20ms at 48kHz = 960 samples

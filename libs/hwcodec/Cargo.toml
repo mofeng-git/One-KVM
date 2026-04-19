@@ -4,6 +4,9 @@ version = "0.8.0"
 edition = "2021"
 description = "Hardware video codec for IP-KVM (Windows/Linux)"
 
+[package.metadata.cargo-machete]
+ignored = ["serde"]
+
 [features]
 default = []
 rkmpp = []

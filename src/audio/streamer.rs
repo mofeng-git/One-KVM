@@ -1,20 +1,21 @@
 //! Audio streaming pipeline
 //!
-//! Coordinates audio capture and Opus encoding, distributing encoded
-//! frames to multiple subscribers via broadcast channel.
+//! ALSA capture (48 kHz stereo only) → fixed Opus 20 ms frames → `mpsc` fan-out per subscriber.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::sync::{broadcast, watch, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, watch, Mutex as AsyncMutex, RwLock};
 use tracing::{error, info, warn};
 
 use super::capture::{AudioCapturer, AudioConfig, AudioFrame, CaptureState};
 use super::encoder::{OpusConfig, OpusEncoder, OpusFrame};
-use super::resample::Opus48kPcmBuffer;
 use crate::error::{AppError, Result};
 use bytemuck;
 use bytes::Bytes;
+
+/// Stereo 48 kHz: 20 ms = 960 frames × 2 channels (S16LE).
+const OPUS_STEREO_SAMPLES: usize = 960 * 2;
 
 /// Audio stream state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -68,15 +69,16 @@ pub struct AudioStreamStats {
 
 /// Audio streamer
 ///
-/// Manages the audio capture -> encode -> broadcast pipeline.
+/// Manages the audio capture → encode → mpsc fan-out pipeline.
 pub struct AudioStreamer {
     config: RwLock<AudioStreamerConfig>,
     state: watch::Sender<AudioStreamState>,
     state_rx: watch::Receiver<AudioStreamState>,
     capturer: RwLock<Option<Arc<AudioCapturer>>>,
-    encoder: Arc<Mutex<Option<OpusEncoder>>>,
-    opus_tx: watch::Sender<Option<Arc<OpusFrame>>>,
-    stats: Arc<Mutex<AudioStreamStats>>,
+    encoder: Arc<AsyncMutex<Option<OpusEncoder>>>,
+    /// One `mpsc::Sender` per subscriber (like shared video pipeline).
+    opus_subscribers: Arc<Mutex<Vec<mpsc::Sender<Arc<OpusFrame>>>>>,
+    stats: Arc<AsyncMutex<AudioStreamStats>>,
     sequence: AtomicU64,
     stream_start_time: RwLock<Option<Instant>>,
     stop_flag: Arc<AtomicBool>,
@@ -91,16 +93,15 @@ impl AudioStreamer {
     /// Create a new audio streamer with specified configuration
     pub fn with_config(config: AudioStreamerConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(AudioStreamState::Stopped);
-        let (opus_tx, _opus_rx) = watch::channel(None);
 
         Self {
             config: RwLock::new(config),
             state: state_tx,
             state_rx,
             capturer: RwLock::new(None),
-            encoder: Arc::new(Mutex::new(None)),
-            opus_tx,
-            stats: Arc::new(Mutex::new(AudioStreamStats::default())),
+            encoder: Arc::new(AsyncMutex::new(None)),
+            opus_subscribers: Arc::new(Mutex::new(Vec::new())),
+            stats: Arc::new(AsyncMutex::new(AudioStreamStats::default())),
             sequence: AtomicU64::new(0),
             stream_start_time: RwLock::new(None),
             stop_flag: Arc::new(AtomicBool::new(false)),
@@ -117,14 +118,21 @@ impl AudioStreamer {
         self.state_rx.clone()
     }
 
-    /// Subscribe to Opus frames
-    pub fn subscribe_opus(&self) -> watch::Receiver<Option<Arc<OpusFrame>>> {
-        self.opus_tx.subscribe()
+    /// Subscribe to Opus frames (each packet is one encoded 20 ms frame).
+    pub fn subscribe_opus(&self) -> mpsc::Receiver<Arc<OpusFrame>> {
+        let (tx, rx) = mpsc::channel::<Arc<OpusFrame>>(128);
+        self.opus_subscribers.lock().unwrap().push(tx);
+        rx
     }
 
     /// Get number of active subscribers
     pub fn subscriber_count(&self) -> usize {
-        self.opus_tx.receiver_count()
+        self.opus_subscribers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|s| !s.is_closed())
+            .count()
     }
 
     /// Get current statistics
@@ -202,12 +210,13 @@ impl AudioStreamer {
         // Start encoding task
         let capturer_for_task = capturer.clone();
         let encoder = self.encoder.clone();
-        let opus_tx = self.opus_tx.clone();
+        let opus_subscribers = self.opus_subscribers.clone();
         let state = self.state.clone();
         let stop_flag = self.stop_flag.clone();
 
         tokio::spawn(async move {
-            Self::stream_task(capturer_for_task, encoder, opus_tx, state, stop_flag).await;
+            Self::stream_task(capturer_for_task, encoder, opus_subscribers, state, stop_flag)
+                .await;
         });
 
         Ok(())
@@ -229,10 +238,11 @@ impl AudioStreamer {
             capturer.stop().await?;
         }
 
-        // Clear resources
+        // Clear resources — drop Opus senders so mpsc receivers see end-of-stream
         *self.capturer.write().await = None;
         *self.encoder.lock().await = None;
         *self.stream_start_time.write().await = None;
+        self.opus_subscribers.lock().unwrap().clear();
 
         let _ = self.state.send(AudioStreamState::Stopped);
         info!("Audio stream stopped");
@@ -244,51 +254,63 @@ impl AudioStreamer {
         self.state() == AudioStreamState::Running
     }
 
-    /// Internal streaming task
+    async fn fanout_opus(
+        subscribers: &Arc<Mutex<Vec<mpsc::Sender<Arc<OpusFrame>>>>>,
+        frame: Arc<OpusFrame>,
+    ) {
+        let txs: Vec<_> = {
+            let g = subscribers.lock().unwrap();
+            if g.is_empty() {
+                return;
+            }
+            g.clone()
+        };
+        for tx in &txs {
+            let _ = tx.send(frame.clone()).await;
+        }
+        if txs.iter().any(|tx| tx.is_closed()) {
+            let mut g = subscribers.lock().unwrap();
+            g.retain(|tx| !tx.is_closed());
+        }
+    }
+
     async fn stream_task(
         capturer: Arc<AudioCapturer>,
-        encoder: Arc<Mutex<Option<OpusEncoder>>>,
-        opus_tx: watch::Sender<Option<Arc<OpusFrame>>>,
+        encoder: Arc<AsyncMutex<Option<OpusEncoder>>>,
+        opus_subscribers: Arc<Mutex<Vec<mpsc::Sender<Arc<OpusFrame>>>>>,
         state: watch::Sender<AudioStreamState>,
         stop_flag: Arc<AtomicBool>,
     ) {
         let mut pcm_rx = capturer.subscribe();
         let _ = state.send(AudioStreamState::Running);
 
-        info!("Audio stream task started");
+        info!("Audio stream task started (48 kHz stereo → Opus, mpsc fan-out)");
 
-        let mut to_48k: Option<Opus48kPcmBuffer> = None;
-        let mut queued_48k: Vec<i16> = Vec::new();
+        let mut pending: Vec<i16> = Vec::new();
 
         loop {
-            // Check stop flag (atomic, no async lock needed)
             if stop_flag.load(Ordering::Relaxed) {
                 break;
             }
 
-            // Check capturer state
             if capturer.state() == CaptureState::Error {
                 error!("Audio capture error, stopping stream");
                 let _ = state.send(AudioStreamState::Error);
                 break;
             }
 
-            // Receive PCM frame with timeout
             let recv_result =
                 tokio::time::timeout(std::time::Duration::from_secs(2), pcm_rx.recv()).await;
 
             match recv_result {
                 Ok(Ok(audio_frame)) => {
-                    if to_48k.is_none() {
-                        to_48k = Some(Opus48kPcmBuffer::new(
-                            audio_frame.sample_rate,
-                            audio_frame.channels,
-                        ));
+                    if audio_frame.sample_rate != 48_000 || audio_frame.channels != 2 {
+                        warn!(
+                            "Skip non–48 kHz/stereo PCM ({} Hz, {} ch)",
+                            audio_frame.sample_rate, audio_frame.channels
+                        );
+                        continue;
                     }
-                    let pipeline = match to_48k.as_mut() {
-                        Some(p) => p,
-                        None => continue,
-                    };
 
                     let samples: &[i16] = match bytemuck::try_cast_slice(&audio_frame.data) {
                         Ok(s) => s,
@@ -298,16 +320,16 @@ impl AudioStreamer {
                         }
                     };
                     if !samples.is_empty() {
-                        pipeline.push_interleaved(samples);
+                        pending.extend_from_slice(samples);
                     }
-                    pipeline.pop_opus_frames(&mut queued_48k);
 
-                    while queued_48k.len() >= 960 * 2 {
-                        let pcm_20ms =
-                            Bytes::copy_from_slice(bytemuck::cast_slice(&queued_48k[..960 * 2]));
-                        queued_48k.drain(..960 * 2);
+                    while pending.len() >= OPUS_STEREO_SAMPLES {
+                        let pcm_20ms = Bytes::copy_from_slice(bytemuck::cast_slice(
+                            &pending[..OPUS_STEREO_SAMPLES],
+                        ));
+                        pending.drain(..OPUS_STEREO_SAMPLES);
 
-                        let frame_48k = AudioFrame::new_interleaved(pcm_20ms, 2, 48000, 0);
+                        let frame_48k = AudioFrame::new_interleaved(pcm_20ms, 2, 48_000, 0);
 
                         let opus_result = {
                             let mut enc_guard = encoder.lock().await;
@@ -318,9 +340,7 @@ impl AudioStreamer {
 
                         match opus_result {
                             Some(Ok(opus_frame)) => {
-                                if opus_tx.receiver_count() > 0 {
-                                    let _ = opus_tx.send(Some(Arc::new(opus_frame)));
-                                }
+                                Self::fanout_opus(&opus_subscribers, Arc::new(opus_frame)).await;
                             }
                             Some(Err(e)) => {
                                 error!("Opus encode error: {}", e);
@@ -337,10 +357,9 @@ impl AudioStreamer {
                     break;
                 }
                 Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
-                    warn!("Audio receiver lagged by {} frames", n);
+                    warn!("PCM receiver lagged by {} frames", n);
                 }
                 Err(_) => {
-                    // Timeout - check if still capturing
                     if capturer.state() != CaptureState::Running {
                         info!("Audio capture stopped, ending stream task");
                         break;

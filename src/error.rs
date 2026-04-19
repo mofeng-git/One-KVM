@@ -45,6 +45,10 @@ pub enum AppError {
     #[error("Video device lost [{device}]: {reason}")]
     VideoDeviceLost { device: String, reason: String },
 
+    /// No input signal while opening capture; `kind` is `SignalStatus` as string (`from_str`).
+    #[error("Capture has no valid signal: {kind}")]
+    CaptureNoSignal { kind: String },
+
     #[error("Audio error: {0}")]
     AudioError(String),
 

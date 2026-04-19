@@ -64,6 +64,8 @@ fn topic_prefix(event_name: &str) -> Option<String> {
 /// bus.publish(SystemEvent::StreamStateChanged {
 ///     state: "streaming".to_string(),
 ///     device: Some("/dev/video0".to_string()),
+///     reason: None,
+///     next_retry_ms: None,
 /// });
 ///
 /// // Subscribe to events
@@ -188,6 +190,8 @@ mod tests {
         bus.publish(SystemEvent::StreamStateChanged {
             state: "streaming".to_string(),
             device: Some("/dev/video0".to_string()),
+            reason: None,
+            next_retry_ms: None,
         });
 
         let event = rx.recv().await.unwrap();
@@ -205,6 +209,8 @@ mod tests {
         bus.publish(SystemEvent::StreamStateChanged {
             state: "ready".to_string(),
             device: Some("/dev/video0".to_string()),
+            reason: None,
+            next_retry_ms: None,
         });
 
         let event1 = rx1.recv().await.unwrap();
@@ -222,6 +228,8 @@ mod tests {
         bus.publish(SystemEvent::StreamStateChanged {
             state: "ready".to_string(),
             device: None,
+            reason: None,
+            next_retry_ms: None,
         });
 
         let event = rx.recv().await.unwrap();
@@ -236,6 +244,8 @@ mod tests {
         bus.publish(SystemEvent::StreamStateChanged {
             state: "ready".to_string(),
             device: None,
+            reason: None,
+            next_retry_ms: None,
         });
 
         let event = rx.recv().await.unwrap();
@@ -257,6 +267,8 @@ mod tests {
         bus.publish(SystemEvent::StreamStateChanged {
             state: "ready".to_string(),
             device: None,
+            reason: None,
+            next_retry_ms: None,
         });
     }
 }

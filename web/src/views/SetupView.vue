@@ -35,6 +35,7 @@ import {
   Check,
   HelpCircle,
   Puzzle,
+  RefreshCw,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -106,6 +107,7 @@ interface VideoDeviceInfo {
     }>
   }>
   usb_bus: string | null
+  has_signal: boolean
 }
 
 interface AudioDeviceInfo {
@@ -163,6 +165,29 @@ const passwordStrengthColor = computed(() => {
   const colors = ['bg-muted', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500']
   return colors[passwordStrength.value] || colors[0]
 })
+
+// Whether the selected video device currently has an HDMI signal
+const selectedDeviceHasSignal = computed(() => {
+  const device = devices.value.video.find((d) => d.path === videoDevice.value)
+  return device?.has_signal ?? true
+})
+
+const refreshingDevices = ref(false)
+
+async function refreshDeviceList() {
+  refreshingDevices.value = true
+  try {
+    const result = await configApi.listDevices()
+    devices.value = result
+    if (result.extensions) {
+      ttydAvailable.value = result.extensions.ttyd_available
+    }
+  } catch {
+    // keep current list
+  } finally {
+    refreshingDevices.value = false
+  }
+}
 
 // Computed: available formats for selected video device
 const availableFormats = computed(() => {
@@ -733,6 +758,14 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div v-if="videoDevice && !selectedDeviceHasSignal" class="flex items-center gap-3 p-3 rounded-lg border border-orange-500/30 bg-orange-500/5 text-sm text-orange-600 dark:text-orange-400">
+              <p class="flex-1">{{ t('setup.noSignalDetected') }}</p>
+              <Button variant="outline" size="sm" :disabled="refreshingDevices" @click="refreshDeviceList">
+                <RefreshCw class="w-4 h-4 mr-1" :class="{ 'animate-spin': refreshingDevices }" />
+                {{ t('setup.refreshDevices') }}
+              </Button>
             </div>
 
             <div v-if="videoDevice" class="space-y-2">

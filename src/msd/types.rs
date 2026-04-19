@@ -1,8 +1,8 @@
 //! MSD data types and structures
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use time::OffsetDateTime;
 
 /// MSD operating mode
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,7 +31,8 @@ pub struct ImageInfo {
     /// File size in bytes
     pub size: u64,
     /// Creation timestamp
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
 }
 
 impl ImageInfo {
@@ -42,7 +43,7 @@ impl ImageInfo {
             name,
             path,
             size,
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
         }
     }
 
@@ -132,7 +133,8 @@ pub struct DriveFile {
     /// Whether this is a directory
     pub is_dir: bool,
     /// Last modified timestamp
-    pub modified: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub modified: Option<OffsetDateTime>,
 }
 
 /// MSD connect request

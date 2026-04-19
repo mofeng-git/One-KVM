@@ -36,14 +36,15 @@ use tracing::{debug, info, trace, warn};
 
 use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
-use crate::events::EventBus;
+use crate::events::{EventBus, SystemEvent};
 use crate::hid::HidController;
 use crate::video::encoder::registry::EncoderBackend;
 use crate::video::encoder::registry::VideoEncoderType;
 use crate::video::encoder::VideoCodecType;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::shared_video_pipeline::{
-    SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats,
+    PipelineStateNotification, SharedVideoPipeline, SharedVideoPipelineConfig,
+    SharedVideoPipelineStats,
 };
 
 use super::config::{TurnServer, WebRtcConfig};
@@ -93,6 +94,8 @@ pub struct CaptureDeviceConfig {
     pub device_path: PathBuf,
     pub buffer_count: u32,
     pub jpeg_quality: u8,
+    pub subdev_path: Option<PathBuf>,
+    pub bridge_kind: Option<String>,
 }
 
 /// WebRTC streamer statistics
@@ -274,6 +277,73 @@ impl WebRtcStreamer {
         }
     }
 
+    fn build_pipeline_state_notifier(
+        device: String,
+        events: Option<Arc<EventBus>>,
+    ) -> Option<Arc<dyn Fn(PipelineStateNotification) + Send + Sync>> {
+        events.map(|events| {
+            Arc::new(move |notification: PipelineStateNotification| {
+                events.publish(SystemEvent::StreamStateChanged {
+                    state: notification.state.to_string(),
+                    device: Some(device.clone()),
+                    reason: notification.reason.map(|reason| reason.to_string()),
+                    next_retry_ms: notification.next_retry_ms,
+                });
+            }) as Arc<dyn Fn(PipelineStateNotification) + Send + Sync>
+        })
+    }
+
+    fn make_keyframe_callback(
+        pipeline: Arc<SharedVideoPipeline>,
+        session_id: String,
+    ) -> Arc<dyn Fn() + Send + Sync + 'static> {
+        Arc::new(move || {
+            let pipeline = pipeline.clone();
+            let sid = session_id.clone();
+            tokio::spawn(async move {
+                info!("Requesting keyframe for session {} after reconnect", sid);
+                pipeline.request_keyframe().await;
+            });
+        })
+    }
+
+    async fn reconnect_sessions_to_current_pipeline(
+        self: &Arc<Self>,
+        reason: &str,
+    ) -> Result<usize> {
+        if self.capture_device.read().await.is_none() {
+            return Ok(0);
+        }
+
+        let sessions_to_reconnect: Vec<(String, Arc<UniversalSession>)> = {
+            let sessions = self.sessions.read().await;
+            sessions
+                .iter()
+                .map(|(session_id, session)| (session_id.clone(), session.clone()))
+                .collect()
+        };
+
+        if sessions_to_reconnect.is_empty() {
+            return Ok(0);
+        }
+
+        let pipeline = self.ensure_video_pipeline().await?;
+        for (session_id, session) in &sessions_to_reconnect {
+            info!(
+                "Reconnecting session {} to pipeline after {}",
+                session_id, reason
+            );
+            session
+                .start_from_video_pipeline(
+                    pipeline.subscribe(),
+                    Self::make_keyframe_callback(pipeline.clone(), session_id.clone()),
+                )
+                .await;
+        }
+
+        Ok(sessions_to_reconnect.len())
+    }
+
     /// Ensure video pipeline is initialized and running
     async fn ensure_video_pipeline(self: &Arc<Self>) -> Result<Arc<SharedVideoPipeline>> {
         let mut pipeline_guard = self.video_pipeline.write().await;
@@ -284,24 +354,35 @@ impl WebRtcStreamer {
             }
         }
 
-        let config = self.config.read().await;
         let codec = *self.video_codec.read().await;
-
-        let pipeline_config = SharedVideoPipelineConfig {
-            resolution: config.resolution,
-            input_format: config.input_format,
-            output_codec: Self::codec_type_to_encoder_type(codec),
-            bitrate_preset: config.bitrate_preset,
-            fps: config.fps,
-            encoder_backend: config.encoder_backend,
+        let pipeline_config = {
+            let config = self.config.read().await;
+            SharedVideoPipelineConfig {
+                resolution: config.resolution,
+                input_format: config.input_format,
+                output_codec: Self::codec_type_to_encoder_type(codec),
+                bitrate_preset: config.bitrate_preset,
+                fps: config.fps,
+                encoder_backend: config.encoder_backend,
+            }
         };
 
         info!("Creating shared video pipeline for {:?}", codec);
         let pipeline = SharedVideoPipeline::new(pipeline_config)?;
         let capture_device = self.capture_device.read().await.clone();
         if let Some(device) = capture_device {
+            pipeline.set_state_notifier(Self::build_pipeline_state_notifier(
+                device.device_path.display().to_string(),
+                self.events.read().await.clone(),
+            ));
             pipeline
-                .start_with_device(device.device_path, device.buffer_count, device.jpeg_quality)
+                .start_with_device(
+                    device.device_path,
+                    device.buffer_count,
+                    device.jpeg_quality,
+                    device.subdev_path,
+                    device.bridge_kind,
+                )
                 .await?;
         } else {
             return Err(AppError::VideoError(
@@ -322,17 +403,48 @@ impl WebRtcStreamer {
 
                     // Clear pipeline reference in WebRtcStreamer
                     if let Some(streamer) = streamer_weak.upgrade() {
+                        let mut pending_geometry: Option<(Resolution, PixelFormat)> = None;
                         let mut pipeline_guard = streamer.video_pipeline.write().await;
                         // Only clear if it's the same pipeline that stopped
                         if let Some(ref current) = *pipeline_guard {
                             if let Some(stopped_pipeline) = pipeline_weak.upgrade() {
                                 if Arc::ptr_eq(current, &stopped_pipeline) {
+                                    pending_geometry = stopped_pipeline.take_pending_sync_geometry();
                                     *pipeline_guard = None;
                                     info!("Cleared stopped video pipeline reference");
                                 }
                             }
                         }
                         drop(pipeline_guard);
+
+                        let should_reconnect = pending_geometry.is_some();
+                        if let Some((r, f)) = pending_geometry {
+                            streamer.sync_video_geometry_from_negotiated(r, f).await;
+                        }
+                        if should_reconnect {
+                            let streamer_for_reconnect = streamer.clone();
+                            tokio::task::spawn_blocking(move || {
+                                let handle = tokio::runtime::Handle::current();
+                                handle.block_on(async move {
+                                    match streamer_for_reconnect
+                                        .reconnect_sessions_to_current_pipeline(
+                                            "capture geometry change",
+                                        )
+                                        .await
+                                    {
+                                        Ok(reconnected) if reconnected > 0 => info!(
+                                            "Video pipeline rebuilt after geometry change, reconnected {} sessions",
+                                            reconnected
+                                        ),
+                                        Ok(_) => {}
+                                        Err(e) => warn!(
+                                            "Failed to reconnect sessions after geometry change: {}",
+                                            e
+                                        ),
+                                    }
+                                });
+                            });
+                        }
 
                         info!(
                             "Video pipeline stopped, but keeping capture config for new sessions"
@@ -343,6 +455,13 @@ impl WebRtcStreamer {
             }
             debug!("Video pipeline monitor task ended");
         });
+
+        let pipeline_cfg = pipeline.config().await;
+        self.sync_video_geometry_from_negotiated(
+            pipeline_cfg.resolution,
+            pipeline_cfg.input_format,
+        )
+        .await;
 
         *pipeline_guard = Some(pipeline.clone());
         Ok(pipeline)
@@ -364,6 +483,15 @@ impl WebRtcStreamer {
             Some(pipeline.config().await)
         } else {
             None
+        }
+    }
+
+    pub async fn current_video_geometry(&self) -> (Resolution, PixelFormat, u32) {
+        if let Some(cfg) = self.get_pipeline_config().await {
+            (cfg.resolution, cfg.input_format, cfg.fps)
+        } else {
+            let c = self.config.read().await;
+            (c.resolution, c.input_format, c.fps)
         }
     }
 
@@ -417,7 +545,7 @@ impl WebRtcStreamer {
     /// Subscribe to encoded Opus frames (for sessions)
     pub async fn subscribe_opus(
         &self,
-    ) -> Option<tokio::sync::watch::Receiver<Option<std::sync::Arc<OpusFrame>>>> {
+    ) -> Option<tokio::sync::mpsc::Receiver<std::sync::Arc<OpusFrame>>> {
         if let Some(ref controller) = *self.audio_controller.read().await {
             controller.subscribe_opus_async().await
         } else {
@@ -441,16 +569,23 @@ impl WebRtcStreamer {
         }
     }
 
-    /// Set capture device for direct capture pipeline
-    pub async fn set_capture_device(&self, device_path: PathBuf, jpeg_quality: u8) {
+    pub async fn set_capture_device(
+        &self,
+        device_path: PathBuf,
+        jpeg_quality: u8,
+        subdev_path: Option<PathBuf>,
+        bridge_kind: Option<String>,
+    ) {
         info!(
-            "Setting direct capture device for WebRTC: {:?}",
-            device_path
+            "Setting direct capture device for WebRTC: {:?} (subdev={:?}, kind={:?})",
+            device_path, subdev_path, bridge_kind
         );
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
             buffer_count: 2,
             jpeg_quality,
+            subdev_path,
+            bridge_kind,
         });
     }
 
@@ -519,16 +654,54 @@ impl WebRtcStreamer {
         }
 
         // Update config (preserve user-configured bitrate)
-        let mut config = self.config.write().await;
-        config.resolution = resolution;
-        config.input_format = format;
-        config.fps = fps;
-        // Note: bitrate is NOT auto-scaled here - use set_bitrate() or config to change it
+        {
+            let mut config = self.config.write().await;
+            config.resolution = resolution;
+            config.input_format = format;
+            config.fps = fps;
+            // Note: bitrate is NOT auto-scaled here - use set_bitrate() or config to change it
 
-        info!(
-            "WebRTC config updated: {}x{} {:?} @ {} fps, {}",
-            resolution.width, resolution.height, format, fps, config.bitrate_preset
-        );
+            info!(
+                "WebRTC config updated: {}x{} {:?} @ {} fps, {}",
+                resolution.width,
+                resolution.height,
+                format,
+                fps,
+                config.bitrate_preset
+            );
+        }
+
+        self.notify_device_info_dirty().await;
+    }
+
+    /// Update resolution/format to match DV-negotiated capture without stopping
+    /// the pipeline or closing sessions. Used when hardware timing differs from
+    /// saved settings (e.g. RK628 `S_FMT` follows source while SQLite still has
+    /// a user-chosen preset).
+    pub async fn sync_video_geometry_from_negotiated(
+        &self,
+        resolution: Resolution,
+        format: PixelFormat,
+    ) {
+        {
+            let mut config = self.config.write().await;
+            if config.resolution == resolution && config.input_format == format {
+                return;
+            }
+            info!(
+                "WebRTC geometry aligned to negotiated capture: {}x{} {:?} (was {}x{} {:?})",
+                resolution.width,
+                resolution.height,
+                format,
+                config.resolution.width,
+                config.resolution.height,
+                config.input_format
+            );
+            config.resolution = resolution;
+            config.input_format = format;
+        }
+
+        self.notify_device_info_dirty().await;
     }
 
     /// Update encoder backend (software/hardware selection)
@@ -652,6 +825,14 @@ impl WebRtcStreamer {
         *self.events.write().await = Some(events);
     }
 
+    /// Push a debounced `system.device_info` refresh so the console status card
+    /// picks up DV-negotiated / pipeline resolution without a separate WebRTC message.
+    async fn notify_device_info_dirty(&self) {
+        if let Some(bus) = self.events.read().await.as_ref() {
+            bus.mark_device_info_dirty();
+        }
+    }
+
     // === Session Management ===
 
     /// Create a new WebRTC session
@@ -695,17 +876,8 @@ impl WebRtcStreamer {
         // Request keyframe after ICE connection is established and on gaps
         let pipeline_for_callback = pipeline.clone();
         let session_id_for_callback = session_id.clone();
-        let request_keyframe = Arc::new(move || {
-            let pipeline = pipeline_for_callback.clone();
-            let sid = session_id_for_callback.clone();
-            tokio::spawn(async move {
-                info!(
-                    "Requesting keyframe for session {} after ICE connected",
-                    sid
-                );
-                pipeline.request_keyframe().await;
-            });
-        });
+        let request_keyframe =
+            Self::make_keyframe_callback(pipeline_for_callback, session_id_for_callback);
         session
             .start_from_video_pipeline(pipeline.subscribe(), request_keyframe)
             .await;
@@ -939,34 +1111,14 @@ impl WebRtcStreamer {
                 return Ok(());
             }
 
-            let session_ids: Vec<String> = self.sessions.read().await.keys().cloned().collect();
-            if !session_ids.is_empty() {
-                let pipeline = self.ensure_video_pipeline().await?;
-
-                let sessions = self.sessions.read().await;
-                for session_id in &session_ids {
-                    if let Some(session) = sessions.get(session_id) {
-                        info!("Reconnecting session {} to new pipeline", session_id);
-                        let pipeline_for_callback = pipeline.clone();
-                        let sid = session_id.clone();
-                        let request_keyframe = Arc::new(move || {
-                            let pipeline = pipeline_for_callback.clone();
-                            let sid = sid.clone();
-                            tokio::spawn(async move {
-                                info!("Requesting keyframe for session {} after reconnect", sid);
-                                pipeline.request_keyframe().await;
-                            });
-                        });
-                        session
-                            .start_from_video_pipeline(pipeline.subscribe(), request_keyframe)
-                            .await;
-                    }
-                }
-
+            let reconnected = self
+                .reconnect_sessions_to_current_pipeline("bitrate change")
+                .await?;
+            if reconnected > 0 {
                 info!(
                     "Video pipeline restarted with {}, reconnected {} sessions",
                     preset,
-                    session_ids.len()
+                    reconnected
                 );
             }
         } else {

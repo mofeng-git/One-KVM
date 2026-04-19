@@ -78,15 +78,13 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
     loop {
         tokio::select! {
             // Receive Opus frames and send to client
-            opus_result = opus_rx.changed() => {
-                if opus_result.is_err() {
-                    info!("Audio stream closed");
-                    break;
-                }
-
-                let frame = match opus_rx.borrow().clone() {
-                    Some(frame) => frame,
-                    None => continue,
+            opus_result = opus_rx.recv() => {
+                let frame = match opus_result {
+                    Some(f) => f,
+                    None => {
+                        info!("Audio stream closed");
+                        break;
+                    }
                 };
 
                 let binary = encode_audio_packet(&frame, stream_start);

@@ -988,6 +988,7 @@ pub struct VideoDevice {
     pub driver: String,
     pub formats: Vec<VideoFormat>,
     pub usb_bus: Option<String>,
+    pub has_signal: bool,
 }
 
 #[derive(Serialize)]
@@ -1083,10 +1084,14 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
                         })
                         .collect(),
                     usb_bus,
+                    has_signal: d.has_signal,
                 }
             })
             .collect(),
-        Err(_) => vec![],
+        Err(e) => {
+            warn!(error = %e, "Video device enumeration failed; returning empty video list for /api/devices");
+            vec![]
+        }
     };
 
     // Detect serial devices (common USB/ACM ports) - single directory read

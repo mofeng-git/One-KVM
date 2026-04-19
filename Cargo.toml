@@ -29,7 +29,6 @@ serde_json = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "tracing-log"] }
-tracing-log = "0.2"
 
 # Error handling
 thiserror = "2"
@@ -41,7 +40,6 @@ rand = "0.9"
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 nix = { version = "0.30", features = ["fs", "net", "hostname", "poll"] }
 
@@ -62,8 +60,8 @@ axum-server = { version = "0.8", features = ["tls-rustls"] }
 # CLI argument parsing
 clap = { version = "4", features = ["derive"] }
 
-# Time
-time = "0.3"
+# Time (cookie max_age + RFC3339 timestamps)
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 
 # Video capture (V4L2)
 v4l2r = "0.0.7"

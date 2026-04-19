@@ -45,25 +45,10 @@ impl Default for AudioConfig {
 }
 
 impl AudioConfig {
-    /// Create config for a specific device
+    /// Create config for a specific device (48 kHz stereo only; must match ALSA hardware).
     pub fn for_device(device: &AudioDeviceInfo) -> Self {
-        let sample_rate = if device.sample_rates.contains(&48000) {
-            48000
-        } else {
-            *device.sample_rates.first().unwrap_or(&48000)
-        };
-
-        let channels = if device.channels.contains(&2) {
-            2
-        } else {
-            *device.channels.first().unwrap_or(&2)
-        };
-
         Self {
             device_name: device.name.clone(),
-            sample_rate,
-            channels,
-            frame_size: sample_rate / 50, // 20ms
             ..Default::default()
         }
     }
@@ -281,23 +266,29 @@ fn run_capture(
             .map_err(|e| AppError::AudioError(format!("Failed to apply hw params: {}", e)))?;
     }
 
-    // Get actual configuration
-    let actual_rate = pcm
-        .hw_params_current()
-        .map(|h| h.get_rate().unwrap_or(config.sample_rate))
-        .unwrap_or(config.sample_rate);
-
-    if actual_rate != config.sample_rate {
-        info!(
-            "ALSA sample rate differs from requested ({}Hz vs {}Hz); streamer will resample to 48000Hz for Opus",
-            actual_rate, config.sample_rate
-        );
-    } else {
-        info!(
-            "Audio capture configured: {}Hz {}ch (requested {}Hz)",
-            actual_rate, config.channels, config.sample_rate
-        );
+    // Fixed 48 kHz stereo: fail if hardware negotiated something else.
+    let hw_now = pcm.hw_params_current().map_err(|e| {
+        AppError::AudioError(format!("Failed to read hw_params after apply: {}", e))
+    })?;
+    let actual_rate = hw_now
+        .get_rate()
+        .map_err(|e| AppError::AudioError(format!("Failed to read sample rate: {}", e)))?;
+    let actual_ch = hw_now
+        .get_channels()
+        .map_err(|e| AppError::AudioError(format!("Failed to read channels: {}", e)))?;
+    if actual_rate != 48_000 {
+        return Err(AppError::AudioError(format!(
+            "Audio capture requires 48000 Hz; device is {} Hz",
+            actual_rate
+        )));
     }
+    if actual_ch != 2 {
+        return Err(AppError::AudioError(format!(
+            "Audio capture requires 2 channels (stereo); device has {}",
+            actual_ch
+        )));
+    }
+    info!("Audio capture: 48000 Hz, 2 ch");
 
     // Prepare for capture
     pcm.prepare()
@@ -357,7 +348,7 @@ fn run_capture(
                 let frame = AudioFrame::new_interleaved(
                     Bytes::copy_from_slice(&buffer[..byte_count]),
                     config.channels,
-                    actual_rate,
+                    48_000,
                     seq,
                 );
 

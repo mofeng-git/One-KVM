@@ -240,6 +240,8 @@ export default {
     fps: '帧率',
     selectFps: '选择帧率',
     noVideoDevices: '未检测到视频设备',
+    noSignalDetected: '未检测到 HDMI 信号，请连接 HDMI 线缆后刷新。',
+    refreshDevices: '刷新设备',
     // Audio
     audioDevice: '音频设备',
     selectAudioDevice: '选择音频采集设备',
@@ -310,6 +312,32 @@ export default {
     configChanging: '正在应用新配置...',
     videoRestarted: '视频流已更新',
     streamError: '视频流错误',
+    // 四档视频状态（对应后端 StreamStateChanged：streaming / no_signal /
+    // device_lost / device_busy）.  `reason` 子键可选，用于在副文案中补充细节。
+    signal: {
+      noSignal: {
+        title: '暂无视频信号',
+        detail: '采集卡已就绪，正在等待被控机画面',
+      },
+      deviceLost: {
+        title: '视频设备已断开',
+        detail: '采集卡离线，正在尝试重新识别…',
+      },
+      deviceBusy: {
+        title: '视频通道忙',
+        detail: '正在切换配置或被其他组件占用，请稍候…',
+      },
+      reason: {
+        no_cable: '未检测到 HDMI 线缆，请检查连接或被控机是否已开机',
+        no_sync: '信号不稳定，无法锁定时序，可尝试降低被控机分辨率/刷新率',
+        out_of_range: '分辨率或刷新率超出采集卡能力，建议切换到 1080p60 以内',
+        no_signal: '采集卡已就绪，正在等待画面…',
+        recovering: '正在自动重连视频设备',
+        device_lost: '视频节点丢失，等待驱动恢复',
+        config_changing: '正在应用新配置',
+        mode_switching: '正在切换视频模式',
+      },
+    },
     // WebRTC
     webrtcConnected: 'WebRTC 已连接',
     webrtcConnectedDesc: '正在使用 H.264 低延迟视频流',

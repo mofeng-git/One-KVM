@@ -14,7 +14,14 @@ export interface ConsoleEventHandlers {
   onStreamModeSwitching?: (data: { transition_id: string; to_mode: string; from_mode: string }) => void
   onStreamModeReady?: (data: { transition_id: string; mode: string }) => void
   onWebRTCReady?: (data: { codec: string; hardware: boolean; transition_id?: string }) => void
-  onStreamStateChanged?: (data: { state: string; device?: string | null }) => void
+  onStreamStateChanged?: (data: {
+    state: string
+    device?: string | null
+    /** Optional fine-grained diagnostic tag (e.g. `no_cable`, `out_of_range`, `recovering`). */
+    reason?: string | null
+    /** Optional countdown (ms) until the next backend self-recovery attempt. */
+    next_retry_ms?: number | null
+  }) => void
   onStreamDeviceLost?: (data: { device: string; reason: string }) => void
   onStreamReconnecting?: (data: { device: string; attempt: number }) => void
   onStreamRecovered?: (data: { device: string }) => void

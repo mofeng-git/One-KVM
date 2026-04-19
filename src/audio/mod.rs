@@ -13,7 +13,6 @@ pub mod controller;
 pub mod device;
 pub mod encoder;
 pub mod monitor;
-pub mod resample;
 pub mod streamer;
 
 pub use capture::{AudioCapturer, AudioConfig, AudioFrame};

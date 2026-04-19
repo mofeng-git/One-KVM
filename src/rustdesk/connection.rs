@@ -1831,18 +1831,18 @@ async fn run_audio_streaming(
                     break 'subscribe_loop;
                 }
 
-                result = opus_rx.changed() => {
-                    if result.is_err() {
-                        // Pipeline was restarted
-                        info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
-                        audio_adapter.reset();
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        continue 'subscribe_loop;
-                    }
-
-                    let opus_frame = match opus_rx.borrow().clone() {
+                result = opus_rx.recv() => {
+                    let opus_frame = match result {
                         Some(frame) => frame,
-                        None => continue,
+                        None => {
+                            info!(
+                                "Audio pipeline closed for connection {}, re-subscribing...",
+                                conn_id
+                            );
+                            audio_adapter.reset();
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            continue 'subscribe_loop;
+                        }
                     };
 
                     // Convert OpusFrame to RustDesk AudioFrame message

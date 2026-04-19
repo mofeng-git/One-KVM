@@ -240,6 +240,8 @@ export default {
     fps: 'Frame Rate',
     selectFps: 'Select FPS',
     noVideoDevices: 'No video devices detected',
+    noSignalDetected: 'No HDMI signal detected. Please connect an HDMI cable and refresh.',
+    refreshDevices: 'Refresh Devices',
     // Audio
     audioDevice: 'Audio Device',
     selectAudioDevice: 'Select audio capture device',
@@ -310,6 +312,33 @@ export default {
     configChanging: 'Applying new configuration...',
     videoRestarted: 'Video stream updated',
     streamError: 'Stream error',
+    // Four canonical video states (backend StreamStateChanged: streaming /
+    // no_signal / device_lost / device_busy).  `reason` provides optional
+    // fine-grained diagnostic sub-text.
+    signal: {
+      noSignal: {
+        title: 'Waiting for video signal',
+        detail: 'Capture device is ready, waiting for the target to output video',
+      },
+      deviceLost: {
+        title: 'Video device offline',
+        detail: 'Capture card is not responding, attempting to re-detect…',
+      },
+      deviceBusy: {
+        title: 'Video channel busy',
+        detail: 'Applying a new configuration or another component is using the device, please wait…',
+      },
+      reason: {
+        no_cable: 'HDMI cable not detected — check the cable and that the target is powered on',
+        no_sync: 'Unstable signal: timings could not be locked — try a lower resolution or refresh rate',
+        out_of_range: 'Resolution or refresh rate exceeds capture capability — try 1080p60 or below',
+        no_signal: 'Capture card is ready, waiting for a picture…',
+        recovering: 'Reconnecting the video device automatically',
+        device_lost: 'Video node disappeared, waiting for the driver to recover',
+        config_changing: 'Applying new configuration',
+        mode_switching: 'Switching video mode',
+      },
+    },
     // WebRTC
     webrtcConnected: 'WebRTC Connected',
     webrtcConnectedDesc: 'Using low-latency H.264 video stream',

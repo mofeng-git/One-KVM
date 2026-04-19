@@ -1,9 +1,10 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::password::{hash_password, verify_password};
+use super::rfc3339;
 use crate::error::{AppError, Result};
 
 /// User row type from database
@@ -16,8 +17,10 @@ pub struct User {
     pub username: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub updated_at: OffsetDateTime,
 }
 
 impl User {
@@ -28,12 +31,8 @@ impl User {
             id,
             username,
             password_hash,
-            created_at: DateTime::parse_from_rfc3339(&created_at)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now()),
-            updated_at: DateTime::parse_from_rfc3339(&updated_at)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now()),
+            created_at: rfc3339::parse(&created_at),
+            updated_at: rfc3339::parse(&updated_at),
         }
     }
 }
@@ -61,7 +60,7 @@ impl UserStore {
         }
 
         let password_hash = hash_password(password)?;
-        let now = Utc::now();
+        let now = OffsetDateTime::now_utc();
         let user = User {
             id: Uuid::new_v4().to_string(),
             username: username.to_string(),
@@ -79,8 +78,8 @@ impl UserStore {
         .bind(&user.id)
         .bind(&user.username)
         .bind(&user.password_hash)
-        .bind(user.created_at.to_rfc3339())
-        .bind(user.updated_at.to_rfc3339())
+        .bind(rfc3339::format(user.created_at))
+        .bind(rfc3339::format(user.updated_at))
         .execute(&self.pool)
         .await?;
 
@@ -128,12 +127,12 @@ impl UserStore {
     /// Update user password
     pub async fn update_password(&self, user_id: &str, new_password: &str) -> Result<()> {
         let password_hash = hash_password(new_password)?;
-        let now = Utc::now();
+        let now = OffsetDateTime::now_utc();
 
         let result =
             sqlx::query("UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3")
                 .bind(&password_hash)
-                .bind(now.to_rfc3339())
+                .bind(rfc3339::format(now))
                 .bind(user_id)
                 .execute(&self.pool)
                 .await?;
@@ -156,10 +155,10 @@ impl UserStore {
             }
         }
 
-        let now = Utc::now();
+        let now = OffsetDateTime::now_utc();
         let result = sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
             .bind(new_username)
-            .bind(now.to_rfc3339())
+            .bind(rfc3339::format(now))
             .bind(user_id)
             .execute(&self.pool)
             .await?;

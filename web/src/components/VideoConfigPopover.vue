@@ -47,6 +47,7 @@ interface VideoDevice {
       fps: number[]
     }[]
   }[]
+  has_signal?: boolean
 }
 
 const props = defineProps<{

@@ -152,6 +152,41 @@ impl JpegEncoder {
         self.encode_i420_to_jpeg(sequence)
     }
 
+    /// YVYU → swap chroma to YUYV in scratch, then same as [`Self::encode_yuyv`].
+    pub fn encode_yvyu(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
+        let width = self.config.resolution.width as usize;
+        let height = self.config.resolution.height as usize;
+        let expected_size = width * height * 2;
+
+        if data.len() < expected_size {
+            return Err(AppError::VideoError(format!(
+                "YVYU data too small: {} < {}",
+                data.len(),
+                expected_size
+            )));
+        }
+
+        // Reuse bgra_buffer as scratch for the swapped YUYV data.
+        if self.bgra_buffer.len() < expected_size {
+            self.bgra_buffer.resize(expected_size, 0);
+        }
+        let dst = &mut self.bgra_buffer[..expected_size];
+        let src = &data[..expected_size];
+
+        // Swap bytes [1] and [3] in every 4-byte macropixel: Y0 V0 Y1 U0 → Y0 U0 Y1 V0
+        for (chunk_dst, chunk_src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+            chunk_dst[0] = chunk_src[0]; // Y0
+            chunk_dst[1] = chunk_src[3]; // U0
+            chunk_dst[2] = chunk_src[2]; // Y1
+            chunk_dst[3] = chunk_src[1]; // V0
+        }
+
+        libyuv::yuy2_to_i420(dst, &mut self.i420_buffer, width as i32, height as i32)
+            .map_err(|e| AppError::VideoError(format!("libyuv YVYU→I420 failed: {}", e)))?;
+
+        self.encode_i420_to_jpeg(sequence)
+    }
+
     /// Encode NV12 frame to JPEG
     pub fn encode_nv12(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
         let width = self.config.resolution.width as usize;
@@ -323,7 +358,8 @@ impl crate::video::encoder::traits::Encoder for JpegEncoder {
 
     fn encode(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
         match self.config.input_format {
-            PixelFormat::Yuyv | PixelFormat::Yvyu => self.encode_yuyv(data, sequence),
+            PixelFormat::Yuyv => self.encode_yuyv(data, sequence),
+            PixelFormat::Yvyu => self.encode_yvyu(data, sequence),
             PixelFormat::Nv12 => self.encode_nv12(data, sequence),
             PixelFormat::Nv16 => self.encode_nv16(data, sequence),
             PixelFormat::Nv24 => self.encode_nv24(data, sequence),

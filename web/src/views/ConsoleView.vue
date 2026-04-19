@@ -59,7 +59,7 @@ import {
   Loader2,
 } from 'lucide-vue-next'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
@@ -97,6 +97,12 @@ const videoError = ref(false)
 const videoErrorMessage = ref('')
 const videoRestarting = ref(false) // Track if video is restarting due to config change
 const mjpegFrameReceived = ref(false) // Whether MJPEG stream has received at least one frame
+
+/** From `stream.state_changed`: ok | no_signal | device_lost | device_busy */
+type StreamSignalState = 'ok' | 'no_signal' | 'device_lost' | 'device_busy'
+const streamSignalState = ref<StreamSignalState>('ok')
+const streamSignalReason = ref<string | null>(null)
+const streamNextRetryMs = ref<number | null>(null)
 
 // Video aspect ratio (dynamically updated from actual video dimensions)
 // Using string format "width/height" to let browser handle the ratio calculation
@@ -644,6 +650,7 @@ function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise
   })
 }
 
+/** For WebRTC watch: skip auto-reconnect when these hold. */
 function shouldSuppressAutoReconnect(): boolean {
   return videoMode.value === 'mjpeg'
     || !isConsoleActive.value
@@ -748,6 +755,17 @@ function handleVideoError() {
 
   // 如果正在刷新视频，忽略清空 src 时触发的错误
   if (isRefreshingVideo) {
+    return
+  }
+
+  // Expected <img> error while overlay shows no_signal / device_* — do not retry.
+  if (streamSignalState.value !== 'ok') {
+    if (retryTimeoutId !== null) {
+      clearTimeout(retryTimeoutId)
+      retryTimeoutId = null
+    }
+    videoLoading.value = false
+    mjpegFrameReceived.value = false
     return
   }
 
@@ -993,21 +1011,120 @@ function handleStreamModeSwitching(data: { transition_id: string; to_mode: strin
 }
 
 function handleStreamStateChanged(data: any) {
-  if (data.state === 'error') {
+  const state = typeof data?.state === 'string' ? data.state : ''
+  const reason = typeof data?.reason === 'string' && data.reason.length > 0 ? data.reason : null
+  const nextRetry = typeof data?.next_retry_ms === 'number' && data.next_retry_ms > 0
+    ? data.next_retry_ms
+    : null
+
+  streamSignalReason.value = reason
+  streamNextRetryMs.value = nextRetry
+
+  const previous = streamSignalState.value
+
+  switch (state) {
+    case 'streaming':
+    case 'ready':
+    case 'uninitialized':
+      streamSignalState.value = 'ok'
+      break
+    case 'no_signal':
+      streamSignalState.value = 'no_signal'
+      break
+    case 'device_lost':
+      streamSignalState.value = 'device_lost'
+      break
+    case 'device_busy':
+      streamSignalState.value = 'device_busy'
+      break
+  }
+
+  if (state === 'error') {
     videoError.value = true
     videoErrorMessage.value = t('console.streamError')
-  } else if (data.state === 'recovering' && videoMode.value !== 'mjpeg') {
-    // Backend is in the DeviceLost recovery loop; start WebRTC reconnect if not already scheduled.
+  } else if (state === 'no_signal' && videoMode.value !== 'mjpeg') {
+    cancelWebRTCRecovery()
+    videoRestarting.value = false
+    videoError.value = false
+    videoErrorMessage.value = ''
+  } else if (state === 'device_busy' && videoMode.value !== 'mjpeg') {
+    cancelWebRTCRecovery()
+    videoRestarting.value = true
+    videoLoading.value = true
+    videoError.value = false
+    videoErrorMessage.value = ''
+    if (previous !== 'device_busy') {
+      captureFrameOverlay().catch(() => {})
+    }
+  } else if (state === 'device_lost' && videoMode.value !== 'mjpeg') {
     if (webrtcRecoveryTimerId === null && webrtcRecoveryAttempts === 0) {
       scheduleWebRTCRecovery()
     }
-  } else if (data.state === 'streaming' || data.state === 'no_signal') {
-    // Backend stream is alive; cancel any pending recovery timers.
-    if (data.state === 'streaming') {
-      cancelWebRTCRecovery()
+  } else if (state === 'streaming') {
+    cancelWebRTCRecovery()
+    videoError.value = false
+    videoErrorMessage.value = ''
+    videoRestarting.value = false
+    if (
+      videoMode.value === 'mjpeg'
+      && (previous === 'no_signal' || previous === 'device_lost' || previous === 'device_busy')
+    ) {
+      refreshVideo()
+    } else if (
+      videoMode.value !== 'mjpeg'
+      && (previous === 'no_signal' || previous === 'device_busy' || previous === 'device_lost')
+    ) {
+      if (webrtc.isConnected.value && !webrtc.isConnecting.value) {
+        void rebindWebRTCVideo().then(() => {
+          videoLoading.value = false
+        })
+      } else if (!webrtc.isConnected.value && !webrtc.isConnecting.value) {
+        void connectWebRTCSerial('stream recovered').then(async (ok) => {
+          if (ok) {
+            await rebindWebRTCVideo()
+            videoLoading.value = false
+          } else if (webrtcRecoveryTimerId === null && webrtcRecoveryAttempts === 0) {
+            scheduleWebRTCRecovery()
+          }
+        })
+      }
     }
   }
 }
+
+const showSignalOverlay = computed(() => streamSignalState.value !== 'ok')
+
+const signalOverlayInfo = computed(() => {
+  const reason = streamSignalReason.value
+  const reasonHintKey = reason ? `console.signal.reason.${reason}` : ''
+  const hint = reasonHintKey && te(reasonHintKey) ? t(reasonHintKey) : ''
+
+  switch (streamSignalState.value) {
+    case 'no_signal':
+      return {
+        title: t('console.signal.noSignal.title'),
+        detail: t('console.signal.noSignal.detail'),
+        hint,
+        tone: 'info' as const,
+      }
+    case 'device_lost':
+      return {
+        title: t('console.signal.deviceLost.title'),
+        detail: t('console.signal.deviceLost.detail'),
+        hint,
+        tone: 'error' as const,
+      }
+    case 'device_busy':
+      return {
+        title: t('console.signal.deviceBusy.title'),
+        detail: t('console.signal.deviceBusy.detail'),
+        hint,
+        tone: 'info' as const,
+      }
+    default:
+      return { title: '', detail: '', hint: '', tone: 'info' as const }
+  }
+})
 
 function handleStreamStatsUpdate(data: any) {
   // Always update clients count in store (for MJPEG mode display)
@@ -1177,14 +1294,21 @@ function refreshVideo() {
 }
 
 // MJPEG URL with cache-busting timestamp (reactive)
-// Only return valid URL when in MJPEG mode to prevent unnecessary requests
-const mjpegTimestamp = ref(0) // Start with 0 to prevent initial load
+// Only return valid URL when in MJPEG mode and the backend reports a
+// healthy stream.  When the backend goes offline (no_signal / device_lost
+// / device_busy) we deliberately return an empty string so the `<img>`
+// tag has no `src` and the 4-state overlay fully owns the video area —
+// no more fake placeholder JPEG peeking through.
+const mjpegTimestamp = ref(0)
 const mjpegUrl = computed(() => {
   if (videoMode.value !== 'mjpeg') {
     return '' // Don't load MJPEG when in H264 mode
   }
   if (mjpegTimestamp.value === 0) {
     return '' // Don't load until refreshVideo() is called
+  }
+  if (streamSignalState.value !== 'ok') {
+    return '' // Backend is offline; let the overlay own the viewport
   }
   return `${streamApi.getMjpegUrl(myClientId)}&t=${mjpegTimestamp.value}`
 })
@@ -1491,19 +1615,25 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     webrtcReconnectTimeout = null
   }
 
-  if (shouldSuppressAutoReconnect()) {
-    return
-  }
-
-  // Update stream online status based on WebRTC connection state
+  // Run before `shouldSuppressAutoReconnect()` so `device_busy` / `videoRestarting`
+  // never blocks clearing the loading overlay when ICE becomes connected.
   if (videoMode.value !== 'mjpeg') {
     if (newState === 'connected') {
       systemStore.setStreamOnline(true)
       webrtcReconnectFailures = 0
+      if (videoLoading.value) {
+        void rebindWebRTCVideo().then(() => {
+          videoLoading.value = false
+        })
+      }
     } else if (newState === 'disconnected' || newState === 'failed') {
       // Don't immediately set offline - wait for potential reconnect
       // The device_info event will eventually sync the correct state
     }
+  }
+
+  if (shouldSuppressAutoReconnect()) {
+    return
   }
 
   // Auto-reconnect when disconnected (but was previously connected)
@@ -2581,6 +2711,50 @@ onUnmounted(() => {
               <p class="text-white/50 text-xs sm:text-sm mt-1 sm:mt-2">
                 {{ t('console.pleaseWait') }}
               </p>
+            </div>
+          </Transition>
+
+          <!--
+            Canonical 4-state signal overlay (no_signal / device_lost /
+            device_busy).  Fully covers the video area with a solid dim
+            backdrop so the browser never shows a frozen last frame or a
+            transparent video element peeking through — the MJPEG `<img>`
+            has its `src` cleared the moment the backend goes offline and
+            the WebRTC track is simply obscured.  Sits below the loading /
+            error overlays so those take precedence when both apply.
+          -->
+          <Transition name="fade">
+            <div
+              v-if="showSignalOverlay && !videoLoading && !videoError"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 transition-opacity duration-300 pointer-events-none"
+              :class="{
+                'bg-black/80 backdrop-blur-sm': signalOverlayInfo.tone === 'error',
+                'bg-black/70 backdrop-blur-sm': signalOverlayInfo.tone !== 'error',
+              }"
+            >
+              <MonitorOff
+                class="h-10 w-10 sm:h-16 sm:w-16"
+                :class="{
+                  'text-slate-200': signalOverlayInfo.tone === 'info',
+                  'text-red-300': signalOverlayInfo.tone === 'error',
+                }"
+              />
+              <div class="text-center max-w-md">
+                <p
+                  class="font-semibold text-sm sm:text-lg text-white"
+                >{{ signalOverlayInfo.title }}</p>
+                <p
+                  class="text-xs sm:text-sm mt-1 sm:mt-2"
+                  :class="{
+                    'text-slate-200/80': signalOverlayInfo.tone === 'info',
+                    'text-red-100/80': signalOverlayInfo.tone === 'error',
+                  }"
+                >{{ signalOverlayInfo.detail }}</p>
+                <p
+                  v-if="signalOverlayInfo.hint"
+                  class="text-[11px] sm:text-xs mt-2 text-white/50"
+                >{{ signalOverlayInfo.hint }}</p>
+              </div>
             </div>
           </Transition>
 

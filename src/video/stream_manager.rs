@@ -38,8 +38,8 @@ use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
 use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
-use crate::video::is_rk_hdmirx_device;
-use crate::video::streamer::{Streamer, StreamerState};
+use crate::video::is_csi_hdmi_bridge;
+use crate::video::streamer::{Streamer, StreamerStats, StreamerState};
 use crate::webrtc::WebRtcStreamer;
 
 /// Video stream manager configuration
@@ -353,8 +353,17 @@ impl VideoStreamManager {
             .update_video_config(resolution, format, fps)
             .await;
         if let Some(device_path) = device_path {
+            // Resolve the paired subdev so the WebRTC pipeline can run the
+            // RK628 STREAMON gate + SOURCE_CHANGE polling identically to the
+            // MJPEG path.  See `csi_bridge::discover_subdev_for_video`.
+            let (subdev_path, bridge_kind) = self
+                .streamer
+                .current_device()
+                .await
+                .map(|d| (d.subdev_path.clone(), d.bridge_kind.clone()))
+                .unwrap_or((None, None));
             self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
+                .set_capture_device(device_path, jpeg_quality, subdev_path, bridge_kind)
                 .await;
         } else {
             warn!("No capture device configured while syncing WebRTC capture source");
@@ -431,7 +440,7 @@ impl VideoStreamManager {
                         device.formats.iter().map(|f| f.format).collect();
 
                     // If current format is not MJPEG and device supports MJPEG, switch to it
-                    if !is_rk_hdmirx_device(&device)
+                    if !is_csi_hdmi_bridge(&device)
                         && current_format != PixelFormat::Mjpeg
                         && available_formats.contains(&PixelFormat::Mjpeg)
                     {
@@ -550,8 +559,14 @@ impl VideoStreamManager {
             }
             if let Some(device_path) = device_path {
                 info!("Configuring direct capture for WebRTC after config change");
+                let (subdev_path, bridge_kind) = self
+                    .streamer
+                    .current_device()
+                    .await
+                    .map(|d| (d.subdev_path.clone(), d.bridge_kind.clone()))
+                    .unwrap_or((None, None));
                 self.webrtc_streamer
-                    .set_capture_device(device_path, jpeg_quality)
+                    .set_capture_device(device_path, jpeg_quality, subdev_path, bridge_kind)
                     .await;
             } else {
                 warn!("No capture device configured for WebRTC after config change");
@@ -610,7 +625,7 @@ impl VideoStreamManager {
 
     /// Get video device info for device_info event
     pub async fn get_video_info(&self) -> VideoDeviceInfo {
-        let stats = self.streamer.stats().await;
+        let stats = self.stats().await;
         let state = self.streamer.state().await;
         let device = self.streamer.current_device().await;
         let mode = self.mode.read().await.clone();
@@ -636,7 +651,7 @@ impl VideoStreamManager {
             config_changing: self.streamer.is_config_changing(),
             error: if state == StreamerState::Error {
                 Some("Video stream error".to_string())
-            } else if state == StreamerState::NoSignal {
+            } else if state.is_no_signal_like() {
                 Some("No video signal".to_string())
             } else {
                 None
@@ -687,8 +702,24 @@ impl VideoStreamManager {
     }
 
     /// Get streamer statistics
-    pub async fn stats(&self) -> crate::video::streamer::StreamerStats {
-        self.streamer.stats().await
+    ///
+    /// In WebRTC mode, resolution/format/target_fps/fps reflect
+    /// [`WebRtcStreamer`]'s config (updated after DV negotiation / geometry sync),
+    /// not only the MJPEG [`Streamer`] snapshot — so `/api/stream/status` matches
+    /// what the shared encoder actually uses.
+    pub async fn stats(&self) -> StreamerStats {
+        let mut s = self.streamer.stats().await;
+        if *self.mode.read().await == StreamMode::WebRTC {
+            let (res, fmt, tgt_fps) = self.webrtc_streamer.current_video_geometry().await;
+            s.format = Some(fmt.to_string());
+            s.resolution = Some((res.width, res.height));
+            s.target_fps = tgt_fps;
+            if let Some(ps) = self.webrtc_streamer.pipeline_stats().await {
+                s.fps = ps.current_fps;
+            }
+            s.clients = self.webrtc_streamer.session_count().await as u64;
+        }
+        s
     }
 
     /// Check if config is being changed

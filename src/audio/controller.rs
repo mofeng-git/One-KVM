@@ -342,8 +342,7 @@ impl AudioController {
     }
 
     /// Subscribe to Opus frames (for WebSocket clients)
-    pub fn subscribe_opus(&self) -> Option<tokio::sync::watch::Receiver<Option<Arc<OpusFrame>>>> {
-        // Use try_read to avoid blocking - this is called from sync context sometimes
+    pub fn subscribe_opus(&self) -> Option<tokio::sync::mpsc::Receiver<Arc<OpusFrame>>> {
         if let Ok(guard) = self.streamer.try_read() {
             guard.as_ref().map(|s| s.subscribe_opus())
         } else {
@@ -354,7 +353,7 @@ impl AudioController {
     /// Subscribe to Opus frames (async version)
     pub async fn subscribe_opus_async(
         &self,
-    ) -> Option<tokio::sync::watch::Receiver<Option<Arc<OpusFrame>>>> {
+    ) -> Option<tokio::sync::mpsc::Receiver<Arc<OpusFrame>>> {
         self.streamer
             .read()
             .await

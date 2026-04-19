@@ -158,13 +158,16 @@ pub enum SystemEvent {
         from_mode: String,
     },
 
-    /// Stream state changed (e.g., started, stopped, error)
+    /// Stream state for the UI (`streaming`, `no_signal`, `device_lost`, `device_busy`, etc.).
+    /// Optional `reason` / `next_retry_ms` are hints only; branch on `state`.
     #[serde(rename = "stream.state_changed")]
     StreamStateChanged {
-        /// Current state: "uninitialized", "ready", "streaming", "no_signal", "error"
         state: String,
-        /// Device path if available
         device: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        next_retry_ms: Option<u64>,
     },
 
     /// Stream configuration is being changed
@@ -407,6 +410,8 @@ mod tests {
         let event = SystemEvent::StreamStateChanged {
             state: "streaming".to_string(),
             device: Some("/dev/video0".to_string()),
+            reason: None,
+            next_retry_ms: None,
         };
         assert_eq!(event.event_name(), "stream.state_changed");
     }
@@ -416,6 +421,8 @@ mod tests {
         let event = SystemEvent::StreamStateChanged {
             state: "streaming".to_string(),
             device: None,
+            reason: None,
+            next_retry_ms: None,
         };
 
         assert!(event.matches_topic("*"));

@@ -19,6 +19,7 @@
 mod encoder_state;
 
 use bytes::Bytes;
+use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
@@ -33,10 +34,10 @@ use self::encoder_state::{build_encoder_state, EncoderThreadState};
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 /// After this many consecutive timeouts, log a prominent warning.
 const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
-/// After this many consecutive timeouts, actually stop the pipeline.
-/// Setting this high (60 × 2 s poll = ~120 s) keeps WebRTC sessions alive
-/// while the source is temporarily unavailable (e.g. resolution change/reboot).
 const CAPTURE_TIMEOUT_STOP_THRESHOLD: u32 = 60;
+const CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD: u32 = 3;
+const CSI_BRIDGE_NOSIGNAL_INTERVAL_MS: u64 = 500;
+const NOSIGNAL_POLL_MAX: Duration = Duration::from_secs(20);
 /// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 /// Validate every JPEG frame during startup to avoid poisoning HW decoders
@@ -49,10 +50,13 @@ const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
 
 use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
+use crate::video::csi_bridge::{self, ProbeResult};
 use crate::video::encoder::registry::{EncoderBackend, VideoEncoderType};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
-use crate::video::v4l2r_capture::V4l2rCaptureStream;
+use crate::video::device::parse_bridge_kind;
+use crate::video::SignalStatus;
+use crate::video::v4l2r_capture::{is_source_changed_error, BridgeContext, V4l2rCaptureStream};
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
@@ -75,6 +79,39 @@ pub struct EncodedVideoFrame {
 
 enum PipelineCmd {
     SetBitrate { bitrate_kbps: u32, gop: u32 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PipelineStateNotification {
+    pub state: &'static str,
+    pub reason: Option<&'static str>,
+    pub next_retry_ms: Option<u64>,
+}
+
+impl PipelineStateNotification {
+    fn streaming() -> Self {
+        Self {
+            state: "streaming",
+            reason: None,
+            next_retry_ms: None,
+        }
+    }
+
+    fn no_signal(status: SignalStatus, next_retry_ms: Option<u64>) -> Self {
+        Self {
+            state: "no_signal",
+            reason: Some(status.as_str()),
+            next_retry_ms,
+        }
+    }
+
+    fn device_busy(reason: &'static str) -> Self {
+        Self {
+            state: "device_busy",
+            reason: Some(reason),
+            next_retry_ms: None,
+        }
+    }
 }
 
 /// Shared video pipeline configuration
@@ -241,6 +278,84 @@ pub struct SharedVideoPipeline {
     /// Pipeline start time for PTS calculation (epoch millis, 0 = not set)
     /// Uses AtomicI64 instead of Mutex for lock-free access
     pipeline_start_time_ms: AtomicI64,
+    pending_sync_geometry: ParkingMutex<Option<(Resolution, PixelFormat)>>,
+    state_notifier: ParkingRwLock<Option<Arc<dyn Fn(PipelineStateNotification) + Send + Sync>>>,
+    last_state_notification: ParkingMutex<Option<PipelineStateNotification>>,
+}
+
+fn poll_bridge_subdev_after_no_signal(
+    bridge_ctx: &BridgeContext,
+    pipeline: &SharedVideoPipeline,
+) {
+    let Some(subdev_path) = bridge_ctx.subdev_path.as_ref() else {
+        return;
+    };
+    let kind = bridge_ctx
+        .kind
+        .unwrap_or(csi_bridge::CsiBridgeKind::Unknown);
+    let deadline = Instant::now() + NOSIGNAL_POLL_MAX;
+    let mut poll_count: u32 = 0;
+    info!(
+        "No-signal poll: scanning subdev {:?} every {} ms (max {:?})",
+        subdev_path, CSI_BRIDGE_NOSIGNAL_INTERVAL_MS, NOSIGNAL_POLL_MAX
+    );
+    loop {
+        if !pipeline.running_flag.load(Ordering::Acquire) {
+            return;
+        }
+        if Instant::now() >= deadline {
+            info!(
+                "No-signal poll: stopped after {:?} ({} attempts)",
+                NOSIGNAL_POLL_MAX, poll_count
+            );
+            return;
+        }
+        let fd = match csi_bridge::open_subdev(subdev_path) {
+            Ok(f) => f,
+            Err(e) => {
+                debug!("No-signal poll: open subdev {:?} failed: {}", subdev_path, e);
+                std::thread::sleep(Duration::from_millis(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS));
+                continue;
+            }
+        };
+        match csi_bridge::probe_signal_thread_timeout(
+            &fd,
+            kind,
+            csi_bridge::RK628_SUBDEV_PROBE_TIMEOUT,
+        ) {
+            Some(ProbeResult::Locked(mode)) => {
+                info!(
+                    "No-signal poll: locked {}x{} @ {} Hz — proceeding to capture re-open",
+                    mode.width, mode.height, mode.pixelclock
+                );
+                return;
+            }
+            Some(other) => {
+                poll_count = poll_count.saturating_add(1);
+                if poll_count == 1 || poll_count.is_multiple_of(8) {
+                    debug!(
+                        "No-signal poll: attempt {} — still {:?}",
+                        poll_count,
+                        other.as_status()
+                    );
+                }
+                if let Some(st) = other.as_status() {
+                    pipeline.notify_state(PipelineStateNotification::no_signal(
+                        st,
+                        Some(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS.saturating_add(50)),
+                    ));
+                }
+            }
+            None => {
+                poll_count = poll_count.saturating_add(1);
+                debug!(
+                    "No-signal poll: attempt {} — probe ioctl timed out",
+                    poll_count
+                );
+            }
+        }
+        std::thread::sleep(Duration::from_millis(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS));
+    }
 }
 
 impl SharedVideoPipeline {
@@ -268,9 +383,41 @@ impl SharedVideoPipeline {
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
             pipeline_start_time_ms: AtomicI64::new(0),
+            pending_sync_geometry: ParkingMutex::new(None),
+            state_notifier: ParkingRwLock::new(None),
+            last_state_notification: ParkingMutex::new(None),
         });
 
         Ok(pipeline)
+    }
+
+    pub fn take_pending_sync_geometry(&self) -> Option<(Resolution, PixelFormat)> {
+        self.pending_sync_geometry.lock().take()
+    }
+
+    pub fn set_state_notifier(
+        &self,
+        notifier: Option<Arc<dyn Fn(PipelineStateNotification) + Send + Sync>>,
+    ) {
+        *self.state_notifier.write() = notifier;
+    }
+
+    fn notify_state(&self, notification: PipelineStateNotification) {
+        let should_emit = {
+            let mut last = self.last_state_notification.lock();
+            if last.as_ref() == Some(&notification) {
+                false
+            } else {
+                *last = Some(notification);
+                true
+            }
+        };
+        if !should_emit {
+            return;
+        }
+        if let Some(notifier) = self.state_notifier.read().clone() {
+            notifier(notification);
+        }
     }
 
     /// Subscribe to encoded frames
@@ -393,13 +540,68 @@ impl SharedVideoPipeline {
         device_path: std::path::PathBuf,
         buffer_count: u32,
         _jpeg_quality: u8,
+        subdev_path: Option<std::path::PathBuf>,
+        bridge_kind: Option<String>,
     ) -> Result<()> {
         if *self.running_rx.borrow() {
             warn!("Pipeline already running");
             return Ok(());
         }
 
-        let config = self.config.read().await.clone();
+        let mut config = self.config.read().await.clone();
+        {
+            let mut last = self.last_state_notification.lock();
+            *last = None;
+        }
+
+        // Pre-open for DV negotiation; align encoder to probed size.
+        let bridge_ctx_probe = BridgeContext::from_parts(
+            subdev_path.clone(),
+            parse_bridge_kind(bridge_kind.as_deref()),
+        );
+        let preopened: Option<V4l2rCaptureStream> =
+            match V4l2rCaptureStream::open_with_bridge(
+                &device_path,
+                config.resolution,
+                config.input_format,
+                config.fps,
+                buffer_count.max(1),
+                Duration::from_secs(2),
+                bridge_ctx_probe,
+            ) {
+                Ok(s) => {
+                    let negotiated_res = s.resolution();
+                    let negotiated_fmt = s.format();
+                    if negotiated_res != config.resolution || negotiated_fmt != config.input_format {
+                        info!(
+                            "Negotiated capture {}x{} {:?} (configured {}x{} {:?}) — aligning encoder to source",
+                            negotiated_res.width,
+                            negotiated_res.height,
+                            negotiated_fmt,
+                            config.resolution.width,
+                            config.resolution.height,
+                            config.input_format
+                        );
+                        config.resolution = negotiated_res;
+                        config.input_format = negotiated_fmt;
+                        *self.config.write().await = config.clone();
+                    }
+                    Some(s)
+                }
+                Err(AppError::CaptureNoSignal { kind }) => {
+                    debug!(
+                        "Pre-probe: no signal — encoder uses configured geometry until capture opens"
+                    );
+                    let status = SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal);
+                    self.notify_state(PipelineStateNotification::no_signal(
+                        status,
+                        Some(Duration::from_secs(2).as_millis() as u64),
+                    ));
+                    None
+                }
+                Err(e) => return Err(e),
+            };
+
         let mut encoder_state = build_encoder_state(&config)?;
         let _ = self.running.send(true);
         self.running_flag.store(true, Ordering::Release);
@@ -499,28 +701,123 @@ impl SharedVideoPipeline {
             let latest_frame = latest_frame.clone();
             let frame_seq_tx = frame_seq_tx.clone();
             let buffer_pool = buffer_pool.clone();
+            let bridge_ctx = BridgeContext::from_parts(
+                subdev_path,
+                parse_bridge_kind(bridge_kind.as_deref()),
+            );
             std::thread::spawn(move || {
-                let mut stream = match V4l2rCaptureStream::open(
-                    &device_path,
-                    config.resolution,
-                    config.input_format,
-                    config.fps,
-                    buffer_count.max(1),
-                    Duration::from_secs(2),
-                ) {
-                    Ok(stream) => stream,
-                    Err(e) => {
-                        error!("Failed to open capture stream: {}", e);
-                        let _ = pipeline.running.send(false);
-                        pipeline.running_flag.store(false, Ordering::Release);
-                        let _ = frame_seq_tx.send(1);
-                        return;
-                    }
-                };
+                let mut stream: Option<V4l2rCaptureStream> = None;
+                let mut initial_geometry: Option<(Resolution, PixelFormat)> = None;
+                let mut resolution = config.resolution;
+                let mut pixel_format = config.input_format;
+                let mut stride: u32 = 0;
 
-                let resolution = stream.resolution();
-                let pixel_format = stream.format();
-                let stride = stream.stride();
+                match preopened {
+                    Some(s) => {
+                        resolution = s.resolution();
+                        pixel_format = s.format();
+                        stride = s.stride();
+                        initial_geometry = Some((resolution, pixel_format));
+                        stream = Some(s);
+                    }
+                    None => {
+                        match V4l2rCaptureStream::open_with_bridge(
+                            &device_path,
+                            config.resolution,
+                            config.input_format,
+                            config.fps,
+                            buffer_count.max(1),
+                            Duration::from_secs(2),
+                            bridge_ctx.clone(),
+                        ) {
+                            Ok(s) => {
+                                resolution = s.resolution();
+                                pixel_format = s.format();
+                                stride = s.stride();
+                                if resolution != config.resolution
+                                    || pixel_format != config.input_format
+                                {
+                                    info!(
+                                        "First capture open negotiated {}x{} {:?} but encoder expects {}x{} {:?} — stopping for dimension resync",
+                                        resolution.width,
+                                        resolution.height,
+                                        pixel_format,
+                                        config.resolution.width,
+                                        config.resolution.height,
+                                        config.input_format
+                                    );
+                                    pipeline.notify_state(PipelineStateNotification::device_busy(
+                                        "config_changing",
+                                    ));
+                                    *pipeline.pending_sync_geometry.lock() =
+                                        Some((resolution, pixel_format));
+                                    let _ = pipeline.running.send(false);
+                                    pipeline.running_flag.store(false, Ordering::Release);
+                                    let _ = frame_seq_tx.send(1);
+                                    return;
+                                }
+                                initial_geometry = Some((resolution, pixel_format));
+                                stream = Some(s);
+                            }
+                            Err(AppError::CaptureNoSignal { kind }) => {
+                                warn!(
+                                    "Capture stream open reports no signal ({}) — pipeline will retry",
+                                    kind
+                                );
+                                pipeline.notify_state(PipelineStateNotification::no_signal(
+                                    SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal),
+                                    Some(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS),
+                                ));
+                            }
+                            Err(e) => {
+                                error!("Failed to open capture stream: {}", e);
+                                let _ = pipeline.running.send(false);
+                                pipeline.running_flag.store(false, Ordering::Release);
+                                let _ = frame_seq_tx.send(1);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                /// Helper: try to (re)open the capture stream. Returns:
+                ///   * `Ok(Some(stream))` — opened successfully
+                ///   * `Ok(None)` — CaptureNoSignal, keep retrying later
+                ///   * `Err(())` — fatal (stop pipeline)
+                enum OpenResult {
+                    Opened(V4l2rCaptureStream),
+                    NoSignal(SignalStatus),
+                    Fatal,
+                }
+
+                fn open_or_retry(
+                    device_path: &std::path::Path,
+                    config: &SharedVideoPipelineConfig,
+                    buffer_count: u32,
+                    bridge_ctx: BridgeContext,
+                ) -> OpenResult {
+                    match V4l2rCaptureStream::open_with_bridge(
+                        device_path,
+                        config.resolution,
+                        config.input_format,
+                        config.fps,
+                        buffer_count.max(1),
+                        Duration::from_secs(2),
+                        bridge_ctx,
+                    ) {
+                        Ok(s) => OpenResult::Opened(s),
+                        Err(AppError::CaptureNoSignal { kind }) => {
+                            debug!("Capture soft-restart: still no signal ({})", kind);
+                            OpenResult::NoSignal(
+                                SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal),
+                            )
+                        }
+                        Err(e) => {
+                            error!("Capture soft-restart failed: {}", e);
+                            OpenResult::Fatal
+                        }
+                    }
+                }
 
                 let mut no_subscribers_since: Option<Instant> = None;
                 let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
@@ -569,16 +866,243 @@ impl SharedVideoPipeline {
                         no_subscribers_since = None;
                     }
 
+                    // ── No usable stream?  Try to (re)open, back off on failure. ──
+                    if stream.is_none() {
+                        match open_or_retry(&device_path, &config, buffer_count, bridge_ctx.clone()) {
+                            OpenResult::Opened(new_stream) => {
+                                let new_res = new_stream.resolution();
+                                let new_fmt = new_stream.format();
+                                let new_stride = new_stream.stride();
+
+                                // Pre-probe was skipped (no signal at pipeline start) but the
+                                // encoder was sized to saved settings — if DV timings now
+                                // disagree, we cannot encode until WebRTC resyncs dimensions.
+                                if initial_geometry.is_none()
+                                    && (new_res != config.resolution || new_fmt != config.input_format)
+                                {
+                                    info!(
+                                        "Deferred capture open is {}x{} {:?} but encoder expects {}x{} {:?} — stopping for dimension resync",
+                                        new_res.width,
+                                        new_res.height,
+                                        new_fmt,
+                                        config.resolution.width,
+                                        config.resolution.height,
+                                        config.input_format
+                                    );
+                                    pipeline.notify_state(PipelineStateNotification::device_busy(
+                                        "config_changing",
+                                    ));
+                                    *pipeline.pending_sync_geometry.lock() = Some((new_res, new_fmt));
+                                    let _ = pipeline.running.send(false);
+                                    pipeline.running_flag.store(false, Ordering::Release);
+                                    let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                    break;
+                                }
+
+                                // If this is the very first successful open,
+                                // record it and run normally.  Otherwise check
+                                // for a geometry change — the encoder thread
+                                // is pinned to the original geometry, so a
+                                // change requires tearing the pipeline down
+                                // and letting the upper layer rebuild.
+                                match initial_geometry {
+                                    Some((orig_res, orig_fmt))
+                                        if orig_res != new_res || orig_fmt != new_fmt =>
+                                    {
+                                        info!(
+                                            "Capture soft-restart detected geometry change \
+                                             {:?}/{:?} -> {:?}/{:?}, stopping pipeline for \
+                                             encoder rebuild",
+                                            orig_res, orig_fmt, new_res, new_fmt
+                                        );
+                                        pipeline.notify_state(
+                                            PipelineStateNotification::device_busy(
+                                                "config_changing",
+                                            ),
+                                        );
+                                        *pipeline.pending_sync_geometry.lock() =
+                                            Some((new_res, new_fmt));
+                                        let _ = pipeline.running.send(false);
+                                        pipeline.running_flag.store(false, Ordering::Release);
+                                        let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+
+                                if initial_geometry.is_none() {
+                                    initial_geometry = Some((new_res, new_fmt));
+                                }
+                                resolution = new_res;
+                                pixel_format = new_fmt;
+                                stride = new_stride;
+                                stream = Some(new_stream);
+                                consecutive_timeouts = 0;
+                                info!(
+                                    "Capture stream (re)opened: {}x{} {:?} stride={}",
+                                    resolution.width, resolution.height, pixel_format, stride
+                                );
+                            }
+                            OpenResult::NoSignal(status) => {
+                                consecutive_timeouts =
+                                    consecutive_timeouts.saturating_add(1);
+                                if consecutive_timeouts >= CAPTURE_TIMEOUT_STOP_THRESHOLD {
+                                    warn!(
+                                        "Capture soft-restart gave up after {} attempts, \
+                                         stopping pipeline",
+                                        consecutive_timeouts
+                                    );
+                                    let _ = pipeline.running.send(false);
+                                    pipeline.running_flag.store(false, Ordering::Release);
+                                    let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                    break;
+                                }
+                                let wait_ms = CSI_BRIDGE_NOSIGNAL_INTERVAL_MS;
+                                pipeline.notify_state(PipelineStateNotification::no_signal(
+                                    status,
+                                    Some(wait_ms),
+                                ));
+                                std::thread::sleep(Duration::from_millis(wait_ms));
+                                continue;
+                            }
+                            OpenResult::Fatal => {
+                                let _ = pipeline.running.send(false);
+                                pipeline.running_flag.store(false, Ordering::Release);
+                                let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                break;
+                            }
+                        }
+                    }
+
                     let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
-                    let meta = match stream.next_into(&mut owned) {
+                    let next_result = stream
+                        .as_mut()
+                        .expect("stream is Some above")
+                        .next_into(&mut owned);
+                    let meta = match next_result {
                         Ok(meta) => {
                             consecutive_timeouts = 0;
+                            pipeline.notify_state(PipelineStateNotification::streaming());
                             meta
                         }
                         Err(e) => {
+                            // V4L2 driver reported V4L2_EVENT_SOURCE_CHANGE.
+                            // The current capture is effectively invalidated:
+                            // drop the stream so the next iteration re-opens
+                            // via a fresh DV_TIMINGS probe.  This is the fast
+                            // path for source-side resolution switches on
+                            // RK628 / rkcif — sub-second recovery vs. the ~8 s
+                            // timeout fallback.
+                            if is_source_changed_error(&e) {
+                                info!(
+                                    "Capture reported SOURCE_CHANGE — \
+                                     dropping stream for immediate re-open"
+                                );
+                                consecutive_timeouts = 0;
+                                stream = None;
+                                continue;
+                            }
                             if e.kind() == std::io::ErrorKind::TimedOut {
                                 consecutive_timeouts = consecutive_timeouts.saturating_add(1);
-                                warn!("Capture timeout - no signal?");
+                                let probe_result = {
+                                    let sr = stream.as_mut().expect("stream is Some above");
+                                    sr.probe_bridge_signal_with_timeout(
+                                        csi_bridge::RK628_SUBDEV_PROBE_TIMEOUT,
+                                    )
+                                };
+                                match probe_result {
+                                    Some(ProbeResult::Locked(mode)) => {
+                                        let probed_resolution =
+                                            Resolution::new(mode.width, mode.height);
+                                        if probed_resolution == resolution {
+                                            info!(
+                                                "Capture timeout but bridge is locked at {}x{} — soft-restarting capture without encoder rebuild",
+                                                probed_resolution.width,
+                                                probed_resolution.height
+                                            );
+                                        } else {
+                                            info!(
+                                                "Capture timeout probe detected geometry change {}x{} -> {}x{} — soft-restarting capture for encoder rebuild",
+                                                resolution.width,
+                                                resolution.height,
+                                                probed_resolution.width,
+                                                probed_resolution.height
+                                            );
+                                            pipeline.notify_state(
+                                                PipelineStateNotification::device_busy(
+                                                    "config_changing",
+                                                ),
+                                            );
+                                        }
+                                        consecutive_timeouts = 0;
+                                        stream = None;
+                                        continue;
+                                    }
+                                    Some(other) => {
+                                        let status =
+                                            other.as_status().unwrap_or(SignalStatus::NoSignal);
+                                        warn!(
+                                            "Capture timeout probe reports no signal ({})",
+                                            status.as_str()
+                                        );
+                                        pipeline.notify_state(
+                                            PipelineStateNotification::no_signal(
+                                                status,
+                                                Some(Duration::from_secs(2).as_millis() as u64),
+                                            ),
+                                        );
+                                        // Drop capture so RK628 / rkcif can release the queue,
+                                        // then poll subdev on a fresh fd until timings lock (or
+                                        // timeout).  Avoids sitting on DQBUF 2s × N with a dead
+                                        // stream while `v4l2-ctl --query-dv-timings` already shows
+                                        // a real mode.
+                                        stream = None;
+                                        consecutive_timeouts = 0;
+                                        if bridge_ctx.has_subdev()
+                                            && matches!(
+                                                other,
+                                                ProbeResult::NoSignal
+                                                    | ProbeResult::NoSync
+                                                    | ProbeResult::OutOfRange
+                                            )
+                                        {
+                                            poll_bridge_subdev_after_no_signal(
+                                                &bridge_ctx,
+                                                &pipeline,
+                                            );
+                                        }
+                                        continue;
+                                    }
+                                    None if bridge_ctx.has_subdev() => {
+                                        warn!(
+                                            "DV-timings probe timed out or failed — forcing stream re-open (RK628 / rkcif)"
+                                        );
+                                        consecutive_timeouts = 0;
+                                        stream = None;
+                                        poll_bridge_subdev_after_no_signal(&bridge_ctx, &pipeline);
+                                        continue;
+                                    }
+                                    None => {
+                                        warn!("Capture timeout - no signal?");
+                                    }
+                                }
+
+                                if consecutive_timeouts
+                                    >= CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD
+                                {
+                                    // Drop the stream so the next loop
+                                    // iteration re-opens via the DV-timings
+                                    // probe.  This catches source-side
+                                    // resolution changes in ~6 s without
+                                    // taking the encoder down.
+                                    warn!(
+                                        "Capture timed out {} consecutive times, \
+                                         closing stream for soft-restart",
+                                        consecutive_timeouts
+                                    );
+                                    stream = None;
+                                    continue;
+                                }
 
                                 if consecutive_timeouts == CAPTURE_TIMEOUT_RESTART_THRESHOLD {
                                     warn!(
@@ -599,6 +1123,20 @@ impl SharedVideoPipeline {
                                 }
                             } else {
                                 consecutive_timeouts = 0;
+                                // EIO (5) / EPIPE (32) in next_into generally
+                                // mean the source glitched mid-stream.
+                                // Tear down the stream and let the open loop
+                                // re-probe via DV_TIMINGS — same logic as
+                                // timeouts, just triggered earlier.
+                                if matches!(e.raw_os_error(), Some(5) | Some(32)) {
+                                    warn!(
+                                        "Capture transient error ({}), closing stream for \
+                                         soft-restart",
+                                        e
+                                    );
+                                    stream = None;
+                                    continue;
+                                }
                                 let key = classify_capture_error(&e);
                                 if capture_error_throttler.should_log(&key) {
                                     let suppressed =
