@@ -2048,14 +2048,12 @@ pub async fn webrtc_ice_servers(State(state): State<Arc<AppState>>) -> Json<IceS
             }
         }
     } else {
-        // No custom servers configured - use Google STUN as default
-        if let Some(stun) = public_ice::stun_server() {
-            ice_servers.push(IceServerInfo {
-                urls: vec![stun],
-                username: None,
-                credential: None,
-            });
-        }
+        // No custom servers — baked-in public STUN
+        ice_servers.push(IceServerInfo {
+            urls: vec![public_ice::stun_server().to_string()],
+            username: None,
+            credential: None,
+        });
         // Note: TURN servers are not provided - users must configure their own
     }
 

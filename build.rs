@@ -64,25 +64,6 @@ fn generate_secrets() {
 pub mod ice {
     /// Google public STUN server URL (hardcoded)
     pub const STUN_SERVER: &str = "stun:stun.l.google.com:19302";
-
-    /// TURN server URLs - not provided, users must configure their own
-    pub const TURN_URLS: &str = "";
-
-    /// TURN authentication username
-    pub const TURN_USERNAME: &str = "";
-
-    /// TURN authentication password
-    pub const TURN_PASSWORD: &str = "";
-
-    /// Always returns true since we have STUN
-    pub const fn is_configured() -> bool {
-        true
-    }
-
-    /// Always returns false since TURN is not provided
-    pub const fn has_turn() -> bool {
-        false
-    }
 }
 
 /// RustDesk public server configuration - NOT PROVIDED

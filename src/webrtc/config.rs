@@ -2,42 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::secrets;
-
-/// ICE server utilities - Only provides Google STUN, no TURN
+/// ICE server utilities — public STUN only (TURN must be user-configured).
 pub mod public_ice {
-    use super::*;
-
-    /// Always returns true (we have Google STUN)
+    /// Whether a build-time public STUN URL exists (always true for stock builds).
+    #[inline]
     pub fn is_configured() -> bool {
-        secrets::ice::is_configured()
+        true
     }
 
-    /// Always returns false (TURN not provided)
-    pub fn has_turn() -> bool {
-        secrets::ice::has_turn()
-    }
-
-    /// Get the Google STUN server URL
-    pub fn stun_server() -> Option<String> {
-        let server = secrets::ice::STUN_SERVER;
-        if server.is_empty() {
-            None
-        } else {
-            Some(server.to_string())
-        }
-    }
-
-    /// Always returns empty vector (TURN not provided)
-    pub fn turn_servers() -> Vec<TurnServer> {
-        vec![]
-    }
-
-    /// Get all public ICE servers (STUN only, no TURN)
-    pub fn get_all_servers() -> (Vec<String>, Vec<TurnServer>) {
-        let stun_servers = stun_server().into_iter().collect();
-        let turn_servers = vec![];
-        (stun_servers, turn_servers)
+    /// Build-time public STUN URL (`secrets::ice::STUN_SERVER`).
+    #[inline]
+    pub fn stun_server() -> &'static str {
+        crate::secrets::ice::STUN_SERVER
     }
 }
 

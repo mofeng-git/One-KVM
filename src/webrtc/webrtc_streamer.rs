@@ -759,7 +759,7 @@ impl WebRtcStreamer {
     /// Note: Changes take effect for new sessions only.
     /// Existing sessions need to be reconnected to use the new ICE config.
     ///
-    /// If both stun_server and turn_server are empty/None, uses public ICE servers.
+    /// If both stun_server and turn_server are empty/None, uses baked-in public STUN.
     pub async fn update_ice_config(
         &self,
         stun_server: Option<String>,
@@ -777,21 +777,12 @@ impl WebRtcStreamer {
         let has_custom_stun = stun_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
         let has_custom_turn = turn_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 
-        // If no custom servers, use public ICE servers (like RustDesk)
+        // If no custom servers, use baked-in public STUN
         if !has_custom_stun && !has_custom_turn {
             use crate::webrtc::config::public_ice;
-            if public_ice::is_configured() {
-                if let Some(stun) = public_ice::stun_server() {
-                    config.webrtc.stun_servers.push(stun.clone());
-                    info!("Using public STUN server: {}", stun);
-                }
-                for turn in public_ice::turn_servers() {
-                    info!("Using public TURN server: {:?}", turn.urls);
-                    config.webrtc.turn_servers.push(turn);
-                }
-            } else {
-                info!("No public ICE servers configured, using host candidates only");
-            }
+            let stun = public_ice::stun_server().to_string();
+            info!("Using public STUN server: {}", stun);
+            config.webrtc.stun_servers.push(stun);
         } else {
             // Use custom servers
             if let Some(ref stun) = stun_server {

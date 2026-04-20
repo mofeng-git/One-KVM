@@ -288,23 +288,12 @@ async fn main() -> anyhow::Result<()> {
                     .map(|s| !s.is_empty())
                     .unwrap_or(false);
 
-                // If no custom servers, use public ICE servers (like RustDesk)
+                // If no custom servers, use baked-in public STUN
                 if !has_custom_stun && !has_custom_turn {
                     use one_kvm::webrtc::config::public_ice;
-                    if public_ice::is_configured() {
-                        if let Some(stun) = public_ice::stun_server() {
-                            stun_servers.push(stun.clone());
-                            tracing::info!("Using public STUN server: {}", stun);
-                        }
-                        for turn in public_ice::turn_servers() {
-                            tracing::info!("Using public TURN server: {:?}", turn.urls);
-                            turn_servers.push(turn);
-                        }
-                    } else {
-                        tracing::info!(
-                            "No public ICE servers configured, using host candidates only"
-                        );
-                    }
+                    let stun = public_ice::stun_server().to_string();
+                    tracing::info!("Using public STUN server: {}", stun);
+                    stun_servers.push(stun);
                 } else {
                     // Use custom servers
                     if let Some(ref stun) = config.stream.stun_server {
@@ -342,7 +331,7 @@ async fn main() -> anyhow::Result<()> {
         };
         WebRtcStreamer::with_config(webrtc_config)
     };
-    tracing::info!("WebRTC streamer created (supports H264, extensible to VP8/VP9/H265)");
+    tracing::info!("WebRTC streamer created");
 
     // Create OTG Service (single instance for centralized USB gadget management)
     let otg_service = Arc::new(OtgService::new());
