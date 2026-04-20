@@ -5,7 +5,7 @@
 
 use crate::error::{Result, VentoyError};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::OnceLock;
 
 /// Resource file names
@@ -151,13 +151,6 @@ pub fn get_ventoy_disk_img() -> Result<&'static [u8]> {
         })
 }
 
-/// Get the resource directory path for a given data directory
-///
-/// Returns `{data_dir}/ventoy`
-pub fn get_resource_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join("ventoy")
-}
-
 /// List required resource files
 pub fn required_files() -> &'static [&'static str] {
     &[BOOT_IMG_NAME, CORE_IMG_NAME, VENTOY_DISK_IMG_NAME]
@@ -166,22 +159,6 @@ pub fn required_files() -> &'static [&'static str] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    fn create_test_resources(dir: &Path) {
-        // Create boot.img (512 bytes)
-        let mut boot = std::fs::File::create(dir.join(BOOT_IMG_NAME)).unwrap();
-        boot.write_all(&[0u8; 512]).unwrap();
-
-        // Create core.img (fake, 1KB)
-        let mut core = std::fs::File::create(dir.join(CORE_IMG_NAME)).unwrap();
-        core.write_all(&[0u8; 1024]).unwrap();
-
-        // Create ventoy.disk.img (fake, 1KB)
-        let mut ventoy = std::fs::File::create(dir.join(VENTOY_DISK_IMG_NAME)).unwrap();
-        ventoy.write_all(&[0u8; 1024]).unwrap();
-    }
 
     #[test]
     fn test_required_files() {
@@ -192,10 +169,4 @@ mod tests {
         assert!(files.contains(&"ventoy.disk.img"));
     }
 
-    #[test]
-    fn test_get_resource_dir() {
-        let data_dir = Path::new("/var/lib/one-kvm");
-        let resource_dir = get_resource_dir(data_dir);
-        assert_eq!(resource_dir, PathBuf::from("/var/lib/one-kvm/ventoy"));
-    }
 }

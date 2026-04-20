@@ -362,16 +362,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Create MSD controller (optional, based on config)
     let msd = if config.msd.enabled {
-        // Initialize Ventoy resources from data directory
-        let ventoy_resource_dir = ventoy_img::get_resource_dir(&data_dir);
+        // `{data_dir}/ventoy`: boot.img, core.img, ventoy.disk.img for ventoy_img
+        let ventoy_resource_dir = data_dir.join("ventoy");
         if ventoy_resource_dir.exists() {
             if let Err(e) = ventoy_img::init_resources(&ventoy_resource_dir) {
                 tracing::warn!("Failed to initialize Ventoy resources: {}", e);
-                tracing::info!(
-                    "Ventoy resource files should be placed in: {}",
-                    ventoy_resource_dir.display()
-                );
-                tracing::info!("Required files: {:?}", ventoy_img::required_files());
             } else {
                 tracing::info!(
                     "Ventoy resources initialized from {}",
@@ -382,10 +377,6 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!(
                 "Ventoy resource directory not found: {}",
                 ventoy_resource_dir.display()
-            );
-            tracing::info!(
-                "Create the directory and place the following files: {:?}",
-                ventoy_img::required_files()
             );
         }
 
