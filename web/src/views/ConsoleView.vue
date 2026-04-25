@@ -137,6 +137,9 @@ const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
 const isPointerLocked = ref(false) // Track pointer lock state
 
+/** Local overlay crosshair position (px, relative to video container); HID uses mousePosition separately */
+const localCrosshairPos = ref<{ x: number; y: number } | null>(null)
+
 // Mouse move throttling (60 Hz = ~16.67ms interval)
 const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
 let mouseMoveSendIntervalMs = DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
@@ -1982,7 +1985,43 @@ function getAbsoluteMousePosition(e: MouseEvent) {
   }
 }
 
+function updateLocalCrosshairFromEvent(e: MouseEvent) {
+  if (!cursorVisible.value) {
+    localCrosshairPos.value = null
+    return
+  }
+  const container = videoContainerRef.value
+  if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
+
+  if (mouseMode.value === 'relative' && isPointerLocked.value) {
+    const cur = localCrosshairPos.value
+    const nx = cur ? cur.x + e.movementX : rect.width / 2
+    const ny = cur ? cur.y + e.movementY : rect.height / 2
+    localCrosshairPos.value = {
+      x: Math.max(0, Math.min(rect.width, nx)),
+      y: Math.max(0, Math.min(rect.height, ny)),
+    }
+    return
+  }
+
+  localCrosshairPos.value = {
+    x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
+  }
+}
+
+function handleMouseLeaveVideo() {
+  if (!isPointerLocked.value) {
+    localCrosshairPos.value = null
+  }
+}
+
 function handleMouseMove(e: MouseEvent) {
+  updateLocalCrosshairFromEvent(e)
+
   const videoElement = getActiveVideoElement()
   if (!videoElement) return
 
@@ -2192,6 +2231,12 @@ function handlePointerLockChange() {
   if (isPointerLocked.value) {
     // Reset mouse position display when locked
     mousePosition.value = { x: 0, y: 0 }
+    if (cursorVisible.value && container) {
+      const r = container.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) {
+        localCrosshairPos.value = { x: r.width / 2, y: r.height / 2 }
+      }
+    }
     toast.info(t('console.pointerLocked'), {
       description: t('console.pointerLockedDesc'),
       duration: 3000,
@@ -2222,6 +2267,9 @@ function handleBlur() {
 function handleCursorVisibilityChange(e: Event) {
   const customEvent = e as CustomEvent<{ visible: boolean }>
   cursorVisible.value = customEvent.detail.visible
+  if (!cursorVisible.value) {
+    localCrosshairPos.value = null
+  }
 }
 
 function clampMouseMoveSendIntervalMs(ms: number): number {
@@ -2654,10 +2702,10 @@ onUnmounted(() => {
           }"
           :class="{
             'opacity-60': videoLoading || videoError,
-            'cursor-crosshair': cursorVisible,
-            'cursor-none': !cursorVisible
+            'cursor-none': true,
           }"
           tabindex="0"
+          @mouseleave="handleMouseLeaveVideo"
           @mousemove="handleMouseMove"
           @mousedown="handleMouseDown"
           @mouseup="handleMouseUp"
@@ -2692,6 +2740,59 @@ onUnmounted(() => {
             class="absolute inset-0 w-full h-full object-contain pointer-events-none"
             alt=""
           />
+
+          <!-- Stroked crosshair (native cursor cannot be outlined) -->
+          <div
+            v-if="cursorVisible && localCrosshairPos"
+            class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
+            :style="{
+              left: `${localCrosshairPos.x}px`,
+              top: `${localCrosshairPos.y}px`,
+            }"
+            aria-hidden="true"
+          >
+            <svg
+              width="23"
+              height="23"
+              viewBox="-11.5 -11.5 23 23"
+              class="overflow-visible"
+            >
+              <g stroke-linecap="square">
+                <line
+                  x1="0"
+                  y1="-10"
+                  x2="0"
+                  y2="10"
+                  stroke="rgba(0,0,0,0.88)"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-10"
+                  y1="0"
+                  x2="10"
+                  y2="0"
+                  stroke="rgba(0,0,0,0.88)"
+                  stroke-width="3"
+                />
+                <line
+                  x1="0"
+                  y1="-10"
+                  x2="0"
+                  y2="10"
+                  stroke="rgba(255,255,255,0.95)"
+                  stroke-width="1"
+                />
+                <line
+                  x1="-10"
+                  y1="0"
+                  x2="10"
+                  y2="0"
+                  stroke="rgba(255,255,255,0.95)"
+                  stroke-width="1"
+                />
+              </g>
+            </svg>
+          </div>
 
           <!-- Loading Overlay with smooth transition and visual feedback -->
           <Transition name="fade">
