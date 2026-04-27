@@ -328,6 +328,14 @@ export default {
         title: 'Video channel busy',
         detail: 'Applying a new configuration or another component is using the device, please wait…',
       },
+      uvc_usb_error: {
+        title: 'USB capture transport error',
+        detail: 'The USB capture device encountered a protocol error (EPROTO). You can try resetting the device from Settings → Environment → USB Devices.',
+      },
+      uvc_capture_stall: {
+        title: 'UVC capture stalled',
+        detail: 'Check the device connection. If already connected, try changing the capture format and resetting the device.',
+      },
       reason: {
         no_cable: 'HDMI cable not detected — check the cable and that the target is powered on',
         no_sync: 'Unstable signal: timings could not be locked — try a lower resolution or refresh rate',
@@ -337,6 +345,9 @@ export default {
         device_lost: 'Video node disappeared, waiting for the driver to recover',
         config_changing: 'Applying new configuration',
         mode_switching: 'Switching video mode',
+        uvc_usb_error:
+          'Try another USB port or cable, avoid hubs, or reconnect the device. You can also reset the device from Settings → Environment → USB Devices.',
+        uvc_capture_stall: '',
       },
     },
     // WebRTC
@@ -835,6 +846,21 @@ export default {
       resolution: 'Resolution',
       currentHardwareEncoder: 'Current Hardware Encoder',
       none: 'None',
+    },
+    usbDevices: {
+      title: 'USB Devices',
+      desc: 'View connected USB devices and reset them to recover from errors',
+      refresh: 'Refresh',
+      loadFailed: 'Failed to load USB device list',
+      noDevices: 'No USB devices found',
+      colDevice: 'Device',
+      colSpeed: 'Speed',
+      colVideo: 'Video',
+      colAction: 'Action',
+      reset: 'Reset',
+      resetConfirmTitle: 'Confirm USB Device Reset',
+      resetConfirmDesc: 'This will reset USB device "{device}" by cycling its authorized attribute. All connections to this device will be temporarily interrupted. Continue?',
+      resetAction: 'Reset Device',
     },
     // WebRTC / ICE
     webrtcSettings: 'WebRTC Settings',

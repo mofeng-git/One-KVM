@@ -177,6 +177,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/atx/wol/history", get(handlers::atx_wol_history))
         // Device discovery endpoints
         .route("/devices/atx", get(handlers::devices::list_atx_devices))
+        .route("/devices/usb", get(handlers::devices::list_usb_devices))
+        .route(
+            "/devices/usb/reset",
+            post(handlers::devices::reset_usb_device),
+        )
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
         .route("/extensions/{id}", get(handlers::extensions::get_extension))

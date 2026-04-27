@@ -96,6 +96,8 @@ pub struct CaptureDeviceConfig {
     pub jpeg_quality: u8,
     pub subdev_path: Option<PathBuf>,
     pub bridge_kind: Option<String>,
+    /// V4L2 driver name (e.g. `uvcvideo`) for UVC-specific recovery hints.
+    pub v4l2_driver: Option<String>,
 }
 
 /// WebRTC streamer statistics
@@ -382,6 +384,7 @@ impl WebRtcStreamer {
                     device.jpeg_quality,
                     device.subdev_path,
                     device.bridge_kind,
+                    device.v4l2_driver,
                 )
                 .await?;
         } else {
@@ -575,10 +578,11 @@ impl WebRtcStreamer {
         jpeg_quality: u8,
         subdev_path: Option<PathBuf>,
         bridge_kind: Option<String>,
+        v4l2_driver: Option<String>,
     ) {
         info!(
-            "Setting direct capture device for WebRTC: {:?} (subdev={:?}, kind={:?})",
-            device_path, subdev_path, bridge_kind
+            "Setting direct capture device for WebRTC: {:?} (subdev={:?}, kind={:?}, driver={:?})",
+            device_path, subdev_path, bridge_kind, v4l2_driver
         );
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
@@ -586,6 +590,7 @@ impl WebRtcStreamer {
             jpeg_quality,
             subdev_path,
             bridge_kind,
+            v4l2_driver,
         });
     }
 

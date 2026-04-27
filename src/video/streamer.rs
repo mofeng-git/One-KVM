@@ -71,6 +71,10 @@ pub enum StreamerState {
     NoSync,
     /// Source timings are outside of what the capture hardware supports (ERANGE)
     OutOfRange,
+    /// UVC/USB isochronous protocol error (kernel EPROTO/-71)
+    UvcUsbError,
+    /// UVC capture stalled (repeated DQBUF timeouts)
+    UvcCaptureStall,
     /// Error occurred
     Error,
     /// Device was lost (unplugged)
@@ -90,6 +94,8 @@ impl StreamerState {
             StreamerState::NoCable => "no_cable",
             StreamerState::NoSync => "no_sync",
             StreamerState::OutOfRange => "out_of_range",
+            StreamerState::UvcUsbError => "uvc_usb_error",
+            StreamerState::UvcCaptureStall => "uvc_capture_stall",
             StreamerState::Error => "error",
             StreamerState::DeviceLost => "device_lost",
             StreamerState::Recovering => "recovering",
@@ -107,6 +113,8 @@ impl StreamerState {
             "no_cable" => StreamerState::NoCable,
             "no_sync" => StreamerState::NoSync,
             "out_of_range" => StreamerState::OutOfRange,
+            "uvc_usb_error" => StreamerState::UvcUsbError,
+            "uvc_capture_stall" => StreamerState::UvcCaptureStall,
             "error" => StreamerState::Error,
             "device_lost" => StreamerState::DeviceLost,
             "recovering" => StreamerState::Recovering,
@@ -122,6 +130,8 @@ impl StreamerState {
                 | StreamerState::NoCable
                 | StreamerState::NoSync
                 | StreamerState::OutOfRange
+                | StreamerState::UvcUsbError
+                | StreamerState::UvcCaptureStall
         )
     }
 
@@ -135,6 +145,8 @@ impl StreamerState {
             StreamerState::NoCable => ("no_signal", Some("no_cable")),
             StreamerState::NoSync => ("no_signal", Some("no_sync")),
             StreamerState::OutOfRange => ("no_signal", Some("out_of_range")),
+            StreamerState::UvcUsbError => ("no_signal", Some("uvc_usb_error")),
+            StreamerState::UvcCaptureStall => ("no_signal", Some("uvc_capture_stall")),
             StreamerState::DeviceLost => ("device_lost", Some("device_lost")),
             StreamerState::Recovering => ("device_lost", Some("recovering")),
             StreamerState::Busy => ("device_busy", None),
@@ -1076,7 +1088,8 @@ impl Streamer {
                         // in ~1 s instead of the 1 s recovery-poll loop.
                         let os_err = e.raw_os_error();
                         let is_device_lost = matches!(os_err, Some(6) | Some(19) | Some(108));
-                        let is_transient_signal_error = matches!(os_err, Some(5) | Some(32));
+                        let is_transient_signal_error =
+                            matches!(os_err, Some(5) | Some(32) | Some(71));
 
                         if is_device_lost {
                             error!("Video device lost: {} - {}", device_path.display(), e);
@@ -1098,10 +1111,28 @@ impl Streamer {
                         }
 
                         if is_transient_signal_error {
-                            warn!(
-                                "Capture transient error ({}): treating as NoSignal + soft-restart",
-                                e
-                            );
+                            if os_err == Some(71) {
+                                warn!(
+                                    "Capture transient error (EPROTO/-71, often UVC USB): {}",
+                                    e
+                                );
+                                let is_uvc = handle.block_on(async {
+                                    self.current_device.read().await.as_ref().is_some_and(
+                                        |d| d.driver.eq_ignore_ascii_case("uvcvideo"),
+                                    )
+                                });
+                                if is_uvc {
+                                    go_offline();
+                                    set_state(StreamerState::UvcUsbError);
+                                    need_soft_restart = true;
+                                    break 'capture;
+                                }
+                            } else {
+                                warn!(
+                                    "Capture transient error ({}): treating as NoSignal + soft-restart",
+                                    e
+                                );
+                            }
                             set_retry(
                                 backoff_secs(no_signal_restart_count).saturating_mul(1000),
                             );

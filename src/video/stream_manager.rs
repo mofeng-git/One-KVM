@@ -356,14 +356,26 @@ impl VideoStreamManager {
             // Resolve the paired subdev so the WebRTC pipeline can run the
             // RK628 STREAMON gate + SOURCE_CHANGE polling identically to the
             // MJPEG path.  See `csi_bridge::discover_subdev_for_video`.
-            let (subdev_path, bridge_kind) = self
+            let (subdev_path, bridge_kind, v4l2_driver) = self
                 .streamer
                 .current_device()
                 .await
-                .map(|d| (d.subdev_path.clone(), d.bridge_kind.clone()))
-                .unwrap_or((None, None));
+                .map(|d| {
+                    (
+                        d.subdev_path.clone(),
+                        d.bridge_kind.clone(),
+                        Some(d.driver.clone()),
+                    )
+                })
+                .unwrap_or((None, None, None));
             self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality, subdev_path, bridge_kind)
+                .set_capture_device(
+                    device_path,
+                    jpeg_quality,
+                    subdev_path,
+                    bridge_kind,
+                    v4l2_driver,
+                )
                 .await;
         } else {
             warn!("No capture device configured while syncing WebRTC capture source");
@@ -559,14 +571,26 @@ impl VideoStreamManager {
             }
             if let Some(device_path) = device_path {
                 info!("Configuring direct capture for WebRTC after config change");
-                let (subdev_path, bridge_kind) = self
+                let (subdev_path, bridge_kind, v4l2_driver) = self
                     .streamer
                     .current_device()
                     .await
-                    .map(|d| (d.subdev_path.clone(), d.bridge_kind.clone()))
-                    .unwrap_or((None, None));
+                    .map(|d| {
+                        (
+                            d.subdev_path.clone(),
+                            d.bridge_kind.clone(),
+                            Some(d.driver.clone()),
+                        )
+                    })
+                    .unwrap_or((None, None, None));
                 self.webrtc_streamer
-                    .set_capture_device(device_path, jpeg_quality, subdev_path, bridge_kind)
+                    .set_capture_device(
+                        device_path,
+                        jpeg_quality,
+                        subdev_path,
+                        bridge_kind,
+                        v4l2_driver,
+                    )
                     .await;
             } else {
                 warn!("No capture device configured for WebRTC after config change");

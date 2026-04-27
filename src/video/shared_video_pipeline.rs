@@ -415,6 +415,11 @@ impl SharedVideoPipeline {
         if !should_emit {
             return;
         }
+        tracing::debug!(
+            "Pipeline state notification: state={}, reason={:?}",
+            notification.state,
+            notification.reason
+        );
         if let Some(notifier) = self.state_notifier.read().clone() {
             notifier(notification);
         }
@@ -542,6 +547,7 @@ impl SharedVideoPipeline {
         _jpeg_quality: u8,
         subdev_path: Option<std::path::PathBuf>,
         bridge_kind: Option<String>,
+        _v4l2_driver: Option<String>,
     ) -> Result<()> {
         if *self.running_rx.borrow() {
             warn!("Pipeline already running");
@@ -982,7 +988,6 @@ impl SharedVideoPipeline {
                     let meta = match next_result {
                         Ok(meta) => {
                             consecutive_timeouts = 0;
-                            pipeline.notify_state(PipelineStateNotification::streaming());
                             meta
                         }
                         Err(e) => {
@@ -1100,6 +1105,12 @@ impl SharedVideoPipeline {
                                          closing stream for soft-restart",
                                         consecutive_timeouts
                                     );
+                                    pipeline.notify_state(
+                                        PipelineStateNotification::no_signal(
+                                            SignalStatus::UvcCaptureStall,
+                                            Some(Duration::from_secs(2).as_millis() as u64),
+                                        ),
+                                    );
                                     stream = None;
                                     continue;
                                 }
@@ -1123,17 +1134,29 @@ impl SharedVideoPipeline {
                                 }
                             } else {
                                 consecutive_timeouts = 0;
-                                // EIO (5) / EPIPE (32) in next_into generally
-                                // mean the source glitched mid-stream.
-                                // Tear down the stream and let the open loop
-                                // re-probe via DV_TIMINGS — same logic as
-                                // timeouts, just triggered earlier.
-                                if matches!(e.raw_os_error(), Some(5) | Some(32)) {
-                                    warn!(
-                                        "Capture transient error ({}), closing stream for \
-                                         soft-restart",
-                                        e
-                                    );
+                                // EIO (5) / EPIPE (32) / EPROTO (71) in next_into generally
+                                // mean the source or UVC USB transport glitched mid-stream.
+                                // Tear down the stream and let the open loop re-probe.
+                                let os = e.raw_os_error();
+                                if matches!(os, Some(5) | Some(32) | Some(71)) {
+                                    if os == Some(71) {
+                                        warn!(
+                                            "Capture transient error (EPROTO/-71, often UVC USB): {} — soft-restart",
+                                            e
+                                        );
+                                        pipeline.notify_state(
+                                            PipelineStateNotification::no_signal(
+                                                SignalStatus::UvcUsbError,
+                                                Some(Duration::from_secs(2).as_millis() as u64),
+                                            ),
+                                        );
+                                    } else {
+                                        warn!(
+                                            "Capture transient error ({}), closing stream for \
+                                             soft-restart",
+                                            e
+                                        );
+                                    }
                                     stream = None;
                                     continue;
                                 }
@@ -1172,6 +1195,11 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
+                    // Notify streaming only after frame validation passes —
+                    // stale/warm-up frames from V4L2 kernel queues can cause
+                    // DQBUF Ok with invalid data, which would prematurely
+                    // clear the frontend error overlay.
+                    pipeline.notify_state(PipelineStateNotification::streaming());
                     let frame = Arc::new(VideoFrame::from_pooled(
                         Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
                         resolution,

@@ -13,6 +13,7 @@ pub mod frame;
 pub mod shared_video_pipeline;
 pub mod stream_manager;
 pub mod streamer;
+pub mod usb_reset;
 pub mod v4l2r_capture;
 
 pub use convert::{PixelConverter, Yuv420pBuffer};
@@ -41,6 +42,10 @@ pub enum SignalStatus {
     OutOfRange,
     /// Generic "no usable source" (fallback for EINVAL / EIO / unknown errnos).
     NoSignal,
+    /// UVC/USB isochronous protocol error (common kernel: status -71 / userspace EPROTO).
+    UvcUsbError,
+    /// UVC capture stalled (repeated DQBUF timeouts; often cable, hub, or controller load).
+    UvcCaptureStall,
 }
 
 impl SignalStatus {
@@ -50,6 +55,8 @@ impl SignalStatus {
             SignalStatus::NoSync => "no_sync",
             SignalStatus::OutOfRange => "out_of_range",
             SignalStatus::NoSignal => "no_signal",
+            SignalStatus::UvcUsbError => "uvc_usb_error",
+            SignalStatus::UvcCaptureStall => "uvc_capture_stall",
         }
     }
 
@@ -59,6 +66,8 @@ impl SignalStatus {
             "no_sync" => SignalStatus::NoSync,
             "out_of_range" => SignalStatus::OutOfRange,
             "no_signal" => SignalStatus::NoSignal,
+            "uvc_usb_error" => SignalStatus::UvcUsbError,
+            "uvc_capture_stall" => SignalStatus::UvcCaptureStall,
             _ => return None,
         })
     }
@@ -71,6 +80,8 @@ impl From<SignalStatus> for streamer::StreamerState {
             SignalStatus::NoSync => streamer::StreamerState::NoSync,
             SignalStatus::OutOfRange => streamer::StreamerState::OutOfRange,
             SignalStatus::NoSignal => streamer::StreamerState::NoSignal,
+            SignalStatus::UvcUsbError => streamer::StreamerState::UvcUsbError,
+            SignalStatus::UvcCaptureStall => streamer::StreamerState::UvcCaptureStall,
         }
     }
 }

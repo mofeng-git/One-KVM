@@ -1102,6 +1102,20 @@ const signalOverlayInfo = computed(() => {
   const reasonHintKey = reason ? `console.signal.reason.${reason}` : ''
   const hint = reasonHintKey && te(reasonHintKey) ? t(reasonHintKey) : ''
 
+  // UVC-specific overlay when we have the detailed reason
+  if (streamSignalState.value === 'no_signal' && reason) {
+    const titleKey = `console.signal.${reason}.title`
+    const detailKey = `console.signal.${reason}.detail`
+    if (te(titleKey) && te(detailKey)) {
+      return {
+        title: t(titleKey),
+        detail: t(detailKey),
+        hint,
+        tone: 'info' as const,
+      }
+    }
+  }
+
   switch (streamSignalState.value) {
     case 'no_signal':
       return {

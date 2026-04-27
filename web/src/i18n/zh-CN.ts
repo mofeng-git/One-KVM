@@ -327,6 +327,14 @@ export default {
         title: '视频通道忙',
         detail: '正在切换配置或被其他组件占用，请稍候…',
       },
+      uvc_usb_error: {
+        title: 'USB 采集传输异常',
+        detail: 'USB 采集卡遇到协议错误（EPROTO），可在 设置 → 环境 → USB 设备 中尝试复位。',
+      },
+      uvc_capture_stall: {
+        title: 'UVC 采集超时',
+        detail: '检查设备连接，若设备已连接，可尝试修改采集格式并复位设备。',
+      },
       reason: {
         no_cable: '未检测到 HDMI 线缆，请检查连接或被控机是否已开机',
         no_sync: '信号不稳定，无法锁定时序，可尝试降低被控机分辨率/刷新率',
@@ -336,6 +344,9 @@ export default {
         device_lost: '视频节点丢失，等待驱动恢复',
         config_changing: '正在应用新配置',
         mode_switching: '正在切换视频模式',
+        uvc_usb_error:
+          '可尝试更换 USB 口或线、避免 HUB、或重新插拔设备；也可在 设置 → 环境 → USB 设备 中复位。',
+        uvc_capture_stall: '',
       },
     },
     // WebRTC
@@ -834,6 +845,21 @@ export default {
       resolution: '分辨率',
       currentHardwareEncoder: '当前硬件编码器',
       none: '无',
+    },
+    usbDevices: {
+      title: 'USB 设备',
+      desc: '查看已连接的 USB 设备，可通过复位恢复异常设备',
+      refresh: '刷新',
+      loadFailed: '加载 USB 设备列表失败',
+      noDevices: '未发现 USB 设备',
+      colDevice: '设备',
+      colSpeed: '速度',
+      colVideo: '视频',
+      colAction: '操作',
+      reset: '复位',
+      resetConfirmTitle: '确认复位 USB 设备',
+      resetConfirmDesc: '将通过 authorized 属性复位 USB 设备「{device}」，该设备上的所有连接将短暂中断。确定继续？',
+      resetAction: '确认复位',
     },
     // WebRTC / ICE
     webrtcSettings: 'WebRTC 设置',

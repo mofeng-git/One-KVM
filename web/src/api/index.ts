@@ -765,4 +765,28 @@ export const audioApi = {
     }),
 }
 
+// USB API
+export interface UsbDeviceInfo {
+  bus_num: number
+  dev_num: number
+  id_vendor: string
+  id_product: string
+  product?: string
+  manufacturer?: string
+  speed?: string
+  authorized?: boolean
+  video_device?: string
+}
+
+export const usbApi = {
+  listDevices: () =>
+    request<UsbDeviceInfo[]>('/devices/usb'),
+
+  resetDevice: (busNum: number, devNum: number) =>
+    request<{ success: boolean; message: string }>('/devices/usb/reset', {
+      method: 'POST',
+      body: JSON.stringify({ bus_num: busNum, dev_num: devNum }),
+    }),
+}
+
 export { ApiError }

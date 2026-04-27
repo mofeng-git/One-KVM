@@ -14,6 +14,7 @@ import {
   extensionsApi,
   systemApi,
   updateApi,
+  usbApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
@@ -59,6 +60,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Monitor,
   Keyboard,
@@ -645,6 +656,52 @@ async function onRunVideoEncoderSelfCheckClick() {
     }, 160)
   }
   await runVideoEncoderSelfCheck()
+}
+
+// USB devices state
+const usbDevices = ref<import('@/api').UsbDeviceInfo[]>([])
+const usbDevicesLoading = ref(false)
+const usbDevicesError = ref('')
+const usbResetTarget = ref<import('@/api').UsbDeviceInfo | null>(null)
+const usbResetLoading = ref(false)
+
+async function fetchUsbDevices() {
+  usbDevicesLoading.value = true
+  usbDevicesError.value = ''
+  try {
+    usbDevices.value = await usbApi.listDevices()
+  } catch {
+    usbDevicesError.value = t('settings.usbDevices.loadFailed')
+  } finally {
+    usbDevicesLoading.value = false
+  }
+}
+
+async function confirmUsbReset() {
+  if (!usbResetTarget.value) return
+  usbResetLoading.value = true
+  try {
+    await usbApi.resetDevice(usbResetTarget.value.bus_num, usbResetTarget.value.dev_num)
+  } catch {
+    // Error already shown by request helper toast
+  } finally {
+    usbResetLoading.value = false
+    usbResetTarget.value = null
+    // Refresh the list after a short delay for USB re-enumeration
+    setTimeout(() => fetchUsbDevices(), 1500)
+  }
+}
+
+function usbSpeedLabel(speed?: string): string {
+  if (!speed) return '-'
+  const map: Record<string, string> = {
+    '1.5': '1.5 Mbps',
+    '12': '12 Mbps',
+    '480': '480 Mbps',
+    '5000': '5 Gbps',
+    '10000': '10 Gbps',
+  }
+  return map[speed] || `${speed} Mbps`
 }
 
 function defaultOtgEndpointBudgetForUdc(udc?: string): OtgEndpointBudget {
@@ -2024,6 +2081,7 @@ onMounted(async () => {
     loadWebServerConfig(),
     loadUpdateOverview(),
     refreshUpdateStatus(),
+    fetchUsbDevices(),
   ])
   usernameInput.value = authStore.user || ''
 
@@ -2742,9 +2800,103 @@ watch(() => route.query.tab, (tab) => {
                 </p>
               </CardContent>
             </Card>
-          </div>
 
-          <!-- Network Section -->
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.usbDevices.title') }}</CardTitle>
+                  <CardDescription>{{ t('settings.usbDevices.desc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="usbDevicesLoading"
+                  @click="fetchUsbDevices()"
+                >
+                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
+                  {{ t('settings.usbDevices.refresh') }}
+                </Button>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p v-if="usbDevicesError" class="text-xs text-red-600 dark:text-red-400">
+                  {{ usbDevicesError }}
+                </p>
+
+                <template v-if="usbDevices.length > 0">
+                  <div class="rounded-md border overflow-x-auto">
+                    <table class="w-full text-sm min-w-[540px]">
+                      <thead>
+                        <tr class="border-b bg-muted/40">
+                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colDevice') }}</th>
+                          <th class="px-3 py-2 text-left font-medium">VID:PID</th>
+                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colSpeed') }}</th>
+                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colVideo') }}</th>
+                          <th class="px-3 py-2 text-right font-medium">{{ t('settings.usbDevices.colAction') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="dev in usbDevices"
+                          :key="`${dev.bus_num}-${dev.dev_num}`"
+                          class="border-b last:border-b-0 hover:bg-muted/20"
+                        >
+                          <td class="px-3 py-2">
+                            <div class="font-medium truncate max-w-[180px]" :title="dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}`">{{ dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}` }}</div>
+                          </td>
+                          <td class="px-3 py-2 font-mono text-xs">{{ dev.id_vendor }}:{{ dev.id_product }}</td>
+                          <td class="px-3 py-2 text-xs">{{ usbSpeedLabel(dev.speed) }}</td>
+                          <td class="px-3 py-2 text-xs">
+                            <code v-if="dev.video_device">{{ dev.video_device }}</code>
+                            <span v-else class="text-muted-foreground">-</span>
+                          </td>
+                          <td class="px-3 py-2 text-right">
+                            <Button
+                              v-if="dev.authorized != null"
+                              variant="outline"
+                              size="sm"
+                              class="h-7 text-xs bg-black text-white border-black hover:bg-black/90 hover:text-white dark:bg-white dark:text-black dark:border-white dark:hover:bg-white/90 dark:hover:text-black"
+                              :disabled="usbResetLoading"
+                              @click="usbResetTarget = dev"
+                            >
+                              {{ t('settings.usbDevices.reset') }}
+                            </Button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+                <p v-else-if="usbDevicesLoading" class="text-xs text-muted-foreground">
+                  {{ t('common.loading') }}
+                </p>
+                <p v-else class="text-xs text-muted-foreground">
+                  {{ t('settings.usbDevices.noDevices') }}
+                </p>
+              </CardContent>
+            </Card>
+
+            <!-- USB Reset Confirmation Dialog -->
+            <AlertDialog :open="usbResetTarget != null">
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{{ t('settings.usbDevices.resetConfirmTitle') }}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {{ t('settings.usbDevices.resetConfirmDesc', { device: usbResetTarget?.product || `${usbResetTarget?.id_vendor}:${usbResetTarget?.id_product}` }) }}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel @click="usbResetTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
+                  <AlertDialogAction
+                    :disabled="usbResetLoading"
+                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    @click="confirmUsbReset()"
+                  >
+                    {{ t('settings.usbDevices.resetAction') }}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
           <div v-show="activeSection === 'network'" class="space-y-6">
 
             <!-- Auto-restart: restarting progress -->
