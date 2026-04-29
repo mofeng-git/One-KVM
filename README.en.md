@@ -222,6 +222,9 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 
 ### Sponsors
 
+**Mirror Download Services:**
+- **[Chongqing University Open Source Software Mirror](https://mirrors.cqu.edu.cn/)** — provides mirror download services
+
 **File hosting**
 
 - **[Huang1111 public-interest program](https://pan.huang1111.cn/s/mxkx3T1)** — login-free downloads
