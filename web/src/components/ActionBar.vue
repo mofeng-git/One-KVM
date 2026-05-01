@@ -51,7 +51,6 @@ const { t, locale } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
 
-// Overflow menu state
 const overflowMenuOpen = ref(false)
 
 const hidBackend = computed(() => (systemStore.hid?.backend ?? '').toLowerCase())
@@ -79,7 +78,6 @@ const emit = defineEmits<{
   (e: 'openTerminal'): void
 }>()
 
-// Desktop toolbar popover/dialog state
 const pasteOpen = ref(false)
 const atxOpen = ref(false)
 const videoPopoverOpen = ref(false)
@@ -88,7 +86,6 @@ const audioPopoverOpen = ref(false)
 const msdDialogOpen = ref(false)
 const extensionOpen = ref(false)
 
-// Mobile Sheet state
 const mobileAtxOpen = ref(false)
 const mobilePasteOpen = ref(false)
 const mobileAtxOpenTime = ref(0)
@@ -117,7 +114,6 @@ const openMobilePaste = () => openFromOverflow(() => {
   mobilePasteOpenTime.value = Date.now()
 })
 
-// ── Adaptive overflow: measure real width, show as many items as fit ──
 
 const barRef = ref<HTMLElement | null>(null)
 const measureRef = ref<HTMLElement | null>(null)
@@ -146,11 +142,9 @@ const ITEM_SPECS: ItemSpec[] = [
   { id: 'settings',  side: 'right' },
 ]
 
-// Measured widths from DOM (icon-only and with-label)
 const measuredWidths = ref<Map<CollapsibleItem, { icon: number; label: number }>>(new Map())
 const measurementReady = ref(false)
 
-// Measure button widths from hidden measurement container
 const measureButtonWidths = async () => {
   await nextTick()
   if (!measureRef.value) return
@@ -162,7 +156,6 @@ const measureButtonWidths = async () => {
     const labelEl = measureRef.value.querySelector(`[data-measure="${spec.id}-label"]`) as HTMLElement
     
     if (iconEl && labelEl) {
-      // Add small buffer (8px) for gaps and rounding errors
       newWidths.set(spec.id, {
         icon: Math.ceil(iconEl.offsetWidth) + 8,
         label: Math.ceil(labelEl.offsetWidth) + 8,
@@ -191,17 +184,13 @@ onUnmounted(() => {
   resizeObserver?.disconnect() 
 })
 
-// Re-measure when locale changes (different text widths)
 watch(locale, () => {
   measurementReady.value = false
   measureButtonWidths()
 })
 
-// Fixed-width budget for always-visible items (right side):
-// keyboard + fullscreen + potential overflow button + gaps
 const RIGHT_FIXED_PX = 120
 
-// First 3 items (video/audio/hid) are always visible
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
@@ -210,27 +199,22 @@ const collapsibleItems = computed(() => {
   return items
 })
 
-// Determine which collapsible items are visible (icon-only or with label)
 const visibleSet = computed(() => {
   if (!measurementReady.value) {
-    // Fallback to hardcoded estimates during initial render
     return new Map<CollapsibleItem, 'icon' | 'label'>()
   }
 
   const available = barWidth.value - RIGHT_FIXED_PX
   
-  // Measure actual width of always-visible items (video/audio/hid)
   let used = 0
   if (barRef.value) {
     const leftContainer = barRef.value.querySelector('.left-buttons') as HTMLElement
     if (leftContainer) {
-      // Get width of first 3 children (video/audio/hid)
       const children = Array.from(leftContainer.children).slice(0, 3) as HTMLElement[]
       used = children.reduce((sum, el) => sum + el.offsetWidth, 0)
     }
   }
   
-  // If measurement failed, use estimate
   if (used === 0) used = 330
   
   const result = new Map<CollapsibleItem, 'icon' | 'label'>()

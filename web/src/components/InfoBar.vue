@@ -17,7 +17,6 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-// Key name mapping for friendly display
 const keyNameMap: Record<string, string> = {
   MetaLeft: 'Win', MetaRight: 'Win',
   ControlLeft: 'Ctrl', ControlRight: 'Ctrl',

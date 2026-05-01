@@ -1,35 +1,31 @@
-//! Audio controller for high-level audio management
-//!
-//! Provides device enumeration, selection, quality control, and streaming management.
+//! Device selection, quality presets, streaming.
 
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
 use super::capture::AudioConfig;
-use super::device::{enumerate_audio_devices_with_current, AudioDeviceInfo};
+use super::device::{
+    enumerate_audio_devices_with_current, find_best_audio_device, AudioDeviceInfo,
+};
 use super::encoder::{OpusConfig, OpusFrame};
-use super::monitor::{AudioHealthMonitor, AudioHealthStatus};
+use super::monitor::AudioHealthMonitor;
 use super::streamer::{AudioStreamer, AudioStreamerConfig};
 use crate::error::{AppError, Result};
 use crate::events::EventBus;
 
-/// Audio quality presets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AudioQuality {
-    /// Low bandwidth voice (32kbps)
     Voice,
-    /// Balanced quality (64kbps) - default
     #[default]
     Balanced,
-    /// High quality audio (128kbps)
     High,
 }
 
 impl AudioQuality {
-    /// Get the bitrate for this quality level
     pub fn bitrate(&self) -> u32 {
         match self {
             AudioQuality::Voice => 32000,
@@ -38,22 +34,27 @@ impl AudioQuality {
         }
     }
 
-    /// Parse from string
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "voice" | "low" => AudioQuality::Voice,
-            "high" | "music" => AudioQuality::High,
-            _ => AudioQuality::Balanced,
-        }
-    }
-
-    /// Convert to OpusConfig
     pub fn to_opus_config(&self) -> OpusConfig {
         match self {
             AudioQuality::Voice => OpusConfig::voice(),
             AudioQuality::Balanced => OpusConfig::default(),
             AudioQuality::High => OpusConfig::music(),
+        }
+    }
+}
+
+impl FromStr for AudioQuality {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "voice" => Ok(Self::Voice),
+            "balanced" => Ok(Self::Balanced),
+            "high" => Ok(Self::High),
+            _ => Err(AppError::BadRequest(format!(
+                "invalid audio quality {:?} (expected voice, balanced, or high)",
+                s.trim()
+            ))),
         }
     }
 }
@@ -68,17 +69,10 @@ impl std::fmt::Display for AudioQuality {
     }
 }
 
-/// Audio controller configuration
-///
-/// Note: Sample rate is fixed at 48000Hz and channels at 2 (stereo).
-/// These are optimal for Opus encoding and match WebRTC requirements.
 #[derive(Debug, Clone)]
 pub struct AudioControllerConfig {
-    /// Whether audio is enabled
     pub enabled: bool,
-    /// Selected device name
     pub device: String,
-    /// Audio quality preset
     pub quality: AudioQuality,
 }
 
@@ -86,74 +80,52 @@ impl Default for AudioControllerConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            device: "default".to_string(),
+            device: String::new(),
             quality: AudioQuality::Balanced,
         }
     }
 }
 
-/// Current audio status
 #[derive(Debug, Clone, Serialize)]
 pub struct AudioStatus {
-    /// Whether audio feature is enabled
     pub enabled: bool,
-    /// Whether audio is currently streaming
     pub streaming: bool,
-    /// Currently selected device
     pub device: Option<String>,
-    /// Current quality preset
     pub quality: AudioQuality,
-    /// Number of connected subscribers
     pub subscriber_count: usize,
-    /// Error message if any
     pub error: Option<String>,
 }
 
-/// Audio controller
-///
-/// High-level interface for audio management, providing:
-/// - Device enumeration and selection
-/// - Quality control
-/// - Stream start/stop
-/// - Status reporting
 pub struct AudioController {
     config: RwLock<AudioControllerConfig>,
     streamer: RwLock<Option<Arc<AudioStreamer>>>,
     devices: RwLock<Vec<AudioDeviceInfo>>,
     event_bus: RwLock<Option<Arc<EventBus>>>,
-    last_error: RwLock<Option<String>>,
-    /// Health monitor for error tracking and recovery
     monitor: Arc<AudioHealthMonitor>,
 }
 
 impl AudioController {
-    /// Create a new audio controller with configuration
     pub fn new(config: AudioControllerConfig) -> Self {
         Self {
             config: RwLock::new(config),
             streamer: RwLock::new(None),
             devices: RwLock::new(Vec::new()),
             event_bus: RwLock::new(None),
-            last_error: RwLock::new(None),
-            monitor: Arc::new(AudioHealthMonitor::with_defaults()),
+            monitor: Arc::new(AudioHealthMonitor::new()),
         }
     }
 
-    /// Set event bus for internal state notifications.
     pub async fn set_event_bus(&self, event_bus: Arc<EventBus>) {
         *self.event_bus.write().await = Some(event_bus);
     }
 
-    /// Mark the device-info snapshot as stale.
     async fn mark_device_info_dirty(&self) {
         if let Some(ref bus) = *self.event_bus.read().await {
             bus.mark_device_info_dirty();
         }
     }
 
-    /// List available audio capture devices
     pub async fn list_devices(&self) -> Result<Vec<AudioDeviceInfo>> {
-        // Get current device if streaming (it may be busy and unable to be opened)
         let current_device = if self.is_streaming().await {
             Some(self.config.read().await.device.clone())
         } else {
@@ -165,41 +137,23 @@ impl AudioController {
         Ok(devices)
     }
 
-    /// Refresh device list and cache it
-    pub async fn refresh_devices(&self) -> Result<()> {
-        // Get current device if streaming (it may be busy and unable to be opened)
-        let current_device = if self.is_streaming().await {
-            Some(self.config.read().await.device.clone())
-        } else {
-            None
-        };
-
-        let devices = enumerate_audio_devices_with_current(current_device.as_deref())?;
-        *self.devices.write().await = devices;
-        Ok(())
-    }
-
-    /// Get cached device list
     pub async fn get_cached_devices(&self) -> Vec<AudioDeviceInfo> {
         self.devices.read().await.clone()
     }
 
-    /// Select audio device
     pub async fn select_device(&self, device: &str) -> Result<()> {
-        // Validate device exists
         let devices = self.list_devices().await?;
         let found = devices
             .iter()
             .any(|d| d.name == device || d.description.contains(device));
 
-        if !found && device != "default" {
+        if !found {
             return Err(AppError::AudioError(format!(
                 "Audio device not found: {}",
                 device
             )));
         }
 
-        // Update config
         {
             let mut config = self.config.write().await;
             config.device = device.to_string();
@@ -207,7 +161,6 @@ impl AudioController {
 
         info!("Audio device selected: {}", device);
 
-        // If streaming, restart with new device
         if self.is_streaming().await {
             self.stop_streaming().await?;
             self.start_streaming().await?;
@@ -216,15 +169,12 @@ impl AudioController {
         Ok(())
     }
 
-    /// Set audio quality
     pub async fn set_quality(&self, quality: AudioQuality) -> Result<()> {
-        // Update config
         {
             let mut config = self.config.write().await;
             config.quality = quality;
         }
 
-        // Update streamer if running
         if let Some(ref streamer) = *self.streamer.read().await {
             streamer.set_bitrate(quality.bitrate()).await?;
         }
@@ -237,44 +187,45 @@ impl AudioController {
         Ok(())
     }
 
-    /// Start audio streaming
     pub async fn start_streaming(&self) -> Result<()> {
-        let config = self.config.read().await.clone();
-
-        if !config.enabled {
-            return Err(AppError::AudioError("Audio is disabled".to_string()));
+        {
+            let config = self.config.read().await;
+            if !config.enabled {
+                return Err(AppError::AudioError("Audio is disabled".to_string()));
+            }
         }
 
-        // Check if already streaming
         if self.is_streaming().await {
             return Ok(());
         }
 
-        info!("Starting audio streaming with device: {}", config.device);
-
-        // Clear any previous error
-        *self.last_error.write().await = None;
-
-        // Create streamer config (fixed 48kHz stereo)
-        let streamer_config = AudioStreamerConfig {
-            capture: AudioConfig {
-                device_name: config.device.clone(),
-                ..Default::default()
-            },
-            opus: config.quality.to_opus_config(),
+        let (device_name, quality) = {
+            let mut cfg = self.config.write().await;
+            if cfg.device.trim().is_empty() {
+                let best = find_best_audio_device()?;
+                cfg.device = best.name;
+            }
+            (cfg.device.clone(), cfg.quality)
         };
 
-        // Create and start streamer
+        info!("Starting audio streaming with device: {}", device_name);
+
+        self.monitor.prepare_retry_attempt();
+
+        let streamer_config = AudioStreamerConfig {
+            capture: AudioConfig {
+                device_name: device_name.clone(),
+                ..Default::default()
+            },
+            opus: quality.to_opus_config(),
+        };
+
         let streamer = Arc::new(AudioStreamer::with_config(streamer_config));
 
         if let Err(e) = streamer.start().await {
             let error_msg = format!("Failed to start audio: {}", e);
-            *self.last_error.write().await = Some(error_msg.clone());
 
-            // Report error to health monitor
-            self.monitor
-                .report_error(Some(&config.device), &error_msg, "start_failed")
-                .await;
+            self.monitor.report_error(&error_msg, "start_failed").await;
 
             self.mark_device_info_dirty().await;
 
@@ -283,9 +234,8 @@ impl AudioController {
 
         *self.streamer.write().await = Some(streamer);
 
-        // Report recovery if we were in an error state
         if self.monitor.is_error().await {
-            self.monitor.report_recovered(Some(&config.device)).await;
+            self.monitor.report_recovered().await;
         }
 
         self.mark_device_info_dirty().await;
@@ -294,7 +244,6 @@ impl AudioController {
         Ok(())
     }
 
-    /// Stop audio streaming
     pub async fn stop_streaming(&self) -> Result<()> {
         if let Some(streamer) = self.streamer.write().await.take() {
             streamer.stop().await?;
@@ -306,7 +255,6 @@ impl AudioController {
         Ok(())
     }
 
-    /// Check if currently streaming
     pub async fn is_streaming(&self) -> bool {
         if let Some(ref streamer) = *self.streamer.read().await {
             streamer.is_running()
@@ -315,45 +263,37 @@ impl AudioController {
         }
     }
 
-    /// Get current status
     pub async fn status(&self) -> AudioStatus {
-        let config = self.config.read().await;
-        let streaming = self.is_streaming().await;
-        let error = self.last_error.read().await.clone();
+        let (enabled, device_str, quality) = {
+            let c = self.config.read().await;
+            (c.enabled, c.device.clone(), c.quality)
+        };
+        let error = self.monitor.error_message().await;
 
-        let subscriber_count = if let Some(ref streamer) = *self.streamer.read().await {
-            streamer.stats().await.subscriber_count
+        let (streaming, subscriber_count) = if let Some(ref streamer) = *self.streamer.read().await
+        {
+            let streaming = streamer.is_running();
+            let subscriber_count = streamer.stats().subscriber_count;
+            (streaming, subscriber_count)
         } else {
-            0
+            (false, 0)
         };
 
         AudioStatus {
-            enabled: config.enabled,
+            enabled,
             streaming,
-            device: if streaming || config.enabled {
-                Some(config.device.clone())
+            device: if streaming || enabled {
+                Some(device_str)
             } else {
                 None
             },
-            quality: config.quality,
+            quality,
             subscriber_count,
             error,
         }
     }
 
-    /// Subscribe to Opus frames (for WebSocket clients)
-    pub fn subscribe_opus(&self) -> Option<tokio::sync::mpsc::Receiver<Arc<OpusFrame>>> {
-        if let Ok(guard) = self.streamer.try_read() {
-            guard.as_ref().map(|s| s.subscribe_opus())
-        } else {
-            None
-        }
-    }
-
-    /// Subscribe to Opus frames (async version)
-    pub async fn subscribe_opus_async(
-        &self,
-    ) -> Option<tokio::sync::mpsc::Receiver<Arc<OpusFrame>>> {
+    pub async fn subscribe_opus(&self) -> Option<tokio::sync::mpsc::Receiver<Arc<OpusFrame>>> {
         self.streamer
             .read()
             .await
@@ -361,7 +301,6 @@ impl AudioController {
             .map(|s| s.subscribe_opus())
     }
 
-    /// Enable or disable audio
     pub async fn set_enabled(&self, enabled: bool) -> Result<()> {
         {
             let mut config = self.config.write().await;
@@ -376,21 +315,15 @@ impl AudioController {
         Ok(())
     }
 
-    /// Update full configuration
     pub async fn update_config(&self, new_config: AudioControllerConfig) -> Result<()> {
         let was_streaming = self.is_streaming().await;
 
-        // Stop streaming if running (device/quality/enabled may all change)
         if was_streaming {
             self.stop_streaming().await?;
         }
 
-        // Update config
         *self.config.write().await = new_config.clone();
 
-        // Start whenever audio is enabled — not only when we were already streaming.
-        // Otherwise PATCH /config/audio alone leaves enabled=true with no capture until
-        // POST /audio/start, which races WebRTC reconnect and matches "apply twice" reports.
         if new_config.enabled {
             self.start_streaming().await?;
         }
@@ -398,24 +331,8 @@ impl AudioController {
         Ok(())
     }
 
-    /// Shutdown the controller
     pub async fn shutdown(&self) -> Result<()> {
         self.stop_streaming().await
-    }
-
-    /// Get the health monitor reference
-    pub fn monitor(&self) -> &Arc<AudioHealthMonitor> {
-        &self.monitor
-    }
-
-    /// Get current health status
-    pub async fn health_status(&self) -> AudioHealthStatus {
-        self.monitor.status().await
-    }
-
-    /// Check if the audio is healthy
-    pub async fn is_healthy(&self) -> bool {
-        self.monitor.is_healthy().await
     }
 }
 
@@ -438,12 +355,23 @@ mod tests {
 
     #[test]
     fn test_audio_quality_from_str() {
-        assert_eq!(AudioQuality::from_str("voice"), AudioQuality::Voice);
-        assert_eq!(AudioQuality::from_str("low"), AudioQuality::Voice);
-        assert_eq!(AudioQuality::from_str("balanced"), AudioQuality::Balanced);
-        assert_eq!(AudioQuality::from_str("high"), AudioQuality::High);
-        assert_eq!(AudioQuality::from_str("music"), AudioQuality::High);
-        assert_eq!(AudioQuality::from_str("unknown"), AudioQuality::Balanced);
+        assert_eq!(
+            "voice".parse::<AudioQuality>().unwrap(),
+            AudioQuality::Voice
+        );
+        assert_eq!(
+            "balanced".parse::<AudioQuality>().unwrap(),
+            AudioQuality::Balanced
+        );
+        assert_eq!("high".parse::<AudioQuality>().unwrap(), AudioQuality::High);
+    }
+
+    #[test]
+    fn test_audio_quality_from_str_rejects_aliases_and_unknown() {
+        assert!("low".parse::<AudioQuality>().is_err());
+        assert!("music".parse::<AudioQuality>().is_err());
+        assert!("unknown".parse::<AudioQuality>().is_err());
+        assert!("".parse::<AudioQuality>().is_err());
     }
 
     #[tokio::test]

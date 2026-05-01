@@ -68,7 +68,6 @@ const router = useRouter()
 const devices = ref<VideoDevice[]>([])
 const loadingDevices = ref(false)
 
-// Codec list
 const codecs = ref<VideoCodecInfo[]>([])
 const loadingCodecs = ref(false)
 
@@ -135,7 +134,6 @@ function detectBrowserCodecSupport() {
     if (capabilities?.codecs) {
       for (const codec of capabilities.codecs) {
         const mimeType = codec.mimeType.toLowerCase()
-        // Map MIME types to our codec IDs
         if (mimeType.includes('h264') || mimeType.includes('avc')) {
           supported.add('h264')
         }
@@ -154,7 +152,6 @@ function detectBrowserCodecSupport() {
       }
     }
   } else {
-    // Fallback: assume basic codecs are supported
     supported.add('h264')
     supported.add('vp8')
     supported.add('vp9')
@@ -191,12 +188,10 @@ const translateBackendName = (backend: string | undefined): string => {
   return backend
 }
 
-// Check if a format has fps >= 30 in any resolution
 const hasHighFps = (format: { resolutions: { fps: number[] }[] }): boolean => {
   return format.resolutions.some(res => res.fps.some(fps => fps >= 30))
 }
 
-// Check if a format is recommended based on video mode
 const isFormatRecommended = (formatName: string): boolean => {
   if (!isVideoFormatSelectable(formatName, props.videoMode, currentEncoderBackend.value)) {
     return false
@@ -214,20 +209,16 @@ const isFormatRecommended = (formatName: string): boolean => {
   const currentFormat = formats.find(f => f.format.toUpperCase() === upperFormat)
   if (!currentFormat) return false
 
-  // Check if NV12 exists with fps >= 30
   const nv12Format = formats.find(f => f.format.toUpperCase() === 'NV12')
   const nv12HasHighFps = nv12Format && hasHighFps(nv12Format)
 
-  // Check if YUYV exists with fps >= 30
   const yuyvFormat = formats.find(f => f.format.toUpperCase() === 'YUYV')
   const yuyvHasHighFps = yuyvFormat && hasHighFps(yuyvFormat)
 
-  // Priority 1: NV12 with high fps
   if (nv12HasHighFps) {
     return upperFormat === 'NV12'
   }
 
-  // Priority 2: YUYV with high fps (only if NV12 doesn't qualify)
   if (yuyvHasHighFps) {
     return upperFormat === 'YUYV'
   }
@@ -235,13 +226,11 @@ const isFormatRecommended = (formatName: string): boolean => {
   return false
 }
 
-// Check if a format is not recommended for current video mode
 // In WebRTC mode, compressed formats (MJPEG/JPEG) are not recommended
 const isFormatNotRecommended = (formatName: string): boolean => {
   return getFormatState(formatName) === 'not_recommended'
 }
 
-// Selected values (mode comes from props)
 const selectedDevice = ref<string>('')
 const selectedFormat = ref<string>('')
 const selectedResolution = ref<string>('')
@@ -249,11 +238,9 @@ const selectedFps = ref<number>(30)
 const selectedBitratePreset = ref<'Speed' | 'Balanced' | 'Quality'>('Balanced')
 const isDirty = ref(false)
 
-// UI state
 const applying = ref(false)
 const applyingBitrate = ref(false)
 
-// Current config from store
 const currentConfig = computed(() => ({
   device: configStore.video?.device || '',
   format: configStore.video?.format || '',
@@ -262,7 +249,6 @@ const currentConfig = computed(() => ({
   fps: configStore.video?.fps || 30,
 }))
 
-// Button display text - simplified to just show label
 const buttonText = computed(() => t('actionbar.videoConfig'))
 
 // Available codecs for selection (filtered by backend support and enriched with backend info)
@@ -305,7 +291,6 @@ const availableCodecs = computed(() => {
   return backendFiltered.filter(codec => allowed.includes(codec.id))
 })
 
-// Cascading filters
 const availableFormats = computed(() => {
   const device = devices.value.find(d => d.path === selectedDevice.value)
   return device?.formats || []
@@ -331,13 +316,11 @@ const availableFps = computed(() => {
   return resolution?.fps || []
 })
 
-// Get selected format description for display in trigger
 const selectedFormatInfo = computed(() => {
   const format = availableFormatOptions.value.find(f => f.format === selectedFormat.value)
   return format
 })
 
-// Get selected codec info for display in trigger
 const selectedCodecInfo = computed(() => {
   const codec = availableCodecs.value.find(c => c.id === props.videoMode)
   return codec || null
@@ -366,7 +349,6 @@ async function loadCodecs() {
     backends.value = result.backends || []
   } catch (e) {
     console.info('[VideoConfig] Failed to load codecs')
-    // Fallback to default codecs
     codecs.value = [
       { id: 'mjpeg', name: 'MJPEG / HTTP', protocol: 'http', hardware: false, backend: 'software', available: true },
       { id: 'h264', name: 'H.264 / WebRTC', protocol: 'webrtc', hardware: false, backend: 'software', available: true },
@@ -384,12 +366,10 @@ async function loadConstraints() {
   }
 }
 
-// Navigate to settings page (video tab)
 function goToSettings() {
   router.push('/settings?tab=video')
 }
 
-// Initialize selected values from current config
 function initializeFromCurrent() {
   const config = currentConfig.value
   selectedDevice.value = config.device
@@ -417,7 +397,6 @@ function syncFromCurrentIfChanged() {
   isDirty.value = false
 }
 
-// Handle video mode change
 function handleVideoModeChange(mode: unknown) {
   if (typeof mode !== 'string') return
 
@@ -476,7 +455,6 @@ function handleDeviceChange(devicePath: unknown) {
   selectedDevice.value = devicePath
   isDirty.value = true
 
-  // Auto-select first format
   const device = devices.value.find(d => d.path === devicePath)
   const format = device ? findFirstSelectableFormat(device.formats) : undefined
   if (!format) {
@@ -487,7 +465,6 @@ function handleDeviceChange(devicePath: unknown) {
   selectFormatWithDefaults(format.format)
 }
 
-// Handle format change
 function handleFormatChange(format: unknown) {
   if (typeof format !== 'string') return
   if (isFormatUnsupported(format)) return
@@ -496,13 +473,11 @@ function handleFormatChange(format: unknown) {
   isDirty.value = true
 }
 
-// Handle resolution change
 function handleResolutionChange(resolution: unknown) {
   if (typeof resolution !== 'string') return
   selectedResolution.value = resolution
   isDirty.value = true
 
-  // Auto-select first FPS for this resolution
   const resolutionData = availableResolutions.value.find(
     r => `${r.width}x${r.height}` === resolution
   )
@@ -511,14 +486,12 @@ function handleResolutionChange(resolution: unknown) {
   }
 }
 
-// Handle FPS change
 function handleFpsChange(fps: unknown) {
   if (typeof fps !== 'string' && typeof fps !== 'number') return
   selectedFps.value = typeof fps === 'string' ? Number(fps) : fps
   isDirty.value = true
 }
 
-// Apply bitrate preset change
 async function applyBitratePreset(preset: 'Speed' | 'Balanced' | 'Quality') {
   if (applyingBitrate.value) return
   applyingBitrate.value = true
@@ -532,7 +505,6 @@ async function applyBitratePreset(preset: 'Speed' | 'Balanced' | 'Quality') {
   }
 }
 
-// Handle bitrate preset selection
 function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
   selectedBitratePreset.value = preset
   if (props.videoMode !== 'mjpeg') {
@@ -540,7 +512,6 @@ function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
   }
 }
 
-// Apply video configuration
 async function applyVideoConfig() {
   const [width, height] = selectedResolution.value.split('x').map(Number)
 
@@ -559,13 +530,11 @@ async function applyVideoConfig() {
     // Stream state will be updated via WebSocket system.device_info event
   } catch (e) {
     console.info('[VideoConfig] Failed to apply config:', e)
-    // Error toast already shown by API layer
   } finally {
     applying.value = false
   }
 }
 
-// Watch open state
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
     isDirty.value = false

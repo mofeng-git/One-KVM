@@ -142,15 +142,10 @@ impl UpdateService {
     }
 
     pub async fn overview(&self, channel: UpdateChannel) -> Result<UpdateOverviewResponse> {
-        let channels: ChannelsManifest = self.fetch_json("/v1/channels.json").await?;
-        let releases: ReleasesManifest = self.fetch_json("/v1/releases.json").await?;
+        let (channels, releases) = self.fetch_manifests().await?;
 
         let current_version = parse_version(env!("CARGO_PKG_VERSION"))?;
-        let latest_version_str = match channel {
-            UpdateChannel::Stable => channels.stable,
-            UpdateChannel::Beta => channels.beta,
-        };
-        let latest_version = parse_version(&latest_version_str)?;
+        let latest_version = parse_version(&channel_head_version(&channels, channel))?;
         let current_parts = parse_version_parts(&current_version)?;
         let latest_parts = parse_version_parts(&latest_version)?;
 
@@ -159,11 +154,7 @@ impl UpdateService {
             if release.channel != channel {
                 continue;
             }
-            let version = match parse_version(&release.version) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let version_parts = match parse_version_parts(&version) {
+            let version_parts = match parse_version_parts(&release.version) {
                 Ok(parts) => parts,
                 Err(_) => continue,
             };
@@ -253,16 +244,11 @@ impl UpdateService {
         )
         .await;
 
-        let channels: ChannelsManifest = self.fetch_json("/v1/channels.json").await?;
-        let releases: ReleasesManifest = self.fetch_json("/v1/releases.json").await?;
+        let (channels, releases) = self.fetch_manifests().await?;
 
         let current_version = parse_version(env!("CARGO_PKG_VERSION"))?;
         let target_version = if let Some(channel) = req.channel {
-            let version_str = match channel {
-                UpdateChannel::Stable => channels.stable,
-                UpdateChannel::Beta => channels.beta,
-            };
-            parse_version(&version_str)?
+            parse_version(&channel_head_version(&channels, channel))?
         } else {
             parse_version(req.target_version.as_deref().unwrap_or_default())?
         };
@@ -443,6 +429,12 @@ impl UpdateService {
         Ok(())
     }
 
+    async fn fetch_manifests(&self) -> Result<(ChannelsManifest, ReleasesManifest)> {
+        let channels = self.fetch_json("/v1/channels.json").await?;
+        let releases = self.fetch_json("/v1/releases.json").await?;
+        Ok((channels, releases))
+    }
+
     async fn fetch_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
         let url = format!("{}{}", self.base_url.trim_end_matches('/'), path);
         let response = self
@@ -494,22 +486,7 @@ impl UpdateService {
 }
 
 fn parse_version(input: &str) -> Result<String> {
-    let parts: Vec<&str> = input.split('.').collect();
-    if parts.len() != 3 {
-        return Err(AppError::Internal(format!(
-            "Invalid version {}, expected x.x.x",
-            input
-        )));
-    }
-    if parts
-        .iter()
-        .any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()))
-    {
-        return Err(AppError::Internal(format!(
-            "Invalid version {}, expected numeric x.x.x",
-            input
-        )));
-    }
+    parse_version_parts(input)?;
     Ok(input.to_string())
 }
 
@@ -527,16 +504,26 @@ fn parse_version_parts(input: &str) -> Result<[u64; 3]> {
             input
         )));
     }
-    let major = parts[0]
-        .parse::<u64>()
-        .map_err(|e| AppError::Internal(format!("Invalid major version {}: {}", parts[0], e)))?;
-    let minor = parts[1]
-        .parse::<u64>()
-        .map_err(|e| AppError::Internal(format!("Invalid minor version {}: {}", parts[1], e)))?;
-    let patch = parts[2]
-        .parse::<u64>()
-        .map_err(|e| AppError::Internal(format!("Invalid patch version {}: {}", parts[2], e)))?;
-    Ok([major, minor, patch])
+    let mut out = [0u64; 3];
+    for (i, p) in parts.iter().enumerate() {
+        if p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()) {
+            return Err(AppError::Internal(format!(
+                "Invalid version {}, expected numeric x.x.x",
+                input
+            )));
+        }
+        out[i] = p
+            .parse::<u64>()
+            .map_err(|e| AppError::Internal(format!("Invalid version component {}: {}", p, e)))?;
+    }
+    Ok(out)
+}
+
+fn channel_head_version(channels: &ChannelsManifest, channel: UpdateChannel) -> String {
+    match channel {
+        UpdateChannel::Stable => channels.stable.clone(),
+        UpdateChannel::Beta => channels.beta.clone(),
+    }
 }
 
 fn compare_version_parts(a: &[u64; 3], b: &[u64; 3]) -> std::cmp::Ordering {

@@ -42,10 +42,8 @@ const configStore = useConfigStore()
 const systemStore = useSystemStore()
 const unifiedAudio = getUnifiedAudio()
 
-// === Playback Control (immediate effect) ===
 const localVolume = ref([unifiedAudio.volume.value * 100])
 
-// Volume change - immediate effect, also triggers connection if needed
 async function handleVolumeChange(value: number[] | undefined) {
   if (!value || value.length === 0 || value[0] === undefined) return
 
@@ -53,7 +51,6 @@ async function handleVolumeChange(value: number[] | undefined) {
   unifiedAudio.setVolume(newVolume)
   localVolume.value = value
 
-  // If backend is streaming but audio not connected, connect now (user gesture)
   if (newVolume > 0 && systemStore.audio?.streaming && !unifiedAudio.connected.value) {
     console.log('[Audio] User adjusted volume, connecting unified audio')
     try {
@@ -64,17 +61,14 @@ async function handleVolumeChange(value: number[] | undefined) {
   }
 }
 
-// === Device Settings (requires apply) ===
 const devices = ref<AudioDevice[]>([])
 const loadingDevices = ref(false)
 const applying = ref(false)
 
-// Config values
 const audioEnabled = ref(false)
 const selectedDevice = ref('')
 const selectedQuality = ref<'voice' | 'balanced' | 'high'>('balanced')
 
-// Load device list
 async function loadDevices() {
   loadingDevices.value = true
   try {
@@ -87,7 +81,6 @@ async function loadDevices() {
   }
 }
 
-// Initialize from current config
 function initializeFromCurrent() {
   const audio = configStore.audio
   if (audio) {
@@ -96,46 +89,36 @@ function initializeFromCurrent() {
     selectedQuality.value = (audio.quality as 'voice' | 'balanced' | 'high') || 'balanced'
   }
 
-  // Sync playback control state
   localVolume.value = [unifiedAudio.volume.value * 100]
 }
 
-// Apply device configuration
 async function applyConfig() {
   applying.value = true
 
   try {
-    // Update config
     await configStore.updateAudio({
       enabled: audioEnabled.value,
       device: selectedDevice.value,
       quality: selectedQuality.value,
     })
 
-    // If enabled and device is selected, try to start audio stream
     if (audioEnabled.value && selectedDevice.value) {
       try {
-        // Restore default volume BEFORE starting audio
-        // This ensures handleAudioStateChanged sees the correct volume
         if (localVolume.value[0] === 0) {
           localVolume.value = [100]
           unifiedAudio.setVolume(1)
         }
 
         await audioApi.start()
-        // ConsoleView will react when system.device_info reflects streaming=true.
       } catch (startError) {
-        // Audio start failed - config was saved but streaming not started
         console.info('[AudioConfig] Audio start failed:', startError)
       }
     } else if (!audioEnabled.value) {
-      // Reset volume to 0 when disabling audio
       localVolume.value = [0]
       unifiedAudio.setVolume(0)
       try {
         await audioApi.stop()
       } catch {
-        // Ignore stop errors
       }
       unifiedAudio.disconnect()
     }
@@ -148,7 +131,6 @@ async function applyConfig() {
   }
 }
 
-// Watch popover open state
 watch(() => props.open, (isOpen) => {
   if (!isOpen) return
 

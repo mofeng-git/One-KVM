@@ -1,42 +1,28 @@
-//! WebRTC configuration
-
 use serde::{Deserialize, Serialize};
 
-/// ICE server utilities — public STUN only (TURN must be user-configured).
+/// Public STUN from build-time secrets; TURN is user-configured.
 pub mod public_ice {
-    /// Whether a build-time public STUN URL exists (always true for stock builds).
     #[inline]
     pub fn is_configured() -> bool {
         true
     }
 
-    /// Build-time public STUN URL (`secrets::ice::STUN_SERVER`).
     #[inline]
     pub fn stun_server() -> &'static str {
         crate::secrets::ice::STUN_SERVER
     }
 }
 
-/// WebRTC configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebRtcConfig {
-    /// Enable WebRTC
     pub enabled: bool,
-    /// STUN server URLs
     pub stun_servers: Vec<String>,
-    /// TURN server configuration
     pub turn_servers: Vec<TurnServer>,
-    /// Enable DataChannel for HID
     pub enable_datachannel: bool,
-    /// Video codec preference
     pub video_codec: VideoCodec,
-    /// Target bitrate in kbps
     pub target_bitrate_kbps: u32,
-    /// Maximum bitrate in kbps
     pub max_bitrate_kbps: u32,
-    /// Minimum bitrate in kbps
     pub min_bitrate_kbps: u32,
-    /// Enable audio track
     pub enable_audio: bool,
 }
 
@@ -44,8 +30,6 @@ impl Default for WebRtcConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            // Empty STUN servers for local connections - host candidates work directly
-            // For remote access, configure STUN/TURN servers via settings
             stun_servers: vec![],
             turn_servers: vec![],
             enable_datachannel: true,
@@ -58,20 +42,14 @@ impl Default for WebRtcConfig {
     }
 }
 
-/// TURN server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnServer {
-    /// TURN server URLs (e.g., ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"])
-    /// Multiple URLs allow fallback between UDP and TCP transports
     pub urls: Vec<String>,
-    /// Username for TURN authentication
     pub username: String,
-    /// Credential for TURN authentication
     pub credential: String,
 }
 
 impl TurnServer {
-    /// Create a TurnServer with a single URL (for backwards compatibility)
     pub fn new(url: String, username: String, credential: String) -> Self {
         Self {
             urls: vec![url],
@@ -81,7 +59,6 @@ impl TurnServer {
     }
 }
 
-/// Video codec preference
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
@@ -104,14 +81,10 @@ impl std::fmt::Display for VideoCodec {
     }
 }
 
-/// ICE configuration
 #[derive(Debug, Clone)]
 pub struct IceConfig {
-    /// ICE candidate gathering timeout (ms)
     pub gathering_timeout_ms: u64,
-    /// ICE connection timeout (ms)
     pub connection_timeout_ms: u64,
-    /// Enable ICE lite mode
     pub ice_lite: bool,
 }
 

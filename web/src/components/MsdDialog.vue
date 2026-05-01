@@ -60,29 +60,23 @@ const { t } = useI18n()
 const systemStore = useSystemStore()
 const { on, off } = useWebSocket()
 
-// Tab state
 const activeTab = ref('images')
 
-// Image state
 const images = ref<MsdImage[]>([])
 const loadingImages = ref(false)
 const uploadProgress = ref(0)
 const uploading = ref(false)
 
-// Mount options (using ToggleGroup)
 const mountMode = ref<'cdrom' | 'flash'>('flash')
 const accessMode = ref<'readonly' | 'readwrite'>('readonly')
 
-// Computed properties for API compatibility
 const cdromMode = computed(() => mountMode.value === 'cdrom')
 const readOnly = computed(() => accessMode.value === 'readonly')
 
-// Operation state flags
 const connecting = ref(false)
 const disconnecting = ref(false)
 const deleting = ref(false)
 
-// Drive state
 const driveFiles = ref<DriveFile[]>([])
 const currentPath = ref('/')
 const loadingDrive = ref(false)
@@ -91,13 +85,11 @@ const driveInitialized = ref(false)
 const uploadingFile = ref(false)
 const fileUploadProgress = ref(0)
 
-// Inner dialog state
 const showDeleteDialog = ref(false)
 const deleteTarget = ref<{ type: 'image' | 'file'; id: string; name: string } | null>(null)
 const showNewFolderDialog = ref(false)
 const newFolderName = ref('')
 
-// Drive init dialog state
 const showDriveInitDialog = ref(false)
 const showDeleteDriveDialog = ref(false)
 const selectedDriveSize = ref(256) // Default 256MB
@@ -105,7 +97,6 @@ const customDriveSize = ref<number | undefined>(undefined)
 const initializingDrive = ref(false)
 const deletingDrive = ref(false)
 
-// URL download state
 const showUrlDialog = ref(false)
 const downloadUrl = ref('')
 const downloadFilename = ref('')
@@ -119,14 +110,11 @@ const downloadProgress = ref<{
   status: string
 } | null>(null)
 
-// Constants
 const TWO_POINT_TWO_GB = 2.2 * 1024 * 1024 * 1024
 
-// Computed
 const msdConnected = computed(() => systemStore.msd?.connected ?? false)
 const msdMode = computed(() => systemStore.msd?.mode ?? 'none')
 
-// Get currently connected image name
 const connectedImageName = computed(() => {
   if (!msdConnected.value) return null
   if (msdMode.value === 'drive') return t('msd.drive')
@@ -136,7 +124,6 @@ const connectedImageName = computed(() => {
   return image?.name ?? null
 })
 
-// Check if any operation is in progress
 const operationInProgress = computed(() => {
   return connecting.value ||
          disconnecting.value ||
@@ -147,7 +134,6 @@ const operationInProgress = computed(() => {
          deletingDrive.value
 })
 
-// Check if image is large (>2.2GB)
 function isLargeFile(image: MsdImage): boolean {
   return image.size > TWO_POINT_TWO_GB
 }
@@ -163,7 +149,6 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-// Load data when dialog opens
 watch(() => props.open, async (isOpen) => {
   if (isOpen) {
     await loadData()
@@ -179,7 +164,6 @@ async function loadData() {
   }
 }
 
-// Image functions
 async function loadImages() {
   loadingImages.value = true
   try {
@@ -294,7 +278,6 @@ async function executeDelete() {
   }
 }
 
-// Drive functions
 async function loadDriveInfo() {
   try {
     driveInfo.value = await msdApi.driveInfo()
@@ -304,7 +287,6 @@ async function loadDriveInfo() {
   }
 }
 
-// Drive size options - computed for i18n support
 const driveSizeOptions = computed(() => [
   { value: 64, label: '64 MB' },
   { value: 128, label: '128 MB' },
@@ -316,17 +298,14 @@ const driveSizeOptions = computed(() => [
   { value: 8192, label: '8 GB' },
 ])
 
-// Computed final drive size
 const finalDriveSize = computed(() => {
   return customDriveSize.value || selectedDriveSize.value
 })
 
-// Open drive init dialog
 function initializeDrive() {
   showDriveInitDialog.value = true
 }
 
-// Create drive with selected size
 async function createDrive() {
   initializingDrive.value = true
   try {
@@ -342,7 +321,6 @@ async function createDrive() {
   }
 }
 
-// Delete virtual drive
 async function deleteDrive() {
   deletingDrive.value = true
   try {
@@ -422,7 +400,6 @@ async function createFolder() {
   }
 }
 
-// URL download functions
 async function startUrlDownload() {
   if (!downloadUrl.value.trim()) return
 

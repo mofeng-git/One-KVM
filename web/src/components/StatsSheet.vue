@@ -29,19 +29,16 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
 }>()
 
-// Chart containers
 const stabilityChartRef = ref<HTMLDivElement | null>(null)
 const delayChartRef = ref<HTMLDivElement | null>(null)
 const packetLossChartRef = ref<HTMLDivElement | null>(null)
 const fpsChartRef = ref<HTMLDivElement | null>(null)
 
-// Chart instances
 let stabilityChart: uPlot | null = null
 let delayChart: uPlot | null = null
 let packetLossChart: uPlot | null = null
 let fpsChart: uPlot | null = null
 
-// Data history (last 120 seconds)
 const MAX_POINTS = 120
 const timestamps = ref<number[]>([])
 const jitterHistory = ref<number[]>([])
@@ -50,7 +47,6 @@ const packetLossHistory = ref<number[]>([])
 const fpsHistory = ref<number[]>([])
 const bitrateHistory = ref<number[]>([])
 
-// For delta calculations
 let lastBytesReceived = 0
 let lastPacketsLost = 0
 let lastTimestamp = 0
@@ -58,13 +54,11 @@ let lastTimestamp = 0
 // Is WebRTC mode
 const isWebRTC = computed(() => props.videoMode !== 'mjpeg')
 
-// Format time for axis
 function formatTime(ts: number): string {
   const date = new Date(ts * 1000)
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// Chart theme colors
 const chartColors = {
   line: '#3b82f6',
   fill: 'rgba(59, 130, 246, 0.1)',
@@ -73,7 +67,6 @@ const chartColors = {
   text: '#94a3b8',
 }
 
-// Chart options factory
 function createChartOptions(
   container: HTMLElement,
   _yLabel: string,
@@ -129,7 +122,6 @@ function createChartOptions(
   }
 }
 
-// Tooltip state for each chart
 const activeTooltip = ref<{
   chartId: string
   time: string
@@ -186,12 +178,10 @@ function createTooltipPlugin(chartId: string, unit: string): uPlot.Plugin {
   }
 }
 
-// Initialize charts
 function initCharts() {
   if (!props.open) return
 
   nextTick(() => {
-    // Initialize timestamps if empty
     if (timestamps.value.length === 0) {
       const now = Date.now() / 1000
       for (let i = MAX_POINTS - 1; i >= 0; i--) {
@@ -204,7 +194,6 @@ function initCharts() {
       bitrateHistory.value = new Array(MAX_POINTS).fill(0)
     }
 
-    // Network Stability (Jitter) Chart
     if (stabilityChartRef.value && !stabilityChart) {
       const opts = createChartOptions(stabilityChartRef.value, 'ms', (v) => `${v.toFixed(0)} ms`)
       opts.plugins = [createTooltipPlugin('stability', 'ms')]
@@ -215,7 +204,6 @@ function initCharts() {
       )
     }
 
-    // Playback Delay Chart
     if (delayChartRef.value && !delayChart) {
       const opts = createChartOptions(delayChartRef.value, 'ms', (v) => `${v.toFixed(0)} ms`)
       opts.plugins = [createTooltipPlugin('delay', 'ms')]
@@ -237,7 +225,6 @@ function initCharts() {
       )
     }
 
-    // FPS Chart
     if (fpsChartRef.value && !fpsChart) {
       const opts = createChartOptions(fpsChartRef.value, 'fps', (v) => `${v.toFixed(0)} fps`)
       opts.plugins = [createTooltipPlugin('fps', 'fps')]
@@ -250,7 +237,6 @@ function initCharts() {
   })
 }
 
-// Destroy charts
 function destroyCharts() {
   stabilityChart?.destroy()
   stabilityChart = null
@@ -262,22 +248,18 @@ function destroyCharts() {
   fpsChart = null
 }
 
-// Add data point
 function addDataPoint() {
   const now = Date.now() / 1000
 
-  // Shift timestamps
   timestamps.value.push(now)
   if (timestamps.value.length > MAX_POINTS) {
     timestamps.value.shift()
   }
 
   if (isWebRTC.value && props.webrtcStats) {
-    // Jitter in ms
     const jitter = (props.webrtcStats.jitter || 0) * 1000
     jitterHistory.value.push(jitter)
 
-    // RTT (round trip time) as delay in ms
     const rtt = (props.webrtcStats.roundTripTime || 0) * 1000
     delayHistory.value.push(rtt)
 
@@ -287,10 +269,8 @@ function addDataPoint() {
     lastPacketsLost = currentLost
     packetLossHistory.value.push(lostDelta)
 
-    // FPS
     fpsHistory.value.push(props.webrtcStats.framesPerSecond || 0)
 
-    // Calculate bitrate
     const currentBytes = props.webrtcStats.bytesReceived || 0
     const currentTime = Date.now()
     if (lastTimestamp > 0 && currentBytes > lastBytesReceived) {
@@ -312,18 +292,15 @@ function addDataPoint() {
     bitrateHistory.value.push(0)
   }
 
-  // Trim arrays
   if (jitterHistory.value.length > MAX_POINTS) jitterHistory.value.shift()
   if (delayHistory.value.length > MAX_POINTS) delayHistory.value.shift()
   if (packetLossHistory.value.length > MAX_POINTS) packetLossHistory.value.shift()
   if (fpsHistory.value.length > MAX_POINTS) fpsHistory.value.shift()
   if (bitrateHistory.value.length > MAX_POINTS) bitrateHistory.value.shift()
 
-  // Update charts
   updateCharts()
 }
 
-// Update charts with new data
 function updateCharts() {
   stabilityChart?.setData([timestamps.value, jitterHistory.value])
   delayChart?.setData([timestamps.value, delayHistory.value])
@@ -331,7 +308,6 @@ function updateCharts() {
   fpsChart?.setData([timestamps.value, fpsHistory.value])
 }
 
-// Data collection interval
 let dataInterval: number | null = null
 
 function startDataCollection() {
@@ -346,7 +322,6 @@ function stopDataCollection() {
   }
 }
 
-// Format candidate type for display
 function formatCandidateType(type: string): string {
   const typeMap: Record<string, string> = {
     host: 'Host (Local)',
@@ -393,10 +368,8 @@ const currentStats = computed(() => {
   }
 })
 
-// Watch open state
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
-    // Reset data
     timestamps.value = []
     jitterHistory.value = []
     delayHistory.value = []
@@ -417,7 +390,6 @@ watch(() => props.open, (isOpen) => {
   }
 })
 
-// Resize handler
 function handleResize() {
   if (!props.open) return
   destroyCharts()

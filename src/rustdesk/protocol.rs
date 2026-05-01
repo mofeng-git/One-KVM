@@ -1,18 +1,12 @@
-//! RustDesk Protocol Messages
-//!
-//! This module provides the compiled protobuf messages for the RustDesk protocol.
-//! Messages are generated from rendezvous.proto and message.proto at build time.
-//! Uses protobuf-rust (same as RustDesk server) for full compatibility.
+//! Protobuf wrappers (`protos/` → `OUT_DIR`).
 
 use protobuf::Message;
 
-// Include the generated protobuf code
 #[path = ""]
 pub mod hbb {
     include!(concat!(env!("OUT_DIR"), "/protos/mod.rs"));
 }
 
-// Re-export commonly used types
 pub use hbb::rendezvous::{
     punch_hole_response, relay_response, rendezvous_message, ConfigUpdate, ConnType,
     FetchLocalAddr, HealthCheck, KeyExchange, LocalAddr, NatType, OnlineRequest, OnlineResponse,
@@ -21,7 +15,6 @@ pub use hbb::rendezvous::{
     RequestRelay, SoftwareUpdate, TestNatRequest, TestNatResponse,
 };
 
-// Re-export message.proto types
 pub use hbb::message::{
     key_event, login_response, message, misc, AudioFormat, AudioFrame, Auth2FA, Clipboard,
     ControlKey, CursorData, CursorPosition, DisplayInfo, EncodedVideoFrame, EncodedVideoFrames,
@@ -30,7 +23,6 @@ pub use hbb::message::{
     SupportedResolutions, TestDelay, VideoFrame, WindowsSessions,
 };
 
-/// Helper to create a RendezvousMessage with RegisterPeer
 pub fn make_register_peer(id: &str, serial: i32) -> RendezvousMessage {
     let mut rp = RegisterPeer::new();
     rp.id = id.to_string();
@@ -41,7 +33,6 @@ pub fn make_register_peer(id: &str, serial: i32) -> RendezvousMessage {
     msg
 }
 
-/// Helper to create a RendezvousMessage with RegisterPk
 pub fn make_register_pk(id: &str, uuid: &[u8], pk: &[u8], old_id: &str) -> RendezvousMessage {
     let mut rpk = RegisterPk::new();
     rpk.id = id.to_string();
@@ -54,7 +45,6 @@ pub fn make_register_pk(id: &str, uuid: &[u8], pk: &[u8], old_id: &str) -> Rende
     msg
 }
 
-/// Helper to create a PunchHoleSent message
 pub fn make_punch_hole_sent(
     socket_addr: &[u8],
     id: &str,
@@ -74,10 +64,7 @@ pub fn make_punch_hole_sent(
     msg
 }
 
-/// Helper to create a RelayResponse message (sent to rendezvous server)
-/// IMPORTANT: The union field should be `Id` (our device ID), NOT `Pk`.
-/// The rendezvous server will look up our registered public key using this ID,
-/// sign it with the server's private key, and set the `pk` field before forwarding to client.
+/// Use `id` (device id), not raw `pk`; hbbs fills `pk` when forwarding.
 pub fn make_relay_response(
     uuid: &str,
     socket_addr: &[u8],
@@ -96,13 +83,7 @@ pub fn make_relay_response(
     msg
 }
 
-/// Helper to create a RequestRelay message (sent to relay server to identify ourselves)
-///
-/// The `licence_key` is required if the relay server is configured with a key.
-/// If the key doesn't match, the relay server will silently reject the connection.
-///
-/// IMPORTANT: `socket_addr` is the peer's encoded socket address (from FetchLocalAddr/RelayResponse).
-/// The relay server uses this to match the two peers connecting to the same relay session.
+/// `socket_addr` must be the peer's mangled addr; `licence_key` required if hbbr uses `-k`.
 pub fn make_request_relay(uuid: &str, licence_key: &str, socket_addr: &[u8]) -> RendezvousMessage {
     let mut rr = RequestRelay::new();
     rr.uuid = uuid.to_string();
@@ -114,8 +95,6 @@ pub fn make_request_relay(uuid: &str, licence_key: &str, socket_addr: &[u8]) -> 
     msg
 }
 
-/// Helper to create a LocalAddr response message
-/// This is sent in response to FetchLocalAddr when a peer on the same LAN wants to connect
 pub fn make_local_addr(
     socket_addr: &[u8],
     local_addr: &[u8],
@@ -135,12 +114,10 @@ pub fn make_local_addr(
     msg
 }
 
-/// Decode a RendezvousMessage from bytes
 pub fn decode_rendezvous_message(buf: &[u8]) -> Result<RendezvousMessage, protobuf::Error> {
     RendezvousMessage::parse_from_bytes(buf)
 }
 
-/// Decode a Message (session message) from bytes
 pub fn decode_message(buf: &[u8]) -> Result<hbb::message::Message, protobuf::Error> {
     hbb::message::Message::parse_from_bytes(buf)
 }

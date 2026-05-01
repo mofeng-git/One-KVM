@@ -12,7 +12,9 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
 
 use super::csi_bridge;
-use super::device::{enumerate_devices, find_best_device, parse_bridge_kind, VideoDevice, VideoDeviceInfo};
+use super::device::{
+    enumerate_devices, find_best_device, parse_bridge_kind, VideoDevice, VideoDeviceInfo,
+};
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use super::is_csi_hdmi_bridge;
@@ -20,12 +22,8 @@ use crate::error::{AppError, Result};
 use crate::events::{EventBus, SystemEvent};
 use crate::stream::MjpegStreamHandler;
 use crate::utils::LogThrottler;
+use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
 use crate::video::v4l2r_capture::{is_source_changed_error, BridgeContext, V4l2rCaptureStream};
-
-/// Minimum valid frame size for capture
-const MIN_CAPTURE_FRAME_SIZE: usize = 128;
-/// Validate JPEG header every N frames to reduce overhead
-const JPEG_VALIDATE_INTERVAL: u64 = 30;
 
 /// Streamer configuration
 #[derive(Debug, Clone)]
@@ -477,11 +475,10 @@ impl Streamer {
                 );
                 return Ok(preferred);
             }
-            let fmt = device
-                .formats
-                .first()
-                .map(|f| f.format)
-                .ok_or_else(|| AppError::VideoError("No supported formats found".to_string()))?;
+            let fmt =
+                device.formats.first().map(|f| f.format).ok_or_else(|| {
+                    AppError::VideoError("No supported formats found".to_string())
+                })?;
             info!(
                 "select_format: CSI bridge with signal, preferred {:?} unavailable, selected {:?} from {:?}",
                 preferred,
@@ -916,9 +913,7 @@ impl Streamer {
                             "CSI open probe reports no signal ({:?}), will soft-restart",
                             status
                         );
-                        set_retry(
-                            backoff_secs(no_signal_restart_count).saturating_mul(1000),
-                        );
+                        set_retry(backoff_secs(no_signal_restart_count).saturating_mul(1000));
                         go_offline();
                         set_state(status.into());
                         last_error = Some(format!("CaptureNoSignal({})", kind));
@@ -952,8 +947,9 @@ impl Streamer {
                     // restart path.  This lets CSI bridges recover on their
                     // own when the source comes back (resolution change,
                     // host reboot, HDMI cable re-plug).
-                    let was_no_signal =
-                        handle.block_on(async { self.state().await }).is_no_signal_like();
+                    let was_no_signal = handle
+                        .block_on(async { self.state().await })
+                        .is_no_signal_like();
                     if !was_no_signal {
                         error!(
                             "Failed to open device {:?}: {}",
@@ -965,9 +961,7 @@ impl Streamer {
                         break 'session;
                     }
 
-                    debug!(
-                        "Open failed in NoSignal-like state, backing off before soft-restart"
-                    );
+                    debug!("Open failed in NoSignal-like state, backing off before soft-restart");
                     let wait = backoff_secs(no_signal_restart_count);
                     set_retry(wait.saturating_mul(1000));
                     std::thread::sleep(Duration::from_secs(wait));
@@ -1040,9 +1034,7 @@ impl Streamer {
                     Err(e) => {
                         if is_source_changed_error(&e) {
                             info!("Capture SOURCE_CHANGE — soft-restart for DV re-probe");
-                            set_retry(
-                                backoff_secs(no_signal_restart_count).saturating_mul(1000),
-                            );
+                            set_retry(backoff_secs(no_signal_restart_count).saturating_mul(1000));
                             go_offline();
                             set_state(StreamerState::NoSignal);
                             need_soft_restart = true;
@@ -1112,15 +1104,13 @@ impl Streamer {
 
                         if is_transient_signal_error {
                             if os_err == Some(71) {
-                                warn!(
-                                    "Capture transient error (EPROTO/-71, often UVC USB): {}",
-                                    e
-                                );
-                                let is_uvc = handle.block_on(async {
-                                    self.current_device.read().await.as_ref().is_some_and(
-                                        |d| d.driver.eq_ignore_ascii_case("uvcvideo"),
-                                    )
-                                });
+                                warn!("Capture transient error (EPROTO/-71, often UVC USB): {}", e);
+                                let is_uvc =
+                                    handle.block_on(async {
+                                        self.current_device.read().await.as_ref().is_some_and(|d| {
+                                            d.driver.eq_ignore_ascii_case("uvcvideo")
+                                        })
+                                    });
                                 if is_uvc {
                                     go_offline();
                                     set_state(StreamerState::UvcUsbError);
@@ -1133,9 +1123,7 @@ impl Streamer {
                                     e
                                 );
                             }
-                            set_retry(
-                                backoff_secs(no_signal_restart_count).saturating_mul(1000),
-                            );
+                            set_retry(backoff_secs(no_signal_restart_count).saturating_mul(1000));
                             go_offline();
                             set_state(StreamerState::NoSignal);
                             need_soft_restart = true;
@@ -1165,7 +1153,7 @@ impl Streamer {
 
                 validate_counter = validate_counter.wrapping_add(1);
                 if pixel_format.is_compressed()
-                    && validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
+                    && should_validate_jpeg_frame(validate_counter)
                     && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
                 {
                     continue 'capture;
@@ -1567,7 +1555,10 @@ fn probe_subdev_signal(
     let fd = match csi_bridge::open_subdev(subdev_path) {
         Ok(f) => f,
         Err(e) => {
-            debug!("probe_subdev_signal: failed to open {:?}: {}", subdev_path, e);
+            debug!(
+                "probe_subdev_signal: failed to open {:?}: {}",
+                subdev_path, e
+            );
             return Some(crate::video::SignalStatus::NoSignal);
         }
     };
@@ -1608,9 +1599,7 @@ fn wait_subdev_for_source_change(
         let wait = remaining.min(slice);
         match csi_bridge::wait_source_change(&fd, wait) {
             Ok(true) => {
-                info!(
-                    "Subdev SOURCE_CHANGE during no-signal wait, retrying open immediately"
-                );
+                info!("Subdev SOURCE_CHANGE during no-signal wait, retrying open immediately");
                 return;
             }
             Ok(false) => continue,

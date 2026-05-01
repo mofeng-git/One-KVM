@@ -1,21 +1,11 @@
-//! RustDesk BytesCodec - Variable-length framing for TCP messages
-//!
-//! RustDesk uses a custom variable-length encoding for message framing:
-//! - Length <= 0x3F (63): 1-byte header, format `(len << 2)`
-//! - Length <= 0x3FFF (16383): 2-byte LE header, format `(len << 2) | 0x1`
-//! - Length <= 0x3FFFFF (4194303): 3-byte LE header, format `(len << 2) | 0x2`
-//! - Length <= 0x3FFFFFFF (1073741823): 4-byte LE header, format `(len << 2) | 0x3`
-//!
-//! The low 2 bits of the first byte indicate the header length (+1).
+//! Variable-length TCP framing (RustDesk wire format).
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::io;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-/// Maximum packet length (1GB)
 const MAX_PACKET_LENGTH: usize = 0x3FFFFFFF;
 
-/// Encode a message with RustDesk's variable-length framing
 pub fn encode_frame(data: &[u8]) -> io::Result<Vec<u8>> {
     let len = data.len();
     let mut buf = Vec::with_capacity(len + 4);
@@ -44,8 +34,6 @@ pub fn encode_frame(data: &[u8]) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-/// Decode the header to get message length
-/// Returns (header_length, message_length)
 fn decode_header(first_byte: u8, header_bytes: &[u8]) -> (usize, usize) {
     let head_len = ((first_byte & 0x3) + 1) as usize;
 
@@ -64,21 +52,17 @@ fn decode_header(first_byte: u8, header_bytes: &[u8]) -> (usize, usize) {
     (head_len, msg_len)
 }
 
-/// Read a single framed message from an async reader
 pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<BytesMut> {
-    // Read first byte to determine header length
     let mut first_byte = [0u8; 1];
     reader.read_exact(&mut first_byte).await?;
 
     let head_len = ((first_byte[0] & 0x3) + 1) as usize;
 
-    // Read remaining header bytes if needed
     let mut header_rest = [0u8; 3];
     if head_len > 1 {
         reader.read_exact(&mut header_rest[..head_len - 1]).await?;
     }
 
-    // Calculate message length
     let (_, msg_len) = decode_header(first_byte[0], &header_rest);
 
     if msg_len > MAX_PACKET_LENGTH {
@@ -88,7 +72,6 @@ pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Byte
         ));
     }
 
-    // Read message body
     let mut buf = BytesMut::with_capacity(msg_len);
     buf.resize(msg_len, 0);
     reader.read_exact(&mut buf).await?;
@@ -96,7 +79,6 @@ pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Byte
     Ok(buf)
 }
 
-/// Write a framed message to an async writer
 pub async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, data: &[u8]) -> io::Result<()> {
     let frame = encode_frame(data)?;
     writer.write_all(&frame).await?;
@@ -104,10 +86,6 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, data: &[u8]) -> 
     Ok(())
 }
 
-/// Write a framed message using a reusable buffer (reduces allocations)
-///
-/// This version reuses the provided BytesMut buffer to avoid allocation on each call.
-/// The buffer is cleared before use and will grow as needed.
 pub async fn write_frame_buffered<W: AsyncWrite + Unpin>(
     writer: &mut W,
     data: &[u8],
@@ -120,11 +98,9 @@ pub async fn write_frame_buffered<W: AsyncWrite + Unpin>(
     Ok(())
 }
 
-/// Encode a message with RustDesk's variable-length framing into an existing buffer
 pub fn encode_frame_into(data: &[u8], buf: &mut BytesMut) -> io::Result<()> {
     let len = data.len();
 
-    // Reserve space for header (max 4 bytes) + data
     buf.reserve(4 + len);
 
     if len <= 0x3F {
@@ -149,7 +125,7 @@ pub fn encode_frame_into(data: &[u8], buf: &mut BytesMut) -> io::Result<()> {
     Ok(())
 }
 
-/// BytesCodec for stateful decoding (compatible with tokio-util codec)
+/// Stateful decoder for `Framed`.
 #[derive(Debug, Clone, Copy)]
 pub struct BytesCodec {
     state: DecodeState,
@@ -180,7 +156,6 @@ impl BytesCodec {
         self.max_packet_length = n;
     }
 
-    /// Decode from a BytesMut buffer (for use with Framed)
     pub fn decode(&mut self, src: &mut BytesMut) -> io::Result<Option<BytesMut>> {
         let n = match self.state {
             DecodeState::Head => match self.decode_head(src)? {
@@ -242,7 +217,6 @@ impl BytesCodec {
         Ok(Some(src.split_to(n)))
     }
 
-    /// Encode a message into a BytesMut buffer
     pub fn encode(&mut self, data: Bytes, buf: &mut BytesMut) -> io::Result<()> {
         let len = data.len();
 
@@ -276,7 +250,7 @@ mod tests {
     fn test_encode_decode_small() {
         let data = vec![1u8; 63];
         let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 63 + 1); // 1 byte header
+        assert_eq!(encoded.len(), 63 + 1);
 
         let mut codec = BytesCodec::new();
         let mut buf = BytesMut::from(&encoded[..]);
@@ -288,7 +262,7 @@ mod tests {
     fn test_encode_decode_medium() {
         let data = vec![2u8; 1000];
         let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 1000 + 2); // 2 byte header
+        assert_eq!(encoded.len(), 1000 + 2);
 
         let mut codec = BytesCodec::new();
         let mut buf = BytesMut::from(&encoded[..]);
@@ -300,7 +274,7 @@ mod tests {
     fn test_encode_decode_large() {
         let data = vec![3u8; 100000];
         let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 100000 + 3); // 3 byte header
+        assert_eq!(encoded.len(), 100000 + 3);
 
         let mut codec = BytesCodec::new();
         let mut buf = BytesMut::from(&encoded[..]);

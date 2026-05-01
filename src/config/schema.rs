@@ -1,11 +1,84 @@
-use crate::video::encoder::BitratePreset;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-// Re-export ExtensionsConfig from extensions module
+// Re-export domain config types that are embedded in AppConfig.
+// These are simple data types defined in their respective modules;
+// keeping the re-export here is acceptable since they flow inward.
 pub use crate::extensions::ExtensionsConfig;
-// Re-export RustDeskConfig from rustdesk module
 pub use crate::rustdesk::config::RustDeskConfig;
+
+/// Bitrate preset for video encoding
+///
+/// Simplifies bitrate configuration by providing three intuitive presets
+/// plus a custom option for advanced users.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
+#[derive(Default)]
+pub enum BitratePreset {
+    /// Speed priority: 1 Mbps, lowest latency, smaller GOP
+    Speed,
+    /// Balanced: 4 Mbps, good quality/latency tradeoff
+    #[default]
+    Balanced,
+    /// Quality priority: 8 Mbps, best visual quality
+    Quality,
+    /// Custom bitrate in kbps (for advanced users)
+    Custom(u32),
+}
+
+impl BitratePreset {
+    /// Get bitrate value in kbps
+    pub fn bitrate_kbps(&self) -> u32 {
+        match self {
+            Self::Speed => 1000,
+            Self::Balanced => 4000,
+            Self::Quality => 8000,
+            Self::Custom(kbps) => *kbps,
+        }
+    }
+
+    /// Get recommended GOP size based on preset
+    pub fn gop_size(&self, fps: u32) -> u32 {
+        match self {
+            Self::Speed => (fps / 2).max(15),
+            Self::Balanced => fps,
+            Self::Quality => fps * 2,
+            Self::Custom(_) => fps,
+        }
+    }
+
+    /// Get quality preset name for encoder configuration
+    pub fn quality_level(&self) -> &'static str {
+        match self {
+            Self::Speed => "low",
+            Self::Balanced => "medium",
+            Self::Quality => "high",
+            Self::Custom(_) => "medium",
+        }
+    }
+
+    /// Create from kbps value, mapping to nearest preset or Custom
+    pub fn from_kbps(kbps: u32) -> Self {
+        match kbps {
+            0..=1500 => Self::Speed,
+            1501..=6000 => Self::Balanced,
+            6001..=10000 => Self::Quality,
+            _ => Self::Custom(kbps),
+        }
+    }
+}
+
+impl std::fmt::Display for BitratePreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Speed => write!(f, "Speed (1 Mbps)"),
+            Self::Balanced => write!(f, "Balanced (4 Mbps)"),
+            Self::Quality => write!(f, "Quality (8 Mbps)"),
+            Self::Custom(kbps) => write!(f, "Custom ({} kbps)", kbps),
+        }
+    }
+}
 
 /// Main application configuration
 #[typeshare]
@@ -179,27 +252,13 @@ pub enum OtgEndpointBudget {
 }
 
 impl OtgEndpointBudget {
-    pub fn default_for_udc_name(udc: Option<&str>) -> Self {
-        if udc.is_some_and(crate::otg::configfs::is_low_endpoint_udc) {
-            Self::Five
-        } else {
-            Self::Six
-        }
-    }
-
-    pub fn resolved(self, udc: Option<&str>) -> Self {
+    /// Resolve endpoint limit assuming a known budget variant (not Auto).
+    pub fn endpoint_limit_raw(&self) -> Option<u8> {
         match self {
-            Self::Auto => Self::default_for_udc_name(udc),
-            other => other,
-        }
-    }
-
-    pub fn endpoint_limit(self, udc: Option<&str>) -> Option<u8> {
-        match self.resolved(udc) {
             Self::Five => Some(5),
             Self::Six => Some(6),
             Self::Unlimited => None,
-            Self::Auto => unreachable!("auto budget must be resolved before use"),
+            Self::Auto => None, // resolved via `HidConfig::resolved_otg_endpoint_limit`
         }
     }
 }
@@ -356,32 +415,23 @@ impl Default for HidConfig {
 }
 
 impl HidConfig {
+    /// Resolve effective OTG HID functions from profile + custom selection.
+    /// Pure logic, no external dependency.
     pub fn effective_otg_functions(&self) -> OtgHidFunctions {
         self.otg_profile.resolve_functions(&self.otg_functions)
     }
 
-    pub fn resolved_otg_udc(&self) -> Option<String> {
-        crate::otg::configfs::resolve_udc_name(self.otg_udc.as_deref())
-    }
-
-    pub fn resolved_otg_endpoint_budget(&self) -> OtgEndpointBudget {
-        self.otg_endpoint_budget
-            .resolved(self.resolved_otg_udc().as_deref())
-    }
-
-    pub fn resolved_otg_endpoint_limit(&self) -> Option<u8> {
-        self.otg_endpoint_budget
-            .endpoint_limit(self.resolved_otg_udc().as_deref())
-    }
-
+    /// Whether keyboard LED feedback is effectively enabled.
     pub fn effective_otg_keyboard_leds(&self) -> bool {
         self.otg_keyboard_leds && self.effective_otg_functions().keyboard
     }
 
+    /// Effective HID functions after applying all constraints.
     pub fn constrained_otg_functions(&self) -> OtgHidFunctions {
         self.effective_otg_functions()
     }
 
+    /// Calculate required endpoint count for the current function selection.
     pub fn effective_otg_required_endpoints(&self, msd_enabled: bool) -> u8 {
         let functions = self.effective_otg_functions();
         let mut endpoints = functions.endpoint_cost(self.effective_otg_keyboard_leds());
@@ -391,6 +441,7 @@ impl HidConfig {
         endpoints
     }
 
+    /// Validate endpoint budget for the current OTG configuration (UDC-aware when budget is Auto).
     pub fn validate_otg_endpoint_budget(&self, msd_enabled: bool) -> crate::error::Result<()> {
         if self.backend != HidBackend::Otg {
             return Ok(());
@@ -403,8 +454,9 @@ impl HidConfig {
             ));
         }
 
+        let resolved_limit = self.resolved_otg_endpoint_limit();
         let required = self.effective_otg_required_endpoints(msd_enabled);
-        if let Some(limit) = self.resolved_otg_endpoint_limit() {
+        if let Some(limit) = resolved_limit {
             if required > limit {
                 return Err(crate::error::AppError::BadRequest(format!(
                     "OTG selection requires {} endpoints, but the configured limit is {}",
@@ -414,6 +466,40 @@ impl HidConfig {
         }
 
         Ok(())
+    }
+
+    /// Effective OTG UDC name (for change detection / service).
+    #[inline]
+    pub fn resolved_otg_udc(&self) -> Option<String> {
+        if self.backend != HidBackend::Otg {
+            return None;
+        }
+        self.otg_udc
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| crate::otg::OtgGadgetManager::find_udc())
+    }
+
+    /// Resolved endpoint limit used for OTG gadget allocator / validation.
+    #[inline]
+    pub fn resolved_otg_endpoint_limit(&self) -> Option<u8> {
+        if self.backend != HidBackend::Otg {
+            return None;
+        }
+        match self.otg_endpoint_budget {
+            OtgEndpointBudget::Five => Some(5),
+            OtgEndpointBudget::Six => Some(6),
+            OtgEndpointBudget::Unlimited => None,
+            OtgEndpointBudget::Auto => {
+                let udc = self.resolved_otg_udc().unwrap_or_default();
+                if crate::otg::configfs::is_low_endpoint_udc(&udc) {
+                    Some(5)
+                } else {
+                    Some(6)
+                }
+            }
+        }
     }
 }
 
@@ -511,7 +597,7 @@ impl Default for AudioConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            device: "default".to_string(),
+            device: String::new(),
             quality: "balanced".to_string(),
         }
     }
@@ -606,21 +692,6 @@ pub enum EncoderType {
 }
 
 impl EncoderType {
-    /// Convert to EncoderBackend for registry queries
-    pub fn to_backend(&self) -> Option<crate::video::encoder::registry::EncoderBackend> {
-        use crate::video::encoder::registry::EncoderBackend;
-        match self {
-            EncoderType::Auto => None,
-            EncoderType::Software => Some(EncoderBackend::Software),
-            EncoderType::Vaapi => Some(EncoderBackend::Vaapi),
-            EncoderType::Nvenc => Some(EncoderBackend::Nvenc),
-            EncoderType::Qsv => Some(EncoderBackend::Qsv),
-            EncoderType::Amf => Some(EncoderBackend::Amf),
-            EncoderType::Rkmpp => Some(EncoderBackend::Rkmpp),
-            EncoderType::V4l2m2m => Some(EncoderBackend::V4l2m2m),
-        }
-    }
-
     /// Get display name for UI
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -687,19 +758,17 @@ impl Default for StreamConfig {
 }
 
 impl StreamConfig {
-    /// Check if using public ICE servers (user left fields empty)
+    /// Whether built-in / public ICE is used (no custom STUN or TURN URL configured).
     pub fn is_using_public_ice_servers(&self) -> bool {
-        use crate::webrtc::config::public_ice;
-        self.stun_server
+        let no_custom_stun = self
+            .stun_server
             .as_ref()
-            .map(|s| s.is_empty())
-            .unwrap_or(true)
-            && self
-                .turn_server
-                .as_ref()
-                .map(|s| s.is_empty())
-                .unwrap_or(true)
-            && public_ice::is_configured()
+            .map_or(true, |s| s.trim().is_empty());
+        let no_custom_turn = self
+            .turn_server
+            .as_ref()
+            .map_or(true, |s| s.trim().is_empty());
+        no_custom_stun && no_custom_turn
     }
 }
 

@@ -17,7 +17,6 @@ use crate::auth::auth_middleware;
 use crate::hid::websocket::ws_hid_handler;
 use crate::state::AppState;
 
-/// Create the main application router
 pub fn create_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)

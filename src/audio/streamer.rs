@@ -1,10 +1,7 @@
-//! Audio streaming pipeline
-//!
-//! ALSA capture (48 kHz stereo only) → fixed Opus 20 ms frames → `mpsc` fan-out per subscriber.
+//! ALSA 48 kHz stereo → Opus 20 ms frames, fan-out per subscriber.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, watch, Mutex as AsyncMutex, RwLock};
 use tracing::{error, info, warn};
 
@@ -14,34 +11,25 @@ use crate::error::{AppError, Result};
 use bytemuck;
 use bytes::Bytes;
 
-/// Stereo 48 kHz: 20 ms = 960 frames × 2 channels (S16LE).
+/// 48 kHz stereo: 20 ms = 960 × 2 samples (S16LE).
 const OPUS_STEREO_SAMPLES: usize = 960 * 2;
 
-/// Audio stream state
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AudioStreamState {
-    /// Stream is stopped
     #[default]
     Stopped,
-    /// Stream is starting up
     Starting,
-    /// Stream is running
     Running,
-    /// Stream encountered an error
     Error,
 }
 
-/// Audio streamer configuration
 #[derive(Debug, Clone, Default)]
 pub struct AudioStreamerConfig {
-    /// Audio capture configuration
     pub capture: AudioConfig,
-    /// Opus encoder configuration
     pub opus: OpusConfig,
 }
 
 impl AudioStreamerConfig {
-    /// Create config for a specific device with default quality
     pub fn for_device(device_name: &str) -> Self {
         Self {
             capture: AudioConfig {
@@ -52,45 +40,32 @@ impl AudioStreamerConfig {
         }
     }
 
-    /// Create config with specified bitrate
     pub fn with_bitrate(mut self, bitrate: u32) -> Self {
         self.opus.bitrate = bitrate;
         self
     }
 }
 
-/// Audio stream statistics
 #[derive(Debug, Clone, Default)]
 pub struct AudioStreamStats {
-    /// Frames encoded to Opus
-    /// Number of active subscribers
     pub subscriber_count: usize,
 }
 
-/// Audio streamer
-///
-/// Manages the audio capture → encode → mpsc fan-out pipeline.
 pub struct AudioStreamer {
     config: RwLock<AudioStreamerConfig>,
     state: watch::Sender<AudioStreamState>,
     state_rx: watch::Receiver<AudioStreamState>,
     capturer: RwLock<Option<Arc<AudioCapturer>>>,
     encoder: Arc<AsyncMutex<Option<OpusEncoder>>>,
-    /// One `mpsc::Sender` per subscriber (like shared video pipeline).
     opus_subscribers: Arc<Mutex<Vec<mpsc::Sender<Arc<OpusFrame>>>>>,
-    stats: Arc<AsyncMutex<AudioStreamStats>>,
-    sequence: AtomicU64,
-    stream_start_time: RwLock<Option<Instant>>,
     stop_flag: Arc<AtomicBool>,
 }
 
 impl AudioStreamer {
-    /// Create a new audio streamer with default configuration
     pub fn new() -> Self {
         Self::with_config(AudioStreamerConfig::default())
     }
 
-    /// Create a new audio streamer with specified configuration
     pub fn with_config(config: AudioStreamerConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(AudioStreamState::Stopped);
 
@@ -101,31 +76,24 @@ impl AudioStreamer {
             capturer: RwLock::new(None),
             encoder: Arc::new(AsyncMutex::new(None)),
             opus_subscribers: Arc::new(Mutex::new(Vec::new())),
-            stats: Arc::new(AsyncMutex::new(AudioStreamStats::default())),
-            sequence: AtomicU64::new(0),
-            stream_start_time: RwLock::new(None),
             stop_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// Get current state
     pub fn state(&self) -> AudioStreamState {
         *self.state_rx.borrow()
     }
 
-    /// Subscribe to state changes
     pub fn state_watch(&self) -> watch::Receiver<AudioStreamState> {
         self.state_rx.clone()
     }
 
-    /// Subscribe to Opus frames (each packet is one encoded 20 ms frame).
     pub fn subscribe_opus(&self) -> mpsc::Receiver<Arc<OpusFrame>> {
         let (tx, rx) = mpsc::channel::<Arc<OpusFrame>>(128);
         self.opus_subscribers.lock().unwrap().push(tx);
         rx
     }
 
-    /// Get number of active subscribers
     pub fn subscriber_count(&self) -> usize {
         self.opus_subscribers
             .lock()
@@ -135,14 +103,12 @@ impl AudioStreamer {
             .count()
     }
 
-    /// Get current statistics
-    pub async fn stats(&self) -> AudioStreamStats {
-        let mut stats = self.stats.lock().await.clone();
-        stats.subscriber_count = self.subscriber_count();
-        stats
+    pub fn stats(&self) -> AudioStreamStats {
+        AudioStreamStats {
+            subscriber_count: self.subscriber_count(),
+        }
     }
 
-    /// Update configuration (only when stopped)
     pub async fn set_config(&self, config: AudioStreamerConfig) -> Result<()> {
         if self.state() != AudioStreamState::Stopped {
             return Err(AppError::AudioError(
@@ -153,12 +119,9 @@ impl AudioStreamer {
         Ok(())
     }
 
-    /// Update bitrate dynamically (can be done while streaming)
     pub async fn set_bitrate(&self, bitrate: u32) -> Result<()> {
-        // Update config
         self.config.write().await.opus.bitrate = bitrate;
 
-        // Update encoder if running
         if let Some(ref mut encoder) = *self.encoder.lock().await {
             encoder.set_bitrate(bitrate)?;
         }
@@ -167,7 +130,6 @@ impl AudioStreamer {
         Ok(())
     }
 
-    /// Start the audio stream
     pub async fn start(&self) -> Result<()> {
         if self.state() == AudioStreamState::Running {
             return Ok(());
@@ -186,28 +148,14 @@ impl AudioStreamer {
             config.opus.bitrate
         );
 
-        // Create capturer
         let capturer = Arc::new(AudioCapturer::new(config.capture.clone()));
         *self.capturer.write().await = Some(capturer.clone());
 
-        // Create encoder
         let encoder = OpusEncoder::new(config.opus.clone())?;
         *self.encoder.lock().await = Some(encoder);
 
-        // Start capture
         capturer.start().await?;
 
-        // Reset stats
-        {
-            let mut stats = self.stats.lock().await;
-            *stats = AudioStreamStats::default();
-        }
-
-        // Record start time
-        *self.stream_start_time.write().await = Some(Instant::now());
-        self.sequence.store(0, Ordering::SeqCst);
-
-        // Start encoding task
         let capturer_for_task = capturer.clone();
         let encoder = self.encoder.clone();
         let opus_subscribers = self.opus_subscribers.clone();
@@ -215,14 +163,19 @@ impl AudioStreamer {
         let stop_flag = self.stop_flag.clone();
 
         tokio::spawn(async move {
-            Self::stream_task(capturer_for_task, encoder, opus_subscribers, state, stop_flag)
-                .await;
+            Self::stream_task(
+                capturer_for_task,
+                encoder,
+                opus_subscribers,
+                state,
+                stop_flag,
+            )
+            .await;
         });
 
         Ok(())
     }
 
-    /// Stop the audio stream
     pub async fn stop(&self) -> Result<()> {
         if self.state() == AudioStreamState::Stopped {
             return Ok(());
@@ -230,18 +183,14 @@ impl AudioStreamer {
 
         info!("Stopping audio stream");
 
-        // Signal stop
         self.stop_flag.store(true, Ordering::SeqCst);
 
-        // Stop capturer
         if let Some(ref capturer) = *self.capturer.read().await {
             capturer.stop().await?;
         }
 
-        // Clear resources — drop Opus senders so mpsc receivers see end-of-stream
         *self.capturer.write().await = None;
         *self.encoder.lock().await = None;
-        *self.stream_start_time.write().await = None;
         self.opus_subscribers.lock().unwrap().clear();
 
         let _ = self.state.send(AudioStreamState::Stopped);
@@ -249,7 +198,6 @@ impl AudioStreamer {
         Ok(())
     }
 
-    /// Check if streaming
     pub fn is_running(&self) -> bool {
         self.state() == AudioStreamState::Running
     }

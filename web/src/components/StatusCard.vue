@@ -92,7 +92,6 @@ const statusIcon = computed(() => {
   }
 })
 
-// Localized status text
 const statusText = computed(() => {
   switch (props.status) {
     case 'connected':
@@ -108,7 +107,6 @@ const statusText = computed(() => {
   }
 })
 
-// Localized status badge text (for hover card)
 const statusBadgeText = computed(() => {
   switch (props.status) {
     case 'connected':

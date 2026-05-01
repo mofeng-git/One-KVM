@@ -2,13 +2,11 @@ use crate::config::*;
 use crate::error::AppError;
 use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
-use crate::video::encoder::BitratePreset;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use typeshare::typeshare;
 
-// ===== Auth Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct AuthConfigUpdate {
@@ -27,7 +25,6 @@ impl AuthConfigUpdate {
     }
 }
 
-// ===== Video Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct VideoConfigUpdate {
@@ -91,8 +88,6 @@ impl VideoConfigUpdate {
         }
     }
 }
-
-// ===== Stream Config =====
 
 /// Stream configuration response (includes has_turn_password)
 #[typeshare]
@@ -211,8 +206,6 @@ impl StreamConfigUpdate {
         }
     }
 }
-
-// ===== HID Config =====
 
 /// OTG USB device descriptor configuration update
 #[typeshare]
@@ -364,7 +357,6 @@ impl HidConfigUpdate {
     }
 }
 
-// ===== MSD Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct MsdConfigUpdate {
@@ -397,8 +389,6 @@ impl MsdConfigUpdate {
         }
     }
 }
-
-// ===== ATX Config =====
 
 /// Update for a single ATX key configuration
 #[typeshare]
@@ -626,7 +616,6 @@ impl AtxConfigUpdate {
     }
 }
 
-// ===== Audio Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct AudioConfigUpdate {
@@ -659,8 +648,6 @@ impl AudioConfigUpdate {
         }
     }
 }
-
-// ===== RustDesk Config =====
 
 /// hbbs/hbbr `-k` relay key: standard Base64 encoding of exactly 32 bytes (typically 44 chars with padding).
 fn validate_rustdesk_relay_key(key: &str) -> Result<(), AppError> {
@@ -758,7 +745,6 @@ impl RustDeskConfigUpdate {
     }
 }
 
-// ===== RTSP Config =====
 #[typeshare]
 #[derive(Debug, serde::Serialize)]
 pub struct RtspConfigResponse {
@@ -875,8 +861,6 @@ impl RtspConfigUpdate {
         }
     }
 }
-
-// ===== Web Config =====
 
 /// Web server settings returned by `GET` / `PATCH /api/config/web`.
 ///

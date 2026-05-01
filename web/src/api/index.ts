@@ -1,11 +1,9 @@
-// API client for One-KVM backend
-
 import { request, ApiError } from './request'
 import type { CanonicalKey } from '@/types/generated'
+import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 
 const API_BASE = '/api'
 
-// Auth API
 export const authApi = {
   login: (username: string, password: string) =>
     request<{ success: boolean; message?: string }>(
@@ -36,7 +34,6 @@ export const authApi = {
     }),
 }
 
-// System API
 export interface NetworkAddress {
   interface: string
   ip: string
@@ -149,7 +146,6 @@ export const updateApi = {
     request<UpdateStatusResponse>('/update/status'),
 }
 
-// Stream API
 export interface VideoCodecInfo {
   id: string
   name: string
@@ -271,7 +267,6 @@ export const streamApi = {
     }),
 }
 
-// WebRTC API
 export interface IceCandidate {
   candidate: string
   sdpMid?: string
@@ -317,15 +312,9 @@ export const webrtcApi = {
     request<{ ice_servers: IceServerConfig[]; mdns_mode: string }>('/webrtc/ice-servers'),
 }
 
-// HID API
-// Import HID WebSocket composable
-import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
-
-// Create shared HID WebSocket instance
 const hidWs = useHidWebSocket()
 let hidWsInitialized = false
 
-// Initialize HID WebSocket connection
 async function ensureHidConnection() {
   if (!hidWsInitialized) {
     hidWsInitialized = true
@@ -333,7 +322,6 @@ async function ensureHidConnection() {
   }
 }
 
-// Map button string to number
 function mapButton(button?: 'left' | 'right' | 'middle'): number | undefined {
   if (!button) return undefined
   const buttonMap = { left: 0, middle: 1, right: 2 }
@@ -403,7 +391,6 @@ export const hidApi = {
     scroll?: number | null
   }) => {
     await ensureHidConnection()
-    // Ensure all values are properly typed (convert null to undefined)
     const event: HidMouseEvent = {
       type: data.type === 'move_abs' ? 'moveabs' : data.type,
       x: data.x ?? undefined,
@@ -424,13 +411,11 @@ export const hidApi = {
     return { success: true }
   },
 
-  // WebSocket connection management
   connectWebSocket: () => hidWs.connect(),
   disconnectWebSocket: () => hidWs.disconnect(),
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
-// ATX API
 export const atxApi = {
   status: () =>
     request<{
@@ -448,7 +433,6 @@ export const atxApi = {
     }),
 }
 
-// MSD API
 export interface MsdImage {
   id: string
   name: string
@@ -485,7 +469,6 @@ export const msdApi = {
       }
     }>('/msd/status'),
 
-  // Image management
   listImages: () => request<MsdImage[]>('/msd/images'),
 
   uploadImage: async (file: File, onProgress?: (progress: number) => void) => {
@@ -528,7 +511,6 @@ export const msdApi = {
   disconnect: () =>
     request<{ success: boolean }>('/msd/disconnect', { method: 'POST' }),
 
-  // Virtual drive
   driveInfo: () =>
     request<{
       size: number
@@ -590,7 +572,6 @@ export const msdApi = {
       method: 'POST',
     }),
 
-  // Download from URL
   downloadFromUrl: (url: string, filename?: string) =>
     request<{
       download_id: string
@@ -632,7 +613,6 @@ function sortSerialDevices(serialDevices: SerialDeviceOption[]): SerialDeviceOpt
   })
 }
 
-// Config API
 /** @deprecated 使用域特定 API（videoConfigApi, hidConfigApi 等）替代 */
 export const configApi = {
   get: () => request<Record<string, unknown>>('/config'),
@@ -683,7 +663,6 @@ export const configApi = {
   },
 }
 
-// 导出新的域分离配置 API
 export {
   authConfigApi,
   videoConfigApi,
@@ -707,7 +686,6 @@ export {
   type WebConfigUpdate,
 } from './config'
 
-// 导出生成的类型
 export type {
   AppConfig,
   AuthConfig,
@@ -730,7 +708,6 @@ export type {
   BitratePreset,
 } from '@/types/generated'
 
-// Audio API
 export const audioApi = {
   status: () =>
     request<{
@@ -765,7 +742,6 @@ export const audioApi = {
     }),
 }
 
-// USB API
 export interface UsbDeviceInfo {
   bus_num: number
   dev_num: number

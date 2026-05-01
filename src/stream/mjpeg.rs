@@ -1,7 +1,3 @@
-//! MJPEG stream handler
-//!
-//! Manages video frame distribution and per-client statistics.
-
 use arc_swap::ArcSwap;
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
@@ -17,28 +13,18 @@ use crate::video::encoder::JpegEncoder;
 use crate::video::format::PixelFormat;
 use crate::video::VideoFrame;
 
-// No placeholder JPEGs: capture calls `set_offline()`; UI uses `stream.state_changed`.
-
-/// Client ID type (UUID string)
 pub type ClientId = String;
 
-/// Per-client session information
 #[derive(Debug, Clone)]
 pub struct ClientSession {
-    /// Unique client ID
     pub id: ClientId,
-    /// Connection timestamp
     pub connected_at: Instant,
-    /// Last activity timestamp (frame sent)
     pub last_activity: Instant,
-    /// Frames sent to this client
     pub frames_sent: u64,
-    /// FPS calculator (1-second rolling window)
     pub fps_calculator: FpsCalculator,
 }
 
 impl ClientSession {
-    /// Create a new client session
     pub fn new(id: ClientId) -> Self {
         let now = Instant::now();
         Self {
@@ -50,44 +36,31 @@ impl ClientSession {
         }
     }
 
-    /// Get connection duration
-    pub fn connected_duration(&self) -> Duration {
-        self.last_activity.duration_since(self.connected_at)
-    }
-
-    /// Get idle duration
-    pub fn idle_duration(&self) -> Duration {
-        Instant::now().duration_since(self.last_activity)
+    pub fn connected_elapsed(&self) -> Duration {
+        self.connected_at.elapsed()
     }
 }
 
-/// Rolling window FPS calculator
 #[derive(Debug, Clone)]
 pub struct FpsCalculator {
-    /// Frame timestamps in last window
     frame_times: VecDeque<Instant>,
-    /// Window duration (default 1 second)
     window: Duration,
-    /// Cached count of frames in current window (optimization to avoid O(n) filtering)
     count_in_window: usize,
 }
 
 impl FpsCalculator {
-    /// Create a new FPS calculator with 1-second window
     pub fn new() -> Self {
         Self {
-            frame_times: VecDeque::with_capacity(120), // Max 120fps tracking
+            frame_times: VecDeque::with_capacity(120),
             window: Duration::from_secs(1),
             count_in_window: 0,
         }
     }
 
-    /// Record a frame sent
     pub fn record_frame(&mut self) {
         let now = Instant::now();
         self.frame_times.push_back(now);
 
-        // Remove frames outside window and maintain count
         let cutoff = now - self.window;
         while let Some(&oldest) = self.frame_times.front() {
             if oldest < cutoff {
@@ -97,31 +70,18 @@ impl FpsCalculator {
             }
         }
 
-        // Update cached count
         self.count_in_window = self.frame_times.len();
     }
 
-    /// Calculate current FPS (frames in last 1 second window)
     pub fn current_fps(&self) -> u32 {
-        // Return cached count instead of filtering entire deque (O(1) instead of O(n))
         self.count_in_window as u32
     }
 }
 
-impl Default for FpsCalculator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Auto-pause configuration
 #[derive(Debug, Clone)]
 pub struct AutoPauseConfig {
-    /// Enable auto-pause when no clients
     pub enabled: bool,
-    /// Delay before pausing (default 10s)
     pub shutdown_delay_secs: u64,
-    /// Client timeout for cleanup (default 30s)
     pub client_timeout_secs: u64,
 }
 
@@ -135,43 +95,27 @@ impl Default for AutoPauseConfig {
     }
 }
 
-/// MJPEG stream handler
-/// Manages video frame distribution to HTTP clients
 pub struct MjpegStreamHandler {
-    /// Current frame (latest) - using ArcSwap for lock-free reads
     current_frame: ArcSwap<Option<VideoFrame>>,
-    /// Frame update notification
     frame_notify: broadcast::Sender<()>,
-    /// Whether stream is online
     online: AtomicBool,
-    /// Frame sequence counter
     sequence: AtomicU64,
-    /// Per-client sessions (ClientId -> ClientSession)
-    /// Use parking_lot::RwLock for better performance
     clients: ParkingRwLock<HashMap<ClientId, ClientSession>>,
-    /// Auto-pause configuration
     auto_pause_config: ParkingRwLock<AutoPauseConfig>,
-    /// Last frame timestamp
     last_frame_ts: ParkingRwLock<Option<Instant>>,
-    /// Dropped same frames count
     dropped_same_frames: AtomicU64,
-    /// Maximum consecutive same frames to drop (0 = disabled)
     max_drop_same_frames: AtomicU64,
-    /// JPEG encoder for non-JPEG input formats
     jpeg_encoder: ParkingMutex<Option<JpegEncoder>>,
-    /// JPEG quality for software encoding (1-100)
     jpeg_quality: AtomicU64,
 }
 
 impl MjpegStreamHandler {
-    /// Create a new MJPEG stream handler
     pub fn new() -> Self {
-        Self::with_drop_limit(100) // Default: drop up to 100 same frames
+        Self::with_drop_limit(100)
     }
 
-    /// Create handler with custom drop limit
     pub fn with_drop_limit(max_drop: u64) -> Self {
-        let (frame_notify, _) = broadcast::channel(16); // Buffer size 16 for low latency
+        let (frame_notify, _) = broadcast::channel(16);
         Self {
             current_frame: ArcSwap::from_pointee(None),
             frame_notify,
@@ -187,16 +131,12 @@ impl MjpegStreamHandler {
         }
     }
 
-    /// Set JPEG quality for software encoding (1-100)
     pub fn set_jpeg_quality(&self, quality: u8) {
         let clamped = quality.clamp(1, 100) as u64;
         self.jpeg_quality.store(clamped, Ordering::Relaxed);
     }
 
-    /// Update current frame
     pub fn update_frame(&self, frame: VideoFrame) {
-        // Fast path: if no MJPEG clients are connected, do minimal bookkeeping and avoid
-        // expensive work (JPEG encoding and per-frame dedup hashing).
         let has_clients = !self.clients.read().is_empty();
         if !has_clients {
             self.dropped_same_frames.store(0, Ordering::Relaxed);
@@ -204,8 +144,6 @@ impl MjpegStreamHandler {
             self.online.store(frame.online, Ordering::SeqCst);
             *self.last_frame_ts.write() = Some(Instant::now());
 
-            // Keep the latest compressed frame for "instant first frame" when a client connects.
-            // Avoid retaining large raw buffers when there are no MJPEG clients.
             if frame.format.is_compressed() {
                 self.current_frame.store(Arc::new(Some(frame)));
             } else {
@@ -214,7 +152,6 @@ impl MjpegStreamHandler {
             return;
         }
 
-        // If frame is not JPEG, encode it
         let frame = if !frame.format.is_compressed() {
             match self.encode_to_jpeg(&frame) {
                 Ok(jpeg_frame) => jpeg_frame,
@@ -227,17 +164,13 @@ impl MjpegStreamHandler {
             frame
         };
 
-        // Frame deduplication (ustreamer-style)
-        // Check if this frame is identical to the previous one
         let max_drop = self.max_drop_same_frames.load(Ordering::Relaxed);
         if max_drop > 0 && frame.online {
             let current = self.current_frame.load();
             if let Some(ref prev_frame) = **current {
                 let dropped_count = self.dropped_same_frames.load(Ordering::Relaxed);
 
-                // Check if we should drop this frame
                 if dropped_count < max_drop && frames_are_identical(prev_frame, &frame) {
-                    // Check last frame timestamp to ensure minimum 1fps
                     let last_ts = *self.last_frame_ts.read();
                     let should_force_send = if let Some(ts) = last_ts {
                         ts.elapsed() >= Duration::from_secs(1)
@@ -246,16 +179,13 @@ impl MjpegStreamHandler {
                     };
 
                     if !should_force_send {
-                        // Drop this duplicate frame
                         self.dropped_same_frames.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
-                    // If more than 1 second since last frame, force send even if identical
                 }
             }
         }
 
-        // Frame is different or limit reached or forced by 1fps guarantee, update
         self.dropped_same_frames.store(0, Ordering::Relaxed);
 
         self.sequence.fetch_add(1, Ordering::Relaxed);
@@ -263,17 +193,14 @@ impl MjpegStreamHandler {
         *self.last_frame_ts.write() = Some(Instant::now());
         self.current_frame.store(Arc::new(Some(frame)));
 
-        // Notify waiting clients
         let _ = self.frame_notify.send(());
     }
 
-    /// Encode a non-JPEG frame to JPEG
     fn encode_to_jpeg(&self, frame: &VideoFrame) -> Result<VideoFrame, String> {
         let resolution = frame.resolution;
         let sequence = self.sequence.load(Ordering::Relaxed);
         let desired_quality = self.jpeg_quality.load(Ordering::Relaxed) as u32;
 
-        // Get or create encoder
         let mut encoder_guard = self.jpeg_encoder.lock();
         let encoder = encoder_guard.get_or_insert_with(|| {
             let config = EncoderConfig::jpeg(resolution, desired_quality);
@@ -286,15 +213,12 @@ impl MjpegStreamHandler {
                     enc
                 }
                 Err(e) => {
-                    warn!("Failed to create JPEG encoder: {}, using default", e);
-                    // Try with default config
-                    JpegEncoder::new(EncoderConfig::jpeg(resolution, desired_quality))
-                        .expect("Failed to create default JPEG encoder")
+                    warn!("Failed to create JPEG encoder: {}", e);
+                    panic!("Failed to create JPEG encoder");
                 }
             }
         });
 
-        // Check if resolution changed
         if encoder.config().resolution != resolution {
             debug!(
                 "Resolution changed, recreating JPEG encoder: {}x{}",
@@ -312,7 +236,6 @@ impl MjpegStreamHandler {
             }
         }
 
-        // Encode based on input format
         let encoded = match frame.format {
             PixelFormat::Yuyv => encoder
                 .encode_yuyv(frame.data(), sequence)
@@ -343,38 +266,32 @@ impl MjpegStreamHandler {
             }
         };
 
-        // Create new VideoFrame with JPEG data (zero-copy: Bytes -> Arc<Bytes>)
         Ok(VideoFrame::new(
             encoded.data,
             resolution,
             PixelFormat::Mjpeg,
-            0, // stride not relevant for JPEG
+            0,
             sequence,
         ))
     }
 
-    /// Marks offline; clients exit their read loop. UI overlay comes from `stream.state_changed`.
     pub fn set_offline(&self) {
         self.online.store(false, Ordering::SeqCst);
         let _ = self.frame_notify.send(());
     }
 
-    /// Set stream online (called when streaming starts)
     pub fn set_online(&self) {
         self.online.store(true, Ordering::SeqCst);
     }
 
-    /// Check if stream is online
     pub fn is_online(&self) -> bool {
         self.online.load(Ordering::SeqCst)
     }
 
-    /// Get current client count
     pub fn client_count(&self) -> u64 {
         self.clients.read().len() as u64
     }
 
-    /// Register a new client
     pub fn register_client(&self, client_id: ClientId) {
         let session = ClientSession::new(client_id.clone());
         self.clients.write().insert(client_id.clone(), session);
@@ -385,10 +302,9 @@ impl MjpegStreamHandler {
         );
     }
 
-    /// Unregister a client
     pub fn unregister_client(&self, client_id: &str) {
         if let Some(session) = self.clients.write().remove(client_id) {
-            let duration = session.connected_duration();
+            let duration = session.connected_elapsed();
             let duration_secs = duration.as_secs_f32();
             let avg_fps = if duration_secs > 0.1 {
                 session.frames_sent as f32 / duration_secs
@@ -402,7 +318,6 @@ impl MjpegStreamHandler {
         }
     }
 
-    /// Record frame sent to a specific client
     pub fn record_frame_sent(&self, client_id: &str) {
         if let Some(session) = self.clients.write().get_mut(client_id) {
             session.last_activity = Instant::now();
@@ -411,7 +326,6 @@ impl MjpegStreamHandler {
         }
     }
 
-    /// Get per-client statistics
     pub fn get_clients_stat(&self) -> HashMap<String, crate::events::types::ClientStats> {
         self.clients
             .read()
@@ -422,43 +336,33 @@ impl MjpegStreamHandler {
                     crate::events::types::ClientStats {
                         id: id.clone(),
                         fps: session.fps_calculator.current_fps(),
-                        connected_secs: session.connected_duration().as_secs(),
+                        connected_secs: session.connected_elapsed().as_secs(),
                     },
                 )
             })
             .collect()
     }
 
-    /// Get auto-pause configuration
     pub fn auto_pause_config(&self) -> AutoPauseConfig {
         self.auto_pause_config.read().clone()
     }
 
-    /// Update auto-pause configuration
     pub fn set_auto_pause_config(&self, config: AutoPauseConfig) {
-        let config_clone = config.clone();
-        *self.auto_pause_config.write() = config;
         info!(
             "Auto-pause config updated: enabled={}, delay={}s, timeout={}s",
-            config_clone.enabled,
-            config_clone.shutdown_delay_secs,
-            config_clone.client_timeout_secs
+            config.enabled, config.shutdown_delay_secs, config.client_timeout_secs
         );
+        *self.auto_pause_config.write() = config;
     }
 
-    /// Get current frame (if any)
     pub fn current_frame(&self) -> Option<VideoFrame> {
         (**self.current_frame.load()).clone()
     }
 
-    /// Subscribe to frame updates
     pub fn subscribe(&self) -> broadcast::Receiver<()> {
         self.frame_notify.subscribe()
     }
 
-    /// Disconnect all clients (used during config changes)
-    /// This clears the client list and sets the stream offline,
-    /// which will cause all active MJPEG streams to terminate.
     pub fn disconnect_all_clients(&self) {
         let count = {
             let mut clients = self.clients.write();
@@ -469,32 +373,21 @@ impl MjpegStreamHandler {
         if count > 0 {
             info!("Disconnected all {} MJPEG clients for config change", count);
         }
-        // Set offline to signal all streaming tasks to stop
         self.set_offline();
     }
 }
 
-impl Default for MjpegStreamHandler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// RAII guard for client lifecycle management
-/// Ensures cleanup even on panic or abrupt disconnection
 pub struct ClientGuard {
     client_id: ClientId,
     handler: Arc<MjpegStreamHandler>,
 }
 
 impl ClientGuard {
-    /// Create a new client guard
     pub fn new(client_id: ClientId, handler: Arc<MjpegStreamHandler>) -> Self {
         handler.register_client(client_id.clone());
         Self { client_id, handler }
     }
 
-    /// Get client ID
     pub fn id(&self) -> &ClientId {
         &self.client_id
     }
@@ -507,8 +400,6 @@ impl Drop for ClientGuard {
 }
 
 impl MjpegStreamHandler {
-    /// Start stale client cleanup task
-    /// Should be called once when handler is created
     pub fn start_cleanup_task(self: Arc<Self>) {
         let handler = self.clone();
         tokio::spawn(async move {
@@ -522,7 +413,6 @@ impl MjpegStreamHandler {
                 let now = Instant::now();
                 let mut stale = Vec::new();
 
-                // Find stale clients
                 {
                     let clients = handler.clients.read();
                     for (id, session) in clients.iter() {
@@ -532,7 +422,6 @@ impl MjpegStreamHandler {
                     }
                 }
 
-                // Remove stale clients
                 if !stale.is_empty() {
                     let mut clients = handler.clients.write();
                     for id in stale {
@@ -550,10 +439,7 @@ impl MjpegStreamHandler {
     }
 }
 
-/// Compare two frames for equality (hash-based, ustreamer-style)
-/// Returns true if frames are identical in geometry and content
 fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
-    // Quick checks first (geometry)
     if a.len() != b.len() {
         return false;
     }
@@ -574,13 +460,10 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
         return false;
     }
 
-    // Avoid hashing the whole frame for obviously different frames by sampling a few
-    // fixed-size windows first. If all samples match, fall back to the cached hash.
     let a_data = a.data();
     let b_data = b.data();
     let len = a_data.len();
 
-    // Small frames: direct compare is cheap.
     if len <= 256 {
         return a_data == b_data;
     }
@@ -588,7 +471,6 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
     const SAMPLE: usize = 16;
     debug_assert!(len == b_data.len());
 
-    // Head + tail.
     if a_data[..SAMPLE] != b_data[..SAMPLE] {
         return false;
     }
@@ -596,7 +478,6 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
         return false;
     }
 
-    // Two interior samples (quarter + middle) to catch common "same header/footer" cases.
     let quarter = len / 4;
     let quarter_start = quarter.saturating_sub(SAMPLE / 2);
     if a_data[quarter_start..quarter_start + SAMPLE]
@@ -610,8 +491,6 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
         return false;
     }
 
-    // Compare hashes instead of full binary data.
-    // Hash is computed once and cached in OnceLock for efficiency.
     a.get_hash() == b.get_hash()
 }
 
@@ -627,7 +506,6 @@ mod tests {
         assert!(!handler.is_online());
         assert_eq!(handler.client_count(), 0);
 
-        // Create a frame
         let _frame = VideoFrame::new(
             Bytes::from(vec![0xFF, 0xD8, 0x00, 0x00, 0xFF, 0xD9]),
             Resolution::VGA,
@@ -641,15 +519,12 @@ mod tests {
     fn test_fps_calculator() {
         let mut calc = FpsCalculator::new();
 
-        // Initially empty
         assert_eq!(calc.current_fps(), 0);
 
-        // Record some frames
         calc.record_frame();
         calc.record_frame();
         calc.record_frame();
 
-        // Should have 3 frames in window
         assert!(calc.frame_times.len() == 3);
     }
 }

@@ -42,17 +42,14 @@ function t(key: string, params?: Record<string, unknown>): string {
   return String(i18n.global.t(key, params as any))
 }
 
-// Navigation guard
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // Prevent access to setup after initialization
   const shouldCheckSetup = to.name === 'Setup' || !authStore.initialized
   if (shouldCheckSetup) {
     try {
       await authStore.checkSetupStatus()
     } catch {
-      // Continue anyway
     }
   }
 
@@ -65,20 +62,17 @@ router.beforeEach(async (to, _from, next) => {
       try {
         await authStore.checkAuth()
       } catch {
-        // Not authenticated
       }
     }
 
     return next({ name: authStore.isAuthenticated ? 'Console' : 'Login' })
   }
 
-  // Check authentication for protected routes
   if (to.meta.requiresAuth !== false) {
     if (!authStore.isAuthenticated) {
       try {
         await authStore.checkAuth()
       } catch (e) {
-        // Not authenticated
         if (e instanceof ApiError && e.status === 401 && !sessionExpiredNotified) {
           const normalized = e.message.toLowerCase()
           const isLoggedInElsewhere = normalized.includes('logged in elsewhere')

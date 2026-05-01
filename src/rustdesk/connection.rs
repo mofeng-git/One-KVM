@@ -1,12 +1,4 @@
-//! RustDesk Connection Handler
-//!
-//! This module handles incoming connections from RustDesk clients.
-//! It manages the connection lifecycle including:
-//! - Connection establishment (P2P or via relay)
-//! - Encrypted handshake
-//! - Authentication
-//! - Message routing (video, audio, input)
-//! - Video frame streaming (shared with WebRTC)
+//! Incoming RustDesk TCP sessions (handshake, AV, input).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -23,6 +15,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
 use crate::hid::{CanonicalKey, HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
+use crate::utils::hostname_from_etc;
 use crate::video::codec_constraints::{
     encoder_codec_to_id, encoder_codec_to_video_codec, video_codec_to_encoder_codec,
 };
@@ -92,13 +85,6 @@ impl InputThrottler {
     fn mark_mouse_sent(&mut self) {
         self.last_mouse_time = Instant::now();
     }
-}
-
-/// Get system hostname
-fn get_hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|_| "One-KVM".to_string())
 }
 
 /// Connection state
@@ -1165,7 +1151,7 @@ impl Connection {
 
             let mut peer_info = PeerInfo::new();
             peer_info.username = "one-kvm".to_string();
-            peer_info.hostname = get_hostname();
+            peer_info.hostname = hostname_from_etc();
             peer_info.platform = RUSTDESK_COMPAT_PLATFORM.to_string();
             peer_info.displays.push(display_info);
             peer_info.current_display = 0;
@@ -1786,7 +1772,7 @@ async fn run_audio_streaming(
         }
 
         // Subscribe to the audio Opus stream
-        let mut opus_rx = match audio_controller.subscribe_opus_async().await {
+        let mut opus_rx = match audio_controller.subscribe_opus().await {
             Some(rx) => rx,
             None => {
                 // Audio not available, wait and retry

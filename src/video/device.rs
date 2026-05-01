@@ -168,16 +168,15 @@ impl VideoDevice {
         // subdev (the video node returns ENOTTY).  Tc358743 and rk_hdmirx
         // typically expose DV ioctls on the video node itself, but having
         // the subdev handle for EDID/event subscription doesn't hurt.
-        let (subdev_path, bridge_kind) = if is_rkcif_driver(&caps.driver)
-            || is_rk_hdmirx_driver(&caps.driver, &caps.card)
-        {
-            match csi_bridge::discover_subdev_for_video(&self.path) {
-                Some((path, kind)) => (Some(path), Some(format!("{:?}", kind).to_lowercase())),
-                None => (None, None),
-            }
-        } else {
-            (None, None)
-        };
+        let (subdev_path, bridge_kind) =
+            if is_rkcif_driver(&caps.driver) || is_rk_hdmirx_driver(&caps.driver, &caps.card) {
+                match csi_bridge::discover_subdev_for_video(&self.path) {
+                    Some((path, kind)) => (Some(path), Some(format!("{:?}", kind).to_lowercase())),
+                    None => (None, None),
+                }
+            } else {
+                (None, None)
+            };
 
         // Probe the HDMI source for both signal presence *and* the live
         // frame-rate.  rkcif's `VIDIOC_ENUM_FRAMEINTERVALS` returns a
@@ -225,9 +224,7 @@ impl VideoDevice {
                     (false, None)
                 }
             }
-        } else if is_rk_hdmirx_driver(&caps.driver, &caps.card)
-            || is_rkcif_driver(&caps.driver)
-        {
+        } else if is_rk_hdmirx_driver(&caps.driver, &caps.card) || is_rkcif_driver(&caps.driver) {
             let dv = self.current_dv_timings_mode();
             debug!(
                 "has_signal via video node {:?} (driver={}): dv_timings={:?}",
@@ -247,21 +244,20 @@ impl VideoDevice {
             (true, None)
         };
 
-        let mut formats = if is_rk_hdmirx_driver(&caps.driver, &caps.card)
-            || is_rkcif_driver(&caps.driver)
-        {
-            // CSI/HDMI bridge drivers (rk_hdmirx, rkcif) expose multiple pixel
-            // formats via ENUM_FMT (e.g. rk_hdmirx: BGR3/NV24/NV16/NV12) but
-            // `ENUM_FRAMESIZES` is fiction for these drivers (rkcif reports a
-            // degenerate `64x64 StepWise 8/8` that only describes its DMA
-            // engine, rk_hdmirx returns ENOTTY). The only authoritative
-            // resolution is whatever the bridge subdev's DV timings report,
-            // so we treat the HDMI source mode as the single allowed
-            // resolution for every pixel format.
-            self.enumerate_bridge_formats(subdev_hdmi_mode)?
-        } else {
-            self.enumerate_formats()?
-        };
+        let mut formats =
+            if is_rk_hdmirx_driver(&caps.driver, &caps.card) || is_rkcif_driver(&caps.driver) {
+                // CSI/HDMI bridge drivers (rk_hdmirx, rkcif) expose multiple pixel
+                // formats via ENUM_FMT (e.g. rk_hdmirx: BGR3/NV24/NV16/NV12) but
+                // `ENUM_FRAMESIZES` is fiction for these drivers (rkcif reports a
+                // degenerate `64x64 StepWise 8/8` that only describes its DMA
+                // engine, rk_hdmirx returns ENOTTY). The only authoritative
+                // resolution is whatever the bridge subdev's DV timings report,
+                // so we treat the HDMI source mode as the single allowed
+                // resolution for every pixel format.
+                self.enumerate_bridge_formats(subdev_hdmi_mode)?
+            } else {
+                self.enumerate_formats()?
+            };
 
         // For CSI/HDMI bridges, the driver-enumerated fps list is fiction
         // (rkcif: always `1..30`; rk_hdmirx: typically `ENOTTY`).  Replace
@@ -923,7 +919,11 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
     // The path tiebreaker ensures deterministic ordering when multiple sub-devices
     // share the same priority (e.g. rkcif nodes), so that /dev/video0 is preferred
     // over /dev/video10 after deduplication.
-    devices.sort_by(|a, b| b.priority.cmp(&a.priority).then_with(|| a.path.cmp(&b.path)));
+    devices.sort_by(|a, b| {
+        b.priority
+            .cmp(&a.priority)
+            .then_with(|| a.path.cmp(&b.path))
+    });
 
     // Deduplicate rkcif sub-devices: the driver exposes many /dev/video* nodes
     // for a single MIPI CSI pipeline. Keep only the highest-priority node per
@@ -976,8 +976,11 @@ fn collapse_rkcif_probe_candidates(candidates: &mut Vec<PathBuf>) {
 
 fn sysfs_uevent_driver(path: &Path) -> Option<String> {
     let name = path.file_name()?.to_str()?;
-    let uevent =
-        read_sysfs_string(&Path::new("/sys/class/video4linux").join(name).join("device/uevent"))?;
+    let uevent = read_sysfs_string(
+        &Path::new("/sys/class/video4linux")
+            .join(name)
+            .join("device/uevent"),
+    )?;
     extract_uevent_value(&uevent, "driver")
 }
 
@@ -1037,7 +1040,10 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
     // kernel driver that created them has been unloaded but the device nodes
     // were never cleaned up. Opening them returns ENODEV; skip the probe.
     if !sysfs_base.exists() {
-        debug!("Skipping {:?}: no matching /sys/class/video4linux entry", path);
+        debug!(
+            "Skipping {:?}: no matching /sys/class/video4linux entry",
+            path
+        );
         return false;
     }
 
@@ -1081,7 +1087,13 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
     // succeed QUERYCAP but expose only VIDEO_M2M / STATS / PARAMS and get
     // filtered later — skipping here saves an open() + ioctl() per node.
     let driver_skip = [
-        "rkvenc", "rkvdec", "vepu", "vdpu", "hantro", "mpp_", "rockchip-vpu",
+        "rkvenc",
+        "rkvdec",
+        "vepu",
+        "vdpu",
+        "hantro",
+        "mpp_",
+        "rockchip-vpu",
     ];
     if let Some(driver) = &driver {
         if driver_skip.iter().any(|hint| driver.contains(hint)) {

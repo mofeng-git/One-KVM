@@ -20,7 +20,6 @@ import { generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
 
-// Components
 import StatusCard, { type StatusDetail } from '@/components/StatusCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import InfoBar from '@/components/InfoBar.vue'
@@ -84,10 +83,8 @@ const consoleEvents = useConsoleEvents({
   onDeviceInfo: handleDeviceInfo,
 })
 
-// Video mode state
 const videoMode = ref<VideoMode>('mjpeg')
 
-// Video state
 const videoRef = ref<HTMLImageElement | null>(null)
 const webrtcVideoRef = ref<HTMLVideoElement | null>(null)
 const videoContainerRef = ref<HTMLDivElement | null>(null)
@@ -104,7 +101,6 @@ const streamSignalState = ref<StreamSignalState>('ok')
 const streamSignalReason = ref<string | null>(null)
 const streamNextRetryMs = ref<number | null>(null)
 
-// Video aspect ratio (dynamically updated from actual video dimensions)
 // Using string format "width/height" to let browser handle the ratio calculation
 const videoAspectRatio = ref<string | null>(null)
 
@@ -123,7 +119,6 @@ const clientsStats = ref<Record<string, ClientStat>>({})
 // This allows us to identify our own stats in the clients_stat map
 const myClientId = generateUUID()
 
-// HID state
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
 const pressedKeys = ref<CanonicalKey[]>([])
 const keyboardLed = computed(() => ({
@@ -140,7 +135,6 @@ const isPointerLocked = ref(false) // Track pointer lock state
 /** Local overlay crosshair position (px, relative to video container); HID uses mousePosition separately */
 const localCrosshairPos = ref<{ x: number; y: number } | null>(null)
 
-// Mouse move throttling (60 Hz = ~16.67ms interval)
 const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
 let mouseMoveSendIntervalMs = DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
 let mouseFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -148,7 +142,6 @@ let lastMouseMoveSendTime = 0
 let pendingMouseMove: { type: 'move' | 'move_abs'; x: number; y: number } | null = null
 let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas between sends
 
-// Cursor visibility (from localStorage, updated via storage event)
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
 let interactionListenersBound = false
 const isConsoleActive = ref(false)
@@ -162,7 +155,6 @@ function syncMouseModeFromConfig() {
   }
 }
 
-// Virtual keyboard state
 const virtualKeyboardVisible = ref(false)
 const virtualKeyboardAttached = ref(true)
 const statsSheetOpen = ref(false)
@@ -173,18 +165,15 @@ const virtualKeyboardConsumerEnabled = computed(() => {
   return hid.otg_functions?.consumer !== false
 })
 
-// Change password dialog state
 const changePasswordDialogOpen = ref(false)
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const changingPassword = ref(false)
 
-// ttyd (web terminal) state
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
 
-// Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
 // Status computed (Device status removed - now only Video, Audio, HID, MSD)
@@ -207,9 +196,7 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   return 'disconnected'
 })
 
-// Convert resolution to short format (e.g., 720p, 1080p, 2K, 4K)
 function getResolutionShortName(width: number, height: number): string {
-  // Common resolution mappings based on height
   if (height === 2160 || (height === 2160 && width === 4096)) return '4K'
   if (height === 1440) return '2K'
   if (height === 1080) return '1080p'
@@ -218,11 +205,9 @@ function getResolutionShortName(width: number, height: number): string {
   if (height === 600) return '600p'
   if (height === 1024 && width === 1280) return '1024p'
   if (height === 960) return '960p'
-  // Fallback: use height + 'p'
   return `${height}p`
 }
 
-// Quick info for status card trigger
 const videoQuickInfo = computed(() => {
   const stream = systemStore.stream
   if (!stream?.resolution) return ''
@@ -235,12 +220,10 @@ const videoDetails = computed<StatusDetail[]>(() => {
   if (!stream) return []
   const receivedFps = backendFps.value
 
-  // Input (capture) format → output (delivery) mode
   const inputFmt = stream.format || 'MJPEG'
   const outputFmt = videoMode.value === 'mjpeg' ? 'MJPEG' : `${videoMode.value.toUpperCase()} (WebRTC)`
   const formatDisplay = inputFmt === outputFmt ? inputFmt : `${inputFmt} → ${outputFmt}`
 
-  // Target / actual FPS combined
   const fpsDisplay = `${formatFpsValue(stream.targetFps ?? 0)} / ${formatFpsValue(receivedFps)}`
   const fpsStatus: StatusDetail['status'] = receivedFps > 5 ? 'ok' : receivedFps > 0 ? 'warning' : undefined
 
@@ -269,7 +252,6 @@ const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   }
 
   // MJPEG mode or WebRTC fallback: check WebSocket HID status
-  // If HID WebSocket has network error, show connecting (yellow)
   if (hidWs.networkError.value) return 'connecting'
 
   // If HID WebSocket is not connected (disconnected without error), show disconnected
@@ -278,17 +260,14 @@ const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   // If HID backend is unavailable (business error), show disconnected (gray)
   if (hidWs.hidUnavailable.value) return 'disconnected'
 
-  // Normal status based on system state
   if (hid?.available && hid.online) return 'connected'
   if (hid?.available && hid.initialized) return 'connecting'
   return 'disconnected'
 })
 
-// Quick info for HID status card trigger
 const hidQuickInfo = computed(() => {
   const hid = systemStore.hid
   if (!hid?.available) return ''
-  // Show current mode, not hardware capability
   return mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative')
 })
 
@@ -387,7 +366,6 @@ const hidDetails = computed<StatusDetail[]>(() => {
     }
   }
 
-  // Channel (merged with availability / connection state)
   let channelValue: string
   let channelStatus: StatusDetail['status']
   if (videoMode.value !== 'mjpeg') {
@@ -422,7 +400,6 @@ const hidDetails = computed<StatusDetail[]>(() => {
   return details
 })
 
-// Audio status computed
 const audioStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
   const audio = systemStore.audio
   if (!audio?.available) return 'disconnected'
@@ -431,7 +408,6 @@ const audioStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   return 'disconnected'
 })
 
-// Helper function to translate audio quality
 function translateAudioQuality(quality: string | undefined): string {
   if (!quality) return t('common.unknown')
   const qualityLower = quality.toLowerCase()
@@ -463,7 +439,6 @@ const audioDetails = computed<StatusDetail[]>(() => {
   ]
 })
 
-// MSD status computed
 const msdStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
   const msd = systemStore.msd
   if (!msd?.available) return 'disconnected'
@@ -568,7 +543,6 @@ const hidHoverAlign = computed<'start' | 'end'>(() => {
   return showMsdStatusCard.value ? 'start' : 'end'
 })
 
-// Video handling
 let retryTimeoutId: number | null = null
 let retryCount = 0
 let gracePeriodTimeoutId: number | null = null
@@ -618,10 +592,8 @@ async function captureFrameOverlay() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     }
 
-    // Use JPEG to keep memory reasonable
     frameOverlayUrl.value = canvas.toDataURL('image/jpeg', 0.7)
   } catch {
-    // Best-effort only
   }
 }
 
@@ -729,7 +701,6 @@ function handleVideoLoad() {
     gracePeriodTimeoutId = null
   }
 
-  // Reset all error states
   videoLoading.value = false
   videoError.value = false
   videoErrorMessage.value = ''
@@ -738,7 +709,6 @@ function handleVideoLoad() {
   consecutiveErrors = 0
   clearFrameOverlay()
 
-  // Auto-focus video container for immediate keyboard input
   const container = videoContainerRef.value
   if (container && typeof container.focus === 'function') {
     container.focus()
@@ -787,13 +757,11 @@ function handleVideoError() {
     return
   }
 
-  // Clear any pending retries to avoid duplicate attempts
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
   }
 
-  // Show loading state immediately
   videoLoading.value = true
   mjpegFrameReceived.value = false
 
@@ -821,7 +789,6 @@ function handleStreamDeviceLost(data: { device: string; reason: string }) {
 }
 
 function scheduleWebRTCRecovery() {
-  // Clear any previous timer
   if (webrtcRecoveryTimerId !== null) {
     clearTimeout(webrtcRecoveryTimerId)
     webrtcRecoveryTimerId = null
@@ -862,7 +829,6 @@ function scheduleWebRTCRecovery() {
         videoErrorMessage.value = ''
         webrtcRecoveryAttempts = 0
       } else {
-        // Retry
         scheduleWebRTCRecovery()
       }
     } catch {
@@ -883,21 +849,17 @@ function handleStreamRecovered(_data: { device: string }) {
   // Cancel any pending recovery timer – backend is back
   cancelWebRTCRecovery()
 
-  // Reset video error state
   videoError.value = false
   videoErrorMessage.value = ''
-  // Refresh video stream
   refreshVideo()
 }
 
 async function handleAudioStateChanged(data: { streaming: boolean; device: string | null }) {
   if (!data.streaming) {
-    // Audio stopped, disconnect
     unifiedAudio.disconnect()
     return
   }
 
-  // Audio started streaming
   if (videoMode.value !== 'mjpeg' && webrtc.isConnected.value) {
     // WebRTC mode: check if we have an audio track
     if (!webrtc.audioTrack.value) {
@@ -907,9 +869,7 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
       await new Promise(resolve => setTimeout(resolve, 300))
       await connectWebRTCSerial('audio track refresh')
       // After reconnect, the new session will have audio track
-      // and the watch on audioTrack will add it to MediaStream
     } else {
-      // We have audio track, ensure it's in MediaStream
       const currentStream = webrtcVideoRef.value?.srcObject as MediaStream | null
       if (currentStream && currentStream.getAudioTracks().length === 0) {
         currentStream.addTrack(webrtc.audioTrack.value)
@@ -934,7 +894,6 @@ function handleStreamConfigChanging(data: any) {
     gracePeriodTimeoutId = null
   }
 
-  // Reset all counters and states
   videoRestarting.value = true
   pendingWebRTCReadyGate = true
   videoLoading.value = true
@@ -952,7 +911,6 @@ function handleStreamConfigChanging(data: any) {
 }
 
 async function handleStreamConfigApplied(data: any) {
-  // Reset consecutive error counter for new config
   consecutiveErrors = 0
 
   // Start grace period to ignore transient errors
@@ -961,7 +919,6 @@ async function handleStreamConfigApplied(data: any) {
     consecutiveErrors = 0 // Also reset when grace period ends
   }, GRACE_PERIOD)
 
-  // Refresh video based on current mode
   videoRestarting.value = true
 
   // 如果正在进行模式切换，不需要在这里处理（WebRTCReady 事件会处理）
@@ -1003,7 +960,6 @@ function handleStreamModeReady(data: { transition_id: string; mode: string }) {
 }
 
 function handleStreamModeSwitching(data: { transition_id: string; to_mode: string; from_mode: string }) {
-  // External mode switches: keep UI responsive and avoid black flash
   if (!isModeSwitching.value) {
     videoRestarting.value = true
     videoLoading.value = true
@@ -1230,13 +1186,11 @@ function handleDeviceInfo(data: any) {
     })
   }
 
-  // Skip mode sync if video config is being changed
   // This prevents false-positive mode changes during config switching
   if (data.video?.config_changing) {
     return
   }
 
-  // Sync video mode from server's stream_mode
   if (data.video?.stream_mode) {
     const serverMode = normalizeServerMode(data.video.stream_mode)
     if (!serverMode) return
@@ -1256,7 +1210,6 @@ function handleDeviceInfo(data: any) {
   }
 }
 
-// Handle stream mode change event from server (WebSocket broadcast)
 function handleStreamModeChanged(data: { mode: string; previous_mode: string }) {
   const newMode = normalizeServerMode(data.mode)
   if (!newMode) return
@@ -1267,7 +1220,6 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
     return
   }
 
-  // Show toast notification only if this is an external mode change
   toast.info(t('console.streamModeChanged'), {
     description: t('console.streamModeChangedDesc', { mode: data.mode.toUpperCase() }),
     duration: 5000,
@@ -1300,7 +1252,6 @@ function refreshVideo() {
   mjpegTimestamp.value = Date.now()
 
   // For MJPEG streams, the 'load' event fires when first frame arrives
-  // But on reconnection it may not fire again, so use a timeout as fallback
   setTimeout(() => {
     isRefreshingVideo = false
     // Clear loading state after timeout - if stream failed, error handler will show error
@@ -1508,7 +1459,6 @@ async function switchToMJPEG() {
     }
   } catch (e) {
     console.error('Failed to switch to MJPEG mode:', e)
-    // Continue anyway - the mode might already be correct
   }
 
   // Step 2: Disconnect WebRTC if connected or session still exists
@@ -1542,7 +1492,6 @@ function syncToServerMode(mode: VideoMode) {
   }
 }
 
-// Handle video mode change
 async function handleVideoModeChange(mode: VideoMode) {
   // 防止重复切换和竞态条件
   if (mode === videoMode.value) return
@@ -1592,10 +1541,8 @@ watch(() => webrtc.videoTrack.value, async (track) => {
 // Watch for WebRTC audio track changes - update MediaStream when audio arrives
 watch(() => webrtc.audioTrack.value, async (track) => {
   if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg') {
-    // Audio track arrived, update the MediaStream to include it
     const currentStream = webrtcVideoRef.value.srcObject as MediaStream | null
     if (currentStream && currentStream.getAudioTracks().length === 0) {
-      // Add audio track to existing stream
       currentStream.addTrack(track)
     }
   }
@@ -1607,7 +1554,6 @@ watch(webrtcVideoRef, (el) => {
 }, { immediate: true })
 
 // Watch for WebRTC stats to update FPS display
-// Watch the ref directly with deep: true to detect property changes
 watch(webrtc.stats, (stats) => {
   if (videoMode.value !== 'mjpeg' && stats.framesPerSecond > 0) {
     backendFps.value = Math.round(stats.framesPerSecond)
@@ -1626,7 +1572,6 @@ let webrtcReconnectFailures = 0
 watch(() => webrtc.state.value, (newState, oldState) => {
   console.log('[WebRTC] State changed:', oldState, '->', newState)
 
-  // Clear any pending reconnect
   if (webrtcReconnectTimeout) {
     clearTimeout(webrtcReconnectTimeout)
     webrtcReconnectTimeout = null
@@ -1644,7 +1589,6 @@ watch(() => webrtc.state.value, (newState, oldState) => {
         })
       }
     } else if (newState === 'disconnected' || newState === 'failed') {
-      // Don't immediately set offline - wait for potential reconnect
       // The device_info event will eventually sync the correct state
     }
   }
@@ -1653,7 +1597,6 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     return
   }
 
-  // Auto-reconnect when disconnected (but was previously connected)
   if (newState === 'disconnected' && oldState === 'connected' && videoMode.value !== 'mjpeg') {
     webrtcReconnectTimeout = setTimeout(async () => {
       if (videoMode.value !== 'mjpeg' && webrtc.state.value === 'disconnected') {
@@ -1676,8 +1619,6 @@ watch(() => webrtc.state.value, (newState, oldState) => {
   }
 
   // Handle direct 'failed' state (ICE or DTLS failure)
-  // Allow one automatic retry before marking as failed, consistent with
-  // the disconnected->reconnect path that allows 2 failures.
   if (newState === 'failed' && videoMode.value !== 'mjpeg') {
     webrtcReconnectFailures += 1
     if (webrtcReconnectFailures >= 2) {
@@ -1706,20 +1647,17 @@ async function toggleFullscreen() {
   }
 }
 
-// Theme toggle
 function toggleTheme() {
   isDark.value = !isDark.value
   document.documentElement.classList.toggle('dark', isDark.value)
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
 }
 
-// Logout
 async function logout() {
   await authStore.logout()
   router.push('/login')
 }
 
-// Change password function
 async function handleChangePassword() {
   if (!newPassword.value || !confirmPassword.value) {
     toast.error(t('auth.passwordRequired'))
@@ -1741,20 +1679,17 @@ async function handleChangePassword() {
     await authApi.changePassword(currentPassword.value, newPassword.value)
     toast.success(t('auth.passwordChanged'))
 
-    // Reset form and close dialog
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
     changePasswordDialogOpen.value = false
   } catch (e) {
-    // Error toast is shown by API layer
     console.info('[ChangePassword] Failed:', e)
   } finally {
     changingPassword.value = false
   }
 }
 
-// ttyd (web terminal) functions
 function openTerminal() {
   if (!ttydStatus.value?.running) return
   showTerminalDialog.value = true
@@ -1764,13 +1699,11 @@ function openTerminalInNewTab() {
   window.open('/api/terminal/', '_blank')
 }
 
-// ATX actions
 async function handlePowerShort() {
   try {
     await atxApi.power('short')
     await systemStore.fetchAtxState()
   } catch {
-    // ATX action failed
   }
 }
 
@@ -1779,7 +1712,6 @@ async function handlePowerLong() {
     await atxApi.power('long')
     await systemStore.fetchAtxState()
   } catch {
-    // ATX action failed
   }
 }
 
@@ -1788,7 +1720,6 @@ async function handleReset() {
     await atxApi.power('reset')
     await systemStore.fetchAtxState()
   } catch {
-    // ATX action failed
   }
 }
 
@@ -1801,14 +1732,10 @@ async function handleWol(mac: string) {
   }
 }
 
-// HID error handling - silently handle all HID errors
 function handleHidError(_error: any, _operation: string) {
-  // All HID errors are silently ignored
 }
 
-// HID channel selection: use WebRTC DataChannel when available, fallback to WebSocket
 function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
-  // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
@@ -1817,14 +1744,11 @@ function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: nu
     }
     const sent = webrtc.sendKeyboard(event)
     if (sent) return
-    // Fallback to WebSocket if DataChannel send failed
   }
-  // Use WebSocket as fallback or for MJPEG mode
   hidApi.keyboard(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
-  // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidMouseEvent = {
       type: data.type === 'move_abs' ? 'moveabs' : data.type,
@@ -1835,50 +1759,37 @@ function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scr
     }
     const sent = webrtc.sendMouse(event)
     if (sent) return
-    // Fallback to WebSocket if DataChannel send failed
   }
-  // Use WebSocket as fallback or for MJPEG mode
   hidApi.mouse(data).catch(err => handleHidError(err, `mouse ${data.type}`))
 }
 
-// Check if a key should be blocked (prevented from default behavior)
 function shouldBlockKey(e: KeyboardEvent): boolean {
-  // In fullscreen mode, block all keys for maximum capture
   if (isFullscreen.value) {
     return true
   }
 
-  // Don't block critical browser shortcuts in non-fullscreen mode
   const key = e.key.toUpperCase()
 
-  // Don't block Ctrl+W (close tab), Ctrl+T (new tab), Ctrl+N (new window)
   if (e.ctrlKey && ['W', 'T', 'N'].includes(key)) return false
 
-  // Don't block F11 (browser fullscreen toggle)
   if (key === 'F11') return false
 
-  // Don't block Alt+Tab (already can't capture it anyway)
   if (e.altKey && key === 'TAB') return false
 
-  // Block everything else
   return true
 }
 
-// Keyboard/Mouse event handling
 function handleKeyDown(e: KeyboardEvent) {
   const container = videoContainerRef.value
   if (!container) return
 
-  // Check focus in non-fullscreen mode
   if (!isFullscreen.value && !container.contains(document.activeElement)) return
 
-  // Try to block the key if appropriate
   if (shouldBlockKey(e)) {
     e.preventDefault()
     e.stopPropagation()
   }
 
-  // Show hint for Meta key in non-fullscreen mode
   if (!isFullscreen.value && (e.metaKey || e.key === 'Meta')) {
     toast.info(t('console.metaKeyHint'), {
       description: t('console.metaKeyHintDesc'),
@@ -1905,10 +1816,8 @@ function handleKeyUp(e: KeyboardEvent) {
   const container = videoContainerRef.value
   if (!container) return
 
-  // Check focus in non-fullscreen mode
   if (!isFullscreen.value && !container.contains(document.activeElement)) return
 
-  // Try to block the key if appropriate
   if (shouldBlockKey(e)) {
     e.preventDefault()
     e.stopPropagation()
@@ -2049,20 +1958,16 @@ function handleMouseMove(e: MouseEvent) {
     pendingMouseMove = { type: 'move_abs', x, y }
     requestMouseMoveFlush()
   } else {
-    // Relative mode: use movementX/Y when pointer is locked
     if (isPointerLocked.value) {
       const dx = e.movementX
       const dy = e.movementY
 
-      // Only accumulate if there's actual movement
       if (dx !== 0 || dy !== 0) {
-        // Accumulate deltas for throttled sending
         accumulatedDelta.x += dx
         accumulatedDelta.y += dy
         requestMouseMoveFlush()
       }
 
-      // Update display position (accumulated delta for display only)
       mousePosition.value = {
         x: mousePosition.value.x + dx,
         y: mousePosition.value.y + dy,
@@ -2086,13 +1991,11 @@ function flushMouseMoveOnce(): boolean {
 
   if (accumulatedDelta.x === 0 && accumulatedDelta.y === 0) return false
 
-  // Clamp to i8 range (-127 to 127)
   const clampedDx = Math.max(-127, Math.min(127, accumulatedDelta.x))
   const clampedDy = Math.max(-127, Math.min(127, accumulatedDelta.y))
 
   sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
 
-  // Subtract sent amount (keep remainder for next send if clamped)
   accumulatedDelta.x -= clampedDx
   accumulatedDelta.y -= clampedDy
   return true
@@ -2147,13 +2050,11 @@ function requestMouseMoveFlush() {
   scheduleMouseMoveFlush()
 }
 
-// Track pressed mouse button for window-level mouseup handling
 const pressedMouseButton = ref<'left' | 'right' | 'middle' | null>(null)
 
 function handleMouseDown(e: MouseEvent) {
   e.preventDefault()
 
-  // Auto-focus the video container to enable keyboard input
   const container = videoContainerRef.value
   if (container && document.activeElement !== container) {
     if (typeof container.focus === 'function') {
@@ -2161,7 +2062,6 @@ function handleMouseDown(e: MouseEvent) {
     }
   }
 
-  // In relative mode, request pointer lock on first click
   if (mouseMode.value === 'relative' && !isPointerLocked.value) {
     requestPointerLock()
     return
@@ -2186,7 +2086,6 @@ function handleMouseUp(e: MouseEvent) {
   handleMouseUpInternal(e.button)
 }
 
-// Window-level mouseup handler (catches releases outside the container)
 function handleWindowMouseUp(e: MouseEvent) {
   if (pressedMouseButton.value !== null) {
     handleMouseUpInternal(e.button)
@@ -2201,7 +2100,6 @@ function handleMouseUpInternal(rawButton: number) {
 
   const button = rawButton === 0 ? 'left' : rawButton === 2 ? 'right' : 'middle'
 
-  // Only send if this button was actually pressed
   if (pressedMouseButton.value !== button) {
     return
   }
@@ -2220,7 +2118,6 @@ function handleContextMenu(e: MouseEvent) {
   e.preventDefault()
 }
 
-// Pointer Lock API for relative mouse mode
 function requestPointerLock() {
   const container = videoContainerRef.value
   if (!container) return
@@ -2243,7 +2140,6 @@ function handlePointerLockChange() {
   isPointerLocked.value = document.pointerLockElement === container
 
   if (isPointerLocked.value) {
-    // Reset mouse position display when locked
     mousePosition.value = { x: 0, y: 0 }
     if (cursorVisible.value && container) {
       const r = container.getBoundingClientRect()
@@ -2269,7 +2165,6 @@ function handleFullscreenChange() {
 function handleBlur() {
   pressedKeys.value = []
   activeModifierMask.value = 0
-  // Release any pressed mouse button when window loses focus
   if (pressedMouseButton.value !== null) {
     const button = pressedMouseButton.value
     pressedMouseButton.value = null
@@ -2277,7 +2172,6 @@ function handleBlur() {
   }
 }
 
-// Handle cursor visibility change from HidConfigPopover
 function handleCursorVisibilityChange(e: Event) {
   const customEvent = e as CustomEvent<{ visible: boolean }>
   cursorVisible.value = customEvent.detail.visible
@@ -2365,7 +2259,6 @@ async function activateConsoleView() {
   void systemStore.fetchAllStates()
   void configStore.refreshHid().then(() => syncMouseModeFromConfig()).catch(() => {})
 
-  // Ensure HID WebSocket is connected when console becomes active
   if (!hidWs.connected.value) {
     hidWs.connect().catch(() => {})
   }
@@ -2395,28 +2288,22 @@ function deactivateConsoleView() {
   unregisterInteractionListeners()
 }
 
-// ActionBar handlers
-// (MSD and Settings are now handled by ActionBar component directly)
 
 function handleToggleVirtualKeyboard() {
   virtualKeyboardVisible.value = !virtualKeyboardVisible.value
 }
 
-// Virtual keyboard key event handlers
 function handleVirtualKeyDown(key: CanonicalKey) {
-  // Add to pressedKeys for InfoBar display
   if (!pressedKeys.value.includes(key)) {
     pressedKeys.value = [...pressedKeys.value, key]
   }
 }
 
 function handleVirtualKeyUp(key: CanonicalKey) {
-  // Remove from pressedKeys
   pressedKeys.value = pressedKeys.value.filter(k => k !== key)
 }
 
 function handleToggleMouseMode() {
-  // Exit pointer lock when switching away from relative mode
   if (mouseMode.value === 'relative' && isPointerLocked.value) {
     exitPointerLock()
   }
@@ -2424,7 +2311,6 @@ function handleToggleMouseMode() {
   mouseMode.value = mouseMode.value === 'absolute' ? 'relative' : 'absolute'
   pendingMouseMove = null
   accumulatedDelta = { x: 0, y: 0 }
-  // Reset position when switching modes
   lastMousePosition.value = { x: 0, y: 0 }
   mousePosition.value = { x: 0, y: 0 }
 
@@ -2436,16 +2322,13 @@ function handleToggleMouseMode() {
   }
 }
 
-// Lifecycle
 onMounted(async () => {
   // 1. 先订阅 WebSocket 事件，再连接（内部会 connect）
   consoleEvents.subscribe()
 
-  // 3. Watch WebSocket connection states and sync to store
   watch([wsConnected, wsNetworkError], ([connected, netError], [_prevConnected, prevNetError]) => {
     systemStore.updateWsConnection(connected, netError)
 
-    // Auto-refresh video when network recovers (wsNetworkError: true -> false)
     if (prevNetError === true && netError === false && connected === true) {
       refreshVideo()
     }
@@ -2476,7 +2359,6 @@ onMounted(async () => {
 
   // Note: Video mode is now synced from server via device_info event
   // The handleDeviceInfo function will automatically switch to the server's mode
-  // localStorage preference is only used when server mode matches
   try {
     const modeResp = await streamApi.getMode()
     const serverMode = normalizeServerMode(modeResp?.mode)
@@ -2504,13 +2386,11 @@ onUnmounted(() => {
   initialModeRestoreDone = false
   initialModeRestoreInProgress = false
 
-  // Clear mouse flush timer
   if (mouseFlushTimer !== null) {
     clearTimeout(mouseFlushTimer)
     mouseFlushTimer = null
   }
 
-  // Clear all timers
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -2522,7 +2402,6 @@ onUnmounted(() => {
   cancelWebRTCRecovery()
   videoSession.clearWaiters()
 
-  // Reset counters
   retryCount = 0
 
   consoleEvents.unsubscribe()
@@ -2533,7 +2412,6 @@ onUnmounted(() => {
     void webrtc.disconnect()
   }
 
-  // Exit pointer lock if active
   exitPointerLock()
 })
 </script>

@@ -53,10 +53,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const systemStore = useSystemStore()
 
-// Tab state
 const activeTab = ref('images')
 
-// Image state
 const images = ref<MsdImage[]>([])
 const loadingImages = ref(false)
 const uploadProgress = ref(0)
@@ -64,7 +62,6 @@ const uploading = ref(false)
 const cdromMode = ref(true)
 const readOnly = ref(true)
 
-// Drive state
 const driveFiles = ref<DriveFile[]>([])
 const currentPath = ref('/')
 const loadingDrive = ref(false)
@@ -73,13 +70,11 @@ const driveInitialized = ref(false)
 const uploadingFile = ref(false)
 const fileUploadProgress = ref(0)
 
-// Dialog state
 const showDeleteDialog = ref(false)
 const deleteTarget = ref<{ type: 'image' | 'file'; id: string; name: string } | null>(null)
 const showNewFolderDialog = ref(false)
 const newFolderName = ref('')
 
-// Computed
 const msdConnected = computed(() => systemStore.msd?.connected ?? false)
 const msdMode = computed(() => systemStore.msd?.mode ?? 'none')
 
@@ -94,7 +89,6 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-// Load data when sheet opens
 watch(() => props.open, async (isOpen) => {
   if (isOpen) {
     await loadData()
@@ -110,7 +104,6 @@ async function loadData() {
   }
 }
 
-// Image functions
 async function loadImages() {
   loadingImages.value = true
   try {
@@ -186,7 +179,6 @@ async function executeDelete() {
   }
 }
 
-// Drive functions
 async function loadDriveInfo() {
   try {
     driveInfo.value = await msdApi.driveInfo()

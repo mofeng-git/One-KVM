@@ -5,7 +5,6 @@ use argon2::{
 
 use crate::error::{AppError, Result};
 
-/// Hash a password using Argon2
 pub fn hash_password(password: &str) -> Result<String> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -16,7 +15,6 @@ pub fn hash_password(password: &str) -> Result<String> {
         .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))
 }
 
-/// Verify a password against a hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
     let parsed_hash = PasswordHash::new(hash)
         .map_err(|e| AppError::Internal(format!("Invalid password hash: {}", e)))?;

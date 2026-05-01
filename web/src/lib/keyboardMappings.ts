@@ -122,7 +122,6 @@ export const keys = {
 
 export type KeyName = keyof typeof keys
 
-// Consumer Control Usage codes (for multimedia keys)
 export const consumerKeys = {
   PlayPause: 0x00cd,
   Stop: 0x00b7,

@@ -1,9 +1,4 @@
-//! CH9329 Serial HID Controller backend
-//!
-//! CH9329 is a USB HID chip controlled via UART from WCH (沁恒).
-//! It supports keyboard, mouse (absolute + relative), and custom HID device emulation.
-//!
-//! ## Protocol Format
+//! CH9329 over UART — WCH *Serial Communication Protocol V1.0*.
 //! ```text
 //! ┌──────┬──────┬──────┬────────┬──────────────┬──────────┐
 //! │Header│ ADDR │ CMD  │  LEN   │     DATA     │   SUM    │
@@ -11,16 +6,11 @@
 //! │57 AB │ 00   │ xx   │   N    │   N bytes    │Checksum  │
 //! └──────┴──────┴──────┴────────┴──────────────┴──────────┘
 //! ```
-//!
-//! Checksum: Sum of ALL bytes including header (modulo 256)
-//!
-//! ## Reference
-//! Based on WCH CH9329 Serial Communication Protocol V1.0
+//! Sum of all octets modulo 256 (including header).
 
 use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -29,82 +19,51 @@ use tokio::sync::watch;
 use tracing::{info, trace, warn};
 
 use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
-use super::otg::LedState;
 use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
 use crate::error::{AppError, Result};
+use crate::events::LedState;
 
-// ============================================================================
-// Constants and Command Codes
-// ============================================================================
-
-/// CH9329 packet header
 const PACKET_HEADER: [u8; 2] = [0x57, 0xAB];
 
-/// Default address (accepts any address)
 const DEFAULT_ADDR: u8 = 0x00;
 
-/// Default baud rate for CH9329
 pub const DEFAULT_BAUD_RATE: u32 = 9600;
 
-/// Response timeout in milliseconds
 const RESPONSE_TIMEOUT_MS: u64 = 500;
 
-/// Maximum data length in a packet
 const MAX_DATA_LEN: usize = 64;
 
-/// CH9329 absolute mouse resolution
 const CH9329_MOUSE_RESOLUTION: u32 = 4096;
 
-/// How often the worker probes the chip when idle.
 const PROBE_INTERVAL_MS: u64 = 100;
 
-/// How long the worker waits before reopening the serial port after a failure.
 const RECONNECT_DELAY_MS: u64 = 2000;
 
-/// Initial startup wait for the worker to confirm CH9329 is reachable.
 const INIT_WAIT_MS: u64 = 3000;
 
-/// CH9329 command codes
 pub mod cmd {
-    /// Get chip version, USB status, and LED status
     pub const GET_INFO: u8 = 0x01;
-    /// Send standard keyboard data (8 bytes)
     pub const SEND_KB_GENERAL_DATA: u8 = 0x02;
-    /// Send multimedia keyboard data
     pub const SEND_KB_MEDIA_DATA: u8 = 0x03;
-    /// Send absolute mouse data
     pub const SEND_MS_ABS_DATA: u8 = 0x04;
-    /// Send relative mouse data
     pub const SEND_MS_REL_DATA: u8 = 0x05;
-    /// Send custom HID data
     pub const SEND_MY_HID_DATA: u8 = 0x06;
-    /// Restore factory default configuration
     pub const SET_DEFAULT_CFG: u8 = 0x0C;
-    /// Software reset
     pub const RESET: u8 = 0x0F;
 }
 
-/// Response command mask (success = cmd | 0x80, error = cmd | 0xC0)
 const RESPONSE_SUCCESS_MASK: u8 = 0x80;
 const RESPONSE_ERROR_MASK: u8 = 0xC0;
 
-/// CH9329 error codes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Ch9329Error {
-    /// Command executed successfully
     Success = 0x00,
-    /// Serial receive timeout
     Timeout = 0xE1,
-    /// Invalid packet header
     InvalidHeader = 0xE2,
-    /// Invalid command code
     InvalidCommand = 0xE3,
-    /// Checksum mismatch
     ChecksumError = 0xE4,
-    /// Parameter error
     ParameterError = 0xE5,
-    /// Execution failed
     OperationFailed = 0xE6,
 }
 
@@ -137,29 +96,17 @@ impl std::fmt::Display for Ch9329Error {
     }
 }
 
-// ============================================================================
-// Chip Information
-// ============================================================================
-
-/// CH9329 chip information
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChipInfo {
-    /// Chip version (e.g., "V1.0", "V1.1")
     pub version: String,
-    /// Raw version byte
     pub version_raw: u8,
-    /// USB connection status
     pub usb_connected: bool,
-    /// Num Lock LED state
     pub num_lock: bool,
-    /// Caps Lock LED state
     pub caps_lock: bool,
-    /// Scroll Lock LED state
     pub scroll_lock: bool,
 }
 
 impl ChipInfo {
-    /// Parse chip info from response data (8 bytes)
     pub fn from_response(data: &[u8]) -> Option<Self> {
         if data.len() < 8 {
             return None;
@@ -181,7 +128,6 @@ impl ChipInfo {
     }
 }
 
-/// Keyboard LED status
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LedStatus {
     pub num_lock: bool,
@@ -199,98 +145,21 @@ impl From<u8> for LedStatus {
     }
 }
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-/// CH9329 work mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u8)]
-#[derive(Default)]
-pub enum WorkMode {
-    /// Mode 0: Standard USB Keyboard + Mouse (default)
-    #[default]
-    KeyboardMouse = 0x00,
-    /// Mode 1: Standard USB Keyboard only
-    KeyboardOnly = 0x01,
-    /// Mode 2: Standard USB Mouse only
-    MouseOnly = 0x02,
-    /// Mode 3: Custom HID device
-    CustomHid = 0x03,
-}
-
-/// CH9329 serial communication mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u8)]
-#[derive(Default)]
-pub enum SerialMode {
-    /// Mode 0: Protocol transmission mode (default)
-    #[default]
-    Protocol = 0x00,
-    /// Mode 1: ASCII mode
-    Ascii = 0x01,
-    /// Mode 2: Transparent mode
-    Transparent = 0x02,
-}
-
-/// CH9329 configuration parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Ch9329Config {
-    /// Work mode
-    pub work_mode: WorkMode,
-    /// Serial communication mode
-    pub serial_mode: SerialMode,
-    /// Device address (0x00-0xFE, 0xFF = broadcast)
-    pub address: u8,
-    /// Baud rate
-    pub baud_rate: u32,
-    /// USB VID
-    pub vid: u16,
-    /// USB PID
-    pub pid: u16,
-}
-
-impl Default for Ch9329Config {
-    fn default() -> Self {
-        Self {
-            work_mode: WorkMode::KeyboardMouse,
-            serial_mode: SerialMode::Protocol,
-            address: 0x00,
-            baud_rate: 9600,
-            vid: 0x1A86,
-            pid: 0xE129,
-        }
-    }
-}
-
-// ============================================================================
-// Response Parsing
-// ============================================================================
-
-/// Parsed response from CH9329
 #[derive(Debug)]
 pub struct Response {
-    /// Address byte
     pub address: u8,
-    /// Command code (with response bits)
     pub cmd: u8,
-    /// Data payload
     pub data: Vec<u8>,
-    /// Whether this is an error response
     pub is_error: bool,
-    /// Error code (if is_error)
     pub error_code: Option<Ch9329Error>,
 }
 
 impl Response {
-    /// Parse a response from raw bytes
     pub fn parse(bytes: &[u8]) -> Option<Self> {
-        // Minimum: Header(2) + Addr(1) + Cmd(1) + Len(1) + Sum(1) = 6
         if bytes.len() < 6 {
             return None;
         }
 
-        // Check header
         if bytes[0] != PACKET_HEADER[0] || bytes[1] != PACKET_HEADER[1] {
             return None;
         }
@@ -299,12 +168,10 @@ impl Response {
         let cmd = bytes[3];
         let len = bytes[4] as usize;
 
-        // Check if we have enough bytes
         if bytes.len() < 5 + len + 1 {
             return None;
         }
 
-        // Verify checksum
         let expected_checksum = bytes[5 + len];
         let calculated_checksum = bytes[..5 + len]
             .iter()
@@ -335,18 +202,12 @@ impl Response {
         })
     }
 
-    /// Check if the response indicates success
     pub fn is_success(&self) -> bool {
         !self.is_error && (self.data.is_empty() || self.data[0] == Ch9329Error::Success as u8)
     }
 }
 
-/// Maximum packet size (header 2 + addr 1 + cmd 1 + len 1 + data 64 + checksum 1 = 70)
 const MAX_PACKET_SIZE: usize = 70;
-
-// ============================================================================
-// CH9329 Backend Implementation
-// ============================================================================
 
 struct Ch9329RuntimeState {
     initialized: AtomicBool,
@@ -424,47 +285,28 @@ enum WorkerCommand {
     Shutdown,
 }
 
-/// CH9329 HID backend
 pub struct Ch9329Backend {
-    /// Serial port path
     port_path: String,
-    /// Baud rate
     baud_rate: u32,
-    /// Worker command sender
     worker_tx: Mutex<Option<mpsc::Sender<WorkerCommand>>>,
-    /// Background worker thread
     worker_handle: Mutex<Option<thread::JoinHandle<()>>>,
-    /// Current keyboard state
     keyboard_state: Mutex<KeyboardReport>,
-    /// Current mouse button state
     mouse_buttons: AtomicU8,
-    /// Screen width for absolute mouse coordinate conversion
-    screen_width: u32,
-    /// Screen height for absolute mouse coordinate conversion
-    screen_height: u32,
-    /// Cached chip information
+    screen_resolution: RwLock<(u32, u32)>,
     chip_info: Arc<RwLock<Option<ChipInfo>>>,
-    /// LED status cache
     led_status: Arc<RwLock<LedStatus>>,
-    /// Device address (default 0x00)
     address: u8,
-    /// Last absolute mouse X position (CH9329 coordinate: 0-4095)
     last_abs_x: AtomicU16,
-    /// Last absolute mouse Y position (CH9329 coordinate: 0-4095)
     last_abs_y: AtomicU16,
-    /// Whether relative mouse mode is active (set by incoming events)
     relative_mouse_active: AtomicBool,
-    /// Shared runtime status updated only by the worker.
     runtime: Arc<Ch9329RuntimeState>,
 }
 
 impl Ch9329Backend {
-    /// Create a new CH9329 backend with default baud rate (9600)
     pub fn new(port_path: &str) -> Result<Self> {
         Self::with_baud_rate(port_path, DEFAULT_BAUD_RATE)
     }
 
-    /// Create a new CH9329 backend with custom baud rate
     pub fn with_baud_rate(port_path: &str, baud_rate: u32) -> Result<Self> {
         Ok(Self {
             port_path: port_path.to_string(),
@@ -473,8 +315,7 @@ impl Ch9329Backend {
             worker_handle: Mutex::new(None),
             keyboard_state: Mutex::new(KeyboardReport::default()),
             mouse_buttons: AtomicU8::new(0),
-            screen_width: 1920,
-            screen_height: 1080,
+            screen_resolution: RwLock::new((1920, 1080)),
             chip_info: Arc::new(RwLock::new(None)),
             led_status: Arc::new(RwLock::new(LedStatus::default())),
             address: DEFAULT_ADDR,
@@ -489,12 +330,10 @@ impl Ch9329Backend {
         self.runtime.set_error(reason, error_code);
     }
 
-    /// Check if the serial port device file exists
     pub fn check_port_exists(&self) -> bool {
         std::path::Path::new(&self.port_path).exists()
     }
 
-    /// Convert serialport error to HidError
     fn serial_error_to_hid_error(e: serialport::Error, operation: &str) -> AppError {
         let error_code = match e.kind() {
             serialport::ErrorKind::NoDevice => "port_not_found",
@@ -518,16 +357,11 @@ impl Ch9329Backend {
         }
     }
 
-    /// Calculate checksum for CH9329 packet (sum of ALL bytes including header)
     #[inline]
     fn calculate_checksum(data: &[u8]) -> u8 {
         data.iter().fold(0u8, |acc, &x| acc.wrapping_add(x))
     }
 
-    /// Build a CH9329 packet into a stack-allocated buffer
-    ///
-    /// Packet format: `[Header 0x57 0xAB] [Address] [Command] [Length] [Data] [Checksum]`
-    /// Returns the packet buffer and the actual length
     #[inline]
     fn build_packet_buf(address: u8, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
         debug_assert!(
@@ -539,25 +373,18 @@ impl Ch9329Backend {
         let packet_len = 6 + data.len();
         let mut packet = [0u8; MAX_PACKET_SIZE];
 
-        // Header (2 bytes)
         packet[0] = PACKET_HEADER[0];
         packet[1] = PACKET_HEADER[1];
-        // Address (1 byte)
         packet[2] = address;
-        // Command (1 byte)
         packet[3] = cmd;
-        // Length (1 byte) - data length only
         packet[4] = len;
-        // Data (N bytes)
         packet[5..5 + data.len()].copy_from_slice(data);
-        // Checksum (1 byte) - sum of ALL bytes including header
         let checksum = Self::calculate_checksum(&packet[..5 + data.len()]);
         packet[5 + data.len()] = checksum;
 
         (packet, packet_len)
     }
 
-    /// Build a CH9329 packet (legacy Vec version for compatibility)
     fn build_packet(address: u8, cmd: u8, data: &[u8]) -> Vec<u8> {
         let (buf, len) = Self::build_packet_buf(address, cmd, data);
         buf[..len].to_vec()
@@ -984,10 +811,6 @@ impl Ch9329Backend {
     }
 }
 
-// ============================================================================
-// HidBackend Trait Implementation
-// ============================================================================
-
 #[async_trait]
 impl HidBackend for Ch9329Backend {
     async fn init(&self) -> Result<()> {
@@ -1060,7 +883,6 @@ impl HidBackend for Ch9329Backend {
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
         let usb_key = event.key.to_hid_usage();
 
-        // Handle modifier keys separately
         if event.key.is_modifier() {
             let mut state = self.keyboard_state.lock();
 
@@ -1078,7 +900,6 @@ impl HidBackend for Ch9329Backend {
         } else {
             let mut state = self.keyboard_state.lock();
 
-            // Update modifiers from event
             state.modifiers = event.modifiers.to_hid_byte();
 
             match event.event_type {
@@ -1104,19 +925,15 @@ impl HidBackend for Ch9329Backend {
 
         match event.event_type {
             MouseEventType::Move => {
-                // Relative movement - send delta directly without inversion
                 self.relative_mouse_active.store(true, Ordering::Relaxed);
                 let dx = event.x.clamp(-127, 127) as i8;
                 let dy = event.y.clamp(-127, 127) as i8;
                 self.send_mouse_relative(buttons, dx, dy, 0)?;
             }
             MouseEventType::MoveAbs => {
-                // Absolute movement
                 self.relative_mouse_active.store(false, Ordering::Relaxed);
-                // Frontend sends 0-32767 (HID standard), CH9329 expects 0-4095
                 let x = ((event.x.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
                 let y = ((event.y.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
-                // Store last absolute position for click events
                 self.last_abs_x.store(x, Ordering::Relaxed);
                 self.last_abs_y.store(y, Ordering::Relaxed);
                 self.send_mouse_absolute(buttons, x, y, 0)?;
@@ -1153,7 +970,6 @@ impl HidBackend for Ch9329Backend {
                 if self.relative_mouse_active.load(Ordering::Relaxed) {
                     self.send_mouse_relative(buttons, 0, 0, event.scroll)?;
                 } else {
-                    // Use absolute mouse for scroll with last position
                     let x = self.last_abs_x.load(Ordering::Relaxed);
                     let y = self.last_abs_y.load(Ordering::Relaxed);
                     self.send_mouse_absolute(buttons, x, y, event.scroll)?;
@@ -1165,7 +981,6 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn reset(&self) -> Result<()> {
-        // Reset keyboard
         {
             let mut state = self.keyboard_state.lock();
             state.clear();
@@ -1174,14 +989,12 @@ impl HidBackend for Ch9329Backend {
             self.send_keyboard_report(&report)?;
         }
 
-        // Reset mouse
         self.mouse_buttons.store(0, Ordering::Relaxed);
         self.last_abs_x.store(0, Ordering::Relaxed);
         self.last_abs_y.store(0, Ordering::Relaxed);
         self.relative_mouse_active.store(false, Ordering::Relaxed);
         self.send_mouse_absolute(0, 0, 0, 0)?;
 
-        // Reset media keys
         let _ = self.release_media_keys();
 
         info!("CH9329 HID state reset");
@@ -1233,7 +1046,7 @@ impl HidBackend for Ch9329Backend {
                     kana: false,
                 }
             },
-            screen_resolution: Some((self.screen_width, self.screen_height)),
+            screen_resolution: Some(*self.screen_resolution.read()),
             device: Some(self.port_path.clone()),
             error: error.as_ref().map(|(reason, _)| reason.clone()),
             error_code: error.as_ref().map(|(_, code)| code.clone()),
@@ -1244,113 +1057,11 @@ impl HidBackend for Ch9329Backend {
         self.runtime.subscribe()
     }
 
-    fn set_screen_resolution(&mut self, width: u32, height: u32) {
-        self.screen_width = width;
-        self.screen_height = height;
+    fn set_screen_resolution(&self, width: u32, height: u32) {
+        *self.screen_resolution.write() = (width, height);
         self.runtime.notify();
     }
 }
-
-// ============================================================================
-// Detection and Helpers
-// ============================================================================
-
-/// Detect CH9329 on common serial ports
-pub fn detect_ch9329() -> Option<String> {
-    let common_ports = [
-        "/dev/ttyUSB0",
-        "/dev/ttyUSB1",
-        "/dev/ttyAMA0",
-        "/dev/serial0",
-        "/dev/ttyS0",
-    ];
-
-    // Try multiple baud rates
-    let baud_rates = [9600, 115200];
-
-    for port_path in &common_ports {
-        if !std::path::Path::new(port_path).exists() {
-            continue;
-        }
-
-        for &baud_rate in &baud_rates {
-            if let Ok(mut port) = serialport::new(*port_path, baud_rate)
-                .timeout(Duration::from_millis(200))
-                .open()
-            {
-                // Build GET_INFO packet manually (address = 0x00)
-                let packet = [0x57, 0xAB, 0x00, cmd::GET_INFO, 0x00, 0x03];
-
-                if port.write_all(&packet).is_ok() {
-                    std::thread::sleep(Duration::from_millis(50));
-
-                    let mut response = [0u8; 16];
-                    if let Ok(n) = port.read(&mut response) {
-                        // Check for valid CH9329 response header
-                        if n >= 6
-                            && response[0] == PACKET_HEADER[0]
-                            && response[1] == PACKET_HEADER[1]
-                        {
-                            info!("CH9329 detected on {} @ {} baud", port_path, baud_rate);
-                            return Some(port_path.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Detect CH9329 and return both path and working baud rate
-pub fn detect_ch9329_with_baud() -> Option<(String, u32)> {
-    let common_ports = [
-        "/dev/ttyUSB0",
-        "/dev/ttyUSB1",
-        "/dev/ttyAMA0",
-        "/dev/serial0",
-        "/dev/ttyS0",
-    ];
-
-    let baud_rates = [9600, 115200, 57600, 38400, 19200];
-
-    for port_path in &common_ports {
-        if !std::path::Path::new(port_path).exists() {
-            continue;
-        }
-
-        for &baud_rate in &baud_rates {
-            if let Ok(mut port) = serialport::new(*port_path, baud_rate)
-                .timeout(Duration::from_millis(200))
-                .open()
-            {
-                let packet = [0x57, 0xAB, 0x00, cmd::GET_INFO, 0x00, 0x03];
-
-                if port.write_all(&packet).is_ok() {
-                    std::thread::sleep(Duration::from_millis(50));
-
-                    let mut response = [0u8; 16];
-                    if let Ok(n) = port.read(&mut response) {
-                        if n >= 6
-                            && response[0] == PACKET_HEADER[0]
-                            && response[1] == PACKET_HEADER[1]
-                        {
-                            info!("CH9329 detected on {} @ {} baud", port_path, baud_rate);
-                            return Some((port_path.to_string(), baud_rate));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-// ============================================================================
-// Tests
-// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -1358,11 +1069,9 @@ mod tests {
 
     #[test]
     fn test_packet_building() {
-        // Test GET_INFO packet (no data)
         let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::GET_INFO, &[]);
         assert_eq!(packet, vec![0x57, 0xAB, 0x00, 0x01, 0x00, 0x03]);
 
-        // Test keyboard packet (8 bytes data)
         let data = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]; // 'A' key
         let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
 
@@ -1372,7 +1081,6 @@ mod tests {
         assert_eq!(packet[3], cmd::SEND_KB_GENERAL_DATA); // Command
         assert_eq!(packet[4], 8); // Length (8 data bytes)
         assert_eq!(&packet[5..13], &data); // Data
-                                           // Checksum = 0x57 + 0xAB + 0x00 + 0x02 + 0x08 + 0x00 + 0x00 + 0x04 + ... = 0x10
         let expected_checksum: u8 = packet[..13]
             .iter()
             .fold(0u8, |acc: u8, &x| acc.wrapping_add(x));
@@ -1381,7 +1089,6 @@ mod tests {
 
     #[test]
     fn test_relative_mouse_packet() {
-        // Test relative mouse: move right 50 pixels
         let data = [0x01, 0x00, 50u8, 0x00, 0x00];
         let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_MS_REL_DATA, &data);
 
@@ -1397,12 +1104,10 @@ mod tests {
 
     #[test]
     fn test_checksum_calculation() {
-        // Known packet: GET_INFO
         let packet = [0x57u8, 0xAB, 0x00, 0x01, 0x00];
         let checksum = Ch9329Backend::calculate_checksum(&packet);
         assert_eq!(checksum, 0x03);
 
-        // Known packet: Keyboard 'A' press
         let packet = [
             0x57u8, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
@@ -1412,7 +1117,6 @@ mod tests {
 
     #[test]
     fn test_response_parsing() {
-        // Valid GET_INFO response
         let response_bytes = [
             0x57, 0xAB, // Header
             0x00, // Address
@@ -1422,9 +1126,7 @@ mod tests {
             0xE0, // Checksum (calculated)
         ];
 
-        // Note: checksum in test is just placeholder, parse will validate
         let _result = Response::parse(&response_bytes);
-        // This will fail because checksum doesn't match, but structure is tested
     }
 
     #[test]

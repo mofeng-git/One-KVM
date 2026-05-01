@@ -1,13 +1,10 @@
-//! 配置热重载逻辑
-//!
-//! 从 handlers.rs 中抽取的配置应用函数，负责将配置变更应用到各个子系统。
-
 use std::sync::Arc;
 
 use crate::config::*;
 use crate::error::{AppError, Result};
 use crate::rtsp::RtspService;
 use crate::state::AppState;
+use crate::stream_encoder::encoder_type_to_backend;
 use crate::video::codec_constraints::{
     enforce_constraints_with_stream_manager, StreamCodecConstraints,
 };
@@ -32,13 +29,11 @@ async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
         .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
 }
 
-/// 应用 Video 配置变更
 pub async fn apply_video_config(
     state: &Arc<AppState>,
     old_config: &VideoConfig,
     new_config: &VideoConfig,
 ) -> Result<()> {
-    // 检查配置是否实际变更
     if old_config == new_config {
         tracing::info!("Video config unchanged, skipping reload");
         return Ok(());
@@ -74,7 +69,6 @@ pub async fn apply_video_config(
     Ok(())
 }
 
-/// 应用 Stream 配置变更
 pub async fn apply_stream_config(
     state: &Arc<AppState>,
     old_config: &StreamConfig,
@@ -82,32 +76,24 @@ pub async fn apply_stream_config(
 ) -> Result<()> {
     tracing::info!("Applying stream config changes...");
 
-    // 更新编码器后端
     if old_config.encoder != new_config.encoder {
-        let encoder_backend = new_config.encoder.to_backend();
+        let encoder_backend = encoder_type_to_backend(new_config.encoder.clone());
         tracing::info!(
             "Updating encoder backend to: {:?} (from config: {:?})",
             encoder_backend,
             new_config.encoder
         );
-        state
-            .stream_manager
-            .webrtc_streamer()
-            .update_encoder_backend(encoder_backend)
-            .await;
+        state.webrtc.update_encoder_backend(encoder_backend).await;
     }
 
-    // 更新码率
     if old_config.bitrate_preset != new_config.bitrate_preset {
         state
             .stream_manager
-            .webrtc_streamer()
             .set_bitrate_preset(new_config.bitrate_preset)
             .await
             .ok(); // Ignore error if no active stream
     }
 
-    // 更新 ICE 配置 (STUN/TURN)
     let ice_changed = old_config.stun_server != new_config.stun_server
         || old_config.turn_server != new_config.turn_server
         || old_config.turn_username != new_config.turn_username
@@ -120,8 +106,7 @@ pub async fn apply_stream_config(
             new_config.turn_server
         );
         state
-            .stream_manager
-            .webrtc_streamer()
+            .webrtc
             .update_ice_config(
                 new_config.stun_server.clone(),
                 new_config.turn_server.clone(),
@@ -139,7 +124,6 @@ pub async fn apply_stream_config(
     Ok(())
 }
 
-/// 应用 HID 配置变更
 pub async fn apply_hid_config(
     state: &Arc<AppState>,
     old_config: &HidConfig,
@@ -202,7 +186,6 @@ pub async fn apply_hid_config(
     Ok(())
 }
 
-/// 应用 MSD 配置变更
 pub async fn apply_msd_config(
     state: &Arc<AppState>,
     old_config: &MsdConfig,
@@ -218,7 +201,6 @@ pub async fn apply_msd_config(
     tracing::debug!("Old MSD config: {:?}", old_config);
     tracing::debug!("New MSD config: {:?}", new_config);
 
-    // Check if MSD enabled state changed
     let old_msd_enabled = old_config.enabled;
     let new_msd_enabled = new_config.enabled;
     let msd_dir_changed = old_config.msd_dir != new_config.msd_dir;
@@ -232,7 +214,6 @@ pub async fn apply_msd_config(
         tracing::info!("MSD directory changed: {}", new_config.msd_dir);
     }
 
-    // Ensure MSD directories exist (msd/images, msd/ventoy)
     let msd_dir = new_config.msd_dir_path();
     if let Err(e) = std::fs::create_dir_all(msd_dir.join("images")) {
         tracing::warn!("Failed to create MSD images directory: {}", e);
@@ -255,7 +236,6 @@ pub async fn apply_msd_config(
 
         reconcile_otg_from_store(state).await?;
 
-        // Shutdown existing controller if present
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
             if let Err(e) = msd.shutdown().await {
@@ -271,15 +251,12 @@ pub async fn apply_msd_config(
             .await
             .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
 
-        // Set event bus
         let events = state.events.clone();
         msd.set_event_bus(events).await;
 
-        // Store the initialized controller
         *state.msd.write().await = Some(msd);
         tracing::info!("MSD initialized successfully");
     } else {
-        // MSD disabled - shutdown
         tracing::info!("MSD disabled in config, shutting down...");
 
         let mut msd_guard = state.msd.write().await;
@@ -306,7 +283,6 @@ pub async fn apply_msd_config(
     Ok(())
 }
 
-/// 应用 ATX 配置变更
 pub async fn apply_atx_config(
     state: &Arc<AppState>,
     _old_config: &AtxConfig,
@@ -314,10 +290,8 @@ pub async fn apply_atx_config(
 ) -> Result<()> {
     tracing::info!("Applying ATX config changes...");
 
-    // Convert AtxConfig to AtxControllerConfig
     let controller_config = new_config.to_controller_config();
 
-    // Reload the ATX controller with new configuration
     let atx_guard = state.atx.read().await;
     if let Some(atx) = atx_guard.as_ref() {
         if let Err(e) = atx.reload(controller_config).await {
@@ -326,7 +300,6 @@ pub async fn apply_atx_config(
         }
         tracing::info!("ATX controller reloaded successfully");
     } else {
-        // ATX controller not initialized, create a new one if enabled
         drop(atx_guard);
 
         if new_config.enabled {
@@ -345,7 +318,6 @@ pub async fn apply_atx_config(
     Ok(())
 }
 
-/// 应用 Audio 配置变更
 pub async fn apply_audio_config(
     state: &Arc<AppState>,
     _old_config: &AudioConfig,
@@ -353,17 +325,14 @@ pub async fn apply_audio_config(
 ) -> Result<()> {
     tracing::info!("Applying audio config changes...");
 
-    // Create audio controller config from new config
     let audio_config = crate::audio::AudioControllerConfig {
         enabled: new_config.enabled,
         device: new_config.device.clone(),
-        quality: crate::audio::AudioQuality::from_str(&new_config.quality),
+        quality: new_config.quality.parse::<crate::audio::AudioQuality>()?,
     };
 
-    // Update audio controller
     if let Err(e) = state.audio.update_config(audio_config).await {
         tracing::error!("Audio config update failed: {}", e);
-        // Don't fail - audio errors are not critical
     } else {
         tracing::info!(
             "Audio config applied: enabled={}, device={}",
@@ -372,7 +341,6 @@ pub async fn apply_audio_config(
         );
     }
 
-    // Also update WebRTC audio enabled state
     if let Err(e) = state
         .stream_manager
         .set_webrtc_audio_enabled(new_config.enabled)
@@ -383,7 +351,6 @@ pub async fn apply_audio_config(
         tracing::info!("WebRTC audio enabled: {}", new_config.enabled);
     }
 
-    // Reconnect audio sources for existing WebRTC sessions
     if new_config.enabled {
         state.stream_manager.reconnect_webrtc_audio_sources().await;
     }
@@ -391,7 +358,6 @@ pub async fn apply_audio_config(
     Ok(())
 }
 
-/// Apply stream codec constraints derived from global config.
 pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<Option<String>> {
     let config = state.config.get();
     let constraints = StreamCodecConstraints::from_config(&config);
@@ -400,7 +366,6 @@ pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<O
     Ok(enforcement.message)
 }
 
-/// 应用 RustDesk 配置变更
 pub async fn apply_rustdesk_config(
     state: &Arc<AppState>,
     old_config: &crate::rustdesk::config::RustDeskConfig,
@@ -411,9 +376,7 @@ pub async fn apply_rustdesk_config(
     let mut rustdesk_guard = state.rustdesk.write().await;
     let mut credentials_to_save = None;
 
-    // Check if service needs to be stopped
     if old_config.enabled && !new_config.enabled {
-        // Disable service
         if let Some(ref service) = *rustdesk_guard {
             if let Err(e) = service.stop().await {
                 tracing::error!("Failed to stop RustDesk service: {}", e);
@@ -423,14 +386,12 @@ pub async fn apply_rustdesk_config(
         *rustdesk_guard = None;
     }
 
-    // Check if service needs to be started or restarted
     if new_config.enabled {
         let need_restart = old_config.rendezvous_server != new_config.rendezvous_server
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
 
         if rustdesk_guard.is_none() {
-            // Create new service
             tracing::info!("Initializing RustDesk service...");
             let service = crate::rustdesk::RustDeskService::new(
                 new_config.clone(),
@@ -442,12 +403,10 @@ pub async fn apply_rustdesk_config(
                 tracing::error!("Failed to start RustDesk service: {}", e);
             } else {
                 tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
-                // Save generated keypair and UUID to config
                 credentials_to_save = service.save_credentials();
             }
             *rustdesk_guard = Some(std::sync::Arc::new(service));
         } else if need_restart {
-            // Restart existing service with new config
             if let Some(ref service) = *rustdesk_guard {
                 if let Err(e) = service.restart(new_config.clone()).await {
                     tracing::error!("Failed to restart RustDesk service: {}", e);
@@ -456,14 +415,12 @@ pub async fn apply_rustdesk_config(
                         "RustDesk service restarted with ID: {}",
                         new_config.device_id
                     );
-                    // Save generated keypair and UUID to config
                     credentials_to_save = service.save_credentials();
                 }
             }
         }
     }
 
-    // Save credentials to persistent config store (outside the lock)
     drop(rustdesk_guard);
     if let Some(updated_config) = credentials_to_save {
         tracing::info!("Saving RustDesk credentials to config store...");
@@ -491,7 +448,6 @@ pub async fn apply_rustdesk_config(
     Ok(())
 }
 
-/// 应用 RTSP 配置变更
 pub async fn apply_rtsp_config(
     state: &Arc<AppState>,
     old_config: &RtspConfig,

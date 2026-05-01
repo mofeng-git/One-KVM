@@ -1,7 +1,3 @@
-//! RustDesk HID Adapter
-//!
-//! Converts RustDesk HID events (KeyEvent, MouseEvent) to One-KVM HID events.
-
 use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{ControlKey, KeyEvent, MouseEvent};
 use crate::hid::{
@@ -10,8 +6,6 @@ use crate::hid::{
 };
 use protobuf::Enum;
 
-/// Mouse event types from RustDesk protocol
-/// mask = (button << 3) | event_type
 pub mod mouse_type {
     pub const MOVE: i32 = 0;
     pub const DOWN: i32 = 1;
@@ -21,7 +15,6 @@ pub mod mouse_type {
     pub const MOVE_RELATIVE: i32 = 5;
 }
 
-/// Mouse button IDs from RustDesk protocol (before left shift by 3)
 pub mod mouse_button {
     pub const LEFT: i32 = 0x01;
     pub const RIGHT: i32 = 0x02;
@@ -30,9 +23,6 @@ pub mod mouse_button {
     pub const FORWARD: i32 = 0x10;
 }
 
-/// Convert RustDesk MouseEvent to One-KVM MouseEvent(s)
-/// Returns a Vec because a single RustDesk event may need multiple One-KVM events
-/// (e.g., move + button + scroll)
 pub fn convert_mouse_event(
     event: &MouseEvent,
     screen_width: u32,
@@ -41,23 +31,18 @@ pub fn convert_mouse_event(
 ) -> Vec<OneKvmMouseEvent> {
     let mut events = Vec::new();
 
-    // Parse RustDesk mask format: (button << 3) | event_type
     let event_type = event.mask & 0x07;
     let button_id = event.mask >> 3;
     let include_abs_move = !relative_mode;
 
     match event_type {
         mouse_type::MOVE => {
-            // RustDesk uses absolute coordinates
             let x = event.x.max(0) as u32;
             let y = event.y.max(0) as u32;
 
-            // Normalize to 0-32767 range for absolute mouse (USB HID standard)
             let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
             let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
 
-            // Move event - may have button held down (button_id > 0 means dragging)
-            // Just send move, button state is tracked separately by HID backend
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::MoveAbs,
                 x: abs_x,
@@ -67,7 +52,6 @@ pub fn convert_mouse_event(
             });
         }
         mouse_type::MOVE_RELATIVE => {
-            // Relative movement uses delta values directly (dx, dy).
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::Move,
                 x: event.x,
@@ -78,7 +62,6 @@ pub fn convert_mouse_event(
         }
         mouse_type::DOWN => {
             if include_abs_move {
-                // Button down - first move, then press
                 let x = event.x.max(0) as u32;
                 let y = event.y.max(0) as u32;
                 let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
@@ -104,7 +87,6 @@ pub fn convert_mouse_event(
         }
         mouse_type::UP => {
             if include_abs_move {
-                // Button up - first move, then release
                 let x = event.x.max(0) as u32;
                 let y = event.y.max(0) as u32;
                 let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
@@ -130,7 +112,6 @@ pub fn convert_mouse_event(
         }
         mouse_type::WHEEL => {
             if include_abs_move {
-                // Scroll event - move first, then scroll
                 let x = event.x.max(0) as u32;
                 let y = event.y.max(0) as u32;
                 let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
@@ -144,9 +125,6 @@ pub fn convert_mouse_event(
                 });
             }
 
-            // RustDesk encodes scroll direction in the y coordinate
-            // Positive y = scroll up, Negative y = scroll down
-            // The button_id field is not used for direction
             let scroll = if event.y > 0 { 1i8 } else { -1i8 };
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::Scroll,
@@ -158,7 +136,6 @@ pub fn convert_mouse_event(
         }
         _ => {
             if include_abs_move {
-                // Unknown event type, just move
                 let x = event.x.max(0) as u32;
                 let y = event.y.max(0) as u32;
                 let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
@@ -177,7 +154,6 @@ pub fn convert_mouse_event(
     events
 }
 
-/// Convert RustDesk button ID to One-KVM MouseButton
 fn button_id_to_button(button_id: i32) -> Option<MouseButton> {
     match button_id {
         mouse_button::LEFT => Some(MouseButton::Left),
@@ -187,34 +163,19 @@ fn button_id_to_button(button_id: i32) -> Option<MouseButton> {
     }
 }
 
-/// Convert RustDesk KeyEvent to One-KVM KeyboardEvent
-///
-/// RustDesk KeyEvent has two modes:
-/// - down=true/false: Key state (pressed/released)
-/// - press=true: Complete key press (down + up), used for typing
-///
-/// For press=true events, we only send Down and let the caller handle
-/// the timing for Up event if needed. Most systems handle this correctly.
 pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
-    // Determine if this is a key down or key up event
-    // press=true means "key was pressed" (down event)
-    // down=true means key is currently held down
-    // down=false with press=false means key was released
     let event_type = if event.down || event.press {
         KeyEventType::Down
     } else {
         KeyEventType::Up
     };
 
-    // For modifier keys sent as ControlKey, don't include them in modifiers
-    // to avoid double-pressing. The modifier will be tracked by HID state.
     let modifiers = if is_modifier_control_key(event) {
         KeyboardModifiers::default()
     } else {
         parse_modifiers(event)
     };
 
-    // Handle control keys
     if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
         if let Some(key) = control_key_to_hid(ck.value()) {
             let key = CanonicalKey::from_hid_usage(key)?;
@@ -226,9 +187,7 @@ pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
         }
     }
 
-    // Handle character keys (chr field contains platform-specific keycode)
     if let Some(ke_union::Union::Chr(chr)) = &event.union {
-        // chr contains USB HID scancode on Windows, X11 keycode on Linux
         if let Some(key) = keycode_to_hid(*chr) {
             let key = CanonicalKey::from_hid_usage(key)?;
             return Some(KeyboardEvent {
@@ -239,13 +198,9 @@ pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
         }
     }
 
-    // Handle unicode (for text input, we'd need to convert to scancodes)
-    // Unicode input requires more complex handling, skip for now
-
     None
 }
 
-/// Check if the event is a modifier key sent as ControlKey
 fn is_modifier_control_key(event: &KeyEvent) -> bool {
     if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
         let val = ck.value();
@@ -260,7 +215,6 @@ fn is_modifier_control_key(event: &KeyEvent) -> bool {
     false
 }
 
-/// Parse modifier keys from RustDesk KeyEvent into KeyboardModifiers
 fn parse_modifiers(event: &KeyEvent) -> KeyboardModifiers {
     let mut modifiers = KeyboardModifiers::default();
 
@@ -281,7 +235,6 @@ fn parse_modifiers(event: &KeyEvent) -> KeyboardModifiers {
     modifiers
 }
 
-/// Convert RustDesk ControlKey to USB HID usage code
 fn control_key_to_hid(key: i32) -> Option<u8> {
     match key {
         x if x == ControlKey::Alt as i32 => Some(0xE2), // Left Alt
@@ -342,67 +295,47 @@ fn control_key_to_hid(key: i32) -> Option<u8> {
     }
 }
 
-/// Convert platform keycode to USB HID usage code
-/// Handles Windows Virtual Key Codes, X11 keycodes, and ASCII codes
 fn keycode_to_hid(keycode: u32) -> Option<u8> {
-    // First try ASCII code mapping (RustDesk often sends ASCII codes)
     if let Some(hid) = ascii_to_hid(keycode) {
         return Some(hid);
     }
-    // Then try Windows Virtual Key Code mapping
     if let Some(hid) = windows_vk_to_hid(keycode) {
         return Some(hid);
     }
-    // Fall back to X11 keycode mapping for Linux clients
     x11_keycode_to_hid(keycode)
 }
 
-/// Convert ASCII code to USB HID usage code
 fn ascii_to_hid(ascii: u32) -> Option<u8> {
     match ascii {
-        // Lowercase letters a-z (ASCII 97-122)
-        97..=122 => {
-            // USB HID: a=0x04, b=0x05, ..., z=0x1D
-            Some((ascii - 97 + 0x04) as u8)
-        }
-        // Uppercase letters A-Z (ASCII 65-90)
-        65..=90 => {
-            // USB HID: A=0x04, B=0x05, ..., Z=0x1D (same as lowercase)
-            Some((ascii - 65 + 0x04) as u8)
-        }
-        // Numbers 0-9 (ASCII 48-57)
+        97..=122 => Some((ascii - 97 + 0x04) as u8),
+        65..=90 => Some((ascii - 65 + 0x04) as u8),
         48 => Some(0x27),                           // 0
         49..=57 => Some((ascii - 49 + 0x1E) as u8), // 1-9
-        // Common punctuation
-        32 => Some(0x2C),  // Space
-        13 => Some(0x28),  // Enter (CR)
-        10 => Some(0x28),  // Enter (LF)
-        9 => Some(0x2B),   // Tab
-        27 => Some(0x29),  // Escape
-        8 => Some(0x2A),   // Backspace
-        127 => Some(0x4C), // Delete
-        // Symbols (US keyboard layout)
-        45 => Some(0x2D), // -
-        61 => Some(0x2E), // =
-        91 => Some(0x2F), // [
-        93 => Some(0x30), // ]
-        92 => Some(0x31), // \
-        59 => Some(0x33), // ;
-        39 => Some(0x34), // '
-        96 => Some(0x35), // `
-        44 => Some(0x36), // ,
-        46 => Some(0x37), // .
-        47 => Some(0x38), // /
+        32 => Some(0x2C),                           // Space
+        13 => Some(0x28),                           // Enter (CR)
+        10 => Some(0x28),                           // Enter (LF)
+        9 => Some(0x2B),                            // Tab
+        27 => Some(0x29),                           // Escape
+        8 => Some(0x2A),                            // Backspace
+        127 => Some(0x4C),                          // Delete
+        45 => Some(0x2D),                           // -
+        61 => Some(0x2E),                           // =
+        91 => Some(0x2F),                           // [
+        93 => Some(0x30),                           // ]
+        92 => Some(0x31),                           // \
+        59 => Some(0x33),                           // ;
+        39 => Some(0x34),                           // '
+        96 => Some(0x35),                           // `
+        44 => Some(0x36),                           // ,
+        46 => Some(0x37),                           // .
+        47 => Some(0x38),                           // /
         _ => None,
     }
 }
 
-/// Convert Windows Virtual Key Code to USB HID usage code
 fn windows_vk_to_hid(vk: u32) -> Option<u8> {
     match vk {
-        // Letters A-Z (VK_A=0x41 to VK_Z=0x5A)
         0x41..=0x5A => {
-            // USB HID: A=0x04, B=0x05, ..., Z=0x1D
             let letter = (vk - 0x41) as u8;
             Some(match letter {
                 0 => 0x04,  // A
@@ -434,21 +367,16 @@ fn windows_vk_to_hid(vk: u32) -> Option<u8> {
                 _ => return None,
             })
         }
-        // Numbers 0-9 (VK_0=0x30 to VK_9=0x39)
         0x30 => Some(0x27),                            // 0
         0x31..=0x39 => Some((vk - 0x31 + 0x1E) as u8), // 1-9
-        // Numpad 0-9 (VK_NUMPAD0=0x60 to VK_NUMPAD9=0x69)
         0x60 => Some(0x62),                            // Numpad 0
         0x61..=0x69 => Some((vk - 0x61 + 0x59) as u8), // Numpad 1-9
-        // Numpad operators
-        0x6A => Some(0x55), // Numpad *
-        0x6B => Some(0x57), // Numpad +
-        0x6D => Some(0x56), // Numpad -
-        0x6E => Some(0x63), // Numpad .
-        0x6F => Some(0x54), // Numpad /
-        // Function keys F1-F12 (VK_F1=0x70 to VK_F12=0x7B)
+        0x6A => Some(0x55),                            // Numpad *
+        0x6B => Some(0x57),                            // Numpad +
+        0x6D => Some(0x56),                            // Numpad -
+        0x6E => Some(0x63),                            // Numpad .
+        0x6F => Some(0x54),                            // Numpad /
         0x70..=0x7B => Some((vk - 0x70 + 0x3A) as u8),
-        // Special keys
         0x08 => Some(0x2A), // Backspace
         0x09 => Some(0x2B), // Tab
         0x0D => Some(0x28), // Enter
@@ -464,7 +392,6 @@ fn windows_vk_to_hid(vk: u32) -> Option<u8> {
         0x28 => Some(0x51), // Down Arrow
         0x2D => Some(0x49), // Insert
         0x2E => Some(0x4C), // Delete
-        // OEM keys (US keyboard layout)
         0xBA => Some(0x33), // ; :
         0xBB => Some(0x2E), // = +
         0xBC => Some(0x36), // , <
@@ -476,66 +403,56 @@ fn windows_vk_to_hid(vk: u32) -> Option<u8> {
         0xDC => Some(0x31), // \ |
         0xDD => Some(0x30), // ] }
         0xDE => Some(0x34), // ' "
-        // Lock keys
         0x14 => Some(0x39), // Caps Lock
         0x90 => Some(0x53), // Num Lock
         0x91 => Some(0x47), // Scroll Lock
-        // Print Screen, Pause
         0x2C => Some(0x46), // Print Screen
         0x13 => Some(0x48), // Pause
         _ => None,
     }
 }
 
-/// Convert X11 keycode to USB HID usage code (for Linux clients)
 fn x11_keycode_to_hid(keycode: u32) -> Option<u8> {
     match keycode {
-        // Numbers: X11 keycode 10="1", 11="2", ..., 18="9", 19="0"
         10..=18 => Some((keycode - 10 + 0x1E) as u8), // 1-9
         19 => Some(0x27),                             // 0
-        // Punctuation
-        20 => Some(0x2D), // -
-        21 => Some(0x2E), // =
-        34 => Some(0x2F), // [
-        35 => Some(0x30), // ]
-        // Letters (X11 keycodes are row-based)
-        // Row 1: q(24) w(25) e(26) r(27) t(28) y(29) u(30) i(31) o(32) p(33)
-        24 => Some(0x14), // q
-        25 => Some(0x1A), // w
-        26 => Some(0x08), // e
-        27 => Some(0x15), // r
-        28 => Some(0x17), // t
-        29 => Some(0x1C), // y
-        30 => Some(0x18), // u
-        31 => Some(0x0C), // i
-        32 => Some(0x12), // o
-        33 => Some(0x13), // p
-        // Row 2: a(38) s(39) d(40) f(41) g(42) h(43) j(44) k(45) l(46)
-        38 => Some(0x04), // a
-        39 => Some(0x16), // s
-        40 => Some(0x07), // d
-        41 => Some(0x09), // f
-        42 => Some(0x0A), // g
-        43 => Some(0x0B), // h
-        44 => Some(0x0D), // j
-        45 => Some(0x0E), // k
-        46 => Some(0x0F), // l
-        47 => Some(0x33), // ;
-        48 => Some(0x34), // '
-        49 => Some(0x35), // `
-        51 => Some(0x31), // \
-        // Row 3: z(52) x(53) c(54) v(55) b(56) n(57) m(58)
-        52 => Some(0x1D), // z
-        53 => Some(0x1B), // x
-        54 => Some(0x06), // c
-        55 => Some(0x19), // v
-        56 => Some(0x05), // b
-        57 => Some(0x11), // n
-        58 => Some(0x10), // m
-        59 => Some(0x36), // ,
-        60 => Some(0x37), // .
-        61 => Some(0x38), // /
-        // Space
+        20 => Some(0x2D),                             // -
+        21 => Some(0x2E),                             // =
+        34 => Some(0x2F),                             // [
+        35 => Some(0x30),                             // ]
+        24 => Some(0x14),                             // q
+        25 => Some(0x1A),                             // w
+        26 => Some(0x08),                             // e
+        27 => Some(0x15),                             // r
+        28 => Some(0x17),                             // t
+        29 => Some(0x1C),                             // y
+        30 => Some(0x18),                             // u
+        31 => Some(0x0C),                             // i
+        32 => Some(0x12),                             // o
+        33 => Some(0x13),                             // p
+        38 => Some(0x04),                             // a
+        39 => Some(0x16),                             // s
+        40 => Some(0x07),                             // d
+        41 => Some(0x09),                             // f
+        42 => Some(0x0A),                             // g
+        43 => Some(0x0B),                             // h
+        44 => Some(0x0D),                             // j
+        45 => Some(0x0E),                             // k
+        46 => Some(0x0F),                             // l
+        47 => Some(0x33),                             // ;
+        48 => Some(0x34),                             // '
+        49 => Some(0x35),                             // `
+        51 => Some(0x31),                             // \
+        52 => Some(0x1D),                             // z
+        53 => Some(0x1B),                             // x
+        54 => Some(0x06),                             // c
+        55 => Some(0x19),                             // v
+        56 => Some(0x05),                             // b
+        57 => Some(0x11),                             // n
+        58 => Some(0x10),                             // m
+        59 => Some(0x36),                             // ,
+        60 => Some(0x37),                             // .
+        61 => Some(0x38),                             // /
         65 => Some(0x2C),
         _ => None,
     }
@@ -573,7 +490,6 @@ mod tests {
 
         let events = convert_mouse_event(&event, 1920, 1080, false);
         assert!(events.len() >= 2);
-        // Should have a button down event
         assert!(events
             .iter()
             .any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));

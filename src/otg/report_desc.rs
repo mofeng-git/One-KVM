@@ -1,10 +1,3 @@
-//! HID Report Descriptors
-
-/// Keyboard HID Report Descriptor (no LED output)
-/// Report format (8 bytes input):
-///   [0] Modifier keys (8 bits)
-///   [1] Reserved
-///   [2-7] Key codes (6 keys)
 pub const KEYBOARD: &[u8] = &[
     0x05, 0x01, // Usage Page (Generic Desktop)
     0x09, 0x06, // Usage (Keyboard)
@@ -34,13 +27,6 @@ pub const KEYBOARD: &[u8] = &[
     0xC0, // End Collection
 ];
 
-/// Keyboard HID Report Descriptor with LED output support.
-/// Input report format (8 bytes):
-///   [0] Modifier keys (8 bits)
-///   [1] Reserved
-///   [2-7] Key codes (6 keys)
-/// Output report format (1 byte):
-///   [0] Num Lock / Caps Lock / Scroll Lock / Compose / Kana
 pub const KEYBOARD_WITH_LED: &[u8] = &[
     0x05, 0x01, // Usage Page (Generic Desktop)
     0x09, 0x06, // Usage (Keyboard)
@@ -81,12 +67,6 @@ pub const KEYBOARD_WITH_LED: &[u8] = &[
     0xC0, // End Collection
 ];
 
-/// Relative Mouse HID Report Descriptor (4 bytes report)
-/// Report format:
-///   [0] Buttons (5 bits) + padding (3 bits)
-///   [1] X movement (signed 8-bit)
-///   [2] Y movement (signed 8-bit)
-///   [3] Wheel (signed 8-bit)
 pub const MOUSE_RELATIVE: &[u8] = &[
     0x05, 0x01, // Usage Page (Generic Desktop)
     0x09, 0x02, // Usage (Mouse)
@@ -126,12 +106,6 @@ pub const MOUSE_RELATIVE: &[u8] = &[
     0xC0, // End Collection
 ];
 
-/// Absolute Mouse HID Report Descriptor (6 bytes report)
-/// Report format:
-///   [0] Buttons (5 bits) + padding (3 bits)
-///   [1-2] X position (16-bit, 0-32767)
-///   [3-4] Y position (16-bit, 0-32767)
-///   [5] Wheel (signed 8-bit)
 pub const MOUSE_ABSOLUTE: &[u8] = &[
     0x05, 0x01, // Usage Page (Generic Desktop)
     0x09, 0x02, // Usage (Mouse)
@@ -177,10 +151,6 @@ pub const MOUSE_ABSOLUTE: &[u8] = &[
     0xC0, // End Collection
 ];
 
-/// Consumer Control HID Report Descriptor (2 bytes report)
-/// Report format:
-///   [0-1] Consumer Control Usage (16-bit little-endian)
-/// Supports: Play/Pause, Stop, Next/Prev Track, Mute, Volume Up/Down, etc.
 pub const CONSUMER_CONTROL: &[u8] = &[
     0x05, 0x0C, // Usage Page (Consumer)
     0x09, 0x01, // Usage (Consumer Control)

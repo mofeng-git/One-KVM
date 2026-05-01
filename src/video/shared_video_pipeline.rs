@@ -38,25 +38,19 @@ const CAPTURE_TIMEOUT_STOP_THRESHOLD: u32 = 60;
 const CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD: u32 = 3;
 const CSI_BRIDGE_NOSIGNAL_INTERVAL_MS: u64 = 500;
 const NOSIGNAL_POLL_MAX: Duration = Duration::from_secs(20);
-/// Minimum valid frame size for capture
-const MIN_CAPTURE_FRAME_SIZE: usize = 128;
-/// Validate every JPEG frame during startup to avoid poisoning HW decoders
-/// with incomplete UVC warm-up frames.
-const STARTUP_JPEG_VALIDATE_FRAMES: u64 = 3;
-/// Validate JPEG header every N frames to reduce overhead
-const JPEG_VALIDATE_INTERVAL: u64 = 30;
 /// Throttle repeated encoding errors to avoid log flooding
 const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
 
 use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
+use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
 use crate::video::csi_bridge::{self, ProbeResult};
+use crate::video::device::parse_bridge_kind;
 use crate::video::encoder::registry::{EncoderBackend, VideoEncoderType};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
-use crate::video::device::parse_bridge_kind;
-use crate::video::SignalStatus;
 use crate::video::v4l2r_capture::{is_source_changed_error, BridgeContext, V4l2rCaptureStream};
+use crate::video::SignalStatus;
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
@@ -250,11 +244,6 @@ fn log_encoding_error(
     }
 }
 
-fn should_validate_jpeg_frame(validate_counter: u64) -> bool {
-    validate_counter <= STARTUP_JPEG_VALIDATE_FRAMES
-        || validate_counter.is_multiple_of(JPEG_VALIDATE_INTERVAL)
-}
-
 /// Pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct SharedVideoPipelineStats {
@@ -283,10 +272,7 @@ pub struct SharedVideoPipeline {
     last_state_notification: ParkingMutex<Option<PipelineStateNotification>>,
 }
 
-fn poll_bridge_subdev_after_no_signal(
-    bridge_ctx: &BridgeContext,
-    pipeline: &SharedVideoPipeline,
-) {
+fn poll_bridge_subdev_after_no_signal(bridge_ctx: &BridgeContext, pipeline: &SharedVideoPipeline) {
     let Some(subdev_path) = bridge_ctx.subdev_path.as_ref() else {
         return;
     };
@@ -313,7 +299,10 @@ fn poll_bridge_subdev_after_no_signal(
         let fd = match csi_bridge::open_subdev(subdev_path) {
             Ok(f) => f,
             Err(e) => {
-                debug!("No-signal poll: open subdev {:?} failed: {}", subdev_path, e);
+                debug!(
+                    "No-signal poll: open subdev {:?} failed: {}",
+                    subdev_path, e
+                );
                 std::thread::sleep(Duration::from_millis(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS));
                 continue;
             }
@@ -565,21 +554,20 @@ impl SharedVideoPipeline {
             subdev_path.clone(),
             parse_bridge_kind(bridge_kind.as_deref()),
         );
-        let preopened: Option<V4l2rCaptureStream> =
-            match V4l2rCaptureStream::open_with_bridge(
-                &device_path,
-                config.resolution,
-                config.input_format,
-                config.fps,
-                buffer_count.max(1),
-                Duration::from_secs(2),
-                bridge_ctx_probe,
-            ) {
-                Ok(s) => {
-                    let negotiated_res = s.resolution();
-                    let negotiated_fmt = s.format();
-                    if negotiated_res != config.resolution || negotiated_fmt != config.input_format {
-                        info!(
+        let preopened: Option<V4l2rCaptureStream> = match V4l2rCaptureStream::open_with_bridge(
+            &device_path,
+            config.resolution,
+            config.input_format,
+            config.fps,
+            buffer_count.max(1),
+            Duration::from_secs(2),
+            bridge_ctx_probe,
+        ) {
+            Ok(s) => {
+                let negotiated_res = s.resolution();
+                let negotiated_fmt = s.format();
+                if negotiated_res != config.resolution || negotiated_fmt != config.input_format {
+                    info!(
                             "Negotiated capture {}x{} {:?} (configured {}x{} {:?}) — aligning encoder to source",
                             negotiated_res.width,
                             negotiated_res.height,
@@ -588,25 +576,25 @@ impl SharedVideoPipeline {
                             config.resolution.height,
                             config.input_format
                         );
-                        config.resolution = negotiated_res;
-                        config.input_format = negotiated_fmt;
-                        *self.config.write().await = config.clone();
-                    }
-                    Some(s)
+                    config.resolution = negotiated_res;
+                    config.input_format = negotiated_fmt;
+                    *self.config.write().await = config.clone();
                 }
-                Err(AppError::CaptureNoSignal { kind }) => {
-                    debug!(
-                        "Pre-probe: no signal — encoder uses configured geometry until capture opens"
-                    );
-                    let status = SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal);
-                    self.notify_state(PipelineStateNotification::no_signal(
-                        status,
-                        Some(Duration::from_secs(2).as_millis() as u64),
-                    ));
-                    None
-                }
-                Err(e) => return Err(e),
-            };
+                Some(s)
+            }
+            Err(AppError::CaptureNoSignal { kind }) => {
+                debug!(
+                    "Pre-probe: no signal — encoder uses configured geometry until capture opens"
+                );
+                let status = SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal);
+                self.notify_state(PipelineStateNotification::no_signal(
+                    status,
+                    Some(Duration::from_secs(2).as_millis() as u64),
+                ));
+                None
+            }
+            Err(e) => return Err(e),
+        };
 
         let mut encoder_state = build_encoder_state(&config)?;
         let _ = self.running.send(true);
@@ -707,10 +695,8 @@ impl SharedVideoPipeline {
             let latest_frame = latest_frame.clone();
             let frame_seq_tx = frame_seq_tx.clone();
             let buffer_pool = buffer_pool.clone();
-            let bridge_ctx = BridgeContext::from_parts(
-                subdev_path,
-                parse_bridge_kind(bridge_kind.as_deref()),
-            );
+            let bridge_ctx =
+                BridgeContext::from_parts(subdev_path, parse_bridge_kind(bridge_kind.as_deref()));
             std::thread::spawn(move || {
                 let mut stream: Option<V4l2rCaptureStream> = None;
                 let mut initial_geometry: Option<(Resolution, PixelFormat)> = None;
@@ -874,7 +860,8 @@ impl SharedVideoPipeline {
 
                     // ── No usable stream?  Try to (re)open, back off on failure. ──
                     if stream.is_none() {
-                        match open_or_retry(&device_path, &config, buffer_count, bridge_ctx.clone()) {
+                        match open_or_retry(&device_path, &config, buffer_count, bridge_ctx.clone())
+                        {
                             OpenResult::Opened(new_stream) => {
                                 let new_res = new_stream.resolution();
                                 let new_fmt = new_stream.format();
@@ -884,7 +871,8 @@ impl SharedVideoPipeline {
                                 // encoder was sized to saved settings — if DV timings now
                                 // disagree, we cannot encode until WebRTC resyncs dimensions.
                                 if initial_geometry.is_none()
-                                    && (new_res != config.resolution || new_fmt != config.input_format)
+                                    && (new_res != config.resolution
+                                        || new_fmt != config.input_format)
                                 {
                                     info!(
                                         "Deferred capture open is {}x{} {:?} but encoder expects {}x{} {:?} — stopping for dimension resync",
@@ -898,7 +886,8 @@ impl SharedVideoPipeline {
                                     pipeline.notify_state(PipelineStateNotification::device_busy(
                                         "config_changing",
                                     ));
-                                    *pipeline.pending_sync_geometry.lock() = Some((new_res, new_fmt));
+                                    *pipeline.pending_sync_geometry.lock() =
+                                        Some((new_res, new_fmt));
                                     let _ = pipeline.running.send(false);
                                     pipeline.running_flag.store(false, Ordering::Release);
                                     let _ = frame_seq_tx.send(sequence.wrapping_add(1));
@@ -950,8 +939,7 @@ impl SharedVideoPipeline {
                                 );
                             }
                             OpenResult::NoSignal(status) => {
-                                consecutive_timeouts =
-                                    consecutive_timeouts.saturating_add(1);
+                                consecutive_timeouts = consecutive_timeouts.saturating_add(1);
                                 if consecutive_timeouts >= CAPTURE_TIMEOUT_STOP_THRESHOLD {
                                     warn!(
                                         "Capture soft-restart gave up after {} attempts, \
@@ -1092,9 +1080,7 @@ impl SharedVideoPipeline {
                                     }
                                 }
 
-                                if consecutive_timeouts
-                                    >= CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD
-                                {
+                                if consecutive_timeouts >= CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD {
                                     // Drop the stream so the next loop
                                     // iteration re-opens via the DV-timings
                                     // probe.  This catches source-side
@@ -1105,12 +1091,10 @@ impl SharedVideoPipeline {
                                          closing stream for soft-restart",
                                         consecutive_timeouts
                                     );
-                                    pipeline.notify_state(
-                                        PipelineStateNotification::no_signal(
-                                            SignalStatus::UvcCaptureStall,
-                                            Some(Duration::from_secs(2).as_millis() as u64),
-                                        ),
-                                    );
+                                    pipeline.notify_state(PipelineStateNotification::no_signal(
+                                        SignalStatus::UvcCaptureStall,
+                                        Some(Duration::from_secs(2).as_millis() as u64),
+                                    ));
                                     stream = None;
                                     continue;
                                 }
@@ -1550,14 +1534,5 @@ mod tests {
 
         let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, BitratePreset::Speed);
         assert_eq!(h265.output_codec, VideoEncoderType::H265);
-    }
-
-    #[test]
-    fn test_startup_jpeg_validation_policy() {
-        assert!(should_validate_jpeg_frame(1));
-        assert!(should_validate_jpeg_frame(2));
-        assert!(should_validate_jpeg_frame(3));
-        assert!(!should_validate_jpeg_frame(4));
-        assert!(should_validate_jpeg_frame(30));
     }
 }

@@ -1,6 +1,3 @@
-// Console WebSocket events composable - handles all WebSocket event subscriptions
-// Extracted from ConsoleView.vue for better separation of concerns
-
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
@@ -33,7 +30,7 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   const systemStore = useSystemStore()
   const { on, off, connect } = useWebSocket()
   const noop = () => {}
-  // Stream device monitoring handlers
+
   function handleStreamDeviceLost(data: { device: string; reason: string }) {
     if (systemStore.stream) {
       systemStore.stream.online = false
@@ -66,20 +63,11 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
     handlers.onStreamRecovered?.(_data)
   }
 
-  function handleStreamStateChanged(data: { state: string }) {
-    if (data.state === 'error') {
-      // Handled by video stream composable
-    }
-  }
-
   function handleStreamStateChangedForward(data: { state: string; device?: string | null }) {
-    handleStreamStateChanged(data)
     handlers.onStreamStateChanged?.(data)
   }
 
-  // Subscribe to all events
   function subscribe() {
-    // Stream events
     on('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
     on('stream.config_applied', handlers.onStreamConfigApplied ?? noop)
     on('stream.stats_update', handlers.onStreamStatsUpdate ?? noop)
@@ -92,14 +80,11 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
     on('stream.reconnecting', handleStreamReconnecting)
     on('stream.recovered', handleStreamRecovered)
 
-    // System events
     on('system.device_info', handlers.onDeviceInfo ?? noop)
 
-    // Connect WebSocket
     connect()
   }
 
-  // Unsubscribe from all events
   function unsubscribe() {
     off('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
     off('stream.config_applied', handlers.onStreamConfigApplied ?? noop)

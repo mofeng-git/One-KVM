@@ -1,4 +1,3 @@
-// Virtual keyboard layout data shared by the on-screen keyboard.
 
 export type KeyboardOsType = 'windows' | 'mac' | 'android'
 

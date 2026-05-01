@@ -109,7 +109,6 @@ export default {
     settingsTip: 'System settings',
     fullscreen: 'Fullscreen',
     fullscreenTip: 'Toggle fullscreen mode',
-    // Video Config
     videoConfig: 'Video',
     streamSettings: 'Stream Settings',
     deviceSettings: 'Device Settings',
@@ -141,7 +140,6 @@ export default {
     notRecommended: 'Not Recommended',
     multiSourceCodecLocked: '{sources} are enabled. Current codec is locked.',
     multiSourceVideoParamsWarning: '{sources} are enabled. Changing video device and input parameters will interrupt the stream.',
-    // HID Config
     hidConfig: 'HID',
     mouseSettings: 'Mouse Settings',
     hidDeviceSettings: 'HID Device Settings',
@@ -154,7 +152,6 @@ export default {
     absolute: 'Absolute',
     relative: 'Relative',
     applying: 'Applying...',
-    // Audio Config
     audioConfig: 'Audio',
     playbackControl: 'Playback',
     volume: 'Volume',
@@ -218,19 +215,16 @@ export default {
     title: 'Initial Setup',
     welcome: 'Welcome to One-KVM',
     description: 'Complete the initial setup to get started',
-    // Step titles
     stepAccount: 'Account Setup',
     stepVideo: 'Video Setup',
     stepAudioVideo: 'Audio/Video Setup',
     stepHid: 'HID Setup',
-    // Account
     setUsername: 'Set Admin Username',
     usernameHint: 'Username must be at least 2 characters',
     setPassword: 'Set Admin Password',
     passwordHint: 'Password must be at least 4 characters',
     confirmPassword: 'Confirm Password',
     passwordMismatch: 'Passwords do not match',
-    // Video
     videoDevice: 'Video Device',
     selectVideoDevice: 'Select video capture device',
     videoFormat: 'Video Format',
@@ -242,13 +236,11 @@ export default {
     noVideoDevices: 'No video devices detected',
     noSignalDetected: 'No HDMI signal detected. Please connect an HDMI cable and refresh.',
     refreshDevices: 'Refresh Devices',
-    // Audio
     audioDevice: 'Audio Device',
     selectAudioDevice: 'Select audio capture device',
     noAudio: 'No audio',
     noAudioDevices: 'No audio devices detected',
     audioDeviceHelp: 'Select the audio capture device for capturing remote host audio. Usually on the same USB device as the video capture card.',
-    // HID
     hidBackend: 'HID Backend',
     selectHidBackend: 'Select HID control method',
     serialHid: 'Serial HID',
@@ -261,31 +253,25 @@ export default {
     selectUdc: 'Select UDC',
     noUdcDevices: 'No UDC devices detected',
     hidDisabledHint: 'Disabling HID will prevent keyboard and mouse control of the remote host',
-    // Complete
     complete: 'Complete Setup',
     setupFailed: 'Setup failed',
-    // Advanced encoder
     advancedEncoder: 'Advanced: Encoder Backend',
     encoderHint: 'The default "Auto" option works for most cases. Only change if you need a specific encoder backend.',
     autoRecommended: 'Auto (Recommended)',
     hardware: 'Hardware',
     software: 'Software',
-    // Progress
     progress: 'Step {current} of {total}',
-    // Help tooltips
     ch9329Help: 'CH9329 is a serial-to-HID chip connected via serial port. Works with most hardware configurations.',
     otgHelp: 'USB OTG mode emulates HID devices directly through USB Device Controller. Requires hardware OTG support.',
     otgLowEndpointHint: 'Detected low-endpoint UDC; Consumer Control Keyboard will be disabled automatically.',
     videoDeviceHelp: 'Select the video capture device for capturing the remote host display. Usually an HDMI capture card.',
     videoFormatHelp: 'MJPEG has best compatibility. H.264/H.265 uses less bandwidth but requires encoding support.',
-    // Extensions
     stepExtensions: 'Extensions',
     extensionsDescription: 'Choose which extensions to auto-start',
     ttydTitle: 'Web Terminal (ttyd)',
     ttydDescription: 'Access device command line in browser',
     extensionsHint: 'These settings can be changed later in Settings',
     notInstalled: 'Not installed',
-    // Password strength
     passwordStrength: 'Password Strength',
     passwordWeak: 'Weak',
     passwordMedium: 'Medium',
@@ -350,7 +336,6 @@ export default {
         uvc_capture_stall: '',
       },
     },
-    // WebRTC
     webrtcConnected: 'WebRTC Connected',
     webrtcConnectedDesc: 'Using low-latency H.264 video stream',
     webrtcFailed: 'WebRTC Connection Failed',
@@ -363,29 +348,23 @@ export default {
     webrtcPhaseSetRemote: 'Applying remote description...',
     webrtcPhaseApplyIce: 'Applying ICE candidates...',
     webrtcPhaseNegotiating: 'Negotiating secure connection...',
-    // Pointer Lock
     pointerLocked: 'Pointer Locked',
     pointerLockedDesc: 'Press Escape to release the pointer',
     pointerLockFailed: 'Failed to lock pointer',
     relativeModeHint: 'Relative Mouse Mode',
     relativeModeHintDesc: 'Click on the video area to lock the pointer, press Escape to release',
-    // Meta Key Hint
     metaKeyHint: 'System Key Detected',
     metaKeyHintDesc: 'Enter fullscreen mode to capture Win/Meta keys',
-    // Stream mode change
     streamModeChanged: 'Video Mode Changed',
     streamModeChangedDesc: 'Server switched to {mode} mode',
-    // Device monitoring
     deviceLost: 'Video Device Lost',
     deviceLostDesc: '{device}: {reason}',
     deviceRecovering: 'Video Device Recovering',
     deviceRecoveringDesc: 'Attempting to recover video device (attempt {attempt})',
     deviceRecovered: 'Video Device Recovered',
     deviceRecoveredDesc: 'Video device reconnected successfully',
-    // Loading state
     pleaseWait: 'Please wait...',
     retryCount: 'Retrying (attempt {count})',
-    // Error details
     errorDetails: 'Error details',
   },
   hid: {
@@ -397,7 +376,6 @@ export default {
     pasteText: 'Paste Text',
     absoluteMouse: 'Absolute',
     relativeMouse: 'Relative',
-    // Device monitoring
     deviceLost: 'HID Device Lost',
     deviceLostDesc: '{backend}: {reason}',
     reconnecting: 'HID Reconnecting',
@@ -424,7 +402,6 @@ export default {
     },
   },
   audio: {
-    // Device monitoring
     deviceLost: 'Audio Device Lost',
     deviceLostDesc: '{device}: {reason}',
     reconnecting: 'Audio Reconnecting',
@@ -468,7 +445,6 @@ export default {
     uploadImageHint: 'Click to upload ISO/IMG',
     imageMounted: 'Image {name} mounted',
     imageUnmounted: 'Image unmounted',
-    // URL download
     downloadFromUrl: 'Download from URL',
     downloadFromUrlDesc: 'Enter the URL of an image file (ISO/IMG supported)',
     url: 'URL',
@@ -479,16 +455,13 @@ export default {
     downloadFailed: 'Download failed',
     largeFileWarning: '>2.2GB',
     largeFileTooltip: 'File is larger than 2.2GB, please use Flash mode to mount',
-    // Device monitoring
     error: 'MSD Error',
     errorDesc: '{reason}',
     recovered: 'MSD Recovered',
     recoveredDesc: 'MSD operation completed successfully',
-    // Operation status
     operationInProgress: 'Operation in progress, please wait',
     driveConnected: 'Virtual USB drive connected',
     imageConnected: 'Image {name} connected',
-    // Drive initialization
     selectDriveSize: 'Select virtual drive size',
     selectedSize: 'Selected size',
     customSize: 'Custom size',
@@ -520,7 +493,6 @@ export default {
     security: 'Security',
     about: 'About',
     aboutDesc: 'Open and Lightweight IP-KVM Solution',
-    // Device info
     deviceInfo: 'Device Info',
     deviceInfoDesc: 'Host system information',
     hostname: 'Hostname',
@@ -545,11 +517,9 @@ export default {
     networkSettings: 'Network Settings',
     msdSettings: 'MSD Settings',
     atxSettings: 'ATX Settings',
-    // Network tab
     httpSettings: 'HTTP Settings',
     httpPort: 'HTTP Port',
     configureHttpPort: 'Configure HTTP server port',
-    // Web server
     webServer: 'Access Address',
     webServerDesc: 'Configure HTTP/HTTPS ports and listening addresses. Restart required for changes to take effect.',
     httpsPort: 'HTTPS Port',
@@ -569,20 +539,17 @@ export default {
     bindAddressListEmpty: 'Add at least one IP address.',
     httpsEnabled: 'Enable HTTPS',
     httpsEnabledDesc: 'Enable HTTPS encrypted connection (a self-signed certificate is generated if none is specified)',
-    // Port config
     portConfig: 'Port & Protocol',
     portConfigDesc: 'The service runs on a single port at a time, determined by the HTTPS toggle',
     httpPortReserved: 'HTTP port (reserved)',
     httpsPortReserved: 'HTTPS port (reserved)',
     previewUrl: 'Access URL preview',
-    // Listen address
     listenAddress: 'Listen Address',
     listenAddressDesc: 'Configure which network interfaces the web server listens on',
     bindModeAllDesc: '0.0.0.0 — Listen on all network interfaces',
     bindModeLocalDesc: '127.0.0.1 — Allow local access only',
     bindModeCustomDesc: 'Specify a list of IP addresses',
     effectiveAddresses: 'Listen address preview',
-    // SSL certificate
     sslCertificate: 'SSL Certificate',
     sslCertificateDesc: 'Upload a custom PEM certificate to replace the self-signed one, restart required',
     sslCertCustom: 'Custom Certificate',
@@ -628,13 +595,11 @@ export default {
     updateMsgVerifying: 'Verifying (SHA256)',
     updateMsgInstalling: 'Replacing binary',
     updateMsgRestarting: 'Restarting service',
-    // Auth
     auth: 'Access',
     authSettings: 'Access Settings',
     authSettingsDesc: 'Single-user access and session behavior',
     allowMultipleSessions: 'Allow multiple web sessions',
     allowMultipleSessionsDesc: 'When disabled, a new login will kick the previous session.',
-    // User management
     userManagement: 'User Management',
     userManagementDesc: 'Manage user accounts and permissions',
     addUser: 'Add User',
@@ -649,7 +614,6 @@ export default {
     noUsers: 'No users found',
     create: 'Create',
     confirmDeleteUser: 'Are you sure you want to delete user "{name}"?',
-    // MSD/ATX status
     msdStatus: 'MSD Status',
     atxStatus: 'ATX Status',
     available: 'Available',
@@ -665,7 +629,6 @@ export default {
     disabled: 'Disabled',
     msdDesc: 'Mass Storage Device allows you to mount ISO images and virtual drives to the target machine. Use the MSD panel on the main page to manage images.',
     atxDesc: 'ATX power control allows you to remotely power on/off and reset the target machine. Use the ATX panel on the main page to control power.',
-    // ATX configuration
     atxSettingsDesc: 'Configure ATX power control hardware bindings',
     atxEnable: 'Enable ATX Control',
     atxEnableDesc: 'Enable remote control of power and reset buttons',
@@ -693,16 +656,13 @@ export default {
     atxLedPin: 'GPIO Pin',
     atxLedInverted: 'Invert Logic',
     atxLedInvertedDesc: 'GPIO is low when LED is on',
-    // WOL configuration
     atxWolSettings: 'Wake-on-LAN Settings',
     atxWolSettingsDesc: 'Configure WOL magic packet sending options',
     atxWolInterface: 'Network Interface',
     atxWolInterfacePlaceholder: 'e.g. eth0, enp0s3',
     atxWolInterfaceHint: 'Specify network interface for WOL packets, leave empty for default routing',
-    // Basic tab descriptions
     themeDesc: 'Choose your preferred color scheme',
     languageDesc: 'Select your preferred language',
-    // Video tab
     videoSettings: 'Video Settings',
     videoSettingsDesc: 'Configure video capture device',
     videoDevice: 'Video Device',
@@ -719,7 +679,6 @@ export default {
     software: 'Software',
     supportedFormats: 'Supported Formats',
     encoderHint: 'Hardware encoders provide better performance with lower CPU usage. Software encoders are more compatible but require more CPU resources.',
-    // HID tab
     hidSettings: 'HID Settings',
     hidSettingsDesc: 'Configure keyboard and mouse control',
     hidBackend: 'HID Backend',
@@ -748,7 +707,6 @@ export default {
     otgProfileWarning: 'Changing HID functions will reconnect the USB device',
     otgLowEndpointHint: 'Low-endpoint UDC detected; Consumer Control Keyboard will be disabled automatically.',
     otgFunctionMinWarning: 'Enable at least one HID function before saving',
-    // OTG Descriptor
     otgDescriptor: 'USB Device Descriptor',
     otgDescriptorDesc: 'Configure USB device identification',
     vendorId: 'Vendor ID (VID)',
@@ -862,7 +820,6 @@ export default {
       resetConfirmDesc: 'This will reset USB device "{device}" by cycling its authorized attribute. All connections to this device will be temporarily interrupted. Continue?',
       resetAction: 'Reset Device',
     },
-    // WebRTC / ICE
     webrtcSettings: 'WebRTC Settings',
     webrtcSettingsDesc: 'Configure STUN/TURN servers for NAT traversal',
     publicIceServersHint: 'Empty uses Google public STUN, configure your own TURN for production',
@@ -931,7 +888,6 @@ export default {
     notConnected: 'Not Connected',
     connected: 'Connected',
     image: 'Image',
-    // MSD status details
     msdStatus: 'Status',
     msdStandby: 'Idle',
     msdImageMode: 'Image Mode',
@@ -941,7 +897,6 @@ export default {
     msdNoImage: 'None',
   },
   extensions: {
-    // Common
     available: 'Available',
     unavailable: 'Unavailable',
     running: 'Running',
@@ -958,7 +913,6 @@ export default {
       title: 'Remote Access',
       desc: 'GOSTC NAT traversal and Easytier networking',
     },
-    // ttyd
     ttyd: {
       title: 'Ttyd Web Terminal',
       desc: 'Web terminal access via ttyd',
@@ -967,7 +921,6 @@ export default {
       port: 'Port',
       shell: 'Shell',
     },
-    // gostc
     gostc: {
       title: 'GOSTC NAT Traversal',
       desc: 'NAT traversal via GOSTC',
@@ -976,7 +929,6 @@ export default {
       key: 'Client Key',
       tls: 'Enable TLS',
     },
-    // easytier
     easytier: {
       title: 'Easytier Network',
       desc: 'P2P VPN networking via EasyTier',
@@ -987,7 +939,6 @@ export default {
       virtualIp: 'Virtual IP',
       virtualIpHint: 'Leave empty for DHCP, or specify with CIDR (e.g., 10.0.0.1/24)',
     },
-    // rustdesk
     rustdesk: {
       title: 'RustDesk Remote',
       desc: 'Remote access via RustDesk client',
@@ -1078,31 +1029,24 @@ export default {
     p2p: 'P2P Direct',
     relay: 'TURN Relay',
   },
-  // Help tooltip texts
   help: {
-    // MSD related
     flashMode: 'Flash mode mounts the image as a USB drive, compatible with most BIOS boot',
     cdromMode: 'CDROM mode mounts the image as a CD drive, for systems requiring optical boot',
     readOnlyMode: 'Read-only mode is safer, the target system cannot modify the image',
     readWriteMode: 'Read-write mode allows writing data, useful for saving configurations',
     driveSize: 'Virtual drive size. Larger drives can store more files but take longer to initialize',
-    // Video related
     mjpegMode: 'MJPEG mode has best compatibility, works with all browsers, but higher latency',
     webrtcMode: 'WebRTC mode has lower latency, but requires browser codec support',
     videoBitratePreset: 'Speed: lowest latency, best for slow networks. Balanced: good quality and latency. Quality: best visual, needs good bandwidth',
     encoderBackend: 'Hardware encoder has better performance and lower power. Software encoder has better compatibility',
-    // HID related
     absoluteMode: 'Absolute mode maps mouse coordinates directly, suitable for most scenarios',
     relativeMode: 'Relative mode sends mouse movement delta, for games or special software',
     mouseThrottle: 'Send interval controls mouse event frequency. Higher values reduce network load',
     hidBackend: 'OTG backend requires USB OTG hardware support. CH9329 is a serial HID chip solution',
-    // ATX related
     atxActiveLevel: 'Active level depends on your hardware wiring. High means high voltage when triggered',
     wolInterface: 'Network interface name for sending Wake-on-LAN magic packets, e.g., eth0 or br0',
-    // Network related
     stunServer: 'STUN server for NAT traversal to establish P2P connections. Leave empty for public servers',
     turnServer: 'TURN server provides relay when P2P fails. Requires more bandwidth but more reliable',
-    // Audio related
     audioQuality: 'Higher quality means better audio but requires more network bandwidth',
   },
 }

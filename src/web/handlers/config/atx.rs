@@ -1,5 +1,3 @@
-//! ATX configuration handlers
-
 use axum::{extract::State, Json};
 use std::sync::Arc;
 
@@ -11,29 +9,23 @@ use crate::state::AppState;
 use super::apply::apply_atx_config;
 use super::types::AtxConfigUpdate;
 
-/// Get ATX configuration
 pub async fn get_atx_config(State(state): State<Arc<AppState>>) -> Json<AtxConfig> {
     Json(state.config.get().atx.clone())
 }
 
-/// Update ATX configuration
 pub async fn update_atx_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AtxConfigUpdate>,
 ) -> Result<Json<AtxConfig>> {
-    // 1. Read current configuration snapshot
     let current_config = state.config.get();
     let old_atx_config = current_config.atx.clone();
 
-    // 2. Validate request, including merged effective serial parameter checks
     req.validate_with_current(&old_atx_config)?;
 
-    // 3. Ensure ATX serial devices do not conflict with HID CH9329 serial device
     let mut merged_atx_config = old_atx_config.clone();
     req.apply_to(&mut merged_atx_config);
     validate_serial_device_conflict(&merged_atx_config, &current_config.hid)?;
 
-    // 4. Persist update into config store
     state
         .config
         .update(|config| {
@@ -41,10 +33,8 @@ pub async fn update_atx_config(
         })
         .await?;
 
-    // 5. Load new config
     let new_atx_config = state.config.get().atx.clone();
 
-    // 6. Apply to subsystem (hot reload)
     if let Err(e) = apply_atx_config(&state, &old_atx_config, &new_atx_config).await {
         tracing::error!("Failed to apply ATX config: {}", e);
     }

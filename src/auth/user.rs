@@ -1,121 +1,98 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
+use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::password::{hash_password, verify_password};
-use super::rfc3339;
 use crate::error::{AppError, Result};
 
-/// User row type from database
-type UserRow = (String, String, String, String, String);
+type UserRow = (String, String, String);
 
-/// User data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
     pub username: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
 }
 
 impl User {
-    /// Convert from database row to User
     fn from_row(row: UserRow) -> Self {
-        let (id, username, password_hash, created_at, updated_at) = row;
+        let (id, username, password_hash) = row;
         Self {
             id,
             username,
             password_hash,
-            created_at: rfc3339::parse(&created_at),
-            updated_at: rfc3339::parse(&updated_at),
         }
     }
 }
 
-/// User store backed by SQLite
 #[derive(Clone)]
 pub struct UserStore {
     pool: Pool<Sqlite>,
 }
 
 impl UserStore {
-    /// Create a new user store
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
 
-    /// Create a new user
-    pub async fn create(&self, username: &str, password: &str) -> Result<User> {
-        // Check if username already exists
-        if self.get_by_username(username).await?.is_some() {
-            return Err(AppError::BadRequest(format!(
-                "Username '{}' already exists",
-                username
-            )));
+    /// The single local user, or `None` if none exists. Errors if more than one row is present.
+    pub async fn single_user(&self) -> Result<Option<User>> {
+        let mut rows: Vec<UserRow> = sqlx::query_as(
+            "SELECT id, username, password_hash FROM users ORDER BY rowid ASC LIMIT 2",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        match rows.len() {
+            0 => Ok(None),
+            1 => Ok(Some(User::from_row(rows.remove(0)))),
+            _ => Err(AppError::Internal(
+                "Multiple user accounts in database; this build supports only one".to_string(),
+            )),
+        }
+    }
+
+    pub async fn create_first_user(&self, username: &str, password: &str) -> Result<User> {
+        if self.single_user().await?.is_some() {
+            return Err(AppError::BadRequest(
+                "A user account already exists".to_string(),
+            ));
         }
 
         let password_hash = hash_password(password)?;
-        let now = OffsetDateTime::now_utc();
         let user = User {
             id: Uuid::new_v4().to_string(),
             username: username.to_string(),
             password_hash,
-            created_at: now,
-            updated_at: now,
         };
 
         sqlx::query(
             r#"
-            INSERT INTO users (id, username, password_hash, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5)
+            INSERT INTO users (id, username, password_hash)
+            VALUES (?1, ?2, ?3)
             "#,
         )
         .bind(&user.id)
         .bind(&user.username)
         .bind(&user.password_hash)
-        .bind(rfc3339::format(user.created_at))
-        .bind(rfc3339::format(user.updated_at))
         .execute(&self.pool)
         .await?;
 
         Ok(user)
     }
 
-    /// Get user by ID
-    pub async fn get(&self, user_id: &str) -> Result<Option<User>> {
-        let row: Option<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE id = ?1",
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(User::from_row))
-    }
-
-    /// Get user by username
-    pub async fn get_by_username(&self, username: &str) -> Result<Option<User>> {
-        let row: Option<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = ?1",
-        )
-        .bind(username)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(User::from_row))
-    }
-
-    /// Verify user credentials
     pub async fn verify(&self, username: &str, password: &str) -> Result<Option<User>> {
-        let user = match self.get_by_username(username).await? {
-            Some(user) => user,
+        let user = match self.single_user().await? {
+            Some(u) => u,
             None => return Ok(None),
         };
+
+        if user.username != username {
+            return Ok(None);
+        }
 
         if verify_password(password, &user.password_hash)? {
             Ok(Some(user))
@@ -124,15 +101,23 @@ impl UserStore {
         }
     }
 
-    /// Update user password
     pub async fn update_password(&self, user_id: &str, new_password: &str) -> Result<()> {
+        let user = self
+            .single_user()
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+        if user.id != user_id {
+            return Err(AppError::AuthError("Invalid session".to_string()));
+        }
+
         let password_hash = hash_password(new_password)?;
         let now = OffsetDateTime::now_utc();
 
         let result =
             sqlx::query("UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3")
                 .bind(&password_hash)
-                .bind(rfc3339::format(now))
+                .bind(now.format(&Rfc3339).expect("RFC3339 format"))
                 .bind(user_id)
                 .execute(&self.pool)
                 .await?;
@@ -144,21 +129,24 @@ impl UserStore {
         Ok(())
     }
 
-    /// Update username
     pub async fn update_username(&self, user_id: &str, new_username: &str) -> Result<()> {
-        if let Some(existing) = self.get_by_username(new_username).await? {
-            if existing.id != user_id {
-                return Err(AppError::BadRequest(format!(
-                    "Username '{}' already exists",
-                    new_username
-                )));
-            }
+        let user = self
+            .single_user()
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+        if user.id != user_id {
+            return Err(AppError::AuthError("Invalid session".to_string()));
+        }
+
+        if new_username == user.username {
+            return Ok(());
         }
 
         let now = OffsetDateTime::now_utc();
         let result = sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
             .bind(new_username)
-            .bind(rfc3339::format(now))
+            .bind(now.format(&Rfc3339).expect("RFC3339 format"))
             .bind(user_id)
             .execute(&self.pool)
             .await?;
@@ -168,38 +156,5 @@ impl UserStore {
         }
 
         Ok(())
-    }
-
-    /// List all users
-    pub async fn list(&self) -> Result<Vec<User>> {
-        let rows: Vec<UserRow> = sqlx::query_as(
-            "SELECT id, username, password_hash, created_at, updated_at FROM users ORDER BY created_at",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows.into_iter().map(User::from_row).collect())
-    }
-
-    /// Delete user by ID
-    pub async fn delete(&self, user_id: &str) -> Result<()> {
-        let result = sqlx::query("DELETE FROM users WHERE id = ?1")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::NotFound("User not found".to_string()));
-        }
-
-        Ok(())
-    }
-
-    /// Check if any users exist
-    pub async fn has_users(&self) -> Result<bool> {
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(count.0 > 0)
     }
 }

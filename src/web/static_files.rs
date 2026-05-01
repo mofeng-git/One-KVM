@@ -9,38 +9,30 @@ use std::path::PathBuf;
 #[cfg(debug_assertions)]
 use std::sync::OnceLock;
 
-// Only embed assets in release mode
 #[cfg(not(debug_assertions))]
 use rust_embed::Embed;
 
 #[cfg(not(debug_assertions))]
-/// Embedded static assets (frontend files) - only in release mode
 #[derive(Embed)]
 #[folder = "web/dist"]
 #[prefix = ""]
 pub struct StaticAssets;
 
-/// Get the base directory for static files
-/// In debug mode: relative to executable directory
-/// In release mode: not used (embedded assets)
 #[cfg(debug_assertions)]
 fn get_static_base_dir() -> PathBuf {
     static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
     BASE_DIR
         .get_or_init(|| {
-            // Try to get executable directory
             if let Ok(exe_path) = std::env::current_exe() {
                 if let Some(exe_dir) = exe_path.parent() {
                     return exe_dir.join("web").join("dist");
                 }
             }
-            // Fallback to current directory
             PathBuf::from("web/dist")
         })
         .clone()
 }
 
-/// Create router for static file serving
 pub fn static_file_router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
@@ -50,29 +42,23 @@ where
         .route("/{*path}", get(static_handler))
 }
 
-/// Serve index.html for root path
 async fn index_handler() -> Response<Body> {
     serve_file("index.html")
 }
 
-/// Serve static files
 async fn static_handler(uri: Uri) -> Response<Body> {
     let path = uri.path().trim_start_matches('/');
 
-    // Try to serve the exact file
     if let Some(response) = try_serve_file(path) {
         return response;
     }
 
-    // For SPA routing, serve index.html for non-asset paths
     if !path.contains('.') {
         if let Some(response) = try_serve_file("index.html") {
             return response;
         }
     }
 
-    // If no embedded assets found, return placeholder page
-    // This happens when web/dist was not built before compilation
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -82,7 +68,6 @@ async fn static_handler(uri: Uri) -> Response<Body> {
 
 fn serve_file(path: &str) -> Response<Body> {
     try_serve_file(path).unwrap_or_else(|| {
-        // If index.html not found in embedded assets, return placeholder
         if path == "index.html" {
             Response::builder()
                 .status(StatusCode::OK)
@@ -101,17 +86,14 @@ fn serve_file(path: &str) -> Response<Body> {
 fn try_serve_file(path: &str) -> Option<Response<Body>> {
     #[cfg(debug_assertions)]
     {
-        // Debug mode: read from file system
         let base_dir = get_static_base_dir();
         let file_path = base_dir.join(path);
 
-        // Check if file exists and is within base directory (prevent directory traversal)
         if !file_path.starts_with(&base_dir) {
             tracing::warn!("Path traversal attempt blocked: {}", path);
             return None;
         }
 
-        // Normalize path to prevent directory traversal (only if file exists)
         if let (Ok(normalized_path), Ok(normalized_base)) =
             (file_path.canonicalize(), base_dir.canonicalize())
         {
@@ -150,7 +132,6 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
 
     #[cfg(not(debug_assertions))]
     {
-        // Release mode: use embedded assets
         let asset = StaticAssets::get(path)?;
 
         let mime = mime_guess::from_path(path)
@@ -168,7 +149,6 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
     }
 }
 
-/// Placeholder index.html when frontend is not built
 pub fn placeholder_html() -> &'static str {
     r#"<!DOCTYPE html>
 <html lang="en">

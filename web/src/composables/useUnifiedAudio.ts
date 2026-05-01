@@ -1,4 +1,3 @@
-// Unified Audio Manager
 // Manages audio playback across different video modes (MJPEG/WebSocket and H264/WebRTC)
 // Provides a single interface for volume control and audio source switching
 
@@ -17,7 +16,6 @@ export interface UnifiedAudioState {
 }
 
 export function useUnifiedAudio() {
-  // === State ===
   const audioMode = ref<AudioMode>('ws')
   const volume = ref(0) // 0-1, default muted (browser autoplay policy)
   const muted = ref(false)
@@ -25,11 +23,9 @@ export function useUnifiedAudio() {
   const playing = ref(false)
   const error = ref<string | null>(null)
 
-  // === Internal References ===
   const wsPlayer = getAudioPlayer()
   let webrtcVideoElement: HTMLVideoElement | null = null
 
-  // === Methods ===
 
   /**
    * Set the WebRTC video element reference
@@ -39,9 +35,7 @@ export function useUnifiedAudio() {
     // Only update if element is provided (don't clear on null to preserve reference)
     if (el) {
       webrtcVideoElement = el
-      // Sync current volume to video element
       el.volume = volume.value
-      // Mute if volume is 0 or explicitly muted
       const shouldMute = muted.value || volume.value === 0
       el.muted = shouldMute
     }
@@ -57,7 +51,6 @@ export function useUnifiedAudio() {
     const wasConnected = connected.value
     const wasPlaying = playing.value
 
-    // Disconnect old mode
     if (audioMode.value === 'ws') {
       wsPlayer.disconnect()
     }
@@ -65,12 +58,10 @@ export function useUnifiedAudio() {
 
     audioMode.value = mode
 
-    // If was connected/playing and volume > 0, auto-connect new mode
     if ((wasConnected || wasPlaying) && volume.value > 0) {
       await connect()
     }
 
-    // Update connection state
     updateConnectionState()
   }
 
@@ -82,7 +73,6 @@ export function useUnifiedAudio() {
     const newVolume = Math.max(0, Math.min(1, v))
     volume.value = newVolume
 
-    // Sync to WS player
     wsPlayer.setVolume(newVolume)
 
     // Sync to WebRTC video element
@@ -99,7 +89,6 @@ export function useUnifiedAudio() {
   function setMuted(m: boolean) {
     muted.value = m
 
-    // WS player: control via volume (no separate mute)
     if (audioMode.value === 'ws') {
       wsPlayer.setVolume(m ? 0 : volume.value)
     }
@@ -133,7 +122,6 @@ export function useUnifiedAudio() {
       }
     } else {
       // WebRTC audio is automatically connected via video track
-      // Just ensure video element is not muted (if volume > 0)
       if (webrtcVideoElement) {
         webrtcVideoElement.muted = muted.value || volume.value === 0
         connected.value = true
@@ -173,7 +161,6 @@ export function useUnifiedAudio() {
     }
   }
 
-  // Watch WS player state changes
   watch(() => wsPlayer.connected.value, (newConnected) => {
     if (audioMode.value === 'ws') {
       connected.value = newConnected
@@ -193,7 +180,6 @@ export function useUnifiedAudio() {
   })
 
   return {
-    // State
     audioMode,
     volume,
     muted,
@@ -201,7 +187,6 @@ export function useUnifiedAudio() {
     playing,
     error,
 
-    // Methods
     setWebRTCElement,
     switchMode,
     setVolume,

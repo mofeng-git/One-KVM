@@ -135,7 +135,7 @@ pub async fn enforce_constraints_with_stream_manager(
     }
 
     if current_mode == StreamMode::WebRTC {
-        let current_codec = stream_manager.webrtc_streamer().current_video_codec().await;
+        let current_codec = stream_manager.current_video_codec().await;
         if !constraints.is_webrtc_codec_allowed(current_codec) {
             let target_codec = constraints.preferred_webrtc_codec();
             stream_manager.set_video_codec(target_codec).await?;

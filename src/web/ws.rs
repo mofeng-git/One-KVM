@@ -1,11 +1,3 @@
-//! WebSocket handler for real-time event streaming
-//!
-//! This module provides a WebSocket endpoint at `/api/ws` that:
-//! - Broadcasts system events to connected clients
-//! - Supports topic-based event filtering
-//! - Handles client subscription management
-//! - Includes heartbeat (ping/pong) mechanism
-
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -132,48 +124,36 @@ fn rebuild_event_tasks(
     }
 }
 
-/// Client-to-server message
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 enum ClientMessage {
-    /// Subscribe to event topics
     #[serde(rename = "subscribe")]
     Subscribe { topics: Vec<String> },
 
-    /// Unsubscribe from event topics
     #[serde(rename = "unsubscribe")]
     Unsubscribe { topics: Vec<String> },
 
-    /// Ping (keep-alive)
     #[serde(rename = "ping")]
     Ping,
 }
 
-/// WebSocket upgrade handler
-///
-/// This is the entry point for WebSocket connections at `/api/ws`.
-/// Authentication is handled by the middleware.
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-/// Handle WebSocket connection
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let (event_tx, mut event_rx) = mpsc::unbounded_channel();
     let mut event_tasks: Vec<JoinHandle<()>> = Vec::new();
 
-    // Track subscribed topics (default: none until client subscribes)
     let mut subscribed_topics: Vec<String> = vec![];
 
     info!("WebSocket client connected");
 
-    // Heartbeat interval (30 seconds)
     let mut heartbeat_interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
 
     loop {
         tokio::select! {
-            // Receive message from client
             msg = receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
@@ -189,7 +169,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         }
                     }
                     Some(Ok(Message::Ping(_))) => {
-                        // WebSocket automatically handles ping/pong
                         debug!("Received ping from client");
                     }
                     Some(Ok(Message::Pong(_))) => {
@@ -207,11 +186,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 }
             }
 
-            // Receive event from event bus
             event = event_rx.recv() => {
                 match event {
                     Some(BusMessage::Event(event)) => {
-                        // Filter event based on subscribed topics
                         if let Ok(json) = serialize_event(&event) {
                             if sender.send(Message::Text(json.into())).await.is_err() {
                                 warn!("Failed to send event to client, disconnecting");
@@ -224,7 +201,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             "WebSocket client lagged by {} events on topic {}",
                             count, topic
                         );
-                        // Send error notification to client using SystemEvent::Error
                         let error_event = SystemEvent::Error {
                             message: format!("Lagged by {} events", count),
                         };
@@ -239,7 +215,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 }
             }
 
-            // Heartbeat
             _ = heartbeat_interval.tick() => {
                 if sender.send(Message::Ping(vec![].into())).await.is_err() {
                     warn!("Failed to send ping, disconnecting");
@@ -256,7 +231,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     info!("WebSocket handler exiting");
 }
 
-/// Handle message from client
 async fn handle_client_message(
     text: &str,
     topics: &mut Vec<String>,
@@ -282,7 +256,6 @@ async fn handle_client_message(
     Ok(())
 }
 
-/// Serialize event to JSON string
 fn serialize_event(event: &SystemEvent) -> Result<String, serde_json::Error> {
     serde_json::to_string(event)
 }

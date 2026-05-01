@@ -1,5 +1,3 @@
-// Config popover composable - shared logic for config popover components
-// Provides common state management and lifecycle hooks
 
 import { ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,11 +15,9 @@ export interface UseConfigPopoverOptions {
 export function useConfigPopover(options: UseConfigPopoverOptions) {
   const { t } = useI18n()
 
-  // Common state
   const applying = ref(false)
   const loadingDevices = ref(false)
 
-  // Watch open state to initialize
   watch(options.open, async (isOpen) => {
     if (isOpen) {
       options.initializeFromCurrent?.()
@@ -36,7 +32,6 @@ export function useConfigPopover(options: UseConfigPopoverOptions) {
     }
   })
 
-  // Apply config wrapper with loading state and toast
   async function applyConfig(applyFn: () => Promise<void>) {
     applying.value = true
     try {
@@ -44,7 +39,6 @@ export function useConfigPopover(options: UseConfigPopoverOptions) {
       toast.success(t('config.applied'))
     } catch (e) {
       console.info('[ConfigPopover] Apply failed:', e)
-      // Error toast is usually shown by API layer
     } finally {
       applying.value = false
     }
@@ -62,11 +56,9 @@ export function useConfigPopover(options: UseConfigPopoverOptions) {
   }
 
   return {
-    // State
     applying,
     loadingDevices,
 
-    // Methods
     applyConfig,
     refreshDevices,
   }

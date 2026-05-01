@@ -1,8 +1,3 @@
-// WebSocket composable for real-time event streaming
-//
-// Usage:
-//   const { connected, on, off } = useWebSocket()
-//   on('stream.state_changed', (data) => { ... })
 
 import { ref } from 'vue'
 import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
@@ -151,7 +146,6 @@ function handleEvent(payload: WsEvent) {
       }
     })
   }
-  // Silently ignore events without handlers
 }
 
 export function useWebSocket() {
@@ -170,7 +164,6 @@ export function useWebSocket() {
   }
 }
 
-// Global lifecycle - disconnect when page unloads
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     disconnect()

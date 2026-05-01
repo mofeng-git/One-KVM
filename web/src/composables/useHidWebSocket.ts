@@ -1,6 +1,3 @@
-// WebSocket HID channel for low-latency keyboard/mouse input (binary protocol)
-// Uses the same binary format as WebRTC DataChannel for consistency
-
 import { ref, onUnmounted } from 'vue'
 import {
   type HidKeyboardEvent,
@@ -23,26 +20,22 @@ const reconnectAttempts = ref(0)
 const networkError = ref(false)
 const networkErrorMessage = ref<string | null>(null)
 let reconnectTimeout: number | null = null
-const hidUnavailable = ref(false) // Track if HID is unavailable to prevent unnecessary reconnects
+const hidUnavailable = ref(false)
 
-// Connection promise to avoid race conditions
 let connectionPromise: Promise<boolean> | null = null
 let connectionResolved = false
 
 function connect(): Promise<boolean> {
-  // If already connected, return immediately
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN && connectionResolved) {
     return Promise.resolve(true)
   }
 
-  // If connection is in progress, return the existing promise
   if (connectionPromise && !connectionResolved) {
     return connectionPromise
   }
 
   connectionResolved = false
   connectionPromise = new Promise((resolve) => {
-    // Reset network error flag when attempting new connection
     networkError.value = false
     networkErrorMessage.value = null
     hidUnavailable.value = false
@@ -60,7 +53,6 @@ function connect(): Promise<boolean> {
       }
 
       wsInstance.onmessage = (e) => {
-        // Handle binary response
         if (e.data instanceof ArrayBuffer) {
           const view = new DataView(e.data)
           if (view.byteLength >= 1) {
@@ -126,14 +118,12 @@ function disconnect() {
   }
 
   if (wsInstance) {
-    // Close the websocket
     wsInstance.close()
     wsInstance = null
     connected.value = false
     networkError.value = false
   }
 
-  // Reset connection state
   connectionPromise = null
   connectionResolved = false
 }
@@ -154,7 +144,6 @@ function sendKeyboard(event: HidKeyboardEvent): Promise<void> {
   })
 }
 
-// Internal function to actually send mouse event
 function _sendMouseInternal(event: HidMouseEvent): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!wsInstance || wsInstance.readyState !== WebSocket.OPEN) {
@@ -175,7 +164,6 @@ function sendMouse(event: HidMouseEvent): Promise<void> {
   return _sendMouseInternal(event)
 }
 
-// Send consumer control event (multimedia keys)
 function sendConsumer(event: HidConsumerEvent): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!wsInstance || wsInstance.readyState !== WebSocket.OPEN) {
@@ -194,8 +182,6 @@ function sendConsumer(event: HidConsumerEvent): Promise<void> {
 
 export function useHidWebSocket() {
   onUnmounted(() => {
-    // Don't disconnect on component unmount - WebSocket is shared
-    // Only disconnect when explicitly called or page unloads
   })
 
   return {
@@ -212,7 +198,6 @@ export function useHidWebSocket() {
   }
 }
 
-// Global lifecycle - disconnect when page unloads
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     disconnect()

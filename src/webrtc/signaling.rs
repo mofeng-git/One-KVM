@@ -1,27 +1,19 @@
-//! WebRTC signaling types and messages
+//! SDP / ICE JSON types used by HTTP and WebSocket handlers.
 
 use serde::{Deserialize, Serialize};
 
-/// Signaling message types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SignalingMessage {
-    /// SDP Offer from client
     Offer(SdpOffer),
-    /// SDP Answer from server
     Answer(SdpAnswer),
-    /// ICE candidate
     Candidate(IceCandidate),
-    /// Connection error
     Error(SignalingError),
-    /// Connection closed
     Close,
 }
 
-/// SDP Offer from client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdpOffer {
-    /// SDP content
     pub sdp: String,
 }
 
@@ -31,12 +23,9 @@ impl SdpOffer {
     }
 }
 
-/// SDP Answer from server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdpAnswer {
-    /// SDP content
     pub sdp: String,
-    /// ICE candidates gathered during answer creation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ice_candidates: Option<Vec<IceCandidate>>,
 }
@@ -61,18 +50,13 @@ impl SdpAnswer {
     }
 }
 
-/// ICE candidate
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IceCandidate {
-    /// Candidate string
     pub candidate: String,
-    /// SDP mid (media ID)
     #[serde(rename = "sdpMid")]
     pub sdp_mid: Option<String>,
-    /// SDP mline index
     #[serde(rename = "sdpMLineIndex")]
     pub sdp_mline_index: Option<u16>,
-    /// Username fragment
     #[serde(rename = "usernameFragment")]
     pub username_fragment: Option<String>,
 }
@@ -94,12 +78,9 @@ impl IceCandidate {
     }
 }
 
-/// Signaling error
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignalingError {
-    /// Error code
     pub code: u32,
-    /// Error message
     pub message: String,
 }
 
@@ -124,24 +105,17 @@ impl SignalingError {
     }
 }
 
-/// WebRTC offer request (from HTTP API)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OfferRequest {
-    /// SDP offer
     pub sdp: String,
-    /// Client ID (optional, for tracking)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
 }
 
-/// WebRTC answer response (from HTTP API)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnswerResponse {
-    /// SDP answer
     pub sdp: String,
-    /// Session ID for this connection
     pub session_id: String,
-    /// ICE candidates
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ice_candidates: Vec<IceCandidate>,
 }
@@ -160,16 +134,12 @@ impl AnswerResponse {
     }
 }
 
-/// ICE candidate request (trickle ICE)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IceCandidateRequest {
-    /// Session ID
     pub session_id: String,
-    /// ICE candidate
     pub candidate: IceCandidate,
 }
 
-/// Connection state notification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionState {

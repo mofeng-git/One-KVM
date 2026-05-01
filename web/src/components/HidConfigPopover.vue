@@ -54,7 +54,6 @@ function loadMouseMoveSendIntervalFromStorage(): number {
   )
 }
 
-// Mouse Settings (real-time)
 const mouseThrottle = ref<number>(
   loadMouseMoveSendIntervalFromStorage()
 )
@@ -62,9 +61,7 @@ const showCursor = ref<boolean>(
   localStorage.getItem('hidShowCursor') !== 'false' // default true
 )
 
-// Watch showCursor changes and sync to localStorage + notify ConsoleView
 watch(showCursor, (newValue, oldValue) => {
-  // Only sync if value actually changed (avoid triggering on initialization)
   if (newValue !== oldValue) {
     localStorage.setItem('hidShowCursor', newValue ? 'true' : 'false')
     window.dispatchEvent(new CustomEvent('hidCursorVisibilityChanged', {
@@ -78,7 +75,6 @@ const hidBackend = ref<HidBackend>(HidBackend.None)
 const devicePath = ref<string>('')
 const baudrate = ref<number>(9600)
 
-// UI state
 const applying = ref(false)
 const loadingDevices = ref(false)
 
@@ -86,7 +82,6 @@ const loadingDevices = ref(false)
 const serialDevices = ref<Array<{ path: string; name: string }>>([])
 const udcDevices = ref<Array<{ name: string }>>([])
 
-// Button display text - simplified to just show label
 const buttonText = computed(() => t('actionbar.hidConfig'))
 
 // Available device paths based on backend type
@@ -117,9 +112,7 @@ async function loadDevices() {
   }
 }
 
-// Initialize from current config
 function initializeFromCurrent() {
-  // Re-sync real-time settings from localStorage
   mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
 
   const storedCursor = localStorage.getItem('hidShowCursor') !== 'false'
@@ -140,7 +133,6 @@ function initializeFromCurrent() {
   }
 }
 
-// Toggle mouse mode (real-time)
 function toggleMouseMode() {
   const newMode = props.mouseMode === 'absolute' ? 'relative' : 'absolute'
   emit('update:mouseMode', newMode)
@@ -154,14 +146,11 @@ function toggleMouseMode() {
   })
 }
 
-// Update mouse throttle (real-time)
 function handleThrottleChange(value: number[] | undefined) {
   if (!value || value.length === 0 || value[0] === undefined) return
   const throttleValue = clampMouseMoveSendIntervalMs(value[0])
   mouseThrottle.value = throttleValue
-  // Save to localStorage
   localStorage.setItem('hidMouseThrottle', String(throttleValue))
-  // Notify ConsoleView (storage event doesn't fire in same tab)
   window.dispatchEvent(new CustomEvent('hidMouseSendIntervalChanged', {
     detail: { intervalMs: throttleValue },
   }))
@@ -191,7 +180,6 @@ function handleDevicePathChange(path: unknown) {
   devicePath.value = path
 }
 
-// Handle baudrate change
 function handleBaudrateChange(rate: unknown) {
   if (typeof rate !== 'string') return
   baudrate.value = Number(rate)
@@ -219,13 +207,11 @@ async function applyHidConfig() {
     // HID state will be updated via WebSocket device_info event
   } catch (e) {
     console.info('[HidConfig] Failed to apply config:', e)
-    // Error toast already shown by API layer
   } finally {
     applying.value = false
   }
 }
 
-// Watch open state
 watch(() => props.open, (isOpen) => {
   if (!isOpen) return
 

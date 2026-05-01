@@ -1,5 +1,3 @@
-//! ALSA audio capture implementation
-
 use alsa::pcm::{Access, Format, Frames, HwParams, State, IO};
 use alsa::{Direction, ValueOr, PCM};
 use bytes::Bytes;
@@ -14,30 +12,23 @@ use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::{error_throttled, warn_throttled};
 
-/// Audio capture configuration
 #[derive(Debug, Clone)]
 pub struct AudioConfig {
-    /// ALSA device name (e.g., "hw:0,0" or "default")
     pub device_name: String,
-    /// Sample rate in Hz
     pub sample_rate: u32,
-    /// Number of channels (1 = mono, 2 = stereo)
     pub channels: u32,
-    /// Samples per frame (for Opus, typically 480 for 10ms at 48kHz)
     pub frame_size: u32,
-    /// Buffer size in frames
     pub buffer_frames: u32,
-    /// Period size in frames
     pub period_frames: u32,
 }
 
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
-            device_name: "default".to_string(),
+            device_name: String::new(),
             sample_rate: 48000,
             channels: 2,
-            frame_size: 960, // 20ms at 48kHz (good for Opus)
+            frame_size: 960,
             buffer_frames: 4096,
             period_frames: 960,
         }
@@ -45,7 +36,6 @@ impl Default for AudioConfig {
 }
 
 impl AudioConfig {
-    /// Create config for a specific device (48 kHz stereo only; must match ALSA hardware).
     pub fn for_device(device: &AudioDeviceInfo) -> Self {
         Self {
             device_name: device.name.clone(),
@@ -53,36 +43,26 @@ impl AudioConfig {
         }
     }
 
-    /// Bytes per sample (16-bit signed)
     pub fn bytes_per_sample(&self) -> u32 {
         2 * self.channels
     }
 
-    /// Bytes per frame
     pub fn bytes_per_frame(&self) -> usize {
         (self.frame_size * self.bytes_per_sample()) as usize
     }
 }
 
-/// Audio frame data
 #[derive(Debug, Clone)]
 pub struct AudioFrame {
-    /// Raw PCM data (S16LE interleaved)
     pub data: Bytes,
-    /// Sample rate
     pub sample_rate: u32,
-    /// Number of channels
     pub channels: u32,
-    /// Number of samples per channel
     pub samples: u32,
-    /// Frame sequence number
     pub sequence: u64,
-    /// Capture timestamp
     pub timestamp: Instant,
 }
 
 impl AudioFrame {
-    /// One capture block: `sample_rate` must be the **hardware** rate (e.g. ALSA `actual_rate`).
     pub fn new_interleaved(data: Bytes, channels: u32, sample_rate: u32, sequence: u64) -> Self {
         let bps = 2 * channels;
         Self {
@@ -96,7 +76,6 @@ impl AudioFrame {
     }
 }
 
-/// Audio capture state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureState {
     Stopped,
@@ -104,7 +83,6 @@ pub enum CaptureState {
     Error,
 }
 
-/// ALSA audio capturer
 pub struct AudioCapturer {
     config: AudioConfig,
     state: Arc<watch::Sender<CaptureState>>,
@@ -113,15 +91,13 @@ pub struct AudioCapturer {
     stop_flag: Arc<AtomicBool>,
     sequence: Arc<AtomicU64>,
     capture_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    /// Log throttler to prevent log flooding
     log_throttler: LogThrottler,
 }
 
 impl AudioCapturer {
-    /// Create a new audio capturer
     pub fn new(config: AudioConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(CaptureState::Stopped);
-        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
+        let (frame_tx, _) = broadcast::channel(16);
 
         Self {
             config,
@@ -135,22 +111,18 @@ impl AudioCapturer {
         }
     }
 
-    /// Get current state
     pub fn state(&self) -> CaptureState {
         *self.state_rx.borrow()
     }
 
-    /// Subscribe to state changes
     pub fn state_watch(&self) -> watch::Receiver<CaptureState> {
         self.state_rx.clone()
     }
 
-    /// Subscribe to audio frames
     pub fn subscribe(&self) -> broadcast::Receiver<AudioFrame> {
         self.frame_tx.subscribe()
     }
 
-    /// Start capturing
     pub async fn start(&self) -> Result<()> {
         if self.state() == CaptureState::Running {
             return Ok(());
@@ -171,14 +143,27 @@ impl AudioCapturer {
         let log_throttler = self.log_throttler.clone();
 
         let handle = tokio::task::spawn_blocking(move || {
-            capture_loop(config, state, frame_tx, stop_flag, sequence, log_throttler);
+            let result = run_capture(
+                &config,
+                &state,
+                &frame_tx,
+                &stop_flag,
+                &sequence,
+                &log_throttler,
+            );
+
+            if let Err(e) = result {
+                error_throttled!(log_throttler, "capture_error", "Audio capture error: {}", e);
+                let _ = state.send(CaptureState::Error);
+            } else {
+                let _ = state.send(CaptureState::Stopped);
+            }
         });
 
         *self.capture_handle.lock().await = Some(handle);
         Ok(())
     }
 
-    /// Stop capturing
     pub async fn stop(&self) -> Result<()> {
         info!("Stopping audio capture");
         self.stop_flag.store(true, Ordering::SeqCst);
@@ -191,35 +176,8 @@ impl AudioCapturer {
         Ok(())
     }
 
-    /// Check if running
     pub fn is_running(&self) -> bool {
         self.state() == CaptureState::Running
-    }
-}
-
-/// Main capture loop
-fn capture_loop(
-    config: AudioConfig,
-    state: Arc<watch::Sender<CaptureState>>,
-    frame_tx: broadcast::Sender<AudioFrame>,
-    stop_flag: Arc<AtomicBool>,
-    sequence: Arc<AtomicU64>,
-    log_throttler: LogThrottler,
-) {
-    let result = run_capture(
-        &config,
-        &state,
-        &frame_tx,
-        &stop_flag,
-        &sequence,
-        &log_throttler,
-    );
-
-    if let Err(e) = result {
-        error_throttled!(log_throttler, "capture_error", "Audio capture error: {}", e);
-        let _ = state.send(CaptureState::Error);
-    } else {
-        let _ = state.send(CaptureState::Stopped);
     }
 }
 
@@ -231,7 +189,6 @@ fn run_capture(
     sequence: &AtomicU64,
     log_throttler: &LogThrottler,
 ) -> Result<()> {
-    // Open ALSA device
     let pcm = PCM::new(&config.device_name, Direction::Capture, false).map_err(|e| {
         AppError::AudioError(format!(
             "Failed to open audio device {}: {}",
@@ -239,7 +196,6 @@ fn run_capture(
         ))
     })?;
 
-    // Configure hardware parameters
     {
         let hwp = HwParams::any(&pcm)
             .map_err(|e| AppError::AudioError(format!("Failed to get HwParams: {}", e)))?;
@@ -266,7 +222,6 @@ fn run_capture(
             .map_err(|e| AppError::AudioError(format!("Failed to apply hw params: {}", e)))?;
     }
 
-    // Fixed 48 kHz stereo: fail if hardware negotiated something else.
     let hw_now = pcm.hw_params_current().map_err(|e| {
         AppError::AudioError(format!("Failed to read hw_params after apply: {}", e))
     })?;
@@ -290,13 +245,11 @@ fn run_capture(
     }
     info!("Audio capture: 48000 Hz, 2 ch");
 
-    // Prepare for capture
     pcm.prepare()
         .map_err(|e| AppError::AudioError(format!("Failed to prepare PCM: {}", e)))?;
 
     let _ = state.send(CaptureState::Running);
 
-    // Sized from actual period — `readi` may return up to ~one period of frames per call.
     let period_frames = pcm
         .hw_params_current()
         .ok()
@@ -308,9 +261,7 @@ fn run_capture(
     let bytes_per_frame = (config.channels as usize) * 2;
     let mut buffer = vec![0u8; buf_frames * bytes_per_frame];
 
-    // Capture loop
     while !stop_flag.load(Ordering::Relaxed) {
-        // Check PCM state
         match pcm.state() {
             State::XRun => {
                 warn_throttled!(log_throttler, "xrun", "Audio buffer overrun, recovering");
@@ -329,9 +280,7 @@ fn run_capture(
             _ => {}
         }
 
-        // Get IO handle and read audio data directly as bytes
-        // Note: Use io() instead of io_checked() because USB audio devices
-        // typically don't support mmap, which io_checked() requires
+        // io_bytes: USB capture often lacks mmap (io_checked requires it).
         let io: IO<u8> = pcm.io_bytes();
 
         match io.readi(&mut buffer) {
@@ -340,10 +289,8 @@ fn run_capture(
                     continue;
                 }
 
-                // Calculate actual byte count
                 let byte_count = frames_read * config.channels as usize * 2;
 
-                // Directly use the buffer slice (already in correct byte format)
                 let seq = sequence.fetch_add(1, Ordering::Relaxed);
                 let frame = AudioFrame::new_interleaved(
                     Bytes::copy_from_slice(&buffer[..byte_count]),
@@ -352,7 +299,6 @@ fn run_capture(
                     seq,
                 );
 
-                // Send to subscribers
                 if frame_tx.receiver_count() > 0 {
                     if let Err(e) = frame_tx.send(frame) {
                         debug!("No audio receivers: {}", e);
@@ -360,14 +306,11 @@ fn run_capture(
                 }
             }
             Err(e) => {
-                // Check for buffer overrun (EPIPE = 32 on Linux)
                 let desc = e.to_string();
                 if desc.contains("EPIPE") || desc.contains("Broken pipe") {
-                    // Buffer overrun
                     warn_throttled!(log_throttler, "buffer_overrun", "Audio buffer overrun");
                     let _ = pcm.prepare();
                 } else if desc.contains("No such device") || desc.contains("ENODEV") {
-                    // Device disconnected - use longer throttle for this
                     error_throttled!(log_throttler, "no_device", "Audio read error: {}", e);
                 } else {
                     error_throttled!(log_throttler, "read_error", "Audio read error: {}", e);

@@ -38,20 +38,16 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// State
 const isAttached = ref(props.attached ?? true)
 const selectedOs = ref<KeyboardOsType>('windows')
 
-// Keyboard instances
 const mainKeyboard = ref<Keyboard | null>(null)
 const controlKeyboard = ref<Keyboard | null>(null)
 const arrowsKeyboard = ref<Keyboard | null>(null)
 
-// Pressed keys tracking
 const pressedModifiers = ref<number>(0)
 const keysDown = ref<CanonicalKey[]>([])
 
-// Shift state for display
 const isShiftActive = computed(() => {
   return (pressedModifiers.value & 0x22) !== 0
 })
@@ -64,7 +60,6 @@ const layoutName = computed(() => {
   return isShiftActive.value ? 'shift' : 'default'
 })
 
-// Keys currently pressed (for highlighting)
 const keyNamesForDownKeys = computed(() => {
   const activeModifierMask = pressedModifiers.value || 0
   const modifierNames = Object.entries(modifiers)
@@ -79,19 +74,15 @@ const keyNamesForDownKeys = computed(() => {
   ]))
 })
 
-// Dragging state (for floating mode)
 const keyboardRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const position = ref({ x: 100, y: 100 })
 
-// Unique ID for this keyboard instance
 const keyboardId = ref(`kb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
-// Get bottom row based on selected OS
 const getBottomRow = () => osBottomRows[selectedOs.value].join(' ')
 
-// Keyboard layouts - matching JetKVM style
 const keyboardLayout = {
   main: {
     default: [
@@ -143,19 +134,15 @@ function setCompactLayout(active: boolean) {
   updateKeyboardLayout()
 }
 
-// Key display mapping with Unicode symbols (JetKVM style)
 const keyDisplayMap = computed<Record<string, string>>(() => {
-  // OS-specific Meta key labels
   const metaLabel = selectedOs.value === 'windows' ? '⊞ Win'
     : selectedOs.value === 'mac' ? '⌘ Cmd' : 'Meta'
 
   return {
-    // Macros - compact format
     CtrlAltDelete: 'Ctrl+Alt+Del',
     AltMetaEscape: 'Alt+Meta+Esc',
     CtrlAltBackspace: 'Ctrl+Alt+Bksp',
 
-    // Modifiers - simplified
     ControlLeft: 'Ctrl',
     ControlRight: 'Ctrl',
     ShiftLeft: 'Shift',
@@ -166,7 +153,6 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     MetaRight: metaLabel,
     ContextMenu: 'Menu',
 
-    // Special keys
     Escape: 'Esc',
     Backspace: '⌫',
     Tab: 'Tab',
@@ -174,7 +160,6 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     Enter: 'Enter',
     Space: ' ',
 
-    // Navigation
     Insert: 'Ins',
     Delete: 'Del',
     Home: 'Home',
@@ -182,23 +167,19 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     PageUp: 'PgUp',
     PageDown: 'PgDn',
 
-    // Arrows
     ArrowUp: '↑',
     ArrowDown: '↓',
     ArrowLeft: '←',
     ArrowRight: '→',
 
-    // Control cluster
     PrintScreen: 'PrtSc',
     ScrollLock: 'ScrLk',
     Pause: 'Pause',
 
-    // Function keys
     F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4',
     F5: 'F5', F6: 'F6', F7: 'F7', F8: 'F8',
     F9: 'F9', F10: 'F10', F11: 'F11', F12: 'F12',
 
-    // Letters
     KeyA: areLettersUppercase.value ? 'A' : 'a',
     KeyB: areLettersUppercase.value ? 'B' : 'b',
     KeyC: areLettersUppercase.value ? 'C' : 'c',
@@ -226,7 +207,6 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     KeyY: areLettersUppercase.value ? 'Y' : 'y',
     KeyZ: areLettersUppercase.value ? 'Z' : 'z',
 
-    // Letter labels in the shifted layout follow CapsLock xor Shift too
     '(KeyA)': areLettersUppercase.value ? 'A' : 'a',
     '(KeyB)': areLettersUppercase.value ? 'B' : 'b',
     '(KeyC)': areLettersUppercase.value ? 'C' : 'c',
@@ -254,15 +234,12 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     '(KeyY)': areLettersUppercase.value ? 'Y' : 'y',
     '(KeyZ)': areLettersUppercase.value ? 'Z' : 'z',
 
-    // Numbers
     Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
     Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '0',
 
-    // Shifted Numbers
     '(Digit1)': '!', '(Digit2)': '@', '(Digit3)': '#', '(Digit4)': '$', '(Digit5)': '%',
     '(Digit6)': '^', '(Digit7)': '&', '(Digit8)': '*', '(Digit9)': '(', '(Digit0)': ')',
 
-    // Symbols
     Minus: '-', '(Minus)': '_',
     Equal: '=', '(Equal)': '+',
     BracketLeft: '[', '(BracketLeft)': '{',
@@ -277,7 +254,6 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
   }
 })
 
-// Handle media key press (Consumer Control)
 async function onMediaKeyPress(key: string) {
   if (key in consumerKeys) {
     const usage = consumerKeys[key as ConsumerKeyName]
@@ -289,16 +265,12 @@ async function onMediaKeyPress(key: string) {
   }
 }
 
-// Switch OS layout
 function switchOsLayout(os: KeyboardOsType) {
   selectedOs.value = os
-  // Save preference to localStorage
   localStorage.setItem('vkb-os-layout', os)
-  // Update keyboard layout
   updateKeyboardLayout()
 }
 
-// Update keyboard layout based on selected OS
 function updateKeyboardLayout() {
   const bottomRow = getBottomRow()
   const baseLayout = isCompactLayout.value ? compactMainLayout : keyboardLayout.main
@@ -319,9 +291,7 @@ function updateKeyboardLayout() {
   updateKeyboardButtonTheme()
 }
 
-// Key press handler
 async function onKeyDown(key: string) {
-  // Handle macro keys
   if (key === 'CtrlAltDelete') {
     await executeMacro([
       { keys: ['Delete'], modifiers: ['ControlLeft', 'AltLeft'] },
@@ -343,10 +313,8 @@ async function onKeyDown(key: string) {
     return
   }
 
-  // Clean key name (remove parentheses for shifted keys)
   const cleanKey = key.replace(/[()]/g, '')
 
-  // Check if key exists
   if (!(cleanKey in keys)) {
     console.warn(`[VirtualKeyboard] Unknown key: ${cleanKey}`)
     return
@@ -354,7 +322,6 @@ async function onKeyDown(key: string) {
 
   const keyCode = keys[cleanKey as KeyName]
 
-  // Handle latching keys (Caps Lock, etc.)
   if (latchingKeys.some(latchingKey => latchingKey === keyCode)) {
     emit('keyDown', keyCode)
     const currentMask = pressedModifiers.value & 0xff
@@ -366,7 +333,6 @@ async function onKeyDown(key: string) {
     return
   }
 
-  // Handle modifier keys (toggle)
   const mask = modifiers[keyCode] ?? 0
   if (mask !== 0) {
     const isCurrentlyDown = (pressedModifiers.value & mask) !== 0
@@ -386,7 +352,6 @@ async function onKeyDown(key: string) {
     return
   }
 
-  // Regular key: press and release
   keysDown.value.push(keyCode)
   emit('keyDown', keyCode)
   const currentMask = pressedModifiers.value & 0xff
@@ -401,7 +366,6 @@ async function onKeyDown(key: string) {
 }
 
 async function onKeyUp() {
-  // Not used for now - we handle up in onKeyDown with setTimeout
 }
 
 async function sendKeyPress(keyCode: CanonicalKey, press: boolean, modifierMask: number) {
@@ -453,7 +417,6 @@ async function executeMacro(steps: MacroStep[]) {
   }
 }
 
-// Update keyboard button theme for pressed keys
 function updateKeyboardButtonTheme() {
   const downKeys = keyNamesForDownKeys.value.join(' ')
   const buttonTheme = [
@@ -472,7 +435,6 @@ function updateKeyboardButtonTheme() {
   arrowsKeyboard.value?.setOptions({ buttonTheme })
 }
 
-// Update layout when shift state changes
 watch([layoutName, () => props.capsLock], ([name]) => {
   mainKeyboard.value?.setOptions({
     layoutName: name,
@@ -481,11 +443,9 @@ watch([layoutName, () => props.capsLock], ([name]) => {
   updateKeyboardButtonTheme()
 })
 
-// Initialize keyboards with unique selectors
 function initKeyboards() {
   const id = keyboardId.value
 
-  // Check if elements exist - use full selector with #
   const mainEl = document.querySelector(`#${id}-main`)
   const controlEl = document.querySelector(`#${id}-control`)
   const arrowsEl = document.querySelector(`#${id}-arrows`)
@@ -496,7 +456,6 @@ function initKeyboards() {
     return
   }
 
-  // Main keyboard - pass element directly instead of selector string
   mainKeyboard.value = new Keyboard(mainEl, {
     layout: isCompactLayout.value ? compactMainLayout : keyboardLayout.main,
     layoutName: layoutName.value,
@@ -517,7 +476,6 @@ function initKeyboards() {
     stopMouseUpPropagation: true,
   })
 
-  // Control keyboard
   controlKeyboard.value = new Keyboard(controlEl, {
     layout: keyboardLayout.control,
     layoutName: 'default',
@@ -532,7 +490,6 @@ function initKeyboards() {
     stopMouseUpPropagation: true,
   })
 
-  // Arrows keyboard
   arrowsKeyboard.value = new Keyboard(arrowsEl, {
     layout: keyboardLayout.arrows,
     layoutName: 'default',
@@ -551,7 +508,6 @@ function initKeyboards() {
   console.log('[VirtualKeyboard] Keyboards initialized:', id)
 }
 
-// Destroy keyboards
 function destroyKeyboards() {
   mainKeyboard.value?.destroy()
   controlKeyboard.value?.destroy()
@@ -561,7 +517,6 @@ function destroyKeyboards() {
   arrowsKeyboard.value = null
 }
 
-// Dragging handlers
 function getClientCoords(e: MouseEvent | TouchEvent): { x: number; y: number } | null {
   if ('touches' in e) {
     const touch = e.touches[0]
@@ -609,11 +564,9 @@ async function toggleAttached() {
   isAttached.value = !isAttached.value
   emit('update:attached', isAttached.value)
 
-  // Wait for Teleport to move the component
   await nextTick()
   await nextTick() // Extra tick for Teleport
 
-  // Reinitialize keyboards in new location
   setTimeout(() => {
     initKeyboards()
   }, 100)
@@ -623,7 +576,6 @@ function close() {
   emit('update:visible', false)
 }
 
-// Watch visibility to init/destroy keyboards
 watch(() => props.visible, async (visible) => {
   console.log('[VirtualKeyboard] Visibility changed:', visible, 'attached:', isAttached.value, 'id:', keyboardId.value)
   if (visible) {
@@ -641,7 +593,6 @@ watch(() => props.attached, (value) => {
 })
 
 onMounted(() => {
-  // Load saved OS layout preference
   const savedOs = localStorage.getItem('vkb-os-layout') as KeyboardOsType | null
   if (savedOs && ['windows', 'mac', 'android'].includes(savedOs)) {
     selectedOs.value = savedOs

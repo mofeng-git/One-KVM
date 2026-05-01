@@ -1,11 +1,4 @@
-//! Video streaming module
-//!
-//! Provides MJPEG streaming and WebSocket handlers for MJPEG mode.
-//!
-//! # Components
-//!
-//! - `MjpegStreamHandler` - HTTP multipart MJPEG video streaming
-//! - `WsHidHandler` - WebSocket HID input handler
+//! MJPEG multipart streaming and WebSocket HID (for MJPEG mode).
 
 pub mod mjpeg;
 pub mod ws_hid;

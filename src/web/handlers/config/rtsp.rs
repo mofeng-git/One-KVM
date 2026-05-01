@@ -7,13 +7,11 @@ use crate::state::AppState;
 use super::apply::apply_rtsp_config;
 use super::types::{RtspConfigResponse, RtspConfigUpdate, RtspStatusResponse};
 
-/// Get RTSP config
 pub async fn get_rtsp_config(State(state): State<Arc<AppState>>) -> Json<RtspConfigResponse> {
     let config = state.config.get();
     Json(RtspConfigResponse::from(&config.rtsp))
 }
 
-/// Get RTSP status (config + service status)
 pub async fn get_rtsp_status(State(state): State<Arc<AppState>>) -> Json<RtspStatusResponse> {
     let config = state.config.get().rtsp.clone();
     let status = {
@@ -28,7 +26,6 @@ pub async fn get_rtsp_status(State(state): State<Arc<AppState>>) -> Json<RtspSta
     Json(RtspStatusResponse::new(&config, status))
 }
 
-/// Update RTSP config
 pub async fn update_rtsp_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RtspConfigUpdate>,

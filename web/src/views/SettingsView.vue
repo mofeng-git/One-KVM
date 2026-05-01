@@ -106,7 +106,6 @@ const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
 
-// Settings state
 const activeSection = ref('appearance')
 const mobileMenuOpen = ref(false)
 const loading = ref(false)
@@ -127,7 +126,6 @@ const SETTINGS_SECTION_IDS = new Set([
   'about',
 ])
 
-// Navigation structure
 const navGroups = computed(() => [
   {
     title: t('settings.system'),
@@ -175,10 +173,8 @@ function normalizeSettingsSection(value: unknown): string | null {
   return SETTINGS_SECTION_IDS.has(value) ? value : null
 }
 
-// Theme
 const theme = ref<'light' | 'dark' | 'system'>('system')
 
-// Account settings
 const usernameInput = ref('')
 const usernamePassword = ref('')
 const usernameSaving = ref(false)
@@ -192,7 +188,6 @@ const passwordSaved = ref(false)
 const passwordError = ref('')
 const showPasswords = ref(false)
 
-// Auth config state
 const authConfig = ref<AuthConfig>({
   session_timeout_secs: 3600 * 24,
   single_user_allow_multiple_sessions: false,
@@ -201,7 +196,6 @@ const authConfig = ref<AuthConfig>({
 })
 const authConfigLoading = ref(false)
 
-// Extensions management
 const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
 const extensionLogs = ref<Record<string, string[]>>({
@@ -215,17 +209,14 @@ const showLogs = ref<Record<string, boolean>>({
   easytier: false,
 })
 
-// Terminal dialog
 const showTerminalDialog = ref(false)
 
-// Extension config (local edit state)
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
   gostc: { enabled: false, addr: '', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
 })
 
-// RustDesk config state
 const rustdeskConfig = ref<RustDeskConfigResponse | null>(null)
 const rustdeskStatus = ref<RustDeskStatusResponse | null>(null)
 const rustdeskPassword = ref<RustDeskPasswordResponse | null>(null)
@@ -239,7 +230,6 @@ const rustdeskLocalConfig = ref({
   relay_key: '',
 })
 
-// RTSP config state
 const rtspStatus = ref<RtspStatusResponse | null>(null)
 const rtspLoading = ref(false)
 const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
@@ -267,7 +257,6 @@ const rtspStreamUrl = computed(() => {
   return `rtsp://${host}:${port}/${path}`
 })
 
-// Web server config state
 const webServerConfig = ref<WebConfig>({
   http_port: 8080,
   https_port: 8443,
@@ -277,14 +266,12 @@ const webServerConfig = ref<WebConfig>({
   has_custom_cert: false,
 })
 const webServerLoading = ref(false)
-// SSL certificate state
 const sslCertPem = ref('')
 const sslKeyPem = ref('')
 const certSaving = ref(false)
 const certClearing = ref(false)
 const showRestartDialog = ref(false)
 const restarting = ref(false)
-// Auto-restart flow (no dialog needed for web-config saves)
 const autoRestarting = ref(false)
 const autoRestartFailed = ref(false)
 // For HTTPS targets: can't poll (self-signed cert), show manual link instead
@@ -339,7 +326,6 @@ const previewAccessUrl = computed(() => {
   return `${scheme}://${host}:${port}`
 })
 
-// Config
 interface DeviceConfig {
   video: Array<{
     path: string
@@ -389,14 +375,12 @@ const config = ref({
   msd_enabled: false,
   msd_dir: '',
   encoder_backend: 'auto',
-  // STUN/TURN settings
   stun_server: '',
   turn_server: '',
   turn_username: '',
   turn_password: '',
 })
 
-// Tracks whether TURN password is configured on the server
 const hasTurnPassword = ref(false)
 
 type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
@@ -658,7 +642,6 @@ async function onRunVideoEncoderSelfCheckClick() {
   await runVideoEncoderSelfCheck()
 }
 
-// USB devices state
 const usbDevices = ref<import('@/api').UsbDeviceInfo[]>([])
 const usbDevicesLoading = ref(false)
 const usbDevicesError = ref('')
@@ -683,11 +666,9 @@ async function confirmUsbReset() {
   try {
     await usbApi.resetDevice(usbResetTarget.value.bus_num, usbResetTarget.value.dev_num)
   } catch {
-    // Error already shown by request helper toast
   } finally {
     usbResetLoading.value = false
     usbResetTarget.value = null
-    // Refresh the list after a short delay for USB re-enumeration
     setTimeout(() => fetchUsbDevices(), 1500)
   }
 }
@@ -782,14 +763,12 @@ const isHidFunctionSelectionValid = computed(() => {
   return !!(f.keyboard || f.mouse_relative || f.mouse_absolute || f.consumer)
 })
 
-// OTG Descriptor settings
 const otgVendorIdHex = ref('1d6b')
 const otgProductIdHex = ref('0104')
 const otgManufacturer = ref('One-KVM')
 const otgProduct = ref('One-KVM USB Device')
 const otgSerialNumber = ref('')
 
-// Validate hex input
 const validateHex = (event: Event, _field: string) => {
   const input = event.target as HTMLInputElement
   input.value = input.value.replace(/[^0-9a-fA-F]/g, '').toLowerCase()
@@ -807,7 +786,6 @@ watch(bindMode, (mode) => {
   }
 })
 
-// ATX config state
 const atxConfig = ref({
   enabled: false,
   power: {
@@ -833,7 +811,6 @@ const atxConfig = ref({
   wol_interface: '',
 })
 
-// ATX devices for discovery
 const atxDevices = ref<AtxDevices>({
   gpio_chips: [],
   usb_relays: [],
@@ -856,7 +833,6 @@ const isSharedAtxSerialRelay = computed(() => {
   )
 })
 
-// Encoder backend
 const availableBackends = ref<EncoderBackendInfo[]>([])
 
 const selectedBackendFormats = computed(() => {
@@ -921,7 +897,6 @@ const availableFps = computed(() => {
   return currentRes ? currentRes.fps : []
 })
 
-// Keep the selected format aligned with currently selectable formats.
 watch(
   selectableFormats,
   () => {
@@ -938,7 +913,6 @@ watch(
   { deep: true },
 )
 
-// Watch for format change to set default resolution
 watch(() => config.value.video_format, () => {
   if (availableResolutions.value.length > 0) {
     const isValid = availableResolutions.value.some(
@@ -955,7 +929,6 @@ watch(() => config.value.video_format, () => {
   }
 })
 
-// Watch for resolution change to set default FPS
 watch(() => [config.value.video_width, config.value.video_height], () => {
   const fpsList = availableFps.value
   if (fpsList.length > 0) {
@@ -975,7 +948,6 @@ watch(() => authStore.user, (value) => {
 })
 
 
-// Format bytes to human readable string
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -984,7 +956,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
 
-// Theme handling
 function setTheme(newTheme: 'light' | 'dark' | 'system') {
   theme.value = newTheme
   localStorage.setItem('theme', newTheme)
@@ -997,7 +968,6 @@ function setTheme(newTheme: 'light' | 'dark' | 'system') {
   }
 }
 
-// Account updates
 async function changeUsername() {
   usernameError.value = ''
   usernameSaved.value = false
@@ -1062,17 +1032,13 @@ async function changePassword() {
   }
 }
 
-// Save config using domain-separated APIs
 async function saveConfig() {
   loading.value = true
   saved.value = false
 
   try {
-    // Save only config related to the active section.
     // Sequential awaits: backend ConfigStore uses read-modify-write; parallel PATCH
-    // requests could overwrite each other's section (last writer wins on full JSON).
 
-    // Video config (including encoder and WebRTC/STUN/TURN settings)
     if (activeSection.value === 'video') {
       await configStore.updateVideo({
         device: config.value.video_device || undefined,
@@ -1100,7 +1066,6 @@ async function saveConfig() {
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
       }
-      // Add descriptor config for OTG backend
       if (config.value.hid_backend === 'otg') {
         hidUpdate.otg_descriptor = {
           vendor_id: parseInt(otgVendorIdHex.value, 16) || 0x1d6b,
@@ -1120,7 +1085,6 @@ async function saveConfig() {
       })
     }
 
-    // MSD config
     if (activeSection.value === 'msd') {
       await configStore.updateMsd({
         msd_dir: config.value.msd_dir || undefined,
@@ -1137,10 +1101,8 @@ async function saveConfig() {
   }
 }
 
-// Load config using domain-separated APIs
 async function loadConfig() {
   try {
-    // Load all domain configs in parallel
     const [video, stream, hid, msd] = await Promise.all([
       configStore.refreshVideo(),
       configStore.refreshStream(),
@@ -1170,17 +1132,14 @@ async function loadConfig() {
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       encoder_backend: stream.encoder || 'auto',
-      // STUN/TURN settings
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: '', // Password is never returned from server; set-only field
     }
 
-    // Track whether TURN password is configured
     hasTurnPassword.value = stream.has_turn_password || false
 
-    // Load OTG descriptor config
     if (hid.otg_descriptor) {
       otgVendorIdHex.value = hid.otg_descriptor.vendor_id?.toString(16).padStart(4, '0') || '1d6b'
       otgProductIdHex.value = hid.otg_descriptor.product_id?.toString(16).padStart(4, '0') || '0104'
@@ -1211,7 +1170,6 @@ async function loadBackends() {
   }
 }
 
-// Auth config functions
 async function loadAuthConfig() {
   authConfigLoading.value = true
   try {
@@ -1236,12 +1194,10 @@ async function saveAuthConfig() {
   }
 }
 
-// Extension management functions
 async function loadExtensions() {
   extensionsLoading.value = true
   try {
     extensions.value = await extensionsApi.getAll()
-    // Sync config from server
     if (extensions.value) {
       const ttyd = extensions.value.ttyd.config
       extConfig.value.ttyd = {
@@ -1359,7 +1315,6 @@ function removeEasytierPeer(index: number) {
   }
 }
 
-// ATX management functions
 async function loadAtxConfig() {
   try {
     const config = await configStore.refreshAtx()
@@ -1485,7 +1440,6 @@ watch(
   },
 )
 
-// RustDesk management functions
 async function loadRustdeskConfig() {
   rustdeskLoading.value = true
   try {
@@ -1573,7 +1527,6 @@ function removeBindAddress(index: number) {
   }
 }
 
-// Web server config functions
 async function loadWebServerConfig() {
   try {
     const config = await configStore.refreshWeb()
@@ -1668,7 +1621,6 @@ async function pollUntilReady(targetOrigin: string, maxMs = 30000): Promise<bool
       clearTimeout(tid)
       if (res.ok) return true
     } catch {
-      // server still restarting — keep polling
     }
   }
   return false
@@ -1836,7 +1788,6 @@ async function saveRustdeskConfig() {
       relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
     })
     await loadRustdeskConfig()
-    // Clear relay_key input after save (it's a password field)
     rustdeskLocalConfig.value.relay_key = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
@@ -1878,7 +1829,6 @@ async function regenerateRustdeskPassword() {
 async function startRustdesk() {
   rustdeskLoading.value = true
   try {
-    // Enable and save config to start the service
     await configStore.updateRustdesk({ enabled: true })
     rustdeskLocalConfig.value.enabled = true
     await loadRustdeskConfig()
@@ -1892,7 +1842,6 @@ async function startRustdesk() {
 async function stopRustdesk() {
   rustdeskLoading.value = true
   try {
-    // Disable and save config to stop the service
     await configStore.updateRustdesk({ enabled: false })
     rustdeskLocalConfig.value.enabled = false
     await loadRustdeskConfig()
@@ -1919,7 +1868,6 @@ function getRustdeskServiceStatusText(status: string | undefined): string {
     case 'stopped': return t('extensions.stopped')
     case 'not_initialized': return t('extensions.rustdesk.notInitialized')
     default:
-      // Handle "error: xxx" format
       if (status.startsWith('error:')) return t('extensions.failed')
       return status
   }
@@ -1933,7 +1881,6 @@ function getRustdeskRendezvousStatusText(status: string | null | undefined): str
     case 'connecting': return t('extensions.rustdesk.connecting')
     case 'disconnected': return t('extensions.rustdesk.disconnected')
     default:
-      // Handle "error: xxx" format
       if (status.startsWith('error:')) return t('extensions.failed')
       return status
   }
@@ -1950,7 +1897,6 @@ function getRustdeskStatusClass(status: string | null | undefined): string {
     case 'not_initialized':
     case 'disconnected': return 'bg-gray-400'
     default:
-      // Handle "error: xxx" format
       if (status?.startsWith('error:')) return 'bg-red-500'
       return 'bg-gray-400'
   }
@@ -2058,9 +2004,7 @@ function getRtspStatusClass(status: string | undefined): string {
   }
 }
 
-// Lifecycle
 onMounted(async () => {
-  // Load theme preference
   const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null
   if (storedTheme) {
     theme.value = storedTheme

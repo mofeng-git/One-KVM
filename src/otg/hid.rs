@@ -1,35 +1,24 @@
-//! HID Function implementation for USB Gadget
-
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use super::configfs::{
     create_dir, create_symlink, remove_dir, remove_file, write_bytes, write_file,
 };
-use super::function::{FunctionMeta, GadgetFunction};
+use super::function::GadgetFunction;
 use super::report_desc::{
     CONSUMER_CONTROL, KEYBOARD, KEYBOARD_WITH_LED, MOUSE_ABSOLUTE, MOUSE_RELATIVE,
 };
 use crate::error::Result;
 
-/// HID function type
 #[derive(Debug, Clone)]
 pub enum HidFunctionType {
-    /// Keyboard
     Keyboard,
-    /// Relative mouse (traditional mouse movement)
-    /// Uses 1 endpoint: IN
     MouseRelative,
-    /// Absolute mouse (touchscreen-like positioning)
-    /// Uses 1 endpoint: IN
     MouseAbsolute,
-    /// Consumer control (multimedia keys)
-    /// Uses 1 endpoint: IN
     ConsumerControl,
 }
 
 impl HidFunctionType {
-    /// Get the base endpoint cost for this function type.
     pub fn endpoints(&self) -> u8 {
         match self {
             HidFunctionType::Keyboard => 1,
@@ -39,27 +28,24 @@ impl HidFunctionType {
         }
     }
 
-    /// Get HID protocol
     pub fn protocol(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,        // Keyboard
-            HidFunctionType::MouseRelative => 2,   // Mouse
-            HidFunctionType::MouseAbsolute => 2,   // Mouse
-            HidFunctionType::ConsumerControl => 0, // None
+            HidFunctionType::Keyboard => 1,
+            HidFunctionType::MouseRelative => 2,
+            HidFunctionType::MouseAbsolute => 2,
+            HidFunctionType::ConsumerControl => 0,
         }
     }
 
-    /// Get HID subclass
     pub fn subclass(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,        // Boot interface
-            HidFunctionType::MouseRelative => 1,   // Boot interface
-            HidFunctionType::MouseAbsolute => 0,   // No boot interface
-            HidFunctionType::ConsumerControl => 0, // No boot interface
+            HidFunctionType::Keyboard => 1,
+            HidFunctionType::MouseRelative => 1,
+            HidFunctionType::MouseAbsolute => 0,
+            HidFunctionType::ConsumerControl => 0,
         }
     }
 
-    /// Get report length in bytes
     pub fn report_length(&self, _keyboard_leds: bool) -> u8 {
         match self {
             HidFunctionType::Keyboard => 8,
@@ -69,7 +55,6 @@ impl HidFunctionType {
         }
     }
 
-    /// Get report descriptor
     pub fn report_desc(&self, keyboard_leds: bool) -> &'static [u8] {
         match self {
             HidFunctionType::Keyboard => {
@@ -84,33 +69,17 @@ impl HidFunctionType {
             HidFunctionType::ConsumerControl => CONSUMER_CONTROL,
         }
     }
-
-    /// Get description
-    pub fn description(&self) -> &'static str {
-        match self {
-            HidFunctionType::Keyboard => "Keyboard",
-            HidFunctionType::MouseRelative => "Relative Mouse",
-            HidFunctionType::MouseAbsolute => "Absolute Mouse",
-            HidFunctionType::ConsumerControl => "Consumer Control",
-        }
-    }
 }
 
-/// HID Function for USB Gadget
 #[derive(Debug, Clone)]
 pub struct HidFunction {
-    /// Instance number (usb0, usb1, ...)
     instance: u8,
-    /// Function type
     func_type: HidFunctionType,
-    /// Cached function name (avoids repeated allocation)
     name: String,
-    /// Whether keyboard LED/status feedback is enabled.
     keyboard_leds: bool,
 }
 
 impl HidFunction {
-    /// Create a keyboard function
     pub fn keyboard(instance: u8, keyboard_leds: bool) -> Self {
         Self {
             instance,
@@ -120,7 +89,6 @@ impl HidFunction {
         }
     }
 
-    /// Create a relative mouse function
     pub fn mouse_relative(instance: u8) -> Self {
         Self {
             instance,
@@ -130,7 +98,6 @@ impl HidFunction {
         }
     }
 
-    /// Create an absolute mouse function
     pub fn mouse_absolute(instance: u8) -> Self {
         Self {
             instance,
@@ -140,7 +107,6 @@ impl HidFunction {
         }
     }
 
-    /// Create a consumer control function
     pub fn consumer_control(instance: u8) -> Self {
         Self {
             instance,
@@ -150,12 +116,10 @@ impl HidFunction {
         }
     }
 
-    /// Get function path in gadget
     fn function_path(&self, gadget_path: &Path) -> PathBuf {
         gadget_path.join("functions").join(self.name())
     }
 
-    /// Get expected device path (e.g., /dev/hidg0)
     pub fn device_path(&self) -> PathBuf {
         PathBuf::from(format!("/dev/hidg{}", self.instance))
     }
@@ -170,20 +134,10 @@ impl GadgetFunction for HidFunction {
         self.func_type.endpoints()
     }
 
-    fn meta(&self) -> FunctionMeta {
-        FunctionMeta {
-            name: self.name().to_string(),
-            description: self.func_type.description().to_string(),
-            endpoints: self.endpoints_required(),
-            enabled: true,
-        }
-    }
-
     fn create(&self, gadget_path: &Path) -> Result<()> {
         let func_path = self.function_path(gadget_path);
         create_dir(&func_path)?;
 
-        // Set HID parameters
         write_file(
             &func_path.join("protocol"),
             &self.func_type.protocol().to_string(),
@@ -197,7 +151,6 @@ impl GadgetFunction for HidFunction {
             &self.func_type.report_length(self.keyboard_leds).to_string(),
         )?;
 
-        // Write report descriptor
         write_bytes(
             &func_path.join("report_desc"),
             self.func_type.report_desc(self.keyboard_leds),

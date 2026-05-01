@@ -1,7 +1,8 @@
 use std::collections::HashSet;
+use std::future::Future;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum_server::tls_rustls::RustlsConfig;
@@ -15,6 +16,7 @@ use one_kvm::atx::AtxController;
 use one_kvm::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use one_kvm::auth::{SessionStore, UserStore};
 use one_kvm::config::{self, AppConfig, ConfigStore};
+use one_kvm::db::DatabasePool;
 use one_kvm::events::EventBus;
 use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
@@ -33,7 +35,6 @@ use one_kvm::video::{Streamer, VideoStreamManager};
 use one_kvm::web;
 use one_kvm::webrtc::{WebRtcStreamer, WebRtcStreamerConfig};
 
-/// Log level for the application
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 enum LogLevel {
     Error,
@@ -45,7 +46,6 @@ enum LogLevel {
     Trace,
 }
 
-/// One-KVM command line arguments
 #[derive(Parser, Debug)]
 #[command(name = "one-kvm")]
 #[command(version, about = "A  open and lightweight IP-KVM solution", long_about = None)]
@@ -111,37 +111,30 @@ enum UserAction {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Parse command line arguments
     let args = CliArgs::parse();
 
-    // Initialize logging with CLI arguments
     init_logging(args.log_level, args.verbose);
 
-    // Install default crypto provider (required by rustls 0.23+)
     CryptoProvider::install_default(ring::default_provider())
         .expect("Failed to install rustls crypto provider");
 
     tracing::info!("Starting One-KVM v{}", env!("CARGO_PKG_VERSION"));
 
-    // Determine data directory (CLI arg takes precedence)
     let data_dir = args.data_dir.clone().unwrap_or_else(get_data_dir);
     tracing::info!("Data directory: {}", data_dir.display());
 
-    // Run one-off CLI command and exit.
     if let Some(command) = args.command {
         run_cli_command(command, data_dir).await?;
         return Ok(());
     }
 
-    // Ensure data directory exists
     tokio::fs::create_dir_all(&data_dir).await?;
 
-    // Initialize configuration store
-    let db_path = data_dir.join("one-kvm.db");
-    let config_store = ConfigStore::new(&db_path).await?;
+    let db = open_database_pool(&data_dir).await?;
+    let config_store = ConfigStore::new(db.clone_pool())?;
+    config_store.load().await?;
     let mut config = (*config_store.get()).clone();
 
-    // Normalize MSD directory (absolute path under data dir if empty/relative)
     let mut msd_dir_updated = false;
     if config.msd.msd_dir.trim().is_empty() {
         let msd_dir = data_dir.join("msd");
@@ -159,8 +152,6 @@ async fn main() -> anyhow::Result<()> {
     if msd_dir_updated {
         config_store.set(config.clone()).await?;
     }
-
-    // Ensure MSD directories exist (msd/images, msd/ventoy)
     let msd_dir = PathBuf::from(&config.msd.msd_dir);
     if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("images")).await {
         tracing::warn!("Failed to create MSD images directory: {}", e);
@@ -169,7 +160,6 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("Failed to create MSD ventoy directory: {}", e);
     }
 
-    // Apply CLI argument overrides to config (only if explicitly specified)
     if let Some(addr) = args.address {
         config.web.bind_address = addr.clone();
         config.web.bind_addresses = vec![addr];
@@ -203,29 +193,21 @@ async fn main() -> anyhow::Result<()> {
         config.web.http_port
     };
 
-    // Log final configuration
+
     for ip in &bind_ips {
         let addr = SocketAddr::new(*ip, bind_port);
         tracing::info!("Server will listen on: {}://{}", scheme, addr);
     }
 
-    // Initialize session store
-    let session_store = SessionStore::new(
-        config_store.pool().clone(),
-        config.auth.session_timeout_secs as i64,
-    );
+    let session_store = SessionStore::new(config.auth.session_timeout_secs as i64);
 
-    // Initialize user store
-    let user_store = UserStore::new(config_store.pool().clone());
+    let user_store = UserStore::new(db.clone_pool());
 
-    // Create shutdown channel
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-    // Create event bus for real-time notifications
     let events = Arc::new(EventBus::new());
     tracing::info!("Event bus initialized");
 
-    // Parse video configuration once (avoid duplication)
     let (video_format, video_resolution) = parse_video_config(&config);
     tracing::debug!(
         "Parsed video config: {} @ {}x{}",
@@ -234,7 +216,6 @@ async fn main() -> anyhow::Result<()> {
         video_resolution.height
     );
 
-    // Create video streamer and initialize with config if device is set
     let streamer = Streamer::new();
     streamer.set_event_bus(events.clone()).await;
     if let Some(ref device_path) = config.video.device {
@@ -262,19 +243,19 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Create WebRTC streamer
     let webrtc_streamer = {
         let webrtc_config = WebRtcStreamerConfig {
             resolution: video_resolution,
             input_format: video_format,
             fps: config.video.fps,
             bitrate_preset: config.stream.bitrate_preset,
-            encoder_backend: config.stream.encoder.to_backend(),
+            encoder_backend: one_kvm::stream_encoder::encoder_type_to_backend(
+                config.stream.encoder.clone(),
+            ),
             webrtc: {
                 let mut stun_servers = vec![];
                 let mut turn_servers = vec![];
 
-                // Check if user configured custom servers
                 let has_custom_stun = config
                     .stream
                     .stun_server
@@ -288,14 +269,12 @@ async fn main() -> anyhow::Result<()> {
                     .map(|s| !s.is_empty())
                     .unwrap_or(false);
 
-                // If no custom servers, use baked-in public STUN
                 if !has_custom_stun && !has_custom_turn {
                     use one_kvm::webrtc::config::public_ice;
                     let stun = public_ice::stun_server().to_string();
                     tracing::info!("Using public STUN server: {}", stun);
                     stun_servers.push(stun);
                 } else {
-                    // Use custom servers
                     if let Some(ref stun) = config.stream.stun_server {
                         if !stun.is_empty() {
                             stun_servers.push(stun.clone());
@@ -333,16 +312,13 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::info!("WebRTC streamer created");
 
-    // Create OTG Service (single instance for centralized USB gadget management)
     let otg_service = Arc::new(OtgService::new());
     tracing::info!("OTG Service created");
 
-    // Reconcile OTG once from the persisted config so controllers only consume its result.
     if let Err(e) = otg_service.apply_config(&config.hid, &config.msd).await {
         tracing::warn!("Failed to apply OTG config: {}", e);
     }
 
-    // Create HID controller based on config
     let hid_backend = match config.hid.backend {
         config::HidBackend::Otg => HidBackendType::Otg,
         config::HidBackend::Ch9329 => HidBackendType::Ch9329 {
@@ -353,16 +329,14 @@ async fn main() -> anyhow::Result<()> {
     };
     let hid = Arc::new(HidController::new(
         hid_backend,
-        Some(otg_service.clone()), // Always pass OtgService to support hot-reload to OTG
+        Some(otg_service.clone()),
     ));
     hid.set_event_bus(events.clone()).await;
     if let Err(e) = hid.init().await {
         tracing::warn!("Failed to initialize HID backend: {}", e);
     }
 
-    // Create MSD controller (optional, based on config)
     let msd = if config.msd.enabled {
-        // `{data_dir}/ventoy`: boot.img, core.img, ventoy.disk.img for ventoy_img
         let ventoy_resource_dir = data_dir.join("ventoy");
         if ventoy_resource_dir.exists() {
             if let Err(e) = ventoy_img::init_resources(&ventoy_resource_dir) {
@@ -393,7 +367,6 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    // Create ATX controller (optional, based on config)
     let atx = if config.atx.enabled {
         let controller_config = config.atx.to_controller_config();
         let controller = AtxController::new(controller_config);
@@ -409,12 +382,21 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    // Create Audio controller
     let audio = {
         let audio_config = AudioControllerConfig {
             enabled: config.audio.enabled,
             device: config.audio.device.clone(),
-            quality: AudioQuality::from_str(&config.audio.quality),
+            quality: match config.audio.quality.parse::<AudioQuality>() {
+                Ok(q) => q,
+                Err(e) => {
+                    tracing::warn!(
+                        "Invalid audio quality in config (value={:?}): {}, using balanced",
+                        config.audio.quality,
+                        e
+                    );
+                    AudioQuality::Balanced
+                }
+            },
         };
 
         let controller = AudioController::new(audio_config);
@@ -426,7 +408,6 @@ async fn main() -> anyhow::Result<()> {
                 config.audio.device,
                 config.audio.quality
             );
-            // Start audio streaming so WebRTC can subscribe to Opus frames
             if let Err(e) = controller.start_streaming().await {
                 tracing::warn!("Failed to start audio streaming: {}", e);
             }
@@ -437,16 +418,11 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(controller)
     };
 
-    // Create Extension manager (ttyd, gostc, easytier)
     let extensions = Arc::new(ExtensionManager::new());
     tracing::info!("Extension manager initialized");
 
-    // Wire up WebRTC streamer with HID controller
-    // This enables WebRTC DataChannel to process HID events
     webrtc_streamer.set_hid_controller(hid.clone()).await;
 
-    // Wire up WebRTC streamer with Audio controller
-    // This enables WebRTC audio track to receive Opus frames
     webrtc_streamer.set_audio_controller(audio.clone()).await;
     if config.audio.enabled {
         if let Err(e) = webrtc_streamer.set_audio_enabled(true).await {
@@ -456,7 +432,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Configure direct capture for WebRTC encoder pipeline
     let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
         streamer.current_capture_config().await;
     tracing::info!(
@@ -495,14 +470,13 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("No capture device configured for WebRTC");
     }
 
-    // Create video stream manager (unified MJPEG/WebRTC management)
-    // Use with_webrtc_streamer to ensure we use the same WebRtcStreamer instance
-    let stream_manager =
-        VideoStreamManager::with_webrtc_streamer(streamer.clone(), webrtc_streamer.clone());
+    let stream_manager = VideoStreamManager::with_webrtc_streamer(
+        streamer.clone(),
+        webrtc_streamer.clone() as std::sync::Arc<dyn one_kvm::video::traits::VideoOutput>,
+    );
     stream_manager.set_event_bus(events.clone()).await;
     stream_manager.set_config_store(config_store.clone()).await;
 
-    // Initialize stream manager with configured mode
     let initial_mode = config.stream.mode.clone();
     if let Err(e) = stream_manager.init_with_mode(initial_mode.clone()).await {
         tracing::warn!(
@@ -517,7 +491,6 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    // Create RustDesk service (optional, based on config)
     let rustdesk = if config.rustdesk.is_valid() {
         tracing::info!(
             "Initializing RustDesk service: ID={} -> {}",
@@ -542,7 +515,6 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    // Create RTSP service (optional, based on config)
     let rtsp = if config.rtsp.enabled {
         tracing::info!(
             "Initializing RTSP service: rtsp://{}:{}/{}",
@@ -557,15 +529,16 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    // Create application state
     let update_service = Arc::new(UpdateService::new(data_dir.join("updates")));
 
     let state = AppState::new(
+        db.clone(),
         config_store.clone(),
         session_store,
         user_store,
         otg_service,
         stream_manager,
+        webrtc_streamer.clone(),
         hid,
         msd,
         atx,
@@ -581,12 +554,10 @@ async fn main() -> anyhow::Result<()> {
 
     extensions.set_event_bus(events.clone()).await;
 
-    // Start RustDesk service if enabled
     if let Some(ref service) = rustdesk {
         if let Err(e) = service.start().await {
             tracing::error!("Failed to start RustDesk service: {}", e);
         } else {
-            // Save generated keypair and UUID to config
             if let Some(updated_config) = service.save_credentials() {
                 if let Err(e) = config_store
                     .update(|cfg| {
@@ -606,7 +577,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Start RTSP service if enabled
     if let Some(ref service) = rtsp {
         if let Err(e) = service.start().await {
             tracing::error!("Failed to start RTSP service: {}", e);
@@ -615,7 +585,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Enforce startup codec constraints (e.g. RTSP/RustDesk locks)
     {
         let runtime_config = state.config.get();
         let constraints = StreamCodecConstraints::from_config(&runtime_config);
@@ -630,13 +599,11 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Start enabled extensions
     {
         let ext_config = config_store.get();
         extensions.start_enabled(&ext_config.extensions).await;
     }
 
-    // Start extension health check task (every 30 seconds)
     {
         let extensions_clone = extensions.clone();
         let config_store_clone = config_store.clone();
@@ -653,17 +620,12 @@ async fn main() -> anyhow::Result<()> {
 
     state.publish_device_info().await;
 
-    // Start device info broadcast task
-    // This monitors state change events and broadcasts DeviceInfo to all clients
     spawn_device_info_broadcaster(state.clone(), events);
 
-    // Create router
     let app = web::create_router(state.clone());
 
-    // Bind sockets for configured addresses
     let listeners = bind_tcp_listeners(&bind_ips, bind_port)?;
 
-    // Setup graceful shutdown
     let shutdown_signal = async move {
         tokio::signal::ctrl_c()
             .await
@@ -672,9 +634,7 @@ async fn main() -> anyhow::Result<()> {
         let _ = shutdown_tx.send(());
     };
 
-    // Start server
     if config.web.https_enabled {
-        // Generate self-signed certificate if no custom cert provided
         let tls_config = if let (Some(cert_path), Some(key_path)) =
             (&config.web.ssl_cert_path, &config.web.ssl_key_path)
         {
@@ -684,7 +644,6 @@ async fn main() -> anyhow::Result<()> {
             let cert_path = cert_dir.join("server.crt");
             let key_path = cert_dir.join("server.key");
 
-            // Check if certificate already exists, only generate if missing
             if !cert_path.exists() || !key_path.exists() {
                 tracing::info!("Generating new self-signed TLS certificate");
                 let cert = generate_self_signed_cert()?;
@@ -698,7 +657,7 @@ async fn main() -> anyhow::Result<()> {
             RustlsConfig::from_pem_file(&cert_path, &key_path).await?
         };
 
-        let mut servers = FuturesUnordered::new();
+        let servers = FuturesUnordered::new();
         for listener in listeners {
             let local_addr = listener.local_addr()?;
             tracing::info!("Starting HTTPS server on {}", local_addr);
@@ -708,19 +667,9 @@ async fn main() -> anyhow::Result<()> {
             servers.push(server);
         }
 
-        tokio::select! {
-            _ = shutdown_signal => {
-                cleanup(&state).await;
-            }
-            result = servers.next() => {
-                if let Some(Err(e)) = result {
-                    tracing::error!("HTTPS server error: {}", e);
-                }
-                cleanup(&state).await;
-            }
-        }
+        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTPS").await;
     } else {
-        let mut servers = FuturesUnordered::new();
+        let servers = FuturesUnordered::new();
         for listener in listeners {
             let local_addr = listener.local_addr()?;
             tracing::info!("Starting HTTP server on {}", local_addr);
@@ -730,26 +679,14 @@ async fn main() -> anyhow::Result<()> {
             servers.push(async move { server.await });
         }
 
-        tokio::select! {
-            _ = shutdown_signal => {
-                cleanup(&state).await;
-            }
-            result = servers.next() => {
-                if let Some(Err(e)) = result {
-                    tracing::error!("HTTP server error: {}", e);
-                }
-                cleanup(&state).await;
-            }
-        }
+        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTP").await;
     }
 
     tracing::info!("Server shutdown complete");
     Ok(())
 }
 
-/// Initialize logging with tracing
 fn init_logging(level: LogLevel, verbose_count: u8) {
-    // Verbose count overrides log level
     let effective_level = match verbose_count {
         0 => level,
         1 => LogLevel::Verbose,
@@ -757,7 +694,6 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
         _ => LogLevel::Trace,
     };
 
-    // Build filter string based on effective level
     let filter = match effective_level {
         LogLevel::Error => "one_kvm=error,tower_http=error",
         LogLevel::Warn => "one_kvm=warn,tower_http=warn",
@@ -767,7 +703,6 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
         LogLevel::Trace => "one_kvm=trace,tower_http=debug",
     };
 
-    // Environment variable takes highest priority
     let env_filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
 
@@ -780,23 +715,48 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
     }
 }
 
-/// Get the application data directory
 fn get_data_dir() -> PathBuf {
-    // Check environment variable first
     if let Ok(path) = std::env::var("ONE_KVM_DATA_DIR") {
         return PathBuf::from(path);
     }
 
-    // Default to system configuration directory
     PathBuf::from("/etc/one-kvm")
+}
+
+async fn open_database_pool(data_dir: &Path) -> anyhow::Result<DatabasePool> {
+    let db_path = data_dir.join("one-kvm.db");
+    let db = DatabasePool::new(&db_path).await?;
+    db.init_schema().await?;
+    Ok(db)
+}
+
+async fn run_servers_until_shutdown<F, E>(
+    mut servers: FuturesUnordered<F>,
+    shutdown_signal: impl Future<Output = ()>,
+    state: &Arc<AppState>,
+    protocol: &'static str,
+) where
+    F: Future<Output = Result<(), E>> + Send,
+    E: std::fmt::Display,
+{
+    tokio::select! {
+        _ = shutdown_signal => {
+            cleanup(state).await;
+        }
+        result = servers.next() => {
+            if let Some(Err(e)) = result {
+                tracing::error!("{} server error: {}", protocol, e);
+            }
+            cleanup(state).await;
+        }
+    }
 }
 
 async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Result<()> {
     tokio::fs::create_dir_all(&data_dir).await?;
-    let db_path = data_dir.join("one-kvm.db");
-    let config_store = ConfigStore::new(&db_path).await?;
-    let users = UserStore::new(config_store.pool().clone());
-    let sessions = SessionStore::new(config_store.pool().clone(), 0);
+    let db = open_database_pool(&data_dir).await?;
+    let users = UserStore::new(db.clone_pool());
+    let sessions = SessionStore::new(0);
 
     match command {
         CliCommand::User(user) => run_user_action(user.action, &users, &sessions).await,
@@ -814,15 +774,10 @@ async fn run_user_action(
 }
 
 async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow::Result<()> {
-    let all = users.list().await?;
-    let user = match all.len() {
-        0 => anyhow::bail!("No local user exists yet; complete setup in the web UI first."),
-        1 => &all[0],
-        _ => anyhow::bail!(
-            "Expected exactly one local user (single-user design), found {}. Remove extra users from the database or contact support.",
-            all.len()
-        ),
-    };
+    let user = users
+        .single_user()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No local user exists yet; complete setup in the web UI first."))?;
 
     let new_password = read_new_password_interactive()?;
     if new_password.len() < 4 {
@@ -830,7 +785,7 @@ async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow
     }
 
     users.update_password(&user.id, &new_password).await?;
-    let revoked = sessions.delete_by_user_id(&user.id).await?;
+    let revoked = sessions.delete_all().await?;
 
     tracing::info!(
         "Password updated for user '{}' and {} sessions revoked",
@@ -866,7 +821,6 @@ fn read_new_password_interactive() -> anyhow::Result<String> {
     Ok(a)
 }
 
-/// Resolve bind IPs from config, preferring bind_addresses when set.
 fn resolve_bind_addresses(web: &config::WebConfig) -> anyhow::Result<Vec<IpAddr>> {
     let raw_addrs = if !web.bind_addresses.is_empty() {
         web.bind_addresses.as_slice()
@@ -907,7 +861,6 @@ fn bind_tcp_listeners(addrs: &[IpAddr], port: u16) -> anyhow::Result<Vec<std::ne
     Ok(listeners)
 }
 
-/// Parse video format and resolution from config (avoids code duplication)
 fn parse_video_config(config: &AppConfig) -> (PixelFormat, Resolution) {
     let format = config
         .video
@@ -919,7 +872,6 @@ fn parse_video_config(config: &AppConfig) -> (PixelFormat, Resolution) {
     (format, resolution)
 }
 
-/// Generate a self-signed TLS certificate
 fn generate_self_signed_cert() -> anyhow::Result<rcgen::CertifiedKey<rcgen::KeyPair>> {
     use rcgen::generate_simple_self_signed;
 
@@ -933,8 +885,6 @@ fn generate_self_signed_cert() -> anyhow::Result<rcgen::CertifiedKey<rcgen::KeyP
     Ok(certified_key)
 }
 
-/// Spawn a background task that monitors state change events
-/// and broadcasts DeviceInfo to all WebSocket clients with debouncing
 fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
     use std::time::{Duration, Instant};
 
@@ -1021,7 +971,6 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
         let mut pending_broadcast = false;
 
         loop {
-            // Use timeout to handle pending broadcasts
             let recv_result = if pending_broadcast {
                 let remaining =
                     DEBOUNCE_MS.saturating_sub(last_broadcast.elapsed().as_millis() as u64);
@@ -1046,12 +995,9 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
                     tracing::info!("Event bus closed, stopping DeviceInfo broadcaster");
                     break;
                 }
-                Err(_timeout) => {
-                    // Debounce timeout reached, broadcast now
-                }
+                Err(_timeout) => {}
             }
 
-            // Broadcast if pending and debounce time has passed
             if pending_broadcast && last_broadcast.elapsed() >= Duration::from_millis(DEBOUNCE_MS) {
                 state.publish_device_info().await;
                 tracing::trace!("Broadcasted DeviceInfo (debounced)");
@@ -1067,13 +1013,10 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
     );
 }
 
-/// Clean up subsystems on shutdown
 async fn cleanup(state: &Arc<AppState>) {
-    // Stop all extensions
     state.extensions.stop_all().await;
     tracing::info!("Extensions stopped");
 
-    // Stop RustDesk service
     if let Some(ref service) = *state.rustdesk.read().await {
         if let Err(e) = service.stop().await {
             tracing::warn!("Failed to stop RustDesk service: {}", e);
@@ -1082,7 +1025,6 @@ async fn cleanup(state: &Arc<AppState>) {
         }
     }
 
-    // Stop RTSP service
     if let Some(ref service) = *state.rtsp.read().await {
         if let Err(e) = service.stop().await {
             tracing::warn!("Failed to stop RTSP service: {}", e);
@@ -1091,31 +1033,26 @@ async fn cleanup(state: &Arc<AppState>) {
         }
     }
 
-    // Stop video
     if let Err(e) = state.stream_manager.stop().await {
         tracing::warn!("Failed to stop streamer: {}", e);
     }
 
-    // Shutdown HID
     if let Err(e) = state.hid.shutdown().await {
         tracing::warn!("Failed to shutdown HID: {}", e);
     }
 
-    // Shutdown MSD
     if let Some(msd) = state.msd.write().await.as_mut() {
         if let Err(e) = msd.shutdown().await {
             tracing::warn!("Failed to shutdown MSD: {}", e);
         }
     }
 
-    // Shutdown ATX
     if let Some(atx) = state.atx.write().await.as_mut() {
         if let Err(e) = atx.shutdown().await {
             tracing::warn!("Failed to shutdown ATX: {}", e);
         }
     }
 
-    // Shutdown Audio
     if let Err(e) = state.audio.shutdown().await {
         tracing::warn!("Failed to shutdown audio: {}", e);
     }

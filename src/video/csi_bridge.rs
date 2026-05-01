@@ -14,9 +14,7 @@ use tracing::{debug, info, warn};
 use v4l2r::bindings::{
     v4l2_bt_timings, v4l2_dv_timings, V4L2_DV_BT_656_1120, V4L2_DV_FL_HAS_CEA861_VIC,
 };
-use v4l2r::ioctl::{
-    self, Event as V4l2Event, EventType, QueryDvTimingsError, SubscribeEventFlags,
-};
+use v4l2r::ioctl::{self, Event as V4l2Event, EventType, QueryDvTimingsError, SubscribeEventFlags};
 use v4l2r::nix::errno::Errno;
 
 use crate::video::SignalStatus;
@@ -143,9 +141,9 @@ pub fn probe_signal(subdev_fd: &impl AsRawFd, kind: CsiBridgeKind) -> ProbeResul
         Err(QueryDvTimingsError::NoLink) => ProbeResult::NoCable,
         Err(QueryDvTimingsError::UnstableSignal) => ProbeResult::NoSync,
         Err(QueryDvTimingsError::IoctlError(Errno::ERANGE)) => ProbeResult::OutOfRange,
-        Err(QueryDvTimingsError::IoctlError(
-            Errno::EIO | Errno::EREMOTEIO | Errno::ETIMEDOUT,
-        )) => ProbeResult::NoSync,
+        Err(QueryDvTimingsError::IoctlError(Errno::EIO | Errno::EREMOTEIO | Errno::ETIMEDOUT)) => {
+            ProbeResult::NoSync
+        }
         Err(QueryDvTimingsError::Unsupported) | Err(QueryDvTimingsError::IoctlError(_)) => {
             ProbeResult::NoSignal
         }
@@ -222,14 +220,8 @@ fn classify_timings(timings: v4l2_dv_timings, kind: CsiBridgeKind) -> ProbeResul
         return ProbeResult::NoSignal;
     }
 
-    let total_h: u64 = (width
-        + bt.hfrontporch
-        + bt.hsync
-        + bt.hbackporch) as u64;
-    let total_v: u64 = (height
-        + bt.vfrontporch
-        + bt.vsync
-        + bt.vbackporch) as u64;
+    let total_h: u64 = (width + bt.hfrontporch + bt.hsync + bt.hbackporch) as u64;
+    let total_v: u64 = (height + bt.vfrontporch + bt.vsync + bt.vbackporch) as u64;
     let fps = if total_h > 0 && total_v > 0 && pixelclock > 0 {
         Some(pixelclock as f64 / (total_h as f64 * total_v as f64))
     } else {

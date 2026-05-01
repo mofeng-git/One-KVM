@@ -1,15 +1,4 @@
-//! HID (Human Interface Device) control module
-//!
-//! This module provides keyboard and mouse control for remote KVM:
-//! - USB OTG gadget mode (native Linux USB gadget)
-//! - CH9329 serial HID controller
-//!
-//! Architecture:
-//! ```text
-//! Web Client --> WebSocket/DataChannel --> HID Events --> Backend --> Target PC
-//!                                              |
-//!                                      [OTG | CH9329]
-//! ```
+//! HID path: browser (WebSocket or WebRTC DataChannel) → queue → OTG gadget or CH9329.
 
 pub mod backend;
 pub mod ch9329;
@@ -20,51 +9,26 @@ pub mod otg;
 pub mod types;
 pub mod websocket;
 
+pub use crate::events::LedState;
 pub use backend::{HidBackend, HidBackendRuntimeSnapshot, HidBackendType};
 pub use keyboard::CanonicalKey;
-pub use otg::LedState;
 pub use types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,
     MouseEventType,
 };
 
-/// HID backend information
-#[derive(Debug, Clone)]
-pub struct HidInfo {
-    /// Backend name
-    pub name: String,
-    /// Whether backend is initialized
-    pub initialized: bool,
-    /// Whether absolute mouse positioning is supported
-    pub supports_absolute_mouse: bool,
-    /// Screen resolution for absolute mouse
-    pub screen_resolution: Option<(u32, u32)>,
-}
-
-/// Unified HID runtime state used by snapshots and events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HidRuntimeState {
-    /// Whether a backend is configured and expected to exist.
     pub available: bool,
-    /// Stable backend key: "otg", "ch9329", "none".
     pub backend: String,
-    /// Whether the backend is currently initialized and operational.
     pub initialized: bool,
-    /// Whether the backend is currently online.
     pub online: bool,
-    /// Whether absolute mouse positioning is supported.
     pub supports_absolute_mouse: bool,
-    /// Whether keyboard LED/status feedback is enabled.
     pub keyboard_leds_enabled: bool,
-    /// Last known keyboard LED state.
     pub led_state: LedState,
-    /// Screen resolution for absolute mouse mode.
     pub screen_resolution: Option<(u32, u32)>,
-    /// Device path associated with the backend, if any.
     pub device: Option<String>,
-    /// Current user-facing error, if any.
     pub error: Option<String>,
-    /// Current programmatic error code, if any.
     pub error_code: Option<String>,
 }
 
@@ -140,45 +104,29 @@ const HID_EVENT_QUEUE_CAPACITY: usize = 64;
 const HID_EVENT_SEND_TIMEOUT_MS: u64 = 30;
 
 #[derive(Debug)]
-enum HidEvent {
+enum QueuedHidEvent {
     Keyboard(KeyboardEvent),
     Mouse(MouseEvent),
     Consumer(ConsumerEvent),
     Reset,
 }
 
-/// HID controller managing keyboard and mouse input
 pub struct HidController {
-    /// OTG Service reference (only used when backend is OTG)
     otg_service: Option<Arc<OtgService>>,
-    /// Active backend
     backend: Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
-    /// Backend type (mutable for reload)
     backend_type: Arc<RwLock<HidBackendType>>,
-    /// Event bus for broadcasting state changes (optional)
     events: Arc<tokio::sync::RwLock<Option<Arc<EventBus>>>>,
-    /// Unified HID runtime state.
     runtime_state: Arc<RwLock<HidRuntimeState>>,
-    /// HID event queue sender (non-blocking)
-    hid_tx: mpsc::Sender<HidEvent>,
-    /// HID event queue receiver (moved into worker on first start)
-    hid_rx: Mutex<Option<mpsc::Receiver<HidEvent>>>,
-    /// Coalesced mouse move (latest)
+    hid_tx: mpsc::Sender<QueuedHidEvent>,
+    hid_rx: Mutex<Option<mpsc::Receiver<QueuedHidEvent>>>,
     pending_move: Arc<parking_lot::Mutex<Option<MouseEvent>>>,
-    /// Pending move flag (fast path)
     pending_move_flag: Arc<AtomicBool>,
-    /// Worker task handle
     hid_worker: Mutex<Option<JoinHandle<()>>>,
-    /// Backend runtime subscription task handle
     runtime_worker: Mutex<Option<JoinHandle<()>>>,
-    /// Backend initialization fast flag
     backend_available: Arc<AtomicBool>,
 }
 
 impl HidController {
-    /// Create a new HID controller with specified backend
-    ///
-    /// For OTG backend, otg_service should be provided to support hot-reload
     pub fn new(backend_type: HidBackendType, otg_service: Option<Arc<OtgService>>) -> Self {
         let (hid_tx, hid_rx) = mpsc::channel(HID_EVENT_QUEUE_CAPACITY);
         Self {
@@ -199,12 +147,10 @@ impl HidController {
         }
     }
 
-    /// Set event bus for broadcasting state changes
     pub async fn set_event_bus(&self, events: Arc<EventBus>) {
         *self.events.write().await = Some(events);
     }
 
-    /// Initialize the HID backend
     pub async fn init(&self) -> Result<()> {
         let backend_type = self.backend_type.read().await.clone();
         let backend: Arc<dyn HidBackend> = match backend_type {
@@ -256,7 +202,6 @@ impl HidController {
         *self.backend.write().await = Some(backend);
         self.sync_runtime_state_from_backend().await;
 
-        // Start HID event worker (once)
         self.start_event_worker().await;
         self.restart_runtime_worker().await;
 
@@ -264,12 +209,10 @@ impl HidController {
         Ok(())
     }
 
-    /// Shutdown the HID backend and release resources
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down HID controller");
         self.stop_runtime_worker().await;
 
-        // Close the backend
         if let Some(backend) = self.backend.write().await.take() {
             if let Err(e) = backend.shutdown().await {
                 warn!("Error shutting down HID backend: {}", e);
@@ -290,17 +233,15 @@ impl HidController {
         Ok(())
     }
 
-    /// Send keyboard event
     pub async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Err(AppError::BadRequest(
                 "HID backend not available".to_string(),
             ));
         }
-        self.enqueue_event(HidEvent::Keyboard(event)).await
+        self.enqueue_event(QueuedHidEvent::Keyboard(event)).await
     }
 
-    /// Send mouse event
     pub async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Err(AppError::BadRequest(
@@ -312,81 +253,55 @@ impl HidController {
             event.event_type,
             MouseEventType::Move | MouseEventType::MoveAbs
         ) {
-            // Best-effort: drop/merge move events if queue is full
             self.enqueue_mouse_move(event)
         } else {
-            self.enqueue_event(HidEvent::Mouse(event)).await
+            self.enqueue_event(QueuedHidEvent::Mouse(event)).await
         }
     }
 
-    /// Send consumer control event (multimedia keys)
     pub async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Err(AppError::BadRequest(
                 "HID backend not available".to_string(),
             ));
         }
-        self.enqueue_event(HidEvent::Consumer(event)).await
+        self.enqueue_event(QueuedHidEvent::Consumer(event)).await
     }
 
-    /// Reset all keys (release all pressed keys)
     pub async fn reset(&self) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Ok(());
         }
-        // Reset is important but best-effort; enqueue to avoid blocking
-        self.enqueue_event(HidEvent::Reset).await
+        self.enqueue_event(QueuedHidEvent::Reset).await
     }
 
-    /// Check if backend is available
     pub async fn is_available(&self) -> bool {
         self.backend_available.load(Ordering::Acquire)
     }
 
-    /// Get backend type
     pub async fn backend_type(&self) -> HidBackendType {
         self.backend_type.read().await.clone()
     }
 
-    /// Get backend info
-    pub async fn info(&self) -> Option<HidInfo> {
-        let state = self.runtime_state.read().await.clone();
-        if !state.available {
-            return None;
-        }
-
-        Some(HidInfo {
-            name: state.backend,
-            initialized: state.initialized,
-            supports_absolute_mouse: state.supports_absolute_mouse,
-            screen_resolution: state.screen_resolution,
-        })
-    }
-
-    /// Get current HID runtime state snapshot.
     pub async fn snapshot(&self) -> HidRuntimeState {
         self.runtime_state.read().await.clone()
     }
 
-    /// Reload the HID backend with new type
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {
         info!("Reloading HID backend: {:?}", new_backend_type);
         self.backend_available.store(false, Ordering::Release);
         self.stop_runtime_worker().await;
 
-        // Shutdown existing backend first
         if let Some(backend) = self.backend.write().await.take() {
             if let Err(e) = backend.shutdown().await {
                 warn!("Error shutting down old HID backend: {}", e);
             }
         }
 
-        // Create and initialize new backend
         let new_backend: Option<Arc<dyn HidBackend>> = match new_backend_type {
             HidBackendType::Otg => {
                 info!("Initializing OTG HID backend");
 
-                // Get OtgService reference
                 let otg_service = match self.otg_service.as_ref() {
                     Some(svc) => svc,
                     None => {
@@ -398,28 +313,25 @@ impl HidController {
                 };
 
                 match otg_service.hid_device_paths().await {
-                    Some(handles) => {
-                        // Create OtgBackend from handles
-                        match otg::OtgBackend::from_handles(handles) {
-                            Ok(backend) => {
-                                let backend = Arc::new(backend);
-                                match backend.init().await {
-                                    Ok(_) => {
-                                        info!("OTG backend initialized successfully");
-                                        Some(backend)
-                                    }
-                                    Err(e) => {
-                                        warn!("Failed to initialize OTG backend: {}", e);
-                                        None
-                                    }
+                    Some(handles) => match otg::OtgBackend::from_handles(handles) {
+                        Ok(backend) => {
+                            let backend = Arc::new(backend);
+                            match backend.init().await {
+                                Ok(_) => {
+                                    info!("OTG backend initialized successfully");
+                                    Some(backend)
+                                }
+                                Err(e) => {
+                                    warn!("Failed to initialize OTG backend: {}", e);
+                                    None
                                 }
                             }
-                            Err(e) => {
-                                warn!("Failed to create OTG backend: {}", e);
-                                None
-                            }
                         }
-                    }
+                        Err(e) => {
+                            warn!("Failed to create OTG backend: {}", e);
+                            None
+                        }
+                    },
                     None => {
                         warn!("OTG HID paths are not available");
                         None
@@ -470,7 +382,6 @@ impl HidController {
             info!("HID backend reloaded successfully: {:?}", new_backend_type);
             self.start_event_worker().await;
 
-            // Update backend_type on success
             *self.backend_type.write().await = new_backend_type.clone();
 
             self.sync_runtime_state_from_backend().await;
@@ -481,7 +392,6 @@ impl HidController {
             warn!("HID backend reload resulted in no active backend");
             self.backend_available.store(false, Ordering::Release);
 
-            // Update backend_type even on failure (to reflect the attempted change)
             *self.backend_type.write().await = new_backend_type.clone();
 
             let current = self.runtime_state.read().await.clone();
@@ -541,11 +451,10 @@ impl HidController {
 
                 process_hid_event(event, &backend).await;
 
-                // After each event, flush latest move if pending
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
                     let move_event = { pending_move.lock().take() };
                     if let Some(move_event) = move_event {
-                        process_hid_event(HidEvent::Mouse(move_event), &backend).await;
+                        process_hid_event(QueuedHidEvent::Mouse(move_event), &backend).await;
                     }
                 }
             }
@@ -595,7 +504,7 @@ impl HidController {
     }
 
     fn enqueue_mouse_move(&self, event: MouseEvent) -> Result<()> {
-        match self.hid_tx.try_send(HidEvent::Mouse(event.clone())) {
+        match self.hid_tx.try_send(QueuedHidEvent::Mouse(event.clone())) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(_)) => {
                 *self.pending_move.lock() = Some(event);
@@ -608,11 +517,10 @@ impl HidController {
         }
     }
 
-    async fn enqueue_event(&self, event: HidEvent) -> Result<()> {
+    async fn enqueue_event(&self, event: QueuedHidEvent) -> Result<()> {
         match self.hid_tx.try_send(event) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(ev)) => {
-                // For non-move events, wait briefly to avoid dropping critical input
                 let tx = self.hid_tx.clone();
                 let send_result = tokio::time::timeout(
                     Duration::from_millis(HID_EVENT_SEND_TIMEOUT_MS),
@@ -649,7 +557,10 @@ async fn apply_backend_runtime_state(
     apply_runtime_state(runtime_state, events, next).await;
 }
 
-async fn process_hid_event(event: HidEvent, backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>) {
+async fn process_hid_event(
+    event: QueuedHidEvent,
+    backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
+) {
     let backend_opt = backend.read().await.clone();
     let backend = match backend_opt {
         Some(b) => b,
@@ -660,10 +571,10 @@ async fn process_hid_event(event: HidEvent, backend: &Arc<RwLock<Option<Arc<dyn 
     let result = tokio::task::spawn_blocking(move || {
         futures::executor::block_on(async move {
             match event {
-                HidEvent::Keyboard(ev) => backend_for_send.send_keyboard(ev).await,
-                HidEvent::Mouse(ev) => backend_for_send.send_mouse(ev).await,
-                HidEvent::Consumer(ev) => backend_for_send.send_consumer(ev).await,
-                HidEvent::Reset => backend_for_send.reset().await,
+                QueuedHidEvent::Keyboard(ev) => backend_for_send.send_keyboard(ev).await,
+                QueuedHidEvent::Mouse(ev) => backend_for_send.send_mouse(ev).await,
+                QueuedHidEvent::Consumer(ev) => backend_for_send.send_consumer(ev).await,
+                QueuedHidEvent::Reset => backend_for_send.reset().await,
             }
         })
     })
@@ -679,12 +590,6 @@ async fn process_hid_event(event: HidEvent, backend: &Arc<RwLock<Option<Arc<dyn 
         Err(e) => {
             warn!("HID event processing failed: {}", e);
         }
-    }
-}
-
-impl Default for HidController {
-    fn default() -> Self {
-        Self::new(HidBackendType::None, None)
     }
 }
 

@@ -33,14 +33,12 @@ const { t } = useI18n()
 
 const activeTab = ref('atx')
 
-// ATX state
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
 let powerStateTimer: number | null = null
 // Decouple action data from dialog visibility to prevent race conditions
 const pendingAction = ref<'short' | 'long' | 'reset' | null>(null)
 const confirmDialogOpen = ref(false)
 
-// WOL state
 const wolMacAddress = ref('')
 const wolHistory = ref<string[]>([])
 const wolSending = ref(false)
@@ -95,10 +93,8 @@ const confirmDescription = computed(() => {
     default: return ''
   }
 })
-// MAC address validation
 const isValidMac = computed(() => {
   const mac = wolMacAddress.value.trim()
-  // Support formats: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF or AABBCCDDEEFF
   const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^([0-9A-Fa-f]{12})$/
   return macRegex.test(mac)
 })
@@ -107,7 +103,6 @@ function sendWol() {
   if (!isValidMac.value) return
   wolSending.value = true
 
-  // Normalize MAC address
   let mac = wolMacAddress.value.trim().toUpperCase()
   if (mac.length === 12) {
     mac = mac.match(/.{2}/g)!.join(':')
@@ -117,7 +112,6 @@ function sendWol() {
 
   emit('wol', mac)
 
-  // Optimistic update, then sync from server after request likely completes
   wolHistory.value = [mac, ...wolHistory.value.filter(item => item !== mac)].slice(0, 5)
   setTimeout(() => {
     loadWolHistory().catch(() => {})

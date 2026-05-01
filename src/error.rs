@@ -1,12 +1,5 @@
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
-};
-use serde::Serialize;
 use thiserror::Error;
 
-/// Application-wide error type
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Authentication failed: {0}")]
@@ -15,17 +8,14 @@ pub enum AppError {
     #[error("Not authenticated")]
     Unauthorized,
 
-    #[error("Forbidden: {0}")]
-    Forbidden(String),
-
     #[error("Not found: {0}")]
     NotFound(String),
 
     #[error("Bad request: {0}")]
     BadRequest(String),
 
-    #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    #[error("Persistence error: {0}")]
+    Persistence(String),
 
     #[error("Internal error: {0}")]
     Internal(String),
@@ -41,9 +31,6 @@ pub enum AppError {
 
     #[error("Video error: {0}")]
     VideoError(String),
-
-    #[error("Video device lost [{device}]: {reason}")]
-    VideoDeviceLost { device: String, reason: String },
 
     /// No input signal while opening capture; `kind` is `SignalStatus` as string (`from_str`).
     #[error("Capture has no valid signal: {kind}")]
@@ -66,37 +53,10 @@ pub enum AppError {
     ServiceUnavailable(String),
 }
 
-/// Error response body (unified success format)
-#[derive(Serialize)]
-pub struct ErrorResponse {
-    pub success: bool,
-    pub message: String,
-}
-
-impl AppError {
-    fn status_code(&self) -> StatusCode {
-        // Always return 200 OK - success/failure is indicated by the success field
-        StatusCode::OK
-    }
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let status = self.status_code();
-        let body = ErrorResponse {
-            success: false,
-            message: self.to_string(),
-        };
-
-        tracing::error!(
-            error_type = std::any::type_name_of_val(&self),
-            error_message = %body.message,
-            "Request failed"
-        );
-
-        (status, Json(body)).into_response()
-    }
-}
-
-/// Result type alias for handlers
 pub type Result<T> = std::result::Result<T, AppError>;
+
+impl From<sqlx::Error> for AppError {
+    fn from(err: sqlx::Error) -> Self {
+        AppError::Persistence(err.to_string())
+    }
+}

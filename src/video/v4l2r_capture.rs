@@ -129,9 +129,7 @@ impl V4l2rCaptureStream {
                     subdev_dv_mode = Some(mode);
                 }
                 other => {
-                    let status = other
-                        .as_status()
-                        .unwrap_or(SignalStatus::NoSignal);
+                    let status = other.as_status().unwrap_or(SignalStatus::NoSignal);
                     debug!(
                         "Subdev {:?} reports no signal ({:?}) — refusing STREAMON",
                         subdev_path, status
@@ -200,7 +198,10 @@ impl V4l2rCaptureStream {
             }
             (Ok(f), _, _) => f,
             (Err(e), _, _) => {
-                return Err(AppError::VideoError(format!("Failed to get device format: {}", e)));
+                return Err(AppError::VideoError(format!(
+                    "Failed to get device format: {}",
+                    e
+                )));
             }
         };
 
@@ -446,10 +447,7 @@ impl V4l2rCaptureStream {
         let mut poll_fds: Vec<PollFd> = Vec::with_capacity(2);
         poll_fds.push(PollFd::new(
             self.fd.as_fd(),
-            PollFlags::POLLIN
-                | PollFlags::POLLPRI
-                | PollFlags::POLLERR
-                | PollFlags::POLLHUP,
+            PollFlags::POLLIN | PollFlags::POLLPRI | PollFlags::POLLERR | PollFlags::POLLHUP,
         ));
         if let Some(subdev_fd) = self.subdev_fd.as_ref() {
             poll_fds.push(PollFd::new(subdev_fd.as_fd(), PollFlags::POLLPRI));

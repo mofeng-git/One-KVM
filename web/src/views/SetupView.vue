@@ -42,20 +42,17 @@ const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
-// Steps: 1 = Account, 2 = Audio/Video, 3 = HID, 4 = Extensions
 const step = ref(1)
 const totalSteps = 4
 const loading = ref(false)
 const error = ref('')
 const slideDirection = ref<'forward' | 'backward'>('forward')
 
-// Account settings
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
 
-// Form validation states
 const usernameError = ref('')
 const passwordError = ref('')
 const confirmPasswordError = ref('')
@@ -63,17 +60,14 @@ const usernameTouched = ref(false)
 const passwordTouched = ref(false)
 const confirmPasswordTouched = ref(false)
 
-// Video settings
 const videoDevice = ref('')
 const videoFormat = ref('')
 const videoResolution = ref('')
 const videoFps = ref<number | null>(null)
 
-// Audio settings
 const audioDevice = ref('')
 const audioEnabled = ref(true)
 
-// HID settings
 const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
@@ -83,7 +77,6 @@ const otgMsdEnabled = ref(true)
 const otgEndpointBudget = ref<'five' | 'six' | 'unlimited'>('six')
 const otgKeyboardLeds = ref(true)
 
-// Extension settings
 const ttydEnabled = ref(false)
 const ttydAvailable = ref(false)
 
@@ -137,7 +130,6 @@ const devices = ref<DeviceInfo>({
   },
 })
 
-// Password strength calculation
 const passwordStrength = computed(() => {
   const pwd = password.value
   if (!pwd) return 0
@@ -183,7 +175,6 @@ async function refreshDeviceList() {
       ttydAvailable.value = result.extensions.ttyd_available
     }
   } catch {
-    // keep current list
   } finally {
     refreshingDevices.value = false
   }
@@ -195,13 +186,11 @@ const availableFormats = computed(() => {
   return device?.formats || []
 })
 
-// Computed: available resolutions for selected format
 const availableResolutions = computed(() => {
   const format = availableFormats.value.find((f) => f.format === videoFormat.value)
   return format?.resolutions || []
 })
 
-// Computed: available FPS for selected resolution
 const availableFps = computed(() => {
   const [width, height] = (videoResolution.value || '').split('x').map(Number)
   const resolution = availableResolutions.value.find(
@@ -252,10 +241,8 @@ function applyOtgDefaults() {
   otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
 }
 
-// Common baud rates for CH9329
 const baudRates = [9600, 19200, 38400, 57600, 115200]
 
-// Step labels for the indicator
 const stepLabels = computed(() => [
   t('setup.stepAccount'),
   t('setup.stepAudioVideo'),
@@ -263,7 +250,6 @@ const stepLabels = computed(() => [
   t('setup.stepExtensions'),
 ])
 
-// Real-time validation functions
 function validateUsername() {
   usernameTouched.value = true
   if (username.value.length === 0) {
@@ -284,7 +270,6 @@ function validatePassword() {
   } else {
     passwordError.value = ''
   }
-  // Also validate confirm password if it was touched
   if (confirmPasswordTouched.value) {
     validateConfirmPassword()
   }
@@ -335,12 +320,10 @@ watch(videoDevice, (newDevice) => {
   }
 })
 
-// Watch format change to auto-select best resolution
 watch(videoFormat, () => {
   videoResolution.value = ''
   videoFps.value = null
   if (availableResolutions.value.length > 0) {
-    // Prefer 1080p if available, otherwise highest resolution
     const r1080 = availableResolutions.value.find((r) => r.width === 1920 && r.height === 1080)
     const r720 = availableResolutions.value.find((r) => r.width === 1280 && r.height === 720)
     const best = r1080 || r720 || availableResolutions.value[0]
@@ -350,11 +333,9 @@ watch(videoFormat, () => {
   }
 })
 
-// Watch resolution change to auto-select FPS
 watch(videoResolution, () => {
   videoFps.value = null
   if (availableFps.value.length > 0) {
-    // Prefer 30fps if available
     videoFps.value = availableFps.value.includes(30) ? 30 : availableFps.value[0] || null
   }
 })
@@ -389,7 +370,6 @@ onMounted(async () => {
       ch9329Port.value = result.serial[0].path
     }
 
-    // Auto-select first UDC for OTG
     if (result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
     }
@@ -407,7 +387,6 @@ onMounted(async () => {
       ttydAvailable.value = result.extensions.ttyd_available
     }
   } catch {
-    // Use defaults
   }
 
   // Load encoder backends
@@ -415,10 +394,8 @@ onMounted(async () => {
     const codecsResult = await streamApi.getCodecs()
     availableBackends.value = codecsResult.backends || []
   } catch {
-    // Use defaults
   }
 
-  // Add keyboard navigation
   document.addEventListener('keydown', handleKeyDown)
 })
 
@@ -427,7 +404,6 @@ onUnmounted(() => {
 })
 
 function handleKeyDown(e: KeyboardEvent) {
-  // Don't interfere with input fields
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
     return
   }
@@ -446,7 +422,6 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 function validateStep1(): boolean {
-  // Trigger validation for all fields
   validateUsername()
   validatePassword()
   validateConfirmPassword()
@@ -521,7 +496,6 @@ async function handleSetup() {
 
   loading.value = true
 
-  // Parse resolution
   const [width, height] = (videoResolution.value || '').split('x').map(Number)
 
   const setupData: Parameters<typeof authStore.setup>[0] = {
@@ -529,7 +503,6 @@ async function handleSetup() {
     password: password.value,
   }
 
-  // Video settings
   if (videoDevice.value) {
     setupData.video_device = videoDevice.value
   }
@@ -544,7 +517,6 @@ async function handleSetup() {
     setupData.video_fps = toConfigFps(videoFps.value)
   }
 
-  // HID settings
   setupData.hid_backend = hidBackend.value
   if (hidBackend.value === 'ch9329') {
     setupData.hid_ch9329_port = ch9329Port.value
@@ -563,18 +535,15 @@ async function handleSetup() {
     setupData.encoder_backend = encoderBackend.value
   }
 
-  // Audio settings
   if (audioDevice.value && audioDevice.value !== '__none__') {
     setupData.audio_device = audioDevice.value
   }
 
-  // Extension settings
   setupData.ttyd_enabled = ttydEnabled.value
 
   const success = await authStore.setup(setupData)
 
   if (success) {
-    // Auto login after setup
     await authStore.login(username.value, password.value)
     router.push('/')
   } else {
@@ -584,7 +553,6 @@ async function handleSetup() {
   loading.value = false
 }
 
-// Step icon component helper
 const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 

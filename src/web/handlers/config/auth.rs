@@ -14,7 +14,6 @@ pub async fn get_auth_config(State(state): State<Arc<AppState>>) -> Json<AuthCon
     Json(auth)
 }
 
-/// Update auth configuration
 pub async fn update_auth_config(
     State(state): State<Arc<AppState>>,
     Json(update): Json<AuthConfigUpdate>,

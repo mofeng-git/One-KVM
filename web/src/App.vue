@@ -8,7 +8,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
 
-// Check for dark mode preference
 function initTheme() {
   const stored = localStorage.getItem('theme')
   if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -16,11 +15,9 @@ function initTheme() {
   }
 }
 
-// Initialize on mount
 onMounted(async () => {
   initTheme()
 
-  // Check setup status
   try {
     await authStore.checkSetupStatus()
     if (authStore.needsSetup) {
@@ -28,22 +25,17 @@ onMounted(async () => {
       return
     }
   } catch {
-    // Continue anyway
   }
 
-  // Check auth status
   try {
     await authStore.checkAuth()
     if (authStore.isAuthenticated) {
-      // Fetch system info
       await systemStore.fetchSystemInfo()
     }
   } catch {
-    // Not authenticated
   }
 })
 
-// Listen for dark mode changes
 watch(
   () => window.matchMedia('(prefers-color-scheme: dark)').matches,
   (dark) => {

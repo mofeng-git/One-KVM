@@ -1,5 +1,3 @@
-//! Extension management API handlers
-
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -15,12 +13,6 @@ use crate::extensions::{
 };
 use crate::state::AppState;
 
-// ============================================================================
-// Get all extensions status
-// ============================================================================
-
-/// Get status of all extensions
-/// GET /api/extensions
 pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<ExtensionsStatus> {
     let config = state.config.get();
     let mgr = &state.extensions;
@@ -44,12 +36,6 @@ pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<Extensi
     })
 }
 
-// ============================================================================
-// Individual extension status
-// ============================================================================
-
-/// Get status of a single extension
-/// GET /api/extensions/:id
 pub async fn get_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -66,12 +52,6 @@ pub async fn get_extension(
     }))
 }
 
-// ============================================================================
-// Start/Stop extensions
-// ============================================================================
-
-/// Start an extension
-/// POST /api/extensions/:id/start
 pub async fn start_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -83,20 +63,16 @@ pub async fn start_extension(
     let config = state.config.get();
     let mgr = &state.extensions;
 
-    // Start the extension
     mgr.start(ext_id, &config.extensions)
         .await
         .map_err(AppError::Internal)?;
 
-    // Return updated status
     Ok(Json(ExtensionInfo {
         available: mgr.check_available(ext_id),
         status: mgr.status(ext_id).await,
     }))
 }
 
-/// Stop an extension
-/// POST /api/extensions/:id/stop
 pub async fn stop_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -107,29 +83,20 @@ pub async fn stop_extension(
 
     let mgr = &state.extensions;
 
-    // Stop the extension
     mgr.stop(ext_id).await.map_err(AppError::Internal)?;
 
-    // Return updated status
     Ok(Json(ExtensionInfo {
         available: mgr.check_available(ext_id),
         status: mgr.status(ext_id).await,
     }))
 }
 
-// ============================================================================
-// Extension logs
-// ============================================================================
-
-/// Query parameters for logs
 #[derive(Deserialize, Default)]
 pub struct LogsQuery {
     /// Number of lines to return (default: 100, max: 500)
     pub lines: Option<usize>,
 }
 
-/// Get extension logs
-/// GET /api/extensions/:id/logs
 pub async fn get_extension_logs(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -145,20 +112,13 @@ pub async fn get_extension_logs(
     Ok(Json(ExtensionLogs { id: ext_id, logs }))
 }
 
-// ============================================================================
-// Update extension config
-// ============================================================================
-
-/// Update ttyd config
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct TtydConfigUpdate {
     pub enabled: Option<bool>,
-    pub port: Option<u16>,
     pub shell: Option<String>,
 }
 
-/// Update gostc config
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct GostcConfigUpdate {
@@ -168,7 +128,6 @@ pub struct GostcConfigUpdate {
     pub tls: Option<bool>,
 }
 
-/// Update easytier config
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct EasytierConfigUpdate {
@@ -179,25 +138,18 @@ pub struct EasytierConfigUpdate {
     pub virtual_ip: Option<String>,
 }
 
-/// Update ttyd configuration
-/// PATCH /api/extensions/ttyd/config
 pub async fn update_ttyd_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<TtydConfigUpdate>,
 ) -> Result<Json<TtydConfig>> {
-    // Get current config
     let was_enabled = state.config.get().extensions.ttyd.enabled;
 
-    // Update config
     state
         .config
         .update(|config| {
             let ttyd = &mut config.extensions.ttyd;
             if let Some(enabled) = req.enabled {
                 ttyd.enabled = enabled;
-            }
-            if let Some(port) = req.port {
-                ttyd.port = port;
             }
             if let Some(ref shell) = req.shell {
                 ttyd.shell = shell.clone();
@@ -208,12 +160,9 @@ pub async fn update_ttyd_config(
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.ttyd.enabled;
 
-    // Handle enable/disable state change
     if was_enabled && !is_enabled {
-        // Was running, now disabled - stop it
         state.extensions.stop(ExtensionId::Ttyd).await.ok();
     } else if !was_enabled && is_enabled {
-        // Was disabled, now enabled - start it
         if state.extensions.check_available(ExtensionId::Ttyd) {
             state
                 .extensions
@@ -226,8 +175,6 @@ pub async fn update_ttyd_config(
     Ok(Json(new_config.extensions.ttyd.clone()))
 }
 
-/// Update gostc configuration
-/// PATCH /api/extensions/gostc/config
 pub async fn update_gostc_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<GostcConfigUpdate>,
@@ -276,8 +223,6 @@ pub async fn update_gostc_config(
     Ok(Json(new_config.extensions.gostc.clone()))
 }
 
-/// Update easytier configuration
-/// PATCH /api/extensions/easytier/config
 pub async fn update_easytier_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EasytierConfigUpdate>,

@@ -23,11 +23,8 @@ const currentChar = ref(0)
 const totalChars = ref(0)
 const abortController = ref<AbortController | null>(null)
 
-// Typing speed in milliseconds between characters
-// Configurable delay to prevent target system from missing keystrokes
 const typingDelay = ref(10)
 
-// Text analysis for warning display
 const textAnalysis = computed(() => {
   if (!text.value) return null
   return analyzeText(text.value)
@@ -38,14 +35,12 @@ const hasUntypableChars = computed(() => {
 })
 
 onMounted(() => {
-  // Auto focus the textarea
   setTimeout(() => {
     textareaRef.value?.focus()
   }, 100)
 })
 
 onUnmounted(() => {
-  // Cancel any ongoing paste operation when component is unmounted
   cancelPaste()
 })
 
@@ -65,7 +60,6 @@ async function typeChar(char: string, signal: AbortSignal): Promise<boolean> {
 
   const mapping = charToKey(char)
   if (!mapping) {
-    // Skip untypable characters
     return true
   }
 
@@ -73,10 +67,8 @@ async function typeChar(char: string, signal: AbortSignal): Promise<boolean> {
   const modifier = shift ? 0x02 : 0
 
   try {
-    // Send keydown
     await hidApi.keyboard('down', key, modifier)
 
-    // Small delay between down and up to ensure key is registered
     await sleep(5)
 
     if (signal.aborted) {
@@ -85,20 +77,16 @@ async function typeChar(char: string, signal: AbortSignal): Promise<boolean> {
       return false
     }
 
-    // Send keyup
     await hidApi.keyboard('up', key, modifier)
 
-    // Additional small delay after keyup to ensure it's processed
     await sleep(2)
 
     return true
   } catch (error) {
     console.error('[Paste] Failed to type character:', char, error)
-    // Try to release the key even on error
     try {
       await hidApi.keyboard('up', key, modifier)
     } catch {
-      // Ignore cleanup errors
     }
     return false
   }
@@ -133,20 +121,17 @@ async function handlePaste() {
       currentChar.value = charIndex
       progress.value = Math.round((charIndex / totalLength) * 100)
 
-      // Handle CRLF: skip \r if followed by \n
       if (char === '\r' && charIndex < totalLength && chars[charIndex] === '\n') {
         continue
       }
 
       await typeChar(char, signal)
 
-      // Delay between characters (configurable)
       if (typingDelay.value > 0 && charIndex < totalLength) {
         await sleep(typingDelay.value)
       }
     }
 
-    // Success - close the modal after a brief delay
     if (!signal.aborted) {
       await sleep(200)
       text.value = ''
@@ -155,11 +140,9 @@ async function handlePaste() {
   } catch (error) {
     console.error('[Paste] Error during paste operation:', error)
   } finally {
-    // Reset HID to ensure no keys are stuck
     try {
       await hidApi.reset()
     } catch {
-      // Ignore reset errors
     }
     isPasting.value = false
     progress.value = 0
@@ -180,14 +163,12 @@ function cancelPaste() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  // Ctrl/Cmd + Enter to paste
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
     e.preventDefault()
     if (!isPasting.value) {
       handlePaste()
     }
   }
-  // Escape to cancel or close
   if (e.key === 'Escape') {
     e.preventDefault()
     if (isPasting.value) {
@@ -196,7 +177,6 @@ function handleKeydown(e: KeyboardEvent) {
       emit('close')
     }
   }
-  // Stop propagation to prevent HID interference
   e.stopPropagation()
 }
 </script>

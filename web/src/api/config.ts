@@ -19,6 +19,7 @@ import type {
   MsdConfigUpdate,
   AtxConfig,
   AtxConfigUpdate,
+  AtxDevices,
   AudioConfig,
   AudioConfigUpdate,
   ExtensionsStatus,
@@ -36,7 +37,6 @@ import type {
 
 import { request } from './request'
 
-// ===== 全局配置 API =====
 export const configApi = {
   /**
    * 获取完整配置
@@ -44,7 +44,6 @@ export const configApi = {
   getAll: () => request<AppConfig>('/config'),
 }
 
-// ===== Auth 配置 API =====
 export const authConfigApi = {
   /**
    * 获取认证配置
@@ -62,7 +61,6 @@ export const authConfigApi = {
     }),
 }
 
-// ===== Video 配置 API =====
 export const videoConfigApi = {
   /**
    * 获取视频配置
@@ -80,7 +78,6 @@ export const videoConfigApi = {
     }),
 }
 
-// ===== Stream 配置 API =====
 export const streamConfigApi = {
   /**
    * 获取流配置
@@ -98,7 +95,6 @@ export const streamConfigApi = {
     }),
 }
 
-// ===== HID 配置 API =====
 export const hidConfigApi = {
   /**
    * 获取 HID 配置
@@ -116,7 +112,6 @@ export const hidConfigApi = {
     }),
 }
 
-// ===== MSD 配置 API =====
 export const msdConfigApi = {
   /**
    * 获取 MSD 配置
@@ -133,9 +128,6 @@ export const msdConfigApi = {
       body: JSON.stringify(config),
     }),
 }
-
-// ===== ATX 配置 API =====
-import type { AtxDevices } from '@/types/generated'
 
 export interface WolHistoryEntry {
   mac_address: string
@@ -185,7 +177,6 @@ export const atxConfigApi = {
     request<WolHistoryResponse>(`/atx/wol/history?limit=${Math.max(1, Math.min(50, limit))}`),
 }
 
-// ===== Audio 配置 API =====
 export const audioConfigApi = {
   /**
    * 获取音频配置
@@ -203,7 +194,6 @@ export const audioConfigApi = {
     }),
 }
 
-// ===== Extensions API =====
 export const extensionsApi = {
   /**
    * 获取所有扩展状态
@@ -264,8 +254,6 @@ export const extensionsApi = {
       body: JSON.stringify(config),
     }),
 }
-
-// ===== RustDesk 配置 API =====
 
 /** RustDesk 配置响应 */
 export interface RustDeskConfigResponse {
@@ -342,8 +330,6 @@ export const rustdeskConfigApi = {
     }),
 }
 
-// ===== RTSP 配置 API =====
-
 export type RtspCodec = 'h264' | 'h265'
 
 export interface RtspConfigResponse {
@@ -385,9 +371,6 @@ export const rtspConfigApi = {
   getStatus: () => request<RtspStatusResponse>('/config/rtsp/status'),
 }
 
-// ===== Web 服务器配置 API =====
-// `/config/web` 使用 `WebConfigResponse` / `WebConfigUpdate`（由 typeshare 自 Rust 生成）。
-
 /** REST `/config/web` 响应（`WebConfigResponse` 别名，兼容旧命名） */
 export type WebConfig = WebConfigResponse
 
@@ -408,8 +391,6 @@ export const webConfigApi = {
       body: JSON.stringify(config),
     }),
 }
-
-// ===== 系统控制 API =====
 
 export const systemApi = {
   /**

@@ -168,5 +168,4 @@ mod tests {
         assert!(files.contains(&"core.img"));
         assert!(files.contains(&"ventoy.disk.img"));
     }
-
 }

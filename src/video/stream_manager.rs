@@ -39,8 +39,8 @@ use crate::stream::MjpegStreamHandler;
 use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::is_csi_hdmi_bridge;
-use crate::video::streamer::{Streamer, StreamerStats, StreamerState};
-use crate::webrtc::WebRtcStreamer;
+use crate::video::streamer::{Streamer, StreamerState, StreamerStats};
+use crate::video::traits::VideoOutput;
 
 /// Video stream manager configuration
 #[derive(Debug, Clone)]
@@ -95,8 +95,8 @@ pub struct VideoStreamManager {
     mode: RwLock<StreamMode>,
     /// MJPEG streamer (handles video capture and MJPEG distribution)
     streamer: Arc<Streamer>,
-    /// WebRTC streamer (unified WebRTC manager with multi-codec support)
-    webrtc_streamer: Arc<WebRtcStreamer>,
+    /// WebRTC output (unified WebRTC manager with multi-codec support)
+    webrtc_streamer: Arc<dyn VideoOutput>,
     /// Event bus for notifications
     events: RwLock<Option<Arc<EventBus>>>,
     /// Configuration store
@@ -111,7 +111,7 @@ impl VideoStreamManager {
     /// Create a new video stream manager with WebRtcStreamer
     pub fn with_webrtc_streamer(
         streamer: Arc<Streamer>,
-        webrtc_streamer: Arc<WebRtcStreamer>,
+        webrtc_streamer: Arc<dyn VideoOutput>,
     ) -> Arc<Self> {
         Arc::new(Self {
             mode: RwLock::new(StreamMode::Mjpeg),
@@ -173,11 +173,6 @@ impl VideoStreamManager {
     /// Get the underlying streamer (for MJPEG mode)
     pub fn streamer(&self) -> Arc<Streamer> {
         self.streamer.clone()
-    }
-
-    /// Get the WebRTC streamer (unified interface with multi-codec support)
-    pub fn webrtc_streamer(&self) -> Arc<WebRtcStreamer> {
-        self.webrtc_streamer.clone()
     }
 
     /// Get the MJPEG stream handler
@@ -810,6 +805,16 @@ impl VideoStreamManager {
         &self,
     ) -> Option<crate::video::shared_video_pipeline::SharedVideoPipelineConfig> {
         self.webrtc_streamer.get_pipeline_config().await
+    }
+
+    /// Get current video codec type
+    pub async fn current_video_codec(&self) -> crate::video::encoder::VideoCodecType {
+        self.webrtc_streamer.current_video_codec().await
+    }
+
+    /// Check if hardware encoding is in use
+    pub async fn is_hardware_encoding(&self) -> bool {
+        self.webrtc_streamer.is_hardware_encoding().await
     }
 
     /// Set video codec for the shared video pipeline

@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-/// Shared canonical keyboard key identifiers used across frontend and backend.
-///
-/// The enum names intentionally mirror `KeyboardEvent.code` style values so the
-/// browser, virtual keyboard, and HID backend can all speak the same language.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CanonicalKey {
@@ -128,11 +124,6 @@ pub enum CanonicalKey {
 }
 
 impl CanonicalKey {
-    /// Convert the canonical key to a stable wire code.
-    ///
-    /// The wire code intentionally matches the USB HID usage for keyboard page
-    /// keys so existing low-level behavior stays intact while the semantic type
-    /// becomes explicit.
     pub const fn to_hid_usage(self) -> u8 {
         match self {
             Self::KeyA => 0x04,
@@ -255,7 +246,6 @@ impl CanonicalKey {
         }
     }
 
-    /// Convert a wire code / USB HID usage to its canonical key.
     pub const fn from_hid_usage(usage: u8) -> Option<Self> {
         match usage {
             0x04 => Some(Self::KeyA),

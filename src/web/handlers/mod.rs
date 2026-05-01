@@ -14,15 +14,12 @@ use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
+use crate::utils::{hostname_uname, list_dir_names, read_trimmed};
 use crate::video::codec_constraints::codec_to_id;
 use crate::video::encoder::{
     build_hardware_self_check_runtime_error, run_hardware_self_check, BitratePreset,
     VideoEncoderSelfCheckResponse,
 };
-
-// ============================================================================
-// Health & Info
-// ============================================================================
 
 /// Health check response
 #[derive(Serialize)]
@@ -169,20 +166,13 @@ fn get_device_info() -> DeviceInfo {
     let mem_info = get_meminfo();
 
     DeviceInfo {
-        hostname: get_hostname(),
+        hostname: hostname_uname(),
         cpu_model: get_cpu_model(),
         cpu_usage: get_cpu_usage(),
         memory_total: mem_info.total,
         memory_used: mem_info.total.saturating_sub(mem_info.available),
         network_addresses: get_network_addresses(),
     }
-}
-
-/// Get system hostname
-fn get_hostname() -> String {
-    nix::unistd::gethostname()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "unknown".to_string())
 }
 
 /// Get CPU model name from /proc/cpuinfo, fallback to device-tree model
@@ -451,10 +441,6 @@ mod tests {
     }
 }
 
-// ============================================================================
-// Authentication
-// ============================================================================
-
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub username: String,
@@ -550,9 +536,9 @@ pub async fn auth_check(
     axum::Extension(session): axum::Extension<Session>,
 ) -> Json<AuthCheckResponse> {
     // Get user info from user_id
-    let username = match state.users.get(&session.user_id).await {
-        Ok(Some(user)) => Some(user.username),
-        _ => Some(session.user_id.clone()), // Fallback to user_id if user not found
+    let username = match state.users.single_user().await {
+        Ok(Some(user)) if user.id == session.user_id => Some(user.username),
+        _ => None,
     };
 
     Json(AuthCheckResponse {
@@ -560,10 +546,6 @@ pub async fn auth_check(
         user: username,
     })
 }
-
-// ============================================================================
-// Setup
-// ============================================================================
 
 #[derive(Serialize)]
 pub struct SetupStatus {
@@ -630,7 +612,10 @@ pub async fn setup_init(
     }
 
     // Create single system user
-    state.users.create(&req.username, &req.password).await?;
+    state
+        .users
+        .create_first_user(&req.username, &req.password)
+        .await?;
 
     // Update config
     state
@@ -780,7 +765,10 @@ pub async fn setup_init(
         let audio_config = crate::audio::AudioControllerConfig {
             enabled: true,
             device: new_config.audio.device.clone(),
-            quality: crate::audio::AudioQuality::from_str(&new_config.audio.quality),
+            quality: new_config
+                .audio
+                .quality
+                .parse::<crate::audio::AudioQuality>()?,
         };
         if let Err(e) = state.audio.update_config(audio_config).await {
             tracing::warn!("Failed to start audio during setup: {}", e);
@@ -803,10 +791,6 @@ pub async fn setup_init(
         message: Some("Setup completed".to_string()),
     }))
 }
-
-// ============================================================================
-// Configuration
-// ============================================================================
 
 #[derive(Deserialize)]
 pub struct UpdateConfigRequest {
@@ -961,10 +945,6 @@ fn merge_json(
         (_, updates) => Ok(updates),
     }
 }
-
-// ============================================================================
-// Devices
-// ============================================================================
 
 #[derive(Serialize)]
 pub struct DeviceList {
@@ -1165,10 +1145,6 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
     })
 }
 
-// ============================================================================
-// Stream Control
-// ============================================================================
-
 use crate::video::streamer::StreamerStats;
 use axum::{
     body::Body,
@@ -1224,11 +1200,7 @@ pub async fn stream_mode_get(State(state): State<Arc<AppState>>) -> Json<StreamM
         StreamMode::Mjpeg => "mjpeg".to_string(),
         StreamMode::WebRTC => {
             use crate::video::encoder::VideoCodecType;
-            let codec = state
-                .stream_manager
-                .webrtc_streamer()
-                .current_video_codec()
-                .await;
+            let codec = state.stream_manager.current_video_codec().await;
             match codec {
                 VideoCodecType::H264 => "h264".to_string(),
                 VideoCodecType::H265 => "h265".to_string(),
@@ -1300,11 +1272,7 @@ pub async fn stream_mode_set(
     // switch_mode_transaction treats this as "no switch needed" since StreamMode
     // is still WebRTC, so we handle codec change + event emission here.
     let current_mode = state.stream_manager.current_mode().await;
-    let prev_codec = state
-        .stream_manager
-        .webrtc_streamer()
-        .current_video_codec()
-        .await;
+    let prev_codec = state.stream_manager.current_video_codec().await;
 
     let codec_changed = video_codec.is_some_and(|c| c != prev_codec);
     let is_codec_only_switch =
@@ -1312,12 +1280,7 @@ pub async fn stream_mode_set(
 
     if let Some(codec) = video_codec {
         info!("Setting WebRTC video codec to {:?}", codec);
-        if let Err(e) = state
-            .stream_manager
-            .webrtc_streamer()
-            .set_video_codec(codec)
-            .await
-        {
+        if let Err(e) = state.stream_manager.set_video_codec(codec).await {
             warn!("Failed to set video codec: {}", e);
         }
     }
@@ -1349,11 +1312,7 @@ pub async fn stream_mode_set(
     let active_mode_str = match state.stream_manager.current_mode().await {
         StreamMode::Mjpeg => "mjpeg".to_string(),
         StreamMode::WebRTC => {
-            let codec = state
-                .stream_manager
-                .webrtc_streamer()
-                .current_video_codec()
-                .await;
+            let codec = state.stream_manager.current_video_codec().await;
             match codec {
                 VideoCodecType::H264 => "h264".to_string(),
                 VideoCodecType::H265 => "h265".to_string(),
@@ -1452,11 +1411,7 @@ pub async fn stream_constraints_get(
     let current_mode = match current_mode {
         StreamMode::Mjpeg => "mjpeg".to_string(),
         StreamMode::WebRTC => {
-            let codec = state
-                .stream_manager
-                .webrtc_streamer()
-                .current_video_codec()
-                .await;
+            let codec = state.stream_manager.current_video_codec().await;
             match codec {
                 VideoCodecType::H264 => "h264".to_string(),
                 VideoCodecType::H265 => "h265".to_string(),
@@ -1509,7 +1464,6 @@ pub async fn stream_set_bitrate(
     // Apply to WebRTC streamer (real-time adjustment)
     if let Err(e) = state
         .stream_manager
-        .webrtc_streamer()
         .set_bitrate_preset(req.bitrate_preset)
         .await
     {
@@ -1850,10 +1804,6 @@ fn create_mjpeg_part(jpeg_data: &[u8]) -> bytes::Bytes {
     buf.freeze()
 }
 
-// ============================================================================
-// WebRTC
-// ============================================================================
-
 use crate::webrtc::signaling::{AnswerResponse, IceCandidateRequest, OfferRequest};
 
 /// Create WebRTC session
@@ -1872,11 +1822,7 @@ pub async fn webrtc_create_session(
         ));
     }
 
-    let session_id = state
-        .stream_manager
-        .webrtc_streamer()
-        .create_session()
-        .await?;
+    let session_id = state.webrtc.create_session().await?;
     Ok(Json(CreateSessionResponse { session_id }))
 }
 
@@ -1894,7 +1840,7 @@ pub async fn webrtc_offer(
 
     // Backward compatibility: `client_id` is treated as an existing session_id hint.
     // New clients should not pass it; each offer creates a fresh session.
-    let webrtc = state.stream_manager.webrtc_streamer();
+    let webrtc = &state.webrtc;
     let session_id = if let Some(client_id) = &req.client_id {
         // Reuse only when it matches an active session ID.
         if webrtc.get_session(client_id).await.is_some() {
@@ -1923,8 +1869,7 @@ pub async fn webrtc_ice_candidate(
     Json(req): Json<IceCandidateRequest>,
 ) -> Result<Json<LoginResponse>> {
     state
-        .stream_manager
-        .webrtc_streamer()
+        .webrtc
         .add_ice_candidate(&req.session_id, req.candidate)
         .await?;
 
@@ -1948,7 +1893,7 @@ pub struct WebRtcStatus {
 }
 
 pub async fn webrtc_status(State(state): State<Arc<AppState>>) -> Json<WebRtcStatus> {
-    let sessions = state.stream_manager.webrtc_streamer().list_sessions().await;
+    let sessions = state.webrtc.list_sessions().await;
     Json(WebRtcStatus {
         session_count: sessions.len(),
         sessions: sessions
@@ -1971,11 +1916,7 @@ pub async fn webrtc_close_session(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CloseSessionRequest>,
 ) -> Result<Json<LoginResponse>> {
-    state
-        .stream_manager
-        .webrtc_streamer()
-        .close_session(&req.session_id)
-        .await?;
+    state.webrtc.close_session(&req.session_id).await?;
 
     Ok(Json(LoginResponse {
         success: true,
@@ -2066,10 +2007,6 @@ pub async fn webrtc_ice_servers(State(state): State<Arc<AppState>>) -> Json<IceS
     })
 }
 
-// ============================================================================
-// HID Control
-// ============================================================================
-
 /// HID status response
 #[derive(Serialize)]
 pub struct HidStatus {
@@ -2142,24 +2079,6 @@ fn push_otg_check(
         hint: hint.map(|v| v.into()),
         path: path.map(|v| v.into()),
     });
-}
-
-fn list_dir_names(path: &std::path::Path) -> Vec<String> {
-    let mut names = std::fs::read_dir(path)
-        .ok()
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect::<Vec<_>>();
-    names.sort();
-    names
-}
-
-fn read_trimmed(path: &std::path::Path) -> Option<String> {
-    std::fs::read_to_string(path)
-        .ok()
-        .map(|value| value.trim().to_string())
 }
 
 fn proc_modules_has(module_name: &str) -> bool {
@@ -2870,10 +2789,6 @@ pub async fn hid_reset(State(state): State<Arc<AppState>>) -> Result<Json<LoginR
     }))
 }
 
-// ============================================================================
-// MSD (Mass Storage Device)
-// ============================================================================
-
 use crate::msd::{
     DownloadProgress, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest, ImageInfo,
     ImageManager, MsdConnectRequest, MsdMode, MsdState, VentoyDrive,
@@ -3073,10 +2988,6 @@ pub async fn msd_disconnect(State(state): State<Arc<AppState>>) -> Result<Json<L
     }))
 }
 
-// ============================================================================
-// MSD Virtual Drive
-// ============================================================================
-
 /// Get drive info
 pub async fn msd_drive_info(State(state): State<Arc<AppState>>) -> Result<Json<DriveInfo>> {
     let config = state.config.get();
@@ -3261,10 +3172,6 @@ pub async fn msd_drive_mkdir(
     }))
 }
 
-// ============================================================================
-// ATX (Power Control)
-// ============================================================================
-
 use crate::atx::{AtxState, PowerStatus};
 
 const WOL_HISTORY_MAX_ENTRIES: i64 = 50;
@@ -3421,7 +3328,7 @@ async fn record_wol_history(state: &Arc<AppState>, mac_address: &str) -> Result<
         "#,
     )
     .bind(mac_address)
-    .execute(state.config.pool())
+    .execute(state.db.pool())
     .await?;
 
     sqlx::query(
@@ -3435,7 +3342,7 @@ async fn record_wol_history(state: &Arc<AppState>, mac_address: &str) -> Result<
         "#,
     )
     .bind(WOL_HISTORY_MAX_ENTRIES)
-    .execute(state.config.pool())
+    .execute(state.db.pool())
     .await?;
 
     Ok(())
@@ -3488,7 +3395,7 @@ pub async fn atx_wol_history(
         "#,
     )
     .bind(limit as i64)
-    .fetch_all(state.config.pool())
+    .fetch_all(state.db.pool())
     .await?;
 
     let history = rows
@@ -3501,10 +3408,6 @@ pub async fn atx_wol_history(
 
     Ok(Json(WolHistoryResponse { history }))
 }
-
-// ============================================================================
-// Audio Control
-// ============================================================================
 
 use crate::audio::{AudioQuality, AudioStatus};
 
@@ -3554,7 +3457,7 @@ pub async fn set_audio_quality(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SetAudioQualityRequest>,
 ) -> Result<Json<LoginResponse>> {
-    let quality = AudioQuality::from_str(&req.quality);
+    let quality = req.quality.parse::<AudioQuality>()?;
     state.audio.set_quality(quality).await?;
     Ok(Json(LoginResponse {
         success: true,
@@ -3588,10 +3491,6 @@ pub async fn list_audio_devices(
     Ok(Json(devices))
 }
 
-// ============================================================================
-// Password Management
-// ============================================================================
-
 /// Change password request
 #[derive(Deserialize)]
 pub struct ChangePasswordRequest {
@@ -3607,9 +3506,13 @@ pub async fn change_password(
 ) -> Result<Json<LoginResponse>> {
     let current_user = state
         .users
-        .get(&session.user_id)
+        .single_user()
         .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
+
+    if current_user.id != session.user_id {
+        return Err(AppError::AuthError("Invalid session".to_string()));
+    }
 
     if req.new_password.len() < 4 {
         return Err(AppError::BadRequest(
@@ -3654,9 +3557,13 @@ pub async fn change_username(
 ) -> Result<Json<LoginResponse>> {
     let current_user = state
         .users
-        .get(&session.user_id)
+        .single_user()
         .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
+
+    if current_user.id != session.user_id {
+        return Err(AppError::AuthError("Invalid session".to_string()));
+    }
 
     if req.username.len() < 2 {
         return Err(AppError::BadRequest(
@@ -3687,10 +3594,6 @@ pub async fn change_username(
         message: Some("Username changed successfully".to_string()),
     }))
 }
-
-// ============================================================================
-// System Control
-// ============================================================================
 
 /// Restart the application
 pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginResponse> {
@@ -3737,10 +3640,6 @@ pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginRes
         message: Some("Restarting...".to_string()),
     })
 }
-
-// ============================================================================
-// Online Update
-// ============================================================================
 
 #[derive(Deserialize)]
 pub struct UpdateOverviewQuery {

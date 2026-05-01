@@ -85,7 +85,6 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
   }
 
   // Fallback: for local connections, use no ICE servers (host candidates only)
-  // For remote connections, use Google STUN as fallback
   const isLocalConnection = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
      window.location.hostname === '127.0.0.1' ||
@@ -105,7 +104,6 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
   ]
 }
 
-// Shared instance state
 let peerConnection: RTCPeerConnection | null = null
 let dataChannel: RTCDataChannel | null = null
 let sessionId: string | null = null
@@ -146,7 +144,6 @@ const error = ref<string | null>(null)
 const dataChannelReady = ref(false)
 const connectStage = ref<WebRTCConnectStage>('idle')
 
-// Create RTCPeerConnection with configuration
 function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   const config: RTCConfiguration = {
     iceServers,
@@ -155,7 +152,6 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
 
   const pc = new RTCPeerConnection(config)
 
-  // Handle connection state changes
   pc.onconnectionstatechange = () => {
     switch (pc.connectionState) {
       case 'connecting':
@@ -211,7 +207,6 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
     }
   }
 
-  // Handle incoming tracks
   pc.ontrack = (event) => {
     const track = event.track
 
@@ -222,7 +217,6 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
     }
   }
 
-  // Handle data channel from server
   pc.ondatachannel = (event) => {
     setupDataChannel(event.channel)
   }
@@ -230,7 +224,6 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   return pc
 }
 
-// Setup data channel event handlers
 function setupDataChannel(channel: RTCDataChannel) {
   dataChannel = channel
 
@@ -243,15 +236,12 @@ function setupDataChannel(channel: RTCDataChannel) {
   }
 
   channel.onerror = () => {
-    // Data channel errors handled silently
   }
 
   channel.onmessage = () => {
-    // Handle incoming messages from server (e.g., LED status)
   }
 }
 
-// Create data channel for HID events
 function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
   const channel = pc.createDataChannel('hid', {
     ordered: true,
@@ -307,7 +297,6 @@ async function handleRemoteIceComplete(data: WebRTCIceCompleteEvent) {
   try {
     await peerConnection.addIceCandidate(null)
   } catch {
-    // End-of-candidates failures are non-fatal
   }
 }
 
@@ -348,7 +337,6 @@ async function flushPendingRemoteIce() {
     try {
       await peerConnection.addIceCandidate(null)
     } catch {
-      // Ignore end-of-candidates errors
     }
   }
 }
@@ -363,14 +351,12 @@ function startStatsCollection() {
     try {
       const report = await peerConnection.getStats()
 
-      // Collect candidate info
       const candidates: Record<string, { type: IceCandidateType; protocol: string }> = {}
       let selectedPairLocalId = ''
       let selectedPairRemoteId = ''
       let foundActivePair = false
 
       report.forEach((stat) => {
-        // Collect all candidates
         if (stat.type === 'local-candidate' || stat.type === 'remote-candidate') {
           candidates[stat.id] = {
             type: (stat.candidateType as IceCandidateType) || 'unknown',
@@ -378,10 +364,7 @@ function startStatsCollection() {
           }
         }
 
-        // Find the active candidate pair
-        // Priority: nominated > succeeded (for Chrome/Firefox compatibility)
         if (stat.type === 'candidate-pair') {
-          // Check if this is the nominated/selected pair
           const isActive = stat.nominated === true ||
                           (stat.state === 'succeeded' && stat.selected === true) ||
                           (stat.state === 'in-progress' && !foundActivePair)
@@ -425,8 +408,6 @@ function startStatsCollection() {
         stats.value.remoteCandidateType = remoteCandidate.type
       }
 
-      // Check if using TURN relay
-      // TURN relay is when either local or remote candidate is 'relay' type
       stats.value.isRelay = stats.value.localCandidateType === 'relay' || stats.value.remoteCandidateType === 'relay'
     } catch {
       // Stats collection errors are non-fatal
@@ -473,7 +454,6 @@ async function connect(): Promise<boolean> {
   connectInFlight = (async () => {
     registerWebSocketHandlers()
 
-    // Prevent concurrent connection attempts
     if (isConnecting) {
       return state.value === 'connected'
     }
@@ -484,7 +464,6 @@ async function connect(): Promise<boolean> {
 
     isConnecting = true
 
-    // Clean up any existing connection first
     if (peerConnection || sessionId) {
       await disconnect()
     }
@@ -505,20 +484,16 @@ async function connect(): Promise<boolean> {
       peerConnection = createPeerConnection(iceServers)
       connectStage.value = 'creating_data_channel'
 
-      // Create data channel before offer (for HID)
       createDataChannel(peerConnection)
 
-      // Add transceiver for receiving video
       peerConnection.addTransceiver('video', { direction: 'recvonly' })
       peerConnection.addTransceiver('audio', { direction: 'recvonly' })
       connectStage.value = 'creating_offer'
 
-      // Create offer
       const offer = await peerConnection.createOffer()
       await peerConnection.setLocalDescription(offer)
       connectStage.value = 'waiting_server_answer'
 
-      // Send offer to server and get answer
       // Do not pass client_id here: each connect creates a fresh session.
       const response = await webrtcApi.offer(offer.sdp!)
       sessionId = response.session_id
@@ -526,7 +501,6 @@ async function connect(): Promise<boolean> {
       // Send any ICE candidates that were queued while waiting for sessionId
       await flushPendingIceCandidates()
 
-      // Set remote description (answer)
       const answer: RTCSessionDescriptionInit = {
         type: 'answer',
         sdp: response.sdp,
@@ -611,7 +585,6 @@ async function disconnect() {
     try {
       await webrtcApi.close(oldSessionId)
     } catch {
-      // Ignore close errors
     }
   }
 
@@ -671,13 +644,11 @@ function sendMouse(event: HidMouseEvent): boolean {
   }
 }
 
-// Get MediaStream for video element (cached to avoid recreating)
 function getMediaStream(): MediaStream | null {
   if (!videoTrack.value && !audioTrack.value) {
     return null
   }
 
-  // Reuse cached stream if tracks match
   if (cachedMediaStream) {
     const currentVideoTracks = cachedMediaStream.getVideoTracks()
     const currentAudioTracks = cachedMediaStream.getAudioTracks()
@@ -693,19 +664,15 @@ function getMediaStream(): MediaStream | null {
       return cachedMediaStream
     }
 
-    // Tracks changed, update the cached stream
-    // Remove old tracks
     currentVideoTracks.forEach(t => cachedMediaStream!.removeTrack(t))
     currentAudioTracks.forEach(t => cachedMediaStream!.removeTrack(t))
 
-    // Add new tracks
     if (videoTrack.value) cachedMediaStream.addTrack(videoTrack.value)
     if (audioTrack.value) cachedMediaStream.addTrack(audioTrack.value)
 
     return cachedMediaStream
   }
 
-  // Create new cached stream
   cachedMediaStream = new MediaStream()
   if (videoTrack.value) {
     cachedMediaStream.addTrack(videoTrack.value)
@@ -716,15 +683,11 @@ function getMediaStream(): MediaStream | null {
   return cachedMediaStream
 }
 
-// Composable export
 export function useWebRTC() {
   onUnmounted(() => {
-    // Don't disconnect on unmount - keep connection alive
-    // Only disconnect when explicitly called
   })
 
   return {
-    // State
     state: state as Ref<WebRTCState>,
     videoTrack,
     audioTrack,
@@ -734,14 +697,12 @@ export function useWebRTC() {
     connectStage,
     sessionId: computed(() => sessionId),
 
-    // Methods
     connect,
     disconnect,
     sendKeyboard,
     sendMouse,
     getMediaStream,
 
-    // Computed
     isConnected: computed(() => state.value === 'connected'),
     isConnecting: computed(() => state.value === 'connecting'),
     hasVideo: computed(() => videoTrack.value !== null),
@@ -749,7 +710,6 @@ export function useWebRTC() {
   }
 }
 
-// Cleanup on page unload
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     disconnect()

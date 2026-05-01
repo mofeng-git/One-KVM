@@ -1,9 +1,3 @@
-//! OTG Service - unified gadget lifecycle management
-//!
-//! This module provides centralized management for USB OTG gadget functions.
-//! It is the single owner of the USB gadget desired state and reconciles
-//! ConfigFS to match that state.
-
 use std::path::PathBuf;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
@@ -13,7 +7,6 @@ use super::msd::MsdFunction;
 use crate::config::{HidBackend, HidConfig, MsdConfig, OtgDescriptorConfig, OtgHidFunctions};
 use crate::error::{AppError, Result};
 
-/// HID device paths
 #[derive(Debug, Clone, Default)]
 pub struct HidDevicePaths {
     pub keyboard: Option<PathBuf>,
@@ -26,26 +19,20 @@ pub struct HidDevicePaths {
 
 impl HidDevicePaths {
     pub fn existing_paths(&self) -> Vec<PathBuf> {
-        let mut paths = Vec::new();
-        if let Some(ref p) = self.keyboard {
-            paths.push(p.clone());
-        }
-        if let Some(ref p) = self.mouse_relative {
-            paths.push(p.clone());
-        }
-        if let Some(ref p) = self.mouse_absolute {
-            paths.push(p.clone());
-        }
-        if let Some(ref p) = self.consumer {
-            paths.push(p.clone());
-        }
-        paths
+        [
+            &self.keyboard,
+            &self.mouse_relative,
+            &self.mouse_absolute,
+            &self.consumer,
+        ]
+        .into_iter()
+        .filter_map(|p| p.as_ref().cloned())
+        .collect()
     }
 }
 
-/// Desired OTG gadget state derived from configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OtgDesiredState {
+pub(crate) struct OtgDesiredState {
     pub udc: Option<String>,
     pub descriptor: GadgetDescriptor,
     pub hid_functions: Option<OtgHidFunctions>,
@@ -68,7 +55,7 @@ impl Default for OtgDesiredState {
 }
 
 impl OtgDesiredState {
-    pub fn from_config(hid: &HidConfig, msd: &MsdConfig) -> Result<Self> {
+    pub(crate) fn from_config(hid: &HidConfig, msd: &MsdConfig) -> Result<Self> {
         let hid_functions = if hid.backend == HidBackend::Otg {
             let functions = hid.constrained_otg_functions();
             Some(functions)
@@ -96,45 +83,28 @@ impl OtgDesiredState {
     }
 }
 
-/// OTG Service state
 #[derive(Debug, Clone, Default)]
-pub struct OtgServiceState {
-    /// Whether the gadget is created and bound
+struct OtgServiceState {
     pub gadget_active: bool,
-    /// Whether HID functions are enabled
     pub hid_enabled: bool,
-    /// Whether MSD function is enabled
     pub msd_enabled: bool,
-    /// Bound UDC name
     pub configured_udc: Option<String>,
-    /// HID device paths (set after gadget setup)
     pub hid_paths: Option<HidDevicePaths>,
-    /// HID function selection (set after gadget setup)
     pub hid_functions: Option<OtgHidFunctions>,
-    /// Whether keyboard LED/status feedback is enabled.
     pub keyboard_leds_enabled: bool,
-    /// Applied endpoint budget.
     pub max_endpoints: u8,
-    /// Applied descriptor configuration
     pub descriptor: Option<GadgetDescriptor>,
-    /// Error message if setup failed
     pub error: Option<String>,
 }
 
-/// OTG Service - unified gadget lifecycle management
 pub struct OtgService {
-    /// The underlying gadget manager
     manager: Mutex<Option<OtgGadgetManager>>,
-    /// Current state
     state: RwLock<OtgServiceState>,
-    /// MSD function handle (for runtime LUN configuration)
     msd_function: RwLock<Option<MsdFunction>>,
-    /// Desired OTG state
     desired: RwLock<OtgDesiredState>,
 }
 
 impl OtgService {
-    /// Create a new OTG service
     pub fn new() -> Self {
         Self {
             manager: Mutex::new(None),
@@ -144,55 +114,29 @@ impl OtgService {
         }
     }
 
-    /// Check if OTG is available on this system
     pub fn is_available() -> bool {
         OtgGadgetManager::is_available() && OtgGadgetManager::find_udc().is_some()
     }
 
-    /// Get current service state
-    pub async fn state(&self) -> OtgServiceState {
-        self.state.read().await.clone()
-    }
-
-    /// Check if gadget is active
-    pub async fn is_gadget_active(&self) -> bool {
-        self.state.read().await.gadget_active
-    }
-
-    /// Check if HID is enabled
-    pub async fn is_hid_enabled(&self) -> bool {
-        self.state.read().await.hid_enabled
-    }
-
-    /// Check if MSD is enabled
-    pub async fn is_msd_enabled(&self) -> bool {
-        self.state.read().await.msd_enabled
-    }
-
-    /// Get gadget path (for MSD LUN configuration)
     pub async fn gadget_path(&self) -> Option<PathBuf> {
         let manager = self.manager.lock().await;
         manager.as_ref().map(|m| m.gadget_path().clone())
     }
 
-    /// Get HID device paths
     pub async fn hid_device_paths(&self) -> Option<HidDevicePaths> {
         self.state.read().await.hid_paths.clone()
     }
 
-    /// Get MSD function handle (for LUN configuration)
     pub async fn msd_function(&self) -> Option<MsdFunction> {
         self.msd_function.read().await.clone()
     }
 
-    /// Apply desired OTG state derived from the current application config.
     pub async fn apply_config(&self, hid: &HidConfig, msd: &MsdConfig) -> Result<()> {
         let desired = OtgDesiredState::from_config(hid, msd)?;
         self.apply_desired_state(desired).await
     }
 
-    /// Apply a fully materialized desired OTG state.
-    pub async fn apply_desired_state(&self, desired: OtgDesiredState) -> Result<()> {
+    pub(crate) async fn apply_desired_state(&self, desired: OtgDesiredState) -> Result<()> {
         {
             let mut current = self.desired.write().await;
             *current = desired;
@@ -392,7 +336,6 @@ impl OtgService {
         Ok(())
     }
 
-    /// Shutdown the OTG service and cleanup all resources
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down OTG service");
 
@@ -425,12 +368,6 @@ impl Default for OtgService {
     }
 }
 
-impl Drop for OtgService {
-    fn drop(&mut self) {
-        debug!("OtgService dropping");
-    }
-}
-
 impl From<&OtgDescriptorConfig> for GadgetDescriptor {
     fn from(config: &OtgDescriptorConfig) -> Self {
         Self {
@@ -452,17 +389,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_service_creation() {
+    fn service_new_and_availability_probe() {
         let _service = OtgService::new();
         let _ = OtgService::is_available();
-    }
-
-    #[tokio::test]
-    async fn test_initial_state() {
-        let service = OtgService::new();
-        let state = service.state().await;
-        assert!(!state.gadget_active);
-        assert!(!state.hid_enabled);
-        assert!(!state.msd_enabled);
     }
 }

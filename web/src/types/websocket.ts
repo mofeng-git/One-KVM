@@ -1,6 +1,3 @@
-// Shared WebSocket types and utilities
-// Used by useWebSocket, useHidWebSocket, and useAudioPlayer
-
 import { ref, type Ref } from 'vue'
 
 /** WebSocket connection state */

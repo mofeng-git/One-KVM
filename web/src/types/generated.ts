@@ -311,43 +311,26 @@ export interface WebConfig {
 	ssl_key_path?: string;
 }
 
-/** ttyd configuration (Web Terminal) */
 export interface TtydConfig {
-	/** Enable auto-start */
 	enabled: boolean;
-	/** Port to listen on */
-	port: number;
-	/** Shell to execute */
 	shell: string;
 }
 
-/** gostc configuration (NAT traversal based on FRP) */
 export interface GostcConfig {
-	/** Enable auto-start */
 	enabled: boolean;
-	/** Server address (hostname or IP) */
 	addr: string;
-	/** Client key from GOSTC management panel */
 	key: string;
-	/** Enable TLS */
 	tls: boolean;
 }
 
-/** EasyTier configuration (P2P VPN) */
 export interface EasytierConfig {
-	/** Enable auto-start */
 	enabled: boolean;
-	/** Network name */
 	network_name: string;
-	/** Network secret/password */
 	network_secret: string;
-	/** Peer node URLs */
 	peer_urls: string[];
-	/** Virtual IP address (optional, auto-assigned if not set) */
 	virtual_ip?: string;
 }
 
-/** Combined extensions configuration */
 export interface ExtensionsConfig {
 	ttyd: TtydConfig;
 	gostc: GostcConfig;
@@ -483,78 +466,50 @@ export interface EasytierConfigUpdate {
 	virtual_ip?: string;
 }
 
-/** Extension running status */
 export type ExtensionStatus = 
-	/** Binary not found at expected path */
 	| { state: "unavailable", data?: undefined }
-	/** Extension is stopped */
 	| { state: "stopped", data?: undefined }
-	/** Extension is running */
 	| { state: "running", data: {
-	/** Process ID */
 	pid: number;
 }}
-	/** Extension failed to start */
 	| { state: "failed", data: {
-	/** Error message */
 	error: string;
 }};
 
-/** easytier extension info */
 export interface EasytierInfo {
-	/** Whether binary exists */
 	available: boolean;
-	/** Current status */
 	status: ExtensionStatus;
-	/** Configuration */
 	config: EasytierConfig;
 }
 
-/** Extension info with status and config */
 export interface ExtensionInfo {
-	/** Whether binary exists */
 	available: boolean;
-	/** Current status */
 	status: ExtensionStatus;
 }
 
-/** Extension identifier (fixed set of supported extensions) */
 export enum ExtensionId {
-	/** Web terminal (ttyd) */
 	Ttyd = "ttyd",
-	/** NAT traversal client (gostc) */
 	Gostc = "gostc",
-	/** P2P VPN (easytier) */
 	Easytier = "easytier",
 }
 
-/** Extension logs response */
 export interface ExtensionLogs {
 	id: ExtensionId;
 	logs: string[];
 }
 
-/** ttyd extension info */
 export interface TtydInfo {
-	/** Whether binary exists */
 	available: boolean;
-	/** Current status */
 	status: ExtensionStatus;
-	/** Configuration */
 	config: TtydConfig;
 }
 
-/** gostc extension info */
 export interface GostcInfo {
-	/** Whether binary exists */
 	available: boolean;
-	/** Current status */
 	status: ExtensionStatus;
-	/** Configuration */
 	config: GostcConfig;
 }
 
-/** All extensions status response */
 export interface ExtensionsStatus {
 	ttyd: TtydInfo;
 	gostc: GostcInfo;
@@ -677,7 +632,6 @@ export interface StreamConfigUpdate {
 /** Update ttyd config */
 export interface TtydConfigUpdate {
 	enabled?: boolean;
-	port?: number;
 	shell?: string;
 }
 

@@ -1,5 +1,3 @@
-// Character to HID usage mapping for text paste functionality.
-// The table follows US QWERTY layout semantics.
 
 import { type CanonicalKey } from '@/types/generated'
 import { keys } from '@/lib/keyboardMappings'
@@ -10,7 +8,6 @@ export interface CharKeyMapping {
 }
 
 const charToKeyMap: Record<string, CharKeyMapping> = {
-  // Lowercase letters
   a: { key: keys.KeyA, shift: false },
   b: { key: keys.KeyB, shift: false },
   c: { key: keys.KeyC, shift: false },
@@ -38,7 +35,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   y: { key: keys.KeyY, shift: false },
   z: { key: keys.KeyZ, shift: false },
 
-  // Uppercase letters
   A: { key: keys.KeyA, shift: true },
   B: { key: keys.KeyB, shift: true },
   C: { key: keys.KeyC, shift: true },
@@ -66,7 +62,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   Y: { key: keys.KeyY, shift: true },
   Z: { key: keys.KeyZ, shift: true },
 
-  // Number row
   '0': { key: keys.Digit0, shift: false },
   '1': { key: keys.Digit1, shift: false },
   '2': { key: keys.Digit2, shift: false },
@@ -78,7 +73,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   '8': { key: keys.Digit8, shift: false },
   '9': { key: keys.Digit9, shift: false },
 
-  // Shifted number row symbols
   ')': { key: keys.Digit0, shift: true },
   '!': { key: keys.Digit1, shift: true },
   '@': { key: keys.Digit2, shift: true },
@@ -90,7 +84,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   '*': { key: keys.Digit8, shift: true },
   '(': { key: keys.Digit9, shift: true },
 
-  // Punctuation and symbols
   '-': { key: keys.Minus, shift: false },
   '=': { key: keys.Equal, shift: false },
   '[': { key: keys.BracketLeft, shift: false },
@@ -103,7 +96,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   '.': { key: keys.Period, shift: false },
   '/': { key: keys.Slash, shift: false },
 
-  // Shifted punctuation and symbols
   _: { key: keys.Minus, shift: true },
   '+': { key: keys.Equal, shift: true },
   '{': { key: keys.BracketLeft, shift: true },
@@ -116,7 +108,6 @@ const charToKeyMap: Record<string, CharKeyMapping> = {
   '>': { key: keys.Period, shift: true },
   '?': { key: keys.Slash, shift: true },
 
-  // Whitespace and control
   ' ': { key: keys.Space, shift: false },
   '\t': { key: keys.Tab, shift: false },
   '\n': { key: keys.Enter, shift: false },

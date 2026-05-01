@@ -1,11 +1,10 @@
 use arc_swap::ArcSwap;
-use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
-use std::path::Path;
+use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 
+use super::persistence::ConfigChange;
 use super::AppConfig;
 use crate::error::{AppError, Result};
 
@@ -23,127 +22,23 @@ pub struct ConfigStore {
     write_lock: Arc<Mutex<()>>,
 }
 
-/// Configuration change event
-#[derive(Debug, Clone)]
-pub struct ConfigChange {
-    pub key: String,
-}
-
 impl ConfigStore {
     /// Create a new configuration store
-    pub async fn new(db_path: &Path) -> Result<Self> {
-        // Ensure parent directory exists
-        if let Some(parent) = db_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
-
-        let pool = SqlitePoolOptions::new()
-            // SQLite uses single-writer mode, 2 connections is sufficient for embedded devices
-            // One for reads, one for writes to avoid blocking
-            .max_connections(2)
-            // Set reasonable timeouts for embedded environments
-            .acquire_timeout(Duration::from_secs(5))
-            .idle_timeout(Duration::from_secs(300))
-            .connect(&db_url)
-            .await?;
-
-        // Initialize database schema
-        Self::init_schema(&pool).await?;
-
-        // Load or create default config
-        let config = Self::load_config(&pool).await?;
-        let cache = Arc::new(ArcSwap::from_pointee(config));
-
-        let (change_tx, _) = broadcast::channel(16);
-
+    pub fn new(pool: Pool<Sqlite>) -> Result<Self> {
+        // Load or create default config synchronously wrapper
+        // (actual DB load is async, handled in init())
         Ok(Self {
             pool,
-            cache,
-            change_tx,
+            cache: Arc::new(ArcSwap::from_pointee(AppConfig::default())),
+            change_tx: broadcast::channel(16).0,
             write_lock: Arc::new(Mutex::new(())),
         })
     }
 
-    /// Initialize database schema
-    async fn init_schema(pool: &Pool<Sqlite>) -> Result<()> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS config (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                expires_at TEXT NOT NULL,
-                data TEXT
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS api_tokens (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                token_hash TEXT NOT NULL,
-                permissions TEXT NOT NULL,
-                expires_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                last_used TEXT
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS wol_history (
-                mac_address TEXT PRIMARY KEY,
-                updated_at INTEGER NOT NULL
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE INDEX IF NOT EXISTS idx_wol_history_updated_at
-            ON wol_history(updated_at DESC)
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
+    /// Load configuration from database (call after new())
+    pub async fn load(&self) -> Result<()> {
+        let config = Self::load_config(&self.pool).await?;
+        self.cache.store(Arc::new(config));
         Ok(())
     }
 
@@ -244,16 +139,12 @@ impl ConfigStore {
     pub fn is_initialized(&self) -> bool {
         self.cache.load().initialized
     }
-
-    /// Get database pool for session management
-    pub fn pool(&self) -> &Pool<Sqlite> {
-        &self.pool
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::DatabasePool;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -261,7 +152,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
 
-        let store = ConfigStore::new(&db_path).await.unwrap();
+        let db = DatabasePool::new(&db_path).await.unwrap();
+        db.init_schema().await.unwrap();
+
+        let store = ConfigStore::new(db.clone_pool()).unwrap();
+        store.load().await.unwrap();
 
         // Check default config (now lock-free, no await needed)
         let config = store.get();
@@ -282,7 +177,8 @@ mod tests {
         assert_eq!(config.web.http_port, 9000);
 
         // Create new store instance and verify persistence
-        let store2 = ConfigStore::new(&db_path).await.unwrap();
+        let store2 = ConfigStore::new(db.clone_pool()).unwrap();
+        store2.load().await.unwrap();
         let config = store2.get();
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
