@@ -1,10 +1,10 @@
 use axum::{extract::State, Json};
 use std::sync::Arc;
 
-use crate::error::{AppError, Result};
+use crate::error::Result;
 use crate::state::AppState;
 
-use super::apply::apply_rtsp_config;
+use super::apply::{apply_rtsp_config, try_apply_lock, ConfigApplyOptions};
 use super::types::{RtspConfigResponse, RtspConfigUpdate, RtspStatusResponse};
 
 pub async fn get_rtsp_config(State(state): State<Arc<AppState>>) -> Json<RtspConfigResponse> {
@@ -32,6 +32,7 @@ pub async fn update_rtsp_config(
 ) -> Result<Json<RtspConfigResponse>> {
     req.validate()?;
 
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.rtsp, "rtsp")?;
     let old_config = state.config.get().rtsp.clone();
 
     state
@@ -42,26 +43,13 @@ pub async fn update_rtsp_config(
         .await?;
 
     let new_config = state.config.get().rtsp.clone();
-    if let Err(err) = apply_rtsp_config(&state, &old_config, &new_config).await {
-        tracing::error!("Failed to apply RTSP config: {}", err);
-        if let Err(rollback_err) = state
-            .config
-            .update(|config| {
-                config.rtsp = old_config.clone();
-            })
-            .await
-        {
-            tracing::error!(
-                "Failed to rollback RTSP config after apply failure: {}",
-                rollback_err
-            );
-            return Err(AppError::ServiceUnavailable(format!(
-                "RTSP apply failed: {}; rollback failed: {}",
-                err, rollback_err
-            )));
-        }
-        return Err(err);
-    }
+    apply_rtsp_config(
+        &state,
+        &old_config,
+        &new_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
 
     Ok(Json(RtspConfigResponse::from(&new_config)))
 }

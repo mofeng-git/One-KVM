@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::error::Result;
 use crate::state::AppState;
 
-use super::apply::apply_stream_config;
+use super::apply::{apply_stream_config, try_apply_lock, ConfigApplyOptions};
 use super::types::{StreamConfigResponse, StreamConfigUpdate};
 
 pub async fn get_stream_config(State(state): State<Arc<AppState>>) -> Json<StreamConfigResponse> {
@@ -18,6 +18,7 @@ pub async fn update_stream_config(
 ) -> Result<Json<StreamConfigResponse>> {
     req.validate()?;
 
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.stream, "stream")?;
     let old_stream_config = state.config.get().stream.clone();
 
     state
@@ -29,13 +30,15 @@ pub async fn update_stream_config(
 
     let new_stream_config = state.config.get().stream.clone();
 
-    if let Err(e) = apply_stream_config(&state, &old_stream_config, &new_stream_config).await {
-        tracing::error!("Failed to apply stream config: {}", e);
-    }
+    apply_stream_config(
+        &state,
+        &old_stream_config,
+        &new_stream_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
 
-    if let Err(e) = super::apply::enforce_stream_codec_constraints(&state).await {
-        tracing::error!("Failed to enforce stream codec constraints: {}", e);
-    }
+    super::apply::enforce_stream_codec_constraints(&state).await?;
 
     Ok(Json(StreamConfigResponse::from(&new_stream_config)))
 }

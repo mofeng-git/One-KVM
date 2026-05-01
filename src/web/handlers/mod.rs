@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
 
+use self::config::apply::ConfigApplyOptions;
 use crate::auth::{Session, SESSION_COOKIE};
-use crate::config::{AppConfig, StreamMode};
+use crate::config::StreamMode;
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
@@ -739,8 +740,13 @@ pub async fn setup_init(
     // Start RustDesk if enabled
     if new_config.rustdesk.enabled {
         let empty_config = crate::rustdesk::config::RustDeskConfig::default();
-        if let Err(e) =
-            config::apply::apply_rustdesk_config(&state, &empty_config, &new_config.rustdesk).await
+        if let Err(e) = config::apply::apply_rustdesk_config(
+            &state,
+            &empty_config,
+            &new_config.rustdesk,
+            ConfigApplyOptions::default(),
+        )
+        .await
         {
             tracing::warn!("Failed to start RustDesk during setup: {}", e);
         } else {
@@ -751,8 +757,13 @@ pub async fn setup_init(
     // Start RTSP if enabled
     if new_config.rtsp.enabled {
         let empty_config = crate::config::RtspConfig::default();
-        if let Err(e) =
-            config::apply::apply_rtsp_config(&state, &empty_config, &new_config.rtsp).await
+        if let Err(e) = config::apply::apply_rtsp_config(
+            &state,
+            &empty_config,
+            &new_config.rtsp,
+            ConfigApplyOptions::default(),
+        )
+        .await
         {
             tracing::warn!("Failed to start RTSP during setup: {}", e);
         } else {
@@ -790,160 +801,6 @@ pub async fn setup_init(
         success: true,
         message: Some("Setup completed".to_string()),
     }))
-}
-
-#[derive(Deserialize)]
-pub struct UpdateConfigRequest {
-    #[serde(flatten)]
-    pub updates: serde_json::Value,
-}
-
-pub async fn update_config(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<UpdateConfigRequest>,
-) -> Result<Json<LoginResponse>> {
-    // Keep old config for rollback
-    let old_config = state.config.get();
-
-    tracing::info!("Received config update request");
-
-    // Validate and merge config first (outside the update closure)
-    let config_json = serde_json::to_value(&old_config)
-        .map_err(|e| AppError::Internal(format!("Failed to serialize config: {}", e)))?;
-
-    let merged = merge_json(config_json, req.updates.clone())
-        .map_err(|_| AppError::Internal("Failed to merge config".to_string()))?;
-
-    let new_config: AppConfig = serde_json::from_value(merged)
-        .map_err(|e| AppError::BadRequest(format!("Invalid config format: {}", e)))?;
-
-    let new_config = new_config;
-    new_config
-        .hid
-        .validate_otg_endpoint_budget(new_config.msd.enabled)?;
-
-    // Apply the validated config
-    state.config.set(new_config.clone()).await?;
-
-    tracing::info!("Config updated successfully");
-
-    // Detect which config sections were sent in the request
-    let has_video = req.updates.get("video").is_some();
-    let has_stream = req.updates.get("stream").is_some();
-    let has_hid = req.updates.get("hid").is_some();
-    let has_msd = req.updates.get("msd").is_some();
-    let has_atx = req.updates.get("atx").is_some();
-    let has_audio = req.updates.get("audio").is_some();
-
-    tracing::info!(
-        "Config sections sent: video={}, stream={}, hid={}, msd={}, atx={}, audio={}",
-        has_video,
-        has_stream,
-        has_hid,
-        has_msd,
-        has_atx,
-        has_audio
-    );
-
-    // Get new config for device reloading
-    let new_config = state.config.get();
-
-    if has_video {
-        if let Err(e) =
-            config::apply::apply_video_config(&state, &old_config.video, &new_config.video).await
-        {
-            tracing::error!("Failed to apply video config: {}", e);
-            state.config.set((*old_config).clone()).await?;
-            return Ok(Json(LoginResponse {
-                success: false,
-                message: Some(format!("Video configuration invalid: {}", e)),
-            }));
-        }
-    }
-
-    if has_stream {
-        if let Err(e) =
-            config::apply::apply_stream_config(&state, &old_config.stream, &new_config.stream).await
-        {
-            tracing::error!("Failed to apply stream config: {}", e);
-            state.config.set((*old_config).clone()).await?;
-            return Ok(Json(LoginResponse {
-                success: false,
-                message: Some(format!("Stream configuration invalid: {}", e)),
-            }));
-        }
-    }
-
-    if has_hid {
-        if let Err(e) =
-            config::apply::apply_hid_config(&state, &old_config.hid, &new_config.hid).await
-        {
-            tracing::error!("HID reload failed: {}", e);
-            state.config.set((*old_config).clone()).await?;
-            return Ok(Json(LoginResponse {
-                success: false,
-                message: Some(format!("HID configuration invalid: {}", e)),
-            }));
-        }
-    }
-
-    if has_audio {
-        if let Err(e) =
-            config::apply::apply_audio_config(&state, &old_config.audio, &new_config.audio).await
-        {
-            tracing::warn!("Audio config update failed: {}", e);
-        }
-    }
-
-    if has_msd {
-        if let Err(e) =
-            config::apply::apply_msd_config(&state, &old_config.msd, &new_config.msd).await
-        {
-            tracing::error!("MSD initialization failed: {}", e);
-            state.config.set((*old_config).clone()).await?;
-            return Ok(Json(LoginResponse {
-                success: false,
-                message: Some(format!("MSD initialization failed: {}", e)),
-            }));
-        }
-    }
-
-    if has_atx {
-        if let Err(e) =
-            config::apply::apply_atx_config(&state, &old_config.atx, &new_config.atx).await
-        {
-            tracing::error!("ATX configuration invalid: {}", e);
-            state.config.set((*old_config).clone()).await?;
-            return Ok(Json(LoginResponse {
-                success: false,
-                message: Some(format!("ATX configuration invalid: {}", e)),
-            }));
-        }
-    }
-
-    Ok(Json(LoginResponse {
-        success: true,
-        message: Some("Configuration updated".to_string()),
-    }))
-}
-
-fn merge_json(
-    base: serde_json::Value,
-    updates: serde_json::Value,
-) -> std::result::Result<serde_json::Value, ()> {
-    match (base, updates) {
-        (serde_json::Value::Object(mut base), serde_json::Value::Object(updates)) => {
-            for (key, value) in updates {
-                if let Some(base_value) = base.get(&key).cloned() {
-                    base.insert(key, merge_json(base_value, value)?);
-                } else {
-                    base.insert(key, value);
-                }
-            }
-            Ok(serde_json::Value::Object(base))
-        }
-        (_, updates) => Ok(updates),
-    }
 }
 
 #[derive(Serialize)]

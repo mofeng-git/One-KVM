@@ -8,6 +8,24 @@ use crate::stream_encoder::encoder_type_to_backend;
 use crate::video::codec_constraints::{
     enforce_constraints_with_stream_manager, StreamCodecConstraints,
 };
+use tokio::sync::{Mutex, OwnedMutexGuard};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ConfigApplyOptions {
+    pub force: bool,
+}
+
+impl ConfigApplyOptions {
+    pub const fn forced() -> Self {
+        Self { force: true }
+    }
+}
+
+pub fn try_apply_lock(lock: &Arc<Mutex<()>>, domain: &str) -> Result<OwnedMutexGuard<()>> {
+    lock.clone().try_lock_owned().map_err(|_| {
+        AppError::ServiceUnavailable(format!("{domain} configuration is already applying"))
+    })
+}
 
 fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
     match config.backend {
@@ -33,8 +51,9 @@ pub async fn apply_video_config(
     state: &Arc<AppState>,
     old_config: &VideoConfig,
     new_config: &VideoConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
-    if old_config == new_config {
+    if old_config == new_config && !options.force {
         tracing::info!("Video config unchanged, skipping reload");
         return Ok(());
     }
@@ -73,10 +92,11 @@ pub async fn apply_stream_config(
     state: &Arc<AppState>,
     old_config: &StreamConfig,
     new_config: &StreamConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying stream config changes...");
 
-    if old_config.encoder != new_config.encoder {
+    if options.force || old_config.encoder != new_config.encoder {
         let encoder_backend = encoder_type_to_backend(new_config.encoder.clone());
         tracing::info!(
             "Updating encoder backend to: {:?} (from config: {:?})",
@@ -86,12 +106,11 @@ pub async fn apply_stream_config(
         state.webrtc.update_encoder_backend(encoder_backend).await;
     }
 
-    if old_config.bitrate_preset != new_config.bitrate_preset {
+    if options.force || old_config.bitrate_preset != new_config.bitrate_preset {
         state
             .stream_manager
             .set_bitrate_preset(new_config.bitrate_preset)
-            .await
-            .ok(); // Ignore error if no active stream
+            .await?;
     }
 
     let ice_changed = old_config.stun_server != new_config.stun_server
@@ -99,7 +118,7 @@ pub async fn apply_stream_config(
         || old_config.turn_username != new_config.turn_username
         || old_config.turn_password != new_config.turn_password;
 
-    if ice_changed {
+    if options.force || ice_changed {
         tracing::info!(
             "Updating ICE config: STUN={:?}, TURN={:?}",
             new_config.stun_server,
@@ -128,6 +147,7 @@ pub async fn apply_hid_config(
     state: &Arc<AppState>,
     old_config: &HidConfig,
     new_config: &HidConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
     let current_msd_enabled = state.config.get().msd.enabled;
     new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
@@ -149,6 +169,7 @@ pub async fn apply_hid_config(
         && !hid_functions_changed
         && !keyboard_leds_changed
         && !endpoint_budget_changed
+        && !options.force
     {
         tracing::info!("HID config unchanged, skipping reload");
         return Ok(());
@@ -190,6 +211,7 @@ pub async fn apply_msd_config(
     state: &Arc<AppState>,
     old_config: &MsdConfig,
     new_config: &MsdConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
     state
         .config
@@ -222,7 +244,7 @@ pub async fn apply_msd_config(
         tracing::warn!("Failed to create MSD ventoy directory: {}", e);
     }
 
-    let needs_reload = old_msd_enabled != new_msd_enabled || msd_dir_changed;
+    let needs_reload = options.force || old_msd_enabled != new_msd_enabled || msd_dir_changed;
     if !needs_reload {
         tracing::info!(
             "MSD enabled state unchanged ({}) and directory unchanged, no reload needed",
@@ -272,7 +294,9 @@ pub async fn apply_msd_config(
     }
 
     let current_config = state.config.get();
-    if current_config.hid.backend == HidBackend::Otg && old_msd_enabled != new_msd_enabled {
+    if current_config.hid.backend == HidBackend::Otg
+        && (options.force || old_msd_enabled != new_msd_enabled)
+    {
         state
             .hid
             .reload(crate::hid::HidBackendType::Otg)
@@ -306,12 +330,11 @@ pub async fn apply_atx_config(
             tracing::info!("ATX enabled in config, initializing...");
 
             let atx = crate::atx::AtxController::new(controller_config);
-            if let Err(e) = atx.init().await {
-                tracing::warn!("ATX initialization failed: {}", e);
-            } else {
-                *state.atx.write().await = Some(atx);
-                tracing::info!("ATX controller initialized successfully");
-            }
+            atx.init()
+                .await
+                .map_err(|e| AppError::Config(format!("ATX initialization failed: {}", e)))?;
+            *state.atx.write().await = Some(atx);
+            tracing::info!("ATX controller initialized successfully");
         }
     }
 
@@ -331,25 +354,18 @@ pub async fn apply_audio_config(
         quality: new_config.quality.parse::<crate::audio::AudioQuality>()?,
     };
 
-    if let Err(e) = state.audio.update_config(audio_config).await {
-        tracing::error!("Audio config update failed: {}", e);
-    } else {
-        tracing::info!(
-            "Audio config applied: enabled={}, device={}",
-            new_config.enabled,
-            new_config.device
-        );
-    }
+    state.audio.update_config(audio_config).await?;
+    tracing::info!(
+        "Audio config applied: enabled={}, device={}",
+        new_config.enabled,
+        new_config.device
+    );
 
-    if let Err(e) = state
+    state
         .stream_manager
         .set_webrtc_audio_enabled(new_config.enabled)
-        .await
-    {
-        tracing::warn!("Failed to update WebRTC audio state: {}", e);
-    } else {
-        tracing::info!("WebRTC audio enabled: {}", new_config.enabled);
-    }
+        .await?;
+    tracing::info!("WebRTC audio enabled: {}", new_config.enabled);
 
     if new_config.enabled {
         state.stream_manager.reconnect_webrtc_audio_sources().await;
@@ -370,6 +386,7 @@ pub async fn apply_rustdesk_config(
     state: &Arc<AppState>,
     old_config: &crate::rustdesk::config::RustDeskConfig,
     new_config: &crate::rustdesk::config::RustDeskConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RustDesk config changes...");
 
@@ -378,16 +395,18 @@ pub async fn apply_rustdesk_config(
 
     if old_config.enabled && !new_config.enabled {
         if let Some(ref service) = *rustdesk_guard {
-            if let Err(e) = service.stop().await {
-                tracing::error!("Failed to stop RustDesk service: {}", e);
-            }
+            service
+                .stop()
+                .await
+                .map_err(|e| AppError::Config(format!("Failed to stop RustDesk service: {}", e)))?;
             tracing::info!("RustDesk service stopped");
         }
         *rustdesk_guard = None;
     }
 
     if new_config.enabled {
-        let need_restart = old_config.rendezvous_server != new_config.rendezvous_server
+        let need_restart = options.force
+            || old_config.rendezvous_server != new_config.rendezvous_server
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
 
@@ -399,24 +418,22 @@ pub async fn apply_rustdesk_config(
                 state.hid.clone(),
                 state.audio.clone(),
             );
-            if let Err(e) = service.start().await {
-                tracing::error!("Failed to start RustDesk service: {}", e);
-            } else {
-                tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
-                credentials_to_save = service.save_credentials();
-            }
+            service.start().await.map_err(|e| {
+                AppError::Config(format!("Failed to start RustDesk service: {}", e))
+            })?;
+            tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
+            credentials_to_save = service.save_credentials();
             *rustdesk_guard = Some(std::sync::Arc::new(service));
         } else if need_restart {
             if let Some(ref service) = *rustdesk_guard {
-                if let Err(e) = service.restart(new_config.clone()).await {
-                    tracing::error!("Failed to restart RustDesk service: {}", e);
-                } else {
-                    tracing::info!(
-                        "RustDesk service restarted with ID: {}",
-                        new_config.device_id
-                    );
-                    credentials_to_save = service.save_credentials();
-                }
+                service.restart(new_config.clone()).await.map_err(|e| {
+                    AppError::Config(format!("Failed to restart RustDesk service: {}", e))
+                })?;
+                tracing::info!(
+                    "RustDesk service restarted with ID: {}",
+                    new_config.device_id
+                );
+                credentials_to_save = service.save_credentials();
             }
         }
     }
@@ -424,7 +441,7 @@ pub async fn apply_rustdesk_config(
     drop(rustdesk_guard);
     if let Some(updated_config) = credentials_to_save {
         tracing::info!("Saving RustDesk credentials to config store...");
-        if let Err(e) = state
+        state
             .config
             .update(|cfg| {
                 cfg.rustdesk.public_key = updated_config.public_key.clone();
@@ -433,12 +450,8 @@ pub async fn apply_rustdesk_config(
                 cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
                 cfg.rustdesk.uuid = updated_config.uuid.clone();
             })
-            .await
-        {
-            tracing::warn!("Failed to save RustDesk credentials: {}", e);
-        } else {
-            tracing::info!("RustDesk credentials saved successfully");
-        }
+            .await?;
+        tracing::info!("RustDesk credentials saved successfully");
     }
 
     if let Some(message) = enforce_stream_codec_constraints(state).await? {
@@ -452,6 +465,7 @@ pub async fn apply_rtsp_config(
     state: &Arc<AppState>,
     old_config: &RtspConfig,
     new_config: &RtspConfig,
+    options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RTSP config changes...");
 
@@ -459,15 +473,17 @@ pub async fn apply_rtsp_config(
 
     if old_config.enabled && !new_config.enabled {
         if let Some(ref service) = *rtsp_guard {
-            if let Err(e) = service.stop().await {
-                tracing::error!("Failed to stop RTSP service: {}", e);
-            }
+            service
+                .stop()
+                .await
+                .map_err(|e| AppError::Config(format!("Failed to stop RTSP service: {}", e)))?;
         }
         *rtsp_guard = None;
     }
 
     if new_config.enabled {
-        let need_restart = old_config.bind != new_config.bind
+        let need_restart = options.force
+            || old_config.bind != new_config.bind
             || old_config.port != new_config.port
             || old_config.path != new_config.path
             || old_config.codec != new_config.codec

@@ -1,5 +1,5 @@
 use std::{collections::VecDeque, sync::Arc};
-use tokio::sync::{broadcast, watch, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 
 use crate::atx::AtxController;
 use crate::audio::AudioController;
@@ -19,6 +19,31 @@ use crate::rustdesk::RustDeskService;
 use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
 use crate::webrtc::WebRtcStreamer;
+
+#[derive(Clone)]
+pub struct ConfigApplyLocks {
+    pub video: Arc<Mutex<()>>,
+    pub stream: Arc<Mutex<()>>,
+    pub otg: Arc<Mutex<()>>,
+    pub audio: Arc<Mutex<()>>,
+    pub atx: Arc<Mutex<()>>,
+    pub rustdesk: Arc<Mutex<()>>,
+    pub rtsp: Arc<Mutex<()>>,
+}
+
+impl ConfigApplyLocks {
+    fn new() -> Self {
+        Self {
+            video: Arc::new(Mutex::new(())),
+            stream: Arc::new(Mutex::new(())),
+            otg: Arc::new(Mutex::new(())),
+            audio: Arc::new(Mutex::new(())),
+            atx: Arc::new(Mutex::new(())),
+            rustdesk: Arc::new(Mutex::new(())),
+            rtsp: Arc::new(Mutex::new(())),
+        }
+    }
+}
 
 /// Shared Axum/App state: video flows through [`VideoStreamManager`]; WebRTC SDP/ICE/sessions on [`WebRtcStreamer`].
 pub struct AppState {
@@ -41,6 +66,7 @@ pub struct AppState {
     pub update: Arc<UpdateService>,
     pub shutdown_tx: broadcast::Sender<()>,
     pub revoked_sessions: Arc<RwLock<VecDeque<String>>>,
+    pub config_apply_locks: ConfigApplyLocks,
     data_dir: std::path::PathBuf,
 }
 
@@ -88,6 +114,7 @@ impl AppState {
             update,
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
+            config_apply_locks: ConfigApplyLocks::new(),
             data_dir,
         })
     }

@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import 'vue-sonner/style.css'
 import { KeepAlive, onMounted, watch } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
+import { Toaster } from '@/components/ui/sonner'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -54,4 +56,5 @@ watch(
     </KeepAlive>
     <component :is="Component" v-if="route.name !== 'Console' || !authStore.isAuthenticated" />
   </RouterView>
+  <Toaster rich-colors close-button position="top-center" />
 </template>

@@ -6,7 +6,7 @@ use crate::config::{AtxConfig, HidBackend, HidConfig};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 
-use super::apply::apply_atx_config;
+use super::apply::{apply_atx_config, try_apply_lock};
 use super::types::AtxConfigUpdate;
 
 pub async fn get_atx_config(State(state): State<Arc<AppState>>) -> Json<AtxConfig> {
@@ -22,6 +22,7 @@ pub async fn update_atx_config(
 
     req.validate_with_current(&old_atx_config)?;
 
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.atx, "atx")?;
     let mut merged_atx_config = old_atx_config.clone();
     req.apply_to(&mut merged_atx_config);
     validate_serial_device_conflict(&merged_atx_config, &current_config.hid)?;
@@ -35,9 +36,7 @@ pub async fn update_atx_config(
 
     let new_atx_config = state.config.get().atx.clone();
 
-    if let Err(e) = apply_atx_config(&state, &old_atx_config, &new_atx_config).await {
-        tracing::error!("Failed to apply ATX config: {}", e);
-    }
+    apply_atx_config(&state, &old_atx_config, &new_atx_config).await?;
 
     Ok(Json(new_atx_config))
 }

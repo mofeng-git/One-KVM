@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::rustdesk::config::RustDeskConfig;
 use crate::state::AppState;
 
-use super::apply::apply_rustdesk_config;
+use super::apply::{apply_rustdesk_config, try_apply_lock, ConfigApplyOptions};
 use super::types::RustDeskConfigUpdate;
 
 #[derive(Debug, serde::Serialize)]
@@ -75,6 +75,7 @@ pub async fn update_rustdesk_config(
 ) -> Result<Json<RustDeskConfigResponse>> {
     req.validate()?;
 
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.rustdesk, "rustdesk")?;
     let old_config = state.config.get().rustdesk.clone();
 
     state
@@ -86,9 +87,13 @@ pub async fn update_rustdesk_config(
 
     let new_config = state.config.get().rustdesk.clone();
 
-    if let Err(e) = apply_rustdesk_config(&state, &old_config, &new_config).await {
-        tracing::error!("Failed to apply RustDesk config: {}", e);
-    }
+    apply_rustdesk_config(
+        &state,
+        &old_config,
+        &new_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
 
     let constraints = state.stream_manager.codec_constraints().await;
     if constraints.rustdesk_enabled || constraints.rtsp_enabled {

@@ -5,7 +5,7 @@ use crate::config::MsdConfig;
 use crate::error::Result;
 use crate::state::AppState;
 
-use super::apply::apply_msd_config;
+use super::apply::{apply_msd_config, try_apply_lock, ConfigApplyOptions};
 use super::types::MsdConfigUpdate;
 
 pub async fn get_msd_config(State(state): State<Arc<AppState>>) -> Json<MsdConfig> {
@@ -18,6 +18,7 @@ pub async fn update_msd_config(
 ) -> Result<Json<MsdConfig>> {
     req.validate()?;
 
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.otg, "otg")?;
     let old_msd_config = state.config.get().msd.clone();
 
     state
@@ -29,9 +30,13 @@ pub async fn update_msd_config(
 
     let new_msd_config = state.config.get().msd.clone();
 
-    if let Err(e) = apply_msd_config(&state, &old_msd_config, &new_msd_config).await {
-        tracing::error!("Failed to apply MSD config: {}", e);
-    }
+    apply_msd_config(
+        &state,
+        &old_msd_config,
+        &new_msd_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
 
     Ok(Json(new_msd_config))
 }

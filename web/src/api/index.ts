@@ -613,17 +613,7 @@ function sortSerialDevices(serialDevices: SerialDeviceOption[]): SerialDeviceOpt
   })
 }
 
-/** @deprecated 使用域特定 API（videoConfigApi, hidConfigApi 等）替代 */
 export const configApi = {
-  get: () => request<Record<string, unknown>>('/config'),
-
-  /** @deprecated 使用域特定 API 的 update 方法替代 */
-  update: (updates: Record<string, unknown>) =>
-    request<{ success: boolean }>('/config', {
-      method: 'POST',
-      body: JSON.stringify(updates),
-    }),
-
   listDevices: async () => {
     const result = await request<{
       video: Array<{

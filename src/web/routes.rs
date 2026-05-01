@@ -78,7 +78,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/ws/audio", any(audio_ws_handler))
         // Configuration management (domain-separated endpoints)
         .route("/config", get(handlers::config::get_all_config))
-        .route("/config", post(handlers::update_config))
         .route("/config/video", get(handlers::config::get_video_config))
         .route(
             "/config/video",

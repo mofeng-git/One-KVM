@@ -92,8 +92,8 @@ const isFullscreen = ref(false)
 const videoLoading = ref(true)
 const videoError = ref(false)
 const videoErrorMessage = ref('')
-const videoRestarting = ref(false) // Track if video is restarting due to config change
-const mjpegFrameReceived = ref(false) // Whether MJPEG stream has received at least one frame
+const videoRestarting = ref(false)
+const mjpegFrameReceived = ref(false)
 
 /** From `stream.state_changed`: ok | no_signal | device_lost | device_busy */
 type StreamSignalState = 'ok' | 'no_signal' | 'device_lost' | 'device_busy'
@@ -101,22 +101,17 @@ const streamSignalState = ref<StreamSignalState>('ok')
 const streamSignalReason = ref<string | null>(null)
 const streamNextRetryMs = ref<number | null>(null)
 
-// Using string format "width/height" to let browser handle the ratio calculation
 const videoAspectRatio = ref<string | null>(null)
 
-// Backend-provided FPS (received from WebSocket stream.stats_update events)
 const backendFps = ref(0)
 
-// Per-client statistics from backend
 interface ClientStat {
   id: string
-  fps: number  // Integer: frames sent in last second
+  fps: number
   connected_secs: number
 }
 const clientsStats = ref<Record<string, ClientStat>>({})
 
-// Generate a unique client ID for this browser session
-// This allows us to identify our own stats in the clients_stat map
 const myClientId = generateUUID()
 
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
@@ -129,8 +124,8 @@ const keyboardLed = computed(() => ({
 const keyboardLedEnabled = computed(() => systemStore.hid?.keyboardLedsEnabled ?? false)
 const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
-const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
-const isPointerLocked = ref(false) // Track pointer lock state
+const lastMousePosition = ref({ x: 0, y: 0 })
+const isPointerLocked = ref(false)
 
 /** Local overlay crosshair position (px, relative to video container); HID uses mousePosition separately */
 const localCrosshairPos = ref<{ x: number; y: number } | null>(null)
@@ -140,7 +135,7 @@ let mouseMoveSendIntervalMs = DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
 let mouseFlushTimer: ReturnType<typeof setTimeout> | null = null
 let lastMouseMoveSendTime = 0
 let pendingMouseMove: { type: 'move' | 'move_abs'; x: number; y: number } | null = null
-let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas between sends
+let accumulatedDelta = { x: 0, y: 0 }
 
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
 let interactionListenersBound = false
@@ -176,9 +171,7 @@ const showTerminalDialog = ref(false)
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-// Status computed (Device status removed - now only Video, Audio, HID, MSD)
 const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
-  // If WebSocket has network error, video is also affected (same network dependency)
   if (wsNetworkError.value) return 'connecting'
 
   if (videoError.value) return 'error'
@@ -240,24 +233,16 @@ const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   if (hid?.errorCode === 'udc_not_configured') return 'disconnected'
   if (hid?.error) return 'error'
 
-  // In WebRTC mode, check DataChannel status first
   if (videoMode.value !== 'mjpeg') {
-    // DataChannel is ready - HID is connected via WebRTC
     if (webrtc.dataChannelReady.value) return 'connected'
-    // WebRTC is connecting - HID is also connecting
     if (webrtc.isConnecting.value) return 'connecting'
-    // WebRTC is connected but DataChannel not ready - still connecting
     if (webrtc.isConnected.value) return 'connecting'
-    // WebRTC not connected - fall through to WebSocket check as fallback
   }
 
-  // MJPEG mode or WebRTC fallback: check WebSocket HID status
   if (hidWs.networkError.value) return 'connecting'
 
-  // If HID WebSocket is not connected (disconnected without error), show disconnected
   if (!hidWs.connected.value) return 'disconnected'
 
-  // If HID backend is unavailable (business error), show disconnected (gray)
   if (hidWs.hidUnavailable.value) return 'disconnected'
 
   if (hid?.available && hid.online) return 'connected'
@@ -346,12 +331,10 @@ const hidDetails = computed<StatusDetail[]>(() => {
 
   const details: StatusDetail[] = []
 
-  // Backend + device combined
   const backendStr = hid.backend || t('common.unknown')
   const deviceStr = hid.device ? ` @ ${hid.device}` : ''
   details.push({ label: t('statusCard.backend'), value: `${backendStr}${deviceStr}` })
 
-  // Error message (with error code as suffix when present) OR normal-state info
   if (errorMessage) {
     const codeSuffix = hid.errorCode ? ` (${hid.errorCode})` : ''
     details.push({ label: t('common.error'), value: `${errorMessage}${codeSuffix}`, status: hidErrorStatus })
@@ -414,7 +397,7 @@ function translateAudioQuality(quality: string | undefined): string {
   if (qualityLower === 'voice') return t('actionbar.qualityVoice')
   if (qualityLower === 'balanced') return t('actionbar.qualityBalanced')
   if (qualityLower === 'high') return t('actionbar.qualityHigh')
-  return quality // fallback to original value
+  return quality
 }
 
 const audioQuickInfo = computed(() => {
@@ -466,7 +449,6 @@ const msdDetails = computed<StatusDetail[]>(() => {
 
   const details: StatusDetail[] = []
 
-  // 状态：待机 / 已连接
   if (msd.mode === 'none') {
     details.push({
       label: t('statusCard.msdStatus'),
@@ -481,7 +463,6 @@ const msdDetails = computed<StatusDetail[]>(() => {
     })
   }
 
-  // 模式
   const modeDisplay = msd.mode === 'none'
     ? '-'
     : msd.mode === 'image'
@@ -493,7 +474,6 @@ const msdDetails = computed<StatusDetail[]>(() => {
     status: msd.mode !== 'none' ? 'ok' : undefined
   })
 
-  // 当前镜像（仅在 image 模式下显示）
   if (msd.mode === 'image') {
     details.push({
       label: t('statusCard.msdCurrentImage'),
@@ -548,18 +528,16 @@ let retryCount = 0
 let gracePeriodTimeoutId: number | null = null
 let consecutiveErrors = 0
 const BASE_RETRY_DELAY = 2000
-const GRACE_PERIOD = 2000 // Ignore errors for 2s after config change (reduced from 3s)
-const MAX_CONSECUTIVE_ERRORS = 2 // If 2+ errors in grace period, it's a real problem
+const GRACE_PERIOD = 2000
+const MAX_CONSECUTIVE_ERRORS = 2
 let pendingWebRTCReadyGate = false
 let webrtcConnectTask: Promise<boolean> | null = null
 
-// WebRTC auto-reconnect on device-lost/recovery
 let webrtcRecoveryTimerId: number | null = null
 let webrtcRecoveryAttempts = 0
 const MAX_WEBRTC_RECOVERY_ATTEMPTS = 8
 const WEBRTC_RECOVERY_BASE_DELAY = 2000
 
-// Last-frame overlay (prevents black flash during mode switches)
 const frameOverlayUrl = ref<string | null>(null)
 
 function clearFrameOverlay() {
@@ -674,12 +652,9 @@ async function connectWebRTCSerial(reason: string): Promise<boolean> {
 }
 
 function handleVideoLoad() {
-  // MJPEG video frame loaded successfully - update stream online status
-  // This fixes the timing issue where device_info event may arrive before stream is fully active
   if (videoMode.value === 'mjpeg') {
     mjpegFrameReceived.value = true
     systemStore.setStreamOnline(true)
-    // Update aspect ratio from MJPEG image dimensions
     const img = videoRef.value
     if (img && img.naturalWidth && img.naturalHeight) {
       videoAspectRatio.value = `${img.naturalWidth}/${img.naturalHeight}`
@@ -687,11 +662,9 @@ function handleVideoLoad() {
   }
 
   if (!videoLoading.value) {
-    // 非首帧只做计数
     return
   }
 
-  // Clear any pending retries and grace period
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -716,22 +689,18 @@ function handleVideoLoad() {
 }
 
 function handleVideoError() {
-  // 如果当前是 WebRTC 模式，忽略 MJPEG 错误（因为我们主动清空了 src）
   if (videoMode.value !== 'mjpeg') {
     return
   }
 
-  // 如果正在切换模式，忽略错误（可能是 503 错误，因为后端已切换模式）
   if (isModeSwitching.value) {
     return
   }
 
-  // 如果正在刷新视频，忽略清空 src 时触发的错误
   if (isRefreshingVideo) {
     return
   }
 
-  // Expected <img> error while overlay shows no_signal / device_* — do not retry.
   if (streamSignalState.value !== 'ok') {
     if (retryTimeoutId !== null) {
       clearTimeout(retryTimeoutId)
@@ -742,17 +711,14 @@ function handleVideoError() {
     return
   }
 
-  // Count consecutive errors even in grace period
   consecutiveErrors++
 
-  // If too many errors even in grace period, it's a real failure
   if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS && gracePeriodTimeoutId !== null) {
     clearTimeout(gracePeriodTimeoutId)
     gracePeriodTimeoutId = null
     videoRestarting.value = false
   }
 
-  // If in grace period and not too many errors, ignore
   if (videoRestarting.value || gracePeriodTimeoutId !== null) {
     return
   }
@@ -765,7 +731,6 @@ function handleVideoError() {
   videoLoading.value = true
   mjpegFrameReceived.value = false
 
-  // Auto-retry with exponential backoff (infinite retry, capped delay)
   retryCount++
   const delay = BASE_RETRY_DELAY * Math.pow(1.5, Math.min(retryCount - 1, 5))
 
@@ -775,14 +740,10 @@ function handleVideoError() {
   }, delay)
 }
 
-// Stream device monitoring handlers (UI-only; notifications/state are handled by useConsoleEvents)
 function handleStreamDeviceLost(data: { device: string; reason: string }) {
   videoError.value = true
   videoErrorMessage.value = t('console.deviceLostDesc', { device: data.device, reason: data.reason })
 
-  // In WebRTC mode, the pipeline will attempt to restart itself.
-  // Start an exponential-backoff reconnect loop so the session is
-  // re-established automatically once the backend is ready again.
   if (videoMode.value !== 'mjpeg') {
     scheduleWebRTCRecovery()
   }
@@ -813,7 +774,6 @@ function scheduleWebRTCRecovery() {
     webrtcRecoveryTimerId = null
     webrtcRecoveryAttempts++
 
-    // Only reconnect if we are still in a WebRTC mode and error state
     if (videoMode.value === 'mjpeg' || !videoError.value) {
       webrtcRecoveryAttempts = 0
       return
@@ -846,7 +806,6 @@ function cancelWebRTCRecovery() {
 }
 
 function handleStreamRecovered(_data: { device: string }) {
-  // Cancel any pending recovery timer – backend is back
   cancelWebRTCRecovery()
 
   videoError.value = false
@@ -861,14 +820,10 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
   }
 
   if (videoMode.value !== 'mjpeg' && webrtc.isConnected.value) {
-    // WebRTC mode: check if we have an audio track
     if (!webrtc.audioTrack.value) {
-      // No audio track - need to reconnect WebRTC to get one
-      // This happens when audio was enabled after WebRTC session was created
       await webrtc.disconnect()
       await new Promise(resolve => setTimeout(resolve, 300))
       await connectWebRTCSerial('audio track refresh')
-      // After reconnect, the new session will have audio track
     } else {
       const currentStream = webrtcVideoRef.value?.srcObject as MediaStream | null
       if (currentStream && currentStream.getAudioTracks().length === 0) {
@@ -877,14 +832,10 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
     }
   }
 
-  // Connect unified audio when streaming starts (works for both MJPEG and WebRTC modes)
-  // In MJPEG mode, this connects the WebSocket audio player
-  // In WebRTC mode, this unmutes the video element
   await unifiedAudio.connect()
 }
 
 function handleStreamConfigChanging(data: any) {
-  // Clear any existing retries and grace periods
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -901,7 +852,6 @@ function handleStreamConfigChanging(data: any) {
   retryCount = 0
   consecutiveErrors = 0
 
-  // Reset FPS when config changes (backend will send new FPS via WebSocket)
   backendFps.value = 0
 
   toast.info(t('console.videoRestarting'), {
@@ -913,26 +863,21 @@ function handleStreamConfigChanging(data: any) {
 async function handleStreamConfigApplied(data: any) {
   consecutiveErrors = 0
 
-  // Start grace period to ignore transient errors
   gracePeriodTimeoutId = window.setTimeout(() => {
     gracePeriodTimeoutId = null
-    consecutiveErrors = 0 // Also reset when grace period ends
+    consecutiveErrors = 0
   }, GRACE_PERIOD)
 
   videoRestarting.value = true
 
-  // 如果正在进行模式切换，不需要在这里处理（WebRTCReady 事件会处理）
   if (isModeSwitching.value) {
     console.log('[StreamConfigApplied] Mode switch in progress, waiting for WebRTCReady')
     return
   }
 
   if (videoMode.value !== 'mjpeg') {
-    // In WebRTC mode, reconnect WebRTC (session was closed due to config change)
-    // connectWebRTCSerial() will wait on stream.webrtc_ready when gate is enabled.
     await switchToWebRTC(videoMode.value)
   } else {
-    // In MJPEG mode, refresh the MJPEG stream
     refreshVideo()
   }
 
@@ -944,7 +889,6 @@ async function handleStreamConfigApplied(data: any) {
   })
 }
 
-// 处理 WebRTC 就绪事件 - 这是后端真正准备好接受 WebRTC 连接的信号
 function handleWebRTCReady(data: { codec: string; hardware: boolean; transition_id?: string }) {
   console.log(`[WebRTCReady] Backend ready: codec=${data.codec}, hardware=${data.hardware}, transition_id=${data.transition_id || '-'}`)
   pendingWebRTCReadyGate = false
@@ -1058,7 +1002,6 @@ const signalOverlayInfo = computed(() => {
   const reasonHintKey = reason ? `console.signal.reason.${reason}` : ''
   const hint = reasonHintKey && te(reasonHintKey) ? t(reasonHintKey) : ''
 
-  // UVC-specific overlay when we have the detailed reason
   if (streamSignalState.value === 'no_signal' && reason) {
     const titleKey = `console.signal.${reason}.title`
     const detailKey = `console.signal.${reason}.detail`
@@ -1100,15 +1043,11 @@ const signalOverlayInfo = computed(() => {
 })
 
 function handleStreamStatsUpdate(data: any) {
-  // Always update clients count in store (for MJPEG mode display)
   if (typeof data.clients === 'number') {
     systemStore.updateStreamClients(data.clients)
   }
 
-  // Only update FPS from MJPEG stats when in MJPEG mode
-  // In WebRTC mode, FPS is updated from WebRTC stats
   if (videoMode.value !== 'mjpeg') {
-    // Still update clientsStats for display purposes, but don't touch backendFps
     if (data.clients_stat && typeof data.clients_stat === 'object') {
       clientsStats.value = data.clients_stat
     }
@@ -1131,7 +1070,6 @@ function handleStreamStatsUpdate(data: any) {
   }
 }
 
-// Track if we've received the initial device_info
 let initialDeviceInfoReceived = false
 let initialModeRestoreDone = false
 let initialModeRestoreInProgress = false
@@ -1214,7 +1152,7 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
   const newMode = normalizeServerMode(data.mode)
   if (!newMode) return
 
-  // 如果正在进行模式切换，忽略这个事件（这是我们自己触发的切换产生的）
+  // Ignore this during a local mode switch because it was triggered by our own request
   if (isModeSwitching.value) {
     console.log('[StreamModeChanged] Mode switch in progress, ignoring event')
     return
@@ -1225,15 +1163,12 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
     duration: 5000,
   })
 
-  // Switch to new mode (external sync handled by device_info after mode_ready)
   if (newMode !== videoMode.value) {
     syncToServerMode(newMode)
   }
 }
 
-// 标记是否正在刷新视频（用于忽略清空 src 时触发的 error 事件）
 let isRefreshingVideo = false
-// 标记是否正在切换模式（防止竞态条件和 503 错误）
 const isModeSwitching = videoSession.localSwitching
 
 function reloadPage() {
@@ -1246,15 +1181,12 @@ function refreshVideo() {
   videoErrorMessage.value = ''
   mjpegFrameReceived.value = false
 
-  // Update timestamp to force MJPEG reconnection via reactive URL
   isRefreshingVideo = true
   videoLoading.value = true
   mjpegTimestamp.value = Date.now()
 
-  // For MJPEG streams, the 'load' event fires when first frame arrives
   setTimeout(() => {
     isRefreshingVideo = false
-    // Clear loading state after timeout - if stream failed, error handler will show error
     if (videoLoading.value) {
       videoLoading.value = false
     }
@@ -1270,20 +1202,18 @@ function refreshVideo() {
 const mjpegTimestamp = ref(0)
 const mjpegUrl = computed(() => {
   if (videoMode.value !== 'mjpeg') {
-    return '' // Don't load MJPEG when in H264 mode
+    return ''
   }
   if (mjpegTimestamp.value === 0) {
-    return '' // Don't load until refreshVideo() is called
+    return ''
   }
   if (streamSignalState.value !== 'ok') {
-    return '' // Backend is offline; let the overlay own the viewport
+    return ''
   }
   return `${streamApi.getMjpegUrl(myClientId)}&t=${mjpegTimestamp.value}`
 })
 
-// Connect to WebRTC without changing server mode (for new clients joining existing session)
 async function connectWebRTCOnly(codec: VideoMode = 'h264') {
-  // 清除 MJPEG 相关的定时器
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -1295,7 +1225,6 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   retryCount = 0
   consecutiveErrors = 0
 
-  // 停止 MJPEG 流 - 重置 timestamp 以停止请求
   mjpegTimestamp.value = 0
   if (videoRef.value) {
     videoRef.value.src = ''
@@ -1314,8 +1243,8 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
         duration: 3000,
       })
 
-      // 强制重新绑定视频（即使 track 已存在）
-      // 这解决了页面返回时视频不显示的问题
+      // Force video rebind even when the track already exists
+      // This fixes missing video after returning to the page
       await rebindWebRTCVideo()
 
       videoLoading.value = false
@@ -1329,12 +1258,9 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   }
 }
 
-// 强制重新绑定 WebRTC 视频到视频元素
-// 解决页面切换后视频不显示的问题
 async function rebindWebRTCVideo() {
   if (!webrtcVideoRef.value) return
 
-  // 先清空再重新绑定，确保浏览器重新渲染
   webrtcVideoRef.value.srcObject = null
   await nextTick()
 
@@ -1345,7 +1271,6 @@ async function rebindWebRTCVideo() {
       try {
         await webrtcVideoRef.value.play()
       } catch {
-        // AbortError is expected when switching modes quickly, ignore it
       }
       await waitForVideoFirstFrame(webrtcVideoRef.value, 2000)
       clearFrameOverlay()
@@ -1353,9 +1278,7 @@ async function rebindWebRTCVideo() {
   }
 }
 
-// WebRTC video mode handling (switches server mode)
 async function switchToWebRTC(codec: VideoMode = 'h264') {
-  // 清除 MJPEG 相关的定时器，防止切换后重新加载 MJPEG
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -1367,7 +1290,6 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
   retryCount = 0
   consecutiveErrors = 0
 
-  // 停止 MJPEG 流 - 重置 timestamp 以停止请求
   mjpegTimestamp.value = 0
   if (videoRef.value) {
     videoRef.value.src = ''
@@ -1379,14 +1301,11 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
   pendingWebRTCReadyGate = true
 
   try {
-    // Step 1: Disconnect existing WebRTC connection FIRST
-    // This prevents ICE candidates from being sent to stale sessions
-    // when backend closes sessions during codec switch
+    // Disconnect first so ICE candidates are not sent to stale sessions during backend codec switch.
     if (webrtc.isConnected.value || webrtc.sessionId.value) {
       await webrtc.disconnect()
     }
 
-    // Step 2: Call backend API to switch mode with specific codec
     const modeResp = await streamApi.setMode(codec)
     if (modeResp.transition_id) {
       videoSession.registerTransition(modeResp.transition_id)
@@ -1407,7 +1326,6 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       }
     }
 
-    // Step 3: Connect WebRTC with retry (backoff between retries)
     const MAX_ATTEMPTS = 3
     const RETRY_DELAYS = [200, 800]
     let success = false
@@ -1425,12 +1343,10 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
         duration: 3000,
       })
 
-      // 强制重新绑定视频
       await rebindWebRTCVideo()
 
       videoLoading.value = false
 
-      // Step 4: Switch audio to WebRTC mode
       unifiedAudio.switchMode('webrtc')
     } else {
       throw new Error('WebRTC connection failed')
@@ -1446,8 +1362,6 @@ async function switchToMJPEG() {
   videoErrorMessage.value = ''
   pendingWebRTCReadyGate = false
 
-  // Step 1: Call backend API to switch mode FIRST
-  // This ensures the MJPEG endpoint will accept our request
   try {
     const modeResp = await streamApi.setMode('mjpeg')
     if (modeResp.transition_id) {
@@ -1461,20 +1375,16 @@ async function switchToMJPEG() {
     console.error('Failed to switch to MJPEG mode:', e)
   }
 
-  // Step 2: Disconnect WebRTC if connected or session still exists
   if (webrtc.isConnected.value || webrtc.sessionId.value) {
     await webrtc.disconnect()
   }
 
-  // Clear WebRTC video
   if (webrtcVideoRef.value) {
     webrtcVideoRef.value.srcObject = null
   }
 
-  // Step 3: Switch audio to WebSocket mode
   unifiedAudio.switchMode('ws')
 
-  // Refresh MJPEG stream
   refreshVideo()
 }
 
@@ -1493,7 +1403,6 @@ function syncToServerMode(mode: VideoMode) {
 }
 
 async function handleVideoModeChange(mode: VideoMode) {
-  // 防止重复切换和竞态条件
   if (mode === videoMode.value) return
   if (!videoSession.tryStartLocalSwitch()) {
     console.log('[VideoMode] Switch throttled or in progress, ignoring')
@@ -1503,23 +1412,18 @@ async function handleVideoModeChange(mode: VideoMode) {
   try {
     await captureFrameOverlay()
 
-    // Reset mjpegTimestamp to 0 when switching away from MJPEG
-    // This prevents mjpegUrl from returning a valid URL and stops MJPEG requests
     if (mode !== 'mjpeg') {
       mjpegTimestamp.value = 0
-      // 完全清理 MJPEG 图片元素
       if (videoRef.value) {
         videoRef.value.src = ''
         videoRef.value.removeAttribute('src')
       }
-      // 等待一小段时间确保浏览器取消 pending 请求
       await new Promise(resolve => setTimeout(resolve, 50))
     }
 
     videoMode.value = mode
     localStorage.setItem('videoMode', mode)
 
-    // All WebRTC modes: h264, h265, vp8, vp9
     if (mode !== 'mjpeg') {
       await switchToWebRTC(mode)
     } else {
@@ -1530,15 +1434,12 @@ async function handleVideoModeChange(mode: VideoMode) {
   }
 }
 
-// Watch for WebRTC video track changes
 watch(() => webrtc.videoTrack.value, async (track) => {
   if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg') {
-    // 使用统一的重新绑定函数
     await rebindWebRTCVideo()
   }
 })
 
-// Watch for WebRTC audio track changes - update MediaStream when audio arrives
 watch(() => webrtc.audioTrack.value, async (track) => {
   if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg') {
     const currentStream = webrtcVideoRef.value.srcObject as MediaStream | null
@@ -1548,25 +1449,20 @@ watch(() => webrtc.audioTrack.value, async (track) => {
   }
 })
 
-// Watch for WebRTC video element ref changes - set unified audio element
 watch(webrtcVideoRef, (el) => {
   unifiedAudio.setWebRTCElement(el)
 }, { immediate: true })
 
-// Watch for WebRTC stats to update FPS display
 watch(webrtc.stats, (stats) => {
   if (videoMode.value !== 'mjpeg' && stats.framesPerSecond > 0) {
     backendFps.value = Math.round(stats.framesPerSecond)
-    // WebRTC is receiving frames, set stream online
     systemStore.setStreamOnline(true)
-    // Update aspect ratio from WebRTC video dimensions
     if (stats.frameWidth && stats.frameHeight) {
       videoAspectRatio.value = `${stats.frameWidth}/${stats.frameHeight}`
     }
   }
 }, { deep: true })
 
-// Watch for WebRTC connection state changes - auto-reconnect on disconnect
 let webrtcReconnectTimeout: ReturnType<typeof setTimeout> | null = null
 let webrtcReconnectFailures = 0
 watch(() => webrtc.state.value, (newState, oldState) => {
@@ -1588,8 +1484,6 @@ watch(() => webrtc.state.value, (newState, oldState) => {
           videoLoading.value = false
         })
       }
-    } else if (newState === 'disconnected' || newState === 'failed') {
-      // The device_info event will eventually sync the correct state
     }
   }
 
@@ -1618,7 +1512,6 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     }, 1000)
   }
 
-  // Handle direct 'failed' state (ICE or DTLS failure)
   if (newState === 'failed' && videoMode.value !== 'mjpeg') {
     webrtcReconnectFailures += 1
     if (webrtcReconnectFailures >= 2) {
@@ -1954,7 +1847,6 @@ function handleMouseMove(e: MouseEvent) {
     const { x, y } = absolutePosition
 
     mousePosition.value = { x, y }
-    // Queue for throttled sending (absolute mode: just update pending position)
     pendingMouseMove = { type: 'move_abs', x, y }
     requestMouseMoveFlush()
   } else {
@@ -2323,7 +2215,6 @@ function handleToggleMouseMode() {
 }
 
 onMounted(async () => {
-  // 1. 先订阅 WebSocket 事件，再连接（内部会 connect）
   consoleEvents.subscribe()
 
   watch([wsConnected, wsNetworkError], ([connected, netError], [_prevConnected, prevNetError]) => {
@@ -2338,7 +2229,6 @@ onMounted(async () => {
     systemStore.updateHidWsConnection(connected, netError)
   }, { immediate: true })
 
-  // 4. 其他初始化
   await systemStore.startStream().catch(() => {})
   await systemStore.fetchAllStates()
   await configStore.refreshHid().then(() => {
@@ -2357,8 +2247,6 @@ onMounted(async () => {
     document.documentElement.classList.add('dark')
   }
 
-  // Note: Video mode is now synced from server via device_info event
-  // The handleDeviceInfo function will automatically switch to the server's mode
   try {
     const modeResp = await streamApi.getMode()
     const serverMode = normalizeServerMode(modeResp?.mode)
@@ -2381,7 +2269,6 @@ onDeactivated(() => {
 onUnmounted(() => {
   deactivateConsoleView()
 
-  // Reset initial device info flag
   initialDeviceInfoReceived = false
   initialModeRestoreDone = false
   initialModeRestoreInProgress = false
@@ -2407,7 +2294,6 @@ onUnmounted(() => {
   consoleEvents.unsubscribe()
   consecutiveErrors = 0
 
-  // Disconnect WebRTC if connected or session still exists
   if (webrtc.isConnected.value || webrtc.sessionId.value) {
     void webrtc.disconnect()
   }
@@ -2418,19 +2304,15 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen h-dvh flex flex-col bg-background">
-    <!-- Header -->
     <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div class="px-2 sm:px-4">
         <div class="h-10 sm:h-14 flex items-center justify-between">
-          <!-- Left: Logo -->
           <div class="flex items-center gap-2 sm:gap-6">
             <div class="flex items-center gap-1.5 sm:gap-2">
               <BrandMark size="md" class="hidden sm:block" />
               <BrandMark size="sm" class="sm:hidden" />
               <span class="font-bold text-sm sm:text-lg">One-KVM</span>
             </div>
-
-            <!-- Mobile Status Indicators (inline, minimal) -->
             <div class="flex md:hidden items-center gap-1">
               <StatusCard
                 :title="t('statusCard.video')"
@@ -2453,11 +2335,8 @@ onUnmounted(() => {
               />
             </div>
           </div>
-
-          <!-- Right: Status Cards + User Menu -->
           <div class="flex items-center gap-1 sm:gap-2">
             <div class="hidden md:flex items-center gap-2">
-              <!-- Video Status -->
               <StatusCard
                 :title="t('statusCard.video')"
                 type="video"
@@ -2466,8 +2345,6 @@ onUnmounted(() => {
                 :error-message="videoErrorMessage"
                 :details="videoDetails"
               />
-
-              <!-- Audio Status -->
               <StatusCard
                 v-if="systemStore.audio?.available"
                 :title="t('statusCard.audio')"
@@ -2477,8 +2354,6 @@ onUnmounted(() => {
                 :error-message="audioErrorMessage"
                 :details="audioDetails"
               />
-
-              <!-- HID Status -->
               <StatusCard
                 :title="t('statusCard.hid')"
                 type="hid"
@@ -2488,8 +2363,6 @@ onUnmounted(() => {
                 :details="hidDetails"
                 :hover-align="hidHoverAlign"
               />
-
-              <!-- MSD Status - Hidden when CH9329 backend (no USB gadget support) -->
               <StatusCard
                 v-if="showMsdStatusCard"
                 :title="t('statusCard.msd')"
@@ -2501,20 +2374,12 @@ onUnmounted(() => {
                 hover-align="end"
               />
             </div>
-
-            <!-- Separator -->
             <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
-
-            <!-- Theme Toggle -->
             <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
               <Sun v-if="isDark" class="h-4 w-4" />
               <Moon v-else class="h-4 w-4" />
             </Button>
-
-            <!-- Language Toggle -->
             <LanguageToggleButton class="h-8 w-8 hidden md:flex" />
-
-            <!-- User Menu -->
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 h-7 sm:h-9 px-2 sm:px-3">
@@ -2552,8 +2417,6 @@ onUnmounted(() => {
         </div>
       </div>
     </header>
-
-    <!-- ActionBar -->
     <ActionBar
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
@@ -2569,10 +2432,7 @@ onUnmounted(() => {
       @wol="handleWol"
       @open-terminal="openTerminal"
     />
-
-    <!-- Main Video Area -->
     <div class="flex-1 overflow-hidden relative">
-      <!-- Dot Pattern Background -->
       <div
         class="absolute inset-0 bg-slate-100/80 dark:bg-slate-800/40 opacity-80"
         style="
@@ -2580,8 +2440,6 @@ onUnmounted(() => {
           background-size: 20px 20px;
         "
       />
-
-      <!-- Video Container -->
       <div class="relative h-full w-full flex items-center justify-center p-1 sm:p-4">
         <div
           ref="videoContainerRef"
@@ -2604,7 +2462,6 @@ onUnmounted(() => {
           @wheel.prevent="handleWheel"
           @contextmenu="handleContextMenu"
         >
-          <!-- MJPEG Stream -->
           <img
             v-show="videoMode === 'mjpeg'"
             ref="videoRef"
@@ -2614,9 +2471,6 @@ onUnmounted(() => {
             @load="handleVideoLoad"
             @error="handleVideoError"
           />
-
-          <!-- WebRTC Stream (H.264/H.265/VP8/VP9) -->
-          <!-- Note: muted is controlled by unifiedAudio, not hardcoded -->
           <video
             v-show="videoMode !== 'mjpeg'"
             ref="webrtcVideoRef"
@@ -2624,16 +2478,12 @@ onUnmounted(() => {
             autoplay
             playsinline
           />
-
-          <!-- Last-frame overlay (reduces black flash when switching modes) -->
           <img
             v-if="frameOverlayUrl"
             :src="frameOverlayUrl"
             class="absolute inset-0 w-full h-full object-contain pointer-events-none"
             alt=""
           />
-
-          <!-- Stroked crosshair (native cursor cannot be outlined) -->
           <div
             v-if="cursorVisible && localCrosshairPos"
             class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
@@ -2685,14 +2535,11 @@ onUnmounted(() => {
               </g>
             </svg>
           </div>
-
-          <!-- Loading Overlay with smooth transition and visual feedback -->
           <Transition name="fade">
             <div
               v-if="videoLoading"
               class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300"
             >
-              <!-- Animated scan line for visual feedback -->
               <div class="absolute inset-0 overflow-hidden pointer-events-none">
                 <div class="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-pulse" style="top: 50%; animation-duration: 1.5s;" />
               </div>
@@ -2706,16 +2553,6 @@ onUnmounted(() => {
               </p>
             </div>
           </Transition>
-
-          <!--
-            Canonical 4-state signal overlay (no_signal / device_lost /
-            device_busy).  Fully covers the video area with a solid dim
-            backdrop so the browser never shows a frozen last frame or a
-            transparent video element peeking through — the MJPEG `<img>`
-            has its `src` cleared the moment the backend goes offline and
-            the WebRTC track is simply obscured.  Sits below the loading /
-            error overlays so those take precedence when both apply.
-          -->
           <Transition name="fade">
             <div
               v-if="showSignalOverlay && !videoLoading && !videoError"
@@ -2750,8 +2587,6 @@ onUnmounted(() => {
               </div>
             </div>
           </Transition>
-
-          <!-- Error Overlay with smooth transition and detailed info -->
           <Transition name="fade">
             <div
               v-if="videoError && !videoLoading"
@@ -2761,7 +2596,6 @@ onUnmounted(() => {
               <div class="text-center max-w-md px-2">
                 <p class="font-medium text-sm sm:text-lg mb-1 sm:mb-2">{{ t('console.connectionFailed') }}</p>
                 <p class="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">{{ t('console.connectionFailedDesc') }}</p>
-                <!-- Expandable error details -->
                 <div v-if="videoErrorMessage" class="bg-slate-800/60 rounded-lg p-3 text-left">
                   <p class="text-xs text-slate-400 mb-1">{{ t('console.errorDetails') }}:</p>
                   <p class="text-sm text-slate-300 font-mono break-all">{{ videoErrorMessage }}</p>
@@ -2778,8 +2612,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- Virtual Keyboard - Above InfoBar when attached, or in body when floating -->
     <Teleport :to="virtualKeyboardAttached ? '#keyboard-anchor' : 'body'" :disabled="virtualKeyboardAttached">
       <VirtualKeyboard
         v-if="virtualKeyboardVisible"
@@ -2792,11 +2624,7 @@ onUnmounted(() => {
         @key-up="handleVirtualKeyUp"
       />
     </Teleport>
-
-    <!-- Anchor for attached keyboard -->
     <div id="keyboard-anchor"></div>
-
-    <!-- InfoBar (Status Bar) -->
     <InfoBar
       :pressed-keys="pressedKeys"
       :caps-lock="keyboardLed.capsLock"
@@ -2806,8 +2634,6 @@ onUnmounted(() => {
       :mouse-position="mousePosition"
       :debug-mode="false"
     />
-
-    <!-- Stats Sheet -->
     <StatsSheet
       v-model:open="statsSheetOpen"
       :video-mode="videoMode"
@@ -2815,8 +2641,6 @@ onUnmounted(() => {
       :ws-latency="0"
       :webrtc-stats="webrtc.stats.value"
     />
-
-    <!-- Terminal Dialog -->
     <Dialog v-model:open="showTerminalDialog">
       <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
@@ -2848,8 +2672,6 @@ onUnmounted(() => {
         </div>
       </DialogContent>
     </Dialog>
-
-    <!-- Change Password Dialog -->
     <Dialog v-model:open="changePasswordDialogOpen">
       <DialogContent class="w-[95vw] max-w-md">
         <DialogHeader>
@@ -2900,7 +2722,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Smooth fade transition for video overlays */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;

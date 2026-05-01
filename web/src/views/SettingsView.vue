@@ -98,6 +98,7 @@ import {
   ScreenShare,
   Radio,
   Globe,
+  Loader2,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -3393,7 +3394,7 @@ watch(() => route.query.tab, (tab) => {
             <!-- Save Button -->
             <div class="flex justify-end">
               <Button :disabled="loading" @click="saveAtxConfig">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -3486,7 +3487,7 @@ watch(() => route.query.tab, (tab) => {
             <!-- Save button -->
             <div v-if="extensions?.ttyd?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.ttyd?.status)" @click="saveExtensionConfig('ttyd')">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -3580,7 +3581,7 @@ watch(() => route.query.tab, (tab) => {
             <!-- Save button -->
             <div v-if="extensions?.gostc?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.gostc?.status)" @click="saveExtensionConfig('gostc')">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
 
@@ -3687,7 +3688,7 @@ watch(() => route.query.tab, (tab) => {
             <!-- Save button -->
             <div v-if="extensions?.easytier?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -3802,7 +3803,7 @@ watch(() => route.query.tab, (tab) => {
             </Card>
             <div class="flex justify-end">
               <Button :disabled="loading || rtspLoading" @click="saveRtspConfig">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -3971,7 +3972,7 @@ watch(() => route.query.tab, (tab) => {
             <!-- Save button -->
             <div class="flex justify-end">
               <Button :disabled="loading" @click="saveRustdeskConfig">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -4114,7 +4115,7 @@ watch(() => route.query.tab, (tab) => {
                 {{ t('settings.otgFunctionMinWarning') }}
               </p>
               <Button class="shrink-0" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
-                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
