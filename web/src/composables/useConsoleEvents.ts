@@ -43,12 +43,6 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   }
 
   function handleStreamReconnecting(data: { device: string; attempt: number }) {
-    if (data.attempt === 1 || data.attempt % 5 === 0) {
-      toast.info(t('console.deviceRecovering'), {
-        description: t('console.deviceRecoveringDesc', { attempt: data.attempt }),
-        duration: 3000,
-      })
-    }
     handlers.onStreamReconnecting?.(data)
   }
 
@@ -56,10 +50,6 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
     if (systemStore.stream) {
       systemStore.stream.online = true
     }
-    toast.success(t('console.deviceRecovered'), {
-      description: t('console.deviceRecoveredDesc'),
-      duration: 3000,
-    })
     handlers.onStreamRecovered?.(_data)
   }
 

@@ -43,6 +43,10 @@ export default {
     toggleLanguage: '切换语言',
     retry: '重试',
   },
+  toast: {
+    closeNotification: '关闭通知',
+    notificationsRegion: '通知',
+  },
   api: {
     operationFailed: '操作失败',
     operationFailedDesc: '操作失败',

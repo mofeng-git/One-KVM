@@ -835,7 +835,7 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
   await unifiedAudio.connect()
 }
 
-function handleStreamConfigChanging(data: any) {
+function handleStreamConfigChanging(_data: any) {
   if (retryTimeoutId !== null) {
     clearTimeout(retryTimeoutId)
     retryTimeoutId = null
@@ -853,14 +853,9 @@ function handleStreamConfigChanging(data: any) {
   consecutiveErrors = 0
 
   backendFps.value = 0
-
-  toast.info(t('console.videoRestarting'), {
-    description: data.reason === 'device_switch' ? t('console.deviceSwitching') : t('console.configChanging'),
-    duration: 5000,
-  })
 }
 
-async function handleStreamConfigApplied(data: any) {
+async function handleStreamConfigApplied(_data: any) {
   consecutiveErrors = 0
 
   gracePeriodTimeoutId = window.setTimeout(() => {
@@ -882,11 +877,6 @@ async function handleStreamConfigApplied(data: any) {
   }
 
   videoRestarting.value = false
-
-  toast.success(t('console.videoRestarted'), {
-    description: `${data.device} - ${data.resolution[0]}x${data.resolution[1]} @ ${formatFpsValue(data.fps)}fps`,
-    duration: 3000,
-  })
 }
 
 function handleWebRTCReady(data: { codec: string; hardware: boolean; transition_id?: string }) {
@@ -1158,11 +1148,6 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
     return
   }
 
-  toast.info(t('console.streamModeChanged'), {
-    description: t('console.streamModeChangedDesc', { mode: data.mode.toUpperCase() }),
-    duration: 5000,
-  })
-
   if (newMode !== videoMode.value) {
     syncToServerMode(newMode)
   }
@@ -1238,11 +1223,6 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   try {
     const success = await connectWebRTCSerial('connectWebRTCOnly')
     if (success) {
-      toast.success(t('console.webrtcConnected'), {
-        description: t('console.webrtcConnectedDesc'),
-        duration: 3000,
-      })
-
       // Force video rebind even when the track already exists
       // This fixes missing video after returning to the page
       await rebindWebRTCVideo()
@@ -1338,11 +1318,6 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       success = await connectWebRTCSerial('switchToWebRTC')
     }
     if (success) {
-      toast.success(t('console.webrtcConnected'), {
-        description: t('console.webrtcConnectedDesc'),
-        duration: 3000,
-      })
-
       await rebindWebRTCVideo()
 
       videoLoading.value = false
@@ -1570,7 +1545,6 @@ async function handleChangePassword() {
   changingPassword.value = true
   try {
     await authApi.changePassword(currentPassword.value, newPassword.value)
-    toast.success(t('auth.passwordChanged'))
 
     currentPassword.value = ''
     newPassword.value = ''
@@ -1619,7 +1593,6 @@ async function handleReset() {
 async function handleWol(mac: string) {
   try {
     await atxConfigApi.sendWol(mac)
-    toast.success(t('atx.wolSent'))
   } catch (e) {
     toast.error(t('atx.wolFailed'))
   }
@@ -1684,10 +1657,6 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   if (!isFullscreen.value && (e.metaKey || e.key === 'Meta')) {
-    toast.info(t('console.metaKeyHint'), {
-      description: t('console.metaKeyHintDesc'),
-      duration: 3000,
-    })
   }
 
   const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
@@ -2039,10 +2008,6 @@ function handlePointerLockChange() {
         localCrosshairPos.value = { x: r.width / 2, y: r.height / 2 }
       }
     }
-    toast.info(t('console.pointerLocked'), {
-      description: t('console.pointerLockedDesc'),
-      duration: 3000,
-    })
   }
 }
 
@@ -2207,10 +2172,6 @@ function handleToggleMouseMode() {
   mousePosition.value = { x: 0, y: 0 }
 
   if (mouseMode.value === 'relative') {
-    toast.info(t('console.relativeModeHint'), {
-      description: t('console.relativeModeHintDesc'),
-      duration: 5000,
-    })
   }
 }
 

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -122,8 +121,6 @@ async function applyConfig() {
       }
       unifiedAudio.disconnect()
     }
-
-    toast.success(t('config.applied'))
   } catch (e) {
     console.info('[AudioConfig] Failed to apply config:', e)
   } finally {

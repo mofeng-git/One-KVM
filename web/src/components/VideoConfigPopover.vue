@@ -525,7 +525,6 @@ async function applyVideoConfig() {
       fps: toConfigFps(selectedFps.value),
     })
 
-    toast.success(t('config.applied'))
     isDirty.value = false
     // Stream state will be updated via WebSocket system.device_info event
   } catch (e) {

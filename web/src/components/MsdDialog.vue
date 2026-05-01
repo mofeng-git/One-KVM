@@ -207,7 +207,6 @@ async function connectImage(image: MsdImage) {
   try {
     await msdApi.connect('image', image.id, cdromMode.value, readOnly.value)
     await systemStore.fetchMsdState()
-    toast.success(t('msd.imageMounted', { name: image.name }))
   } catch (e) {
     console.error('Failed to connect image:', e)
   } finally {
@@ -225,7 +224,6 @@ async function connectDrive() {
   try {
     await msdApi.connect('drive')
     await systemStore.fetchMsdState()
-    toast.success(t('common.connected'))
   } catch (e) {
     console.error('Failed to connect drive:', e)
   } finally {
@@ -242,7 +240,6 @@ async function disconnect() {
   try {
     await msdApi.disconnect()
     await systemStore.fetchMsdState()
-    toast.success(t('msd.disconnected'))
   } catch (e) {
     console.error('Failed to disconnect:', e)
   } finally {
@@ -263,11 +260,9 @@ async function executeDelete() {
     if (deleteTarget.value.type === 'image') {
       await msdApi.deleteImage(deleteTarget.value.id)
       images.value = images.value.filter(i => i.id !== deleteTarget.value!.id)
-      toast.success(t('common.success'))
     } else {
       await msdApi.deleteDriveFile(deleteTarget.value.id)
       await loadDriveFiles()
-      toast.success(t('common.success'))
     }
   } catch (e) {
     console.error('Failed to delete:', e)
@@ -313,7 +308,6 @@ async function createDrive() {
     await loadDriveInfo()
     await loadDriveFiles()
     showDriveInitDialog.value = false
-    toast.success(t('common.success'))
   } catch (e) {
     console.error('Failed to initialize drive:', e)
   } finally {
@@ -330,7 +324,6 @@ async function deleteDrive() {
     driveFiles.value = []
     currentPath.value = '/'
     showDeleteDriveDialog.value = false
-    toast.success(t('msd.driveDeleted'))
   } catch (e) {
     console.error('Failed to delete drive:', e)
   } finally {

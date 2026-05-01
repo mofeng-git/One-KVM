@@ -43,6 +43,10 @@ export default {
     toggleLanguage: 'Toggle language',
     retry: 'Retry',
   },
+  toast: {
+    closeNotification: 'Dismiss notification',
+    notificationsRegion: 'Notifications',
+  },
   api: {
     operationFailed: 'Operation Failed',
     operationFailedDesc: 'Operation failed',

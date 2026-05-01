@@ -1,7 +1,5 @@
 
 import { ref, watch, type Ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
 export interface UseConfigPopoverOptions {
   /** Reactive open state from props */
@@ -13,8 +11,6 @@ export interface UseConfigPopoverOptions {
 }
 
 export function useConfigPopover(options: UseConfigPopoverOptions) {
-  const { t } = useI18n()
-
   const applying = ref(false)
   const loadingDevices = ref(false)
 
@@ -36,7 +32,6 @@ export function useConfigPopover(options: UseConfigPopoverOptions) {
     applying.value = true
     try {
       await applyFn()
-      toast.success(t('config.applied'))
     } catch (e) {
       console.info('[ConfigPopover] Apply failed:', e)
     } finally {

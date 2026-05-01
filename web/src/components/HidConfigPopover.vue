@@ -202,8 +202,6 @@ async function applyHidConfig() {
 
     await configStore.updateHid(config)
 
-    toast.success(t('config.applied'))
-
     // HID state will be updated via WebSocket device_info event
   } catch (e) {
     console.info('[HidConfig] Failed to apply config:', e)
