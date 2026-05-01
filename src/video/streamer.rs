@@ -23,6 +23,10 @@ use crate::events::{EventBus, SystemEvent};
 use crate::stream::MjpegStreamHandler;
 use crate::utils::LogThrottler;
 use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
+use crate::video::capture_status::{
+    capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
+    CaptureIoErrorKind,
+};
 use crate::video::v4l2r_capture::{is_source_changed_error, BridgeContext, V4l2rCaptureStream};
 
 /// Streamer configuration
@@ -907,8 +911,7 @@ impl Streamer {
                         // "no signal" overlay, update the state with the
                         // fine-grained reason, and let the outer 'session
                         // loop back off before the next retry.
-                        let status = crate::video::SignalStatus::from_str(&kind)
-                            .unwrap_or(crate::video::SignalStatus::NoSignal);
+                        let status = signal_status_from_capture_kind(&kind);
                         debug!(
                             "CSI open probe reports no signal ({:?}), will soft-restart",
                             status
@@ -989,17 +992,6 @@ impl Streamer {
             let capture_error_throttler = LogThrottler::with_secs(5);
             let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
 
-            let classify_capture_error = |err: &std::io::Error| -> String {
-                let message = err.to_string();
-                if message.contains("dqbuf failed") && message.contains("EINVAL") {
-                    "capture_dqbuf_einval".to_string()
-                } else if message.contains("dqbuf failed") {
-                    "capture_dqbuf".to_string()
-                } else {
-                    format!("capture_{:?}", err.kind())
-                }
-            };
-
             // None = signal is present; Some(Instant) = when signal was first lost.
             let mut no_signal_since: Option<std::time::Instant> = None;
             // Whether the inner 'capture loop should trigger a soft restart.
@@ -1078,59 +1070,60 @@ impl Streamer {
                         // when the source glitches or re-locks; those are
                         // treated as NoSignal + soft-restart so we recover
                         // in ~1 s instead of the 1 s recovery-poll loop.
-                        let os_err = e.raw_os_error();
-                        let is_device_lost = matches!(os_err, Some(6) | Some(19) | Some(108));
-                        let is_transient_signal_error =
-                            matches!(os_err, Some(5) | Some(32) | Some(71));
-
-                        if is_device_lost {
-                            error!("Video device lost: {} - {}", device_path.display(), e);
-                            go_offline();
-                            set_retry(0);
-                            handle.block_on(async {
-                                *self.last_lost_device.write().await =
-                                    Some(device_path.display().to_string());
-                                *self.last_lost_reason.write().await = Some(e.to_string());
-                            });
-                            set_state(StreamerState::DeviceLost);
-                            handle.block_on(async {
-                                let streamer = Arc::clone(&self);
-                                tokio::spawn(async move {
-                                    streamer.start_device_recovery_internal().await;
+                        match classify_capture_io_error(&e) {
+                            CaptureIoErrorKind::DeviceLost => {
+                                error!("Video device lost: {} - {}", device_path.display(), e);
+                                go_offline();
+                                set_retry(0);
+                                handle.block_on(async {
+                                    *self.last_lost_device.write().await =
+                                        Some(device_path.display().to_string());
+                                    *self.last_lost_reason.write().await = Some(e.to_string());
                                 });
-                            });
-                            break 'capture;
-                        }
-
-                        if is_transient_signal_error {
-                            if os_err == Some(71) {
-                                warn!("Capture transient error (EPROTO/-71, often UVC USB): {}", e);
-                                let is_uvc =
-                                    handle.block_on(async {
+                                set_state(StreamerState::DeviceLost);
+                                handle.block_on(async {
+                                    let streamer = Arc::clone(&self);
+                                    tokio::spawn(async move {
+                                        streamer.start_device_recovery_internal().await;
+                                    });
+                                });
+                                break 'capture;
+                            }
+                            CaptureIoErrorKind::TransientSignal { status } => {
+                                if status == Some(crate::video::SignalStatus::UvcUsbError) {
+                                    warn!(
+                                        "Capture transient error (EPROTO/-71, often UVC USB): {}",
+                                        e
+                                    );
+                                    let is_uvc = handle.block_on(async {
                                         self.current_device.read().await.as_ref().is_some_and(|d| {
                                             d.driver.eq_ignore_ascii_case("uvcvideo")
                                         })
                                     });
-                                if is_uvc {
-                                    go_offline();
-                                    set_state(StreamerState::UvcUsbError);
-                                    need_soft_restart = true;
-                                    break 'capture;
-                                }
-                            } else {
-                                warn!(
+                                    if is_uvc {
+                                        go_offline();
+                                        set_state(StreamerState::UvcUsbError);
+                                        need_soft_restart = true;
+                                        break 'capture;
+                                    }
+                                } else {
+                                    warn!(
                                     "Capture transient error ({}): treating as NoSignal + soft-restart",
                                     e
                                 );
+                                }
+                                set_retry(
+                                    backoff_secs(no_signal_restart_count).saturating_mul(1000),
+                                );
+                                go_offline();
+                                set_state(StreamerState::NoSignal);
+                                need_soft_restart = true;
+                                break 'capture;
                             }
-                            set_retry(backoff_secs(no_signal_restart_count).saturating_mul(1000));
-                            go_offline();
-                            set_state(StreamerState::NoSignal);
-                            need_soft_restart = true;
-                            break 'capture;
+                            CaptureIoErrorKind::Other => {}
                         }
 
-                        let key = classify_capture_error(&e);
+                        let key = capture_error_log_key(&e);
                         if capture_error_throttler.should_log(&key) {
                             let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
                             if suppressed > 0 {

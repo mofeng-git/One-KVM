@@ -3,6 +3,7 @@
 //! This module provides V4L2 video capture, encoding, and streaming functionality.
 
 pub(crate) mod capture_limits;
+pub(crate) mod capture_status;
 pub mod codec_constraints;
 pub mod convert;
 pub mod csi_bridge;

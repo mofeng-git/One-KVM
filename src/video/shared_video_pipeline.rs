@@ -44,6 +44,10 @@ const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
 use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
+use crate::video::capture_status::{
+    capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
+    CaptureIoErrorKind,
+};
 use crate::video::csi_bridge::{self, ProbeResult};
 use crate::video::device::parse_bridge_kind;
 use crate::video::encoder::registry::{EncoderBackend, VideoEncoderType};
@@ -586,7 +590,7 @@ impl SharedVideoPipeline {
                 debug!(
                     "Pre-probe: no signal — encoder uses configured geometry until capture opens"
                 );
-                let status = SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal);
+                let status = signal_status_from_capture_kind(&kind);
                 self.notify_state(PipelineStateNotification::no_signal(
                     status,
                     Some(Duration::from_secs(2).as_millis() as u64),
@@ -757,7 +761,7 @@ impl SharedVideoPipeline {
                                     kind
                                 );
                                 pipeline.notify_state(PipelineStateNotification::no_signal(
-                                    SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal),
+                                    signal_status_from_capture_kind(&kind),
                                     Some(CSI_BRIDGE_NOSIGNAL_INTERVAL_MS),
                                 ));
                             }
@@ -800,9 +804,7 @@ impl SharedVideoPipeline {
                         Ok(s) => OpenResult::Opened(s),
                         Err(AppError::CaptureNoSignal { kind }) => {
                             debug!("Capture soft-restart: still no signal ({})", kind);
-                            OpenResult::NoSignal(
-                                SignalStatus::from_str(&kind).unwrap_or(SignalStatus::NoSignal),
-                            )
+                            OpenResult::NoSignal(signal_status_from_capture_kind(&kind))
                         }
                         Err(e) => {
                             error!("Capture soft-restart failed: {}", e);
@@ -818,17 +820,6 @@ impl SharedVideoPipeline {
                 let mut consecutive_timeouts: u32 = 0;
                 let capture_error_throttler = LogThrottler::with_secs(5);
                 let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
-
-                let classify_capture_error = |err: &std::io::Error| -> String {
-                    let message = err.to_string();
-                    if message.contains("dqbuf failed") && message.contains("EINVAL") {
-                        "capture_dqbuf_einval".to_string()
-                    } else if message.contains("dqbuf failed") {
-                        "capture_dqbuf".to_string()
-                    } else {
-                        format!("capture_{:?}", err.kind())
-                    }
-                };
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
                     let subscriber_count = pipeline.subscriber_count();
@@ -1121,30 +1112,39 @@ impl SharedVideoPipeline {
                                 // EIO (5) / EPIPE (32) / EPROTO (71) in next_into generally
                                 // mean the source or UVC USB transport glitched mid-stream.
                                 // Tear down the stream and let the open loop re-probe.
-                                let os = e.raw_os_error();
-                                if matches!(os, Some(5) | Some(32) | Some(71)) {
-                                    if os == Some(71) {
-                                        warn!(
+                                match classify_capture_io_error(&e) {
+                                    CaptureIoErrorKind::TransientSignal { status } => {
+                                        if status == Some(SignalStatus::UvcUsbError) {
+                                            warn!(
                                             "Capture transient error (EPROTO/-71, often UVC USB): {} — soft-restart",
                                             e
                                         );
-                                        pipeline.notify_state(
-                                            PipelineStateNotification::no_signal(
-                                                SignalStatus::UvcUsbError,
-                                                Some(Duration::from_secs(2).as_millis() as u64),
-                                            ),
-                                        );
-                                    } else {
-                                        warn!(
-                                            "Capture transient error ({}), closing stream for \
+                                            pipeline.notify_state(
+                                                PipelineStateNotification::no_signal(
+                                                    SignalStatus::UvcUsbError,
+                                                    Some(Duration::from_secs(2).as_millis() as u64),
+                                                ),
+                                            );
+                                        } else {
+                                            warn!(
+                                                "Capture transient error ({}), closing stream for \
                                              soft-restart",
-                                            e
-                                        );
+                                                e
+                                            );
+                                        }
+                                        stream = None;
+                                        continue;
                                     }
-                                    stream = None;
-                                    continue;
+                                    CaptureIoErrorKind::DeviceLost => {
+                                        error!("Capture device lost: {}", e);
+                                        let _ = pipeline.running.send(false);
+                                        pipeline.running_flag.store(false, Ordering::Release);
+                                        let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                        break;
+                                    }
+                                    CaptureIoErrorKind::Other => {}
                                 }
-                                let key = classify_capture_error(&e);
+                                let key = capture_error_log_key(&e);
                                 if capture_error_throttler.should_log(&key) {
                                     let suppressed =
                                         suppressed_capture_errors.remove(&key).unwrap_or(0);

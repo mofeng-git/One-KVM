@@ -193,7 +193,6 @@ async fn main() -> anyhow::Result<()> {
         config.web.http_port
     };
 
-
     for ip in &bind_ips {
         let addr = SocketAddr::new(*ip, bind_port);
         tracing::info!("Server will listen on: {}://{}", scheme, addr);
@@ -327,10 +326,7 @@ async fn main() -> anyhow::Result<()> {
         },
         config::HidBackend::None => HidBackendType::None,
     };
-    let hid = Arc::new(HidController::new(
-        hid_backend,
-        Some(otg_service.clone()),
-    ));
+    let hid = Arc::new(HidController::new(hid_backend, Some(otg_service.clone())));
     hid.set_event_bus(events.clone()).await;
     if let Err(e) = hid.init().await {
         tracing::warn!("Failed to initialize HID backend: {}", e);
@@ -774,10 +770,9 @@ async fn run_user_action(
 }
 
 async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow::Result<()> {
-    let user = users
-        .single_user()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("No local user exists yet; complete setup in the web UI first."))?;
+    let user = users.single_user().await?.ok_or_else(|| {
+        anyhow::anyhow!("No local user exists yet; complete setup in the web UI first.")
+    })?;
 
     let new_password = read_new_password_interactive()?;
     if new_password.len() < 4 {

@@ -55,9 +55,7 @@ impl VideoCodec {
             VideoCodec::H264 => {
                 "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f".to_string()
             }
-            VideoCodec::H265 => {
-                "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST".to_string()
-            }
+            VideoCodec::H265 => "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST".to_string(),
             VideoCodec::VP8 => String::new(),
             VideoCodec::VP9 => "profile-id=0".to_string(),
         }

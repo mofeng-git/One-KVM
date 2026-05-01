@@ -11,9 +11,9 @@ use crate::error::{AppError, Result};
 use crate::events::{EventBus, SystemEvent};
 use crate::hid::HidController;
 use crate::video::types::{
-    BitratePreset, EncoderBackend, PixelFormat, Resolution, VideoCodecType, VideoEncoderType,
-    PipelineStateNotification, SharedVideoPipeline, SharedVideoPipelineConfig,
-    SharedVideoPipelineStats,
+    BitratePreset, EncoderBackend, PipelineStateNotification, PixelFormat, Resolution,
+    SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats, VideoCodecType,
+    VideoEncoderType,
 };
 
 use super::config::{TurnServer, WebRtcConfig};
@@ -249,10 +249,7 @@ impl WebRtcStreamer {
         })
     }
 
-    async fn reconnect_sessions_to_current_pipeline(
-        &self,
-        reason: &str,
-    ) -> Result<usize> {
+    async fn reconnect_sessions_to_current_pipeline(&self, reason: &str) -> Result<usize> {
         if self.capture_device.read().await.is_none() {
             return Ok(0);
         }
@@ -352,7 +349,8 @@ impl WebRtcStreamer {
                         if let Some(ref current) = *pipeline_guard {
                             if let Some(stopped_pipeline) = pipeline_weak.upgrade() {
                                 if Arc::ptr_eq(current, &stopped_pipeline) {
-                                    pending_geometry = stopped_pipeline.take_pending_sync_geometry();
+                                    pending_geometry =
+                                        stopped_pipeline.take_pending_sync_geometry();
                                     *pipeline_guard = None;
                                     info!("Cleared stopped video pipeline reference");
                                 }
@@ -414,9 +412,7 @@ impl WebRtcStreamer {
     ///
     /// This is a public wrapper around ensure_video_pipeline for external
     /// components (like RustDesk) that need to share the encoded video stream.
-    pub async fn ensure_video_pipeline_for_external(
-        &self,
-    ) -> Result<Arc<SharedVideoPipeline>> {
+    pub async fn ensure_video_pipeline_for_external(&self) -> Result<Arc<SharedVideoPipeline>> {
         self.ensure_video_pipeline().await
     }
 
@@ -608,11 +604,7 @@ impl WebRtcStreamer {
 
             info!(
                 "WebRTC config updated: {}x{} {:?} @ {} fps, {}",
-                resolution.width,
-                resolution.height,
-                format,
-                fps,
-                config.bitrate_preset
+                resolution.width, resolution.height, format, fps, config.bitrate_preset
             );
         }
 
@@ -1053,8 +1045,7 @@ impl WebRtcStreamer {
             if reconnected > 0 {
                 info!(
                     "Video pipeline restarted with {}, reconnected {} sessions",
-                    preset,
-                    reconnected
+                    preset, reconnected
                 );
             }
         } else {
@@ -1086,8 +1077,14 @@ impl crate::video::traits::VideoOutput for WebRtcStreamer {
         bridge_kind: Option<String>,
         v4l2_driver: Option<String>,
     ) {
-        self.set_capture_device(device_path, jpeg_quality, subdev_path, bridge_kind, v4l2_driver)
-            .await;
+        self.set_capture_device(
+            device_path,
+            jpeg_quality,
+            subdev_path,
+            bridge_kind,
+            v4l2_driver,
+        )
+        .await;
     }
 
     async fn current_video_codec(&self) -> VideoCodecType {
