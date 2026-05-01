@@ -192,7 +192,7 @@ impl ExtensionManager {
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    tracing::debug!("[{}] {}", id, line);
+                    tracing::info!("[{}] {}", id, line);
                     local_buffer.push(line);
 
                     if local_buffer.len() >= LOG_BATCH_SIZE {
