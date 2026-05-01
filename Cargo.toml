@@ -16,8 +16,8 @@ tokio-util = { version = "0.7", features = ["rt"] }
 
 # Web framework
 axum = { version = "0.8", features = ["ws", "multipart", "tokio"] }
-axum-extra = { version = "0.12", features = ["typed-header", "cookie"] }
-tower-http = { version = "0.6", features = ["fs", "cors", "trace", "compression-gzip"] }
+axum-extra = { version = "0.12", features = ["cookie"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Database - Use bundled SQLite for static linking
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
@@ -123,13 +123,10 @@ libyuv = { path = "res/vcpkg/libyuv" }
 typeshare = "1.0"
 
 [dev-dependencies]
-tokio-test = "0.4"
 tempfile = "3"
 
 [build-dependencies]
 protobuf-codegen = "3.7"
-toml = "0.9"
-cc = "1"
 
 [profile.release]
 opt-level = 3

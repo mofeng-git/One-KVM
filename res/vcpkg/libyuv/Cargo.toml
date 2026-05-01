@@ -8,5 +8,4 @@ license = "BSD-3-Clause"
 [dependencies]
 
 [build-dependencies]
-cc = "1.0"
 bindgen = "0.59"
