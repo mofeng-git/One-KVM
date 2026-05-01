@@ -560,15 +560,15 @@ export const msdApi = {
   },
 
   downloadDriveFile: (path: string) =>
-    `${API_BASE}/msd/drive/files${path.startsWith('/') ? path : '/' + path}`,
+    `${API_BASE}/msd/drive/files${encodeDrivePath(path)}`,
 
   deleteDriveFile: (path: string) =>
-    request<{ success: boolean }>(`/msd/drive/files${path.startsWith('/') ? path : '/' + path}`, {
+    request<{ success: boolean }>(`/msd/drive/files${encodeDrivePath(path)}`, {
       method: 'DELETE',
     }),
 
   createDirectory: (path: string) =>
-    request<{ success: boolean }>(`/msd/drive/mkdir${path.startsWith('/') ? path : '/' + path}`, {
+    request<{ success: boolean }>(`/msd/drive/mkdir${encodeDrivePath(path)}`, {
       method: 'POST',
     }),
 
@@ -597,6 +597,22 @@ export const msdApi = {
 interface SerialDeviceOption {
   path: string
   name: string
+}
+
+function encodeDrivePath(path: string): string {
+  if (path === '' || path === '/') {
+    return '/'
+  }
+
+  const hasLeadingSlash = path.startsWith('/')
+  const hasTrailingSlash = path.endsWith('/')
+  const encodedSegments = path
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment))
+    .join('/')
+
+  return `${hasLeadingSlash ? '/' : ''}${encodedSegments}${hasTrailingSlash ? '/' : ''}`
 }
 
 function getSerialDevicePriority(path: string): number {
