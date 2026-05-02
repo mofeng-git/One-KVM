@@ -128,7 +128,7 @@ impl AudioCapturer {
             return Ok(());
         }
 
-        info!(
+        debug!(
             "Starting audio capture on {} at {}Hz {}ch",
             self.config.device_name, self.config.sample_rate, self.config.channels
         );
@@ -243,7 +243,7 @@ fn run_capture(
             actual_ch
         )));
     }
-    info!("Audio capture: 48000 Hz, 2 ch");
+    debug!("Audio capture: 48000 Hz, 2 ch");
 
     pcm.prepare()
         .map_err(|e| AppError::AudioError(format!("Failed to prepare PCM: {}", e)))?;
@@ -307,11 +307,14 @@ fn run_capture(
             }
             Err(e) => {
                 let desc = e.to_string();
-                if desc.contains("EPIPE") || desc.contains("Broken pipe") {
+                if is_device_lost_error(&desc) {
+                    return Err(AppError::AudioError(format!(
+                        "Audio device lost while reading {}: {}",
+                        config.device_name, e
+                    )));
+                } else if desc.contains("EPIPE") || desc.contains("Broken pipe") {
                     warn_throttled!(log_throttler, "buffer_overrun", "Audio buffer overrun");
                     let _ = pcm.prepare();
-                } else if desc.contains("No such device") || desc.contains("ENODEV") {
-                    error_throttled!(log_throttler, "no_device", "Audio read error: {}", e);
                 } else {
                     error_throttled!(log_throttler, "read_error", "Audio read error: {}", e);
                 }
@@ -321,4 +324,11 @@ fn run_capture(
 
     info!("Audio capture stopped");
     Ok(())
+}
+
+fn is_device_lost_error(desc: &str) -> bool {
+    desc.contains("No such device")
+        || desc.contains("ENODEV")
+        || desc.contains("ENXIO")
+        || desc.contains("ESHUTDOWN")
 }

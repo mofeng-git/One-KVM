@@ -116,7 +116,7 @@ impl ExtensionManager {
             "Starting extension {}: {} {}",
             id,
             id.binary_path(),
-            args.join(" ")
+            Self::redact_args_for_log(&args).join(" ")
         );
 
         let mut child = Command::new(id.binary_path())
@@ -300,6 +300,34 @@ impl ExtensionManager {
                 Ok(args)
             }
         }
+    }
+
+    fn redact_args_for_log(args: &[String]) -> Vec<String> {
+        let mut redacted = Vec::with_capacity(args.len());
+        let mut redact_next = false;
+
+        for arg in args {
+            if redact_next {
+                redacted.push("****".to_string());
+                redact_next = false;
+                continue;
+            }
+
+            if arg == "-key" || arg == "--key" {
+                redacted.push(arg.clone());
+                redact_next = true;
+            } else if let Some((flag, _)) = arg.split_once('=') {
+                if flag == "-key" || flag == "--key" {
+                    redacted.push(format!("{}=****", flag));
+                } else {
+                    redacted.push(arg.clone());
+                }
+            } else {
+                redacted.push(arg.clone());
+            }
+        }
+
+        redacted
     }
 
     async fn prepare_ttyd_socket() -> Result<(), String> {

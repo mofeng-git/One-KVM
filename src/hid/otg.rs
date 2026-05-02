@@ -827,15 +827,15 @@ impl OtgBackend {
 #[async_trait]
 impl HidBackend for OtgBackend {
     async fn init(&self) -> Result<()> {
-        info!("Initializing OTG HID backend");
+        debug!("Initializing OTG HID backend");
 
         if self.udc_name.read().is_none() {
             if let Some(udc) = Self::find_udc() {
-                info!("Auto-detected UDC: {}", udc);
+                debug!("Auto-detected UDC: {}", udc);
                 self.set_udc_name(&udc);
             }
         } else if let Some(udc) = self.udc_name.read().clone() {
-            info!("Using configured UDC: {}", udc);
+            debug!("Using configured UDC: {}", udc);
         }
 
         let mut device_paths = Vec::new();
@@ -866,7 +866,7 @@ impl HidBackend for OtgBackend {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.keyboard_dev.lock() = Some(file);
-                info!("Keyboard device opened: {}", path.display());
+                debug!("Keyboard device opened: {}", path.display());
             } else {
                 warn!("Keyboard device not found: {}", path.display());
             }
@@ -876,7 +876,7 @@ impl HidBackend for OtgBackend {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.mouse_rel_dev.lock() = Some(file);
-                info!("Relative mouse device opened: {}", path.display());
+                debug!("Relative mouse device opened: {}", path.display());
             } else {
                 warn!("Relative mouse device not found: {}", path.display());
             }
@@ -886,7 +886,7 @@ impl HidBackend for OtgBackend {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.mouse_abs_dev.lock() = Some(file);
-                info!("Absolute mouse device opened: {}", path.display());
+                debug!("Absolute mouse device opened: {}", path.display());
             } else {
                 warn!("Absolute mouse device not found: {}", path.display());
             }
@@ -896,7 +896,7 @@ impl HidBackend for OtgBackend {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.consumer_dev.lock() = Some(file);
-                info!("Consumer control device opened: {}", path.display());
+                debug!("Consumer control device opened: {}", path.display());
             } else {
                 debug!("Consumer control device not found: {}", path.display());
             }

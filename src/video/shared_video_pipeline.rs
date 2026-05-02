@@ -45,8 +45,8 @@ use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
 use crate::video::capture_status::{
-    capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
-    CaptureIoErrorKind,
+    capture_error_log_key, classify_capture_io_error, is_device_lost_message,
+    signal_status_from_capture_kind, CaptureIoErrorKind,
 };
 use crate::video::csi_bridge::{self, ProbeResult};
 use crate::video::device::parse_bridge_kind;
@@ -272,6 +272,7 @@ pub struct SharedVideoPipeline {
     /// Uses AtomicI64 instead of Mutex for lock-free access
     pipeline_start_time_ms: AtomicI64,
     pending_sync_geometry: ParkingMutex<Option<(Resolution, PixelFormat)>>,
+    device_lost_reason: ParkingMutex<Option<String>>,
     state_notifier: ParkingRwLock<Option<Arc<dyn Fn(PipelineStateNotification) + Send + Sync>>>,
     last_state_notification: ParkingMutex<Option<PipelineStateNotification>>,
 }
@@ -377,6 +378,7 @@ impl SharedVideoPipeline {
             keyframe_requested: AtomicBool::new(false),
             pipeline_start_time_ms: AtomicI64::new(0),
             pending_sync_geometry: ParkingMutex::new(None),
+            device_lost_reason: ParkingMutex::new(None),
             state_notifier: ParkingRwLock::new(None),
             last_state_notification: ParkingMutex::new(None),
         });
@@ -386,6 +388,14 @@ impl SharedVideoPipeline {
 
     pub fn take_pending_sync_geometry(&self) -> Option<(Resolution, PixelFormat)> {
         self.pending_sync_geometry.lock().take()
+    }
+
+    pub fn take_device_lost_reason(&self) -> Option<String> {
+        self.device_lost_reason.lock().take()
+    }
+
+    fn mark_device_lost(&self, reason: String) {
+        *self.device_lost_reason.lock() = Some(reason);
     }
 
     pub fn set_state_notifier(
@@ -783,6 +793,7 @@ impl SharedVideoPipeline {
                 enum OpenResult {
                     Opened(V4l2rCaptureStream),
                     NoSignal(SignalStatus),
+                    DeviceLost(String),
                     Fatal,
                 }
 
@@ -807,6 +818,11 @@ impl SharedVideoPipeline {
                             OpenResult::NoSignal(signal_status_from_capture_kind(&kind))
                         }
                         Err(e) => {
+                            let reason = e.to_string();
+                            if is_device_lost_message(&reason) {
+                                error!("Capture device lost during soft-restart: {}", e);
+                                return OpenResult::DeviceLost(reason);
+                            }
                             error!("Capture soft-restart failed: {}", e);
                             OpenResult::Fatal
                         }
@@ -949,6 +965,13 @@ impl SharedVideoPipeline {
                                 ));
                                 std::thread::sleep(Duration::from_millis(wait_ms));
                                 continue;
+                            }
+                            OpenResult::DeviceLost(reason) => {
+                                pipeline.mark_device_lost(reason);
+                                let _ = pipeline.running.send(false);
+                                pipeline.running_flag.store(false, Ordering::Release);
+                                let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                break;
                             }
                             OpenResult::Fatal => {
                                 let _ = pipeline.running.send(false);
@@ -1137,6 +1160,7 @@ impl SharedVideoPipeline {
                                     }
                                     CaptureIoErrorKind::DeviceLost => {
                                         error!("Capture device lost: {}", e);
+                                        pipeline.mark_device_lost(e.to_string());
                                         let _ = pipeline.running.send(false);
                                         pipeline.running_flag.store(false, Ordering::Release);
                                         let _ = frame_seq_tx.send(sequence.wrapping_add(1));

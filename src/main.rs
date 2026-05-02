@@ -424,13 +424,13 @@ async fn main() -> anyhow::Result<()> {
         if let Err(e) = webrtc_streamer.set_audio_enabled(true).await {
             tracing::warn!("Failed to enable WebRTC audio: {}", e);
         } else {
-            tracing::info!("WebRTC audio enabled");
+            tracing::debug!("WebRTC audio enabled");
         }
     }
 
     let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
         streamer.current_capture_config().await;
-    tracing::info!(
+    tracing::debug!(
         "Initial video config: {}x{} {:?} @ {}fps",
         actual_resolution.width,
         actual_resolution.height,
@@ -461,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
                 v4l2_driver,
             )
             .await;
-        tracing::info!("WebRTC streamer configured for direct capture");
+        tracing::debug!("WebRTC streamer configured for direct capture");
     } else {
         tracing::warn!("No capture device configured for WebRTC");
     }
@@ -472,6 +472,18 @@ async fn main() -> anyhow::Result<()> {
     );
     stream_manager.set_event_bus(events.clone()).await;
     stream_manager.set_config_store(config_store.clone()).await;
+    {
+        let stream_manager_weak = Arc::downgrade(&stream_manager);
+        audio
+            .set_recovered_callback(Arc::new(move || {
+                if let Some(stream_manager) = stream_manager_weak.upgrade() {
+                    tokio::spawn(async move {
+                        stream_manager.reconnect_webrtc_audio_sources().await;
+                    });
+                }
+            }))
+            .await;
+    }
 
     let initial_mode = config.stream.mode.clone();
     if let Err(e) = stream_manager.init_with_mode(initial_mode.clone()).await {

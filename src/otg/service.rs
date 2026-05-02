@@ -148,7 +148,7 @@ impl OtgService {
     async fn reconcile_gadget(&self) -> Result<()> {
         let desired = self.desired.read().await.clone();
 
-        info!(
+        debug!(
             "Reconciling OTG gadget: HID={}, MSD={}, UDC={:?}",
             desired.hid_enabled(),
             desired.msd_enabled,
@@ -166,7 +166,7 @@ impl OtgService {
                 && state.max_endpoints == desired.max_endpoints
                 && state.descriptor.as_ref() == Some(&desired.descriptor)
             {
-                info!("OTG gadget already matches desired state");
+                debug!("OTG gadget already matches desired state");
                 return Ok(());
             }
         }
@@ -174,7 +174,7 @@ impl OtgService {
         {
             let mut manager = self.manager.lock().await;
             if let Some(mut m) = manager.take() {
-                info!("Cleaning up existing gadget before OTG reconcile");
+                debug!("Cleaning up existing gadget before OTG reconcile");
                 if let Err(e) = m.cleanup() {
                     warn!("Error cleaning up existing gadget: {}", e);
                 }

@@ -28,6 +28,15 @@ pub fn classify_capture_io_error(err: &io::Error) -> CaptureIoErrorKind {
     }
 }
 
+pub fn is_device_lost_message(message: &str) -> bool {
+    message.contains("No such file or directory")
+        || message.contains("No such device")
+        || message.contains("os error 2")
+        || message.contains("ENODEV")
+        || message.contains("ENXIO")
+        || message.contains("ESHUTDOWN")
+}
+
 pub fn capture_error_log_key(err: &io::Error) -> String {
     let message = err.to_string();
     if message.contains("dqbuf failed") && message.contains("EINVAL") {

@@ -3,13 +3,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, watch, Mutex as AsyncMutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::capture::{AudioCapturer, AudioConfig, AudioFrame, CaptureState};
 use super::encoder::{OpusConfig, OpusEncoder, OpusFrame};
 use crate::error::{AppError, Result};
 use bytemuck;
 use bytes::Bytes;
+use std::time::Duration;
 
 /// 48 kHz stereo: 20 ms = 960 × 2 samples (S16LE).
 const OPUS_STEREO_SAMPLES: usize = 960 * 2;
@@ -156,6 +157,49 @@ impl AudioStreamer {
 
         capturer.start().await?;
 
+        let mut capture_state = capturer.state_watch();
+        let startup_result = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                let current_state = *capture_state.borrow();
+                match current_state {
+                    CaptureState::Running => return Ok(()),
+                    CaptureState::Error => {
+                        return Err(AppError::AudioError(
+                            "Audio capture failed to start".to_string(),
+                        ))
+                    }
+                    CaptureState::Stopped => {
+                        if capture_state.changed().await.is_err() {
+                            return Err(AppError::AudioError(
+                                "Audio capture stopped during startup".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        })
+        .await;
+
+        match startup_result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                let _ = capturer.stop().await;
+                *self.capturer.write().await = None;
+                *self.encoder.lock().await = None;
+                let _ = self.state.send(AudioStreamState::Error);
+                return Err(e);
+            }
+            Err(_) => {
+                let _ = capturer.stop().await;
+                *self.capturer.write().await = None;
+                *self.encoder.lock().await = None;
+                let _ = self.state.send(AudioStreamState::Error);
+                return Err(AppError::AudioError(
+                    "Timed out waiting for audio capture to start".to_string(),
+                ));
+            }
+        }
+
         let capturer_for_task = capturer.clone();
         let encoder = self.encoder.clone();
         let opus_subscribers = self.opus_subscribers.clone();
@@ -232,7 +276,7 @@ impl AudioStreamer {
         let mut pcm_rx = capturer.subscribe();
         let _ = state.send(AudioStreamState::Running);
 
-        info!("Audio stream task started (48 kHz stereo → Opus, mpsc fan-out)");
+        debug!("Audio stream task started (48 kHz stereo → Opus, mpsc fan-out)");
 
         let mut pending: Vec<i16> = Vec::new();
 
@@ -310,13 +354,18 @@ impl AudioStreamer {
                 Err(_) => {
                     if capturer.state() != CaptureState::Running {
                         info!("Audio capture stopped, ending stream task");
+                        let _ = state.send(AudioStreamState::Error);
                         break;
                     }
                 }
             }
         }
 
-        let _ = state.send(AudioStreamState::Stopped);
+        if stop_flag.load(Ordering::Relaxed) {
+            let _ = state.send(AudioStreamState::Stopped);
+        } else {
+            opus_subscribers.lock().unwrap().clear();
+        }
         info!("Audio stream task ended");
     }
 }

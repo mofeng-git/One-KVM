@@ -16,6 +16,31 @@ export function useAudioPlayer() {
   let decoder: any = null
   let nextPlayTime = 0
   let isConnecting = false // Prevent concurrent connection attempts
+  let reconnectTimer: number | null = null
+  let shouldReconnect = false
+
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  function scheduleReconnect() {
+    if (!shouldReconnect || volume.value <= 0 || reconnectTimer !== null) {
+      return
+    }
+
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null
+      if (!shouldReconnect || volume.value <= 0) {
+        return
+      }
+      connect().catch(() => {
+        scheduleReconnect()
+      })
+    }, 1000)
+  }
 
   async function initDecoder() {
     const opusDecoder = new OpusDecoder({
@@ -34,6 +59,8 @@ export function useAudioPlayer() {
   }
 
   async function connect() {
+    shouldReconnect = true
+
     // Prevent concurrent connection attempts (critical fix for multiple WS connections)
     if (isConnecting) {
       return
@@ -52,6 +79,7 @@ export function useAudioPlayer() {
     }
 
     isConnecting = true
+    clearReconnectTimer()
 
     try {
       if (!decoder) await initDecoder()
@@ -72,6 +100,7 @@ export function useAudioPlayer() {
         connected.value = true
         playing.value = true
         error.value = null
+        clearReconnectTimer()
         nextPlayTime = audioContext!.currentTime
       }
 
@@ -83,8 +112,10 @@ export function useAudioPlayer() {
 
       ws.onclose = () => {
         isConnecting = false
+        ws = null
         connected.value = false
         playing.value = false
+        scheduleReconnect()
       }
 
       ws.onerror = () => {
@@ -94,10 +125,13 @@ export function useAudioPlayer() {
     } catch (e) {
       isConnecting = false
       error.value = e instanceof Error ? e.message : 'Failed to initialize audio'
+      scheduleReconnect()
     }
   }
 
   function disconnect() {
+    shouldReconnect = false
+    clearReconnectTimer()
     if (ws) {
       ws.close()
       ws = null
@@ -172,6 +206,11 @@ export function useAudioPlayer() {
   function setVolume(v: number) {
     volume.value = Math.max(0, Math.min(1, v))
     updateVolume()
+    if (volume.value <= 0) {
+      clearReconnectTimer()
+    } else if (shouldReconnect && !connected.value && !isConnecting) {
+      scheduleReconnect()
+    }
   }
 
   watch(volume, updateVolume)

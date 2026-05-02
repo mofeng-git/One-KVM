@@ -365,7 +365,7 @@ pub async fn apply_audio_config(
         .stream_manager
         .set_webrtc_audio_enabled(new_config.enabled)
         .await?;
-    tracing::info!("WebRTC audio enabled: {}", new_config.enabled);
+    tracing::debug!("WebRTC audio enabled: {}", new_config.enabled);
 
     if new_config.enabled {
         state.stream_manager.reconnect_webrtc_audio_sources().await;

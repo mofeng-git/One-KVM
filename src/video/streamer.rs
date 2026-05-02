@@ -13,7 +13,8 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::csi_bridge;
 use super::device::{
-    enumerate_devices, find_best_device, parse_bridge_kind, VideoDevice, VideoDeviceInfo,
+    enumerate_devices, find_best_device, parse_bridge_kind, select_recovery_device, VideoDevice,
+    VideoDeviceInfo, VideoDeviceRecoveryHint,
 };
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
@@ -366,7 +367,7 @@ impl Streamer {
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
         // This prevents race conditions where clients try to reconnect and reopen the device
-        info!("Disconnecting all MJPEG clients before config change...");
+        debug!("Disconnecting all MJPEG clients before config change...");
         self.mjpeg_handler.disconnect_all_clients();
 
         // Give clients time to receive the disconnect signal and close their connections
@@ -392,7 +393,7 @@ impl Streamer {
         *self.state.write().await = StreamerState::Ready;
 
         // Publish "config applied" event
-        info!(
+        debug!(
             "Publishing StreamConfigApplied event: {}x{} {:?} @ {}fps",
             resolution.width, resolution.height, format, fps
         );
@@ -408,7 +409,7 @@ impl Streamer {
         // Note: We don't auto-start here anymore.
         // The stream will be started when MJPEG client connects (handlers.rs:790)
         // This avoids race conditions between config change and client reconnection.
-        info!("Config applied, stream will start when client connects");
+        debug!("Config applied, stream will start when client connects");
 
         Ok(())
     }
@@ -1305,6 +1306,7 @@ impl Streamer {
 
         {
             let mut cfg = self.config.write().await;
+            cfg.device_path = Some(device_info.path.clone());
             cfg.format = format;
             cfg.resolution = resolution;
         }
@@ -1392,6 +1394,20 @@ impl Streamer {
             .await
             .clone()
             .unwrap_or_else(|| "Device lost".to_string());
+        let recovery_hint = self
+            .current_device
+            .read()
+            .await
+            .as_ref()
+            .map(VideoDeviceRecoveryHint::from)
+            .unwrap_or_else(|| VideoDeviceRecoveryHint {
+                path: PathBuf::from(&device),
+                name: String::new(),
+                driver: String::new(),
+                bus_info: String::new(),
+                card: String::new(),
+                is_capture_card: true,
+            });
 
         // Store error info
         *self.last_lost_device.write().await = Some(device.clone());
@@ -1409,7 +1425,7 @@ impl Streamer {
         // Start recovery task
         let streamer = Arc::clone(self);
         tokio::spawn(async move {
-            let device_path = device.clone();
+            let original_device_path = device.clone();
 
             loop {
                 let attempt = streamer
@@ -1433,13 +1449,13 @@ impl Streamer {
                 if attempt == 1 || attempt.is_multiple_of(5) {
                     streamer
                         .publish_event(SystemEvent::StreamReconnecting {
-                            device: device_path.clone(),
+                            device: original_device_path.clone(),
                             attempt,
                         })
                         .await;
                     info!(
                         "Attempting to recover video device {} (attempt {})",
-                        device_path, attempt
+                        original_device_path, attempt
                     );
                 }
 
@@ -1450,9 +1466,28 @@ impl Streamer {
                 };
                 tokio::time::sleep(wait).await;
 
-                // Check if device file exists
-                let device_exists = std::path::Path::new(&device_path).exists();
-                if !device_exists {
+                let devices = match enumerate_devices() {
+                    Ok(devices) => devices,
+                    Err(e) => {
+                        debug!("Failed to enumerate devices during recovery: {}", e);
+                        continue;
+                    }
+                };
+
+                let Some(device) = select_recovery_device(&devices, &recovery_hint) else {
+                    debug!("No matching video device present yet for recovery");
+                    continue;
+                };
+
+                let device_path = device.path.display().to_string();
+                if device_path != original_device_path {
+                    info!(
+                        "Recovered video device path changed: {} -> {}",
+                        original_device_path, device_path
+                    );
+                }
+
+                if !std::path::Path::new(&device_path).exists() {
                     debug!("Device {} not present yet", device_path);
                     continue;
                 }

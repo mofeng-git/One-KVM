@@ -3,7 +3,7 @@
 use audiopus::coder::GenericCtl;
 use audiopus::{coder::Encoder, Application, Bitrate, Channels, SampleRate};
 use bytes::Bytes;
-use tracing::info;
+use tracing::debug;
 
 use super::capture::AudioFrame;
 use crate::error::{AppError, Result};
@@ -123,7 +123,7 @@ impl OpusEncoder {
                 .map_err(|e| AppError::AudioError(format!("Failed to enable FEC: {:?}", e)))?;
         }
 
-        info!(
+        debug!(
             "Opus encoder created: {}Hz {}ch {}bps",
             config.sample_rate, config.channels, config.bitrate
         );

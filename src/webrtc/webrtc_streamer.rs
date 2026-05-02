@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::RwLock;
 use tracing::{debug, info, trace, warn};
@@ -10,6 +11,9 @@ use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, SystemEvent};
 use crate::hid::HidController;
+use crate::video::device::{
+    enumerate_devices, select_recovery_device, VideoDevice, VideoDeviceRecoveryHint,
+};
 use crate::video::types::{
     BitratePreset, EncoderBackend, PipelineStateNotification, PixelFormat, Resolution,
     SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats, VideoCodecType,
@@ -56,6 +60,7 @@ pub struct CaptureDeviceConfig {
     pub bridge_kind: Option<String>,
     /// V4L2 driver name (e.g. `uvcvideo`) for UVC-specific recovery hints.
     pub v4l2_driver: Option<String>,
+    pub recovery_hint: VideoDeviceRecoveryHint,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -88,6 +93,7 @@ pub struct WebRtcStreamer {
     audio_controller: RwLock<Option<Arc<AudioController>>>,
     hid_controller: RwLock<Option<Arc<HidController>>>,
     events: RwLock<Option<Arc<EventBus>>>,
+    recovery_in_progress: AtomicBool,
     self_weak: StdRwLock<Option<std::sync::Weak<Self>>>,
 }
 
@@ -107,6 +113,7 @@ impl WebRtcStreamer {
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
             events: RwLock::new(None),
+            recovery_in_progress: AtomicBool::new(false),
             self_weak: StdRwLock::new(None),
         });
         let weak = Arc::downgrade(&streamer);
@@ -283,6 +290,156 @@ impl WebRtcStreamer {
         Ok(sessions_to_reconnect.len())
     }
 
+    async fn publish_stream_event(&self, event: SystemEvent) {
+        if let Some(events) = self.events.read().await.as_ref() {
+            events.publish(event);
+            events.mark_device_info_dirty();
+        }
+    }
+
+    async fn update_recovered_capture_device(
+        &self,
+        device: crate::video::device::VideoDeviceInfo,
+    ) -> Result<()> {
+        let (format, resolution, fps, jpeg_quality, buffer_count) = {
+            let config = self.config.read().await;
+            let current_capture = self.capture_device.read().await.clone();
+            (
+                config.input_format,
+                config.resolution,
+                config.fps,
+                current_capture
+                    .as_ref()
+                    .map(|capture| capture.jpeg_quality)
+                    .unwrap_or(80),
+                current_capture
+                    .as_ref()
+                    .map(|capture| capture.buffer_count)
+                    .unwrap_or(2),
+            )
+        };
+
+        let pipeline_config = CaptureDeviceConfig {
+            device_path: device.path.clone(),
+            buffer_count,
+            jpeg_quality,
+            subdev_path: device.subdev_path.clone(),
+            bridge_kind: device.bridge_kind.clone(),
+            v4l2_driver: Some(device.driver.clone()),
+            recovery_hint: VideoDeviceRecoveryHint::from(&device),
+        };
+
+        *self.capture_device.write().await = Some(pipeline_config);
+        let mut config = self.config.write().await;
+        config.input_format = format;
+        config.resolution = resolution;
+        config.fps = fps;
+        Ok(())
+    }
+
+    fn start_device_recovery(self: &Arc<Self>, hint: VideoDeviceRecoveryHint, reason: String) {
+        if self.recovery_in_progress.swap(true, Ordering::SeqCst) {
+            debug!("WebRTC video recovery already in progress");
+            return;
+        }
+
+        let streamer = self.clone();
+        tokio::spawn(async move {
+            let original_device = hint.path.display().to_string();
+            warn!(
+                "WebRTC video recovery started for {}: {}",
+                original_device, reason
+            );
+            streamer
+                .publish_stream_event(SystemEvent::StreamDeviceLost {
+                    device: original_device.clone(),
+                    reason: reason.clone(),
+                })
+                .await;
+
+            let mut attempt = 0u32;
+            loop {
+                attempt = attempt.saturating_add(1);
+                streamer
+                    .publish_stream_event(SystemEvent::StreamReconnecting {
+                        device: original_device.clone(),
+                        attempt,
+                    })
+                    .await;
+                streamer
+                    .publish_stream_event(SystemEvent::StreamStateChanged {
+                        state: "device_lost".to_string(),
+                        device: Some(original_device.clone()),
+                        reason: Some("recovering".to_string()),
+                        next_retry_ms: Some(1_000),
+                    })
+                    .await;
+
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                let devices = match enumerate_devices() {
+                    Ok(devices) => devices,
+                    Err(e) => {
+                        debug!("WebRTC video recovery enumerate failed: {}", e);
+                        continue;
+                    }
+                };
+
+                let Some(device) = select_recovery_device(&devices, &hint) else {
+                    debug!("No matching WebRTC video device found during recovery");
+                    continue;
+                };
+
+                if let Err(e) = streamer
+                    .update_recovered_capture_device(device.clone())
+                    .await
+                {
+                    debug!("Failed to update recovered capture device: {}", e);
+                    continue;
+                }
+
+                match streamer.ensure_video_pipeline().await {
+                    Ok(_) => {
+                        match streamer
+                            .reconnect_sessions_to_current_pipeline("device recovery")
+                            .await
+                        {
+                            Ok(reconnected) => {
+                                info!(
+                                    "WebRTC video recovered with {} after {} attempts, reconnected {} sessions",
+                                    device.path.display(),
+                                    attempt,
+                                    reconnected
+                                );
+                                streamer
+                                    .publish_stream_event(SystemEvent::StreamRecovered {
+                                        device: device.path.display().to_string(),
+                                    })
+                                    .await;
+                                streamer
+                                    .publish_stream_event(SystemEvent::StreamStateChanged {
+                                        state: "streaming".to_string(),
+                                        device: Some(device.path.display().to_string()),
+                                        reason: None,
+                                        next_retry_ms: None,
+                                    })
+                                    .await;
+                                streamer.recovery_in_progress.store(false, Ordering::SeqCst);
+                                return;
+                            }
+                            Err(e) => {
+                                debug!("Failed to reconnect WebRTC sessions after recovery: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("Failed to restart WebRTC video pipeline: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
     /// Ensure video pipeline is initialized and running
     async fn ensure_video_pipeline(&self) -> Result<Arc<SharedVideoPipeline>> {
         let mut pipeline_guard = self.video_pipeline.write().await;
@@ -344,6 +501,7 @@ impl WebRtcStreamer {
                     // Clear pipeline reference in WebRtcStreamer
                     if let Some(streamer) = streamer_weak.upgrade() {
                         let mut pending_geometry: Option<(Resolution, PixelFormat)> = None;
+                        let mut device_lost_reason: Option<String> = None;
                         let mut pipeline_guard = streamer.video_pipeline.write().await;
                         // Only clear if it's the same pipeline that stopped
                         if let Some(ref current) = *pipeline_guard {
@@ -351,12 +509,20 @@ impl WebRtcStreamer {
                                 if Arc::ptr_eq(current, &stopped_pipeline) {
                                     pending_geometry =
                                         stopped_pipeline.take_pending_sync_geometry();
+                                    device_lost_reason = stopped_pipeline.take_device_lost_reason();
                                     *pipeline_guard = None;
                                     info!("Cleared stopped video pipeline reference");
                                 }
                             }
                         }
                         drop(pipeline_guard);
+
+                        if let Some(reason) = device_lost_reason {
+                            if let Some(capture) = streamer.capture_device.read().await.clone() {
+                                streamer.start_device_recovery(capture.recovery_hint, reason);
+                            }
+                            continue;
+                        }
 
                         let should_reconnect = pending_geometry.is_some();
                         if let Some((r, f)) = pending_geometry {
@@ -466,13 +632,13 @@ impl WebRtcStreamer {
             }
         }
 
-        info!("WebRTC audio enabled: {}", enabled);
+        debug!("WebRTC audio enabled: {}", enabled);
         Ok(())
     }
 
     /// Set audio controller reference
     pub async fn set_audio_controller(&self, controller: Arc<AudioController>) {
-        info!("Setting audio controller for WebRTC streamer");
+        debug!("Setting audio controller for WebRTC streamer");
         *self.audio_controller.write().await = Some(controller.clone());
 
         // Reconnect audio for existing sessions if audio is enabled
@@ -516,10 +682,21 @@ impl WebRtcStreamer {
         bridge_kind: Option<String>,
         v4l2_driver: Option<String>,
     ) {
-        info!(
+        debug!(
             "Setting direct capture device for WebRTC: {:?} (subdev={:?}, kind={:?}, driver={:?})",
             device_path, subdev_path, bridge_kind, v4l2_driver
         );
+        let recovery_hint = VideoDevice::open_readonly(&device_path)
+            .and_then(|device| device.info())
+            .map(|info| VideoDeviceRecoveryHint::from(&info))
+            .unwrap_or_else(|_| VideoDeviceRecoveryHint {
+                path: device_path.clone(),
+                name: String::new(),
+                driver: v4l2_driver.clone().unwrap_or_default(),
+                bus_info: String::new(),
+                card: String::new(),
+                is_capture_card: true,
+            });
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
             buffer_count: 2,
@@ -527,6 +704,7 @@ impl WebRtcStreamer {
             subdev_path,
             bridge_kind,
             v4l2_driver,
+            recovery_hint,
         });
     }
 
@@ -1164,6 +1342,7 @@ impl Default for WebRtcStreamer {
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
             events: RwLock::new(None),
+            recovery_in_progress: AtomicBool::new(false),
             self_weak: StdRwLock::new(None),
         }
     }

@@ -61,6 +61,29 @@ pub struct VideoDeviceInfo {
     pub bridge_kind: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct VideoDeviceRecoveryHint {
+    pub path: PathBuf,
+    pub name: String,
+    pub driver: String,
+    pub bus_info: String,
+    pub card: String,
+    pub is_capture_card: bool,
+}
+
+impl From<&VideoDeviceInfo> for VideoDeviceRecoveryHint {
+    fn from(device: &VideoDeviceInfo) -> Self {
+        Self {
+            path: device.path.clone(),
+            name: device.name.clone(),
+            driver: device.driver.clone(),
+            bus_info: device.bus_info.clone(),
+            card: device.card.clone(),
+            is_capture_card: device.is_capture_card,
+        }
+    }
+}
+
 /// Information about a supported format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatInfo {
@@ -850,7 +873,7 @@ impl VideoDevice {
 
 /// Enumerate all video capture devices
 pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
-    info!("Enumerating video devices...");
+    debug!("Enumerating video devices...");
 
     // First pass: collect candidates that pass the sysfs-based pre-filter.
     // This avoids opening orphan /dev/videoN nodes (ENODEV) and m2m codec
@@ -932,6 +955,51 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
 
     info!("Found {} video capture devices", devices.len());
     Ok(devices)
+}
+
+pub fn select_recovery_device(
+    devices: &[VideoDeviceInfo],
+    hint: &VideoDeviceRecoveryHint,
+) -> Option<VideoDeviceInfo> {
+    devices
+        .iter()
+        .find(|device| device.path == hint.path)
+        .or_else(|| {
+            if hint.bus_info.trim().is_empty() {
+                None
+            } else {
+                devices
+                    .iter()
+                    .find(|device| device.bus_info == hint.bus_info)
+            }
+        })
+        .or_else(|| {
+            if hint.driver.trim().is_empty() || hint.card.trim().is_empty() {
+                None
+            } else {
+                devices
+                    .iter()
+                    .find(|device| device.driver == hint.driver && device.card == hint.card)
+            }
+        })
+        .or_else(|| {
+            if hint.driver.trim().is_empty() || hint.name.trim().is_empty() {
+                None
+            } else {
+                devices
+                    .iter()
+                    .find(|device| device.driver == hint.driver && device.name == hint.name)
+            }
+        })
+        .or_else(|| {
+            if hint.is_capture_card {
+                devices.iter().find(|device| device.is_capture_card)
+            } else {
+                None
+            }
+        })
+        .or_else(|| devices.first())
+        .cloned()
 }
 
 /// Collapse platform sub-device nodes that share the same driver + bus_info
@@ -1215,6 +1283,35 @@ pub fn find_best_device() -> Result<VideoDeviceInfo> {
 mod tests {
     use super::*;
 
+    fn test_device(
+        path: &str,
+        name: &str,
+        driver: &str,
+        bus_info: &str,
+        card: &str,
+        is_capture_card: bool,
+        priority: u32,
+    ) -> VideoDeviceInfo {
+        VideoDeviceInfo {
+            path: PathBuf::from(path),
+            name: name.to_string(),
+            driver: driver.to_string(),
+            bus_info: bus_info.to_string(),
+            card: card.to_string(),
+            formats: Vec::new(),
+            capabilities: DeviceCapabilities {
+                video_capture: true,
+                streaming: true,
+                ..Default::default()
+            },
+            is_capture_card,
+            priority,
+            has_signal: true,
+            subdev_path: None,
+            bridge_kind: None,
+        }
+    }
+
     #[test]
     fn test_pixel_format_conversion() {
         let format = PixelFormat::Mjpeg;
@@ -1229,5 +1326,71 @@ mod tests {
         assert_eq!(res.width, 1920);
         assert_eq!(res.height, 1080);
         assert!(res.is_valid());
+    }
+
+    #[test]
+    fn recovery_selection_prefers_original_path() {
+        let original = test_device(
+            "/dev/video0",
+            "USB Capture",
+            "uvcvideo",
+            "usb-1",
+            "USB Capture",
+            true,
+            100,
+        );
+        let other = test_device(
+            "/dev/video2",
+            "USB Capture",
+            "uvcvideo",
+            "usb-1",
+            "USB Capture",
+            true,
+            200,
+        );
+        let hint = VideoDeviceRecoveryHint::from(&original);
+        let selected = select_recovery_device(&[other, original.clone()], &hint).unwrap();
+        assert_eq!(selected.path, original.path);
+    }
+
+    #[test]
+    fn recovery_selection_matches_bus_info_after_path_change() {
+        let original = test_device(
+            "/dev/video0",
+            "USB Capture",
+            "uvcvideo",
+            "usb-1",
+            "USB Capture",
+            true,
+            100,
+        );
+        let recovered = test_device(
+            "/dev/video3",
+            "USB Capture",
+            "uvcvideo",
+            "usb-1",
+            "USB Capture",
+            true,
+            100,
+        );
+        let hint = VideoDeviceRecoveryHint::from(&original);
+        let selected = select_recovery_device(&[recovered.clone()], &hint).unwrap();
+        assert_eq!(selected.path, recovered.path);
+    }
+
+    #[test]
+    fn recovery_selection_falls_back_to_capture_priority() {
+        let hint = VideoDeviceRecoveryHint {
+            path: PathBuf::from("/dev/video9"),
+            name: "Gone".to_string(),
+            driver: "gone".to_string(),
+            bus_info: String::new(),
+            card: "Gone".to_string(),
+            is_capture_card: true,
+        };
+        let lower = test_device("/dev/video1", "A", "uvcvideo", "usb-a", "A", true, 10);
+        let higher = test_device("/dev/video2", "B", "uvcvideo", "usb-b", "B", true, 20);
+        let selected = select_recovery_device(&[higher.clone(), lower], &hint).unwrap();
+        assert_eq!(selected.path, higher.path);
     }
 }

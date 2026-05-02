@@ -163,7 +163,7 @@ impl OtgGadgetManager {
     }
 
     pub fn setup(&mut self) -> Result<()> {
-        info!("Setting up OTG USB Gadget: {}", self.gadget_name);
+        debug!("Setting up OTG USB Gadget: {}", self.gadget_name);
 
         if !Self::is_available() {
             return Err(AppError::Internal(
@@ -173,7 +173,7 @@ impl OtgGadgetManager {
 
         if self.gadget_exists() {
             if self.is_bound() {
-                info!("Gadget already exists and is bound, skipping setup");
+                debug!("Gadget already exists and is bound, skipping setup");
                 return Ok(());
             }
             warn!("Gadget exists but not bound, will reconfigure");
@@ -194,7 +194,7 @@ impl OtgGadgetManager {
             func.link(&self.config_path, &self.gadget_path)?;
         }
 
-        info!("OTG USB Gadget setup complete");
+        debug!("OTG USB Gadget setup complete");
         Ok(())
     }
 
@@ -203,7 +203,7 @@ impl OtgGadgetManager {
             warn!("Failed to recreate gadget config links before bind: {}", e);
         }
 
-        info!("Binding gadget to UDC: {}", udc);
+        debug!("Binding gadget to UDC: {}", udc);
         write_file(&self.gadget_path.join("UDC"), &udc)?;
         self.bound_udc = Some(udc.to_string());
         std::thread::sleep(std::time::Duration::from_millis(REBIND_DELAY_MS));
