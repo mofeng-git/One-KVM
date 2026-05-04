@@ -4,31 +4,40 @@ use axum::{
     routing::get,
     Router,
 };
-#[cfg(debug_assertions)]
-use std::path::PathBuf;
-#[cfg(debug_assertions)]
+use rust_embed::Embed;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-#[cfg(not(debug_assertions))]
-use rust_embed::Embed;
+const FRONTEND_DIR_ENV: &str = "ONE_KVM_FRONTEND_DIR";
 
-#[cfg(not(debug_assertions))]
 #[derive(Embed)]
 #[folder = "web/dist"]
 #[prefix = ""]
 pub struct StaticAssets;
 
-#[cfg(debug_assertions)]
-fn get_static_base_dir() -> PathBuf {
-    static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-    BASE_DIR
+fn frontend_dir_override() -> Option<PathBuf> {
+    static FRONTEND_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+    FRONTEND_DIR
         .get_or_init(|| {
-            if let Ok(exe_path) = std::env::current_exe() {
-                if let Some(exe_dir) = exe_path.parent() {
-                    return exe_dir.join("web").join("dist");
+            let value = std::env::var_os(FRONTEND_DIR_ENV)?;
+            let path = PathBuf::from(value);
+
+            if path.as_os_str().is_empty() {
+                return None;
+            }
+
+            match path.canonicalize() {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    tracing::warn!(
+                        "{}='{}' is not accessible: {}",
+                        FRONTEND_DIR_ENV,
+                        path.display(),
+                        e
+                    );
+                    None
                 }
             }
-            PathBuf::from("web/dist")
         })
         .clone()
 }
@@ -84,69 +93,60 @@ fn serve_file(path: &str) -> Response<Body> {
 }
 
 fn try_serve_file(path: &str) -> Option<Response<Body>> {
-    #[cfg(debug_assertions)]
-    {
-        let base_dir = get_static_base_dir();
-        let file_path = base_dir.join(path);
+    if let Some(base_dir) = frontend_dir_override() {
+        return try_serve_file_from_dir(&base_dir, path);
+    }
 
-        if !file_path.starts_with(&base_dir) {
-            tracing::warn!("Path traversal attempt blocked: {}", path);
+    let asset = StaticAssets::get(path)?;
+    Some(static_response(path, asset.data.to_vec()))
+}
+
+fn try_serve_file_from_dir(base_dir: &Path, path: &str) -> Option<Response<Body>> {
+    let file_path = base_dir.join(path);
+
+    let normalized_path = match file_path.canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::debug!(
+                "Failed to resolve static file '{}' from '{}': {}",
+                path,
+                file_path.display(),
+                e
+            );
             return None;
         }
+    };
 
-        if let (Ok(normalized_path), Ok(normalized_base)) =
-            (file_path.canonicalize(), base_dir.canonicalize())
-        {
-            if !normalized_path.starts_with(&normalized_base) {
-                tracing::warn!("Path traversal attempt blocked (canonicalized): {}", path);
-                return None;
-            }
-        }
-
-        match std::fs::read(&file_path) {
-            Ok(data) => {
-                let mime = mime_guess::from_path(path)
-                    .first_or_octet_stream()
-                    .to_string();
-
-                Some(
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, mime)
-                        .header(header::CACHE_CONTROL, "public, max-age=86400")
-                        .body(Body::from(data))
-                        .unwrap(),
-                )
-            }
-            Err(e) => {
-                tracing::debug!(
-                    "Failed to read static file '{}' from '{}': {}",
-                    path,
-                    file_path.display(),
-                    e
-                );
-                None
-            }
-        }
+    if !normalized_path.starts_with(base_dir) {
+        tracing::warn!("Path traversal attempt blocked: {}", path);
+        return None;
     }
 
-    #[cfg(not(debug_assertions))]
-    {
-        let asset = StaticAssets::get(path)?;
-
-        let mime = mime_guess::from_path(path)
-            .first_or_octet_stream()
-            .to_string();
-
-        Some(
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, mime)
-                .header(header::CACHE_CONTROL, "public, max-age=86400")
-                .body(Body::from(asset.data.to_vec()))
-                .unwrap(),
-        )
+    match std::fs::read(&normalized_path) {
+        Ok(data) => Some(static_response(path, data)),
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read static file '{}' from '{}': {}",
+                path,
+                normalized_path.display(),
+                e
+            );
+            None
+        }
     }
+}
+
+fn static_response(path: &str, data: Vec<u8>) -> Response<Body> {
+    let mime = mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .to_string();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(data))
+        .unwrap()
 }
 
 pub fn placeholder_html() -> &'static str {
