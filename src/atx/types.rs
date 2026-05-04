@@ -61,7 +61,7 @@ pub struct AtxKeyConfig {
     pub device: String,
     /// Pin or channel number:
     /// - For GPIO: GPIO pin number
-    /// - For USB Relay: relay channel (0-based)
+    /// - For USB Relay: relay channel (1-based)
     /// - For Serial Relay (LCUS): relay channel (1-based)
     pub pin: u32,
     /// Active level (only applicable to GPIO, ignored for USB Relay)

@@ -509,11 +509,23 @@ impl AtxConfigUpdate {
                 }
                 crate::atx::AtxDriverType::UsbRelay => {
                     if let Some(pin) = key.pin {
+                        if pin == 0 {
+                            return Err(AppError::BadRequest(format!(
+                                "{} USB relay channel must be 1-based (>= 1)",
+                                name
+                            )));
+                        }
                         if pin > u8::MAX as u32 {
                             return Err(AppError::BadRequest(format!(
                                 "{} USB relay channel must be <= {}",
                                 name,
                                 u8::MAX
+                            )));
+                        }
+                        if pin > 8 {
+                            return Err(AppError::BadRequest(format!(
+                                "{} USB HID relay channel must be <= 8",
+                                name
                             )));
                         }
                     }
@@ -551,11 +563,23 @@ impl AtxConfigUpdate {
                 }
             }
             crate::atx::AtxDriverType::UsbRelay => {
+                if key.pin == 0 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} USB relay channel must be 1-based (>= 1)",
+                        name
+                    )));
+                }
                 if key.pin > u8::MAX as u32 {
                     return Err(AppError::BadRequest(format!(
                         "{} USB relay channel must be <= {}",
                         name,
                         u8::MAX
+                    )));
+                }
+                if key.pin > 8 {
+                    return Err(AppError::BadRequest(format!(
+                        "{} USB HID relay channel must be <= 8",
+                        name
                     )));
                 }
             }

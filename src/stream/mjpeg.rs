@@ -8,6 +8,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
+/// Generation token paired with `client_id` so [`unregister_client`] ignores stale drops.
+pub type ClientGeneration = u64;
+
 use crate::video::encoder::traits::{Encoder, EncoderConfig};
 use crate::video::encoder::JpegEncoder;
 use crate::video::format::PixelFormat;
@@ -18,6 +21,7 @@ pub type ClientId = String;
 #[derive(Debug, Clone)]
 pub struct ClientSession {
     pub id: ClientId,
+    pub generation: ClientGeneration,
     pub connected_at: Instant,
     pub last_activity: Instant,
     pub frames_sent: u64,
@@ -25,10 +29,11 @@ pub struct ClientSession {
 }
 
 impl ClientSession {
-    pub fn new(id: ClientId) -> Self {
+    pub fn new(id: ClientId, generation: ClientGeneration) -> Self {
         let now = Instant::now();
         Self {
             id,
+            generation,
             connected_at: now,
             last_activity: now,
             frames_sent: 0,
@@ -45,7 +50,6 @@ impl ClientSession {
 pub struct FpsCalculator {
     frame_times: VecDeque<Instant>,
     window: Duration,
-    count_in_window: usize,
 }
 
 impl FpsCalculator {
@@ -53,28 +57,26 @@ impl FpsCalculator {
         Self {
             frame_times: VecDeque::with_capacity(120),
             window: Duration::from_secs(1),
-            count_in_window: 0,
         }
     }
 
     pub fn record_frame(&mut self) {
         let now = Instant::now();
         self.frame_times.push_back(now);
-
-        let cutoff = now - self.window;
-        while let Some(&oldest) = self.frame_times.front() {
-            if oldest < cutoff {
-                self.frame_times.pop_front();
-            } else {
-                break;
-            }
-        }
-
-        self.count_in_window = self.frame_times.len();
+        self.prune(now);
     }
 
-    pub fn current_fps(&self) -> u32 {
-        self.count_in_window as u32
+    /// Rolling-window FPS sample count (~1s).
+    pub fn current_fps(&mut self) -> u32 {
+        self.prune(Instant::now());
+        self.frame_times.len() as u32
+    }
+
+    fn prune(&mut self, now: Instant) {
+        let cutoff = now - self.window;
+        while matches!(self.frame_times.front(), Some(&t) if t < cutoff) {
+            self.frame_times.pop_front();
+        }
     }
 }
 
@@ -101,6 +103,7 @@ pub struct MjpegStreamHandler {
     online: AtomicBool,
     sequence: AtomicU64,
     clients: ParkingRwLock<HashMap<ClientId, ClientSession>>,
+    next_generation: AtomicU64,
     auto_pause_config: ParkingRwLock<AutoPauseConfig>,
     last_frame_ts: ParkingRwLock<Option<Instant>>,
     dropped_same_frames: AtomicU64,
@@ -122,6 +125,7 @@ impl MjpegStreamHandler {
             online: AtomicBool::new(false),
             sequence: AtomicU64::new(0),
             clients: ParkingRwLock::new(HashMap::new()),
+            next_generation: AtomicU64::new(1),
             jpeg_encoder: ParkingMutex::new(None),
             auto_pause_config: ParkingRwLock::new(AutoPauseConfig::default()),
             last_frame_ts: ParkingRwLock::new(None),
@@ -292,18 +296,26 @@ impl MjpegStreamHandler {
         self.clients.read().len() as u64
     }
 
-    pub fn register_client(&self, client_id: ClientId) {
-        let session = ClientSession::new(client_id.clone());
+    /// Connects `client_id`; return value must be passed to [`unregister_client`].
+    pub fn register_client(&self, client_id: ClientId) -> ClientGeneration {
+        let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
+        let session = ClientSession::new(client_id.clone(), generation);
         self.clients.write().insert(client_id.clone(), session);
         info!(
             "Client {} connected (total: {})",
             client_id,
             self.client_count()
         );
+        generation
     }
 
-    pub fn unregister_client(&self, client_id: &str) {
-        if let Some(session) = self.clients.write().remove(client_id) {
+    pub fn unregister_client(&self, client_id: &str, expected_generation: ClientGeneration) {
+        let mut clients = self.clients.write();
+        match clients.get(client_id) {
+            Some(session) if session.generation == expected_generation => {}
+            _ => return,
+        }
+        if let Some(session) = clients.remove(client_id) {
             let duration = session.connected_elapsed();
             let duration_secs = duration.as_secs_f32();
             let avg_fps = if duration_secs > 0.1 {
@@ -327,9 +339,12 @@ impl MjpegStreamHandler {
     }
 
     pub fn get_clients_stat(&self) -> HashMap<String, crate::events::types::ClientStats> {
+        // write() because `current_fps()` mutates the underlying VecDeque
+        // to prune stale samples. Held for ~microseconds, called once per
+        // second by the stats broadcaster.
         self.clients
-            .read()
-            .iter()
+            .write()
+            .iter_mut()
             .map(|(id, session)| {
                 (
                     id.clone(),
@@ -379,13 +394,18 @@ impl MjpegStreamHandler {
 
 pub struct ClientGuard {
     client_id: ClientId,
+    generation: ClientGeneration,
     handler: Arc<MjpegStreamHandler>,
 }
 
 impl ClientGuard {
     pub fn new(client_id: ClientId, handler: Arc<MjpegStreamHandler>) -> Self {
-        handler.register_client(client_id.clone());
-        Self { client_id, handler }
+        let generation = handler.register_client(client_id.clone());
+        Self {
+            client_id,
+            generation,
+            handler,
+        }
     }
 
     pub fn id(&self) -> &ClientId {
@@ -395,7 +415,8 @@ impl ClientGuard {
 
 impl Drop for ClientGuard {
     fn drop(&mut self) {
-        self.handler.unregister_client(&self.client_id);
+        self.handler
+            .unregister_client(&self.client_id, self.generation);
     }
 }
 
@@ -525,6 +546,41 @@ mod tests {
         calc.record_frame();
         calc.record_frame();
 
-        assert!(calc.frame_times.len() == 3);
+        assert_eq!(calc.current_fps(), 3);
+        assert_eq!(calc.frame_times.len(), 3);
+    }
+
+    #[test]
+    fn test_fps_calculator_decays_without_new_frames() {
+        let mut calc = FpsCalculator::new();
+        calc.window = Duration::from_millis(50);
+
+        calc.record_frame();
+        calc.record_frame();
+        assert_eq!(calc.current_fps(), 2);
+
+        std::thread::sleep(Duration::from_millis(80));
+
+        assert_eq!(calc.current_fps(), 0);
+        assert!(calc.frame_times.is_empty());
+    }
+
+    #[test]
+    fn test_client_guard_generation_isolation() {
+        let handler = Arc::new(MjpegStreamHandler::new());
+        let id = "shared-id".to_string();
+
+        let stale = ClientGuard::new(id.clone(), handler.clone());
+        let stale_gen = stale.generation;
+
+        let fresh = ClientGuard::new(id.clone(), handler.clone());
+        assert_ne!(stale_gen, fresh.generation);
+        assert_eq!(handler.client_count(), 1);
+
+        drop(stale);
+        assert_eq!(handler.client_count(), 1);
+
+        drop(fresh);
+        assert_eq!(handler.client_count(), 0);
     }
 }

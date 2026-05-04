@@ -28,17 +28,16 @@ function arraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
-function syncSubscriptions() {
+function syncSubscriptions(force = false) {
   const topics = getSubscribedTopics()
 
-  if (arraysEqual(topics, subscribedTopics)) {
+  if (!force && arraysEqual(topics, subscribedTopics)) {
     return
   }
 
-  subscribedTopics = topics
-
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
     subscribe(topics)
+    subscribedTopics = topics
   }
 }
 
@@ -59,7 +58,7 @@ function connect() {
       networkErrorMessage.value = null
       reconnectAttempts.value = 0
 
-      syncSubscriptions()
+      syncSubscriptions(true)
     }
 
     wsInstance.onmessage = (e) => {

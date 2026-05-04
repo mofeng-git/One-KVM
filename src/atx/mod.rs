@@ -15,6 +15,7 @@
 //!
 //! - **GPIO**: Uses Linux GPIO character device (/dev/gpiochipX) for direct hardware control
 //! - **USB Relay**: Uses HID USB relay modules for isolated switching
+//! - **Serial Relay**: Uses LCUS-style serial relay modules
 //!
 //! # Example
 //!
@@ -59,9 +60,25 @@ pub use types::{
 };
 pub use wol::send_wol;
 
+fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {
+    let upper = uevent.to_ascii_uppercase();
+    upper.contains("000016C0:000005DF")
+        || upper.contains("16C0:05DF")
+        || upper.contains("PRODUCT=16C0/5DF")
+        || upper.contains("USBRELAY")
+        || upper.contains("USB RELAY")
+}
+
+fn is_usb_relay_hidraw(name: &str) -> bool {
+    let uevent_path = format!("/sys/class/hidraw/{}/device/uevent", name);
+    std::fs::read_to_string(uevent_path)
+        .map(|uevent| hidraw_uevent_is_usb_relay(&uevent))
+        .unwrap_or(false)
+}
+
 /// Discover available ATX devices on the system
 ///
-/// Scans for GPIO chips and USB HID relay devices in a single pass.
+/// Scans for GPIO chips, LCUS USB HID relay devices, and serial relay ports.
 pub fn discover_devices() -> AtxDevices {
     let mut devices = AtxDevices::default();
 
@@ -72,7 +89,7 @@ pub fn discover_devices() -> AtxDevices {
             let name_str = name.to_string_lossy();
             if name_str.starts_with("gpiochip") {
                 devices.gpio_chips.push(format!("/dev/{}", name_str));
-            } else if name_str.starts_with("hidraw") {
+            } else if name_str.starts_with("hidraw") && is_usb_relay_hidraw(&name_str) {
                 devices.usb_relays.push(format!("/dev/{}", name_str));
             } else if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
                 devices.serial_ports.push(format!("/dev/{}", name_str));
@@ -94,6 +111,20 @@ mod tests {
     #[test]
     fn test_discover_devices() {
         let _devices = discover_devices();
+    }
+
+    #[test]
+    fn test_hidraw_uevent_detects_usb_relay_id() {
+        assert!(hidraw_uevent_is_usb_relay(
+            "HID_ID=0003:000016C0:000005DF\nHID_NAME=www.dcttech.com USBRelay2\n"
+        ));
+    }
+
+    #[test]
+    fn test_hidraw_uevent_rejects_unrelated_hid() {
+        assert!(!hidraw_uevent_is_usb_relay(
+            "HID_ID=0003:0000046D:0000C534\nHID_NAME=Logitech USB Receiver\n"
+        ));
     }
 
     #[test]

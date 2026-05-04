@@ -1493,12 +1493,8 @@ pub async fn mjpeg_stream(
         handler.clone(),
     ));
 
-    // Use bounded channel (capacity=1) to implement backpressure
-    // This ensures record_frame_sent() is only called when the previous frame
-    // has been successfully consumed by the HTTP client
     let (tx, mut rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(1);
 
-    // Spawn background task to send frames to channel
     let guard_clone = guard.clone();
     let handler_clone = handler.clone();
     tokio::spawn(async move {
@@ -1593,20 +1589,19 @@ pub async fn mjpeg_stream(
             }
         }
 
-        // Guard is automatically dropped here
     });
 
-    // Create stream that receives from channel
-    // Record FPS after yield - this is closer to actual TCP send than tx.send()
+    // Create stream that receives from channel and forwards to the HTTP
+    // body. Record FPS *before* yield so the final frame of a session
+    // still gets counted (after-yield code in async_stream! only runs
+    // when the consumer polls again, which never happens for the last
+    // frame of a closing connection).
     let handler_for_stream = handler.clone();
     let guard_for_stream = guard.clone();
     let body_stream = async_stream::stream! {
-        // Consume from channel - this drives the backpressure
         while let Some(data) = rx.recv().await {
-            yield Ok::<bytes::Bytes, std::io::Error>(data);
-            // Record FPS after yield - data has been handed to Axum/hyper
-            // This is closer to actual TCP send than recording at tx.send()
             handler_for_stream.record_frame_sent(guard_for_stream.id());
+            yield Ok::<bytes::Bytes, std::io::Error>(data);
         }
     };
 

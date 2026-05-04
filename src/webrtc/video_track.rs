@@ -14,7 +14,7 @@ use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 // rtp `HevcPayloader` mishandles AP+IDR and NAL 20 (`IDR_N_LP`).
 use super::h265_payloader::H265Payloader;
 
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::video::types::Resolution;
 
 const RTP_MTU: usize = 1200;
@@ -250,6 +250,10 @@ impl UniversalVideoTrack {
             TrackType::Sample(track) => {
                 if let Err(e) = track.write_sample(&sample).await {
                     debug!("H264 write_sample failed: {}", e);
+                    return Err(AppError::WebRtcError(format!(
+                        "H264 write_sample failed: {}",
+                        e
+                    )));
                 }
             }
             TrackType::Rtp(_) => {
@@ -276,6 +280,10 @@ impl UniversalVideoTrack {
             TrackType::Sample(track) => {
                 if let Err(e) = track.write_sample(&sample).await {
                     debug!("VP8 write_sample failed: {}", e);
+                    return Err(AppError::WebRtcError(format!(
+                        "VP8 write_sample failed: {}",
+                        e
+                    )));
                 }
             }
             TrackType::Rtp(_) => {
@@ -298,6 +306,10 @@ impl UniversalVideoTrack {
             TrackType::Sample(track) => {
                 if let Err(e) = track.write_sample(&sample).await {
                     debug!("VP9 write_sample failed: {}", e);
+                    return Err(AppError::WebRtcError(format!(
+                        "VP9 write_sample failed: {}",
+                        e
+                    )));
                 }
             }
             TrackType::Rtp(_) => {
@@ -366,6 +378,10 @@ impl UniversalVideoTrack {
 
             if let Err(e) = rtp_track.write_rtp(&packet).await {
                 trace!("H265 write_rtp failed: {}", e);
+                return Err(AppError::WebRtcError(format!(
+                    "H265 write_rtp failed: {}",
+                    e
+                )));
             }
         }
 

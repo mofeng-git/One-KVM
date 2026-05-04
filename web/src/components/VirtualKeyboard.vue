@@ -42,8 +42,6 @@ const isAttached = ref(props.attached ?? true)
 const selectedOs = ref<KeyboardOsType>('windows')
 
 const mainKeyboard = ref<Keyboard | null>(null)
-const controlKeyboard = ref<Keyboard | null>(null)
-const arrowsKeyboard = ref<Keyboard | null>(null)
 
 const pressedModifiers = ref<number>(0)
 const keysDown = ref<CanonicalKey[]>([])
@@ -81,47 +79,49 @@ const position = ref({ x: 100, y: 100 })
 
 const keyboardId = ref(`kb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
-const getBottomRow = () => osBottomRows[selectedOs.value].join(' ')
+const getBottomRow = () =>
+  [...osBottomRows[selectedOs.value], 'ArrowLeft', 'ArrowDown', 'ArrowRight'].join(' ')
 
 const keyboardLayout = {
   main: {
     default: [
       'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
-      'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12',
-      'Backquote Digit1 Digit2 Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 Digit0 Minus Equal Backspace',
-      'Tab KeyQ KeyW KeyE KeyR KeyT KeyY KeyU KeyI KeyO KeyP BracketLeft BracketRight Backslash',
+      'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 PrintScreen ScrollLock Pause',
+      'Backquote Digit1 Digit2 Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 Digit0 Minus Equal Backspace Insert Home PageUp',
+      'Tab KeyQ KeyW KeyE KeyR KeyT KeyY KeyU KeyI KeyO KeyP BracketLeft BracketRight Backslash Delete End PageDown',
       'CapsLock KeyA KeyS KeyD KeyF KeyG KeyH KeyJ KeyK KeyL Semicolon Quote Enter',
-      'ShiftLeft KeyZ KeyX KeyC KeyV KeyB KeyN KeyM Comma Period Slash ShiftRight',
-      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight',
+      'ShiftLeft KeyZ KeyX KeyC KeyV KeyB KeyN KeyM Comma Period Slash ShiftRight ArrowUp',
+      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight ArrowLeft ArrowDown ArrowRight',
     ],
     shift: [
       'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
-      'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12',
-      '(Backquote) (Digit1) (Digit2) (Digit3) (Digit4) (Digit5) (Digit6) (Digit7) (Digit8) (Digit9) (Digit0) (Minus) (Equal) Backspace',
-      'Tab (KeyQ) (KeyW) (KeyE) (KeyR) (KeyT) (KeyY) (KeyU) (KeyI) (KeyO) (KeyP) (BracketLeft) (BracketRight) (Backslash)',
+      'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 PrintScreen ScrollLock Pause',
+      '(Backquote) (Digit1) (Digit2) (Digit3) (Digit4) (Digit5) (Digit6) (Digit7) (Digit8) (Digit9) (Digit0) (Minus) (Equal) Backspace Insert Home PageUp',
+      'Tab (KeyQ) (KeyW) (KeyE) (KeyR) (KeyT) (KeyY) (KeyU) (KeyI) (KeyO) (KeyP) (BracketLeft) (BracketRight) (Backslash) Delete End PageDown',
       'CapsLock (KeyA) (KeyS) (KeyD) (KeyF) (KeyG) (KeyH) (KeyJ) (KeyK) (KeyL) (Semicolon) (Quote) Enter',
-      'ShiftLeft (KeyZ) (KeyX) (KeyC) (KeyV) (KeyB) (KeyN) (KeyM) (Comma) (Period) (Slash) ShiftRight',
-      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight',
-    ],
-  },
-  control: {
-    default: [
-      'PrintScreen ScrollLock Pause',
-      'Insert Home PageUp',
-      'Delete End PageDown',
-    ],
-  },
-  arrows: {
-    default: [
-      'ArrowUp',
-      'ArrowLeft ArrowDown ArrowRight',
+      'ShiftLeft (KeyZ) (KeyX) (KeyC) (KeyV) (KeyB) (KeyN) (KeyM) (Comma) (Period) (Slash) ShiftRight ArrowUp',
+      'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight ArrowLeft ArrowDown ArrowRight',
     ],
   },
 }
 
 const compactMainLayout = {
-  default: keyboardLayout.main.default.slice(2),
-  shift: keyboardLayout.main.shift.slice(2),
+  default: [
+    'Escape Insert Delete Home End PageUp PageDown PrintScreen',
+    'Backquote Digit1 Digit2 Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 Digit0 Minus Equal Backspace',
+    'Tab KeyQ KeyW KeyE KeyR KeyT KeyY KeyU KeyI KeyO KeyP BracketLeft BracketRight Backslash',
+    'CapsLock KeyA KeyS KeyD KeyF KeyG KeyH KeyJ KeyK KeyL Semicolon Quote Enter',
+    'ShiftLeft KeyZ KeyX KeyC KeyV KeyB KeyN KeyM Comma Period Slash ShiftRight ArrowUp',
+    'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight ArrowLeft ArrowDown ArrowRight',
+  ],
+  shift: [
+    'Escape Insert Delete Home End PageUp PageDown PrintScreen',
+    '(Backquote) (Digit1) (Digit2) (Digit3) (Digit4) (Digit5) (Digit6) (Digit7) (Digit8) (Digit9) (Digit0) (Minus) (Equal) Backspace',
+    'Tab (KeyQ) (KeyW) (KeyE) (KeyR) (KeyT) (KeyY) (KeyU) (KeyI) (KeyO) (KeyP) (BracketLeft) (BracketRight) (Backslash)',
+    'CapsLock (KeyA) (KeyS) (KeyD) (KeyF) (KeyG) (KeyH) (KeyJ) (KeyK) (KeyL) (Semicolon) (Quote) Enter',
+    'ShiftLeft (KeyZ) (KeyX) (KeyC) (KeyV) (KeyB) (KeyN) (KeyM) (Comma) (Period) (Slash) ShiftRight ArrowUp',
+    'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight ArrowLeft ArrowDown ArrowRight',
+  ],
 }
 
 const isCompactLayout = ref(false)
@@ -286,8 +286,6 @@ function updateKeyboardLayout() {
     ],
   }
   mainKeyboard.value?.setOptions({ layout: newLayout, display: keyDisplayMap.value })
-  controlKeyboard.value?.setOptions({ display: keyDisplayMap.value })
-  arrowsKeyboard.value?.setOptions({ display: keyDisplayMap.value })
   updateKeyboardButtonTheme()
 }
 
@@ -431,8 +429,6 @@ function updateKeyboardButtonTheme() {
   ]
 
   mainKeyboard.value?.setOptions({ buttonTheme })
-  controlKeyboard.value?.setOptions({ buttonTheme })
-  arrowsKeyboard.value?.setOptions({ buttonTheme })
 }
 
 watch([layoutName, () => props.capsLock], ([name]) => {
@@ -447,10 +443,8 @@ function initKeyboards() {
   const id = keyboardId.value
 
   const mainEl = document.querySelector(`#${id}-main`)
-  const controlEl = document.querySelector(`#${id}-control`)
-  const arrowsEl = document.querySelector(`#${id}-arrows`)
 
-  if (!mainEl || !controlEl || !arrowsEl) {
+  if (!mainEl) {
     console.warn('[VirtualKeyboard] DOM elements not ready, retrying...', id)
     setTimeout(initKeyboards, 50)
     return
@@ -476,45 +470,13 @@ function initKeyboards() {
     stopMouseUpPropagation: true,
   })
 
-  controlKeyboard.value = new Keyboard(controlEl, {
-    layout: keyboardLayout.control,
-    layoutName: 'default',
-    display: keyDisplayMap.value,
-    theme: 'hg-theme-default hg-layout-default vkb-keyboard',
-    onKeyPress: onKeyDown,
-    onKeyReleased: onKeyUp,
-    disableButtonHold: true,
-    preventMouseDownDefault: true,
-    preventMouseUpDefault: true,
-    stopMouseDownPropagation: true,
-    stopMouseUpPropagation: true,
-  })
-
-  arrowsKeyboard.value = new Keyboard(arrowsEl, {
-    layout: keyboardLayout.arrows,
-    layoutName: 'default',
-    display: keyDisplayMap.value,
-    theme: 'hg-theme-default hg-layout-default vkb-keyboard',
-    onKeyPress: onKeyDown,
-    onKeyReleased: onKeyUp,
-    disableButtonHold: true,
-    preventMouseDownDefault: true,
-    preventMouseUpDefault: true,
-    stopMouseDownPropagation: true,
-    stopMouseUpPropagation: true,
-  })
-
   updateKeyboardLayout()
   console.log('[VirtualKeyboard] Keyboards initialized:', id)
 }
 
 function destroyKeyboards() {
   mainKeyboard.value?.destroy()
-  controlKeyboard.value?.destroy()
-  arrowsKeyboard.value?.destroy()
   mainKeyboard.value = null
-  controlKeyboard.value = null
-  arrowsKeyboard.value = null
 }
 
 function getClientCoords(e: MouseEvent | TouchEvent): { x: number; y: number } | null {
@@ -682,10 +644,6 @@ onUnmounted(() => {
         </div>
         <div class="vkb-keyboards">
           <div :id="`${keyboardId}-main`" class="kb-main-container"></div>
-          <div class="vkb-side">
-            <div :id="`${keyboardId}-control`" class="kb-control-container"></div>
-            <div :id="`${keyboardId}-arrows`" class="kb-arrows-container"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -818,10 +776,9 @@ onUnmounted(() => {
   min-width: 90px;
 }
 
-/* Right Shift - wider */
 .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"] {
-  flex-grow: 2.75;
-  min-width: 110px;
+  flex-grow: 1.75;
+  min-width: 70px;
 }
 
 /* Bottom row modifiers */
@@ -852,21 +809,33 @@ onUnmounted(() => {
   min-width: 55px;
 }
 
-/* Control keyboard */
-.kb-control-container .hg-button {
-  min-width: 54px !important;
-  justify-content: center;
+.vkb .simple-keyboard .hg-button[data-skbtn="PrintScreen"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ScrollLock"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Pause"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Home"],
+.vkb .simple-keyboard .hg-button[data-skbtn="End"],
+.vkb .simple-keyboard .hg-button[data-skbtn="PageUp"],
+.vkb .simple-keyboard .hg-button[data-skbtn="PageDown"] {
+  font-size: 11px;
+  flex-grow: 0.95;
 }
 
-/* Arrow buttons */
-.kb-arrows-container .hg-button {
-  min-width: 44px !important;
-  width: 44px !important;
-  justify-content: center;
+.vkb .simple-keyboard .hg-button[data-skbtn="PrintScreen"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
+.vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowUp"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowLeft"] {
+  margin-left: 6px;
 }
 
-.kb-arrows-container .hg-row {
-  justify-content: center;
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowUp"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowDown"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowLeft"],
+.vkb .simple-keyboard .hg-button[data-skbtn="ArrowRight"] {
+  font-size: 14px;
+  flex-grow: 1;
 }
 
 /* Dark mode - must be after simple-keyboard CSS import */
@@ -1127,31 +1096,7 @@ html.dark .hg-theme-default .hg-button.down-key,
   flex: 1;
 }
 
-.vkb-side {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.kb-control-container,
-.kb-arrows-container {
-  display: inline-block;
-}
-
 /* Responsive */
-@media (max-width: 900px) {
-  .vkb-keyboards {
-    flex-direction: column;
-  }
-
-  .vkb-side {
-    flex-direction: row;
-    justify-content: center;
-    gap: 16px;
-  }
-}
-
 @media (max-width: 640px) {
   .vkb-body {
     padding: 4px;
@@ -1159,11 +1104,11 @@ html.dark .hg-theme-default .hg-button.down-key,
   }
 
   .vkb .simple-keyboard .hg-button {
-    height: 28px;
-    font-size: 10px;
-    padding: 0 3px;
+    height: 30px;
+    font-size: 11px;
+    padding: 0 2px;
     margin: 0 1px 2px 0;
-    min-width: 24px;
+    min-width: 0;
   }
 
   .vkb .simple-keyboard .hg-button.combination-key {
@@ -1172,35 +1117,15 @@ html.dark .hg-theme-default .hg-button.down-key,
     padding: 0 6px;
   }
 
-  .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"] {
-    min-width: 60px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="Tab"] {
-    min-width: 52px;
-  }
-
+  .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Tab"],
   .vkb .simple-keyboard .hg-button[data-skbtn="Backslash"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="(Backslash)"] {
-    min-width: 52px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="CapsLock"] {
-    min-width: 60px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="Enter"] {
-    min-width: 70px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftLeft"] {
-    min-width: 70px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"] {
-    min-width: 80px;
-  }
-
+  .vkb .simple-keyboard .hg-button[data-skbtn="(Backslash)"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="CapsLock"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Enter"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Space"],
   .vkb .simple-keyboard .hg-button[data-skbtn="ControlLeft"],
   .vkb .simple-keyboard .hg-button[data-skbtn="ControlRight"],
   .vkb .simple-keyboard .hg-button[data-skbtn="MetaLeft"],
@@ -1208,20 +1133,29 @@ html.dark .hg-theme-default .hg-button.down-key,
   .vkb .simple-keyboard .hg-button[data-skbtn="AltLeft"],
   .vkb .simple-keyboard .hg-button[data-skbtn="AltRight"],
   .vkb .simple-keyboard .hg-button[data-skbtn="ContextMenu"] {
-    min-width: 46px;
+    min-width: 0;
   }
 
-  .vkb .simple-keyboard .hg-button[data-skbtn="Space"] {
-    min-width: 140px;
+  .vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Home"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="End"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PageUp"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PageDown"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PrintScreen"] {
+    font-size: 11px;
+    flex-grow: 1;
   }
 
-  .kb-control-container .hg-button {
-    min-width: 44px !important;
+  .vkb .simple-keyboard .hg-button[data-skbtn="PrintScreen"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ArrowLeft"] {
+    margin-left: 0;
   }
 
-  .kb-arrows-container .hg-button {
-    min-width: 36px !important;
-    width: 36px !important;
+  .vkb .simple-keyboard .hg-button[data-skbtn="ArrowUp"] {
+    margin-left: 4px;
   }
 
   .vkb-media-btn {
@@ -1233,40 +1167,11 @@ html.dark .hg-theme-default .hg-button.down-key,
 
 @media (max-width: 400px) {
   .vkb .simple-keyboard .hg-button {
-    height: 26px;
-    font-size: 9px;
-    padding: 0 2px;
+    height: 28px;
+    font-size: 10px;
+    padding: 0 1px;
     margin: 0 1px 2px 0;
-    min-width: 20px;
     border-radius: 4px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="Space"] {
-    min-width: 100px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="Tab"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="Backslash"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="(Backslash)"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="CapsLock"] {
-    min-width: 44px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="Enter"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftLeft"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"] {
-    min-width: 50px;
-  }
-
-  .vkb .simple-keyboard .hg-button[data-skbtn="ControlLeft"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="ControlRight"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="MetaLeft"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="MetaRight"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="AltLeft"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="AltRight"],
-  .vkb .simple-keyboard .hg-button[data-skbtn="ContextMenu"] {
-    min-width: 34px;
   }
 
   .vkb .simple-keyboard .hg-button.combination-key {
@@ -1275,13 +1180,14 @@ html.dark .hg-theme-default .hg-button.down-key,
     padding: 0 4px;
   }
 
-  .kb-control-container .hg-button {
-    min-width: 34px !important;
-  }
-
-  .kb-arrows-container .hg-button {
-    min-width: 30px !important;
-    width: 30px !important;
+  .vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Home"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="End"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PageUp"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PageDown"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="PrintScreen"] {
+    font-size: 10px;
   }
 
   .vkb-media-btn {
@@ -1323,15 +1229,6 @@ html.dark .hg-theme-default .hg-button.down-key,
 .vkb--floating :deep(.simple-keyboard .hg-button.combination-key) {
   height: 26px;
   font-size: 10px;
-}
-
-.vkb--floating :deep(.kb-control-container .hg-button) {
-  min-width: 52px !important;
-}
-
-.vkb--floating :deep(.kb-arrows-container .hg-button) {
-  min-width: 42px !important;
-  width: 42px !important;
 }
 
 /* Animation */

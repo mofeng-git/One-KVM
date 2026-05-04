@@ -17,7 +17,7 @@ use super::encoder::{OpusConfig, OpusFrame};
 use super::monitor::AudioHealthMonitor;
 use super::streamer::{AudioStreamState, AudioStreamer, AudioStreamerConfig};
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 
 const AUDIO_RECOVERY_RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -165,6 +165,7 @@ impl AudioController {
     ) {
         if let Some(ref bus) = *event_bus.read().await {
             bus.publish(SystemEvent::StreamDeviceLost {
+                kind: StreamDeviceLostKind::Audio,
                 device: device.to_string(),
                 reason: reason.to_string(),
             });

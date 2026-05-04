@@ -1,6 +1,3 @@
-// WebRTC composable for H264 video streaming
-// Provides low-latency video via WebRTC with DataChannel for HID
-
 import { ref, onUnmounted, computed, type Ref } from 'vue'
 import { webrtcApi, type IceCandidate } from '@/api'
 import {
@@ -9,7 +6,7 @@ import {
   encodeKeyboardEvent,
   encodeMouseEvent,
 } from '@/types/hid'
-import { useWebSocket } from '@/composables/useWebSocket'
+import { videoDebugLog } from '@/lib/debugLog'
 
 export type { HidKeyboardEvent, HidMouseEvent }
 
@@ -28,7 +25,6 @@ export type WebRTCConnectStage =
   | 'disconnected'
   | 'failed'
 
-// ICE candidate type: host=P2P local, srflx=P2P STUN, relay=TURN relay
 export type IceCandidateType = 'host' | 'srflx' | 'prflx' | 'relay' | 'unknown'
 
 export interface WebRTCStats {
@@ -42,26 +38,14 @@ export interface WebRTCStats {
   framesPerSecond: number
   jitter: number
   roundTripTime: number
-  // ICE connection info
   localCandidateType: IceCandidateType
   remoteCandidateType: IceCandidateType
-  transportProtocol: string // 'udp' | 'tcp'
-  isRelay: boolean // true if using TURN relay
+  transportProtocol: string
+  isRelay: boolean
 }
 
-// Cached ICE servers from backend API
 let cachedIceServers: RTCIceServer[] | null = null
 
-interface WebRTCIceCandidateEvent {
-  session_id: string
-  candidate: IceCandidate
-}
-
-interface WebRTCIceCompleteEvent {
-  session_id: string
-}
-
-// Fetch ICE servers from backend API
 async function fetchIceServers(): Promise<RTCIceServer[]> {
   try {
     const response = await webrtcApi.getIceServers()
@@ -84,7 +68,6 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
     console.warn('[WebRTC] Failed to fetch ICE servers from API, using fallback:', err)
   }
 
-  // Fallback: for local connections, use no ICE servers (host candidates only)
   const isLocalConnection = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
      window.location.hostname === '127.0.0.1' ||
@@ -107,19 +90,15 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
 let peerConnection: RTCPeerConnection | null = null
 let dataChannel: RTCDataChannel | null = null
 let sessionId: string | null = null
+const sessionIdRef = ref<string | null>(null)
 let statsInterval: number | null = null
-let isConnecting = false // Lock to prevent concurrent connect calls
+let isConnecting = false
 let connectInFlight: Promise<boolean> | null = null
-let pendingIceCandidates: RTCIceCandidate[] = [] // Queue for ICE candidates before sessionId is set
-let pendingRemoteCandidates: WebRTCIceCandidateEvent[] = [] // Queue for server ICE candidates
-let pendingRemoteIceComplete = new Set<string>() // Session IDs waiting for end-of-candidates
-let seenRemoteCandidates = new Set<string>() // Deduplicate server ICE candidates
-let cachedMediaStream: MediaStream | null = null // Cached MediaStream to avoid recreating
+let pendingIceCandidates: RTCIceCandidate[] = []
+let seenRemoteCandidates = new Set<string>()
+let cachedMediaStream: MediaStream | null = null
 
 let allowMdnsHostCandidates = false
-
-let wsHandlersRegistered = false
-const { on: wsOn } = useWebSocket()
 
 const state = ref<WebRTCState>('disconnected')
 const videoTrack = ref<MediaStreamTrack | null>(null)
@@ -144,10 +123,44 @@ const error = ref<string | null>(null)
 const dataChannelReady = ref(false)
 const connectStage = ref<WebRTCConnectStage>('idle')
 
+function setConnectStage(stage: WebRTCConnectStage, details?: unknown) {
+  connectStage.value = stage
+  videoDebugLog(`WebRTC stage -> ${stage}`, details)
+}
+
+function getIceCandidatePoolSize(): number {
+  if (typeof window === 'undefined') return 0
+  const icePoolParam = new URLSearchParams(window.location.search).get('ice_pool')
+  if (icePoolParam === null) return 0
+  return Math.max(0, Number.parseInt(icePoolParam, 10) || 0)
+}
+
+function summarizeIceCandidate(candidate: RTCIceCandidate | IceCandidate | RTCIceCandidateInit | null) {
+  if (!candidate) return null
+  const candidateLine = candidate.candidate ?? ''
+  const parts = candidateLine.trim().split(/\s+/)
+  const typIndex = parts.indexOf('typ')
+  const raddrIndex = parts.indexOf('raddr')
+  const rportIndex = parts.indexOf('rport')
+
+  return {
+    type: typIndex >= 0 ? parts[typIndex + 1] : 'unknown',
+    protocol: parts[2] ?? '',
+    address: parts[4] ?? '',
+    port: parts[5] ?? '',
+    relatedAddress: raddrIndex >= 0 ? parts[raddrIndex + 1] : undefined,
+    relatedPort: rportIndex >= 0 ? parts[rportIndex + 1] : undefined,
+    sdpMid: candidate.sdpMid ?? undefined,
+    sdpMLineIndex: candidate.sdpMLineIndex ?? undefined,
+    usernameFragment: candidate.usernameFragment ?? undefined,
+    raw: candidateLine,
+  }
+}
+
 function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   const config: RTCConfiguration = {
     iceServers,
-    iceCandidatePoolSize: 10,
+    iceCandidatePoolSize: getIceCandidatePoolSize(),
   }
 
   const pc = new RTCPeerConnection(config)
@@ -159,38 +172,35 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
         break
       case 'connected':
         state.value = 'connected'
-        connectStage.value = 'connected'
+        setConnectStage('connected')
         error.value = null
         startStatsCollection()
         break
       case 'disconnected':
       case 'closed':
         state.value = 'disconnected'
-        connectStage.value = 'disconnected'
+        setConnectStage('disconnected')
         stopStatsCollection()
         break
       case 'failed':
         state.value = 'failed'
-        connectStage.value = 'failed'
+        setConnectStage('failed')
         error.value = 'Connection failed'
         stopStatsCollection()
         break
     }
   }
 
-  // Handle ICE connection state
-  pc.oniceconnectionstatechange = () => {
-    // ICE state changes handled silently
-  }
-
-  // Handle ICE candidates
   pc.onicecandidate = async (event) => {
-    if (!event.candidate) return
-    if (shouldSkipLocalCandidate(event.candidate)) return
+    if (!event.candidate) {
+      return
+    }
+    if (shouldSkipLocalCandidate(event.candidate)) {
+      return
+    }
 
     const currentSessionId = sessionId
     if (currentSessionId && pc.connectionState !== 'closed') {
-      // Session ready, send immediately
       try {
         await webrtcApi.addIceCandidate(currentSessionId, {
           candidate: event.candidate.candidate,
@@ -198,11 +208,14 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
           sdpMLineIndex: event.candidate.sdpMLineIndex ?? undefined,
           usernameFragment: event.candidate.usernameFragment ?? undefined,
         })
-      } catch {
-        // ICE candidate send failures are non-fatal
+      } catch (err) {
+        videoDebugLog('Failed to send local ICE candidate', {
+          sessionId: currentSessionId,
+          candidate: summarizeIceCandidate(event.candidate),
+          error: err,
+        })
       }
     } else if (!currentSessionId) {
-      // Queue candidate until sessionId is set
       pendingIceCandidates.push(event.candidate)
     }
   }
@@ -235,7 +248,13 @@ function setupDataChannel(channel: RTCDataChannel) {
     dataChannelReady.value = false
   }
 
-  channel.onerror = () => {
+  channel.onerror = (event) => {
+    videoDebugLog('WebRTC data channel error', {
+      label: channel.label,
+      readyState: channel.readyState,
+      event,
+      sessionId,
+    })
   }
 
   channel.onmessage = () => {
@@ -251,59 +270,18 @@ function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
   return channel
 }
 
-function registerWebSocketHandlers() {
-  if (wsHandlersRegistered) return
-  wsHandlersRegistered = true
-  wsOn('webrtc.ice_candidate', handleRemoteIceCandidate)
-  wsOn('webrtc.ice_complete', handleRemoteIceComplete)
-}
-
 function shouldSkipLocalCandidate(candidate: RTCIceCandidate): boolean {
   if (allowMdnsHostCandidates) return false
   const value = candidate.candidate || ''
   return value.includes(' typ host') && value.includes('.local')
 }
 
-async function handleRemoteIceCandidate(data: WebRTCIceCandidateEvent) {
-  if (!data || !data.candidate) return
-
-  // Queue until session is ready and remote description is set
-  if (!sessionId) {
-    pendingRemoteCandidates.push(data)
-    return
+async function addRemoteIceCandidate(candidate: IceCandidate): Promise<boolean> {
+  if (!peerConnection) return false
+  if (!candidate.candidate) return false
+  if (seenRemoteCandidates.has(candidate.candidate)) {
+    return false
   }
-  if (data.session_id !== sessionId) return
-  if (!peerConnection || !peerConnection.remoteDescription) {
-    pendingRemoteCandidates.push(data)
-    return
-  }
-
-  await addRemoteIceCandidate(data.candidate)
-}
-
-async function handleRemoteIceComplete(data: WebRTCIceCompleteEvent) {
-  if (!data || !data.session_id) return
-
-  if (!sessionId) {
-    pendingRemoteIceComplete.add(data.session_id)
-    return
-  }
-  if (data.session_id !== sessionId) return
-  if (!peerConnection || !peerConnection.remoteDescription) {
-    pendingRemoteIceComplete.add(data.session_id)
-    return
-  }
-
-  try {
-    await peerConnection.addIceCandidate(null)
-  } catch {
-  }
-}
-
-async function addRemoteIceCandidate(candidate: IceCandidate) {
-  if (!peerConnection) return
-  if (!candidate.candidate) return
-  if (seenRemoteCandidates.has(candidate.candidate)) return
   seenRemoteCandidates.add(candidate.candidate)
 
   const iceCandidate: RTCIceCandidateInit = {
@@ -315,33 +293,17 @@ async function addRemoteIceCandidate(candidate: IceCandidate) {
 
   try {
     await peerConnection.addIceCandidate(iceCandidate)
-  } catch {
-    // ICE candidate add failures are non-fatal
+    return true
+  } catch (err) {
+    videoDebugLog('Failed to apply remote ICE candidate', {
+      sessionId,
+      candidate: summarizeIceCandidate(candidate),
+      error: err,
+    })
+    return false
   }
 }
 
-async function flushPendingRemoteIce() {
-  if (!peerConnection || !sessionId || !peerConnection.remoteDescription) return
-
-  const queued = pendingRemoteCandidates
-  pendingRemoteCandidates = []
-
-  for (const event of queued) {
-    if (event.session_id === sessionId) {
-      await addRemoteIceCandidate(event.candidate)
-    }
-  }
-
-  if (pendingRemoteIceComplete.has(sessionId)) {
-    pendingRemoteIceComplete.delete(sessionId)
-    try {
-      await peerConnection.addIceCandidate(null)
-    } catch {
-    }
-  }
-}
-
-// Start collecting stats
 function startStatsCollection() {
   if (statsInterval) return
 
@@ -369,7 +331,6 @@ function startStatsCollection() {
                           (stat.state === 'succeeded' && stat.selected === true) ||
                           (stat.state === 'in-progress' && !foundActivePair)
 
-          // Also check if this pair has actual data transfer (more reliable indicator)
           const hasData = (stat.bytesReceived > 0 || stat.bytesSent > 0)
 
           if ((isActive || (stat.state === 'succeeded' && hasData)) && !foundActivePair) {
@@ -382,7 +343,6 @@ function startStatsCollection() {
           }
         }
 
-        // Update video stats
         if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
           stats.value.bytesReceived = stat.bytesReceived || 0
           stats.value.packetsReceived = stat.packetsReceived || 0
@@ -396,7 +356,6 @@ function startStatsCollection() {
         }
       })
 
-      // Update ICE connection info from selected pair
       const localCandidate = selectedPairLocalId ? candidates[selectedPairLocalId] : undefined
       const remoteCandidate = selectedPairRemoteId ? candidates[selectedPairRemoteId] : undefined
 
@@ -410,12 +369,10 @@ function startStatsCollection() {
 
       stats.value.isRelay = stats.value.localCandidateType === 'relay' || stats.value.remoteCandidateType === 'relay'
     } catch {
-      // Stats collection errors are non-fatal
     }
   }, 1000)
 }
 
-// Stop collecting stats
 function stopStatsCollection() {
   if (statsInterval) {
     clearInterval(statsInterval)
@@ -423,37 +380,42 @@ function stopStatsCollection() {
   }
 }
 
-// Send queued ICE candidates after sessionId is set
 async function flushPendingIceCandidates() {
   if (!sessionId || pendingIceCandidates.length === 0) return
 
+  const currentSessionId = sessionId
   const candidates = [...pendingIceCandidates]
   pendingIceCandidates = []
 
-  for (const candidate of candidates) {
-    if (shouldSkipLocalCandidate(candidate)) continue
+  const sendTasks = candidates.map(async (candidate) => {
+    if (shouldSkipLocalCandidate(candidate)) {
+      return
+    }
     try {
-      await webrtcApi.addIceCandidate(sessionId, {
+      await webrtcApi.addIceCandidate(currentSessionId, {
         candidate: candidate.candidate,
         sdpMid: candidate.sdpMid ?? undefined,
         sdpMLineIndex: candidate.sdpMLineIndex ?? undefined,
         usernameFragment: candidate.usernameFragment ?? undefined,
       })
-    } catch {
-      // ICE candidate send failures are non-fatal
+    } catch (err) {
+      videoDebugLog('Failed to send queued local ICE candidate', {
+        sessionId: currentSessionId,
+        candidate: summarizeIceCandidate(candidate),
+        error: err,
+      })
     }
-  }
+  })
+
+  await Promise.allSettled(sendTasks)
 }
 
-// Connect to WebRTC server
 async function connect(): Promise<boolean> {
   if (connectInFlight) {
     return connectInFlight
   }
 
   connectInFlight = (async () => {
-    registerWebSocketHandlers()
-
     if (isConnecting) {
       return state.value === 'connected'
     }
@@ -468,67 +430,85 @@ async function connect(): Promise<boolean> {
       await disconnect()
     }
 
-    // Clear pending ICE candidates from previous attempt
     pendingIceCandidates = []
+    seenRemoteCandidates.clear()
 
     try {
       state.value = 'connecting'
       error.value = null
-      connectStage.value = 'fetching_ice_servers'
+      setConnectStage('fetching_ice_servers')
 
-      // Fetch ICE servers from backend API
       const iceServers = await fetchIceServers()
-      connectStage.value = 'creating_peer_connection'
+      setConnectStage('creating_peer_connection', { iceServerCount: iceServers.length })
 
-      // Create peer connection with fetched ICE servers
       peerConnection = createPeerConnection(iceServers)
-      connectStage.value = 'creating_data_channel'
 
+      setConnectStage('creating_data_channel')
       createDataChannel(peerConnection)
 
       peerConnection.addTransceiver('video', { direction: 'recvonly' })
       peerConnection.addTransceiver('audio', { direction: 'recvonly' })
-      connectStage.value = 'creating_offer'
+      setConnectStage('creating_offer')
 
       const offer = await peerConnection.createOffer()
       await peerConnection.setLocalDescription(offer)
-      connectStage.value = 'waiting_server_answer'
+      setConnectStage('waiting_server_answer')
 
       // Do not pass client_id here: each connect creates a fresh session.
       const response = await webrtcApi.offer(offer.sdp!)
       sessionId = response.session_id
-
-      // Send any ICE candidates that were queued while waiting for sessionId
-      await flushPendingIceCandidates()
+      sessionIdRef.value = response.session_id
 
       const answer: RTCSessionDescriptionInit = {
         type: 'answer',
         sdp: response.sdp,
       }
-      connectStage.value = 'setting_remote_description'
+      setConnectStage('setting_remote_description', { sessionId })
       await peerConnection.setRemoteDescription(answer)
 
-      // Flush any pending server ICE candidates once remote description is set
-      connectStage.value = 'applying_ice_candidates'
-      await flushPendingRemoteIce()
-
-      // Add any ICE candidates from the response
-      if (response.ice_candidates && response.ice_candidates.length > 0) {
-        for (const candidateObj of response.ice_candidates) {
-          await addRemoteIceCandidate(candidateObj)
+      setConnectStage('applying_ice_candidates', {
+        sessionId,
+        answerCandidates: response.ice_candidates?.length ?? 0,
+      })
+      let appliedAnswerCandidates = 0
+      for (const candidate of response.ice_candidates ?? []) {
+        if (await addRemoteIceCandidate(candidate)) {
+          appliedAnswerCandidates += 1
         }
       }
+      try {
+        await peerConnection.addIceCandidate(null)
+      } catch (err) {
+        videoDebugLog('Failed to apply remote ICE end-of-candidates from answer response', {
+          sessionId,
+          appliedAnswerCandidates,
+          error: err,
+        })
+      }
 
-      // Wait for connection to establish (5s for LAN, sufficient for most scenarios)
+      void flushPendingIceCandidates()
+
       const connectionTimeout = 5000
+      const iceConnectedTimeout = 12000
       const pollInterval = 100
       let waited = 0
-      connectStage.value = 'waiting_connection'
+      setConnectStage('waiting_connection', {
+        sessionId,
+        connectionTimeout,
+        iceConnectedTimeout,
+        pollInterval,
+      })
 
-      while (waited < connectionTimeout && peerConnection) {
+      while (peerConnection) {
         const pcState = peerConnection.connectionState
+        const iceState = peerConnection.iceConnectionState
+        const timeoutForState = iceState === 'connected' || iceState === 'completed'
+          ? iceConnectedTimeout
+          : connectionTimeout
+        if (waited >= timeoutForState) break
+
         if (pcState === 'connected') {
-          connectStage.value = 'connected'
+          setConnectStage('connected', { sessionId, waited })
           isConnecting = false
           return true
         }
@@ -539,10 +519,25 @@ async function connect(): Promise<boolean> {
         waited += pollInterval
       }
 
+      videoDebugLog('WebRTC connect timed out waiting for ICE/DTLS', {
+        sessionId,
+        waited,
+        connectionState: peerConnection?.connectionState,
+        iceConnectionState: peerConnection?.iceConnectionState,
+        iceGatheringState: peerConnection?.iceGatheringState,
+        signalingState: peerConnection?.signalingState,
+      })
       throw new Error('Connection timeout waiting for ICE negotiation')
     } catch (err) {
       state.value = 'failed'
-      connectStage.value = 'failed'
+      setConnectStage('failed', {
+        sessionId,
+        error: err,
+        connectionState: peerConnection?.connectionState,
+        iceConnectionState: peerConnection?.iceConnectionState,
+        iceGatheringState: peerConnection?.iceGatheringState,
+        signalingState: peerConnection?.signalingState,
+      })
       error.value = err instanceof Error ? err.message : 'Connection failed'
       isConnecting = false
       await disconnect()
@@ -557,17 +552,15 @@ async function connect(): Promise<boolean> {
   }
 }
 
-// Disconnect from WebRTC server
 async function disconnect() {
   stopStatsCollection()
 
   // Clear state FIRST to prevent ICE candidates from being sent
   const oldSessionId = sessionId
   sessionId = null
+  sessionIdRef.value = null
   isConnecting = false
   pendingIceCandidates = []
-  pendingRemoteCandidates = []
-  pendingRemoteIceComplete.clear()
   seenRemoteCandidates.clear()
 
   if (dataChannel) {
@@ -584,18 +577,21 @@ async function disconnect() {
   if (oldSessionId) {
     try {
       await webrtcApi.close(oldSessionId)
-    } catch {
+    } catch (err) {
+      videoDebugLog('Failed to close backend WebRTC session', {
+        sessionId: oldSessionId,
+        error: err,
+      })
     }
   }
 
   videoTrack.value = null
   audioTrack.value = null
-  cachedMediaStream = null // Clear cached stream on disconnect
+  cachedMediaStream = null
   state.value = 'disconnected'
-  connectStage.value = 'disconnected'
+  setConnectStage('disconnected', { previousSessionId: oldSessionId })
   error.value = null
 
-  // Reset stats
   stats.value = {
     bytesReceived: 0,
     packetsReceived: 0,
@@ -614,7 +610,6 @@ async function disconnect() {
   }
 }
 
-// Send keyboard event via DataChannel (binary format)
 function sendKeyboard(event: HidKeyboardEvent): boolean {
   if (!dataChannel || dataChannel.readyState !== 'open') {
     return false
@@ -629,7 +624,6 @@ function sendKeyboard(event: HidKeyboardEvent): boolean {
   }
 }
 
-// Send mouse event via DataChannel (binary format)
 function sendMouse(event: HidMouseEvent): boolean {
   if (!dataChannel || dataChannel.readyState !== 'open') {
     return false
@@ -695,7 +689,7 @@ export function useWebRTC() {
     error,
     dataChannelReady,
     connectStage,
-    sessionId: computed(() => sessionId),
+    sessionId: sessionIdRef,
 
     connect,
     disconnect,

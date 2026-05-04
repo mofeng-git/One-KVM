@@ -12,6 +12,7 @@ use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice::mdns::MulticastDnsMode;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
@@ -30,14 +31,12 @@ use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec};
 use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
 use crate::video::types::{
     BitratePreset, EncodedVideoFrame, PixelFormat, Resolution, VideoEncoderType,
 };
 use std::sync::atomic::AtomicBool;
-use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
 
 const MIME_TYPE_H265: &str = "video/H265";
 
@@ -140,7 +139,6 @@ pub struct UniversalSession {
     state_rx: watch::Receiver<ConnectionState>,
     ice_candidates: Arc<Mutex<Vec<IceCandidate>>>,
     hid_controller: Option<Arc<HidController>>,
-    event_bus: Option<Arc<EventBus>>,
     video_receiver_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     audio_receiver_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     fps: u32,
@@ -150,7 +148,7 @@ impl UniversalSession {
     pub async fn new(
         config: UniversalSessionConfig,
         session_id: String,
-        event_bus: Option<Arc<EventBus>>,
+        _event_bus: Option<Arc<crate::events::EventBus>>,
     ) -> Result<Self> {
         info!(
             "Creating {} session: {} @ {}x{} (audio={})",
@@ -338,7 +336,6 @@ impl UniversalSession {
             state_rx,
             ice_candidates: Arc::new(Mutex::new(vec![])),
             hid_controller: None,
-            event_bus,
             video_receiver_handle: Mutex::new(None),
             audio_receiver_handle: Mutex::new(None),
             fps: config.fps,
@@ -353,8 +350,6 @@ impl UniversalSession {
         let state = self.state.clone();
         let session_id = self.session_id.clone();
         let codec = self.codec;
-        let event_bus = self.event_bus.clone();
-
         self.pc
             .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
                 let state = state.clone();
@@ -372,42 +367,49 @@ impl UniversalSession {
                     };
 
                     info!("{} session {} state: {}", codec, session_id, new_state);
+                    if matches!(
+                        (*state.borrow(), new_state),
+                        (
+                            ConnectionState::Connected,
+                            ConnectionState::New | ConnectionState::Connecting
+                        )
+                    ) {
+                        return;
+                    }
                     let _ = state.send(new_state);
                 })
             }));
 
+        let state_for_ice = self.state.clone();
         let session_id_ice = self.session_id.clone();
         self.pc
-            .on_ice_connection_state_change(Box::new(move |state| {
+            .on_ice_connection_state_change(Box::new(move |ice_state| {
+                let state = state_for_ice.clone();
                 let session_id = session_id_ice.clone();
                 Box::pin(async move {
-                    info!("[ICE] Session {} connection state: {:?}", session_id, state);
-                })
-            }));
+                    info!(
+                        "[ICE] Session {} connection state: {:?}",
+                        session_id, ice_state
+                    );
 
-        let session_id_gather = self.session_id.clone();
-        let event_bus_gather = event_bus.clone();
-        self.pc
-            .on_ice_gathering_state_change(Box::new(move |state| {
-                let session_id = session_id_gather.clone();
-                let event_bus = event_bus_gather.clone();
-                Box::pin(async move {
-                    if matches!(state, RTCIceGathererState::Complete) {
-                        if let Some(bus) = event_bus.as_ref() {
-                            bus.publish(SystemEvent::WebRTCIceComplete { session_id });
+                    let new_state = match ice_state {
+                        RTCIceConnectionState::Connected | RTCIceConnectionState::Completed => {
+                            ConnectionState::Connected
                         }
-                    }
+                        RTCIceConnectionState::Disconnected => ConnectionState::Disconnected,
+                        RTCIceConnectionState::Failed => ConnectionState::Failed,
+                        RTCIceConnectionState::Closed => ConnectionState::Closed,
+                        _ => return,
+                    };
+
+                    let _ = state.send(new_state);
                 })
             }));
 
         let ice_candidates = self.ice_candidates.clone();
-        let session_id_candidate = self.session_id.clone();
-        let event_bus_candidate = event_bus.clone();
         self.pc
             .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
                 let ice_candidates = ice_candidates.clone();
-                let session_id = session_id_candidate.clone();
-                let event_bus = event_bus_candidate.clone();
 
                 Box::pin(async move {
                     if let Some(c) = candidate {
@@ -430,14 +432,6 @@ impl UniversalSession {
                         let mut candidates = ice_candidates.lock().await;
                         candidates.push(candidate.clone());
                         drop(candidates);
-
-                        if let Some(bus) = event_bus.as_ref() {
-                            bus.publish(SystemEvent::WebRTCIceCandidate {
-                                session_id,
-                                candidate: serde_json::to_value(&candidate)
-                                    .unwrap_or(serde_json::Value::Null),
-                            });
-                        }
                     }
                 })
             }));
@@ -660,9 +654,21 @@ impl UniversalSession {
                             .await;
                         let _ = send_in_flight;
 
-                        if send_result.is_ok() {
-                            frames_sent += 1;
-                            last_sequence = Some(encoded_frame.sequence);
+                        match send_result {
+                            Ok(()) => {
+                                frames_sent += 1;
+                                last_sequence = Some(encoded_frame.sequence);
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Session {} failed to write video frame: sequence={}, keyframe={}, bytes={}, error={}",
+                                    session_id,
+                                    encoded_frame.sequence,
+                                    encoded_frame.is_keyframe,
+                                    encoded_frame.data.len(),
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -810,25 +816,14 @@ impl UniversalSession {
             }
         }
 
-        let mut gather_complete = self.pc.gathering_complete_promise().await;
-
         self.pc
             .set_local_description(answer.clone())
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to set local description: {}", e)))?;
 
-        const ICE_GATHER_TIMEOUT: Duration = Duration::from_millis(2500);
-        if tokio::time::timeout(ICE_GATHER_TIMEOUT, gather_complete.recv())
-            .await
-            .is_err()
-        {
-            debug!(
-                "ICE gathering timeout after {:?} for session {}",
-                ICE_GATHER_TIMEOUT, self.session_id
-            );
-        }
-
+        tokio::time::sleep(Duration::from_millis(500)).await;
         let candidates = self.ice_candidates.lock().await.clone();
+
         Ok(SdpAnswer::with_candidates(answer.sdp, candidates))
     }
 
@@ -842,10 +837,16 @@ impl UniversalSession {
             username_fragment: candidate.username_fragment,
         };
 
-        self.pc
-            .add_ice_candidate(init)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to add ICE candidate: {}", e)))?;
+        if let Err(e) = self.pc.add_ice_candidate(init).await {
+            warn!(
+                "[ICE] Session {} failed to add remote candidate: {}",
+                self.session_id, e
+            );
+            return Err(AppError::VideoError(format!(
+                "Failed to add ICE candidate: {}",
+                e
+            )));
+        }
 
         Ok(())
     }

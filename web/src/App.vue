@@ -72,12 +72,12 @@ watch(
   <Toaster
     rich-colors
     close-button
+    expand
     position="top-center"
     close-button-position="top-right"
     theme="system"
     :duration="4000"
     :gap="14"
-    :visible-toasts="3"
     :offset="{ top: '1rem', right: '1rem', left: '1rem', bottom: '1rem' }"
     :mobile-offset="{ top: 'max(1rem, env(safe-area-inset-top))', bottom: 'max(1rem, env(safe-area-inset-bottom))', left: '1rem', right: '1rem' }"
     :toast-options="toasterToastOptions"

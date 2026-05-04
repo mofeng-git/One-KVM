@@ -35,6 +35,14 @@ export function buildWsUrl(path: string): string {
 /** Default reconnect delay in milliseconds */
 export const WS_RECONNECT_DELAY = 3000
 
+export type StreamDeviceLostKind = 'video' | 'audio'
+
+export interface StreamDeviceLostEventData {
+  kind: StreamDeviceLostKind
+  device: string
+  reason: string
+}
+
 /** WebSocket ready states */
 export const WS_STATE = {
   CONNECTING: WebSocket.CONNECTING,

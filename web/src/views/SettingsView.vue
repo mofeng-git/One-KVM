@@ -44,7 +44,7 @@ import { getVideoFormatState } from '@/lib/video-format-support'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -99,6 +99,7 @@ import {
   Radio,
   Globe,
   Loader2,
+  AlertTriangle,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -162,6 +163,33 @@ const navGroups = computed(() => [
     ]
   }
 ])
+
+const sectionMeta = computed(() => {
+  const fallback = { icon: Info, title: t('settings.title'), description: '' }
+  for (const group of navGroups.value) {
+    for (const item of group.items) {
+      if (item.id === activeSection.value) {
+        const subtitleKey = `settings.${sectionSubtitleKey(item.id)}`
+        return {
+          icon: item.icon,
+          title: item.label,
+          description: te(subtitleKey) ? t(subtitleKey) : '',
+        }
+      }
+    }
+  }
+  return fallback
+})
+
+function sectionSubtitleKey(id: string): string {
+  switch (id) {
+    case 'ext-ttyd': return 'extTtydSubtitle'
+    case 'ext-rustdesk': return 'extRustdeskSubtitle'
+    case 'ext-rtsp': return 'extRtspSubtitle'
+    case 'ext-remote-access': return 'extRemoteAccessSubtitle'
+    default: return `${id}Subtitle`
+  }
+}
 
 function selectSection(id: string) {
   activeSection.value = id
@@ -326,6 +354,23 @@ const previewAccessUrl = computed(() => {
   const host = firstAddr.includes(':') ? `[${firstAddr}]` : firstAddr
   return `${scheme}://${host}:${port}`
 })
+
+const previewUrlCopied = ref(false)
+let previewUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyPreviewUrl() {
+  const ok = await clipboardCopy(previewAccessUrl.value)
+  if (!ok) return
+  previewUrlCopied.value = true
+  if (previewUrlCopiedTimer) clearTimeout(previewUrlCopiedTimer)
+  previewUrlCopiedTimer = setTimeout(() => {
+    previewUrlCopied.value = false
+  }, 1500)
+}
+
+function openPreviewUrl() {
+  window.open(previewAccessUrl.value, '_blank', 'noopener,noreferrer')
+}
 
 interface DeviceConfig {
   video: Array<{
@@ -792,14 +837,14 @@ const atxConfig = ref({
   power: {
     driver: 'none' as AtxDriverType,
     device: '',
-    pin: 0,
+    pin: 1,
     active_level: 'high' as ActiveLevel,
     baud_rate: 9600,
   },
   reset: {
     driver: 'none' as AtxDriverType,
     device: '',
-    pin: 0,
+    pin: 1,
     active_level: 'high' as ActiveLevel,
     baud_rate: 9600,
   },
@@ -1038,9 +1083,18 @@ async function saveConfig() {
   saved.value = false
 
   try {
-    // Sequential awaits: backend ConfigStore uses read-modify-write; parallel PATCH
-
     if (activeSection.value === 'video') {
+      const turnUrl = config.value.turn_server.trim()
+      await configStore.updateStream({
+        encoder: config.value.encoder_backend as any,
+        stun_server: config.value.stun_server.trim(),
+        turn_server: turnUrl,
+        turn_username: config.value.turn_username.trim(),
+        turn_password:
+          turnUrl === ''
+            ? ''
+            : config.value.turn_password || undefined,
+      })
       await configStore.updateVideo({
         device: config.value.video_device || undefined,
         format: config.value.video_format || undefined,
@@ -1048,16 +1102,8 @@ async function saveConfig() {
         height: config.value.video_height,
         fps: toConfigFps(config.value.video_fps),
       })
-      await configStore.updateStream({
-        encoder: config.value.encoder_backend as any,
-        stun_server: config.value.stun_server || undefined,
-        turn_server: config.value.turn_server || undefined,
-        turn_username: config.value.turn_username || undefined,
-        turn_password: config.value.turn_password || undefined,
-      })
     }
 
-    // HID config (includes MSD enable — same gadget; must not race with updateHid)
     if (activeSection.value === 'hid') {
       if (!isHidFunctionSelectionValid.value || !isOtgEndpointBudgetValid.value) {
         return
@@ -1327,6 +1373,7 @@ async function loadAtxConfig() {
       wol_interface: config.wol_interface || '',
     }
     clearAtxSerialDeviceConflicts()
+    normalizeAtxRelayChannels()
     syncSharedAtxSerialBaudRate()
   } catch (e) {
     console.error('Failed to load ATX config:', e)
@@ -1345,6 +1392,7 @@ async function saveAtxConfig() {
   loading.value = true
   saved.value = false
   try {
+    normalizeAtxRelayChannels()
     syncSharedAtxSerialBaudRate()
     await configStore.updateAtx({
       enabled: atxConfig.value.enabled,
@@ -1421,10 +1469,25 @@ function syncSharedAtxSerialBaudRate() {
   atxConfig.value.reset.baud_rate = atxConfig.value.power.baud_rate
 }
 
+function normalizeAtxRelayChannels() {
+  for (const key of [atxConfig.value.power, atxConfig.value.reset]) {
+    if (['usbrelay', 'serial'].includes(key.driver) && key.pin < 1) {
+      key.pin = 1
+    }
+  }
+}
+
 watch(
   () => [config.value.hid_backend, config.value.hid_serial_device],
   () => {
     clearAtxSerialDeviceConflicts()
+  },
+)
+
+watch(
+  () => [atxConfig.value.power.driver, atxConfig.value.reset.driver],
+  () => {
+    normalizeAtxRelayChannels()
   },
 )
 
@@ -2056,7 +2119,7 @@ watch(() => route.query.tab, (tab) => {
   <AppLayout>
     <div class="flex h-full overflow-hidden">
       <!-- Mobile Header -->
-      <div class="lg:hidden fixed top-11 sm:top-14 left-0 right-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background">
+      <div class="lg:hidden fixed top-11 sm:top-14 left-0 right-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Sheet v-model:open="mobileMenuOpen">
           <SheetTrigger as-child>
             <Button variant="ghost" size="icon" class="mr-1.5 sm:mr-2 h-8 w-8 sm:h-9 sm:w-9">
@@ -2091,16 +2154,22 @@ watch(() => route.query.tab, (tab) => {
             </div>
           </SheetContent>
         </Sheet>
-        <h1 class="text-base sm:text-lg font-semibold">{{ t('settings.title') }}</h1>
+        <div class="flex items-center gap-2 min-w-0">
+          <component :is="sectionMeta.icon" class="h-4 w-4 text-muted-foreground shrink-0" />
+          <h1 class="text-sm sm:text-base font-semibold truncate">{{ sectionMeta.title }}</h1>
+        </div>
       </div>
 
       <!-- Desktop Sidebar -->
       <aside class="hidden lg:block w-64 shrink-0 border-r bg-muted/30">
-        <div class="sticky top-0 p-6 space-y-6">
-          <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
-          <nav class="space-y-6">
+        <div class="sticky top-0 p-6 space-y-6 max-h-screen overflow-y-auto">
+          <div class="space-y-1">
+            <h1 class="text-xl font-semibold tracking-tight">{{ t('settings.title') }}</h1>
+            <p class="text-xs text-muted-foreground">{{ t('settings.sidebarSubtitle') }}</p>
+          </div>
+          <nav class="space-y-5">
             <div v-for="group in navGroups" :key="group.title" class="space-y-1">
-              <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
+              <h3 class="px-3 text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1.5">{{ group.title }}</h3>
               <button
                 type="button"
                 v-for="item in group.items"
@@ -2109,13 +2178,13 @@ watch(() => route.query.tab, (tab) => {
                 :class="[
                   'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors',
                   activeSection === item.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-foreground/80 hover:text-foreground hover:bg-muted'
                 ]"
               >
-                <component :is="item.icon" class="h-4 w-4" />
-                <span>{{ item.label }}</span>
-                <Badge v-if="item.status" variant="outline" :class="['ml-auto text-xs', activeSection === item.id ? 'border-primary-foreground/50 text-primary-foreground' : '']">{{ item.status }}</Badge>
+                <component :is="item.icon" class="h-4 w-4 shrink-0" />
+                <span class="truncate">{{ item.label }}</span>
+                <Badge v-if="item.status" variant="outline" :class="['ml-auto text-[10px] px-1.5 py-0 h-4', activeSection === item.id ? 'border-primary-foreground/50 text-primary-foreground' : '']">{{ item.status }}</Badge>
               </button>
             </div>
           </nav>
@@ -2124,7 +2193,18 @@ watch(() => route.query.tab, (tab) => {
 
       <!-- Main Content -->
       <main class="flex-1 overflow-y-auto">
-        <div class="max-w-2xl mx-auto p-3 sm:p-6 lg:p-8 pt-16 sm:pt-20 lg:pt-8 space-y-4 sm:space-y-6">
+        <div class="mx-auto w-full max-w-3xl px-3 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-10 pb-10 space-y-6">
+
+          <!-- Section Header -->
+          <header class="space-y-1.5 pb-2 border-b">
+            <div class="flex items-center gap-2.5">
+              <component :is="sectionMeta.icon" class="h-5 w-5 text-muted-foreground" />
+              <h1 class="text-xl sm:text-2xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+            </div>
+            <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
+              {{ sectionMeta.description }}
+            </p>
+          </header>
 
           <!-- Appearance Section -->
           <div v-show="activeSection === 'appearance'" class="space-y-6">
@@ -2134,14 +2214,14 @@ watch(() => route.query.tab, (tab) => {
                 <CardDescription>{{ t('settings.themeDesc') }}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div class="flex flex-wrap gap-2">
-                  <Button :variant="theme === 'light' ? 'default' : 'outline'" size="sm" @click="setTheme('light')">
+                <div class="grid grid-cols-3 gap-2 sm:max-w-md">
+                  <Button :variant="theme === 'light' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('light')">
                     <Sun class="h-4 w-4 mr-1.5" />{{ t('settings.lightMode') }}
                   </Button>
-                  <Button :variant="theme === 'dark' ? 'default' : 'outline'" size="sm" @click="setTheme('dark')">
+                  <Button :variant="theme === 'dark' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('dark')">
                     <Moon class="h-4 w-4 mr-1.5" />{{ t('settings.darkMode') }}
                   </Button>
-                  <Button :variant="theme === 'system' ? 'default' : 'outline'" size="sm" @click="setTheme('system')">
+                  <Button :variant="theme === 'system' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('system')">
                     <Monitor class="h-4 w-4 mr-1.5" />{{ t('settings.systemMode') }}
                   </Button>
                 </div>
@@ -2154,9 +2234,7 @@ watch(() => route.query.tab, (tab) => {
                 <CardDescription>{{ t('settings.languageDesc') }}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div class="flex">
-                  <LanguageToggleButton variant="outline" size="sm" label-mode="current" />
-                </div>
+                <LanguageToggleButton variant="outline" size="sm" label-mode="current" />
               </CardContent>
             </Card>
           </div>
@@ -2171,21 +2249,22 @@ watch(() => route.query.tab, (tab) => {
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="account-username">{{ t('settings.username') }}</Label>
-                  <Input id="account-username" v-model="usernameInput" />
+                  <Input id="account-username" v-model="usernameInput" autocomplete="username" />
                 </div>
                 <div class="space-y-2">
                   <Label for="account-username-password">{{ t('settings.currentPassword') }}</Label>
-                  <Input id="account-username-password" v-model="usernamePassword" type="password" />
+                  <Input id="account-username-password" v-model="usernamePassword" type="password" autocomplete="current-password" />
                 </div>
                 <p v-if="usernameError" class="text-xs text-destructive">{{ usernameError }}</p>
-                <p v-else-if="usernameSaved" class="text-xs text-emerald-600">{{ t('common.success') }}</p>
-                <div class="flex justify-end">
-                  <Button @click="changeUsername" :disabled="usernameSaving">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ t('common.save') }}
-                  </Button>
-                </div>
+                <p v-else-if="usernameSaved" class="text-xs text-emerald-600 flex items-center gap-1.5"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button @click="changeUsername" :disabled="usernameSaving">
+                  <Loader2 v-if="usernameSaving" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -2196,25 +2275,26 @@ watch(() => route.query.tab, (tab) => {
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="account-current-password">{{ t('settings.currentPassword') }}</Label>
-                  <Input id="account-current-password" v-model="currentPassword" type="password" />
+                  <Input id="account-current-password" v-model="currentPassword" type="password" autocomplete="current-password" />
                 </div>
                 <div class="space-y-2">
                   <Label for="account-new-password">{{ t('settings.newPassword') }}</Label>
-                  <Input id="account-new-password" v-model="newPassword" type="password" />
+                  <Input id="account-new-password" v-model="newPassword" type="password" autocomplete="new-password" />
                 </div>
                 <div class="space-y-2">
                   <Label for="account-confirm-password">{{ t('auth.confirmPassword') }}</Label>
-                  <Input id="account-confirm-password" v-model="confirmPassword" type="password" />
+                  <Input id="account-confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" />
                 </div>
                 <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
-                <p v-else-if="passwordSaved" class="text-xs text-emerald-600">{{ t('common.success') }}</p>
-                <div class="flex justify-end">
-                  <Button @click="changePassword" :disabled="passwordSaving">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ t('common.save') }}
-                  </Button>
-                </div>
+                <p v-else-if="passwordSaved" class="text-xs text-emerald-600 flex items-center gap-1.5"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button @click="changePassword" :disabled="passwordSaving">
+                  <Loader2 v-if="passwordSaving" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -2223,7 +2303,7 @@ watch(() => route.query.tab, (tab) => {
                 <CardDescription>{{ t('settings.authSettingsDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
+                <div class="flex items-start justify-between gap-4">
                   <div class="space-y-0.5">
                     <Label>{{ t('settings.allowMultipleSessions') }}</Label>
                     <p class="text-xs text-muted-foreground">{{ t('settings.allowMultipleSessionsDesc') }}</p>
@@ -2233,13 +2313,14 @@ watch(() => route.query.tab, (tab) => {
                     :disabled="authConfigLoading"
                   />
                 </div>
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveAuthConfig" :disabled="authConfigLoading">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ t('common.save') }}
-                  </Button>
-                </div>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button @click="saveAuthConfig" :disabled="authConfigLoading">
+                  <Loader2 v-if="authConfigLoading" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
           </div>
 
@@ -2903,24 +2984,27 @@ watch(() => route.query.tab, (tab) => {
                 <CardTitle>{{ t('settings.portConfig') }}</CardTitle>
                 <CardDescription>{{ t('settings.portConfigDesc') }}</CardDescription>
               </CardHeader>
-              <CardContent class="space-y-4">
+              <CardContent class="space-y-5">
                 <!-- HTTPS toggle -->
-                <div class="flex items-center justify-between">
+                <div class="flex items-start justify-between gap-4">
                   <div class="space-y-0.5">
                     <Label>{{ t('settings.httpsEnabled') }}</Label>
-                    <p class="text-sm text-muted-foreground">{{ t('settings.httpsEnabledDesc') }}</p>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.httpsEnabledDesc') }}</p>
                   </div>
                   <Switch v-model="webServerConfig.https_enabled" />
                 </div>
 
                 <Separator />
 
-                <!-- Single active-port input, label follows the HTTPS toggle -->
-                <div class="flex items-end gap-3">
-                  <div class="space-y-2 flex-1 max-w-[180px]">
-                    <Label>
-                      {{ webServerConfig.https_enabled ? t('settings.httpsPort') : t('settings.httpPort') }}
-                    </Label>
+                <!-- Active port (primary) -->
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <Label class="text-sm font-medium">
+                        {{ webServerConfig.https_enabled ? t('settings.httpsPort') : t('settings.httpPort') }}
+                      </Label>
+                      <Badge variant="default" class="h-4 text-[10px] px-1.5">{{ t('settings.portActive') }}</Badge>
+                    </div>
                     <Input
                       v-if="webServerConfig.https_enabled"
                       v-model.number="webServerConfig.https_port"
@@ -2932,42 +3016,65 @@ watch(() => route.query.tab, (tab) => {
                       type="number" min="1" max="65535"
                     />
                   </div>
-                  <!-- Inactive-port reference (read-only hint) -->
-                  <div class="space-y-2 flex-1 max-w-[180px]">
-                    <Label class="text-muted-foreground text-xs">
-                      {{ webServerConfig.https_enabled ? t('settings.httpPortReserved') : t('settings.httpsPortReserved') }}
-                    </Label>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <Label class="text-sm text-muted-foreground">
+                        {{ webServerConfig.https_enabled ? t('settings.httpPort') : t('settings.httpsPort') }}
+                      </Label>
+                      <Badge variant="secondary" class="h-4 text-[10px] px-1.5 font-normal">{{ t('settings.portReserved') }}</Badge>
+                    </div>
                     <Input
                       v-if="webServerConfig.https_enabled"
                       v-model.number="webServerConfig.http_port"
                       type="number" min="1" max="65535"
-                      class="opacity-50"
+                      class="opacity-60"
                     />
                     <Input
                       v-else
                       v-model.number="webServerConfig.https_port"
                       type="number" min="1" max="65535"
-                      class="opacity-50"
+                      class="opacity-60"
                     />
                   </div>
                 </div>
+                <p class="text-xs text-muted-foreground -mt-2">{{ t('settings.portReservedHint') }}</p>
 
                 <!-- Preview URL -->
-                <div class="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
-                  <span class="text-muted-foreground shrink-0">{{ t('settings.previewUrl') }}:</span>
-                  <span class="font-mono text-xs break-all">{{ previewAccessUrl }}</span>
-                </div>
-
-                <!-- Save row -->
-                <div class="flex items-center justify-between pt-2">
-                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
-                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || autoRestarting">
-                    <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                    <Save v-else class="h-4 w-4 mr-2" />
-                    {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
-                  </Button>
+                <div class="rounded-md border bg-muted/40 p-3 space-y-1.5">
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.previewUrl') }}</p>
+                  <div class="flex items-center gap-2">
+                    <code class="font-mono text-xs sm:text-sm break-all flex-1 min-w-0">{{ previewAccessUrl }}</code>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.copyUrl')"
+                      :aria-label="t('settings.copyUrl')"
+                      @click="copyPreviewUrl"
+                    >
+                      <Check v-if="previewUrlCopied" class="h-3.5 w-3.5 text-emerald-600" />
+                      <Copy v-else class="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.openInBrowser')"
+                      :aria-label="t('settings.openInBrowser')"
+                      @click="openPreviewUrl"
+                    >
+                      <ExternalLink class="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button @click="saveWebServerConfig" :disabled="webServerLoading || autoRestarting">
+                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
 
             <!-- Listen Address Card -->
@@ -3038,20 +3145,22 @@ watch(() => route.query.tab, (tab) => {
                 </RadioGroup>
 
                 <!-- Effective addresses preview -->
-                <div v-if="effectiveBindAddresses.length > 0" class="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
-                  <span class="text-muted-foreground shrink-0">{{ t('settings.effectiveAddresses') }}:</span>
-                  <span class="font-mono text-xs break-all">{{ effectiveBindAddresses.join(', ') }}</span>
-                </div>
-
-                <div class="flex items-center justify-between pt-2">
-                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
-                  <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError || autoRestarting">
-                    <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                    <Save v-else class="h-4 w-4 mr-2" />
-                    {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
-                  </Button>
+                <div v-if="effectiveBindAddresses.length > 0" class="rounded-md border bg-muted/40 p-3 space-y-1.5">
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.effectiveAddresses') }}</p>
+                  <code class="font-mono text-xs sm:text-sm break-all block">{{ effectiveBindAddresses.join(', ') }}</code>
                 </div>
               </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError || autoRestarting">
+                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
 
             <!-- SSL Certificate Card -->
@@ -3112,18 +3221,21 @@ watch(() => route.query.tab, (tab) => {
                   />
                 </div>
 
-                <div class="flex items-center justify-between pt-1">
-                  <p class="text-xs text-muted-foreground">⚠ {{ t('settings.restartRequired') }}</p>
-                  <Button
-                    :disabled="certSaving || autoRestarting || !sslCertPem.trim() || !sslKeyPem.trim()"
-                    @click="saveCertificate"
-                  >
-                    <RefreshCw v-if="certSaving || autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                    <Save v-else class="h-4 w-4 mr-2" />
-                    {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
-                  </Button>
-                </div>
               </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button
+                  :disabled="certSaving || autoRestarting || !sslCertPem.trim() || !sslKeyPem.trim()"
+                  @click="saveCertificate"
+                >
+                  <RefreshCw v-if="certSaving || autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
+                </Button>
+              </CardFooter>
             </Card>
           </div>
 
@@ -3229,7 +3341,7 @@ watch(() => route.query.tab, (tab) => {
                       id="power-pin"
                       type="number"
                       v-model.number="atxConfig.power.pin"
-                      :min="atxConfig.power.driver === 'serial' ? 1 : 0"
+                      :min="['usbrelay', 'serial'].includes(atxConfig.power.driver) ? 1 : 0"
                       :disabled="atxConfig.power.driver === 'none'"
                     />
                   </div>
@@ -3293,7 +3405,7 @@ watch(() => route.query.tab, (tab) => {
                       id="reset-pin"
                       type="number"
                       v-model.number="atxConfig.reset.pin"
-                      :min="atxConfig.reset.driver === 'serial' ? 1 : 0"
+                      :min="['usbrelay', 'serial'].includes(atxConfig.reset.driver) ? 1 : 0"
                       :disabled="atxConfig.reset.driver === 'none'"
                     />
                   </div>
@@ -4109,12 +4221,14 @@ watch(() => route.query.tab, (tab) => {
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-2 bg-background border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <div class="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
-              <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400 flex-1 min-w-0">
-                {{ t('settings.otgFunctionMinWarning') }}
+          <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <div class="flex items-center justify-between gap-2 sm:gap-3">
+              <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
               </p>
-              <Button class="shrink-0" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
+              <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
+              <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

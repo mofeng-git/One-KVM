@@ -1,7 +1,9 @@
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
+import type { StreamDeviceLostEventData } from '@/types/websocket'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
 
 export interface ConsoleEventHandlers {
   onStreamConfigChanging?: (data: { reason?: string }) => void
@@ -14,12 +16,10 @@ export interface ConsoleEventHandlers {
   onStreamStateChanged?: (data: {
     state: string
     device?: string | null
-    /** Optional fine-grained diagnostic tag (e.g. `no_cable`, `out_of_range`, `recovering`). */
     reason?: string | null
-    /** Optional countdown (ms) until the next backend self-recovery attempt. */
     next_retry_ms?: number | null
   }) => void
-  onStreamDeviceLost?: (data: { device: string; reason: string }) => void
+  onStreamDeviceLost?: (data: StreamDeviceLostEventData) => void
   onStreamReconnecting?: (data: { device: string; attempt: number }) => void
   onStreamRecovered?: (data: { device: string }) => void
   onDeviceInfo?: (data: any) => void
@@ -31,12 +31,16 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   const { on, off, connect } = useWebSocket()
   const noop = () => {}
 
-  function handleStreamDeviceLost(data: { device: string; reason: string }) {
-    if (systemStore.stream) {
+  function handleStreamDeviceLost(data: StreamDeviceLostEventData) {
+    const audioLost = isAudioStreamDeviceLostPayload(data)
+    if (systemStore.stream && !audioLost) {
       systemStore.stream.online = false
     }
-    toast.error(t('console.deviceLost'), {
-      description: t('console.deviceLostDesc', { device: data.device, reason: data.reason }),
+    toast.error(t(audioLost ? 'audio.deviceLost' : 'console.deviceLost'), {
+      description: t(audioLost ? 'audio.deviceLostDesc' : 'console.deviceLostDesc', {
+        device: data.device,
+        reason: data.reason,
+      }),
       duration: 5000,
     })
     handlers.onStreamDeviceLost?.(data)

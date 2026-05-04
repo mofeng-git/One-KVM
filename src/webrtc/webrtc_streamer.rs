@@ -9,7 +9,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 use crate::hid::HidController;
 use crate::video::device::{
     enumerate_devices, select_recovery_device, VideoDevice, VideoDeviceRecoveryHint,
@@ -352,6 +352,7 @@ impl WebRtcStreamer {
             );
             streamer
                 .publish_stream_event(SystemEvent::StreamDeviceLost {
+                    kind: StreamDeviceLostKind::Video,
                     device: original_device.clone(),
                     reason: reason.clone(),
                 })

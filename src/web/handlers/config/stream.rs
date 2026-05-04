@@ -34,7 +34,7 @@ pub async fn update_stream_config(
         &state,
         &old_stream_config,
         &new_stream_config,
-        ConfigApplyOptions::forced(),
+        ConfigApplyOptions::default(),
     )
     .await?;
 

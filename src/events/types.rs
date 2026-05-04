@@ -79,6 +79,14 @@ pub struct ClientStats {
     pub connected_secs: u64,
 }
 
+/// Video vs audio source for [`SystemEvent::StreamDeviceLost`] (WebSocket `stream.device_lost`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamDeviceLostKind {
+    Video,
+    Audio,
+}
+
 /// JSON: `{"event": "<name>", "data": { ... }}`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "event", content = "data")]
@@ -119,7 +127,11 @@ pub enum SystemEvent {
     },
 
     #[serde(rename = "stream.device_lost")]
-    StreamDeviceLost { device: String, reason: String },
+    StreamDeviceLost {
+        kind: StreamDeviceLostKind,
+        device: String,
+        reason: String,
+    },
 
     #[serde(rename = "stream.reconnecting")]
     StreamReconnecting { device: String, attempt: u32 },
@@ -256,6 +268,19 @@ mod tests {
     }
 
     #[test]
+    fn stream_device_lost_json_snake_case_kind() {
+        let event = SystemEvent::StreamDeviceLost {
+            kind: StreamDeviceLostKind::Audio,
+            device: "hw:0,0".to_string(),
+            reason: "test".to_string(),
+        };
+        let v = serde_json::to_value(&event).unwrap();
+        let data = v.get("data").unwrap();
+        assert_eq!(data.get("kind").and_then(|x| x.as_str()), Some("audio"));
+        assert_eq!(data.get("device").and_then(|x| x.as_str()), Some("hw:0,0"));
+    }
+
+    #[test]
     fn exact_topics_covers_all_variants() {
         use std::collections::HashSet;
 
@@ -283,6 +308,7 @@ mod tests {
                 fps: 0,
             },
             SystemEvent::StreamDeviceLost {
+                kind: StreamDeviceLostKind::Video,
                 device: String::new(),
                 reason: String::new(),
             },

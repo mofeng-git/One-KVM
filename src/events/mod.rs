@@ -6,7 +6,7 @@ use self::types::EXACT_EVENT_TOPICS;
 
 pub use types::{
     AtxDeviceInfo, AudioDeviceInfo, ClientStats, HidDeviceInfo, LedState, MsdDeviceInfo,
-    SystemEvent, TtydDeviceInfo, VideoDeviceInfo,
+    StreamDeviceLostKind, SystemEvent, TtydDeviceInfo, VideoDeviceInfo,
 };
 
 use tokio::sync::broadcast;

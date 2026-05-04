@@ -7,6 +7,7 @@ use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
 use serialport::SerialPort;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -17,6 +18,10 @@ use super::types::{ActiveLevel, AtxDriverType, AtxKeyConfig};
 use crate::error::{AppError, Result};
 
 pub type SharedSerialHandle = Arc<Mutex<Box<dyn SerialPort>>>;
+
+const USB_RELAY_MAX_CHANNEL: u8 = 8;
+const USB_RELAY_REPORT_LEN: usize = 9;
+const HIDIOCSFEATURE_9: libc::c_ulong = 0xC009_4806; // _IOC(_IOC_READ|_IOC_WRITE, 'H', 0x06, 9)
 
 /// Timing constants for ATX operations
 pub mod timing {
@@ -129,10 +134,21 @@ impl AtxKeyExecutor {
                 }
             }
             AtxDriverType::UsbRelay => {
+                if self.config.pin == 0 {
+                    return Err(AppError::Config(
+                        "USB relay channel must be 1-based (>= 1)".to_string(),
+                    ));
+                }
                 if self.config.pin > u8::MAX as u32 {
                     return Err(AppError::Config(format!(
                         "USB relay channel must be <= {}",
                         u8::MAX
+                    )));
+                }
+                if self.config.pin > USB_RELAY_MAX_CHANNEL as u32 {
+                    return Err(AppError::Config(format!(
+                        "USB HID relay channel must be <= {}",
+                        USB_RELAY_MAX_CHANNEL
                     )));
                 }
             }
@@ -292,24 +308,62 @@ impl AtxKeyExecutor {
                 u8::MAX
             ))
         })?;
+        if channel == 0 {
+            return Err(AppError::Config(
+                "USB relay channel must be 1-based (>= 1)".to_string(),
+            ));
+        }
+        if channel > USB_RELAY_MAX_CHANNEL {
+            return Err(AppError::Config(format!(
+                "USB HID relay channel must be <= {}",
+                USB_RELAY_MAX_CHANNEL
+            )));
+        }
 
-        // Standard HID relay command format
-        let cmd = if on {
-            [0x00, channel + 1, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
-        } else {
-            [0x00, channel + 1, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x00]
-        };
+        let cmd = Self::build_usb_relay_command(channel, on);
 
         let mut guard = self.usb_relay_handle.lock().unwrap();
         let device = guard
             .as_mut()
             .ok_or_else(|| AppError::Internal("USB relay not initialized".to_string()))?;
 
-        device
-            .write_all(&cmd)
-            .map_err(|e| AppError::Internal(format!("USB relay write failed: {}", e)))?;
+        if let Err(feature_err) = Self::send_usb_relay_feature_report(device, &cmd) {
+            debug!(
+                "USB relay feature report failed ({}), falling back to hidraw write",
+                feature_err
+            );
+            device.write_all(&cmd).map_err(|write_err| {
+                AppError::Internal(format!(
+                    "USB relay feature report failed: {}; raw write failed: {}",
+                    feature_err, write_err
+                ))
+            })?;
+            device
+                .flush()
+                .map_err(|e| AppError::Internal(format!("USB relay flush failed: {}", e)))?;
+        }
 
         Ok(())
+    }
+
+    fn build_usb_relay_command(channel: u8, on: bool) -> [u8; USB_RELAY_REPORT_LEN] {
+        let mut cmd = [0x00; USB_RELAY_REPORT_LEN];
+        cmd[1] = if on { 0xFF } else { 0xFD };
+        cmd[2] = channel;
+        cmd
+    }
+
+    fn send_usb_relay_feature_report(
+        device: &File,
+        report: &[u8; USB_RELAY_REPORT_LEN],
+    ) -> std::io::Result<()> {
+        // Linux hidraw feature reports include the report ID as the first byte.
+        let rc = unsafe { libc::ioctl(device.as_raw_fd(), HIDIOCSFEATURE_9, report.as_ptr()) };
+        if rc < 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
     }
 
     /// Pulse Serial relay
@@ -367,6 +421,8 @@ impl AtxKeyExecutor {
 
         port.write_all(&cmd)
             .map_err(|e| AppError::Internal(format!("Serial relay write failed: {}", e)))?;
+        port.flush()
+            .map_err(|e| AppError::Internal(format!("Serial relay flush failed: {}", e)))?;
 
         Ok(())
     }
@@ -453,7 +509,7 @@ mod tests {
         let config = AtxKeyConfig {
             driver: AtxDriverType::UsbRelay,
             device: "/dev/hidraw0".to_string(),
-            pin: 0,
+            pin: 1,
             active_level: ActiveLevel::High, // Ignored for USB relay
             baud_rate: 9600,
         };
@@ -481,12 +537,52 @@ mod tests {
         assert_eq!(timing::RESET_PRESS.as_millis(), 500);
     }
 
+    #[test]
+    fn test_usb_relay_command_format() {
+        assert_eq!(
+            AtxKeyExecutor::build_usb_relay_command(1, true),
+            [0x00, 0xFF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            AtxKeyExecutor::build_usb_relay_command(1, false),
+            [0x00, 0xFD, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+    }
+
     #[tokio::test]
     async fn test_executor_init_rejects_serial_channel_zero() {
         let config = AtxKeyConfig {
             driver: AtxDriverType::Serial,
             device: "/dev/ttyUSB0".to_string(),
             pin: 0,
+            active_level: ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let mut executor = AtxKeyExecutor::new(config);
+        let err = executor.init().await.unwrap_err();
+        assert!(matches!(err, AppError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn test_executor_init_rejects_usb_relay_channel_zero() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::UsbRelay,
+            device: "/dev/hidraw0".to_string(),
+            pin: 0,
+            active_level: ActiveLevel::High,
+            baud_rate: 9600,
+        };
+        let mut executor = AtxKeyExecutor::new(config);
+        let err = executor.init().await.unwrap_err();
+        assert!(matches!(err, AppError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn test_executor_init_rejects_usb_relay_channel_overflow() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::UsbRelay,
+            device: "/dev/hidraw0".to_string(),
+            pin: USB_RELAY_MAX_CHANNEL as u32 + 1,
             active_level: ActiveLevel::High,
             baud_rate: 9600,
         };

@@ -20,7 +20,7 @@ use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use super::is_csi_hdmi_bridge;
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 use crate::stream::MjpegStreamHandler;
 use crate::utils::LogThrottler;
 use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
@@ -1417,6 +1417,7 @@ impl Streamer {
 
         // Publish device lost event
         self.publish_event(SystemEvent::StreamDeviceLost {
+            kind: StreamDeviceLostKind::Video,
             device: device.clone(),
             reason: reason.clone(),
         })
