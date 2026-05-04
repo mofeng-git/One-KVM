@@ -128,13 +128,6 @@ function setConnectStage(stage: WebRTCConnectStage, details?: unknown) {
   videoDebugLog(`WebRTC stage -> ${stage}`, details)
 }
 
-function getIceCandidatePoolSize(): number {
-  if (typeof window === 'undefined') return 0
-  const icePoolParam = new URLSearchParams(window.location.search).get('ice_pool')
-  if (icePoolParam === null) return 0
-  return Math.max(0, Number.parseInt(icePoolParam, 10) || 0)
-}
-
 function summarizeIceCandidate(candidate: RTCIceCandidate | IceCandidate | RTCIceCandidateInit | null) {
   if (!candidate) return null
   const candidateLine = candidate.candidate ?? ''
@@ -158,10 +151,7 @@ function summarizeIceCandidate(candidate: RTCIceCandidate | IceCandidate | RTCIc
 }
 
 function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
-  const config: RTCConfiguration = {
-    iceServers,
-    iceCandidatePoolSize: getIceCandidatePoolSize(),
-  }
+  const config: RTCConfiguration = { iceServers }
 
   const pc = new RTCPeerConnection(config)
 
