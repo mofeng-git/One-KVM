@@ -680,7 +680,13 @@ impl UniversalSession {
             );
         });
 
-        *self.video_receiver_handle.lock().await = Some(handle);
+        {
+            let mut guard = self.video_receiver_handle.lock().await;
+            if let Some(old) = guard.take() {
+                old.abort();
+            }
+            *guard = Some(handle);
+        }
     }
 
     pub async fn start_audio_from_opus(
@@ -767,7 +773,13 @@ impl UniversalSession {
             );
         });
 
-        *self.audio_receiver_handle.lock().await = Some(handle);
+        {
+            let mut guard = self.audio_receiver_handle.lock().await;
+            if let Some(old) = guard.take() {
+                old.abort();
+            }
+            *guard = Some(handle);
+        }
     }
 
     pub fn has_audio(&self) -> bool {
