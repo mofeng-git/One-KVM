@@ -3294,6 +3294,8 @@ watch(() => route.query.tab, (tab) => {
               </CardFooter>
             </Card>
           </div>
+
+          <!-- MSD Section -->
           <div v-show="activeSection === 'msd' && config.msd_enabled" class="space-y-6">
             <Card>
               <CardHeader>
