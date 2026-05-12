@@ -110,6 +110,8 @@ pub struct AppConfig {
     pub rustdesk: RustDeskConfig,
     /// RTSP streaming settings
     pub rtsp: RtspConfig,
+    /// Redfish API settings
+    pub redfish: RedfishConfig,
 }
 
 /// Authentication configuration
@@ -806,5 +808,20 @@ impl Default for WebConfig {
             ssl_cert_path: None,
             ssl_key_path: None,
         }
+    }
+}
+
+/// Redfish API configuration
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RedfishConfig {
+    /// Enable Redfish API endpoint
+    pub enabled: bool,
+}
+
+impl Default for RedfishConfig {
+    fn default() -> Self {
+        Self { enabled: false }
     }
 }

@@ -17,7 +17,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 # Web framework
 axum = { version = "0.8", features = ["ws", "multipart", "tokio"] }
 axum-extra = { version = "0.12", features = ["cookie"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "set-header"] }
 
 # Database - Use bundled SQLite for static linking
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }

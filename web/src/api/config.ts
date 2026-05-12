@@ -392,6 +392,24 @@ export const webConfigApi = {
     }),
 }
 
+export interface RedfishConfigResponse {
+  enabled: boolean
+}
+
+export interface RedfishConfigUpdate {
+  enabled?: boolean
+}
+
+export const redfishConfigApi = {
+  get: () => request<RedfishConfigResponse>('/config/redfish'),
+
+  update: (config: RedfishConfigUpdate) =>
+    request<RedfishConfigResponse>('/config/redfish', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+}
+
 export const systemApi = {
   /**
    * 重启系统

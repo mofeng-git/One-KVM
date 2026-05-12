@@ -18,6 +18,15 @@ use crate::hid::websocket::ws_hid_handler;
 use crate::state::AppState;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
+    let redfish_router = {
+        let config = state.config.get();
+        if config.redfish.enabled {
+            Some(crate::redfish::routes::create_redfish_router(state.clone()))
+        } else {
+            None
+        }
+    };
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -137,6 +146,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Auth configuration
         .route("/config/auth", get(handlers::config::get_auth_config))
         .route("/config/auth", patch(handlers::config::update_auth_config))
+        // Redfish configuration
+        .route("/config/redfish", get(handlers::config::get_redfish_config))
+        .route("/config/redfish", patch(handlers::config::update_redfish_config))
         // System control
         .route("/system/restart", post(handlers::system_restart))
         .route("/update/overview", get(handlers::update_overview))
@@ -245,10 +257,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let static_routes = super::static_files::static_file_router();
 
     // Main router
-    Router::new()
+    let main_router = Router::new()
         .nest("/api", api_routes)
         .merge(static_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
-        .with_state(state)
+        .with_state(state);
+
+    match redfish_router {
+        Some(rf) => main_router.merge(rf),
+        None => main_router,
+    }
 }
