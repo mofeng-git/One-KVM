@@ -6,6 +6,7 @@ mod audio;
 mod auth;
 mod hid;
 mod msd;
+mod redfish;
 mod rtsp;
 mod rustdesk;
 mod stream;
@@ -17,6 +18,7 @@ pub use audio::{get_audio_config, update_audio_config};
 pub use auth::{get_auth_config, update_auth_config};
 pub use hid::{get_hid_config, update_hid_config};
 pub use msd::{get_msd_config, update_msd_config};
+pub use redfish::{get_redfish_config, update_redfish_config};
 pub use rtsp::{get_rtsp_config, get_rtsp_status, update_rtsp_config};
 pub use rustdesk::{
     get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,

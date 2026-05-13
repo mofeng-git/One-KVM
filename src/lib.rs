@@ -11,6 +11,7 @@ pub mod extensions;
 pub mod hid;
 pub mod msd;
 pub mod otg;
+pub mod redfish;
 pub mod rtsp;
 pub mod rustdesk;
 pub mod state;

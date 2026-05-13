@@ -1009,6 +1009,24 @@ impl WebConfigUpdate {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedfishConfigResponse {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RedfishConfigUpdate {
+    pub enabled: Option<bool>,
+}
+
+impl RedfishConfigUpdate {
+    pub fn apply_to(&self, config: &mut crate::config::RedfishConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

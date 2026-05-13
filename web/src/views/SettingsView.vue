@@ -12,6 +12,7 @@ import {
   streamApi,
   atxConfigApi,
   extensionsApi,
+  redfishConfigApi,
   systemApi,
   updateApi,
   usbApi,
@@ -295,6 +296,8 @@ const webServerConfig = ref<WebConfig>({
   has_custom_cert: false,
 })
 const webServerLoading = ref(false)
+const redfishEnabled = ref(false)
+const redfishSaving = ref(false)
 const sslCertPem = ref('')
 const sslKeyPem = ref('')
 const certSaving = ref(false)
@@ -1601,6 +1604,30 @@ async function loadWebServerConfig() {
   }
 }
 
+async function loadRedfishConfig() {
+  try {
+    const data = await redfishConfigApi.get()
+    redfishEnabled.value = data.enabled
+  } catch (e) {
+    console.error('Failed to load redfish config:', e)
+  }
+}
+
+async function saveRedfishConfig() {
+  redfishSaving.value = true
+  try {
+    const data = await redfishConfigApi.update({
+      enabled: redfishEnabled.value,
+    })
+    redfishEnabled.value = data.enabled
+    await triggerAutoRestart()
+  } catch (e) {
+    console.error('Failed to save redfish config:', e)
+  } finally {
+    redfishSaving.value = false
+  }
+}
+
 async function saveWebServerConfig() {
   if (bindAddressError.value) return
   webServerLoading.value = true
@@ -2087,6 +2114,7 @@ onMounted(async () => {
     loadRustdeskPassword(),
     loadRtspConfig(),
     loadWebServerConfig(),
+    loadRedfishConfig(),
     loadUpdateOverview(),
     refreshUpdateStatus(),
     fetchUsbDevices(),
@@ -3234,6 +3262,34 @@ watch(() => route.query.tab, (tab) => {
                   <RefreshCw v-if="certSaving || autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
                   <Save v-else class="h-4 w-4 mr-2" />
                   {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <!-- Redfish API Card -->
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.redfishTitle') }}</CardTitle>
+                <CardDescription>{{ t('settings.redfishDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-5">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.redfishEnabled') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
+                  </div>
+                  <Switch v-model="redfishEnabled" />
+                </div>
+              </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
+                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
