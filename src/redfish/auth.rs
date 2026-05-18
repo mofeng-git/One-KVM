@@ -62,10 +62,8 @@ pub async fn redfish_auth_middleware(
 }
 
 fn is_redfish_public_endpoint(path: &str, method: &Method) -> bool {
-    matches!(
-        path,
-        "/" | "/v1" | "/v1/" | "/v1/odata"
-    ) || path.starts_with("/v1/$metadata")
+    matches!(path, "/" | "/v1" | "/v1/" | "/v1/odata")
+        || path.starts_with("/v1/$metadata")
         || (path == "/v1/SessionService/Sessions" && *method == Method::POST)
 }
 

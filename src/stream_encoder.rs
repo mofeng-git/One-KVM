@@ -1,7 +1,7 @@
 //! `EncoderType` → `EncoderBackend` (breaks config ↔ video import cycles).
 
 use crate::config::EncoderType;
-use crate::video::encoder::EncoderBackend;
+use crate::video::codec::EncoderBackend;
 
 /// `None` means “auto” in WebRTC / pipeline (same as `EncoderType::Auto`).
 pub fn encoder_type_to_backend(encoder: EncoderType) -> Option<EncoderBackend> {

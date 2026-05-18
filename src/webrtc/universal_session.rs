@@ -1,5 +1,6 @@
 //! One browser session: negotiated [`RTCPeerConnection`], outbound video/audio, HID DataChannel.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{watch, Mutex, RwLock};
@@ -33,6 +34,7 @@ use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
+use crate::video::codec::h264_bitstream;
 use crate::video::types::{
     BitratePreset, EncodedVideoFrame, PixelFormat, Resolution, VideoEncoderType,
 };
@@ -40,49 +42,16 @@ use std::sync::atomic::AtomicBool;
 
 const MIME_TYPE_H265: &str = "video/H265";
 
-fn h264_contains_parameter_sets(data: &[u8]) -> bool {
-    let mut i = 0usize;
-    while i + 4 <= data.len() {
-        let sc_len = if i + 4 <= data.len()
-            && data[i] == 0
-            && data[i + 1] == 0
-            && data[i + 2] == 0
-            && data[i + 3] == 1
-        {
-            4
-        } else if i + 3 <= data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
-            3
-        } else {
-            i += 1;
-            continue;
-        };
-
-        let nal_start = i + sc_len;
-        if nal_start < data.len() {
-            let nal_type = data[nal_start] & 0x1F;
-            if nal_type == 7 || nal_type == 8 {
-                return true;
-            }
+fn is_allowed_ice_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => !ip.is_link_local(),
+        IpAddr::V6(ip) => {
+            !(ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_unique_local()
+                || ip.is_unicast_link_local())
         }
-        i = nal_start.saturating_add(1);
     }
-
-    let mut pos = 0usize;
-    while pos + 4 <= data.len() {
-        let nalu_len =
-            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
-        pos += 4;
-        if nalu_len == 0 || pos + nalu_len > data.len() {
-            break;
-        }
-        let nal_type = data[pos] & 0x1F;
-        if nal_type == 7 || nal_type == 8 {
-            return true;
-        }
-        pos += nalu_len;
-    }
-
-    false
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +63,7 @@ pub struct UniversalSessionConfig {
     pub bitrate_preset: BitratePreset,
     pub fps: u32,
     pub audio_enabled: bool,
+    pub video_sdp_fmtp_line: Option<String>,
 }
 
 impl Default for UniversalSessionConfig {
@@ -106,6 +76,7 @@ impl Default for UniversalSessionConfig {
             bitrate_preset: BitratePreset::Balanced,
             fps: 30,
             audio_enabled: false,
+            video_sdp_fmtp_line: None,
         }
     }
 }
@@ -167,6 +138,7 @@ impl UniversalSession {
             resolution: config.resolution,
             bitrate_kbps: config.bitrate_preset.bitrate_kbps(),
             fps: config.fps,
+            sdp_fmtp_line: config.video_sdp_fmtp_line.clone(),
         };
         let video_track = Arc::new(UniversalVideoTrack::new(track_config));
 
@@ -257,6 +229,7 @@ impl UniversalSession {
             .map_err(|e| AppError::VideoError(format!("Failed to register interceptors: {}", e)))?;
 
         let mut setting_engine = SettingEngine::default();
+        setting_engine.set_ip_filter(Box::new(is_allowed_ice_ip));
         let mode = mdns_mode();
         setting_engine.set_ice_multicast_dns_mode(mode);
         if mode == MulticastDnsMode::QueryAndGather {
@@ -629,7 +602,7 @@ impl UniversalSession {
                                 // before IDR. Keep this frame so browser can decode the next IDR.
                                 let forward_h264_parameter_frame = waiting_for_keyframe
                                     && expected_codec == VideoEncoderType::H264
-                                    && h264_contains_parameter_sets(encoded_frame.data.as_ref());
+                                    && h264_bitstream::has_sps_pps(encoded_frame.data.as_ref());
 
                                 let now = Instant::now();
                                 if now.duration_since(last_keyframe_request)
@@ -929,5 +902,24 @@ mod tests {
             encoder_type_to_video_codec(VideoEncoderType::VP9),
             VideoCodec::VP9
         );
+    }
+
+    #[test]
+    fn test_ice_ip_filter_excludes_link_local_ipv4() {
+        assert!(!is_allowed_ice_ip("169.254.44.156".parse().unwrap()));
+        assert!(!is_allowed_ice_ip("169.254.228.140".parse().unwrap()));
+        assert!(is_allowed_ice_ip("192.168.10.9".parse().unwrap()));
+        assert!(is_allowed_ice_ip("10.0.0.5".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_ice_ip_filter_excludes_local_ipv6() {
+        assert!(!is_allowed_ice_ip("::1".parse().unwrap()));
+        assert!(!is_allowed_ice_ip("::".parse().unwrap()));
+        assert!(!is_allowed_ice_ip(
+            "fe80::3fb1:b28d:a3b0:d160".parse().unwrap()
+        ));
+        assert!(!is_allowed_ice_ip("fc00::1".parse().unwrap()));
+        assert!(is_allowed_ice_ip("2001:4860:4860::8888".parse().unwrap()));
     }
 }

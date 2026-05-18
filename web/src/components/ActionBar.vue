@@ -63,6 +63,7 @@ const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
   videoMode?: VideoMode
   ttydRunning?: boolean
+  showTerminal?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -194,6 +195,7 @@ const RIGHT_FIXED_PX = 120
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
+    if (item.id === 'extension' && props.showTerminal === false) return false
     return true
   })
   return items
@@ -339,7 +341,7 @@ const hasOverflow = computed(() => {
         </div>
 
         <!-- Extension Menu - Adaptive -->
-        <div v-if="isVisible('extension')">
+        <div v-if="props.showTerminal !== false && isVisible('extension')">
           <Popover v-model:open="extensionOpen">
             <PopoverTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
@@ -449,7 +451,7 @@ const hasOverflow = computed(() => {
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
 
-            <DropdownMenuSeparator v-if="(!isVisible('msd') || !isVisible('atx') || !isVisible('paste')) && (!isVisible('stats') || !isVisible('extension') || !isVisible('settings'))" />
+            <DropdownMenuSeparator v-if="(!isVisible('msd') || !isVisible('atx') || !isVisible('paste')) && (!isVisible('stats') || (props.showTerminal !== false && !isVisible('extension')) || !isVisible('settings'))" />
 
             <!-- Stats -->
             <DropdownMenuItem v-if="!isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
@@ -459,7 +461,7 @@ const hasOverflow = computed(() => {
 
             <!-- Extension -->
             <DropdownMenuItem
-              v-if="!isVisible('extension')"
+              v-if="props.showTerminal !== false && !isVisible('extension')"
               :disabled="!props.ttydRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >

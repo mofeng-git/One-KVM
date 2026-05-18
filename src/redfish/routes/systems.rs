@@ -8,8 +8,8 @@ use axum::{
 use std::sync::Arc;
 use tracing::info;
 
-use super::{get_power_state, validate_id, service_unavailable, empty_collection, RESOURCE_ID};
 use super::super::schema::*;
+use super::{empty_collection, get_power_state, service_unavailable, validate_id, RESOURCE_ID};
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -208,13 +208,14 @@ async fn system_reset(
     }
 }
 
-async fn system_set_default_boot_order(
-    Path(system_id): Path<String>,
-) -> Response {
+async fn system_set_default_boot_order(Path(system_id): Path<String>) -> Response {
     if let Some(resp) = validate_id(&system_id) {
         return resp;
     }
 
-    info!("Redfish: SetDefaultBootOrder for system {} (accepted, no-op)", system_id);
+    info!(
+        "Redfish: SetDefaultBootOrder for system {} (accepted, no-op)",
+        system_id
+    );
     StatusCode::NO_CONTENT.into_response()
 }

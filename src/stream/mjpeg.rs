@@ -11,8 +11,8 @@ use tracing::{debug, info, warn};
 /// Generation token paired with `client_id` so [`unregister_client`] ignores stale drops.
 pub type ClientGeneration = u64;
 
-use crate::video::encoder::traits::{Encoder, EncoderConfig};
-use crate::video::encoder::JpegEncoder;
+use crate::video::codec::traits::{Encoder, EncoderConfig};
+use crate::video::codec::JpegEncoder;
 use crate::video::format::PixelFormat;
 use crate::video::VideoFrame;
 

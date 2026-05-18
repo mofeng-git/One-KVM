@@ -91,7 +91,7 @@ impl VideoFrameAdapter {
             return data;
         }
 
-        let (sps, pps) = crate::webrtc::rtp::extract_sps_pps(&data);
+        let (sps, pps) = crate::video::codec::h264_bitstream::extract_sps_pps(&data);
         let mut has_sps = false;
         let mut has_pps = false;
 

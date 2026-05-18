@@ -527,7 +527,10 @@ pub struct RedfishError {
 pub struct RedfishErrorBody {
     pub code: String,
     pub message: String,
-    #[serde(rename = "@Message.ExtendedInfo", skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "@Message.ExtendedInfo",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub extended_info: Vec<RedfishExtendedInfo>,
 }
 

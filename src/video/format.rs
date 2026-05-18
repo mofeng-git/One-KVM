@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+#[cfg(unix)]
 use v4l2r::PixelFormat as V4l2rPixelFormat;
 
 /// Supported pixel formats
@@ -85,11 +86,13 @@ impl PixelFormat {
     }
 
     /// Convert to v4l2r PixelFormat
+    #[cfg(unix)]
     pub fn to_v4l2r(&self) -> V4l2rPixelFormat {
         V4l2rPixelFormat::from(&self.to_fourcc())
     }
 
     /// Convert from v4l2r PixelFormat
+    #[cfg(unix)]
     pub fn from_v4l2r(format: V4l2rPixelFormat) -> Option<Self> {
         let repr: [u8; 4] = format.into();
         Self::from_fourcc(repr)

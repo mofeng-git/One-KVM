@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo } from '@/api'
+import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type PlatformCapabilities } from '@/api'
 
 interface SystemCapabilities {
-  video: { available: boolean; backend?: string }
-  hid: { available: boolean; backend?: string }
-  msd: { available: boolean }
-  atx: { available: boolean; backend?: string }
-  audio: { available: boolean; backend?: string }
+  video: { available: boolean; backend?: string; reason?: string }
+  hid: { available: boolean; backend?: string; reason?: string }
+  msd: { available: boolean; backend?: string; reason?: string }
+  atx: { available: boolean; backend?: string; reason?: string }
+  audio: { available: boolean; backend?: string; reason?: string }
 }
 
 interface DiskSpaceInfo {
@@ -149,6 +149,7 @@ export interface DeviceInfoEvent {
 export const useSystemStore = defineStore('system', () => {
   const version = ref<string>('')
   const buildDate = ref<string>('')
+  const platform = ref<PlatformCapabilities | null>(null)
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
   const deviceInfo = ref<DeviceInfo | null>(null)
@@ -171,6 +172,7 @@ export const useSystemStore = defineStore('system', () => {
       const info = await systemApi.info()
       version.value = info.version
       buildDate.value = info.build_date
+      platform.value = info.platform
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
       deviceInfo.value = info.device_info ?? null
@@ -424,6 +426,7 @@ export const useSystemStore = defineStore('system', () => {
   return {
     version,
     buildDate,
+    platform,
     capabilities,
     diskSpace,
     deviceInfo,

@@ -9,8 +9,8 @@ use tracing::info;
 
 use std::sync::Arc;
 
-use super::empty_collection;
 use super::super::schema::*;
+use super::empty_collection;
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -56,7 +56,10 @@ async fn session_list(State(state): State<Arc<AppState>>) -> Response {
     let mut members = Vec::new();
     for id in &session_ids {
         if state.sessions.get(id).await.ok().flatten().is_some() {
-            members.push(odata_ref(&format!("/redfish/v1/SessionService/Sessions/{}", id)));
+            members.push(odata_ref(&format!(
+                "/redfish/v1/SessionService/Sessions/{}",
+                id
+            )));
         }
     }
 

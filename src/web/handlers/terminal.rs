@@ -10,13 +10,19 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+#[cfg(windows)]
+use tokio::net::TcpStream;
+#[cfg(unix)]
 use tokio::net::UnixStream;
 use tokio_tungstenite::tungstenite::{
     client::IntoClientRequest, http::HeaderValue, Message as TungsteniteMessage,
 };
 
 use crate::error::AppError;
+#[cfg(unix)]
 use crate::extensions::TTYD_SOCKET_PATH;
+#[cfg(windows)]
+use crate::extensions::TTYD_TCP_ADDR;
 use crate::state::AppState;
 
 pub async fn terminal_ws(
@@ -35,10 +41,10 @@ pub async fn terminal_ws(
 }
 
 async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
-    let unix_stream = match UnixStream::connect(TTYD_SOCKET_PATH).await {
+    let ttyd_stream = match connect_ttyd().await {
         Ok(s) => s,
         Err(e) => {
-            tracing::error!("Failed to connect to ttyd socket: {}", e);
+            tracing::error!("Failed to connect to ttyd: {}", e);
             return;
         }
     };
@@ -56,7 +62,7 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
         .headers_mut()
         .insert("Sec-WebSocket-Protocol", HeaderValue::from_static("tty"));
 
-    let ws_stream = match tokio_tungstenite::client_async(request, unix_stream).await {
+    let ws_stream = match tokio_tungstenite::client_async(request, ttyd_stream).await {
         Ok((ws, _)) => ws,
         Err(e) => {
             tracing::error!("Failed to establish WebSocket with ttyd: {}", e);
@@ -121,7 +127,7 @@ pub async fn terminal_proxy(
 ) -> Result<Response, AppError> {
     let path_str = path.map(|p| p.0).unwrap_or_default();
 
-    let mut unix_stream = UnixStream::connect(TTYD_SOCKET_PATH)
+    let mut ttyd_stream = connect_ttyd()
         .await
         .map_err(|e| AppError::ServiceUnavailable(format!("ttyd not running: {}", e)))?;
 
@@ -155,13 +161,13 @@ pub async fn terminal_proxy(
         method, uri_path, headers_str
     );
 
-    unix_stream
+    ttyd_stream
         .write_all(http_request.as_bytes())
         .await
         .map_err(|e| AppError::Internal(format!("Failed to send request: {}", e)))?;
 
     let mut response_buf = Vec::new();
-    unix_stream
+    ttyd_stream
         .read_to_end(&mut response_buf)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to read response: {}", e)))?;
@@ -209,6 +215,16 @@ pub async fn terminal_proxy(
     builder
         .body(body)
         .map_err(|e| AppError::Internal(format!("Failed to build response: {}", e)))
+}
+
+#[cfg(unix)]
+async fn connect_ttyd() -> std::io::Result<UnixStream> {
+    UnixStream::connect(TTYD_SOCKET_PATH).await
+}
+
+#[cfg(windows)]
+async fn connect_ttyd() -> std::io::Result<TcpStream> {
+    TcpStream::connect(TTYD_TCP_ADDR).await
 }
 
 pub async fn terminal_index(

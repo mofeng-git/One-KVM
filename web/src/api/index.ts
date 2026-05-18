@@ -46,6 +46,30 @@ export interface DeviceInfo {
   memory_total: number
   memory_used: number
   network_addresses: NetworkAddress[]
+  serial_ports: string[]
+}
+
+export interface FeatureCapability {
+  available: boolean
+  backends: string[]
+  selected_backend?: string
+  reason?: string
+}
+
+export interface PlatformCapabilities {
+  mode: 'linux' | 'windows'
+  mode_label: string
+  video_capture: FeatureCapability
+  encoder: FeatureCapability
+  hid: FeatureCapability
+  atx: FeatureCapability
+  msd: FeatureCapability
+  otg: FeatureCapability
+  audio: FeatureCapability
+  rustdesk: FeatureCapability
+  diagnostics: FeatureCapability
+  extensions: FeatureCapability
+  service_installation: FeatureCapability
 }
 
 export const systemApi = {
@@ -54,12 +78,14 @@ export const systemApi = {
       version: string
       build_date: string
       initialized: boolean
+      platform: PlatformCapabilities
       capabilities: {
-        video: { available: boolean; backend?: string }
-        hid: { available: boolean; backend?: string }
-        msd: { available: boolean }
-        atx: { available: boolean; backend?: string }
-        audio: { available: boolean; backend?: string }
+        video: { available: boolean; backend?: string; reason?: string }
+        hid: { available: boolean; backend?: string; reason?: string }
+        msd: { available: boolean; backend?: string; reason?: string }
+        atx: { available: boolean; backend?: string; reason?: string }
+        audio: { available: boolean; backend?: string; reason?: string }
+        rustdesk: { available: boolean; backend?: string; reason?: string }
       }
       disk_space?: {
         total: number
@@ -72,7 +98,7 @@ export const systemApi = {
   health: () => request<{ status: string; version: string }>('/health'),
 
   setupStatus: () =>
-    request<{ initialized: boolean; needs_setup: boolean }>('/setup'),
+    request<{ initialized: boolean; needs_setup: boolean; platform: PlatformCapabilities }>('/setup'),
 
   setup: (data: {
     username: string

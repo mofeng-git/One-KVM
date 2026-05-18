@@ -10,9 +10,6 @@ use tracing::{debug, info};
 use super::types::{AtxLedConfig, PowerStatus};
 use crate::error::{AppError, Result};
 
-/// LED sensor for reading power status
-///
-/// Uses GPIO to read the power LED state and determine if the system is on or off.
 pub struct LedSensor {
     config: AtxLedConfig,
     handle: Mutex<Option<LineHandle>>,
@@ -20,7 +17,6 @@ pub struct LedSensor {
 }
 
 impl LedSensor {
-    /// Create a new LED sensor with the given configuration
     pub fn new(config: AtxLedConfig) -> Self {
         Self {
             config,
@@ -29,17 +25,6 @@ impl LedSensor {
         }
     }
 
-    /// Check if the sensor is configured
-    pub fn is_configured(&self) -> bool {
-        self.config.is_configured()
-    }
-
-    /// Check if the sensor is initialized
-    pub fn is_initialized(&self) -> bool {
-        self.initialized.load(Ordering::Relaxed)
-    }
-
-    /// Initialize the LED sensor
     pub async fn init(&mut self) -> Result<()> {
         if !self.config.is_configured() {
             debug!("LED sensor not configured, skipping init");
@@ -72,9 +57,8 @@ impl LedSensor {
         Ok(())
     }
 
-    /// Read the current power status
     pub async fn read(&self) -> Result<PowerStatus> {
-        if !self.is_configured() || !self.is_initialized() {
+        if !self.config.is_configured() || !self.initialized.load(Ordering::Relaxed) {
             return Ok(PowerStatus::Unknown);
         }
 
@@ -85,11 +69,10 @@ impl LedSensor {
                     .get_value()
                     .map_err(|e| AppError::Internal(format!("LED read failed: {}", e)))?;
 
-                // Apply inversion if configured
                 let is_on = if self.config.inverted {
-                    value == 0 // Active low: 0 means on
+                    value == 0
                 } else {
-                    value == 1 // Active high: 1 means on
+                    value == 1
                 };
 
                 Ok(if is_on {
@@ -102,7 +85,6 @@ impl LedSensor {
         }
     }
 
-    /// Shutdown the LED sensor
     pub async fn shutdown(&mut self) -> Result<()> {
         *self.handle.lock().unwrap() = None;
         self.initialized.store(false, Ordering::Relaxed);
@@ -125,8 +107,8 @@ mod tests {
     fn test_led_sensor_creation() {
         let config = AtxLedConfig::default();
         let sensor = LedSensor::new(config);
-        assert!(!sensor.is_configured());
-        assert!(!sensor.is_initialized());
+        assert!(!sensor.config.is_configured());
+        assert!(!sensor.initialized.load(Ordering::Relaxed));
     }
 
     #[test]
@@ -138,8 +120,8 @@ mod tests {
             inverted: false,
         };
         let sensor = LedSensor::new(config);
-        assert!(sensor.is_configured());
-        assert!(!sensor.is_initialized());
+        assert!(sensor.config.is_configured());
+        assert!(!sensor.initialized.load(Ordering::Relaxed));
     }
 
     #[test]
@@ -151,7 +133,6 @@ mod tests {
             inverted: true,
         };
         let sensor = LedSensor::new(config);
-        assert!(sensor.is_configured());
         assert!(sensor.config.inverted);
     }
 }

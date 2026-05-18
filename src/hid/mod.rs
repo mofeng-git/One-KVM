@@ -1,11 +1,16 @@
 //! HID path: browser (WebSocket or WebRTC DataChannel) → queue → OTG gadget or CH9329.
 
 pub mod backend;
+mod ch9329_proto;
 pub mod ch9329;
 pub mod consumer;
 pub mod datachannel;
+mod factory;
 pub mod keyboard;
+#[cfg(unix)]
 pub mod otg;
+#[cfg(unix)]
+mod otg_device;
 pub mod types;
 pub mod websocket;
 
@@ -95,7 +100,9 @@ use tracing::{info, warn};
 
 use crate::error::{AppError, Result};
 use crate::events::EventBus;
+#[cfg(unix)]
 use crate::otg::OtgService;
+use factory::HidBackendFactory;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -112,7 +119,7 @@ enum QueuedHidEvent {
 }
 
 pub struct HidController {
-    otg_service: Option<Arc<OtgService>>,
+    backend_factory: HidBackendFactory,
     backend: Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
     backend_type: Arc<RwLock<HidBackendType>>,
     events: Arc<tokio::sync::RwLock<Option<Arc<EventBus>>>>,
@@ -127,11 +134,33 @@ pub struct HidController {
 }
 
 impl HidController {
+    #[cfg(unix)]
     pub fn new(backend_type: HidBackendType, otg_service: Option<Arc<OtgService>>) -> Self {
         let (hid_tx, hid_rx) = mpsc::channel(HID_EVENT_QUEUE_CAPACITY);
         Self {
-            otg_service,
             backend: Arc::new(RwLock::new(None)),
+            backend_factory: HidBackendFactory::new(otg_service),
+            backend_type: Arc::new(RwLock::new(backend_type.clone())),
+            events: Arc::new(tokio::sync::RwLock::new(None)),
+            runtime_state: Arc::new(RwLock::new(HidRuntimeState::from_backend_type(
+                &backend_type,
+            ))),
+            hid_tx,
+            hid_rx: Mutex::new(Some(hid_rx)),
+            pending_move: Arc::new(parking_lot::Mutex::new(None)),
+            pending_move_flag: Arc::new(AtomicBool::new(false)),
+            hid_worker: Mutex::new(None),
+            runtime_worker: Mutex::new(None),
+            backend_available: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    #[cfg(not(unix))]
+    pub fn new(backend_type: HidBackendType) -> Self {
+        let (hid_tx, hid_rx) = mpsc::channel(HID_EVENT_QUEUE_CAPACITY);
+        Self {
+            backend: Arc::new(RwLock::new(None)),
+            backend_factory: HidBackendFactory::new(),
             backend_type: Arc::new(RwLock::new(backend_type.clone())),
             events: Arc::new(tokio::sync::RwLock::new(None)),
             runtime_state: Arc::new(RwLock::new(HidRuntimeState::from_backend_type(
@@ -153,51 +182,22 @@ impl HidController {
 
     pub async fn init(&self) -> Result<()> {
         let backend_type = self.backend_type.read().await.clone();
-        let backend: Arc<dyn HidBackend> = match backend_type {
-            HidBackendType::Otg => {
-                let otg_service = self
-                    .otg_service
-                    .as_ref()
-                    .ok_or_else(|| AppError::Internal("OtgService not available".into()))?;
-
-                let handles = otg_service.hid_device_paths().await.ok_or_else(|| {
-                    AppError::Config("OTG HID paths are not available".to_string())
-                })?;
-
-                info!("Creating OTG HID backend from device paths");
-                Arc::new(otg::OtgBackend::from_handles(handles)?)
-            }
-            HidBackendType::Ch9329 {
-                ref port,
-                baud_rate,
-            } => {
-                info!(
-                    "Initializing CH9329 HID backend on {} @ {} baud",
-                    port, baud_rate
-                );
-                Arc::new(ch9329::Ch9329Backend::with_baud_rate(port, baud_rate)?)
-            }
-            HidBackendType::None => {
-                warn!("HID backend disabled");
-                return Ok(());
-            }
-        };
-
-        if let Err(e) = backend.init().await {
-            self.backend_available.store(false, Ordering::Release);
-            let error_state = {
-                let backend_type = self.backend_type.read().await.clone();
+        let backend = match self.backend_factory.create_initialized(&backend_type).await {
+            Ok(Some(backend)) => backend,
+            Ok(None) => return Ok(()),
+            Err(error) => {
+                self.backend_available.store(false, Ordering::Release);
                 let current = self.runtime_state.read().await.clone();
-                HidRuntimeState::with_error(
+                let error_state = HidRuntimeState::with_error(
                     &backend_type,
                     &current,
-                    format!("Failed to initialize HID backend: {}", e),
+                    format!("Failed to initialize HID backend: {}", error),
                     "init_failed",
-                )
-            };
-            self.apply_runtime_state(error_state).await;
-            return Err(e);
-        }
+                );
+                self.apply_runtime_state(error_state).await;
+                return Err(error);
+            }
+        };
 
         *self.backend.write().await = Some(backend);
         self.sync_runtime_state_from_backend().await;
@@ -298,73 +298,15 @@ impl HidController {
             }
         }
 
-        let new_backend: Option<Arc<dyn HidBackend>> = match new_backend_type {
-            HidBackendType::Otg => {
-                info!("Initializing OTG HID backend");
-
-                let otg_service = match self.otg_service.as_ref() {
-                    Some(svc) => svc,
-                    None => {
-                        warn!("OTG backend requires OtgService, but it's not available");
-                        return Err(AppError::Config(
-                            "OTG backend not available (OtgService missing)".to_string(),
-                        ));
-                    }
-                };
-
-                match otg_service.hid_device_paths().await {
-                    Some(handles) => match otg::OtgBackend::from_handles(handles) {
-                        Ok(backend) => {
-                            let backend = Arc::new(backend);
-                            match backend.init().await {
-                                Ok(_) => {
-                                    info!("OTG backend initialized successfully");
-                                    Some(backend)
-                                }
-                                Err(e) => {
-                                    warn!("Failed to initialize OTG backend: {}", e);
-                                    None
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!("Failed to create OTG backend: {}", e);
-                            None
-                        }
-                    },
-                    None => {
-                        warn!("OTG HID paths are not available");
-                        None
-                    }
-                }
-            }
-            HidBackendType::Ch9329 {
-                ref port,
-                baud_rate,
-            } => {
-                info!(
-                    "Initializing CH9329 HID backend on {} @ {} baud",
-                    port, baud_rate
-                );
-                match ch9329::Ch9329Backend::with_baud_rate(port, baud_rate) {
-                    Ok(b) => {
-                        let backend = Arc::new(b);
-                        match backend.init().await {
-                            Ok(_) => Some(backend),
-                            Err(e) => {
-                                warn!("Failed to initialize CH9329 backend: {}", e);
-                                None
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to create CH9329 backend: {}", e);
-                        None
-                    }
-                }
-            }
-            HidBackendType::None => {
-                warn!("HID backend disabled");
+        let new_backend = match self
+            .backend_factory
+            .create_initialized(&new_backend_type)
+            .await
+        {
+            Ok(backend) => backend,
+            Err(error) if matches!(&new_backend_type, HidBackendType::None) => return Err(error),
+            Err(error) => {
+                warn!("Failed to initialize HID backend: {}", error);
                 None
             }
         };

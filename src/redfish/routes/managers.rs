@@ -7,8 +7,8 @@ use axum::{
 
 use std::sync::Arc;
 
-use super::{empty_collection, validate_id, RESOURCE_ID};
 use super::super::schema::*;
+use super::{empty_collection, validate_id, RESOURCE_ID};
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -86,7 +86,10 @@ async fn manager_detail(
             manager_for_servers: vec![odata_ref(&format!("/redfish/v1/Systems/{}", RESOURCE_ID))],
             manager_for_chassis: vec![odata_ref(&format!("/redfish/v1/Chassis/{}", RESOURCE_ID))],
         },
-        network_protocol: odata_ref(&format!("/redfish/v1/Managers/{}/NetworkProtocol", manager_id)),
+        network_protocol: odata_ref(&format!(
+            "/redfish/v1/Managers/{}/NetworkProtocol",
+            manager_id
+        )),
     })
     .into_response()
 }

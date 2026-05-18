@@ -9,7 +9,15 @@ pub fn hostname_from_etc() -> String {
 
 /// Current kernel hostname (`gethostname`). Used for live device info in the UI.
 pub fn hostname_uname() -> String {
-    nix::unistd::gethostname()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "unknown".to_string())
+    #[cfg(unix)]
+    {
+        nix::unistd::gethostname()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| "unknown".to_string())
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown".to_string())
+    }
 }

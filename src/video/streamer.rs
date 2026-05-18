@@ -11,24 +11,25 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
 
-use super::csi_bridge;
 use super::device::{
-    enumerate_devices, find_best_device, parse_bridge_kind, select_recovery_device, VideoDevice,
-    VideoDeviceInfo, VideoDeviceRecoveryHint,
+    bridge as csi_bridge, enumerate_devices, find_best_device, is_csi_hdmi_bridge,
+    parse_bridge_kind, select_recovery_device, VideoDevice, VideoDeviceInfo,
+    VideoDeviceRecoveryHint,
 };
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
-use super::is_csi_hdmi_bridge;
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 use crate::stream::MjpegStreamHandler;
 use crate::utils::LogThrottler;
-use crate::video::capture_limits::{should_validate_jpeg_frame, MIN_CAPTURE_FRAME_SIZE};
-use crate::video::capture_status::{
+use crate::video::capture::runtime::open_capture_stream;
+use crate::video::capture::status::{
     capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
     CaptureIoErrorKind,
 };
-use crate::video::v4l2r_capture::{is_source_changed_error, BridgeContext, V4l2rCaptureStream};
+use crate::video::capture::{is_source_changed_error, BridgeContext, CaptureStream};
+
+const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 
 /// Streamer configuration
 #[derive(Debug, Clone)]
@@ -358,10 +359,17 @@ impl Streamer {
         self.publish_event(self.current_state_event().await).await;
 
         let devices = enumerate_devices()?;
-        let device = devices
-            .into_iter()
-            .find(|d| d.path.to_string_lossy() == device_path)
-            .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?;
+        let device = if device_path.eq_ignore_ascii_case("auto") {
+            devices
+                .into_iter()
+                .next()
+                .ok_or_else(|| AppError::VideoError("No video devices found".to_string()))?
+        } else {
+            devices
+                .into_iter()
+                .find(|d| d.path.to_string_lossy() == device_path)
+                .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?
+        };
 
         let (format, resolution) = self.resolve_capture_config(&device, format, resolution)?;
 
@@ -853,12 +861,12 @@ impl Streamer {
             //    On RK628 this prevents a kernel null-pointer deref.
             if let Some(subdev_path) = bridge_ctx.subdev_path.as_ref() {
                 match probe_subdev_signal(subdev_path, bridge_ctx.kind) {
-                    Some(crate::video::SignalStatus::NoCable)
-                    | Some(crate::video::SignalStatus::NoSync)
-                    | Some(crate::video::SignalStatus::NoSignal)
-                    | Some(crate::video::SignalStatus::OutOfRange) => {
+                    Some(crate::video::signal::SignalStatus::NoCable)
+                    | Some(crate::video::signal::SignalStatus::NoSync)
+                    | Some(crate::video::signal::SignalStatus::NoSignal)
+                    | Some(crate::video::signal::SignalStatus::OutOfRange) => {
                         let status = probe_subdev_signal(subdev_path, bridge_ctx.kind)
-                            .unwrap_or(crate::video::SignalStatus::NoSignal);
+                            .unwrap_or(crate::video::signal::SignalStatus::NoSignal);
                         let wait_secs = backoff_secs(no_signal_restart_count);
                         debug!(
                             "Pre-STREAMON gate: subdev {:?} reports {:?} — \
@@ -884,7 +892,7 @@ impl Streamer {
             }
 
             // ── Open the capture stream ─────────────────────────────────────────
-            let mut stream_opt: Option<V4l2rCaptureStream> = None;
+            let mut stream_opt: Option<CaptureStream> = None;
             let mut last_error: Option<String> = None;
 
             for attempt in 0..MAX_RETRIES {
@@ -893,7 +901,7 @@ impl Streamer {
                     return;
                 }
 
-                match V4l2rCaptureStream::open_with_bridge(
+                match open_capture_stream(
                     &device_path,
                     config.resolution,
                     config.format,
@@ -985,7 +993,6 @@ impl Streamer {
 
             let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
             let mut signal_present = true;
-            let mut validate_counter: u64 = 0;
             let mut idle_since: Option<std::time::Instant> = None;
 
             let mut fps_frame_count: u64 = 0;
@@ -1091,7 +1098,7 @@ impl Streamer {
                                 break 'capture;
                             }
                             CaptureIoErrorKind::TransientSignal { status } => {
-                                if status == Some(crate::video::SignalStatus::UvcUsbError) {
+                                if status == Some(crate::video::signal::SignalStatus::UvcUsbError) {
                                     warn!(
                                         "Capture transient error (EPROTO/-71, often UVC USB): {}",
                                         e
@@ -1142,14 +1149,6 @@ impl Streamer {
 
                 let frame_size = meta.bytes_used;
                 if frame_size < MIN_CAPTURE_FRAME_SIZE {
-                    continue 'capture;
-                }
-
-                validate_counter = validate_counter.wrapping_add(1);
-                if pixel_format.is_compressed()
-                    && should_validate_jpeg_frame(validate_counter)
-                    && !VideoFrame::is_valid_jpeg_bytes(&owned[..frame_size])
-                {
                     continue 'capture;
                 }
 
@@ -1275,7 +1274,7 @@ impl Streamer {
             // Reset no_signal_since so the back-off timer is fresh for the new session.
             // no_signal_since will be re-set if the new session immediately times out.
 
-            // Continue 'session → re-open V4l2rCaptureStream with updated config.
+            // Continue 'session → re-open CaptureStream with updated config.
         } // 'session
 
         self.direct_active.store(false, Ordering::SeqCst);
@@ -1580,7 +1579,7 @@ pub struct StreamerStats {
 fn probe_subdev_signal(
     subdev_path: &std::path::Path,
     kind: Option<csi_bridge::CsiBridgeKind>,
-) -> Option<crate::video::SignalStatus> {
+) -> Option<crate::video::signal::SignalStatus> {
     let fd = match csi_bridge::open_subdev(subdev_path) {
         Ok(f) => f,
         Err(e) => {
@@ -1588,7 +1587,7 @@ fn probe_subdev_signal(
                 "probe_subdev_signal: failed to open {:?}: {}",
                 subdev_path, e
             );
-            return Some(crate::video::SignalStatus::NoSignal);
+            return Some(crate::video::signal::SignalStatus::NoSignal);
         }
     };
     let kind = kind.unwrap_or(csi_bridge::CsiBridgeKind::Unknown);

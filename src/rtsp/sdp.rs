@@ -2,8 +2,10 @@ use base64::Engine;
 use sdp_types as sdp;
 
 use crate::config::RtspConfig;
-use crate::video::encoder::VideoCodecType;
-use crate::webrtc::rtp::parse_profile_level_id_from_sps;
+use crate::video::codec::h264_bitstream::{
+    parse_profile_level_id_from_sps, FALLBACK_WEBRTC_PROFILE_LEVEL_ID,
+};
+use crate::video::codec::VideoCodecType;
 
 use super::state::ParameterSets;
 
@@ -15,7 +17,10 @@ pub(crate) fn build_h264_fmtp(payload_type: u8, params: &ParameterSets) -> Strin
             attrs.push(format!("profile-level-id={}", profile_level_id));
         }
     } else {
-        attrs.push("profile-level-id=42e01f".to_string());
+        attrs.push(format!(
+            "profile-level-id={}",
+            FALLBACK_WEBRTC_PROFILE_LEVEL_ID
+        ));
     }
 
     if let (Some(sps), Some(pps)) = (params.h264_sps.as_ref(), params.h264_pps.as_ref()) {

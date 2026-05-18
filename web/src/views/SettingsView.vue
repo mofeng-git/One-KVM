@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
 import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
@@ -42,6 +43,7 @@ import type {
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { getVideoFormatState } from '@/lib/video-format-support'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import { Button } from '@/components/ui/button'
@@ -108,6 +110,8 @@ const route = useRoute()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
+
+const isWindows = computed(() => systemStore.platform?.mode === 'windows')
 
 const activeSection = ref('appearance')
 const mobileMenuOpen = ref(false)
@@ -203,6 +207,12 @@ function normalizeSettingsSection(value: unknown): string | null {
   return SETTINGS_SECTION_IDS.has(value) ? value : null
 }
 
+function ensureVisibleSection() {
+  if (!SETTINGS_SECTION_IDS.has(activeSection.value)) {
+    activeSection.value = 'appearance'
+  }
+}
+
 const theme = ref<'light' | 'dark' | 'system'>('system')
 
 const usernameInput = ref('')
@@ -247,6 +257,17 @@ const extConfig = ref({
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
 })
 
+const gostcValidationMessage = computed(() => {
+  if (!extConfig.value.gostc.addr?.trim()) return t('extensions.gostc.addrRequired')
+  if (!extConfig.value.gostc.key) return t('extensions.gostc.keyRequired')
+  return ''
+})
+
+const easytierValidationMessage = computed(() => {
+  if (!extConfig.value.easytier.network_name?.trim()) return t('extensions.easytier.networkNameRequired')
+  return ''
+})
+
 const rustdeskConfig = ref<RustDeskConfigResponse | null>(null)
 const rustdeskStatus = ref<RustDeskStatusResponse | null>(null)
 const rustdeskPassword = ref<RustDeskPasswordResponse | null>(null)
@@ -258,6 +279,13 @@ const rustdeskLocalConfig = ref({
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
+})
+
+const rustdeskValidationMessage = computed(() => {
+  if (!rustdeskLocalConfig.value.rendezvous_server?.trim()) {
+    return t('extensions.rustdesk.rendezvousServerRequired')
+  }
+  return ''
 })
 
 const rtspStatus = ref<RtspStatusResponse | null>(null)
@@ -871,6 +899,18 @@ const ch9329ReservedSerialDevice = computed(() => {
   return config.value.hid_serial_device.trim()
 })
 
+const atxDriverOptions = computed(() => {
+  const options = [
+    { value: 'none' as AtxDriverType, label: t('settings.atxDriverNone') },
+    { value: 'gpio' as AtxDriverType, label: t('settings.atxDriverGpio') },
+    { value: 'usbrelay' as AtxDriverType, label: t('settings.atxDriverUsbRelay') },
+    { value: 'serial' as AtxDriverType, label: t('settings.atxDriverSerial') },
+  ]
+  return isWindows.value
+    ? options.filter(option => ['none', 'serial'].includes(option.value))
+    : options
+})
+
 const isSharedAtxSerialRelay = computed(() => {
   const power = atxConfig.value.power
   const reset = atxConfig.value.reset
@@ -1004,6 +1044,19 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
+
+const hasDeviceCpuUsage = computed(() => {
+  return !!systemStore.deviceInfo
+})
+
+const hasDeviceMemoryUsage = computed(() => {
+  const info = systemStore.deviceInfo
+  return !!info && info.memory_total > 0
+})
+
+const hasDeviceNetworkAddresses = computed(() => {
+  return (systemStore.deviceInfo?.network_addresses.length ?? 0) > 0
+})
 
 function setTheme(newTheme: 'light' | 'dark' | 'system') {
   theme.value = newTheme
@@ -1272,6 +1325,8 @@ async function loadExtensions() {
 }
 
 async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
+  if ((id === 'gostc' || id === 'easytier') && !validateExtensionConfig(id)) return
+
   try {
     await extensionsApi.start(id)
     await loadExtensions()
@@ -1299,6 +1354,8 @@ async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
 }
 
 async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
+  if ((id === 'gostc' || id === 'easytier') && extConfig.value[id].enabled && !validateExtensionConfig(id)) return
+
   loading.value = true
   try {
     if (id === 'ttyd') {
@@ -1546,6 +1603,26 @@ function normalizeRustdeskServer(value: string, defaultPort: number): string | u
 function normalizeRustdeskRelayKey(value: string): string | undefined {
   const cleaned = value.replace(/\r?\n/g, '').trim()
   return cleaned || undefined
+}
+
+function showValidationError(message: string): boolean {
+  toast.error(t('api.operationFailed'), {
+    description: message,
+    duration: 4000,
+  })
+  return false
+}
+
+function validateExtensionConfig(id: 'gostc' | 'easytier'): boolean {
+  const message = id === 'gostc'
+    ? gostcValidationMessage.value
+    : easytierValidationMessage.value
+
+  return !message || showValidationError(message)
+}
+
+function validateRustdeskConfig(): boolean {
+  return !rustdeskValidationMessage.value || showValidationError(rustdeskValidationMessage.value)
 }
 
 function normalizeRtspPath(path: string): string {
@@ -1864,6 +1941,8 @@ function updateStatusBadgeText(): string {
 }
 
 async function saveRustdeskConfig() {
+  if (rustdeskLocalConfig.value.enabled && !validateRustdeskConfig()) return
+
   loading.value = true
   saved.value = false
   try {
@@ -1918,6 +1997,8 @@ async function regenerateRustdeskPassword() {
 }
 
 async function startRustdesk() {
+  if (!validateRustdeskConfig()) return
+
   rustdeskLoading.value = true
   try {
     await configStore.updateRustdesk({ enabled: true })
@@ -2119,6 +2200,7 @@ onMounted(async () => {
     refreshUpdateStatus(),
     fetchUsbDevices(),
   ])
+  ensureVisibleSection()
   usernameInput.value = authStore.user || ''
 
   if (updateRunning.value) {
@@ -2141,6 +2223,10 @@ watch(() => route.query.tab, (tab) => {
     selectSection(section)
   }
 }, { immediate: true })
+
+watch(isWindows, () => {
+  ensureVisibleSection()
+})
 </script>
 
 <template>
@@ -2370,7 +2456,7 @@ watch(() => route.query.tab, (tab) => {
                   <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
                   <select id="video-device" v-model="config.video_device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                     <option value="">{{ t('settings.selectDevice') }}</option>
-                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</option>
+                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ formatVideoDeviceLabel(dev) }}</option>
                   </select>
                 </div>
                 <div class="space-y-2">
@@ -3369,10 +3455,9 @@ watch(() => route.query.tab, (tab) => {
                   <div class="space-y-2">
                     <Label for="power-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="power-driver" v-model="atxConfig.power.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="none">{{ t('settings.atxDriverNone') }}</option>
-                      <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
-                      <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
-                      <option value="serial">{{ t('settings.atxDriverSerial') }}</option>
+                      <option v-for="option in atxDriverOptions" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                      </option>
                     </select>
                   </div>
                   <div class="space-y-2">
@@ -3433,10 +3518,9 @@ watch(() => route.query.tab, (tab) => {
                   <div class="space-y-2">
                     <Label for="reset-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="reset-driver" v-model="atxConfig.reset.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="none">{{ t('settings.atxDriverNone') }}</option>
-                      <option value="gpio">{{ t('settings.atxDriverGpio') }}</option>
-                      <option value="usbrelay">{{ t('settings.atxDriverUsbRelay') }}</option>
-                      <option value="serial">{{ t('settings.atxDriverSerial') }}</option>
+                      <option v-for="option in atxDriverOptions" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                      </option>
                     </select>
                   </div>
                   <div class="space-y-2">
@@ -3495,7 +3579,7 @@ watch(() => route.query.tab, (tab) => {
             </Card>
 
             <!-- LED Sensing Config -->
-            <Card v-if="atxConfig.enabled">
+            <Card v-if="atxConfig.enabled && !isWindows">
               <CardHeader>
                 <CardTitle>{{ t('settings.atxLedSensing') }}</CardTitle>
                 <CardDescription>{{ t('settings.atxLedSensingDesc') }}</CardDescription>
@@ -3583,7 +3667,7 @@ watch(() => route.query.tab, (tab) => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <div v-if="!extensions?.ttyd?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                  {{ t('extensions.binaryNotFound', { path: '/usr/bin/ttyd' }) }}
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'ttyd.win32.exe' : '/usr/bin/ttyd' }) }}
                 </div>
                 <template v-else>
                   <!-- Status and controls -->
@@ -3632,7 +3716,7 @@ watch(() => route.query.tab, (tab) => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.ttyd.shell') }}</Label>
-                      <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
+                      <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" :placeholder="isWindows ? 'cmd' : '/bin/bash'" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
                   </div>
                   <!-- Logs -->
@@ -3676,7 +3760,7 @@ watch(() => route.query.tab, (tab) => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <div v-if="!extensions?.gostc?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                  {{ t('extensions.binaryNotFound', { path: '/usr/bin/gostc' }) }}
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'gostc.exe' : '/usr/bin/gostc' }) }}
                 </div>
                 <template v-else>
                   <!-- Status and controls -->
@@ -3690,7 +3774,7 @@ watch(() => route.query.tab, (tab) => {
                         v-if="!isExtRunning(extensions?.gostc?.status)"
                         size="sm"
                         @click="startExtension('gostc')"
-                        :disabled="extensionsLoading || !extConfig.gostc.key || !extConfig.gostc.addr?.trim()"
+                        :disabled="extensionsLoading || !!gostcValidationMessage"
                       >
                         <Play class="h-4 w-4 mr-1" />
                         {{ t('extensions.start') }}
@@ -3716,11 +3800,17 @@ watch(() => route.query.tab, (tab) => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
-                      <Input v-model="extConfig.gostc.addr" class="sm:col-span-3" :placeholder="t('extensions.gostc.addrPlaceholder')" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                      <div class="sm:col-span-3 space-y-1">
+                        <Input v-model="extConfig.gostc.addr" :placeholder="t('extensions.gostc.addrPlaceholder')" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                        <p v-if="extConfig.gostc.enabled && !extConfig.gostc.addr?.trim()" class="text-xs text-destructive">{{ t('extensions.gostc.addrRequired') }}</p>
+                      </div>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
-                      <Input v-model="extConfig.gostc.key" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                      <div class="sm:col-span-3 space-y-1">
+                        <Input v-model="extConfig.gostc.key" type="password" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                        <p v-if="extConfig.gostc.enabled && !extConfig.gostc.key" class="text-xs text-destructive">{{ t('extensions.gostc.keyRequired') }}</p>
+                      </div>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.tls') }}</Label>
@@ -3767,7 +3857,7 @@ watch(() => route.query.tab, (tab) => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <div v-if="!extensions?.easytier?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                  {{ t('extensions.binaryNotFound', { path: '/usr/bin/easytier-core' }) }}
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'easytier-core.exe' : '/usr/bin/easytier-core' }) }}
                 </div>
                 <template v-else>
                   <!-- Status and controls -->
@@ -3781,7 +3871,7 @@ watch(() => route.query.tab, (tab) => {
                         v-if="!isExtRunning(extensions?.easytier?.status)"
                         size="sm"
                         @click="startExtension('easytier')"
-                        :disabled="extensionsLoading || !extConfig.easytier.network_name"
+                        :disabled="extensionsLoading || !!easytierValidationMessage"
                       >
                         <Play class="h-4 w-4 mr-1" />
                         {{ t('extensions.start') }}
@@ -3807,7 +3897,10 @@ watch(() => route.query.tab, (tab) => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.networkName') }}</Label>
-                      <Input v-model="extConfig.easytier.network_name" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                      <div class="sm:col-span-3 space-y-1">
+                        <Input v-model="extConfig.easytier.network_name" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                        <p v-if="extConfig.easytier.enabled && !extConfig.easytier.network_name?.trim()" class="text-xs text-destructive">{{ t('extensions.easytier.networkNameRequired') }}</p>
+                      </div>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
@@ -4045,6 +4138,7 @@ watch(() => route.query.tab, (tab) => {
                         :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
                       />
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
+                      <p v-if="rustdeskLocalConfig.enabled && rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
@@ -4249,23 +4343,20 @@ watch(() => route.query.tab, (tab) => {
                     <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.cpuModel') }}</span>
                     <span class="text-sm font-medium truncate max-w-[60%] text-right">{{ systemStore.deviceInfo.cpu_model }}</span>
                   </div>
-                  <div class="flex justify-between items-center py-2 border-b">
+                  <div v-if="hasDeviceCpuUsage" class="flex justify-between items-center py-2 border-b">
                     <span class="text-sm text-muted-foreground">{{ t('settings.cpuUsage') }}</span>
                     <span class="text-sm font-medium">{{ systemStore.deviceInfo.cpu_usage.toFixed(1) }}%</span>
                   </div>
-                  <div class="flex justify-between items-center py-2 border-b">
+                  <div v-if="hasDeviceMemoryUsage" class="flex justify-between items-center py-2 border-b">
                     <span class="text-sm text-muted-foreground">{{ t('settings.memoryUsage') }}</span>
                     <span class="text-sm font-medium">{{ formatBytes(systemStore.deviceInfo.memory_used) }} / {{ formatBytes(systemStore.deviceInfo.memory_total) }}</span>
                   </div>
-                  <div class="py-2">
+                  <div v-if="hasDeviceNetworkAddresses" class="py-2">
                     <span class="text-sm text-muted-foreground">{{ t('settings.networkAddresses') }}</span>
                     <div class="mt-2 space-y-1">
                       <div v-for="addr in systemStore.deviceInfo.network_addresses" :key="addr.interface" class="flex justify-between items-center text-sm">
                         <span class="text-muted-foreground">{{ addr.interface }}</span>
                         <code class="font-mono bg-muted px-2 py-0.5 rounded">{{ addr.ip }}</code>
-                      </div>
-                      <div v-if="systemStore.deviceInfo.network_addresses.length === 0" class="text-sm text-muted-foreground">
-                        {{ t('common.unknown') }}
                       </div>
                     </div>
                   </div>

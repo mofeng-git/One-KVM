@@ -4,12 +4,10 @@
 //! Polled timed writes (JetKVM-style). Treat `ESHUTDOWN` (108) by closing handles and reopening; keep fd on `EAGAIN` (11). Host/gadget teardown during MSD resembles PiKVM. <https://github.com/raspberrypi/linux/issues/4373>
 
 use async_trait::async_trait;
-use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use parking_lot::Mutex;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::io::AsFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -19,6 +17,7 @@ use tokio::sync::watch;
 use tracing::{debug, info, trace, warn};
 
 use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
+use super::otg_device::OtgDeviceIo;
 use super::types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
 };
@@ -87,7 +86,6 @@ pub struct OtgBackend {
     last_error: parking_lot::RwLock<Option<(String, String)>>,
     last_error_log: parking_lot::Mutex<std::time::Instant>,
     error_count: AtomicU8,
-    eagain_count: AtomicU8,
     runtime_notify_tx: watch::Sender<()>,
     runtime_worker_stop: Arc<AtomicBool>,
     runtime_worker: Mutex<Option<thread::JoinHandle<()>>>,
@@ -119,7 +117,6 @@ impl OtgBackend {
             last_error: parking_lot::RwLock::new(None),
             last_error_log: parking_lot::Mutex::new(std::time::Instant::now()),
             error_count: AtomicU8::new(0),
-            eagain_count: AtomicU8::new(0),
             runtime_notify_tx,
             runtime_worker_stop: Arc::new(AtomicBool::new(false)),
             runtime_worker: Mutex::new(None),
@@ -179,34 +176,11 @@ impl OtgBackend {
 
     fn reset_error_count(&self) {
         self.error_count.store(0, Ordering::Relaxed);
-        self.eagain_count.store(0, Ordering::Relaxed);
     }
 
     /// Poll-based write with `HID_WRITE_TIMEOUT_MS`; timeout → drop (JetKVM-style).
     fn write_with_timeout(&self, file: &mut File, data: &[u8]) -> std::io::Result<bool> {
-        let mut pollfd = [PollFd::new(file.as_fd(), PollFlags::POLLOUT)];
-
-        match poll(&mut pollfd, PollTimeout::from(HID_WRITE_TIMEOUT_MS as u16)) {
-            Ok(1) => {
-                if let Some(revents) = pollfd[0].revents() {
-                    if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP)
-                    {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::BrokenPipe,
-                            "Device error or hangup",
-                        ));
-                    }
-                }
-                file.write_all(data)?;
-                Ok(true)
-            }
-            Ok(0) => {
-                trace!("HID write timeout, dropping data");
-                Ok(false)
-            }
-            Ok(_) => Ok(false),
-            Err(e) => Err(std::io::Error::other(e)),
-        }
+        OtgDeviceIo::write_with_timeout(file, data, HID_WRITE_TIMEOUT_MS)
     }
 
     pub fn set_udc_name(&self, udc: &str) {
@@ -357,6 +331,32 @@ impl OtgBackend {
         }
     }
 
+    fn handle_write_error(
+        &self,
+        dev: &mut Option<File>,
+        err: std::io::Error,
+        operation: &str,
+        device_label: &str,
+    ) -> Result<()> {
+        match err.raw_os_error() {
+            Some(108) => {
+                debug!("{} ESHUTDOWN, closing for recovery", device_label);
+                *dev = None;
+                self.record_error(format!("{}: {}", operation, err), "eshutdown");
+                Err(Self::io_error_to_hid_error(err, operation))
+            }
+            Some(11) => {
+                trace!("{} EAGAIN after poll, dropping", device_label);
+                Ok(())
+            }
+            _ => {
+                warn!("{} write error: {}", device_label, err);
+                self.record_error(format!("{}: {}", operation, err), Self::io_error_code(&err));
+                Err(Self::io_error_to_hid_error(err, operation))
+            }
+        }
+    }
+
     pub fn check_devices_exist(&self) -> bool {
         self.keyboard_path.as_ref().is_none_or(|p| p.exists())
             && self.mouse_rel_path.as_ref().is_none_or(|p| p.exists())
@@ -405,41 +405,12 @@ impl OtgBackend {
                     self.log_throttled_error("HID keyboard write timeout, dropped");
                     Ok(())
                 }
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Keyboard ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            self.record_error(
-                                format!("Failed to write keyboard report: {}", e),
-                                "eshutdown",
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write keyboard report",
-                            ))
-                        }
-                        Some(11) => {
-                            trace!("Keyboard EAGAIN after poll, dropping");
-                            Ok(())
-                        }
-                        _ => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Keyboard write error: {}", e);
-                            self.record_error(
-                                format!("Failed to write keyboard report: {}", e),
-                                Self::io_error_code(&e),
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write keyboard report",
-                            ))
-                        }
-                    }
-                }
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write keyboard report",
+                    "Keyboard",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -468,38 +439,12 @@ impl OtgBackend {
                     Ok(())
                 }
                 Ok(false) => Ok(()),
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Relative mouse ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            self.record_error(
-                                format!("Failed to write mouse report: {}", e),
-                                "eshutdown",
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                        Some(11) => Ok(()),
-                        _ => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Relative mouse write error: {}", e);
-                            self.record_error(
-                                format!("Failed to write mouse report: {}", e),
-                                Self::io_error_code(&e),
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                    }
-                }
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write mouse report",
+                    "Relative mouse",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -534,38 +479,12 @@ impl OtgBackend {
                     Ok(())
                 }
                 Ok(false) => Ok(()),
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Absolute mouse ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            self.record_error(
-                                format!("Failed to write mouse report: {}", e),
-                                "eshutdown",
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                        Some(11) => Ok(()),
-                        _ => {
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Absolute mouse write error: {}", e);
-                            self.record_error(
-                                format!("Failed to write mouse report: {}", e),
-                                Self::io_error_code(&e),
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                    }
-                }
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write mouse report",
+                    "Absolute mouse",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -597,35 +516,12 @@ impl OtgBackend {
                     Ok(())
                 }
                 Ok(false) => Ok(()),
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-                    match error_code {
-                        Some(108) => {
-                            debug!("Consumer control ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            self.record_error(
-                                format!("Failed to write consumer report: {}", e),
-                                "eshutdown",
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write consumer report",
-                            ))
-                        }
-                        Some(11) => Ok(()),
-                        _ => {
-                            warn!("Consumer control write error: {}", e);
-                            self.record_error(
-                                format!("Failed to write consumer report: {}", e),
-                                Self::io_error_code(&e),
-                            );
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write consumer report",
-                            ))
-                        }
-                    }
-                }
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write consumer report",
+                    "Consumer control",
+                ),
             }
         } else {
             Err(AppError::HidError {

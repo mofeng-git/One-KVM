@@ -7,8 +7,8 @@ use axum::{
 
 use std::sync::Arc;
 
-use super::{empty_collection, get_power_state, validate_id, RESOURCE_ID};
 use super::super::schema::*;
+use super::{empty_collection, get_power_state, validate_id, RESOURCE_ID};
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -64,9 +64,7 @@ async fn chassis_detail(
     .into_response()
 }
 
-async fn chassis_power(
-    Path(chassis_id): Path<String>,
-) -> Response {
+async fn chassis_power(Path(chassis_id): Path<String>) -> Response {
     if let Some(resp) = validate_id(&chassis_id) {
         return resp;
     }

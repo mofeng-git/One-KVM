@@ -8,29 +8,20 @@ use axum::{
 
 use std::sync::Arc;
 
-use super::{empty_collection, resource_not_found};
 use super::super::schema::*;
+use super::{empty_collection, resource_not_found};
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/v1/AccountService", get(account_service))
-        .route(
-            "/v1/AccountService/Accounts",
-            get(account_list),
-        )
+        .route("/v1/AccountService/Accounts", get(account_list))
         .route(
             "/v1/AccountService/Accounts/{account_id}",
             get(account_detail),
         )
-        .route(
-            "/v1/AccountService/Roles",
-            get(roles_stub),
-        )
-        .route(
-            "/v1/AccountService/Roles/{role_id}",
-            get(role_detail_stub),
-        )
+        .route("/v1/AccountService/Roles", get(roles_stub))
+        .route("/v1/AccountService/Roles/{role_id}", get(role_detail_stub))
         .with_state(state)
 }
 
@@ -77,7 +68,10 @@ async fn account_list(State(state): State<Arc<AppState>>) -> Response {
         "/redfish/v1/$metadata#ManagerAccountCollection.ManagerAccountCollection",
         "Accounts Collection",
         "Collection of Accounts",
-        vec![odata_ref(&format!("/redfish/v1/AccountService/Accounts/{}", user.id))],
+        vec![odata_ref(&format!(
+            "/redfish/v1/AccountService/Accounts/{}",
+            user.id
+        ))],
     ))
     .into_response()
 }

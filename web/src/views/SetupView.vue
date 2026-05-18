@@ -3,8 +3,9 @@ import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { configApi, streamApi, type EncoderBackendInfo } from '@/api'
+import { configApi, streamApi, type EncoderBackendInfo, type PlatformCapabilities } from '@/api'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
@@ -43,7 +44,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const step = ref(1)
-const totalSteps = 4
 const loading = ref(false)
 const error = ref('')
 const slideDirection = ref<'forward' | 'backward'>('forward')
@@ -67,6 +67,10 @@ const videoFps = ref<number | null>(null)
 
 const audioDevice = ref('')
 const audioEnabled = ref(true)
+const platform = ref<PlatformCapabilities | null>(null)
+const isWindows = computed(() => platform.value?.mode === 'windows')
+const audioSupported = computed(() => platform.value?.audio.available ?? true)
+const totalSteps = 4
 
 const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
@@ -298,7 +302,7 @@ watch(videoDevice, (newDevice) => {
   }
 
   // Auto-select matching audio device based on USB bus
-  if (newDevice && audioEnabled.value) {
+  if (newDevice && audioEnabled.value && audioSupported.value) {
     const video = devices.value.video.find((d) => d.path === newDevice)
     if (video?.usb_bus) {
       // Find audio device on the same USB bus
@@ -357,6 +361,20 @@ watch(otgUdc, () => {
 
 onMounted(async () => {
   try {
+    const status = await authStore.checkSetupStatus()
+    platform.value = status.platform
+    if (isWindows.value) {
+      hidBackend.value = 'ch9329'
+      otgMsdEnabled.value = false
+    }
+    if (!audioSupported.value) {
+      audioEnabled.value = false
+      audioDevice.value = '__none__'
+    }
+  } catch {
+  }
+
+  try {
     const result = await configApi.listDevices()
     devices.value = result
 
@@ -370,13 +388,13 @@ onMounted(async () => {
       ch9329Port.value = result.serial[0].path
     }
 
-    if (result.udc.length > 0 && result.udc[0]) {
+    if (!isWindows.value && result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
     }
     applyOtgDefaults()
 
     // Auto-select audio device if available (and no video device to trigger watch)
-    if (result.audio.length > 0 && !audioDevice.value) {
+    if (audioSupported.value && result.audio.length > 0 && !audioDevice.value) {
       // Prefer HDMI audio device
       const hdmiAudio = result.audio.find((a) => a.is_hdmi)
       audioDevice.value = hdmiAudio?.name || result.audio[0]?.name || ''
@@ -535,7 +553,7 @@ async function handleSetup() {
     setupData.encoder_backend = encoderBackend.value
   }
 
-  if (audioDevice.value && audioDevice.value !== '__none__') {
+  if (audioSupported.value && audioDevice.value && audioDevice.value !== '__none__') {
     setupData.audio_device = audioDevice.value
   }
 
@@ -722,7 +740,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="dev in devices.video" :key="dev.path" :value="dev.path">
-                    {{ dev.name }} ({{ dev.path }})
+                    {{ formatVideoDeviceLabel(dev) }}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -801,7 +819,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             </p>
 
             <!-- Audio Device Selection -->
-            <div class="space-y-2 pt-2 border-t">
+            <div v-if="!isWindows" class="space-y-2 pt-2 border-t">
               <div class="flex items-center gap-2">
                 <Label for="audioDevice">{{ t('setup.audioDevice') }}</Label>
                 <HoverCard>
@@ -882,7 +900,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   <SelectItem value="ch9329">
                     CH9329 ({{ t('setup.serialHid') }})
                   </SelectItem>
-                  <SelectItem value="otg">USB OTG</SelectItem>
+                  <SelectItem v-if="!isWindows" value="otg">USB OTG</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -927,7 +945,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             </div>
 
             <!-- OTG Settings -->
-            <div v-if="hidBackend === 'otg'" class="space-y-4 p-4 rounded-lg bg-muted/50">
+            <div v-if="hidBackend === 'otg' && !isWindows" class="space-y-4 p-4 rounded-lg bg-muted/50">
               <div class="flex items-start gap-2 text-sm text-muted-foreground mb-2">
                 <HelpCircle class="w-4 h-4 mt-0.5 shrink-0" />
                 <p>{{ t('setup.otgHelp') }}</p>

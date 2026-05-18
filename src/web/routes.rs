@@ -1,7 +1,8 @@
+#[cfg(unix)]
+use axum::{extract::DefaultBodyLimit, routing::delete};
 use axum::{
-    extract::DefaultBodyLimit,
     middleware,
-    routing::{any, delete, get, patch, post},
+    routing::{any, get, patch, post},
     Router,
 };
 use std::sync::Arc;
@@ -72,7 +73,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/webrtc/close", post(handlers::webrtc_close_session))
         // HID endpoints
         .route("/hid/status", get(handlers::hid_status))
-        .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
         .route("/hid/reset", post(handlers::hid_reset))
         // WebSocket HID endpoint (for MJPEG mode)
         .route("/ws/hid", any(ws_hid_handler))
@@ -99,8 +99,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         .route("/config/hid", get(handlers::config::get_hid_config))
         .route("/config/hid", patch(handlers::config::update_hid_config))
-        .route("/config/msd", get(handlers::config::get_msd_config))
-        .route("/config/msd", patch(handlers::config::update_msd_config))
         .route("/config/atx", get(handlers::config::get_atx_config))
         .route("/config/atx", patch(handlers::config::update_atx_config))
         .route("/config/audio", get(handlers::config::get_audio_config))
@@ -148,38 +146,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/auth", patch(handlers::config::update_auth_config))
         // Redfish configuration
         .route("/config/redfish", get(handlers::config::get_redfish_config))
-        .route("/config/redfish", patch(handlers::config::update_redfish_config))
+        .route(
+            "/config/redfish",
+            patch(handlers::config::update_redfish_config),
+        )
         // System control
         .route("/system/restart", post(handlers::system_restart))
         .route("/update/overview", get(handlers::update_overview))
         .route("/update/upgrade", post(handlers::update_upgrade))
         .route("/update/status", get(handlers::update_status))
-        // MSD (Mass Storage Device) endpoints
-        .route("/msd/status", get(handlers::msd_status))
-        .route("/msd/images", get(handlers::msd_images_list))
-        .route("/msd/images/download", post(handlers::msd_image_download))
-        .route(
-            "/msd/images/download/cancel",
-            post(handlers::msd_image_download_cancel),
-        )
-        .route("/msd/images/{id}", get(handlers::msd_image_get))
-        .route("/msd/images/{id}", delete(handlers::msd_image_delete))
-        .route("/msd/connect", post(handlers::msd_connect))
-        .route("/msd/disconnect", post(handlers::msd_disconnect))
-        // MSD Virtual Drive endpoints
-        .route("/msd/drive", get(handlers::msd_drive_info))
-        .route("/msd/drive", delete(handlers::msd_drive_delete))
-        .route("/msd/drive/init", post(handlers::msd_drive_init))
-        .route("/msd/drive/files", get(handlers::msd_drive_files))
-        .route(
-            "/msd/drive/files/{*path}",
-            get(handlers::msd_drive_download),
-        )
-        .route(
-            "/msd/drive/files/{*path}",
-            delete(handlers::msd_drive_file_delete),
-        )
-        .route("/msd/drive/mkdir/{*path}", post(handlers::msd_drive_mkdir))
         // ATX (Power Control) endpoints
         .route("/atx/status", get(handlers::atx_status))
         .route("/atx/power", post(handlers::atx_power))
@@ -187,11 +162,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/atx/wol/history", get(handlers::atx_wol_history))
         // Device discovery endpoints
         .route("/devices/atx", get(handlers::devices::list_atx_devices))
-        .route("/devices/usb", get(handlers::devices::list_usb_devices))
-        .route(
-            "/devices/usb/reset",
-            post(handlers::devices::reset_usb_device),
-        )
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
         .route("/extensions/{id}", get(handlers::extensions::get_extension))
@@ -225,6 +195,43 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
         .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
 
+    #[cfg(unix)]
+    let user_routes = {
+        user_routes
+            .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
+            .route("/config/msd", get(handlers::config::get_msd_config))
+            .route("/config/msd", patch(handlers::config::update_msd_config))
+            .route("/msd/status", get(handlers::msd_status))
+            .route("/msd/images", get(handlers::msd_images_list))
+            .route("/msd/images/download", post(handlers::msd_image_download))
+            .route(
+                "/msd/images/download/cancel",
+                post(handlers::msd_image_download_cancel),
+            )
+            .route("/msd/images/{id}", get(handlers::msd_image_get))
+            .route("/msd/images/{id}", delete(handlers::msd_image_delete))
+            .route("/msd/connect", post(handlers::msd_connect))
+            .route("/msd/disconnect", post(handlers::msd_disconnect))
+            .route("/msd/drive", get(handlers::msd_drive_info))
+            .route("/msd/drive", delete(handlers::msd_drive_delete))
+            .route("/msd/drive/init", post(handlers::msd_drive_init))
+            .route("/msd/drive/files", get(handlers::msd_drive_files))
+            .route(
+                "/msd/drive/files/{*path}",
+                get(handlers::msd_drive_download),
+            )
+            .route(
+                "/msd/drive/files/{*path}",
+                delete(handlers::msd_drive_file_delete),
+            )
+            .route("/msd/drive/mkdir/{*path}", post(handlers::msd_drive_mkdir))
+            .route("/devices/usb", get(handlers::devices::list_usb_devices))
+            .route(
+                "/devices/usb/reset",
+                post(handlers::devices::reset_usb_device),
+            )
+    };
+
     // Protected routes (all authenticated users)
     let protected_routes = user_routes;
 
@@ -237,10 +244,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Large file upload routes (MSD images and drive files)
     // Use streaming upload to support files larger than available RAM
     // Disable body limit for streaming uploads - files are written directly to disk
+    #[cfg(unix)]
     let upload_routes = Router::new()
         .route("/msd/images", post(handlers::msd_image_upload))
         .route("/msd/drive/files", post(handlers::msd_drive_upload))
         .layer(DefaultBodyLimit::disable());
+    #[cfg(not(unix))]
+    let upload_routes = Router::new();
 
     // Combine API routes
     let api_routes = Router::new()

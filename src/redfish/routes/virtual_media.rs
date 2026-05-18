@@ -9,8 +9,8 @@ use tracing::{info, warn};
 
 use std::sync::Arc;
 
-use super::{empty_collection, validate_id, service_unavailable, resource_not_found, RESOURCE_ID};
 use super::super::schema::*;
+use super::{empty_collection, resource_not_found, service_unavailable, validate_id, RESOURCE_ID};
 use crate::state::AppState;
 
 pub(crate) fn router(state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -95,7 +95,10 @@ async fn virtual_media_detail(
 
     Json(VirtualMedia {
         odata_type: "#VirtualMedia.v1_6_2.VirtualMedia".to_string(),
-        odata_id: format!("/redfish/v1/Managers/{}/VirtualMedia/{}", manager_id, media_id),
+        odata_id: format!(
+            "/redfish/v1/Managers/{}/VirtualMedia/{}",
+            manager_id, media_id
+        ),
         odata_context: "/redfish/v1/$metadata#VirtualMedia.VirtualMedia".to_string(),
         id: media_id.clone(),
         name: "Virtual Media 1".to_string(),
@@ -153,7 +156,9 @@ async fn virtual_media_insert(
         if msd.state().await.connected {
             return (
                 StatusCode::CONFLICT,
-                Json(RedfishError::general_error("Virtual media already inserted")),
+                Json(RedfishError::general_error(
+                    "Virtual media already inserted",
+                )),
             )
                 .into_response();
         }

@@ -4,6 +4,7 @@ mod event;
 mod managers;
 mod session;
 mod systems;
+#[cfg(unix)]
 mod virtual_media;
 
 use axum::{
@@ -191,7 +192,6 @@ pub fn create_redfish_router(state: Arc<AppState>) -> Router {
         .merge(systems::router(state.clone()))
         .merge(chassis::router(state.clone()))
         .merge(managers::router(state.clone()))
-        .merge(virtual_media::router(state.clone()))
         .merge(session::router(state.clone()))
         .merge(account::router(state.clone()))
         .merge(event::router(state.clone()))
@@ -199,6 +199,9 @@ pub fn create_redfish_router(state: Arc<AppState>) -> Router {
             state.clone(),
             redfish_auth_middleware,
         ));
+
+    #[cfg(unix)]
+    let redfish_routes = redfish_routes.merge(virtual_media::router(state.clone()));
 
     Router::new()
         .route("/redfish", get(service_root_redirect))

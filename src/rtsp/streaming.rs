@@ -11,8 +11,8 @@ use webrtc::util::{Marshal, MarshalSize};
 
 use crate::config::RtspCodec;
 use crate::error::{AppError, Result};
-use crate::video::encoder::registry::VideoEncoderType;
-use crate::video::shared_video_pipeline::EncodedVideoFrame;
+use crate::video::codec::registry::VideoEncoderType;
+use crate::video::pipeline::EncodedVideoFrame;
 use crate::video::VideoStreamManager;
 use crate::webrtc::h265_payloader::H265Payloader;
 

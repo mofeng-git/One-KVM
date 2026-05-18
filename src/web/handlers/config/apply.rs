@@ -39,12 +39,20 @@ fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
 }
 
 async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
-    let config = state.config.get();
-    state
-        .otg_service
-        .apply_config(&config.hid, &config.msd)
-        .await
-        .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
+    #[cfg(not(unix))]
+    {
+        let _ = state;
+        Ok(())
+    }
+    #[cfg(unix)]
+    {
+        let config = state.config.get();
+        state
+            .otg_service
+            .apply_config(&config.hid, &config.msd)
+            .await
+            .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
+    }
 }
 
 pub async fn apply_video_config(
@@ -207,6 +215,7 @@ pub async fn apply_hid_config(
     Ok(())
 }
 
+#[cfg(unix)]
 pub async fn apply_msd_config(
     state: &Arc<AppState>,
     old_config: &MsdConfig,

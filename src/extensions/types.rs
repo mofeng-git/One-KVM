@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
+use super::software;
+
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -11,12 +13,8 @@ pub enum ExtensionId {
 }
 
 impl ExtensionId {
-    pub fn binary_path(&self) -> &'static str {
-        match self {
-            Self::Ttyd => "/usr/bin/ttyd",
-            Self::Gostc => "/usr/bin/gostc",
-            Self::Easytier => "/usr/bin/easytier-core",
-        }
+    pub fn binary_path(&self) -> std::path::PathBuf {
+        software::binary_path(*self)
     }
 
     pub fn all() -> &'static [ExtensionId] {
@@ -54,7 +52,6 @@ pub enum ExtensionStatus {
     Unavailable,
     Stopped,
     Running { pid: u32 },
-    Failed { error: String },
 }
 
 impl ExtensionStatus {
@@ -75,7 +72,7 @@ impl Default for TtydConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            shell: "/bin/bash".to_string(),
+            shell: software::default_ttyd_shell().to_string(),
         }
     }
 }

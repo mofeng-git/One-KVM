@@ -25,6 +25,7 @@ pub async fn update_atx_config(
     let _apply_guard = try_apply_lock(&state.config_apply_locks.atx, "atx")?;
     let mut merged_atx_config = old_atx_config.clone();
     req.apply_to(&mut merged_atx_config);
+    validate_windows_atx_backends(&merged_atx_config)?;
     validate_serial_device_conflict(&merged_atx_config, &current_config.hid)?;
 
     state
@@ -39,6 +40,23 @@ pub async fn update_atx_config(
     apply_atx_config(&state, &old_atx_config, &new_atx_config).await?;
 
     Ok(Json(new_atx_config))
+}
+
+fn validate_windows_atx_backends(atx: &AtxConfig) -> Result<()> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+
+    for (name, key) in [("power", &atx.power), ("reset", &atx.reset)] {
+        if !matches!(key.driver, AtxDriverType::Serial | AtxDriverType::None) {
+            return Err(AppError::BadRequest(format!(
+                "Windows ATX {} only supports serial relay or none",
+                name
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<()> {
@@ -90,5 +108,14 @@ mod tests {
         hid.ch9329_port = "/dev/ttyUSB0".to_string();
 
         assert!(validate_serial_device_conflict(&atx, &hid).is_ok());
+    }
+
+    #[test]
+    fn test_validate_windows_atx_backends_allows_serial() {
+        let mut atx = AtxConfig::default();
+        atx.power.driver = AtxDriverType::Serial;
+        atx.reset.driver = AtxDriverType::None;
+
+        assert!(validate_windows_atx_backends(&atx).is_ok());
     }
 }

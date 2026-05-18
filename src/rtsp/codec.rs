@@ -1,5 +1,5 @@
 use crate::config::RtspCodec;
-use crate::video::encoder::VideoCodecType;
+use crate::video::codec::VideoCodecType;
 
 pub(crate) fn rtsp_codec_to_video(codec: RtspCodec) -> VideoCodecType {
     match codec {

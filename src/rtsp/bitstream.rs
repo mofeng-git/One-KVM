@@ -1,7 +1,7 @@
 use bytes::Bytes;
 
-use crate::video::encoder::registry::VideoEncoderType;
-use crate::video::shared_video_pipeline::EncodedVideoFrame;
+use crate::video::codec::registry::VideoEncoderType;
+use crate::video::pipeline::EncodedVideoFrame;
 
 use super::state::ParameterSets;
 

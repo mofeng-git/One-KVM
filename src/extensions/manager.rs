@@ -1,5 +1,4 @@
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -13,7 +12,15 @@ use crate::events::EventBus;
 const LOG_BUFFER_SIZE: usize = 200;
 const LOG_BATCH_SIZE: usize = 16;
 
+#[cfg(unix)]
 pub const TTYD_SOCKET_PATH: &str = "/var/run/one-kvm/ttyd.sock";
+
+#[cfg(windows)]
+pub const TTYD_TCP_ADDR: &str = "127.0.0.1:7681";
+#[cfg(windows)]
+const TTYD_TCP_HOST: &str = "127.0.0.1";
+#[cfg(windows)]
+const TTYD_TCP_PORT: &str = "7681";
 
 struct ExtensionProcess {
     child: Child,
@@ -36,7 +43,7 @@ impl ExtensionManager {
     pub fn new() -> Self {
         let availability = ExtensionId::all()
             .iter()
-            .map(|id| (*id, Path::new(id.binary_path()).exists()))
+            .map(|id| (*id, id.binary_path().exists()))
             .collect();
 
         Self {
@@ -62,6 +69,20 @@ impl ExtensionManager {
 
     pub fn check_available(&self, id: ExtensionId) -> bool {
         *self.availability.get(&id).unwrap_or(&false)
+    }
+
+    fn is_enabled_for_config(id: ExtensionId, config: &ExtensionsConfig) -> bool {
+        match id {
+            ExtensionId::Ttyd => config.ttyd.enabled,
+            ExtensionId::Gostc => {
+                config.gostc.enabled
+                    && !config.gostc.key.is_empty()
+                    && !config.gostc.addr.trim().is_empty()
+            }
+            ExtensionId::Easytier => {
+                config.easytier.enabled && !config.easytier.network_name.is_empty()
+            }
+        }
     }
 
     pub async fn status(&self, id: ExtensionId) -> ExtensionStatus {
@@ -105,7 +126,11 @@ impl ExtensionManager {
 
     pub async fn start(&self, id: ExtensionId, config: &ExtensionsConfig) -> Result<(), String> {
         if !self.check_available(id) {
-            return Err(format!("{} not found at {}", id, id.binary_path()));
+            return Err(format!(
+                "{} not found at {}",
+                id,
+                id.binary_path().display()
+            ));
         }
 
         self.stop(id).await.ok();
@@ -115,7 +140,7 @@ impl ExtensionManager {
         tracing::info!(
             "Starting extension {}: {} {}",
             id,
-            id.binary_path(),
+            id.binary_path().display(),
             Self::redact_args_for_log(&args).join(" ")
         );
 
@@ -232,15 +257,7 @@ impl ExtensionManager {
             ExtensionId::Ttyd => {
                 let c = &config.ttyd;
 
-                Self::prepare_ttyd_socket().await?;
-
-                let mut args = vec![
-                    "-i".to_string(),
-                    TTYD_SOCKET_PATH.to_string(),
-                    "-b".to_string(),
-                    "/api/terminal".to_string(),
-                    "-W".to_string(),
-                ];
+                let mut args = Self::build_ttyd_listen_args().await?;
 
                 args.push(c.shell.clone());
                 Ok(args)
@@ -302,6 +319,43 @@ impl ExtensionManager {
         }
     }
 
+    #[cfg(unix)]
+    async fn build_ttyd_listen_args() -> Result<Vec<String>, String> {
+        Self::prepare_ttyd_socket().await?;
+
+        Ok(vec![
+            "-i".to_string(),
+            TTYD_SOCKET_PATH.to_string(),
+            "-b".to_string(),
+            "/api/terminal".to_string(),
+            "-W".to_string(),
+        ])
+    }
+
+    #[cfg(windows)]
+    async fn build_ttyd_listen_args() -> Result<Vec<String>, String> {
+        let cwd = std::env::var("USERPROFILE")
+            .ok()
+            .filter(|path| !path.trim().is_empty())
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| ".".to_string())
+            });
+
+        Ok(vec![
+            "-i".to_string(),
+            TTYD_TCP_HOST.to_string(),
+            "-p".to_string(),
+            TTYD_TCP_PORT.to_string(),
+            "-b".to_string(),
+            "/api/terminal".to_string(),
+            "-w".to_string(),
+            cwd,
+            "-W".to_string(),
+        ])
+    }
+
     fn redact_args_for_log(args: &[String]) -> Vec<String> {
         let mut redacted = Vec::with_capacity(args.len());
         let mut redact_next = false;
@@ -330,8 +384,9 @@ impl ExtensionManager {
         redacted
     }
 
+    #[cfg(unix)]
     async fn prepare_ttyd_socket() -> Result<(), String> {
-        let socket_path = Path::new(TTYD_SOCKET_PATH);
+        let socket_path = std::path::Path::new(TTYD_SOCKET_PATH);
 
         if let Some(socket_dir) = socket_path.parent() {
             if !socket_dir.exists() {
@@ -357,18 +412,7 @@ impl ExtensionManager {
         let checks: Vec<_> = ExtensionId::all()
             .iter()
             .filter_map(|id| {
-                let should_run = match id {
-                    ExtensionId::Ttyd => config.ttyd.enabled,
-                    ExtensionId::Gostc => {
-                        config.gostc.enabled
-                            && !config.gostc.key.is_empty()
-                            && !config.gostc.addr.trim().is_empty()
-                    }
-                    ExtensionId::Easytier => {
-                        config.easytier.enabled && !config.easytier.network_name.is_empty()
-                    }
-                };
-                if should_run && self.check_available(*id) {
+                if Self::is_enabled_for_config(*id, config) && self.check_available(*id) {
                     Some(*id)
                 } else {
                     None
@@ -404,41 +448,15 @@ impl ExtensionManager {
     }
 
     pub async fn start_enabled(&self, config: &ExtensionsConfig) {
-        use futures::Future;
-        use std::pin::Pin;
-
-        let mut start_futures: Vec<Pin<Box<dyn Future<Output = ()> + Send + '_>>> = Vec::new();
-
-        if config.ttyd.enabled && self.check_available(ExtensionId::Ttyd) {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Ttyd, config).await {
-                    tracing::error!("Failed to start ttyd: {}", e);
+        let start_futures: Vec<_> = ExtensionId::all()
+            .iter()
+            .filter(|id| Self::is_enabled_for_config(**id, config) && self.check_available(**id))
+            .map(|id| async move {
+                if let Err(e) = self.start(*id, config).await {
+                    tracing::error!("Failed to start {}: {}", id, e);
                 }
-            }));
-        }
-
-        if config.gostc.enabled
-            && !config.gostc.key.is_empty()
-            && !config.gostc.addr.trim().is_empty()
-            && self.check_available(ExtensionId::Gostc)
-        {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Gostc, config).await {
-                    tracing::error!("Failed to start gostc: {}", e);
-                }
-            }));
-        }
-
-        if config.easytier.enabled
-            && !config.easytier.network_name.is_empty()
-            && self.check_available(ExtensionId::Easytier)
-        {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Easytier, config).await {
-                    tracing::error!("Failed to start easytier: {}", e);
-                }
-            }));
-        }
+            })
+            .collect();
 
         futures::future::join_all(start_futures).await;
     }

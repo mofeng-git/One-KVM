@@ -37,8 +37,8 @@ use crate::events::{EventBus, SystemEvent, VideoDeviceInfo};
 use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
 use crate::video::codec_constraints::StreamCodecConstraints;
+use crate::video::device::is_csi_hdmi_bridge;
 use crate::video::format::{PixelFormat, Resolution};
-use crate::video::is_csi_hdmi_bridge;
 use crate::video::streamer::{Streamer, StreamerState, StreamerStats};
 use crate::video::traits::VideoOutput;
 
@@ -762,9 +762,7 @@ impl VideoStreamManager {
     pub async fn subscribe_encoded_frames(
         &self,
     ) -> Option<
-        tokio::sync::mpsc::Receiver<
-            std::sync::Arc<crate::video::shared_video_pipeline::EncodedVideoFrame>,
-        >,
+        tokio::sync::mpsc::Receiver<std::sync::Arc<crate::video::pipeline::EncodedVideoFrame>>,
     > {
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
@@ -803,12 +801,12 @@ impl VideoStreamManager {
     /// Get the current video encoding configuration from the shared pipeline
     pub async fn get_encoding_config(
         &self,
-    ) -> Option<crate::video::shared_video_pipeline::SharedVideoPipelineConfig> {
+    ) -> Option<crate::video::pipeline::SharedVideoPipelineConfig> {
         self.webrtc_streamer.get_pipeline_config().await
     }
 
     /// Get current video codec type
-    pub async fn current_video_codec(&self) -> crate::video::encoder::VideoCodecType {
+    pub async fn current_video_codec(&self) -> crate::video::codec::VideoCodecType {
         self.webrtc_streamer.current_video_codec().await
     }
 
@@ -823,7 +821,7 @@ impl VideoStreamManager {
     /// before subscribing to encoded frames.
     pub async fn set_video_codec(
         &self,
-        codec: crate::video::encoder::VideoCodecType,
+        codec: crate::video::codec::VideoCodecType,
     ) -> crate::error::Result<()> {
         self.webrtc_streamer.set_video_codec(codec).await
     }
@@ -834,7 +832,7 @@ impl VideoStreamManager {
     /// based on client preferences.
     pub async fn set_bitrate_preset(
         &self,
-        preset: crate::video::encoder::BitratePreset,
+        preset: crate::video::codec::BitratePreset,
     ) -> crate::error::Result<()> {
         self.webrtc_streamer.set_bitrate_preset(preset).await
     }
@@ -908,19 +906,19 @@ impl VideoStreamManager {
 }
 
 /// Convert VideoCodecType to lowercase string for frontend
-fn codec_to_string(codec: crate::video::encoder::VideoCodecType) -> String {
+fn codec_to_string(codec: crate::video::codec::VideoCodecType) -> String {
     match codec {
-        crate::video::encoder::VideoCodecType::H264 => "h264".to_string(),
-        crate::video::encoder::VideoCodecType::H265 => "h265".to_string(),
-        crate::video::encoder::VideoCodecType::VP8 => "vp8".to_string(),
-        crate::video::encoder::VideoCodecType::VP9 => "vp9".to_string(),
+        crate::video::codec::VideoCodecType::H264 => "h264".to_string(),
+        crate::video::codec::VideoCodecType::H265 => "h265".to_string(),
+        crate::video::codec::VideoCodecType::VP8 => "vp8".to_string(),
+        crate::video::codec::VideoCodecType::VP9 => "vp9".to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::video::encoder::VideoCodecType;
+    use crate::video::codec::VideoCodecType;
 
     #[test]
     fn test_codec_to_string() {

@@ -696,6 +696,7 @@ fn try_into_v4(addr: SocketAddr) -> SocketAddr {
     addr
 }
 
+#[cfg(target_os = "linux")]
 fn is_virtual_interface(name: &str) -> bool {
     name.starts_with("docker")
         || name.starts_with("br-")

@@ -6,67 +6,43 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-/// Power status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PowerStatus {
-    /// Power is on
     On,
-    /// Power is off
     Off,
-    /// Power status unknown (no LED connected)
     #[default]
     Unknown,
 }
 
-/// Driver type for ATX key operations
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AtxDriverType {
-    /// GPIO control via Linux character device
     Gpio,
-    /// USB HID relay module
     UsbRelay,
-    /// Serial/COM port relay (taobao LCUS type)
     Serial,
-    /// Disabled / Not configured
     #[default]
     None,
 }
 
-/// Active level for GPIO pins
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ActiveLevel {
-    /// Active high (default for most cases)
     #[default]
     High,
-    /// Active low (inverted)
     Low,
 }
 
-/// Configuration for a single ATX key (power or reset)
-/// This is the "four-tuple" configuration: (driver, device, pin/channel, level)
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AtxKeyConfig {
-    /// Driver type (GPIO or USB Relay)
     pub driver: AtxDriverType,
-    /// Device path:
-    /// - For GPIO: /dev/gpiochipX
-    /// - For USB Relay: /dev/hidrawX
     pub device: String,
-    /// Pin or channel number:
-    /// - For GPIO: GPIO pin number
-    /// - For USB Relay: relay channel (1-based)
-    /// - For Serial Relay (LCUS): relay channel (1-based)
     pub pin: u32,
-    /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
-    /// Baud rate for serial relay (start with 9600)
     pub baud_rate: u32,
 }
 
@@ -83,77 +59,54 @@ impl Default for AtxKeyConfig {
 }
 
 impl AtxKeyConfig {
-    /// Check if this key is configured
     pub fn is_configured(&self) -> bool {
         self.driver != AtxDriverType::None && !self.device.is_empty()
     }
 }
 
-/// LED sensing configuration (optional)
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AtxLedConfig {
-    /// Whether LED sensing is enabled
     pub enabled: bool,
-    /// GPIO chip for LED sensing
     pub gpio_chip: String,
-    /// GPIO pin for LED input
     pub gpio_pin: u32,
-    /// Whether LED is active low (inverted logic)
     pub inverted: bool,
 }
 
 impl AtxLedConfig {
-    /// Check if LED sensing is configured
     pub fn is_configured(&self) -> bool {
         self.enabled && !self.gpio_chip.is_empty()
     }
 }
 
-/// ATX state information
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AtxState {
-    /// Whether ATX feature is available/enabled
     pub available: bool,
-    /// Whether power button is configured
     pub power_configured: bool,
-    /// Whether reset button is configured
     pub reset_configured: bool,
-    /// Current power status
     pub power_status: PowerStatus,
-    /// Whether power LED sensing is supported
     pub led_supported: bool,
 }
 
-/// ATX power action request
 #[derive(Debug, Clone, Deserialize)]
 pub struct AtxPowerRequest {
-    /// Action to perform: "short", "long", "reset"
     pub action: AtxAction,
 }
 
-/// ATX power action
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AtxAction {
-    /// Short press power button (turn on or graceful shutdown)
     Short,
-    /// Long press power button (force power off)
     Long,
-    /// Press reset button
     Reset,
 }
 
-/// Available ATX devices for discovery
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtxDevices {
-    /// Available GPIO chips (/dev/gpiochip*)
     pub gpio_chips: Vec<String>,
-    /// Available USB HID relay devices (/dev/hidraw*)
     pub usb_relays: Vec<String>,
-    /// Available Serial ports (/dev/ttyUSB*)
     pub serial_ports: Vec<String>,
 }
 
@@ -201,13 +154,13 @@ mod tests {
         assert!(!config.is_configured());
 
         config.driver = AtxDriverType::Gpio;
-        assert!(!config.is_configured()); // device still empty
+        assert!(!config.is_configured());
 
         config.device = "/dev/gpiochip0".to_string();
         assert!(config.is_configured());
 
         config.driver = AtxDriverType::None;
-        assert!(!config.is_configured()); // driver is None
+        assert!(!config.is_configured());
     }
 
     #[test]
@@ -224,7 +177,7 @@ mod tests {
         assert!(!config.is_configured());
 
         config.enabled = true;
-        assert!(!config.is_configured()); // gpio_chip still empty
+        assert!(!config.is_configured());
 
         config.gpio_chip = "/dev/gpiochip0".to_string();
         assert!(config.is_configured());

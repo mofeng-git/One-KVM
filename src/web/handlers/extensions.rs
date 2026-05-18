@@ -13,6 +13,27 @@ use crate::extensions::{
 };
 use crate::state::AppState;
 
+fn validate_gostc_enabled(config: &GostcConfig) -> Result<()> {
+    if config.addr.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "GOSTC server address is required".into(),
+        ));
+    }
+    if config.key.is_empty() {
+        return Err(AppError::BadRequest("GOSTC client key is required".into()));
+    }
+    Ok(())
+}
+
+fn validate_easytier_enabled(config: &EasytierConfig) -> Result<()> {
+    if config.network_name.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "EasyTier network name is required".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<ExtensionsStatus> {
     let config = state.config.get();
     let mgr = &state.extensions;
@@ -179,40 +200,40 @@ pub async fn update_gostc_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<GostcConfigUpdate>,
 ) -> Result<Json<GostcConfig>> {
-    let was_enabled = state.config.get().extensions.gostc.enabled;
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.gostc.enabled;
+    let mut next_gostc = current_config.extensions.gostc.clone();
+
+    if let Some(enabled) = req.enabled {
+        next_gostc.enabled = enabled;
+    }
+    if let Some(ref addr) = req.addr {
+        next_gostc.addr = addr.clone();
+    }
+    if let Some(ref key) = req.key {
+        next_gostc.key = key.clone();
+    }
+    if let Some(tls) = req.tls {
+        next_gostc.tls = tls;
+    }
+
+    if next_gostc.enabled {
+        validate_gostc_enabled(&next_gostc)?;
+    }
 
     state
         .config
         .update(|config| {
-            let gostc = &mut config.extensions.gostc;
-            if let Some(enabled) = req.enabled {
-                gostc.enabled = enabled;
-            }
-            if let Some(ref addr) = req.addr {
-                gostc.addr = addr.clone();
-            }
-            if let Some(ref key) = req.key {
-                gostc.key = key.clone();
-            }
-            if let Some(tls) = req.tls {
-                gostc.tls = tls;
-            }
+            config.extensions.gostc = next_gostc.clone();
         })
         .await?;
 
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.gostc.enabled;
-    let has_key = !new_config.extensions.gostc.key.is_empty();
-    let has_addr = !new_config.extensions.gostc.addr.trim().is_empty();
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Gostc).await.ok();
-    } else if !was_enabled
-        && is_enabled
-        && has_key
-        && has_addr
-        && state.extensions.check_available(ExtensionId::Gostc)
-    {
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Gostc) {
         state
             .extensions
             .start(ExtensionId::Gostc, &new_config.extensions)
@@ -227,40 +248,43 @@ pub async fn update_easytier_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EasytierConfigUpdate>,
 ) -> Result<Json<EasytierConfig>> {
-    let was_enabled = state.config.get().extensions.easytier.enabled;
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.easytier.enabled;
+    let mut next_easytier = current_config.extensions.easytier.clone();
+
+    if let Some(enabled) = req.enabled {
+        next_easytier.enabled = enabled;
+    }
+    if let Some(ref name) = req.network_name {
+        next_easytier.network_name = name.clone();
+    }
+    if let Some(ref secret) = req.network_secret {
+        next_easytier.network_secret = secret.clone();
+    }
+    if let Some(ref peers) = req.peer_urls {
+        next_easytier.peer_urls = peers.clone();
+    }
+    if req.virtual_ip.is_some() {
+        next_easytier.virtual_ip = req.virtual_ip.clone();
+    }
+
+    if next_easytier.enabled {
+        validate_easytier_enabled(&next_easytier)?;
+    }
 
     state
         .config
         .update(|config| {
-            let et = &mut config.extensions.easytier;
-            if let Some(enabled) = req.enabled {
-                et.enabled = enabled;
-            }
-            if let Some(ref name) = req.network_name {
-                et.network_name = name.clone();
-            }
-            if let Some(ref secret) = req.network_secret {
-                et.network_secret = secret.clone();
-            }
-            if let Some(ref peers) = req.peer_urls {
-                et.peer_urls = peers.clone();
-            }
-            if req.virtual_ip.is_some() {
-                et.virtual_ip = req.virtual_ip.clone();
-            }
+            config.extensions.easytier = next_easytier.clone();
         })
         .await?;
 
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.easytier.enabled;
-    let has_name = !new_config.extensions.easytier.network_name.is_empty();
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Easytier).await.ok();
-    } else if !was_enabled
-        && is_enabled
-        && has_name
-        && state.extensions.check_available(ExtensionId::Easytier)
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Easytier)
     {
         state
             .extensions

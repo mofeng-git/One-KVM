@@ -15,6 +15,7 @@ use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 use super::h265_payloader::H265Payloader;
 
 use crate::error::{AppError, Result};
+use crate::video::codec::h264_bitstream;
 use crate::video::types::Resolution;
 
 const RTP_MTU: usize = 1200;
@@ -52,9 +53,7 @@ impl VideoCodec {
 
     pub fn sdp_fmtp(&self) -> String {
         match self {
-            VideoCodec::H264 => {
-                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f".to_string()
-            }
+            VideoCodec::H264 => h264_bitstream::fallback_webrtc_fmtp_line(),
             VideoCodec::H265 => "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST".to_string(),
             VideoCodec::VP8 => String::new(),
             VideoCodec::VP9 => "profile-id=0".to_string(),
@@ -85,6 +84,7 @@ pub struct UniversalVideoTrackConfig {
     pub resolution: Resolution,
     pub bitrate_kbps: u32,
     pub fps: u32,
+    pub sdp_fmtp_line: Option<String>,
 }
 
 impl Default for UniversalVideoTrackConfig {
@@ -96,6 +96,7 @@ impl Default for UniversalVideoTrackConfig {
             resolution: Resolution::HD720,
             bitrate_kbps: 8000,
             fps: 30,
+            sdp_fmtp_line: None,
         }
     }
 }
@@ -154,11 +155,18 @@ struct H265RtpState {
     timestamp_increment: u32,
 }
 
+#[derive(Default)]
+struct H264TrackState {
+    sps: Option<Vec<u8>>,
+    pps: Option<Vec<u8>>,
+}
+
 pub struct UniversalVideoTrack {
     track: TrackType,
     codec: VideoCodec,
     config: UniversalVideoTrackConfig,
     h265_state: Option<Mutex<H265RtpState>>,
+    h264_state: Mutex<H264TrackState>,
 }
 
 impl UniversalVideoTrack {
@@ -167,7 +175,10 @@ impl UniversalVideoTrack {
             mime_type: config.codec.mime_type().to_string(),
             clock_rate: config.codec.clock_rate(),
             channels: 0,
-            sdp_fmtp_line: config.codec.sdp_fmtp(),
+            sdp_fmtp_line: config
+                .sdp_fmtp_line
+                .clone()
+                .unwrap_or_else(|| config.codec.sdp_fmtp()),
             rtcp_feedback: vec![],
         };
 
@@ -201,6 +212,7 @@ impl UniversalVideoTrack {
             codec: config.codec,
             config,
             h265_state,
+            h264_state: Mutex::new(H264TrackState::default()),
         }
     }
 
@@ -239,6 +251,36 @@ impl UniversalVideoTrack {
 
     /// One Annex-B AU per sample so the stack can STAP/FU internally.
     async fn write_h264_frame(&self, data: Bytes, _is_keyframe: bool) -> Result<()> {
+        let normalized = h264_bitstream::normalize_for_webrtc(data.as_ref());
+        let mut data = Bytes::from(normalized);
+
+        let idr = h264_bitstream::is_keyframe(data.as_ref());
+        let has_parameter_sets = h264_bitstream::has_sps_pps(data.as_ref());
+
+        {
+            let mut state = self.h264_state.lock().await;
+            let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
+            if let Some(sps) = sps {
+                state.sps = Some(sps);
+            }
+            if let Some(pps) = pps {
+                state.pps = Some(pps);
+            }
+
+            if idr && !has_parameter_sets {
+                if let (Some(sps), Some(pps)) = (&state.sps, &state.pps) {
+                    let mut with_parameter_sets =
+                        Vec::with_capacity(data.len() + sps.len() + pps.len() + 8);
+                    with_parameter_sets.extend_from_slice(&[0, 0, 0, 1]);
+                    with_parameter_sets.extend_from_slice(sps);
+                    with_parameter_sets.extend_from_slice(&[0, 0, 0, 1]);
+                    with_parameter_sets.extend_from_slice(pps);
+                    with_parameter_sets.extend_from_slice(data.as_ref());
+                    data = Bytes::from(with_parameter_sets);
+                }
+            }
+        }
+
         let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
         let sample = Sample {
             data,

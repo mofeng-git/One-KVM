@@ -154,11 +154,13 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
     if use_static && static_lib.exists() {
         // Static linking (for deb packaging)
         println!("cargo:rustc-link-lib=static=yuv");
+        #[cfg(target_os = "linux")]
         println!("cargo:rustc-link-lib=stdc++");
         println!("cargo:info=Using libyuv from vcpkg (static linking)");
     } else {
         // Dynamic linking (default for development)
         println!("cargo:rustc-link-lib=yuv");
+        #[cfg(target_os = "linux")]
         println!("cargo:rustc-link-lib=stdc++");
         println!("cargo:info=Using libyuv from vcpkg (dynamic linking)");
     }

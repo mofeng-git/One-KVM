@@ -63,12 +63,6 @@ clap = { version = "4", features = ["derive"] }
 # Time (cookie max_age + RFC3339 timestamps)
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 
-# Video capture (V4L2)
-v4l2r = "0.0.7"
-
-# JPEG encoding (libjpeg-turbo, SIMD accelerated)
-turbojpeg = "1.3"
-
 # Bytes handling
 bytes = "1"
 bytemuck = { version = "1.24", features = ["derive"] }
@@ -93,11 +87,6 @@ rtp = "0.14"
 rtsp-types = "0.1"
 sdp-types = "0.1"
 
-# Audio (ALSA capture + Opus encoding)
-# Note: audiopus links to libopus.so (unavoidable for audio support)
-alsa = "0.11"
-audiopus = "0.2"
-
 # HID (serial port for CH9329)
 serialport = "4"
 async-trait = "0.1"
@@ -106,21 +95,41 @@ libc = "0.2"
 # Ventoy bootable image support
 ventoy-img = { path = "libs/ventoy-img-rs" }
 
-# ATX (GPIO control)
-gpio-cdev = "0.6"
-
-# H264 hardware/software encoding (hwcodec from rustdesk)
-hwcodec = { path = "libs/hwcodec" }
-
 # RustDesk protocol support
 protobuf = { version = "3.7", features = ["with-bytes"] }
 sodiumoxide = "0.2"
 sha2 = "0.10"
-# High-performance pixel format conversion (libyuv)
-libyuv = { path = "res/vcpkg/libyuv" }
-
 # TypeScript type generation
 typeshare = "1.0"
+
+[target.'cfg(any(unix, windows))'.dependencies]
+# Video encoding/decoding (FFmpeg/libjpeg-turbo/libyuv; available on Windows and Linux)
+hwcodec = { path = "libs/hwcodec" }
+libyuv = { path = "res/vcpkg/libyuv" }
+turbojpeg = "1.3"
+# Note: audiopus links to libopus.so (unavoidable for audio support)
+audiopus = "0.2"
+
+[target.'cfg(unix)'.dependencies]
+# Video capture (V4L2)
+v4l2r = "0.0.7"
+
+# Audio (ALSA capture)
+alsa = "0.11"
+
+# ATX (GPIO control)
+gpio-cdev = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+cpal = { version = "0.17", default-features = false }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tempfile = "3"

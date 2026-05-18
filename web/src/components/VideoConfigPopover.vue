@@ -29,6 +29,7 @@ import {
 } from '@/api'
 import { getVideoFormatState, isVideoFormatSelectable } from '@/lib/video-format-support'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { useConfigStore } from '@/stores/config'
 import { useRouter } from 'vue-router'
 
@@ -782,7 +783,7 @@ watch(
                   :value="device.path"
                   class="text-xs"
                 >
-                  {{ device.name }} ({{ device.path }})
+                  {{ formatVideoDeviceLabel(device) }}
                 </SelectItem>
               </SelectContent>
             </Select>

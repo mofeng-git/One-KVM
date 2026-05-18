@@ -1,4 +1,5 @@
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
 }
 
@@ -99,13 +100,12 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->color_primaries = AVCOL_PRI_SMPTE170M;
   c->color_trc = AVCOL_TRC_SMPTE170M;
 
-  // Profile selection: use BASELINE for software H264 (faster, simpler)
-  if (is_software_h264(name)) {
-    c->profile = FF_PROFILE_H264_BASELINE;  // Simpler profile for real-time
-  } else if (name.find("h264") != std::string::npos) {
-    c->profile = FF_PROFILE_H264_HIGH;
+  // WebRTC SDP advertises constrained baseline. Keep hardware and software
+  // encoders on the same browser-friendly H264 profile.
+  if (name.find("h264") != std::string::npos) {
+    c->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
   } else if (name.find("hevc") != std::string::npos) {
-    c->profile = FF_PROFILE_HEVC_MAIN;
+    c->profile = AV_PROFILE_HEVC_MAIN;
   }
 }
 
@@ -120,8 +120,7 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
   }
   if (name.find("amf") != std::string::npos) {
     if ((ret = av_opt_set(priv_data, "query_timeout", "1000", 0)) < 0) {
-      LOG_ERROR(std::string("amf set_lantency_free failed, ret = ") + av_err2str(ret));
-      return false;
+      LOG_WARN(std::string("amf query_timeout option is unavailable, ret = ") + av_err2str(ret));
     }
   }
   if (name.find("qsv") != std::string::npos) {

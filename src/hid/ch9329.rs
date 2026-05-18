@@ -10,28 +10,23 @@
 
 use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
-use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
-use tracing::{info, trace, warn};
+use tracing::{info, trace};
 
 use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
+use super::ch9329_proto::{
+    build_packet, cmd, expected_response_cmd, try_extract_response, ChipInfo, LedStatus, Response,
+    DEFAULT_ADDR, DEFAULT_BAUD_RATE, MAX_PACKET_SIZE,
+};
 use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
 use crate::error::{AppError, Result};
 use crate::events::LedState;
 
-const PACKET_HEADER: [u8; 2] = [0x57, 0xAB];
-
-const DEFAULT_ADDR: u8 = 0x00;
-
-pub const DEFAULT_BAUD_RATE: u32 = 9600;
-
 const RESPONSE_TIMEOUT_MS: u64 = 500;
-
-const MAX_DATA_LEN: usize = 64;
 
 const CH9329_MOUSE_RESOLUTION: u32 = 4096;
 
@@ -41,173 +36,6 @@ const RECONNECT_DELAY_MS: u64 = 2000;
 
 const INIT_WAIT_MS: u64 = 3000;
 
-pub mod cmd {
-    pub const GET_INFO: u8 = 0x01;
-    pub const SEND_KB_GENERAL_DATA: u8 = 0x02;
-    pub const SEND_KB_MEDIA_DATA: u8 = 0x03;
-    pub const SEND_MS_ABS_DATA: u8 = 0x04;
-    pub const SEND_MS_REL_DATA: u8 = 0x05;
-    pub const SEND_MY_HID_DATA: u8 = 0x06;
-    pub const SET_DEFAULT_CFG: u8 = 0x0C;
-    pub const RESET: u8 = 0x0F;
-}
-
-const RESPONSE_SUCCESS_MASK: u8 = 0x80;
-const RESPONSE_ERROR_MASK: u8 = 0xC0;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Ch9329Error {
-    Success = 0x00,
-    Timeout = 0xE1,
-    InvalidHeader = 0xE2,
-    InvalidCommand = 0xE3,
-    ChecksumError = 0xE4,
-    ParameterError = 0xE5,
-    OperationFailed = 0xE6,
-}
-
-impl From<u8> for Ch9329Error {
-    fn from(code: u8) -> Self {
-        match code {
-            0x00 => Ch9329Error::Success,
-            0xE1 => Ch9329Error::Timeout,
-            0xE2 => Ch9329Error::InvalidHeader,
-            0xE3 => Ch9329Error::InvalidCommand,
-            0xE4 => Ch9329Error::ChecksumError,
-            0xE5 => Ch9329Error::ParameterError,
-            0xE6 => Ch9329Error::OperationFailed,
-            _ => Ch9329Error::OperationFailed,
-        }
-    }
-}
-
-impl std::fmt::Display for Ch9329Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Ch9329Error::Success => write!(f, "Success"),
-            Ch9329Error::Timeout => write!(f, "Serial receive timeout"),
-            Ch9329Error::InvalidHeader => write!(f, "Invalid packet header"),
-            Ch9329Error::InvalidCommand => write!(f, "Invalid command code"),
-            Ch9329Error::ChecksumError => write!(f, "Checksum mismatch"),
-            Ch9329Error::ParameterError => write!(f, "Parameter error"),
-            Ch9329Error::OperationFailed => write!(f, "Operation failed"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ChipInfo {
-    pub version: String,
-    pub version_raw: u8,
-    pub usb_connected: bool,
-    pub num_lock: bool,
-    pub caps_lock: bool,
-    pub scroll_lock: bool,
-}
-
-impl ChipInfo {
-    pub fn from_response(data: &[u8]) -> Option<Self> {
-        if data.len() < 8 {
-            return None;
-        }
-
-        let version_raw = data[0];
-        let version = format!("V{}.{}", version_raw >> 4, version_raw & 0x0F);
-        let usb_connected = data[1] == 0x01;
-        let led_status = data[2];
-
-        Some(Self {
-            version,
-            version_raw,
-            usb_connected,
-            num_lock: (led_status & 0x01) != 0,
-            caps_lock: (led_status & 0x02) != 0,
-            scroll_lock: (led_status & 0x04) != 0,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LedStatus {
-    pub num_lock: bool,
-    pub caps_lock: bool,
-    pub scroll_lock: bool,
-}
-
-impl From<u8> for LedStatus {
-    fn from(byte: u8) -> Self {
-        Self {
-            num_lock: (byte & 0x01) != 0,
-            caps_lock: (byte & 0x02) != 0,
-            scroll_lock: (byte & 0x04) != 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Response {
-    pub address: u8,
-    pub cmd: u8,
-    pub data: Vec<u8>,
-    pub is_error: bool,
-    pub error_code: Option<Ch9329Error>,
-}
-
-impl Response {
-    pub fn parse(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 6 {
-            return None;
-        }
-
-        if bytes[0] != PACKET_HEADER[0] || bytes[1] != PACKET_HEADER[1] {
-            return None;
-        }
-
-        let address = bytes[2];
-        let cmd = bytes[3];
-        let len = bytes[4] as usize;
-
-        if bytes.len() < 5 + len + 1 {
-            return None;
-        }
-
-        let expected_checksum = bytes[5 + len];
-        let calculated_checksum = bytes[..5 + len]
-            .iter()
-            .fold(0u8, |acc, &x| acc.wrapping_add(x));
-
-        if expected_checksum != calculated_checksum {
-            warn!(
-                "CH9329 checksum mismatch: expected {:02X}, got {:02X}",
-                expected_checksum, calculated_checksum
-            );
-            return None;
-        }
-
-        let data = bytes[5..5 + len].to_vec();
-        let is_error = (cmd & RESPONSE_ERROR_MASK) == RESPONSE_ERROR_MASK;
-        let error_code = if is_error && !data.is_empty() {
-            Some(Ch9329Error::from(data[0]))
-        } else {
-            None
-        };
-
-        Some(Self {
-            address,
-            cmd,
-            data,
-            is_error,
-            error_code,
-        })
-    }
-
-    pub fn is_success(&self) -> bool {
-        !self.is_error && (self.data.is_empty() || self.data[0] == Ch9329Error::Success as u8)
-    }
-}
-
-const MAX_PACKET_SIZE: usize = 70;
 
 struct Ch9329RuntimeState {
     initialized: AtomicBool,
@@ -331,6 +159,13 @@ impl Ch9329Backend {
     }
 
     pub fn check_port_exists(&self) -> bool {
+        #[cfg(windows)]
+        {
+            return crate::utils::list_serial_ports()
+                .iter()
+                .any(|port| port.eq_ignore_ascii_case(&self.port_path));
+        }
+        #[cfg(not(windows))]
         std::path::Path::new(&self.port_path).exists()
     }
 
@@ -358,39 +193,8 @@ impl Ch9329Backend {
     }
 
     #[inline]
-    fn calculate_checksum(data: &[u8]) -> u8 {
-        data.iter().fold(0u8, |acc, &x| acc.wrapping_add(x))
-    }
-
-    #[inline]
-    fn build_packet_buf(address: u8, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
-        debug_assert!(
-            data.len() <= MAX_DATA_LEN,
-            "Data too long for CH9329 packet"
-        );
-
-        let len = data.len() as u8;
-        let packet_len = 6 + data.len();
-        let mut packet = [0u8; MAX_PACKET_SIZE];
-
-        packet[0] = PACKET_HEADER[0];
-        packet[1] = PACKET_HEADER[1];
-        packet[2] = address;
-        packet[3] = cmd;
-        packet[4] = len;
-        packet[5..5 + data.len()].copy_from_slice(data);
-        let checksum = Self::calculate_checksum(&packet[..5 + data.len()]);
-        packet[5 + data.len()] = checksum;
-
-        (packet, packet_len)
-    }
-
-    fn build_packet(address: u8, cmd: u8, data: &[u8]) -> Vec<u8> {
-        let (buf, len) = Self::build_packet_buf(address, cmd, data);
-        buf[..len].to_vec()
-    }
-
     fn open_port(port_path: &str, baud_rate: u32) -> Result<Box<dyn serialport::SerialPort>> {
+        #[cfg(not(windows))]
         if !std::path::Path::new(port_path).exists() {
             return Err(Self::backend_error(
                 format!("Serial port {} not found", port_path),
@@ -410,44 +214,11 @@ impl Ch9329Backend {
         cmd: u8,
         data: &[u8],
     ) -> Result<()> {
-        let packet = Self::build_packet(address, cmd, data);
+        let packet = build_packet(address, cmd, data);
         port.write_all(&packet).map_err(|e| {
             Self::backend_error(format!("Failed to write to CH9329: {}", e), "write_failed")
         })?;
         Ok(())
-    }
-
-    fn try_extract_response(buffer: &[u8]) -> Option<(Response, usize)> {
-        let mut offset = 0;
-        while offset + 6 <= buffer.len() {
-            if buffer[offset] != PACKET_HEADER[0] || buffer[offset + 1] != PACKET_HEADER[1] {
-                offset += 1;
-                continue;
-            }
-
-            let len = buffer[offset + 4] as usize;
-            let frame_len = 6 + len;
-            if offset + frame_len > buffer.len() {
-                return None;
-            }
-
-            let frame = &buffer[offset..offset + frame_len];
-            if let Some(response) = Response::parse(frame) {
-                return Some((response, offset + frame_len));
-            }
-
-            offset += 1;
-        }
-
-        None
-    }
-
-    fn expected_response_cmd(cmd: u8, is_error: bool) -> u8 {
-        cmd | if is_error {
-            RESPONSE_ERROR_MASK
-        } else {
-            RESPONSE_SUCCESS_MASK
-        }
     }
 
     fn xfer_packet(
@@ -460,8 +231,8 @@ impl Ch9329Backend {
 
         let mut pending = Vec::with_capacity(128);
         let deadline = Instant::now() + Duration::from_millis(RESPONSE_TIMEOUT_MS);
-        let expected_ok = Self::expected_response_cmd(cmd, false);
-        let expected_err = Self::expected_response_cmd(cmd, true);
+        let expected_ok = expected_response_cmd(cmd, false);
+        let expected_err = expected_response_cmd(cmd, true);
 
         loop {
             let mut chunk = [0u8; 128];
@@ -469,7 +240,7 @@ impl Ch9329Backend {
                 Ok(n) if n > 0 => {
                     pending.extend_from_slice(&chunk[..n]);
 
-                    while let Some((response, consumed)) = Self::try_extract_response(&pending) {
+                    while let Some((response, consumed)) = try_extract_response(&pending) {
                         pending.drain(..consumed);
                         if response.cmd == expected_ok || response.cmd == expected_err {
                             return Ok(response);
@@ -1023,7 +794,14 @@ impl HidBackend for Ch9329Backend {
         let mut online = initialized && self.runtime.online.load(Ordering::Relaxed);
         let mut error = self.runtime.last_error.read().clone();
 
-        if initialized && !self.check_port_exists() {
+        #[cfg(windows)]
+        let port_still_present = crate::utils::list_serial_ports()
+            .iter()
+            .any(|port| port.eq_ignore_ascii_case(&self.port_path));
+        #[cfg(not(windows))]
+        let port_still_present = self.check_port_exists();
+
+        if initialized && !port_still_present {
             online = false;
             error = Some((
                 format!("Serial port {} not found", self.port_path),
@@ -1066,14 +844,15 @@ impl HidBackend for Ch9329Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::ch9329_proto::{build_packet, calculate_checksum};
 
     #[test]
     fn test_packet_building() {
-        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::GET_INFO, &[]);
+        let packet = build_packet(DEFAULT_ADDR, cmd::GET_INFO, &[]);
         assert_eq!(packet, vec![0x57, 0xAB, 0x00, 0x01, 0x00, 0x03]);
 
         let data = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]; // 'A' key
-        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
+        let packet = build_packet(DEFAULT_ADDR, cmd::SEND_KB_GENERAL_DATA, &data);
 
         assert_eq!(packet[0], 0x57); // Header
         assert_eq!(packet[1], 0xAB); // Header
@@ -1090,7 +869,7 @@ mod tests {
     #[test]
     fn test_relative_mouse_packet() {
         let data = [0x01, 0x00, 50u8, 0x00, 0x00];
-        let packet = Ch9329Backend::build_packet(DEFAULT_ADDR, cmd::SEND_MS_REL_DATA, &data);
+        let packet = build_packet(DEFAULT_ADDR, cmd::SEND_MS_REL_DATA, &data);
 
         assert_eq!(packet[0], 0x57);
         assert_eq!(packet[1], 0xAB);
@@ -1105,13 +884,13 @@ mod tests {
     #[test]
     fn test_checksum_calculation() {
         let packet = [0x57u8, 0xAB, 0x00, 0x01, 0x00];
-        let checksum = Ch9329Backend::calculate_checksum(&packet);
+        let checksum = calculate_checksum(&packet);
         assert_eq!(checksum, 0x03);
 
         let packet = [
             0x57u8, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        let checksum = Ch9329Backend::calculate_checksum(&packet);
+        let checksum = calculate_checksum(&packet);
         assert_eq!(checksum, 0x10);
     }
 

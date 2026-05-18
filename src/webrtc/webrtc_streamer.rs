@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock as StdRwLock};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info, trace, warn};
 
@@ -11,6 +12,7 @@ use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 use crate::hid::HidController;
+use crate::video::codec::h264_bitstream;
 use crate::video::device::{
     enumerate_devices, select_recovery_device, VideoDevice, VideoDeviceRecoveryHint,
 };
@@ -23,6 +25,8 @@ use crate::video::types::{
 use super::config::{TurnServer, WebRtcConfig};
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::universal_session::{UniversalSession, UniversalSessionConfig};
+
+const H264_PROFILE_DETECT_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub struct WebRtcStreamerConfig {
@@ -170,7 +174,7 @@ impl WebRtcStreamer {
 
     /// Get list of supported video codecs
     pub fn supported_video_codecs(&self) -> Vec<VideoCodecType> {
-        use crate::video::encoder::registry::EncoderRegistry;
+        use crate::video::codec::registry::EncoderRegistry;
 
         let registry = EncoderRegistry::global();
         VideoEncoderType::ordered()
@@ -583,6 +587,47 @@ impl WebRtcStreamer {
         self.ensure_video_pipeline().await
     }
 
+    async fn negotiate_video_fmtp(
+        &self,
+        pipeline: &SharedVideoPipeline,
+        codec: VideoEncoderType,
+    ) -> Option<String> {
+        match codec {
+            VideoEncoderType::H264 => {
+                let profile_level_id = Self::wait_for_h264_profile_level_id(pipeline)
+                    .await
+                    .unwrap_or_else(|| {
+                        h264_bitstream::FALLBACK_WEBRTC_PROFILE_LEVEL_ID.to_string()
+                    });
+                Some(h264_bitstream::webrtc_fmtp_line(&profile_level_id))
+            }
+            _ => None,
+        }
+    }
+
+    async fn wait_for_h264_profile_level_id(pipeline: &SharedVideoPipeline) -> Option<String> {
+        let mut rx = pipeline.h264_profile_level_id_watch();
+        if let Some(profile_level_id) = rx.borrow().clone() {
+            return Some(profile_level_id);
+        }
+
+        let wait = async {
+            loop {
+                if rx.changed().await.is_err() {
+                    return None;
+                }
+                if let Some(profile_level_id) = rx.borrow().clone() {
+                    return Some(profile_level_id);
+                }
+            }
+        };
+
+        tokio::time::timeout(H264_PROFILE_DETECT_TIMEOUT, wait)
+            .await
+            .ok()
+            .flatten()
+    }
+
     /// Get the current pipeline configuration (if pipeline is running)
     pub async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig> {
         if let Some(ref pipeline) = *self.video_pipeline.read().await {
@@ -855,7 +900,7 @@ impl WebRtcStreamer {
             Some(backend) => backend.is_hardware(),
             None => {
                 // Auto mode: check if hardware encoder is available for current codec
-                use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
+                use crate::video::codec::registry::{EncoderRegistry, VideoEncoderType};
                 let codec_type = match *self.video_codec.read().await {
                     VideoCodecType::H264 => VideoEncoderType::H264,
                     VideoCodecType::H265 => VideoEncoderType::H265,
@@ -960,8 +1005,16 @@ impl WebRtcStreamer {
             bitrate_preset: config.bitrate_preset,
             fps: config.fps,
             audio_enabled: *self.audio_enabled.read().await,
+            video_sdp_fmtp_line: None,
         };
         drop(config);
+        let video_sdp_fmtp_line = self
+            .negotiate_video_fmtp(&pipeline, session_config.codec)
+            .await;
+        let session_config = UniversalSessionConfig {
+            video_sdp_fmtp_line,
+            ..session_config
+        };
 
         // Create universal session
         let event_bus = self.events.read().await.clone();

@@ -77,11 +77,14 @@ pub async fn update_rustdesk_config(
 
     let _apply_guard = try_apply_lock(&state.config_apply_locks.rustdesk, "rustdesk")?;
     let old_config = state.config.get().rustdesk.clone();
+    let mut merged_config = old_config.clone();
+    req.apply_to(&mut merged_config);
+    req.validate_merged(&merged_config)?;
 
     state
         .config
         .update(|config| {
-            req.apply_to(&mut config.rustdesk);
+            config.rustdesk = merged_config.clone();
         })
         .await?;
 

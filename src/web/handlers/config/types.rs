@@ -4,6 +4,7 @@ use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+#[cfg(unix)]
 use std::path::Path;
 use typeshare::typeshare;
 
@@ -358,12 +359,14 @@ impl HidConfigUpdate {
 }
 
 #[typeshare]
+#[cfg(unix)]
 #[derive(Debug, Deserialize)]
 pub struct MsdConfigUpdate {
     pub enabled: Option<bool>,
     pub msd_dir: Option<String>,
 }
 
+#[cfg(unix)]
 impl MsdConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
         if let Some(ref dir) = self.msd_dir {
@@ -472,7 +475,8 @@ impl AtxConfigUpdate {
 
     fn validate_key_config(key: &AtxKeyConfigUpdate, name: &str) -> crate::error::Result<()> {
         if let Some(ref device) = key.device {
-            if !device.is_empty() && !std::path::Path::new(device).exists() {
+            if !device.trim().is_empty() && !cfg!(windows) && !std::path::Path::new(device).exists()
+            {
                 return Err(AppError::BadRequest(format!(
                     "{} device '{}' does not exist",
                     name, device
@@ -542,6 +546,12 @@ impl AtxConfigUpdate {
     ) -> crate::error::Result<()> {
         match key.driver {
             crate::atx::AtxDriverType::Serial => {
+                if key.device.trim().is_empty() {
+                    return Err(AppError::BadRequest(format!(
+                        "{} serial device cannot be empty",
+                        name
+                    )));
+                }
                 if key.pin == 0 {
                     return Err(AppError::BadRequest(format!(
                         "{} serial channel must be 1-based (>= 1)",
@@ -735,6 +745,15 @@ impl RustDeskConfigUpdate {
             if !trimmed.is_empty() {
                 validate_rustdesk_relay_key(trimmed)?;
             }
+        }
+        Ok(())
+    }
+
+    pub fn validate_merged(&self, config: &RustDeskConfig) -> crate::error::Result<()> {
+        if config.enabled && config.rendezvous_server.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "RustDesk ID server is required".into(),
+            ));
         }
         Ok(())
     }

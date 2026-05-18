@@ -2,53 +2,22 @@
 //!
 //! Provides ATX power management functionality for IP-KVM.
 //! Supports flexible hardware binding with independent configuration for each action.
-//!
-//! # Features
-//!
-//! - Power button control (short press for on/graceful shutdown, long press for force off)
-//! - Reset button control
-//! - Power status monitoring via LED sensing (GPIO only)
-//! - Independent hardware binding for each action (GPIO or USB relay)
-//! - Hot-reload configuration support
-//!
-//! # Hardware Support
-//!
-//! - **GPIO**: Uses Linux GPIO character device (/dev/gpiochipX) for direct hardware control
-//! - **USB Relay**: Uses HID USB relay modules for isolated switching
-//! - **Serial Relay**: Uses LCUS-style serial relay modules
-//!
-//! # Example
-//!
-//! ```ignore
-//! use one_kvm::atx::{AtxController, AtxControllerConfig, AtxKeyConfig, AtxDriverType, ActiveLevel};
-//!
-//! let config = AtxControllerConfig {
-//!     enabled: true,
-//!     power: AtxKeyConfig {
-//!         driver: AtxDriverType::Gpio,
-//!         device: "/dev/gpiochip0".to_string(),
-//!         pin: 5,
-//!         active_level: ActiveLevel::High,
-//!         baud_rate: 9600,
-//!     },
-//!     reset: AtxKeyConfig {
-//!         driver: AtxDriverType::UsbRelay,
-//!         device: "/dev/hidraw0".to_string(),
-//!         pin: 0,
-//!         active_level: ActiveLevel::High,
-//!         baud_rate: 9600,
-//!     },
-//!     led: Default::default(),
-//! };
-//!
-//! let controller = AtxController::new(config);
-//! controller.init().await?;
-//! controller.power_short().await?;  // Turn on or graceful shutdown
-//! ```
 
 mod controller;
+#[cfg(not(unix))]
+mod disabled_key;
 mod executor;
+#[cfg(unix)]
+mod gpio_linux;
+#[cfg(unix)]
+mod hidraw_linux;
+#[cfg(unix)]
 mod led;
+#[cfg(not(unix))]
+#[path = "disabled_led.rs"]
+mod led;
+mod serial_relay;
+mod traits;
 mod types;
 mod wol;
 
@@ -58,8 +27,9 @@ pub use types::{
     ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig, AtxPowerRequest,
     AtxState, PowerStatus,
 };
-pub use wol::send_wol;
+pub use wol::{list_wol_history, record_wol_history, send_wol};
 
+#[cfg(any(unix, test))]
 fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {
     let upper = uevent.to_ascii_uppercase();
     upper.contains("000016C0:000005DF")
@@ -69,6 +39,7 @@ fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {
         || upper.contains("USB RELAY")
 }
 
+#[cfg(unix)]
 fn is_usb_relay_hidraw(name: &str) -> bool {
     let uevent_path = format!("/sys/class/hidraw/{}/device/uevent", name);
     std::fs::read_to_string(uevent_path)
@@ -82,7 +53,9 @@ fn is_usb_relay_hidraw(name: &str) -> bool {
 pub fn discover_devices() -> AtxDevices {
     let mut devices = AtxDevices::default();
 
-    // Single pass through /dev directory
+    devices.serial_ports = crate::utils::list_serial_ports();
+
+    #[cfg(unix)]
     if let Ok(entries) = std::fs::read_dir("/dev") {
         for entry in entries.flatten() {
             let name = entry.file_name();
@@ -100,6 +73,7 @@ pub fn discover_devices() -> AtxDevices {
     devices.gpio_chips.sort();
     devices.usb_relays.sort();
     devices.serial_ports.sort();
+    devices.serial_ports.dedup();
 
     devices
 }
@@ -129,7 +103,6 @@ mod tests {
 
     #[test]
     fn test_module_exports() {
-        // Verify all public exports are accessible
         let _: AtxDriverType = AtxDriverType::None;
         let _: ActiveLevel = ActiveLevel::High;
         let _: AtxKeyConfig = AtxKeyConfig::default();

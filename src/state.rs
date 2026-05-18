@@ -12,7 +12,9 @@ use crate::events::{
 };
 use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
+#[cfg(unix)]
 use crate::msd::MsdController;
+#[cfg(unix)]
 use crate::otg::OtgService;
 use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
@@ -51,10 +53,12 @@ pub struct AppState {
     pub config: ConfigStore,
     pub sessions: SessionStore,
     pub users: UserStore,
+    #[cfg(unix)]
     pub otg_service: Arc<OtgService>,
     pub stream_manager: Arc<VideoStreamManager>,
     pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
+    #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
     pub audio: Arc<AudioController>,
@@ -77,11 +81,11 @@ impl AppState {
         config: ConfigStore,
         sessions: SessionStore,
         users: UserStore,
-        otg_service: Arc<OtgService>,
+        #[cfg(unix)] otg_service: Arc<OtgService>,
         stream_manager: Arc<VideoStreamManager>,
         webrtc: Arc<WebRtcStreamer>,
         hid: Arc<HidController>,
-        msd: Option<MsdController>,
+        #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
         rustdesk: Option<Arc<RustDeskService>>,
@@ -99,10 +103,12 @@ impl AppState {
             config,
             sessions,
             users,
+            #[cfg(unix)]
             otg_service,
             stream_manager,
             webrtc,
             hid,
+            #[cfg(unix)]
             msd: Arc::new(RwLock::new(msd)),
             atx: Arc::new(RwLock::new(atx)),
             audio,
@@ -202,23 +208,30 @@ impl AppState {
     }
 
     async fn collect_msd_info(&self) -> Option<MsdDeviceInfo> {
-        let msd_guard = self.msd.read().await;
-        let msd = msd_guard.as_ref()?;
+        #[cfg(not(unix))]
+        {
+            None
+        }
+        #[cfg(unix)]
+        {
+            let msd_guard = self.msd.read().await;
+            let msd = msd_guard.as_ref()?;
 
-        let state = msd.state().await;
-        let error = msd.monitor().error_message().await;
-        Some(MsdDeviceInfo {
-            available: state.available,
-            mode: match state.mode {
-                crate::msd::MsdMode::None => "none",
-                crate::msd::MsdMode::Image => "image",
-                crate::msd::MsdMode::Drive => "drive",
-            }
-            .to_string(),
-            connected: state.connected,
-            image_id: state.current_image.map(|img| img.id),
-            error,
-        })
+            let state = msd.state().await;
+            let error = msd.monitor().error_message().await;
+            Some(MsdDeviceInfo {
+                available: state.available,
+                mode: match state.mode {
+                    crate::msd::MsdMode::None => "none",
+                    crate::msd::MsdMode::Image => "image",
+                    crate::msd::MsdMode::Drive => "drive",
+                }
+                .to_string(),
+                connected: state.connected,
+                image_id: state.current_image.map(|img| img.id),
+                error,
+            })
+        }
     }
 
     async fn collect_atx_info(&self) -> Option<AtxDeviceInfo> {

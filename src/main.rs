@@ -20,8 +20,11 @@ use one_kvm::db::DatabasePool;
 use one_kvm::events::EventBus;
 use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
+#[cfg(unix)]
 use one_kvm::msd::MsdController;
+#[cfg(unix)]
 use one_kvm::otg::OtgService;
+use one_kvm::platform::PlatformCapabilities;
 use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
@@ -78,7 +81,7 @@ struct CliArgs {
     #[arg(long, value_name = "FILE", requires = "ssl_cert")]
     ssl_key: Option<PathBuf>,
 
-    /// Data directory path (default: /etc/one-kvm)
+    /// Data directory path (default: /etc/one-kvm, or the executable directory on Windows)
     #[arg(short = 'd', long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
@@ -119,6 +122,12 @@ async fn main() -> anyhow::Result<()> {
         .expect("Failed to install rustls crypto provider");
 
     tracing::info!("Starting One-KVM v{}", env!("CARGO_PKG_VERSION"));
+    let platform = PlatformCapabilities::current();
+    tracing::info!(
+        "Platform mode: {:?} ({})",
+        platform.mode,
+        platform.mode_label
+    );
 
     let data_dir = args.data_dir.clone().unwrap_or_else(get_data_dir);
     tracing::info!("Data directory: {}", data_dir.display());
@@ -128,37 +137,7 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    tokio::fs::create_dir_all(&data_dir).await?;
-
-    let db = open_database_pool(&data_dir).await?;
-    let config_store = ConfigStore::new(db.clone_pool())?;
-    config_store.load().await?;
-    let mut config = (*config_store.get()).clone();
-
-    let mut msd_dir_updated = false;
-    if config.msd.msd_dir.trim().is_empty() {
-        let msd_dir = data_dir.join("msd");
-        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
-        msd_dir_updated = true;
-    } else if !PathBuf::from(&config.msd.msd_dir).is_absolute() {
-        let msd_dir = data_dir.join(&config.msd.msd_dir);
-        tracing::warn!(
-            "MSD directory is relative, rebasing to {}",
-            msd_dir.display()
-        );
-        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
-        msd_dir_updated = true;
-    }
-    if msd_dir_updated {
-        config_store.set(config.clone()).await?;
-    }
-    let msd_dir = PathBuf::from(&config.msd.msd_dir);
-    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("images")).await {
-        tracing::warn!("Failed to create MSD images directory: {}", e);
-    }
-    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("ventoy")).await {
-        tracing::warn!("Failed to create MSD ventoy directory: {}", e);
-    }
+    let (db, config_store, mut config) = load_runtime_config(&data_dir).await?;
 
     if let Some(addr) = args.address {
         config.web.bind_address = addr.clone();
@@ -311,9 +290,12 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::info!("WebRTC streamer created");
 
+    #[cfg(unix)]
     let otg_service = Arc::new(OtgService::new());
+    #[cfg(unix)]
     tracing::info!("OTG Service created");
 
+    #[cfg(unix)]
     if let Err(e) = otg_service.apply_config(&config.hid, &config.msd).await {
         tracing::warn!("Failed to apply OTG config: {}", e);
     }
@@ -326,12 +308,16 @@ async fn main() -> anyhow::Result<()> {
         },
         config::HidBackend::None => HidBackendType::None,
     };
+    #[cfg(unix)]
     let hid = Arc::new(HidController::new(hid_backend, Some(otg_service.clone())));
+    #[cfg(not(unix))]
+    let hid = Arc::new(HidController::new(hid_backend));
     hid.set_event_bus(events.clone()).await;
     if let Err(e) = hid.init().await {
         tracing::warn!("Failed to initialize HID backend: {}", e);
     }
 
+    #[cfg(unix)]
     let msd = if config.msd.enabled {
         let ventoy_resource_dir = data_dir.join("ventoy");
         if ventoy_resource_dir.exists() {
@@ -544,10 +530,12 @@ async fn main() -> anyhow::Result<()> {
         config_store.clone(),
         session_store,
         user_store,
+        #[cfg(unix)]
         otg_service,
         stream_manager,
         webrtc_streamer.clone(),
         hid,
+        #[cfg(unix)]
         msd,
         atx,
         audio,
@@ -703,12 +691,12 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
     };
 
     let filter = match effective_level {
-        LogLevel::Error => "one_kvm=error,tower_http=error",
-        LogLevel::Warn => "one_kvm=warn,tower_http=warn",
-        LogLevel::Info => "one_kvm=info,tower_http=info",
-        LogLevel::Verbose => "one_kvm=debug,tower_http=info",
-        LogLevel::Debug => "one_kvm=debug,tower_http=debug",
-        LogLevel::Trace => "one_kvm=trace,tower_http=debug",
+        LogLevel::Error => "one_kvm=error,tower_http=error,webrtc_sctp=warn",
+        LogLevel::Warn => "one_kvm=warn,tower_http=warn,webrtc_sctp=warn",
+        LogLevel::Info => "one_kvm=info,tower_http=info,webrtc_sctp=warn",
+        LogLevel::Verbose => "one_kvm=debug,tower_http=info,webrtc_sctp=warn",
+        LogLevel::Debug => "one_kvm=debug,tower_http=debug,webrtc_sctp=warn",
+        LogLevel::Trace => "one_kvm=trace,tower_http=debug,webrtc_sctp=warn",
     };
 
     let env_filter =
@@ -728,6 +716,19 @@ fn get_data_dir() -> PathBuf {
         return PathBuf::from(path);
     }
 
+    #[cfg(windows)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                return exe_dir.join("one-kvm");
+            }
+        }
+        return std::env::current_dir()
+            .map(|dir| dir.join("one-kvm"))
+            .unwrap_or_else(|_| PathBuf::from("one-kvm"));
+    }
+
+    #[cfg(not(windows))]
     PathBuf::from("/etc/one-kvm")
 }
 
@@ -769,6 +770,64 @@ async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Resu
     match command {
         CliCommand::User(user) => run_user_action(user.action, &users, &sessions).await,
     }
+}
+
+async fn load_runtime_config(
+    data_dir: &Path,
+) -> anyhow::Result<(DatabasePool, ConfigStore, AppConfig)> {
+    tokio::fs::create_dir_all(data_dir).await?;
+
+    let db = open_database_pool(data_dir).await?;
+    let config_store = ConfigStore::new(db.clone_pool())?;
+    config_store.load().await?;
+    let mut config = (*config_store.get()).clone();
+    config.apply_platform_defaults();
+
+    prepare_linux_runtime_dirs(data_dir, &config_store, &mut config).await?;
+
+    Ok((db, config_store, config))
+}
+
+#[cfg(unix)]
+async fn prepare_linux_runtime_dirs(
+    data_dir: &Path,
+    config_store: &ConfigStore,
+    config: &mut AppConfig,
+) -> anyhow::Result<()> {
+    let mut msd_dir_updated = false;
+    if config.msd.msd_dir.trim().is_empty() {
+        let msd_dir = data_dir.join("msd");
+        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
+        msd_dir_updated = true;
+    } else if !PathBuf::from(&config.msd.msd_dir).is_absolute() {
+        let msd_dir = data_dir.join(&config.msd.msd_dir);
+        tracing::warn!(
+            "MSD directory is relative, rebasing to {}",
+            msd_dir.display()
+        );
+        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
+        msd_dir_updated = true;
+    }
+    if msd_dir_updated {
+        config_store.set(config.clone()).await?;
+    }
+    let msd_dir = PathBuf::from(&config.msd.msd_dir);
+    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("images")).await {
+        tracing::warn!("Failed to create MSD images directory: {}", e);
+    }
+    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("ventoy")).await {
+        tracing::warn!("Failed to create MSD ventoy directory: {}", e);
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn prepare_linux_runtime_dirs(
+    _data_dir: &Path,
+    _config_store: &ConfigStore,
+    _config: &mut AppConfig,
+) -> anyhow::Result<()> {
+    Ok(())
 }
 
 async fn run_user_action(
@@ -1048,6 +1107,7 @@ async fn cleanup(state: &Arc<AppState>) {
         tracing::warn!("Failed to shutdown HID: {}", e);
     }
 
+    #[cfg(unix)]
     if let Some(msd) = state.msd.write().await.as_mut() {
         if let Err(e) = msd.shutdown().await {
             tracing::warn!("Failed to shutdown MSD: {}", e);

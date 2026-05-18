@@ -1,7 +1,7 @@
 use crate::config::{AppConfig, RtspCodec, StreamMode};
 use crate::error::Result;
-use crate::video::encoder::registry::VideoEncoderType;
-use crate::video::encoder::VideoCodecType;
+use crate::video::codec::registry::VideoEncoderType;
+use crate::video::codec::VideoCodecType;
 use crate::video::VideoStreamManager;
 use std::sync::Arc;
 

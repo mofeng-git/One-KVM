@@ -34,7 +34,9 @@ fn build_common(builder: &mut Build) {
     // system
     #[cfg(windows)]
     {
-        ["d3d11", "dxgi"].map(|lib| println!("cargo:rustc-link-lib={}", lib));
+        for lib in ["d3d11", "dxgi"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
     }
 
     builder.include(&common_dir);
@@ -99,6 +101,7 @@ mod ffmpeg {
         link_os();
         build_ffmpeg_ram(builder);
         build_ffmpeg_hw(builder);
+        build_ffmpeg_capture(builder);
     }
 
     /// Link system FFmpeg using pkg-config or custom path
@@ -282,15 +285,24 @@ mod ffmpeg {
             )
         );
         {
-            // Only need avcodec and avutil for encoding
+            // avdevice/avformat are needed by the Windows DirectShow capture bridge.
             let mut static_libs = vec!["avcodec", "avutil"];
             if target_os == "windows" {
-                static_libs.push("libmfx");
+                static_libs.extend([
+                    "avformat",
+                    "avdevice",
+                    "avfilter",
+                    "swresample",
+                    "swscale",
+                    "vpx",
+                    "libx264",
+                    "x265-static",
+                    "libmfx",
+                ]);
             }
-            static_libs
-                .iter()
-                .map(|lib| println!("cargo:rustc-link-lib=static={}", lib))
-                .count();
+            for lib in static_libs {
+                println!("cargo:rustc-link-lib=static={}", lib);
+            }
         }
 
         let include = path.join("include");
@@ -304,7 +316,10 @@ mod ffmpeg {
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
         let dyn_libs: Vec<&str> = if target_os == "windows" {
-            ["User32", "bcrypt", "ole32", "advapi32"].to_vec()
+            [
+                "User32", "bcrypt", "ole32", "advapi32", "mfuuid", "strmiids",
+            ]
+            .to_vec()
         } else if target_os == "linux" {
             // Base libraries for all Linux platforms
             let mut v = vec!["drm", "stdc++"];
@@ -373,6 +388,34 @@ mod ffmpeg {
                 target_arch
             );
         }
+    }
+
+    fn build_ffmpeg_capture(builder: &mut Build) {
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target_os != "windows" {
+            return;
+        }
+
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let capture_header = manifest_dir
+            .join("cpp")
+            .join("ffmpeg_capture_ffi.h")
+            .to_string_lossy()
+            .to_string();
+        bindgen::builder()
+            .header(capture_header)
+            .rustified_enum("*")
+            .generate()
+            .unwrap()
+            .write_to_file(
+                Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_capture_ffi.rs"),
+            )
+            .unwrap();
+
+        builder.file(manifest_dir.join("cpp").join("ffmpeg_capture.cpp"));
+        println!("cargo:rustc-link-lib=strmiids");
+        println!("cargo:rustc-link-lib=oleaut32");
+        println!("cargo:rustc-link-lib=quartz");
     }
 
     fn build_ffmpeg_hw(builder: &mut Build) {

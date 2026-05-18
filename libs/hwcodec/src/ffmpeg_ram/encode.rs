@@ -257,7 +257,13 @@ struct ProbePolicy {
 
 impl ProbePolicy {
     fn for_codec(codec_name: &str) -> Self {
-        if codec_name.contains("v4l2m2m") {
+        if codec_name.contains("amf") {
+            Self {
+                max_attempts: 5,
+                request_keyframe: true,
+                accept_any_output: true,
+            }
+        } else if codec_name.contains("v4l2m2m") {
             Self {
                 max_attempts: 5,
                 request_keyframe: true,

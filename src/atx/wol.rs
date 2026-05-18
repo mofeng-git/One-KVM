@@ -3,18 +3,14 @@
 //! Sends magic packets to wake up remote machines.
 
 use std::net::{SocketAddr, UdpSocket};
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::error::{AppError, Result};
 
-/// WOL magic packet structure:
-/// - 6 bytes of 0xFF
-/// - 16 repetitions of the target MAC address (6 bytes each)
-///   Total: 6 + 16 * 6 = 102 bytes
+const WOL_HISTORY_MAX_ENTRIES: i64 = 50;
+
 const MAGIC_PACKET_SIZE: usize = 102;
 
-/// Parse MAC address string into bytes
-/// Supports formats: "AA:BB:CC:DD:EE:FF" or "AA-BB-CC-DD-EE-FF"
 fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     let mac = mac.trim().to_uppercase();
     let parts: Vec<&str> = if mac.contains(':') {
@@ -44,16 +40,13 @@ fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     Ok(bytes)
 }
 
-/// Build WOL magic packet
 fn build_magic_packet(mac: &[u8; 6]) -> [u8; MAGIC_PACKET_SIZE] {
     let mut packet = [0u8; MAGIC_PACKET_SIZE];
 
-    // First 6 bytes are 0xFF
     for byte in packet.iter_mut().take(6) {
         *byte = 0xFF;
     }
 
-    // Next 96 bytes are 16 repetitions of the MAC address
     for i in 0..16 {
         let offset = 6 + i * 6;
         packet[offset..offset + 6].copy_from_slice(mac);
@@ -73,16 +66,13 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
 
     info!("Sending WOL packet to {} via {:?}", mac_address, interface);
 
-    // Create UDP socket
     let socket = UdpSocket::bind("0.0.0.0:0")
         .map_err(|e| AppError::Internal(format!("Failed to create UDP socket: {}", e)))?;
 
-    // Enable broadcast
     socket
         .set_broadcast(true)
         .map_err(|e| AppError::Internal(format!("Failed to enable broadcast: {}", e)))?;
 
-    // Bind to specific interface if specified
     #[cfg(target_os = "linux")]
     if let Some(iface) = interface {
         if !iface.is_empty() {
@@ -90,8 +80,7 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
             let fd = socket.as_raw_fd();
             let iface_bytes = iface.as_bytes();
 
-            // SO_BINDTODEVICE requires interface name as null-terminated string
-            let mut iface_buf = [0u8; 16]; // IFNAMSIZ is typically 16
+            let mut iface_buf = [0u8; 16];
             let len = iface_bytes.len().min(15);
             iface_buf[..len].copy_from_slice(&iface_bytes[..len]);
 
@@ -112,23 +101,70 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
                     iface, err
                 )));
             }
-            debug!("Bound to interface: {}", iface);
+            tracing::debug!("Bound to interface: {}", iface);
         }
     }
 
-    // Send to broadcast address on port 9 (discard protocol, commonly used for WOL)
     let broadcast_addr: SocketAddr = "255.255.255.255:9".parse().unwrap();
 
     socket
         .send_to(&packet, broadcast_addr)
         .map_err(|e| AppError::Internal(format!("Failed to send WOL packet: {}", e)))?;
 
-    // Also try sending to port 7 (echo protocol, alternative WOL port)
     let broadcast_addr_7: SocketAddr = "255.255.255.255:7".parse().unwrap();
     let _ = socket.send_to(&packet, broadcast_addr_7);
 
     info!("WOL packet sent successfully to {}", mac_address);
     Ok(())
+}
+
+pub async fn record_wol_history(pool: &sqlx::Pool<sqlx::Sqlite>, mac_address: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO wol_history (mac_address, updated_at)
+        VALUES (?1, CAST(strftime('%s', 'now') AS INTEGER))
+        ON CONFLICT(mac_address) DO UPDATE SET
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(mac_address)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM wol_history
+        WHERE mac_address NOT IN (
+            SELECT mac_address FROM wol_history
+            ORDER BY updated_at DESC
+            LIMIT ?1
+        )
+        "#,
+    )
+    .bind(WOL_HISTORY_MAX_ENTRIES)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn list_wol_history(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    limit: usize,
+) -> Result<Vec<(String, i64)>> {
+    let rows = sqlx::query_as(
+        r#"
+        SELECT mac_address, updated_at
+        FROM wol_history
+        ORDER BY updated_at DESC
+        LIMIT ?1
+        "#,
+    )
+    .bind(limit as i64)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -159,12 +195,10 @@ mod tests {
         let mac = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
         let packet = build_magic_packet(&mac);
 
-        // Check header (6 bytes of 0xFF)
         for byte in packet.iter().take(6) {
             assert_eq!(*byte, 0xFF);
         }
 
-        // Check MAC repetitions
         for i in 0..16 {
             let offset = 6 + i * 6;
             assert_eq!(&packet[offset..offset + 6], &mac);

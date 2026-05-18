@@ -48,8 +48,7 @@ async fn event_service() -> Json<EventService> {
         server_sent_event_uri: Some("/redfish/v1/EventService/SSE".to_string()),
         actions: EventServiceActions {
             submit_test_event: ActionTarget {
-                target: "/redfish/v1/EventService/Actions/EventService.SubmitTestEvent"
-                    .to_string(),
+                target: "/redfish/v1/EventService/Actions/EventService.SubmitTestEvent".to_string(),
             },
         },
     })

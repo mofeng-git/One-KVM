@@ -1,7 +1,11 @@
-mod persistence;
 mod schema;
 mod store;
 
-pub use persistence::ConfigChange;
+/// Configuration change event
+#[derive(Debug, Clone)]
+pub struct ConfigChange {
+    pub key: String,
+}
+
 pub use schema::*;
 pub use store::ConfigStore;

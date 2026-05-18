@@ -19,6 +19,7 @@ import { toast } from 'vue-sonner'
 import { cn, generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
 import { videoDebugLog } from '@/lib/debugLog'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { isAudioDeviceLostStateReason, isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
 import type { StreamDeviceLostEventData } from '@/types/websocket'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
@@ -170,6 +171,7 @@ const changingPassword = ref(false)
 
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
+const showTerminal = computed(() => ttydStatus.value?.available !== false)
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
@@ -233,7 +235,7 @@ const videoDetails = computed<StatusDetail[]>(() => {
         : 'error'
 
   const details: StatusDetail[] = [
-    { label: t('statusCard.device'), value: stream.device || '-' },
+    { label: t('statusCard.device'), value: stream.device ? formatVideoDeviceLabel({ path: stream.device }) : '-' },
     { label: t('statusCard.format'), value: formatDisplay },
     { label: t('statusCard.resolution'), value: stream.resolution ? `${stream.resolution[0]}x${stream.resolution[1]}` : '-' },
     { label: t('statusCard.fpsTarget'), value: targetFpsValue },
@@ -1865,11 +1867,14 @@ async function handleChangePassword() {
 }
 
 function openTerminal() {
+  if (!showTerminal.value) return
   if (!ttydStatus.value?.running) return
   showTerminalDialog.value = true
 }
 
 function openTerminalInNewTab() {
+  if (!showTerminal.value) return
+  if (!ttydStatus.value?.running) return
   window.open('/api/terminal/', '_blank')
 }
 
@@ -2497,6 +2502,7 @@ onMounted(async () => {
   }, { immediate: true })
 
   await systemStore.startStream().catch(() => {})
+  await systemStore.fetchSystemInfo().catch(() => {})
   await systemStore.fetchAllStates()
   await configStore.refreshHid().then(() => {
     syncMouseModeFromConfig()
@@ -2688,6 +2694,7 @@ onUnmounted(() => {
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
       :ttyd-running="ttydStatus?.running"
+      :show-terminal="showTerminal"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="statsSheetOpen = true"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
@@ -2929,7 +2936,7 @@ onUnmounted(() => {
       :ws-latency="0"
       :webrtc-stats="webrtc.stats.value"
     />
-    <Dialog v-model:open="showTerminalDialog">
+    <Dialog v-if="showTerminal" v-model:open="showTerminalDialog">
       <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
         <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
           <DialogTitle class="flex items-center justify-between w-full">
