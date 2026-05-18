@@ -7,7 +7,7 @@ use std::time::Instant;
 use tokio::sync::{broadcast, watch, Mutex};
 use tracing::{debug, info};
 
-use super::device::AudioDeviceInfo;
+use crate::audio::device::AudioDeviceInfo;
 use crate::error::{AppError, Result};
 use crate::utils::LogThrottler;
 use crate::{error_throttled, warn_throttled};

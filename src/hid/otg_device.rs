@@ -1,13 +1,9 @@
 #[cfg(unix)]
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 #[cfg(unix)]
-use std::io::{Read, Write};
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::io::AsFd;
-#[cfg(unix)]
-use std::path::PathBuf;
 
 #[cfg(unix)]
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};

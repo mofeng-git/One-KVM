@@ -5,7 +5,13 @@ use crate::msd::{
     ImageManager, MsdConnectRequest, MsdMode, MsdState, VentoyDrive,
 };
 #[cfg(unix)]
+use axum::body::Body;
+#[cfg(unix)]
 use axum::extract::{Multipart, Path as AxumPath};
+#[cfg(unix)]
+use axum::http::{header, StatusCode};
+#[cfg(unix)]
+use axum::response::Response;
 #[cfg(unix)]
 use std::collections::HashMap;
 
