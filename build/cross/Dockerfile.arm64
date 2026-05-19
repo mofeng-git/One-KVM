@@ -6,16 +6,36 @@ FROM debian:11
 # Linux headers used by v4l2r bindgen
 ARG LINUX_HEADERS_VERSION=6.6
 ARG LINUX_HEADERS_SHA256=
+ARG CHINAMIRRO=0
 
-# Set Rustup mirrors (Aliyun)
-#ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
-#    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+# Optionally use Tsinghua mirrors for builds in China.
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        sed -i \
+            -e 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+            -e 's|http://security.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+            /etc/apt/sources.list; \
+    fi
 
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    && if [ "$CHINAMIRRO" = "1" ]; then \
+        export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup; \
+        export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup; \
+    fi \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && if [ "$CHINAMIRRO" = "1" ]; then \
+        mkdir -p /root/.cargo; \
+        printf '%s\n' \
+            '[source.crates-io]' \
+            "replace-with = 'tuna'" \
+            '[source.tuna]' \
+            'registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"' \
+            '[registries.tuna]' \
+            'index = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"' \
+            > /root/.cargo/config.toml; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -327,7 +347,11 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && rm -rf /tmp/ffmpeg-build /tmp/aarch64-cross.txt /tmp/aarch64-pkg-config
 
 # Add Rust target
-RUN rustup target add aarch64-unknown-linux-gnu
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup; \
+        export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup; \
+    fi \
+    && rustup target add aarch64-unknown-linux-gnu
 
 # Configure environment for cross-compilation
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \

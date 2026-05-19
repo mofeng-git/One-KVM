@@ -19,6 +19,23 @@ ARCH_MAP=(
 build_arch() {
     local rust_target="$1"
 
+    case "${CHINAMIRRO:-}" in
+        1|true|TRUE|yes|YES|on|ON)
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--build-arg CHINAMIRRO=1"
+            echo "=== China mirror acceleration: enabled (Tsinghua) ==="
+            echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
+            env \
+                CROSS_BUILD_OPTS="$cross_build_opts" \
+                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=tuna \
+                CARGO_SOURCE_TUNA_REGISTRY=sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/ \
+                CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
+                RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup \
+                RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup \
+                cross build --release --target "$rust_target"
+            return
+            ;;
+    esac
+
     echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
     cross build --release --target "$rust_target"
 }
@@ -49,6 +66,7 @@ case "${1:-all}" in
         echo "Examples:"
         echo "  $0              # Build all"
         echo "  $0 x86_64       # Build x86_64 only"
+        echo "  CHINAMIRRO=1 $0 arm64  # Build with Tsinghua mirrors"
         exit 0
         ;;
     *)
