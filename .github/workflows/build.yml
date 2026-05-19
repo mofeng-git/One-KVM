@@ -1,0 +1,133 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  deb:
+    runs-on: ubuntu-22.04
+    needs: frontend
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        run: cargo install cross --locked
+
+      - name: Build linux binary
+        run: bash build/build-images.sh x86_64
+
+      - name: Package deb
+        run: bash build/package-deb.sh amd64
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-deb
+          path: target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    runs-on: windows-2022
+    needs: frontend
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Prepare vcpkg and dependencies
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:VCPKG_DEFAULT_TRIPLET = "x64-windows-static"
+          $env:VCPKG_INSTALLED_DIR = Join-Path $env:VCPKG_ROOT "installed"
+
+          if (-not (Test-Path $env:VCPKG_ROOT)) {
+            git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
+          }
+
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET
+
+          $tripletRoot = Join-Path $env:VCPKG_INSTALLED_DIR $env:VCPKG_DEFAULT_TRIPLET
+          $env:TURBOJPEG_SOURCE = "explicit"
+          $env:TURBOJPEG_LIB_DIR = Join-Path $tripletRoot "lib"
+          $env:TURBOJPEG_INCLUDE_DIR = Join-Path $tripletRoot "include"
+
+          "VCPKG_ROOT=$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_DEFAULT_TRIPLET=$env:VCPKG_DEFAULT_TRIPLET" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_SOURCE=$env:TURBOJPEG_SOURCE" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_LIB_DIR=$env:TURBOJPEG_LIB_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_INCLUDE_DIR=$env:TURBOJPEG_INCLUDE_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: .\build\windows\build.ps1 -Configuration release
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-windows-exe
+          path: target/x86_64-pc-windows-msvc/release/one-kvm.exe
+          if-no-files-found: error
+          retention-days: 7

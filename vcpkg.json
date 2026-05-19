@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "one-kvm",
+  "version-string": "0.2.0",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "amf",
+        "avcodec",
+        "avdevice",
+        "avfilter",
+        "avformat",
+        "gpl",
+        "nvcodec",
+        "opus",
+        "qsv",
+        "swresample",
+        "swscale",
+        "vpx",
+        "x264",
+        "x265"
+      ],
+      "platform": "windows"
+    },
+    {
+      "name": "libjpeg-turbo",
+      "platform": "windows"
+    },
+    {
+      "name": "libyuv",
+      "platform": "windows"
+    },
+    {
+      "name": "opus",
+      "platform": "windows"
+    }
+  ]
+}
