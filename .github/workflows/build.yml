@@ -129,13 +129,13 @@ jobs:
 
       - name: Build Windows exe
         shell: pwsh
-        run: .\build\windows\build.ps1 -Configuration release
+        run: .\build\windows\build.ps1 -Configuration release -Package
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
           name: one-kvm-windows-exe
-          path: target/x86_64-pc-windows-msvc/release/one-kvm.exe
+          path: target/x86_64-pc-windows-msvc/release/one-kvm_*.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -170,7 +170,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag }}
+          prerelease: true
           generate_release_notes: true
           files: |
             release-artifacts/deb/*.deb
-            release-artifacts/windows/one-kvm.exe
+            release-artifacts/windows/*.exe

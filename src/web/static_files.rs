@@ -149,7 +149,7 @@ fn static_response(path: &str, data: Vec<u8>) -> Response<Body> {
         .unwrap()
 }
 
-pub fn placeholder_html() -> &'static str {
+pub fn placeholder_html() -> String {
     r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -181,8 +181,9 @@ pub fn placeholder_html() -> &'static str {
         <h1>One-KVM</h1>
         <p>Frontend not built yet.</p>
         <p>Please build the frontend or access the API directly.</p>
-        <div class="version">v0.2.0</div>
+        <div class="version">v{{VERSION}}</div>
     </div>
 </body>
 </html>"#
+        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
 }

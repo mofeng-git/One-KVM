@@ -6,6 +6,7 @@ param(
     [string]$VcpkgInstalledRoot = $env:VCPKG_INSTALLED_DIR,
     [switch]$NoDefaultFeatures,
     [string[]]$Features = @(),
+    [switch]$Package,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$CargoArgs = @()
 )
@@ -64,3 +65,23 @@ if ($Features.Count -gt 0) {
 $cargoCommand += $CargoArgs
 
 cargo @cargoCommand
+
+if ($Package) {
+    $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+    $packageInfo = $metadata.packages | Where-Object { $_.name -eq "one-kvm" } | Select-Object -First 1
+
+    if ($null -eq $packageInfo -or [string]::IsNullOrWhiteSpace($packageInfo.version)) {
+        throw "Failed to resolve version from Cargo metadata"
+    }
+
+    $sourcePath = Join-Path $repoRoot "target/$Target/release/one-kvm.exe"
+    $targetName = "one-kvm_{0}_amd64.exe" -f $packageInfo.version
+    $targetPath = Join-Path $repoRoot "target/$Target/release/$targetName"
+
+    if (-not (Test-Path $sourcePath)) {
+        throw "Windows binary not found: $sourcePath"
+    }
+
+    Copy-Item $sourcePath $targetPath
+    Write-Host $targetPath
+}
