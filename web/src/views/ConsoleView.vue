@@ -493,7 +493,7 @@ const msdDetails = computed<StatusDetail[]>(() => {
       ? t('statusCard.msdImageMode')
       : t('statusCard.msdDriveMode')
   details.push({
-    label: t('statusCard.mode'),
+    label: t('statusCard.currentMode'),
     value: modeDisplay,
     status: msd.mode !== 'none' ? 'ok' : undefined
   })
