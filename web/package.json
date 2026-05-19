@@ -34,10 +34,15 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.8.1",
     "autoprefixer": "^10.4.22",
-    "postcss": "^8.5.6",
+    "postcss": "^8.5.10",
     "tailwindcss": "^4.1.17",
     "typescript": "~5.9.3",
-    "vite": "^7.2.4",
+    "vite": "^7.3.2",
     "vue-tsc": "^3.1.4"
+  },
+  "overrides": {
+    "defu": "^6.1.5",
+    "picomatch": "^4.0.4",
+    "rollup": "^4.59.0"
   }
 }
