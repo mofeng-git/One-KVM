@@ -38,6 +38,16 @@ fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
     }
 }
 
+fn hid_otg_config_changed(old_config: &HidConfig, new_config: &HidConfig) -> bool {
+    old_config.backend == HidBackend::Otg
+        || new_config.backend == HidBackend::Otg
+        || old_config.otg_udc != new_config.otg_udc
+        || old_config.otg_descriptor != new_config.otg_descriptor
+        || old_config.constrained_otg_functions() != new_config.constrained_otg_functions()
+        || old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds()
+        || old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit()
+}
+
 async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
     #[cfg(not(unix))]
     {
@@ -188,6 +198,7 @@ pub async fn apply_hid_config(
     let new_hid_backend = hid_backend_type(new_config);
     let transitioning_away_from_otg =
         old_config.backend == HidBackend::Otg && new_config.backend != HidBackend::Otg;
+    let otg_config_changed = hid_otg_config_changed(old_config, new_config);
 
     if transitioning_away_from_otg {
         state
@@ -197,7 +208,9 @@ pub async fn apply_hid_config(
             .map_err(|e| AppError::Config(format!("HID reload failed: {}", e)))?;
     }
 
-    reconcile_otg_from_store(state).await?;
+    if otg_config_changed {
+        reconcile_otg_from_store(state).await?;
+    }
 
     if !transitioning_away_from_otg {
         state
