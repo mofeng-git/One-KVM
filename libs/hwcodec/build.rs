@@ -91,8 +91,8 @@ mod ffmpeg {
         ffmpeg_ffi();
 
         // Try VCPKG first, fallback to system FFmpeg via pkg-config
-        if let Ok(vcpkg_root) = std::env::var("VCPKG_ROOT") {
-            link_vcpkg(builder, vcpkg_root.into());
+        if let Some(vcpkg_installed) = vcpkg_installed_root() {
+            link_vcpkg(builder, vcpkg_installed);
         } else {
             // Use system FFmpeg via pkg-config
             link_system_ffmpeg(builder);
@@ -102,6 +102,22 @@ mod ffmpeg {
         build_ffmpeg_ram(builder);
         build_ffmpeg_hw(builder);
         build_ffmpeg_capture(builder);
+    }
+
+    fn vcpkg_installed_root() -> Option<PathBuf> {
+        println!("cargo:rerun-if-env-changed=VCPKG_INSTALLED_DIR");
+        println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+
+        if let Ok(path) = std::env::var("VCPKG_INSTALLED_DIR") {
+            if !path.trim().is_empty() {
+                return Some(PathBuf::from(path));
+            }
+        }
+
+        std::env::var("VCPKG_ROOT")
+            .ok()
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| PathBuf::from(path).join("installed"))
     }
 
     /// Link system FFmpeg using pkg-config or custom path
@@ -274,7 +290,6 @@ mod ffmpeg {
             target = target.replace("x64", "x86");
         }
         println!("cargo:info={}", target);
-        path.push("installed");
         path.push(target);
 
         println!(
@@ -297,11 +312,13 @@ mod ffmpeg {
                     "vpx",
                     "libx264",
                     "x265-static",
-                    "libmfx",
                 ]);
             }
             for lib in static_libs {
                 println!("cargo:rustc-link-lib=static={}", lib);
+            }
+            if target_os == "windows" {
+                link_windows_qsv_lib(&path.join("lib"));
             }
         }
 
@@ -309,6 +326,16 @@ mod ffmpeg {
         println!("{}", format!("cargo:include={}", include.to_str().unwrap()));
         builder.include(&include);
         include
+    }
+
+    fn link_windows_qsv_lib(lib_dir: &Path) {
+        if lib_dir.join("libmfx.lib").exists() {
+            println!("cargo:rustc-link-lib=static=libmfx");
+            println!("cargo:info=Using Windows QSV support library libmfx.lib");
+            return;
+        }
+
+        println!("cargo:warning=Windows QSV support library not found in {}", lib_dir.display());
     }
 
     fn link_os() {

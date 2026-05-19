@@ -3,6 +3,7 @@ param(
     [string]$Target = "x86_64-pc-windows-msvc",
     [string]$Triplet = "x64-windows-static",
     [string]$VcpkgRoot = $env:VCPKG_ROOT,
+    [string]$VcpkgInstalledRoot = $env:VCPKG_INSTALLED_DIR,
     [switch]$NoDefaultFeatures,
     [string[]]$Features = @(),
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -19,8 +20,12 @@ if ([string]::IsNullOrWhiteSpace($VcpkgRoot)) {
 }
 
 $VcpkgRoot = [System.IO.Path]::GetFullPath($VcpkgRoot)
-$vcpkgInstalledRoot = Join-Path $VcpkgRoot "installed"
-$vcpkgTripletRoot = Join-Path $vcpkgInstalledRoot $Triplet
+if ([string]::IsNullOrWhiteSpace($VcpkgInstalledRoot)) {
+    $VcpkgInstalledRoot = Join-Path $VcpkgRoot "installed"
+}
+
+$VcpkgInstalledRoot = [System.IO.Path]::GetFullPath($VcpkgInstalledRoot)
+$vcpkgTripletRoot = Join-Path $VcpkgInstalledRoot $Triplet
 $turbojpegLibDir = Join-Path $vcpkgTripletRoot "lib"
 $turbojpegIncludeDir = Join-Path $vcpkgTripletRoot "include"
 
@@ -34,6 +39,7 @@ if (-not (Test-Path $turbojpegLibDir) -or -not (Test-Path $turbojpegIncludeDir))
 
 $env:VCPKG_ROOT = $VcpkgRoot
 $env:VCPKG_DEFAULT_TRIPLET = $Triplet
+$env:VCPKG_INSTALLED_DIR = $VcpkgInstalledRoot
 $env:TURBOJPEG_SOURCE = "explicit"
 $env:TURBOJPEG_LIB_DIR = $turbojpegLibDir
 $env:TURBOJPEG_INCLUDE_DIR = $turbojpegIncludeDir

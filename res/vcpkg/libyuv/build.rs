@@ -82,8 +82,8 @@ fn generate_bindings(cpp_dir: &Path) {
 
 fn link_libyuv() {
     // Try vcpkg first
-    if let Ok(vcpkg_root) = env::var("VCPKG_ROOT") {
-        if link_vcpkg(vcpkg_root.into()) {
+    if let Some(vcpkg_installed) = vcpkg_installed_root() {
+        if link_vcpkg(vcpkg_installed) {
             return;
         }
     }
@@ -109,6 +109,22 @@ fn link_libyuv() {
     );
 }
 
+fn vcpkg_installed_root() -> Option<PathBuf> {
+    println!("cargo:rerun-if-env-changed=VCPKG_INSTALLED_DIR");
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+
+    if let Ok(path) = env::var("VCPKG_INSTALLED_DIR") {
+        if !path.trim().is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    env::var("VCPKG_ROOT")
+        .ok()
+        .filter(|path| !path.trim().is_empty())
+        .map(|path| PathBuf::from(path).join("installed"))
+}
+
 fn link_vcpkg(mut path: PathBuf) -> bool {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -130,7 +146,6 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
         }
     };
 
-    path.push("installed");
     path.push(triplet);
 
     let include_path = path.join("include");

@@ -1,11 +1,18 @@
 name: Build
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish GitHub Release
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: Release tag name when publishing
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -26,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -63,10 +70,10 @@ jobs:
         run: cargo install cross --locked
 
       - name: Build linux binary
-        run: bash build/build-images.sh x86_64
+        run: bash build/build-images.sh
 
       - name: Package deb
-        run: bash build/package-deb.sh amd64
+        run: bash build/package-deb.sh
 
       - name: Upload deb
         uses: actions/upload-artifact@v4
@@ -99,14 +106,14 @@ jobs:
         run: |
           $env:VCPKG_ROOT = "C:\vcpkg"
           $env:VCPKG_DEFAULT_TRIPLET = "x64-windows-static"
-          $env:VCPKG_INSTALLED_DIR = Join-Path $env:VCPKG_ROOT "installed"
+          $env:VCPKG_INSTALLED_DIR = Join-Path $pwd "vcpkg_installed"
 
           if (-not (Test-Path $env:VCPKG_ROOT)) {
             git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
           }
 
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-install-root="$env:VCPKG_INSTALLED_DIR"
 
           $tripletRoot = Join-Path $env:VCPKG_INSTALLED_DIR $env:VCPKG_DEFAULT_TRIPLET
           $env:TURBOJPEG_SOURCE = "explicit"
@@ -131,3 +138,39 @@ jobs:
           path: target/x86_64-pc-windows-msvc/release/one-kvm.exe
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    runs-on: ubuntu-22.04
+    needs: [deb, windows]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        run: |
+          if [ -z "${{ inputs.release_tag }}" ]; then
+            echo "release_tag is required when publish_release is true"
+            exit 1
+          fi
+
+      - name: Download deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: one-kvm-deb
+          path: release-artifacts/deb
+
+      - name: Download exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: one-kvm-windows-exe
+          path: release-artifacts/windows
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          generate_release_notes: true
+          files: |
+            release-artifacts/deb/*.deb
+            release-artifacts/windows/one-kvm.exe
