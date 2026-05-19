@@ -112,12 +112,13 @@ const configStore = useConfigStore()
 const authStore = useAuthStore()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
+const msdAvailable = computed(() => systemStore.platform?.msd.available ?? systemStore.capabilities?.msd.available ?? false)
 
-const activeSection = ref('appearance')
+const activeSection = ref<SettingsSectionId>('appearance')
 const mobileMenuOpen = ref(false)
 const loading = ref(false)
 const saved = ref(false)
-const SETTINGS_SECTION_IDS = new Set([
+const SETTINGS_SECTION_IDS = [
   'appearance',
   'account',
   'network',
@@ -131,7 +132,9 @@ const SETTINGS_SECTION_IDS = new Set([
   'ext-rtsp',
   'ext-remote-access',
   'about',
-])
+] as const
+type SettingsSectionId = typeof SETTINGS_SECTION_IDS[number]
+const SETTINGS_SECTION_ID_SET = new Set<string>(SETTINGS_SECTION_IDS)
 
 const navGroups = computed(() => [
   {
@@ -147,7 +150,7 @@ const navGroups = computed(() => [
     items: [
       { id: 'video', label: t('settings.video'), icon: Monitor, status: config.value.video_device ? t('settings.configured') : null },
       { id: 'hid', label: t('settings.hid'), icon: Keyboard, status: config.value.hid_backend.toUpperCase() },
-      ...(config.value.msd_enabled ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
+      ...(msdAvailable.value ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
     ]
@@ -196,20 +199,85 @@ function sectionSubtitleKey(id: string): string {
   }
 }
 
-function selectSection(id: string) {
-  activeSection.value = id
-  mobileMenuOpen.value = false
+function isSettingsSectionId(value: string): value is SettingsSectionId {
+  return SETTINGS_SECTION_ID_SET.has(value)
 }
 
-function normalizeSettingsSection(value: unknown): string | null {
+function selectSection(id: string) {
+  if (!isSettingsSectionId(id)) return
+  activeSection.value = id
+  mobileMenuOpen.value = false
+  void loadSectionData(id)
+}
+
+function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
-  return SETTINGS_SECTION_IDS.has(value) ? value : null
+  return isSettingsSectionId(value) ? value : null
 }
 
 function ensureVisibleSection() {
-  if (!SETTINGS_SECTION_IDS.has(activeSection.value)) {
+  if (!SETTINGS_SECTION_ID_SET.has(activeSection.value)) {
     activeSection.value = 'appearance'
+  }
+}
+
+async function loadSectionData(section: SettingsSectionId) {
+  switch (section) {
+    case 'appearance':
+      return
+    case 'account':
+      await loadAuthConfig()
+      return
+    case 'network':
+      await Promise.all([
+        loadWebServerConfig(),
+        loadRedfishConfig(),
+      ])
+      return
+    case 'video':
+      await Promise.all([
+        loadConfig(),
+        loadDevices(),
+        loadBackends(),
+      ])
+      return
+    case 'hid':
+    case 'msd':
+      await Promise.all([
+        loadConfig(),
+        loadDevices(),
+      ])
+      return
+    case 'atx':
+      await Promise.all([
+        loadConfig(),
+        loadAtxConfig(),
+        loadAtxDevices(),
+      ])
+      return
+    case 'environment':
+      await fetchUsbDevices()
+      return
+    case 'ext-ttyd':
+    case 'ext-remote-access':
+      await loadExtensions()
+      return
+    case 'ext-rustdesk':
+      await Promise.all([
+        loadRustdeskConfig(),
+        loadRustdeskPassword(),
+      ])
+      return
+    case 'ext-rtsp':
+      await loadRtspConfig()
+      return
+    case 'about':
+      await Promise.all([
+        loadUpdateOverview(),
+        refreshUpdateStatus(),
+      ])
+      return
   }
 }
 
@@ -643,8 +711,7 @@ async function runOtgSelfCheck() {
   otgSelfCheckError.value = ''
   try {
     otgSelfCheckResult.value = await hidApi.otgSelfCheck()
-  } catch (e) {
-    console.error('Failed to run OTG self-check:', e)
+  } catch {
     otgSelfCheckError.value = t('settings.otgSelfCheck.failed')
   } finally {
     otgSelfCheckLoading.value = false
@@ -701,8 +768,7 @@ async function runVideoEncoderSelfCheck() {
   videoEncoderSelfCheckError.value = ''
   try {
     videoEncoderSelfCheckResult.value = await streamApi.encoderSelfCheck()
-  } catch (e) {
-    console.error('Failed to run encoder self-check:', e)
+  } catch {
     videoEncoderSelfCheckError.value = t('settings.encoderSelfCheck.failed')
   } finally {
     videoEncoderSelfCheckLoading.value = false
@@ -1194,11 +1260,10 @@ async function saveConfig() {
       })
     }
 
-    await loadConfig()
+    await loadSectionData(activeSection.value)
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch (e) {
-    console.error('Failed to save config:', e)
+  } catch {
   } finally {
     loading.value = false
   }
@@ -1251,16 +1316,14 @@ async function loadConfig() {
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
     }
 
-  } catch (e) {
-    console.error('Failed to load config:', e)
+  } catch {
   }
 }
 
 async function loadDevices() {
   try {
     devices.value = await configApi.listDevices()
-  } catch (e) {
-    console.error('Failed to load devices:', e)
+  } catch {
   }
 }
 
@@ -1268,8 +1331,7 @@ async function loadBackends() {
   try {
     const result = await streamApi.getCodecs()
     availableBackends.value = result.backends || []
-  } catch (e) {
-    console.error('Failed to load encoder backends:', e)
+  } catch {
   }
 }
 
@@ -1277,8 +1339,7 @@ async function loadAuthConfig() {
   authConfigLoading.value = true
   try {
     authConfig.value = await configStore.refreshAuth()
-  } catch (e) {
-    console.error('Failed to load auth config:', e)
+  } catch {
   } finally {
     authConfigLoading.value = false
   }
@@ -1290,8 +1351,7 @@ async function saveAuthConfig() {
     authConfig.value = await configStore.updateAuth({
       single_user_allow_multiple_sessions: authConfig.value.single_user_allow_multiple_sessions,
     })
-  } catch (e) {
-    console.error('Failed to save auth config:', e)
+  } catch {
   } finally {
     authConfigLoading.value = false
   }
@@ -1317,8 +1377,7 @@ async function loadExtensions() {
         virtual_ip: easytier.virtual_ip || '',
       }
     }
-  } catch (e) {
-    console.error('Failed to load extensions:', e)
+  } catch {
   } finally {
     extensionsLoading.value = false
   }
@@ -1330,8 +1389,7 @@ async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   try {
     await extensionsApi.start(id)
     await loadExtensions()
-  } catch (e) {
-    console.error(`Failed to start ${id}:`, e)
+  } catch {
   }
 }
 
@@ -1339,8 +1397,7 @@ async function stopExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   try {
     await extensionsApi.stop(id)
     await loadExtensions()
-  } catch (e) {
-    console.error(`Failed to stop ${id}:`, e)
+  } catch {
   }
 }
 
@@ -1348,8 +1405,7 @@ async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
   try {
     const result = await extensionsApi.logs(id, 100)
     extensionLogs.value[id] = result.logs
-  } catch (e) {
-    console.error(`Failed to load ${id} logs:`, e)
+  } catch {
   }
 }
 
@@ -1368,8 +1424,7 @@ async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
     await loadExtensions()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch (e) {
-    console.error(`Failed to save ${id} config:`, e)
+  } catch {
   } finally {
     loading.value = false
   }
@@ -1435,16 +1490,14 @@ async function loadAtxConfig() {
     clearAtxSerialDeviceConflicts()
     normalizeAtxRelayChannels()
     syncSharedAtxSerialBaudRate()
-  } catch (e) {
-    console.error('Failed to load ATX config:', e)
+  } catch {
   }
 }
 
 async function loadAtxDevices() {
   try {
     atxDevices.value = await atxConfigApi.listDevices()
-  } catch (e) {
-    console.error('Failed to load ATX devices:', e)
+  } catch {
   }
 }
 
@@ -1482,8 +1535,7 @@ async function saveAtxConfig() {
     })
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch (e) {
-    console.error('Failed to save ATX config:', e)
+  } catch {
   } finally {
     loading.value = false
   }
@@ -1577,8 +1629,7 @@ async function loadRustdeskConfig() {
       relay_server: config.relay_server || '',
       relay_key: '',
     }
-  } catch (e) {
-    console.error('Failed to load RustDesk config:', e)
+  } catch {
   } finally {
     rustdeskLoading.value = false
   }
@@ -1587,8 +1638,7 @@ async function loadRustdeskConfig() {
 async function loadRustdeskPassword() {
   try {
     rustdeskPassword.value = await configStore.refreshRustdeskPassword()
-  } catch (e) {
-    console.error('Failed to load RustDesk password:', e)
+  } catch {
   }
 }
 
@@ -1676,8 +1726,7 @@ async function loadWebServerConfig() {
     const config = await configStore.refreshWeb()
     webServerConfig.value = config
     applyBindStateFromConfig(config)
-  } catch (e) {
-    console.error('Failed to load web server config:', e)
+  } catch {
   }
 }
 
@@ -1685,8 +1734,7 @@ async function loadRedfishConfig() {
   try {
     const data = await redfishConfigApi.get()
     redfishEnabled.value = data.enabled
-  } catch (e) {
-    console.error('Failed to load redfish config:', e)
+  } catch {
   }
 }
 
@@ -1698,8 +1746,7 @@ async function saveRedfishConfig() {
     })
     redfishEnabled.value = data.enabled
     await triggerAutoRestart()
-  } catch (e) {
-    console.error('Failed to save redfish config:', e)
+  } catch {
   } finally {
     redfishSaving.value = false
   }
@@ -1718,8 +1765,7 @@ async function saveWebServerConfig() {
     webServerConfig.value = updated
     applyBindStateFromConfig(updated)
     await triggerAutoRestart()
-  } catch (e) {
-    console.error('Failed to save web server config:', e)
+  } catch {
   } finally {
     webServerLoading.value = false
   }
@@ -1737,8 +1783,7 @@ async function saveCertificate() {
     sslCertPem.value = ''
     sslKeyPem.value = ''
     await triggerAutoRestart()
-  } catch (e) {
-    console.error('Failed to save certificate:', e)
+  } catch {
   } finally {
     certSaving.value = false
   }
@@ -1750,8 +1795,7 @@ async function clearCertificate() {
     const updated = await configStore.updateWeb({ clear_custom_cert: true })
     webServerConfig.value = updated
     await triggerAutoRestart()
-  } catch (e) {
-    console.error('Failed to clear certificate:', e)
+  } catch {
   } finally {
     certClearing.value = false
   }
@@ -1770,8 +1814,7 @@ async function restartServer() {
       const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
       window.location.href = `${protocol}://${host}:${port}`
     }, 3000)
-  } catch (e) {
-    console.error('Failed to restart server:', e)
+  } catch {
     restarting.value = false
   }
 }
@@ -1837,8 +1880,7 @@ async function triggerAutoRestart() {
         autoRestarting.value = false
       }
     }
-  } catch (e) {
-    console.error('Auto restart failed:', e)
+  } catch {
     autoRestartFailed.value = true
     autoRestarting.value = false
   }
@@ -1849,7 +1891,11 @@ async function loadUpdateOverview() {
   try {
     updateOverview.value = await updateApi.overview(updateChannel.value)
   } catch (e) {
-    console.error('Failed to load update overview:', e)
+    const message = e instanceof Error ? e.message : t('settings.updateOverviewLoadFailed')
+    toast.error(t('settings.updateOverviewLoadFailed'), {
+      description: message,
+      duration: 4000,
+    })
   } finally {
     updateLoading.value = false
   }
@@ -1865,8 +1911,7 @@ async function refreshUpdateStatus() {
         window.location.reload()
       }
     }
-  } catch (e) {
-    console.error('Failed to refresh update status:', e)
+  } catch {
     if (updateSawRestarting.value) {
       updateSawRequestFailure.value = true
     }
@@ -1902,8 +1947,7 @@ async function startOnlineUpgrade() {
     await updateApi.upgrade({ channel: updateChannel.value })
     await refreshUpdateStatus()
     startUpdatePolling()
-  } catch (e) {
-    console.error('Failed to start upgrade:', e)
+  } catch {
   }
 }
 
@@ -1961,8 +2005,7 @@ async function saveRustdeskConfig() {
     rustdeskLocalConfig.value.relay_key = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch (e) {
-    console.error('Failed to save RustDesk config:', e)
+  } catch {
   } finally {
     loading.value = false
   }
@@ -1975,8 +2018,7 @@ async function regenerateRustdeskId() {
     await configStore.regenerateRustdeskId()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
-  } catch (e) {
-    console.error('Failed to regenerate RustDesk ID:', e)
+  } catch {
   } finally {
     rustdeskLoading.value = false
   }
@@ -1989,8 +2031,7 @@ async function regenerateRustdeskPassword() {
     await configStore.regenerateRustdeskPassword()
     await loadRustdeskConfig()
     await loadRustdeskPassword()
-  } catch (e) {
-    console.error('Failed to regenerate RustDesk password:', e)
+  } catch {
   } finally {
     rustdeskLoading.value = false
   }
@@ -2004,8 +2045,7 @@ async function startRustdesk() {
     await configStore.updateRustdesk({ enabled: true })
     rustdeskLocalConfig.value.enabled = true
     await loadRustdeskConfig()
-  } catch (e) {
-    console.error('Failed to start RustDesk:', e)
+  } catch {
   } finally {
     rustdeskLoading.value = false
   }
@@ -2017,8 +2057,7 @@ async function stopRustdesk() {
     await configStore.updateRustdesk({ enabled: false })
     rustdeskLocalConfig.value.enabled = false
     await loadRustdeskConfig()
-  } catch (e) {
-    console.error('Failed to stop RustDesk:', e)
+  } catch {
   } finally {
     rustdeskLoading.value = false
   }
@@ -2089,8 +2128,7 @@ async function loadRtspConfig() {
       username: status.config.username || '',
       password: '',
     }
-  } catch (e) {
-    console.error('Failed to load RTSP config:', e)
+  } catch {
   } finally {
     rtspLoading.value = false
   }
@@ -2120,8 +2158,7 @@ async function saveRtspConfig() {
     rtspLocalConfig.value.password = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch (e) {
-    console.error('Failed to save RTSP config:', e)
+  } catch {
   } finally {
     loading.value = false
   }
@@ -2133,8 +2170,7 @@ async function startRtsp() {
     await configStore.updateRtsp({ enabled: true })
     rtspLocalConfig.value.enabled = true
     await loadRtspConfig()
-  } catch (e) {
-    console.error('Failed to start RTSP:', e)
+  } catch {
   } finally {
     rtspLoading.value = false
   }
@@ -2146,8 +2182,7 @@ async function stopRtsp() {
     await configStore.updateRtsp({ enabled: false })
     rtspLocalConfig.value.enabled = false
     await loadRtspConfig()
-  } catch (e) {
-    console.error('Failed to stop RTSP:', e)
+  } catch {
   } finally {
     rtspLoading.value = false
   }
@@ -2182,26 +2217,15 @@ onMounted(async () => {
     theme.value = storedTheme
   }
 
-  await Promise.all([
-    systemStore.fetchSystemInfo(),
-    loadConfig(),
-    loadDevices(),
-    loadBackends(),
-    loadAuthConfig(),
-    loadExtensions(),
-    loadAtxConfig(),
-    loadAtxDevices(),
-    loadRustdeskConfig(),
-    loadRustdeskPassword(),
-    loadRtspConfig(),
-    loadWebServerConfig(),
-    loadRedfishConfig(),
-    loadUpdateOverview(),
-    refreshUpdateStatus(),
-    fetchUsbDevices(),
-  ])
+  const initialSection = normalizeSettingsSection(route.query.tab)
+  if (initialSection) {
+    activeSection.value = initialSection
+  }
+
+  await systemStore.fetchSystemInfo()
   ensureVisibleSection()
   usernameInput.value = authStore.user || ''
+  await loadSectionData(activeSection.value)
 
   if (updateRunning.value) {
     startUpdatePolling()
@@ -2209,7 +2233,9 @@ onMounted(async () => {
 })
 
 watch(updateChannel, async () => {
-  await loadUpdateOverview()
+  if (activeSection.value === 'about') {
+    await loadUpdateOverview()
+  }
 })
 
 watch(() => config.value.hid_backend, () => {
@@ -2222,7 +2248,7 @@ watch(() => route.query.tab, (tab) => {
   if (section && activeSection.value !== section) {
     selectSection(section)
   }
-}, { immediate: true })
+})
 
 watch(isWindows, () => {
   ensureVisibleSection()
@@ -2288,7 +2314,7 @@ watch(isWindows, () => {
                 type="button"
                 v-for="item in group.items"
                 :key="item.id"
-                @click="activeSection = item.id"
+                @click="selectSection(item.id)"
                 :class="[
                   'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors',
                   activeSection === item.id

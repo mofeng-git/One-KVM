@@ -622,6 +622,7 @@ export default {
     updateStatusIdle: 'Idle',
     releaseNotes: 'Release Notes',
     noUpdates: 'No new version available for current channel',
+    updateOverviewLoadFailed: 'Failed to load update information',
     startUpgrade: 'Start Upgrade',
     updatePhaseIdle: 'Idle',
     updatePhaseChecking: 'Checking',

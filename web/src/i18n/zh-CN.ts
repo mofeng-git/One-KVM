@@ -621,6 +621,7 @@ export default {
     updateStatusIdle: '空闲',
     releaseNotes: '更新说明',
     noUpdates: '当前通道暂无可升级新版本',
+    updateOverviewLoadFailed: '获取版本更新信息失败',
     startUpgrade: '开始升级',
     updatePhaseIdle: '空闲',
     updatePhaseChecking: '检查中',

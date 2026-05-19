@@ -160,7 +160,11 @@ export interface UpdateStatusResponse {
 
 export const updateApi = {
   overview: (channel: UpdateChannel = 'stable') =>
-    request<UpdateOverviewResponse>(`/update/overview?channel=${encodeURIComponent(channel)}`),
+    request<UpdateOverviewResponse>(
+      `/update/overview?channel=${encodeURIComponent(channel)}`,
+      {},
+      { toastOnError: false },
+    ),
 
   upgrade: (payload: { channel?: UpdateChannel; target_version?: string }) =>
     request<{ success: boolean; message?: string }>('/update/upgrade', {
