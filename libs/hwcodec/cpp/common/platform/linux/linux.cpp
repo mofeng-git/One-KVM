@@ -122,12 +122,12 @@ int linux_support_v4l2m2m() {
     if (!file.is_open()) {
       return false;
     }
-    std::getline(file, *out);
+    std::getline(file, *out, '\0');
     return !out->empty();
   };
 
-  auto allow_video0_probe = []() -> bool {
-    const char *env = std::getenv("ONE_KVM_V4L2M2M_ALLOW_VIDEO0");
+  auto v4l2m2m_allowed = []() -> bool {
+    const char *env = std::getenv("ONE_KVM_V4L2M2M_ALLOW");
     if (env == nullptr) {
       return false;
     }
@@ -137,29 +137,89 @@ int linux_support_v4l2m2m() {
     return std::strcmp(env, "0") != 0;
   };
 
-  auto is_amlogic_vdec = [&]() -> bool {
-    std::string name;
-    std::string modalias;
-    if (read_text_file("/sys/class/video4linux/video0/name", &name)) {
-      const std::string lowered = to_lower(name);
-      if (lowered.find("meson") != std::string::npos ||
-          lowered.find("vdec") != std::string::npos ||
-          lowered.find("decoder") != std::string::npos ||
-          lowered.find("video-decoder") != std::string::npos) {
-        return true;
-      }
-    }
-    if (read_text_file("/sys/class/video4linux/video0/device/modalias", &modalias)) {
-      const std::string lowered = to_lower(modalias);
-      if (lowered.find("amlogic") != std::string::npos ||
-          lowered.find("meson") != std::string::npos ||
-          lowered.find("gxl-vdec") != std::string::npos ||
-          lowered.find("gx-vdec") != std::string::npos) {
+  auto contains_any = [](const std::string &value, const char *const *needles, size_t len) -> bool {
+    for (size_t i = 0; i < len; i++) {
+      if (value.find(needles[i]) != std::string::npos) {
         return true;
       }
     }
     return false;
   };
+
+  auto is_amlogic_platform = [&]() -> bool {
+    const char *platform_hints[] = {
+      "amlogic",
+      "meson",
+      "gxl",
+      "gxbb",
+      "gxm",
+      "g12a",
+      "g12b",
+      "sm1",
+    };
+
+    const char *platform_files[] = {
+      "/proc/device-tree/compatible",
+      "/proc/device-tree/model",
+      "/sys/firmware/devicetree/base/compatible",
+      "/sys/firmware/devicetree/base/model",
+    };
+
+    for (size_t i = 0; i < sizeof(platform_files) / sizeof(platform_files[0]); i++) {
+      std::string value;
+      if (read_text_file(platform_files[i], &value) &&
+          contains_any(to_lower(value), platform_hints,
+                       sizeof(platform_hints) / sizeof(platform_hints[0]))) {
+        return true;
+      }
+    }
+
+    const char *video_nodes[] = {
+      "video0",
+      "video1",
+      "video2",
+      "video10",
+      "video11",
+      "video32",
+    };
+    const char *vdec_hints[] = {
+      "meson",
+      "amlogic",
+      "vdec",
+      "decoder",
+      "video-decoder",
+      "gxl-vdec",
+      "gx-vdec",
+    };
+
+    for (size_t i = 0; i < sizeof(video_nodes) / sizeof(video_nodes[0]); i++) {
+      std::string name;
+      std::string modalias;
+      const std::string base = std::string("/sys/class/video4linux/") + video_nodes[i];
+      if (read_text_file((base + "/name").c_str(), &name) &&
+          contains_any(to_lower(name), vdec_hints, sizeof(vdec_hints) / sizeof(vdec_hints[0]))) {
+        return true;
+      }
+      if (read_text_file((base + "/device/modalias").c_str(), &modalias) &&
+          contains_any(to_lower(modalias), vdec_hints,
+                       sizeof(vdec_hints) / sizeof(vdec_hints[0]))) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const bool amlogic_platform = is_amlogic_platform();
+  if (amlogic_platform && !v4l2m2m_allowed()) {
+    LOG_WARN(std::string(
+        "V4L2 M2M: skipped probe on Amlogic platform; set ONE_KVM_V4L2M2M_ALLOW=1 to enable"));
+    return -1;
+  }
+
+  if (amlogic_platform) {
+    LOG_WARN(std::string("V4L2 M2M: ONE_KVM_V4L2M2M_ALLOW is set; probing Amlogic video nodes"));
+  }
 
   // Check common V4L2 M2M device paths used by various ARM SoCs
   // /dev/video10 - Standard on many SoCs
@@ -179,13 +239,6 @@ int linux_support_v4l2m2m() {
 
   for (size_t i = 0; i < sizeof(m2m_devices) / sizeof(m2m_devices[0]); i++) {
     if (access(m2m_devices[i], F_OK) == 0) {
-      if (std::strcmp(m2m_devices[i], "/dev/video0") == 0) {
-        if (!allow_video0_probe() && is_amlogic_vdec()) {
-          LOG_TRACE(std::string("V4L2 M2M: Skipping /dev/video0 (Amlogic vdec)"));
-          continue;
-        }
-      }
-
       // Device exists, check if it's an M2M device by trying to open it
       int fd = open(m2m_devices[i], O_RDWR | O_NONBLOCK);
       if (fd >= 0) {
