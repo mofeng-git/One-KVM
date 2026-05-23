@@ -439,8 +439,11 @@ impl RendezvousMediator {
             }
             Some(rendezvous_message::Union::PunchHole(ph)) => {
                 let config = self.config.read().clone();
-                let effective_relay_server =
-                    select_relay_server(config.relay_server.as_deref(), &ph.relay_server);
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &ph.relay_server,
+                    &config.rendezvous_server,
+                );
 
                 let peer_addr = if !ph.socket_addr.is_empty() {
                     AddrMangle::decode(&ph.socket_addr)
@@ -514,8 +517,11 @@ impl RendezvousMediator {
             }
             Some(rendezvous_message::Union::RequestRelay(rr)) => {
                 let config = self.config.read().clone();
-                let effective_relay_server =
-                    select_relay_server(config.relay_server.as_deref(), &rr.relay_server);
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &rr.relay_server,
+                    &config.rendezvous_server,
+                );
 
                 info!(
                     "Received RequestRelay: relay_server={}, effective_relay_server={}, uuid={}, secure={}",
@@ -542,9 +548,12 @@ impl RendezvousMediator {
             }
             Some(rendezvous_message::Union::FetchLocalAddr(fla)) => {
                 let config = self.config.read().clone();
-                let effective_relay_server =
-                    select_relay_server(config.relay_server.as_deref(), &fla.relay_server)
-                        .unwrap_or_default();
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &fla.relay_server,
+                    &config.rendezvous_server,
+                )
+                .unwrap_or_default();
 
                 let peer_addr = AddrMangle::decode(&fla.socket_addr);
                 info!(
@@ -613,10 +622,18 @@ fn normalize_relay_server(server: &str) -> Option<String> {
     }
 }
 
-fn select_relay_server(local_relay: Option<&str>, server_relay: &str) -> Option<String> {
+fn select_relay_server(
+    local_relay: Option<&str>,
+    server_relay: &str,
+    rendezvous_server: &str,
+) -> Option<String> {
     local_relay
         .and_then(normalize_relay_server)
         .or_else(|| normalize_relay_server(server_relay))
+        .or_else(|| {
+            let host = rendezvous_server.trim().split(':').next().unwrap_or("");
+            normalize_relay_server(host)
+        })
 }
 
 impl AddrMangle {
@@ -799,25 +816,38 @@ mod tests {
     #[test]
     fn test_select_relay_server_prefers_local() {
         assert_eq!(
-            select_relay_server(Some("local.example.com:21117"), "server.example.com:21117"),
+            select_relay_server(
+                Some("local.example.com:21117"),
+                "server.example.com:21117",
+                "hbbs.example.com:21116"
+            ),
             Some("local.example.com:21117".to_string())
         );
 
         assert_eq!(
-            select_relay_server(Some("local.example.com"), "server.example.com:21117"),
+            select_relay_server(
+                Some("local.example.com"),
+                "server.example.com:21117",
+                "hbbs.example.com:21116"
+            ),
             Some("local.example.com:21117".to_string())
         );
 
         assert_eq!(
-            select_relay_server(Some("   "), "server.example.com"),
+            select_relay_server(Some("   "), "server.example.com", "hbbs.example.com:21116"),
             Some("server.example.com:21117".to_string())
         );
 
         assert_eq!(
-            select_relay_server(None, "server.example.com:21117"),
+            select_relay_server(None, "server.example.com:21117", "hbbs.example.com:21116"),
             Some("server.example.com:21117".to_string())
         );
 
-        assert_eq!(select_relay_server(None, ""), None);
+        assert_eq!(
+            select_relay_server(None, "", "hbbs.example.com:21116"),
+            Some("hbbs.example.com:21117".to_string())
+        );
+
+        assert_eq!(select_relay_server(None, "", ""), None);
     }
 }

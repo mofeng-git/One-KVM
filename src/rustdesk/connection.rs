@@ -27,7 +27,7 @@ use super::bytes_codec::{read_frame, write_frame, write_frame_buffered};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_event, convert_mouse_event, mouse_type};
+use super::hid_adapter::{convert_key_events, convert_mouse_event, mouse_type};
 use super::protocol::{
     decode_message, login_response, message, misc, Clipboard, ControlKey, DisplayInfo, Hash,
     HbbMessage, IdPk, KeyEvent, LoginRequest, LoginResponse, Misc, MouseEvent, OptionMessage,
@@ -1331,18 +1331,21 @@ impl Connection {
             }
         }
 
-        // Convert RustDesk key event to One-KVM key event
-        if let Some(kb_event) = convert_key_event(ke) {
-            debug!(
-                "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
-                kb_event.key.to_hid_usage(),
-                kb_event.event_type,
-                kb_event.modifiers.to_hid_byte()
-            );
-            // Send to HID controller if available
+        // Convert RustDesk key event to One-KVM key events
+        let kb_events = convert_key_events(ke);
+        if !kb_events.is_empty() {
             if let Some(ref hid) = self.hid {
-                if let Err(e) = hid.send_keyboard(kb_event).await {
-                    warn!("Failed to send keyboard event: {}", e);
+                for kb_event in kb_events {
+                    debug!(
+                        "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
+                        kb_event.key.to_hid_usage(),
+                        kb_event.event_type,
+                        kb_event.modifiers.to_hid_byte()
+                    );
+
+                    if let Err(e) = hid.send_keyboard(kb_event).await {
+                        warn!("Failed to send keyboard event: {}", e);
+                    }
                 }
             } else {
                 debug!("HID controller not available, skipping key event");
@@ -1381,12 +1384,7 @@ impl Connection {
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
         // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events = convert_mouse_event(
-            me,
-            self.screen_width,
-            self.screen_height,
-            self.relative_mouse_active,
-        );
+        let mouse_events = convert_mouse_event(me, self.screen_width, self.screen_height);
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {

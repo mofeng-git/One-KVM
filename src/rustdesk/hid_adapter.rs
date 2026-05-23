@@ -1,5 +1,5 @@
 use super::protocol::hbb::message::key_event as ke_union;
-use super::protocol::{ControlKey, KeyEvent, MouseEvent};
+use super::protocol::{ControlKey, KeyEvent, KeyboardMode, MouseEvent};
 use crate::hid::{
     CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton,
     MouseEvent as OneKvmMouseEvent, MouseEventType,
@@ -27,13 +27,11 @@ pub fn convert_mouse_event(
     event: &MouseEvent,
     screen_width: u32,
     screen_height: u32,
-    relative_mode: bool,
 ) -> Vec<OneKvmMouseEvent> {
     let mut events = Vec::new();
 
     let event_type = event.mask & 0x07;
     let button_id = event.mask >> 3;
-    let include_abs_move = !relative_mode;
 
     match event_type {
         mouse_type::MOVE => {
@@ -61,20 +59,6 @@ pub fn convert_mouse_event(
             });
         }
         mouse_type::DOWN => {
-            if include_abs_move {
-                let x = event.x.max(0) as u32;
-                let y = event.y.max(0) as u32;
-                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
-                events.push(OneKvmMouseEvent {
-                    event_type: MouseEventType::MoveAbs,
-                    x: abs_x,
-                    y: abs_y,
-                    button: None,
-                    scroll: 0,
-                });
-            }
-
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Down,
@@ -86,20 +70,6 @@ pub fn convert_mouse_event(
             }
         }
         mouse_type::UP => {
-            if include_abs_move {
-                let x = event.x.max(0) as u32;
-                let y = event.y.max(0) as u32;
-                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
-                events.push(OneKvmMouseEvent {
-                    event_type: MouseEventType::MoveAbs,
-                    x: abs_x,
-                    y: abs_y,
-                    button: None,
-                    scroll: 0,
-                });
-            }
-
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Up,
@@ -111,20 +81,6 @@ pub fn convert_mouse_event(
             }
         }
         mouse_type::WHEEL => {
-            if include_abs_move {
-                let x = event.x.max(0) as u32;
-                let y = event.y.max(0) as u32;
-                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
-                events.push(OneKvmMouseEvent {
-                    event_type: MouseEventType::MoveAbs,
-                    x: abs_x,
-                    y: abs_y,
-                    button: None,
-                    scroll: 0,
-                });
-            }
-
             let scroll = if event.y > 0 { 1i8 } else { -1i8 };
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::Scroll,
@@ -134,21 +90,7 @@ pub fn convert_mouse_event(
                 scroll,
             });
         }
-        _ => {
-            if include_abs_move {
-                let x = event.x.max(0) as u32;
-                let y = event.y.max(0) as u32;
-                let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-                let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
-                events.push(OneKvmMouseEvent {
-                    event_type: MouseEventType::MoveAbs,
-                    x: abs_x,
-                    y: abs_y,
-                    button: None,
-                    scroll: 0,
-                });
-            }
-        }
+        _ => {}
     }
 
     events
@@ -163,42 +105,89 @@ fn button_id_to_button(button_id: i32) -> Option<MouseButton> {
     }
 }
 
-pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
-    let event_type = if event.down || event.press {
-        KeyEventType::Down
-    } else {
-        KeyEventType::Up
-    };
-
-    let modifiers = if is_modifier_control_key(event) {
+pub fn convert_key_events(event: &KeyEvent) -> Vec<KeyboardEvent> {
+    let base_modifiers = if is_modifier_control_key(event) {
         KeyboardModifiers::default()
     } else {
         parse_modifiers(event)
     };
 
-    if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
-        if let Some(key) = control_key_to_hid(ck.value()) {
-            let key = CanonicalKey::from_hid_usage(key)?;
-            return Some(KeyboardEvent {
-                event_type,
+    let Some(mapping) = key_event_to_hid(event, base_modifiers) else {
+        return Vec::new();
+    };
+
+    if event.press {
+        let up_modifiers = if mapping.added_shift {
+            base_modifiers
+        } else {
+            mapping.modifiers
+        };
+        vec![
+            KeyboardEvent {
+                event_type: KeyEventType::Down,
+                key: mapping.key,
+                modifiers: mapping.modifiers,
+            },
+            KeyboardEvent {
+                event_type: KeyEventType::Up,
+                key: mapping.key,
+                modifiers: up_modifiers,
+            },
+        ]
+    } else {
+        let event_type = if event.down {
+            KeyEventType::Down
+        } else {
+            KeyEventType::Up
+        };
+        vec![KeyboardEvent {
+            event_type,
+            key: mapping.key,
+            modifiers: mapping.modifiers,
+        }]
+    }
+}
+
+pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
+    convert_key_events(event).into_iter().next()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct KeyMapping {
+    key: CanonicalKey,
+    modifiers: KeyboardModifiers,
+    added_shift: bool,
+}
+
+fn key_event_to_hid(event: &KeyEvent, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    match &event.union {
+        Some(ke_union::Union::ControlKey(ck)) => {
+            let key = CanonicalKey::from_hid_usage(control_key_to_hid(ck.value())?)?;
+            Some(KeyMapping {
                 key,
                 modifiers,
-            });
+                added_shift: false,
+            })
         }
-    }
-
-    if let Some(ke_union::Union::Chr(chr)) = &event.union {
-        if let Some(key) = keycode_to_hid(*chr) {
-            let key = CanonicalKey::from_hid_usage(key)?;
-            return Some(KeyboardEvent {
-                event_type,
+        Some(ke_union::Union::Chr(chr)) => {
+            if event.mode.value() != KeyboardMode::Map.value() {
+                if let Some(mapping) = shifted_printable_char_to_hid(*chr, modifiers) {
+                    return Some(mapping);
+                }
+            }
+            let key = CanonicalKey::from_hid_usage(keycode_to_hid(*chr)?)?;
+            Some(KeyMapping {
                 key,
                 modifiers,
-            });
+                added_shift: false,
+            })
         }
+        Some(ke_union::Union::Unicode(unicode)) => {
+            let mapping = printable_char_to_hid(*unicode, modifiers)?;
+            Some(mapping)
+        }
+        _ => None,
     }
-
-    None
 }
 
 fn is_modifier_control_key(event: &KeyEvent) -> bool {
@@ -233,6 +222,96 @@ fn parse_modifiers(event: &KeyEvent) -> KeyboardModifiers {
     }
 
     modifiers
+}
+
+fn with_shift(mut modifiers: KeyboardModifiers) -> KeyboardModifiers {
+    modifiers.left_shift = true;
+    modifiers
+}
+
+fn shifted_mapping(key: CanonicalKey, modifiers: KeyboardModifiers) -> KeyMapping {
+    let added_shift = !modifiers.left_shift && !modifiers.right_shift;
+    KeyMapping {
+        key,
+        modifiers: with_shift(modifiers),
+        added_shift,
+    }
+}
+
+fn plain_mapping(key: CanonicalKey, modifiers: KeyboardModifiers) -> KeyMapping {
+    KeyMapping {
+        key,
+        modifiers,
+        added_shift: false,
+    }
+}
+
+fn shifted_printable_char_to_hid(ch: u32, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    match ch {
+        33 => Some(shifted_mapping(CanonicalKey::Digit1, modifiers)),
+        64 => Some(shifted_mapping(CanonicalKey::Digit2, modifiers)),
+        35 => Some(shifted_mapping(CanonicalKey::Digit3, modifiers)),
+        36 => Some(shifted_mapping(CanonicalKey::Digit4, modifiers)),
+        37 => Some(shifted_mapping(CanonicalKey::Digit5, modifiers)),
+        94 => Some(shifted_mapping(CanonicalKey::Digit6, modifiers)),
+        38 => Some(shifted_mapping(CanonicalKey::Digit7, modifiers)),
+        42 => Some(shifted_mapping(CanonicalKey::Digit8, modifiers)),
+        40 => Some(shifted_mapping(CanonicalKey::Digit9, modifiers)),
+        41 => Some(shifted_mapping(CanonicalKey::Digit0, modifiers)),
+        95 => Some(shifted_mapping(CanonicalKey::Minus, modifiers)),
+        43 => Some(shifted_mapping(CanonicalKey::Equal, modifiers)),
+        123 => Some(shifted_mapping(CanonicalKey::BracketLeft, modifiers)),
+        125 => Some(shifted_mapping(CanonicalKey::BracketRight, modifiers)),
+        124 => Some(shifted_mapping(CanonicalKey::Backslash, modifiers)),
+        58 => Some(shifted_mapping(CanonicalKey::Semicolon, modifiers)),
+        34 => Some(shifted_mapping(CanonicalKey::Quote, modifiers)),
+        126 => Some(shifted_mapping(CanonicalKey::Backquote, modifiers)),
+        60 => Some(shifted_mapping(CanonicalKey::Comma, modifiers)),
+        62 => Some(shifted_mapping(CanonicalKey::Period, modifiers)),
+        63 => Some(shifted_mapping(CanonicalKey::Slash, modifiers)),
+        _ => None,
+    }
+}
+
+fn printable_char_to_hid(ch: u32, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    match ch {
+        65..=90 => Some(shifted_mapping(
+            CanonicalKey::from_hid_usage((ch - 65 + 0x04) as u8)?,
+            modifiers,
+        )),
+        97..=122 => Some(plain_mapping(
+            CanonicalKey::from_hid_usage((ch - 97 + 0x04) as u8)?,
+            modifiers,
+        )),
+        48 => Some(plain_mapping(CanonicalKey::Digit0, modifiers)),
+        49 => Some(plain_mapping(CanonicalKey::Digit1, modifiers)),
+        50 => Some(plain_mapping(CanonicalKey::Digit2, modifiers)),
+        51 => Some(plain_mapping(CanonicalKey::Digit3, modifiers)),
+        52 => Some(plain_mapping(CanonicalKey::Digit4, modifiers)),
+        53 => Some(plain_mapping(CanonicalKey::Digit5, modifiers)),
+        54 => Some(plain_mapping(CanonicalKey::Digit6, modifiers)),
+        55 => Some(plain_mapping(CanonicalKey::Digit7, modifiers)),
+        56 => Some(plain_mapping(CanonicalKey::Digit8, modifiers)),
+        57 => Some(plain_mapping(CanonicalKey::Digit9, modifiers)),
+        32 => Some(plain_mapping(CanonicalKey::Space, modifiers)),
+        13 | 10 => Some(plain_mapping(CanonicalKey::Enter, modifiers)),
+        9 => Some(plain_mapping(CanonicalKey::Tab, modifiers)),
+        27 => Some(plain_mapping(CanonicalKey::Escape, modifiers)),
+        8 => Some(plain_mapping(CanonicalKey::Backspace, modifiers)),
+        127 => Some(plain_mapping(CanonicalKey::Delete, modifiers)),
+        45 => Some(plain_mapping(CanonicalKey::Minus, modifiers)),
+        61 => Some(plain_mapping(CanonicalKey::Equal, modifiers)),
+        91 => Some(plain_mapping(CanonicalKey::BracketLeft, modifiers)),
+        93 => Some(plain_mapping(CanonicalKey::BracketRight, modifiers)),
+        92 => Some(plain_mapping(CanonicalKey::Backslash, modifiers)),
+        59 => Some(plain_mapping(CanonicalKey::Semicolon, modifiers)),
+        39 => Some(plain_mapping(CanonicalKey::Quote, modifiers)),
+        96 => Some(plain_mapping(CanonicalKey::Backquote, modifiers)),
+        44 => Some(plain_mapping(CanonicalKey::Comma, modifiers)),
+        46 => Some(plain_mapping(CanonicalKey::Period, modifiers)),
+        47 => Some(plain_mapping(CanonicalKey::Slash, modifiers)),
+        _ => shifted_printable_char_to_hid(ch, modifiers),
+    }
 }
 
 fn control_key_to_hid(key: i32) -> Option<u8> {
@@ -476,7 +555,7 @@ mod tests {
         event.y = 300;
         event.mask = mouse_type::MOVE; // Pure move event
 
-        let events = convert_mouse_event(&event, 1920, 1080, false);
+        let events = convert_mouse_event(&event, 1920, 1080);
         assert!(!events.is_empty());
         assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
     }
@@ -488,11 +567,34 @@ mod tests {
         event.y = 300;
         event.mask = (mouse_button::LEFT << 3) | mouse_type::DOWN;
 
-        let events = convert_mouse_event(&event, 1920, 1080, false);
-        assert!(events.len() >= 2);
-        assert!(events
-            .iter()
-            .any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));
+        let events = convert_mouse_event(&event, 1920, 1080);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Down);
+        assert_eq!(events[0].button, Some(MouseButton::Left));
+    }
+
+    #[test]
+    fn test_convert_mouse_button_down_does_not_move() {
+        let mut event = MouseEvent::new();
+        event.mask = (mouse_button::LEFT << 3) | mouse_type::DOWN;
+
+        let events = convert_mouse_event(&event, 1920, 1080);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Down);
+        assert_eq!(events[0].button, Some(MouseButton::Left));
+    }
+
+    #[test]
+    fn test_convert_mouse_wheel_does_not_move() {
+        let mut event = MouseEvent::new();
+        event.x = 500;
+        event.y = 1;
+        event.mask = mouse_type::WHEEL;
+
+        let events = convert_mouse_event(&event, 1920, 1080);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Scroll);
+        assert_eq!(events[0].scroll, 1);
     }
 
     #[test]
@@ -502,7 +604,7 @@ mod tests {
         event.y = 8;
         event.mask = mouse_type::MOVE_RELATIVE;
 
-        let events = convert_mouse_event(&event, 1920, 1080, true);
+        let events = convert_mouse_event(&event, 1920, 1080);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, MouseEventType::Move);
         assert_eq!(events[0].x, -12);
@@ -525,5 +627,66 @@ mod tests {
         let kb_event = result.unwrap();
         assert_eq!(kb_event.event_type, KeyEventType::Down);
         assert_eq!(kb_event.key, CanonicalKey::Enter);
+    }
+
+    #[test]
+    fn test_convert_at_press_to_shift_digit2() {
+        let mut key_event = KeyEvent::new();
+        key_event.press = true;
+        key_event.union = Some(ke_union::Union::Unicode('@' as u32));
+
+        let events = convert_key_events(&key_event);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_type, KeyEventType::Down);
+        assert_eq!(events[0].key, CanonicalKey::Digit2);
+        assert!(events[0].modifiers.left_shift);
+        assert_eq!(events[1].event_type, KeyEventType::Up);
+        assert_eq!(events[1].key, CanonicalKey::Digit2);
+        assert!(!events[1].modifiers.left_shift);
+    }
+
+    #[test]
+    fn test_convert_shifted_chr_to_shift_digit2() {
+        let mut key_event = KeyEvent::new();
+        key_event.down = true;
+        key_event.union = Some(ke_union::Union::Chr('@' as u32));
+
+        let events = convert_key_events(&key_event);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, KeyEventType::Down);
+        assert_eq!(events[0].key, CanonicalKey::Digit2);
+        assert!(events[0].modifiers.left_shift);
+    }
+
+    #[test]
+    fn test_convert_map_mode_chr_as_physical_key() {
+        use protobuf::EnumOrUnknown;
+        let mut key_event = KeyEvent::new();
+        key_event.down = true;
+        key_event.mode = EnumOrUnknown::new(KeyboardMode::Map);
+        key_event.union = Some(ke_union::Union::Chr(0x41));
+
+        let events = convert_key_events(&key_event);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, KeyEventType::Down);
+        assert_eq!(events[0].key, CanonicalKey::KeyA);
+        assert!(!events[0].modifiers.left_shift);
+    }
+
+    #[test]
+    fn test_convert_press_generates_down_and_up() {
+        use protobuf::EnumOrUnknown;
+        let mut key_event = KeyEvent::new();
+        key_event.press = true;
+        key_event.union = Some(ke_union::Union::ControlKey(EnumOrUnknown::new(
+            ControlKey::Return,
+        )));
+
+        let events = convert_key_events(&key_event);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_type, KeyEventType::Down);
+        assert_eq!(events[1].event_type, KeyEventType::Up);
+        assert_eq!(events[0].key, CanonicalKey::Enter);
+        assert_eq!(events[1].key, CanonicalKey::Enter);
     }
 }
