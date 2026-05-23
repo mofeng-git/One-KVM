@@ -14,6 +14,8 @@ import {
   atxConfigApi,
   extensionsApi,
   redfishConfigApi,
+  rtspConfigApi,
+  rustdeskConfigApi,
   systemApi,
   updateApi,
   usbApi,
@@ -295,7 +297,6 @@ const passwordSaving = ref(false)
 const passwordSaved = ref(false)
 const passwordError = ref('')
 const showPasswords = ref(false)
-
 const authConfig = ref<AuthConfig>({
   session_timeout_secs: 3600 * 24,
   single_user_allow_multiple_sessions: false,
@@ -525,8 +526,6 @@ const config = ref({
   turn_username: '',
   turn_password: '',
 })
-
-const hasTurnPassword = ref(false)
 
 type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
 type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
@@ -1206,16 +1205,12 @@ async function saveConfig() {
 
   try {
     if (activeSection.value === 'video') {
-      const turnUrl = config.value.turn_server.trim()
       await configStore.updateStream({
         encoder: config.value.encoder_backend as any,
         stun_server: config.value.stun_server.trim(),
-        turn_server: turnUrl,
+        turn_server: config.value.turn_server.trim(),
         turn_username: config.value.turn_username.trim(),
-        turn_password:
-          turnUrl === ''
-            ? ''
-            : config.value.turn_password || undefined,
+        turn_password: config.value.turn_password.trim(),
       })
       await configStore.updateVideo({
         device: config.value.video_device || undefined,
@@ -1303,10 +1298,8 @@ async function loadConfig() {
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
-      turn_password: '', // Password is never returned from server; set-only field
+      turn_password: stream.turn_password || '',
     }
-
-    hasTurnPassword.value = stream.has_turn_password || false
 
     if (hid.otg_descriptor) {
       otgVendorIdHex.value = hid.otg_descriptor.vendor_id?.toString(16).padStart(4, '0') || '1d6b'
@@ -1448,7 +1441,6 @@ function getExtStatusText(status: ExtensionStatus | undefined): string {
     case 'unavailable': return t('extensions.unavailable')
     case 'stopped': return t('extensions.stopped')
     case 'running': return t('extensions.running')
-    case 'failed': return t('extensions.failed')
     default: return t('extensions.stopped')
   }
 }
@@ -1459,7 +1451,6 @@ function getExtStatusClass(status: ExtensionStatus | undefined): string {
     case 'unavailable': return 'bg-gray-400'
     case 'stopped': return 'bg-gray-400'
     case 'running': return 'bg-green-500'
-    case 'failed': return 'bg-red-500'
     default: return 'bg-gray-400'
   }
 }
@@ -1616,19 +1607,23 @@ watch(
   },
 )
 
+function applyRustdeskStatus(status: RustDeskStatusResponse) {
+  const config = status.config
+  rustdeskConfig.value = config
+  rustdeskStatus.value = status
+  rustdeskLocalConfig.value = {
+    enabled: config.enabled,
+    rendezvous_server: config.rendezvous_server,
+    relay_server: config.relay_server || '',
+    relay_key: config.relay_key || '',
+  }
+}
+
 async function loadRustdeskConfig() {
   rustdeskLoading.value = true
   try {
     const status = await configStore.refreshRustdeskStatus()
-    const config = status.config
-    rustdeskConfig.value = config
-    rustdeskStatus.value = status
-    rustdeskLocalConfig.value = {
-      enabled: config.enabled,
-      rendezvous_server: config.rendezvous_server,
-      relay_server: config.relay_server || '',
-      relay_key: '',
-    }
+    applyRustdeskStatus(status)
   } catch {
   } finally {
     rustdeskLoading.value = false
@@ -1642,17 +1637,17 @@ async function loadRustdeskPassword() {
   }
 }
 
-function normalizeRustdeskServer(value: string, defaultPort: number): string | undefined {
+function normalizeRustdeskServer(value: string, defaultPort: number): string {
   const trimmed = value.trim()
-  if (!trimmed) return undefined
+  if (!trimmed) return ''
   if (trimmed.includes(':')) return trimmed
   return `${trimmed}:${defaultPort}`
 }
 
-/** Strip line breaks from pasted keys; empty means “do not change” on PATCH. */
-function normalizeRustdeskRelayKey(value: string): string | undefined {
+/** Strip line breaks from pasted keys. */
+function normalizeRustdeskRelayKey(value: string): string {
   const cleaned = value.replace(/\r?\n/g, '').trim()
-  return cleaned || undefined
+  return cleaned
 }
 
 function showValidationError(message: string): boolean {
@@ -2002,7 +1997,6 @@ async function saveRustdeskConfig() {
       relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
     })
     await loadRustdeskConfig()
-    rustdeskLocalConfig.value.relay_key = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch {
@@ -2042,9 +2036,8 @@ async function startRustdesk() {
 
   rustdeskLoading.value = true
   try {
-    await configStore.updateRustdesk({ enabled: true })
-    rustdeskLocalConfig.value.enabled = true
-    await loadRustdeskConfig()
+    const status = await rustdeskConfigApi.start()
+    applyRustdeskStatus(status)
   } catch {
   } finally {
     rustdeskLoading.value = false
@@ -2054,9 +2047,8 @@ async function startRustdesk() {
 async function stopRustdesk() {
   rustdeskLoading.value = true
   try {
-    await configStore.updateRustdesk({ enabled: false })
-    rustdeskLocalConfig.value.enabled = false
-    await loadRustdeskConfig()
+    const status = await rustdeskConfigApi.stop()
+    applyRustdeskStatus(status)
   } catch {
   } finally {
     rustdeskLoading.value = false
@@ -2113,21 +2105,25 @@ function getRustdeskStatusClass(status: string | null | undefined): string {
   }
 }
 
+function applyRtspStatus(status: RtspStatusResponse) {
+  rtspStatus.value = status
+  rtspLocalConfig.value = {
+    enabled: status.config.enabled,
+    bind: status.config.bind,
+    port: status.config.port,
+    path: status.config.path,
+    allow_one_client: status.config.allow_one_client,
+    codec: status.config.codec,
+    username: status.config.username || '',
+    password: status.config.password || '',
+  }
+}
+
 async function loadRtspConfig() {
   rtspLoading.value = true
   try {
     const status = await configStore.refreshRtspStatus()
-    rtspStatus.value = status
-    rtspLocalConfig.value = {
-      enabled: status.config.enabled,
-      bind: status.config.bind,
-      port: status.config.port,
-      path: status.config.path,
-      allow_one_client: status.config.allow_one_client,
-      codec: status.config.codec,
-      username: status.config.username || '',
-      password: '',
-    }
+    applyRtspStatus(status)
   } catch {
   } finally {
     rtspLoading.value = false
@@ -2148,14 +2144,10 @@ async function saveRtspConfig() {
       username: (rtspLocalConfig.value.username || '').trim(),
     }
 
-    const nextPassword = (rtspLocalConfig.value.password || '').trim()
-    if (nextPassword) {
-      update.password = nextPassword
-    }
+    update.password = (rtspLocalConfig.value.password || '').trim()
 
     await configStore.updateRtsp(update)
     await loadRtspConfig()
-    rtspLocalConfig.value.password = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch {
@@ -2167,9 +2159,8 @@ async function saveRtspConfig() {
 async function startRtsp() {
   rtspLoading.value = true
   try {
-    await configStore.updateRtsp({ enabled: true })
-    rtspLocalConfig.value.enabled = true
-    await loadRtspConfig()
+    const status = await rtspConfigApi.start()
+    applyRtspStatus(status)
   } catch {
   } finally {
     rtspLoading.value = false
@@ -2179,9 +2170,8 @@ async function startRtsp() {
 async function stopRtsp() {
   rtspLoading.value = true
   try {
-    await configStore.updateRtsp({ enabled: false })
-    rtspLocalConfig.value.enabled = false
-    await loadRtspConfig()
+    const status = await rtspConfigApi.stop()
+    applyRtspStatus(status)
   } catch {
   } finally {
     rtspLoading.value = false
@@ -2573,7 +2563,7 @@ watch(isWindows, () => {
                     <Input
                       id="turn-username"
                       v-model="config.turn_username"
-                      :disabled="!config.turn_server"
+                      :disabled="!config.stun_server && !config.turn_server"
                     />
                   </div>
                   <div class="space-y-2">
@@ -2583,8 +2573,7 @@ watch(isWindows, () => {
                         id="turn-password"
                         v-model="config.turn_password"
                         :type="showPasswords ? 'text' : 'password'"
-                        :disabled="!config.turn_server"
-                        :placeholder="hasTurnPassword ? '••••••••' : ''"
+                        :disabled="!config.stun_server && !config.turn_server"
                       />
                       <button
                         type="button"
@@ -2596,7 +2585,6 @@ watch(isWindows, () => {
                         <EyeOff v-else class="h-4 w-4" />
                       </button>
                     </div>
-                    <p v-if="hasTurnPassword && !config.turn_password" class="text-xs text-muted-foreground">{{ t('settings.turnPasswordConfigured') }}</p>
                   </div>
                 </div>
                 <p class="text-xs text-muted-foreground">{{ t('settings.turnCredentialsHint') }}</p>
@@ -4007,10 +3995,10 @@ watch(isWindows, () => {
                   </div>
                   <div class="flex items-center gap-2">
                     <Button
-                      v-if="rtspStatus?.service_status !== 'running'"
+                      v-if="rtspStatus?.service_status !== 'running' && rtspStatus?.service_status !== 'starting'"
                       size="sm"
                       @click="startRtsp"
-                      :disabled="rtspLoading"
+                      :disabled="rtspLoading || rtspStatus?.service_status === 'starting'"
                     >
                       <Play class="h-4 w-4 mr-1" />
                       {{ t('extensions.start') }}
@@ -4032,27 +4020,27 @@ watch(isWindows, () => {
                 <div class="grid gap-4">
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rtspLocalConfig.enabled" />
+                    <Switch v-model="rtspLocalConfig.enabled" :disabled="rtspStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
-                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" />
+                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="rtspStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
-                    <Input v-model.number="rtspLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" />
+                    <Input v-model.number="rtspLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="rtspStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.path') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <Input v-model="rtspLocalConfig.path" :placeholder="t('extensions.rtsp.pathPlaceholder')" />
+                      <Input v-model="rtspLocalConfig.path" :placeholder="t('extensions.rtsp.pathPlaceholder')" :disabled="rtspStatus?.service_status === 'running'" />
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.pathHint') }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.codec') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <select v-model="rtspLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                      <select v-model="rtspLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="rtspStatus?.service_status === 'running'">
                         <option value="h264">H.264</option>
                         <option value="h265">H.265</option>
                       </select>
@@ -4061,21 +4049,32 @@ watch(isWindows, () => {
                   </div>
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.rtsp.allowOneClient') }}</Label>
-                    <Switch v-model="rtspLocalConfig.allow_one_client" />
+                    <Switch v-model="rtspLocalConfig.allow_one_client" :disabled="rtspStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.username') }}</Label>
-                    <Input v-model="rtspLocalConfig.username" class="sm:col-span-3" :placeholder="t('extensions.rtsp.usernamePlaceholder')" />
+                    <Input v-model="rtspLocalConfig.username" class="sm:col-span-3" :placeholder="t('extensions.rtsp.usernamePlaceholder')" :disabled="rtspStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.password') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rtspLocalConfig.password"
-                        type="password"
-                        :placeholder="rtspStatus?.config?.has_password ? t('extensions.rtsp.passwordSet') : t('extensions.rtsp.passwordPlaceholder')"
-                      />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.passwordHint') }}</p>
+                      <div class="relative">
+                        <Input
+                          v-model="rtspLocalConfig.password"
+                          :type="showPasswords ? 'text' : 'password'"
+                          :placeholder="t('extensions.rtsp.passwordPlaceholder')"
+                          :disabled="rtspStatus?.service_status === 'running'"
+                        />
+                        <button
+                          type="button"
+                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
+                          @click="showPasswords = !showPasswords"
+                        >
+                          <Eye v-if="!showPasswords" class="h-4 w-4" />
+                          <EyeOff v-else class="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4089,7 +4088,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
             <div class="flex justify-end">
-              <Button :disabled="loading || rtspLoading" @click="saveRtspConfig">
+              <Button :disabled="loading || rtspLoading || rtspStatus?.service_status === 'running'" @click="saveRtspConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
@@ -4154,7 +4153,7 @@ watch(isWindows, () => {
                 <div class="grid gap-4">
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rustdeskLocalConfig.enabled" />
+                    <Switch v-model="rustdeskLocalConfig.enabled" :disabled="rustdeskStatus?.service_status === 'running'" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
@@ -4162,8 +4161,8 @@ watch(isWindows, () => {
                       <Input
                         v-model="rustdeskLocalConfig.rendezvous_server"
                         :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
+                        :disabled="rustdeskStatus?.service_status === 'running'"
                       />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
                       <p v-if="rustdeskLocalConfig.enabled && rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
                     </div>
                   </div>
@@ -4173,23 +4172,33 @@ watch(isWindows, () => {
                       <Input
                         v-model="rustdeskLocalConfig.relay_server"
                         :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
+                        :disabled="!rustdeskLocalConfig.rendezvous_server || rustdeskStatus?.service_status === 'running'"
                       />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayServerHint') }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rustdeskLocalConfig.relay_key"
-                        type="text"
-                        maxlength="44"
-                        autocomplete="off"
-                        spellcheck="false"
-                        class="font-mono"
-                        :placeholder="rustdeskStatus?.config?.has_relay_key ? t('extensions.rustdesk.relayKeySet') : t('extensions.rustdesk.relayKeyPlaceholder')"
-                      />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayKeyHint') }}</p>
+                      <div class="relative">
+                        <Input
+                          v-model="rustdeskLocalConfig.relay_key"
+                          :type="showPasswords ? 'text' : 'password'"
+                          :disabled="!rustdeskLocalConfig.rendezvous_server || rustdeskStatus?.service_status === 'running'"
+                          maxlength="44"
+                          autocomplete="off"
+                          spellcheck="false"
+                          class="font-mono"
+                        />
+                        <button
+                          type="button"
+                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
+                          @click="showPasswords = !showPasswords"
+                        >
+                          <Eye v-if="!showPasswords" class="h-4 w-4" />
+                          <EyeOff v-else class="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4259,7 +4268,7 @@ watch(isWindows, () => {
             </Card>
             <!-- Save button -->
             <div class="flex justify-end">
-              <Button :disabled="loading" @click="saveRustdeskConfig">
+              <Button :disabled="loading || rustdeskStatus?.service_status === 'running'" @click="saveRustdeskConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

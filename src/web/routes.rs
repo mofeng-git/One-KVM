@@ -131,12 +131,28 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/rustdesk/regenerate-password",
             post(handlers::config::regenerate_device_password),
         )
+        .route(
+            "/config/rustdesk/start",
+            post(handlers::config::start_rustdesk_service),
+        )
+        .route(
+            "/config/rustdesk/stop",
+            post(handlers::config::stop_rustdesk_service),
+        )
         // RTSP configuration endpoints
         .route("/config/rtsp", get(handlers::config::get_rtsp_config))
         .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
         .route(
             "/config/rtsp/status",
             get(handlers::config::get_rtsp_status),
+        )
+        .route(
+            "/config/rtsp/start",
+            post(handlers::config::start_rtsp_service),
+        )
+        .route(
+            "/config/rtsp/stop",
+            post(handlers::config::stop_rtsp_service),
         )
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))

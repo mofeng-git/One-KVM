@@ -88,9 +88,10 @@ impl RtspService {
         let status = self.status.clone();
         let client_handles = self.client_handles.clone();
 
+        *self.status.write().await = RtspServiceStatus::Running;
+
         let handle = tokio::spawn(async move {
             tracing::info!("RTSP service listening on {}", bind_addr);
-            *status.write().await = RtspServiceStatus::Running;
 
             loop {
                 tokio::select! {

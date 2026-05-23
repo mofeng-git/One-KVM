@@ -16,7 +16,7 @@ pub struct RustDeskConfigResponse {
     pub device_id: String,
     pub has_password: bool,
     pub has_keypair: bool,
-    pub has_relay_key: bool,
+    pub relay_key: Option<String>,
 }
 
 impl From<&RustDeskConfig> for RustDeskConfigResponse {
@@ -28,7 +28,7 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
             device_id: config.device_id.clone(),
             has_password: !config.device_password.is_empty(),
             has_keypair: config.public_key.is_some() && config.private_key.is_some(),
-            has_relay_key: config.relay_key.is_some(),
+            relay_key: config.relay_key.clone(),
         }
     }
 }
@@ -142,5 +142,73 @@ pub async fn get_device_password(State(state): State<Arc<AppState>>) -> Json<ser
     Json(serde_json::json!({
         "device_id": config.device_id,
         "device_password": config.device_password
+    }))
+}
+
+pub async fn start_rustdesk_service(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<RustDeskStatusResponse>> {
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.rustdesk, "rustdesk")?;
+    let current_config = state.config.get().rustdesk.clone();
+    let mut start_config = current_config.clone();
+    start_config.enabled = true;
+
+    apply_rustdesk_config(
+        &state,
+        &current_config,
+        &start_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
+
+    let (service_status, rendezvous_status) = {
+        let guard = state.rustdesk.read().await;
+        if let Some(ref service) = *guard {
+            let status = format!("{}", service.status());
+            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
+            (status, rv_status)
+        } else {
+            ("not_initialized".to_string(), None)
+        }
+    };
+
+    Ok(Json(RustDeskStatusResponse {
+        config: RustDeskConfigResponse::from(&current_config),
+        service_status,
+        rendezvous_status,
+    }))
+}
+
+pub async fn stop_rustdesk_service(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<RustDeskStatusResponse>> {
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.rustdesk, "rustdesk")?;
+    let current_config = state.config.get().rustdesk.clone();
+    let mut stop_config = current_config.clone();
+    stop_config.enabled = false;
+
+    apply_rustdesk_config(
+        &state,
+        &current_config,
+        &stop_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
+
+    let (service_status, rendezvous_status) = {
+        let guard = state.rustdesk.read().await;
+        if let Some(ref service) = *guard {
+            let status = format!("{}", service.status());
+            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
+            (status, rv_status)
+        } else {
+            ("not_initialized".to_string(), None)
+        }
+    };
+
+    Ok(Json(RustDeskStatusResponse {
+        config: RustDeskConfigResponse::from(&current_config),
+        service_status,
+        rendezvous_status,
     }))
 }

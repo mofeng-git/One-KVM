@@ -1,10 +1,3 @@
-/**
- * 配置管理 API - 域分离架构
- *
- * 每个配置域（video, stream, hid, msd, atx, audio）有独立的 GET/PATCH 端点，
- * 避免配置项之间的相互干扰。
- */
-
 import type {
   AppConfig,
   AuthConfig,
@@ -38,22 +31,12 @@ import type {
 import { request } from './request'
 
 export const configApi = {
-  /**
-   * 获取完整配置
-   */
   getAll: () => request<AppConfig>('/config'),
 }
 
 export const authConfigApi = {
-  /**
-   * 获取认证配置
-   */
   get: () => request<AuthConfig>('/config/auth'),
 
-  /**
-   * 更新认证配置
-   * @param config 要更新的字段
-   */
   update: (config: AuthConfigUpdate) =>
     request<AuthConfig>('/config/auth', {
       method: 'PATCH',
@@ -62,15 +45,8 @@ export const authConfigApi = {
 }
 
 export const videoConfigApi = {
-  /**
-   * 获取视频配置
-   */
   get: () => request<VideoConfig>('/config/video'),
 
-  /**
-   * 更新视频配置
-   * @param config 要更新的字段（仅发送需要修改的字段）
-   */
   update: (config: VideoConfigUpdate) =>
     request<VideoConfig>('/config/video', {
       method: 'PATCH',
@@ -79,15 +55,8 @@ export const videoConfigApi = {
 }
 
 export const streamConfigApi = {
-  /**
-   * 获取流配置
-   */
   get: () => request<StreamConfigResponse>('/config/stream'),
 
-  /**
-   * 更新流配置
-   * @param config 要更新的字段
-   */
   update: (config: StreamConfigUpdate) =>
     request<StreamConfigResponse>('/config/stream', {
       method: 'PATCH',
@@ -96,15 +65,8 @@ export const streamConfigApi = {
 }
 
 export const hidConfigApi = {
-  /**
-   * 获取 HID 配置
-   */
   get: () => request<HidConfig>('/config/hid'),
 
-  /**
-   * 更新 HID 配置
-   * @param config 要更新的字段
-   */
   update: (config: HidConfigUpdate) =>
     request<HidConfig>('/config/hid', {
       method: 'PATCH',
@@ -113,15 +75,8 @@ export const hidConfigApi = {
 }
 
 export const msdConfigApi = {
-  /**
-   * 获取 MSD 配置
-   */
   get: () => request<MsdConfig>('/config/msd'),
 
-  /**
-   * 更新 MSD 配置
-   * @param config 要更新的字段
-   */
   update: (config: MsdConfigUpdate) =>
     request<MsdConfig>('/config/msd', {
       method: 'PATCH',
@@ -139,54 +94,29 @@ export interface WolHistoryResponse {
 }
 
 export const atxConfigApi = {
-  /**
-   * 获取 ATX 配置
-   */
   get: () => request<AtxConfig>('/config/atx'),
 
-  /**
-   * 更新 ATX 配置
-   * @param config 要更新的字段
-   */
   update: (config: AtxConfigUpdate) =>
     request<AtxConfig>('/config/atx', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
 
-  /**
-   * 获取可用的 ATX 设备（GPIO chips, USB relays）
-   */
   listDevices: () => request<AtxDevices>('/devices/atx'),
 
-  /**
-   * 发送 Wake-on-LAN 魔术包
-   * @param macAddress 目标 MAC 地址
-   */
   sendWol: (macAddress: string) =>
     request<{ success: boolean; message?: string }>('/atx/wol', {
       method: 'POST',
       body: JSON.stringify({ mac_address: macAddress }),
     }),
 
-  /**
-   * 获取 WOL 历史记录（服务端持久化）
-   * @param limit 返回条数（1-50）
-   */
   getWolHistory: (limit = 5) =>
     request<WolHistoryResponse>(`/atx/wol/history?limit=${Math.max(1, Math.min(50, limit))}`),
 }
 
 export const audioConfigApi = {
-  /**
-   * 获取音频配置
-   */
   get: () => request<AudioConfig>('/config/audio'),
 
-  /**
-   * 更新音频配置
-   * @param config 要更新的字段
-   */
   update: (config: AudioConfigUpdate) =>
     request<AudioConfig>('/config/audio', {
       method: 'PATCH',
@@ -195,59 +125,35 @@ export const audioConfigApi = {
 }
 
 export const extensionsApi = {
-  /**
-   * 获取所有扩展状态
-   */
   getAll: () => request<ExtensionsStatus>('/extensions'),
 
-  /**
-   * 获取单个扩展状态
-   */
   get: (id: string) => request<ExtensionInfo>(`/extensions/${id}`),
 
-  /**
-   * 启动扩展
-   */
   start: (id: string) =>
     request<ExtensionInfo>(`/extensions/${id}/start`, {
       method: 'POST',
     }),
 
-  /**
-   * 停止扩展
-   */
   stop: (id: string) =>
     request<ExtensionInfo>(`/extensions/${id}/stop`, {
       method: 'POST',
     }),
 
-  /**
-   * 获取扩展日志
-   */
   logs: (id: string, lines = 100) =>
     request<ExtensionLogs>(`/extensions/${id}/logs?lines=${lines}`),
 
-  /**
-   * 更新 ttyd 配置
-   */
   updateTtyd: (config: TtydConfigUpdate) =>
     request<TtydConfig>('/extensions/ttyd/config', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
 
-  /**
-   * 更新 gostc 配置
-   */
   updateGostc: (config: GostcConfigUpdate) =>
     request<GostcConfig>('/extensions/gostc/config', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
 
-  /**
-   * 更新 easytier 配置
-   */
   updateEasytier: (config: EasytierConfigUpdate) =>
     request<EasytierConfig>('/extensions/easytier/config', {
       method: 'PATCH',
@@ -255,7 +161,6 @@ export const extensionsApi = {
     }),
 }
 
-/** RustDesk 配置响应 */
 export interface RustDeskConfigResponse {
   enabled: boolean
   rendezvous_server: string
@@ -263,17 +168,15 @@ export interface RustDeskConfigResponse {
   device_id: string
   has_password: boolean
   has_keypair: boolean
-  has_relay_key: boolean
+  relay_key: string | null
 }
 
-/** RustDesk 状态响应 */
 export interface RustDeskStatusResponse {
   config: RustDeskConfigResponse
   service_status: string
   rendezvous_status: string | null
 }
 
-/** RustDesk 配置更新 */
 export interface RustDeskConfigUpdate {
   enabled?: boolean
   rendezvous_server?: string
@@ -282,52 +185,37 @@ export interface RustDeskConfigUpdate {
   device_password?: string
 }
 
-/** RustDesk 密码响应 */
 export interface RustDeskPasswordResponse {
   device_id: string
   device_password: string
 }
 
 export const rustdeskConfigApi = {
-  /**
-   * 获取 RustDesk 配置
-   */
   get: () => request<RustDeskConfigResponse>('/config/rustdesk'),
 
-  /**
-   * 更新 RustDesk 配置
-   */
   update: (config: RustDeskConfigUpdate) =>
     request<RustDeskConfigResponse>('/config/rustdesk', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
 
-  /**
-   * 获取 RustDesk 完整状态
-   */
   getStatus: () => request<RustDeskStatusResponse>('/config/rustdesk/status'),
 
-  /**
-   * 获取设备密码（管理员专用）
-   */
   getPassword: () => request<RustDeskPasswordResponse>('/config/rustdesk/password'),
 
-  /**
-   * 重新生成设备 ID
-   */
   regenerateId: () =>
     request<RustDeskConfigResponse>('/config/rustdesk/regenerate-id', {
       method: 'POST',
     }),
 
-  /**
-   * 重新生成设备密码
-   */
   regeneratePassword: () =>
     request<RustDeskConfigResponse>('/config/rustdesk/regenerate-password', {
       method: 'POST',
     }),
+
+  start: () => request<RustDeskStatusResponse>('/config/rustdesk/start', { method: 'POST' }),
+
+  stop: () => request<RustDeskStatusResponse>('/config/rustdesk/stop', { method: 'POST' }),
 }
 
 export type RtspCodec = 'h264' | 'h265'
@@ -340,7 +228,7 @@ export interface RtspConfigResponse {
   allow_one_client: boolean
   codec: RtspCodec
   username?: string | null
-  has_password: boolean
+  password: string | null
 }
 
 export interface RtspConfigUpdate {
@@ -369,22 +257,19 @@ export const rtspConfigApi = {
     }),
 
   getStatus: () => request<RtspStatusResponse>('/config/rtsp/status'),
+
+  start: () => request<RtspStatusResponse>('/config/rtsp/start', { method: 'POST' }),
+
+  stop: () => request<RtspStatusResponse>('/config/rtsp/stop', { method: 'POST' }),
 }
 
-/** REST `/config/web` 响应（`WebConfigResponse` 别名，兼容旧命名） */
 export type WebConfig = WebConfigResponse
 
 export type { WebConfigUpdate }
 
 export const webConfigApi = {
-  /**
-   * 获取 Web 服务器配置
-   */
   get: () => request<WebConfigResponse>('/config/web'),
 
-  /**
-   * 更新 Web 服务器配置（含可选的证书上传）
-   */
   update: (config: WebConfigUpdate) =>
     request<WebConfigResponse>('/config/web', {
       method: 'PATCH',
@@ -411,9 +296,6 @@ export const redfishConfigApi = {
 }
 
 export const systemApi = {
-  /**
-   * 重启系统
-   */
   restart: () =>
     request<{ success: boolean; message?: string }>('/system/restart', {
       method: 'POST',

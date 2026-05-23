@@ -90,7 +90,7 @@ impl VideoConfigUpdate {
     }
 }
 
-/// Stream configuration response (includes has_turn_password)
+/// Stream configuration response
 #[typeshare]
 #[derive(Debug, serde::Serialize)]
 pub struct StreamConfigResponse {
@@ -104,8 +104,7 @@ pub struct StreamConfigResponse {
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
-    /// Indicates whether TURN password has been configured (password is not returned)
-    pub has_turn_password: bool,
+    pub turn_password: Option<String>,
 }
 
 impl From<&StreamConfig> for StreamConfigResponse {
@@ -120,7 +119,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
             stun_server: config.stun_server.clone(),
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
-            has_turn_password: config.turn_password.is_some(),
+            turn_password: config.turn_password.clone(),
         }
     }
 }
@@ -798,7 +797,7 @@ pub struct RtspConfigResponse {
     pub allow_one_client: bool,
     pub codec: RtspCodec,
     pub username: Option<String>,
-    pub has_password: bool,
+    pub password: Option<String>,
 }
 
 impl From<&RtspConfig> for RtspConfigResponse {
@@ -811,7 +810,7 @@ impl From<&RtspConfig> for RtspConfigResponse {
             allow_one_client: config.allow_one_client,
             codec: config.codec.clone(),
             username: config.username.clone(),
-            has_password: config.password.is_some(),
+            password: config.password.clone(),
         }
     }
 }
