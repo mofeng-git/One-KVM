@@ -108,7 +108,7 @@ Environment:
   ONE_KVM_ANDROID_SKIP_DOCKER_BUILD=1       Reuse an already loaded Docker image
 
 APK output:
-  target/android/
+  target/android/one-kvm_<version>_<arm32|arm64>.apk
 EOF
     ;;
 *)

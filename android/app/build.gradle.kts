@@ -39,6 +39,11 @@ val androidBuildProfile = providers.environmentVariable("ONE_KVM_ANDROID_PROFILE
     .orElse("debug")
     .get()
     .lowercase()
+val oneKvmVersion = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
+    .find(rootCrateDir.file("Cargo.toml").asFile.readText())
+    ?.groupValues
+    ?.get(1)
+    ?: throw GradleException("Failed to resolve version from root Cargo.toml")
 val androidFfmpegSourceDir = rootProject.layout.projectDirectory
     .dir("../.tmp/android-ffmpeg-check/src/ffmpeg-rockchip")
 val localProperties = Properties().apply {
@@ -163,7 +168,7 @@ android {
         minSdk = androidApiLevel
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = oneKvmVersion
     }
 
     productFlavors {

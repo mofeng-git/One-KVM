@@ -151,13 +151,20 @@ RUN printf '%s\n' \
         '  help    Show this help.' \
         '' \
         'APK output:' \
-        '  target/android/' \
+        '  target/android/one-kvm_<version>_<arm32|arm64>.apk' \
         'EOF' \
         '}' \
         '' \
         'fail() {' \
         '    echo "Error: $*" >&2' \
         '    exit 1' \
+        '}' \
+        '' \
+        'read_project_version() {' \
+        '    local version' \
+        '    version="$(awk -F "\"" '"'"'/^version[[:space:]]*=/ { print $2; exit }'"'"' "$PROJECT_ROOT/Cargo.toml")"' \
+        '    [[ -n "$version" ]] || fail "Failed to resolve version from $PROJECT_ROOT/Cargo.toml"' \
+        '    printf "%s\n" "$version"' \
         '}' \
         '' \
         'copy_apks() {' \
@@ -167,7 +174,7 @@ RUN printf '%s\n' \
         '    mkdir -p "$OUTPUT_DIR"' \
         '    for apk in "$src_dir"/*.apk; do' \
         '        [[ -f "$apk" ]] || continue' \
-        '        sign_apk "$apk" "$OUTPUT_DIR/$(basename "${apk/-unsigned.apk/.apk}")"' \
+        '        sign_apk "$apk" "$OUTPUT_DIR/one-kvm_${PROJECT_VERSION}_${flavor}.apk"' \
         '        found=1' \
         '    done' \
         '    [[ "$found" == "1" ]] || fail "No APK files found in: $src_dir"' \
@@ -257,6 +264,7 @@ RUN printf '%s\n' \
         '' \
         'printf "sdk.dir=%s\n" "$ANDROID_HOME" > "$ANDROID_DIR/local.properties"' \
         'mkdir -p "$OUTPUT_DIR"' \
+        'PROJECT_VERSION="$(read_project_version)"' \
         '' \
         'export ONE_KVM_ANDROID_PROFILE="$BUILD_TYPE"' \
         'export ONE_KVM_ANDROID_ABIS="$ANDROID_ABIS"' \
@@ -269,6 +277,7 @@ RUN printf '%s\n' \
         'echo "Building Android APK"' \
         'echo "  task: $GRADLE_TASK"' \
         'echo "  profile: $ONE_KVM_ANDROID_PROFILE"' \
+        'echo "  version: $PROJECT_VERSION"' \
         'echo "  abis: $ONE_KVM_ANDROID_ABIS"' \
         'echo "  output: $OUTPUT_DIR"' \
         'echo "  sdk: $ANDROID_HOME"' \

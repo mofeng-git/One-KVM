@@ -252,7 +252,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: one-kvm-android-apk
-          path: target/android/*.apk
+          path: target/android/one-kvm_*.apk
           if-no-files-found: error
           retention-days: 7
 
