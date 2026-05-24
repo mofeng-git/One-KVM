@@ -17,9 +17,25 @@ fail() {
 build_android() {
     local arch="$1"
     local docker_build_args=()
+    local docker_mount_args=()
     local gradle_distribution_url="${ONE_KVM_GRADLE_DISTRIBUTION_URL:-}"
     local gradle_distribution_url_cn="${ONE_KVM_GRADLE_DISTRIBUTION_URL_CN:-https://mirrors.cloud.tencent.com/gradle/gradle-9.1.0-bin.zip}"
     local gradle_network_timeout="${ONE_KVM_GRADLE_NETWORK_TIMEOUT:-120000}"
+    local gradle_cache="${ONE_KVM_ANDROID_GRADLE_CACHE_DIR:-one-kvm-android-gradle-cache}"
+    local cargo_registry_cache="${ONE_KVM_ANDROID_CARGO_REGISTRY_CACHE_DIR:-one-kvm-android-cargo-registry}"
+    local cargo_git_cache="${ONE_KVM_ANDROID_CARGO_GIT_CACHE_DIR:-one-kvm-android-cargo-git}"
+
+    add_cache_mount() {
+        local source="$1"
+        local target="$2"
+
+        if [[ "$source" == /* || "$source" == ./* || "$source" == ../* ]]; then
+            mkdir -p "$source"
+            source="$(cd "$source" && pwd)"
+        fi
+
+        docker_mount_args+=("-v" "$source:$target")
+    }
 
     if [[ "${CHINAMIRRO:-}" == "1" ]]; then
         docker_build_args+=("--build-arg" "CHINAMIRRO=1")
@@ -28,18 +44,25 @@ build_android() {
         fi
     fi
 
-    echo "=== Building Android image: $IMAGE_NAME ==="
-    docker build \
-        -f "$DOCKERFILE" \
-        -t "$IMAGE_NAME" \
-        "${docker_build_args[@]}" \
-        "$PROJECT_ROOT/build/cross"
+    if [[ "${ONE_KVM_ANDROID_SKIP_DOCKER_BUILD:-0}" == "1" ]]; then
+        echo "=== Skipping Android image build: $IMAGE_NAME ==="
+    else
+        echo "=== Building Android image: $IMAGE_NAME ==="
+        docker build \
+            -f "$DOCKERFILE" \
+            -t "$IMAGE_NAME" \
+            "${docker_build_args[@]}" \
+            "$PROJECT_ROOT/build/cross"
+    fi
+
+    add_cache_mount "$gradle_cache" "/root/.gradle"
+    add_cache_mount "$cargo_registry_cache" "/root/.cargo/registry"
+    add_cache_mount "$cargo_git_cache" "/root/.cargo/git"
 
     echo "=== Building Android APK: $arch ==="
     docker run --rm \
         -v "$PROJECT_ROOT:/workspace" \
-        -v one-kvm-android-gradle-cache:/root/.gradle \
-        -v one-kvm-android-cargo-registry:/root/.cargo/registry \
+        "${docker_mount_args[@]}" \
         -w /workspace \
         -e "CHINAMIRRO=${CHINAMIRRO:-0}" \
         -e "ONE_KVM_GRADLE_DISTRIBUTION_URL=$gradle_distribution_url" \
@@ -77,6 +100,12 @@ Examples:
   build/build-android.sh arm64
   CHINAMIRRO=1 build/build-android.sh all
   CHINAMIRRO=1 ONE_KVM_GRADLE_DISTRIBUTION_URL=https://mirrors.aliyun.com/macports/distfiles/gradle/gradle-9.1.0-bin.zip build/build-android.sh all
+
+Environment:
+  ONE_KVM_ANDROID_GRADLE_CACHE_DIR          Host Gradle cache path or Docker volume name
+  ONE_KVM_ANDROID_CARGO_REGISTRY_CACHE_DIR  Host Cargo registry cache path or Docker volume name
+  ONE_KVM_ANDROID_CARGO_GIT_CACHE_DIR       Host Cargo git cache path or Docker volume name
+  ONE_KVM_ANDROID_SKIP_DOCKER_BUILD=1       Reuse an already loaded Docker image
 
 APK output:
   target/android/
