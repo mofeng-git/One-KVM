@@ -85,12 +85,10 @@ impl AtxController {
                             shared_serial,
                         ),
                     ] {
-                        let executor = AtxKeyExecutor::new_with_shared_serial(
-                            config.clone(),
-                            serial,
-                        );
-                        *slot = Self::init_key_executor(warn_label, info_label, config, executor)
-                            .await;
+                        let executor =
+                            AtxKeyExecutor::new_with_shared_serial(config.clone(), serial);
+                        *slot =
+                            Self::init_key_executor(warn_label, info_label, config, executor).await;
                     }
                 }
                 Err(e) => {
@@ -102,13 +100,22 @@ impl AtxController {
             }
         } else {
             for (slot, warn_label, info_label, config) in [
-                (&mut inner.power_executor, "power", "Power", inner.config.power.clone()),
-                (&mut inner.reset_executor, "reset", "Reset", inner.config.reset.clone()),
+                (
+                    &mut inner.power_executor,
+                    "power",
+                    "Power",
+                    inner.config.power.clone(),
+                ),
+                (
+                    &mut inner.reset_executor,
+                    "reset",
+                    "Reset",
+                    inner.config.reset.clone(),
+                ),
             ] {
                 if config.is_configured() {
                     let executor = AtxKeyExecutor::new(config.clone());
-                    *slot = Self::init_key_executor(warn_label, info_label, config, executor)
-                        .await;
+                    *slot = Self::init_key_executor(warn_label, info_label, config, executor).await;
                 }
             }
         }
@@ -229,11 +236,13 @@ impl AtxController {
         };
 
         let Some(executor) = executor else {
-            return Err(AppError::Config(match action {
-                AtxAction::Reset => "Reset button not configured for ATX controller",
-                _ => "Power button not configured for ATX controller",
-            }
-            .to_string()));
+            return Err(AppError::Config(
+                match action {
+                    AtxAction::Reset => "Reset button not configured for ATX controller",
+                    _ => "Power button not configured for ATX controller",
+                }
+                .to_string(),
+            ));
         };
 
         executor.pulse(duration).await?;

@@ -2,11 +2,13 @@ use crate::{
     common::DataFormat::{self, *},
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
-        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_free_encoder,
-        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo,
-        AV_NUM_DATA_POINTERS,
+        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_encode_packet,
+        ffmpeg_ram_free_encoder, ffmpeg_ram_free_packet, ffmpeg_ram_new_encoder,
+        ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo, AV_NUM_DATA_POINTERS,
     },
 };
+#[cfg(feature = "bytes")]
+use bytes::Bytes;
 use log::trace;
 use std::{
     ffi::{c_void, CString},
@@ -15,7 +17,7 @@ use std::{
     slice,
 };
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 use crate::common::Driver;
 
 /// Timeout for encoder test in milliseconds
@@ -26,6 +28,7 @@ const PRIORITY_AMF: i32 = 2;
 const PRIORITY_RKMPP: i32 = 3;
 const PRIORITY_VAAPI: i32 = 4;
 const PRIORITY_V4L2M2M: i32 = 5;
+const PRIORITY_MEDIACODEC: i32 = 2;
 
 #[derive(Clone, Copy)]
 struct CandidateCodecSpec {
@@ -92,11 +95,32 @@ fn linux_support_v4l2m2m() -> bool {
     false
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 fn enumerate_candidate_codecs(ctx: &EncodeContext) -> Vec<CodecInfo> {
     use log::debug;
 
     let mut codecs = Vec::new();
+
+    if cfg!(target_os = "android") {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_mediacodec",
+                format: H264,
+                priority: PRIORITY_MEDIACODEC,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_mediacodec",
+                format: H265,
+                priority: PRIORITY_MEDIACODEC,
+            },
+        );
+        return codecs;
+    }
+
     let contains = |_vendor: Driver, _format: DataFormat| {
         // Without VRAM feature, we can't check SDK availability.
         // Keep the prefilter coarse and let FFmpeg validation do the real check.
@@ -257,7 +281,13 @@ struct ProbePolicy {
 
 impl ProbePolicy {
     fn for_codec(codec_name: &str) -> Self {
-        if codec_name.contains("amf") {
+        if codec_name.contains("mediacodec") {
+            Self {
+                max_attempts: 30,
+                request_keyframe: true,
+                accept_any_output: true,
+            }
+        } else if codec_name.contains("amf") {
             Self {
                 max_attempts: 5,
                 request_keyframe: true,
@@ -304,11 +334,11 @@ fn log_failed_probe_attempt(
     frames: &[EncodeFrame],
     elapsed_ms: u128,
 ) {
-    use log::debug;
+    use log::{debug, trace};
 
     if policy.accept_any_output {
         if frames.is_empty() {
-            debug!(
+            trace!(
                 "Encoder {} test produced no output on attempt {}",
                 codec_name, attempt
             );
@@ -337,7 +367,7 @@ fn log_failed_probe_attempt(
 }
 
 fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> bool {
-    use log::debug;
+    use log::{debug, warn};
 
     debug!("Testing encoder: {}", codec.name);
 
@@ -388,13 +418,13 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
                             );
                         }
                     }
-                    Err(err) => {
-                        last_err = Some(err);
-                        debug!(
-                            "Encoder {} test attempt {} returned error: {}",
-                            codec.name, attempt_no, err
-                        );
-                    }
+	            Err(err) => {
+	                last_err = Some(err);
+	                warn!(
+	                    "Encoder {} test attempt {} returned error: {}",
+	                    codec.name, attempt_no, err
+	                );
+	            }
                 }
             }
 
@@ -407,15 +437,19 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
             );
             false
         }
-        Err(_) => {
-            debug!("Failed to create encoder {}", codec.name);
-            false
-        }
-    }
+	    Err(_) => {
+	        warn!("Failed to create encoder {}", codec.name);
+	        false
+	    }
+	}
 }
 
 fn add_software_fallback(codecs: &mut Vec<CodecInfo>) {
     use log::debug;
+
+    if cfg!(target_os = "android") {
+        return;
+    }
 
     for fallback in CodecInfo::soft().into_vec() {
         if !codecs.iter().any(|codec| codec.format == fallback.format) {
@@ -449,6 +483,39 @@ pub struct EncodeFrame {
     pub data: Vec<u8>,
     pub pts: i64,
     pub key: i32,
+}
+
+#[cfg(feature = "bytes")]
+pub struct EncodeBytesFrame {
+    pub data: Bytes,
+    pub pts: i64,
+    pub key: i32,
+}
+
+#[cfg(feature = "bytes")]
+struct FfmpegPacketOwner {
+    packet: *mut c_void,
+    data: *const u8,
+    len: usize,
+}
+
+#[cfg(feature = "bytes")]
+unsafe impl Send for FfmpegPacketOwner {}
+
+#[cfg(feature = "bytes")]
+impl AsRef<[u8]> for FfmpegPacketOwner {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.data, self.len) }
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl Drop for FfmpegPacketOwner {
+    fn drop(&mut self) {
+        unsafe {
+            ffmpeg_ram_free_packet(self.packet);
+        }
+    }
 }
 
 impl Display for EncodeFrame {
@@ -543,11 +610,54 @@ impl Encoder {
         }
     }
 
+    #[cfg(feature = "bytes")]
+    pub fn encode_bytes(&mut self, data: &[u8], ms: i64) -> Result<Vec<EncodeBytesFrame>, i32> {
+        unsafe {
+            let mut frames = Vec::<EncodeBytesFrame>::new();
+            let result = ffmpeg_ram_encode_packet(
+                self.codec,
+                data.as_ptr(),
+                data.len() as _,
+                &mut frames as *mut _ as *const c_void,
+                ms,
+                Some(Encoder::packet_callback),
+            );
+            if result == -11 || result == 0 {
+                return Ok(frames);
+            }
+            Err(result)
+        }
+    }
+
     extern "C" fn callback(data: *const u8, size: c_int, pts: i64, key: i32, obj: *const c_void) {
         unsafe {
             let frames = &mut *(obj as *mut Vec<EncodeFrame>);
             frames.push(EncodeFrame {
                 data: slice::from_raw_parts(data, size as _).to_vec(),
+                pts,
+                key,
+            });
+        }
+    }
+
+    #[cfg(feature = "bytes")]
+    extern "C" fn packet_callback(
+        packet: *mut c_void,
+        data: *const u8,
+        size: c_int,
+        pts: i64,
+        key: i32,
+        obj: *const c_void,
+    ) {
+        unsafe {
+            let frames = &mut *(obj as *mut Vec<EncodeBytesFrame>);
+            let owner = FfmpegPacketOwner {
+                packet,
+                data,
+                len: size as usize,
+            };
+            frames.push(EncodeBytesFrame {
+                data: Bytes::from_owner(owner),
                 pts,
                 key,
             });
@@ -588,11 +698,11 @@ impl Encoder {
     pub fn available_encoders(ctx: EncodeContext, _sdk: Option<String>) -> Vec<CodecInfo> {
         use log::debug;
 
-        if !(cfg!(windows) || cfg!(target_os = "linux")) {
+        if !(cfg!(windows) || cfg!(target_os = "linux") || cfg!(target_os = "android")) {
             return vec![];
         }
         let mut res = vec![];
-        #[cfg(any(windows, target_os = "linux"))]
+        #[cfg(any(windows, target_os = "linux", target_os = "android"))]
         let codecs = enumerate_candidate_codecs(&ctx);
 
         if let Ok(yuv) = Encoder::dummy_yuv(ctx.clone()) {

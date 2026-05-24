@@ -95,6 +95,7 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
+        -DCMAKE_INSTALL_LIBDIR=lib \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
@@ -113,6 +114,11 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DJPEG_FOUND=TRUE \
+        -DJPEG_INCLUDE_DIR=/usr/aarch64-linux-gnu/include \
+        -DJPEG_LIBRARY=/usr/aarch64-linux-gnu/lib/libjpeg.a \
+        -DCMAKE_C_FLAGS="-DHAVE_JPEG -I/usr/aarch64-linux-gnu/include" \
+        -DCMAKE_CXX_FLAGS="-DHAVE_JPEG -I/usr/aarch64-linux-gnu/include" \
     && make -j$(nproc) \
     && make install \
     && rm -rf /tmp/libyuv

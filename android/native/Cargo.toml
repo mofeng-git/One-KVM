@@ -1,0 +1,21 @@
+[package]
+name = "one-kvm-android-bootstrap"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "one_kvm_android_bootstrap"
+crate-type = ["cdylib"]
+
+[[bin]]
+name = "one-kvm-android-host"
+path = "src/bin/one-kvm-android-host.rs"
+
+[dependencies]
+jni = "0.22.4"
+one-kvm = { path = "../..", default-features = false, features = ["android", "android-mediacodec"] }
+rustls-platform-verifier = "0.7"
+
+[features]
+android-mediacodec = ["one-kvm/android-mediacodec"]

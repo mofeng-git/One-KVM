@@ -1,5 +1,5 @@
 # Rust
-/target/
+target/
 Cargo.lock
 
 # IDE
@@ -31,6 +31,7 @@ Thumbs.db
 # Build artifacts
 /dist/
 /build-staging
+/.tmp/
 
 # Frontend (built files)
 /web/node_modules/

@@ -100,8 +100,13 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->color_primaries = AVCOL_PRI_SMPTE170M;
   c->color_trc = AVCOL_TRC_SMPTE170M;
 
-  // WebRTC SDP advertises constrained baseline. Keep hardware and software
-  // encoders on the same browser-friendly H264 profile.
+  // WebRTC SDP advertises constrained baseline. Keep most hardware and software
+  // encoders on the same browser-friendly H264 profile. Android MediaCodec is
+  // deliberately excluded because older vendor OMX encoders can reject explicit
+  // profile/level combinations during configure().
+  if (name.find("mediacodec") != std::string::npos) {
+    return;
+  }
   if (name.find("h264") != std::string::npos) {
     c->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
   } else if (name.find("hevc") != std::string::npos) {
@@ -305,23 +310,9 @@ bool set_quality(void *priv_data, const std::string &name, int quality) {
       break;
     }
   }
-  if (name.find("mediacodec") != std::string::npos) {
-    if (name.find("h264") != std::string::npos) {
-      if ((ret = av_opt_set(priv_data, "level", "5.1", 0)) < 0) {
-        LOG_ERROR(std::string("mediacodec set opt level 5.1 failed, ret = ") +
-                  av_err2str(ret));
-        return false;
-      }
-    }
-    if (name.find("hevc") != std::string::npos) {
-      // https:en.wikipedia.org/wiki/High_Efficiency_Video_Coding_tiers_and_levels
-      if ((ret = av_opt_set(priv_data, "level", "h5.1", 0)) < 0) {
-        LOG_ERROR(std::string("mediacodec set opt level h5.1 failed, ret = ") +
-                  av_err2str(ret));
-        return false;
-      }
-    }
-  }
+  // Do not force MediaCodec level here. Some Android TV vendor encoders,
+  // including older Amlogic OMX implementations, reject explicit level values
+  // even when they support the requested resolution and bitrate.
   // libx264 software encoder presets
   if (is_software_h264(name)) {
     const char* preset = nullptr;
@@ -453,6 +444,13 @@ bool set_others(void *priv_data, const std::string &name) {
     // ff_eAVScenarioInfo_DisplayRemoting = 1
     if ((ret = av_opt_set_int(priv_data, "scenario", 1, 0)) < 0) {
       LOG_ERROR(std::string("mediafoundation set scenario failed, ret = ") +
+                av_err2str(ret));
+      return false;
+    }
+  }
+  if (name.find("mediacodec") != std::string::npos) {
+    if ((ret = av_opt_set_int(priv_data, "ndk_codec", 1, 0)) < 0) {
+      LOG_ERROR(std::string("mediacodec set ndk_codec failed, ret = ") +
                 av_err2str(ret));
       return false;
     }

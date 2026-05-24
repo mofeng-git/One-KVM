@@ -898,6 +898,17 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
         candidates.push(path);
     }
 
+    if candidates.is_empty() {
+        let sysfs_entries = video_node_names("/sys/class/video4linux");
+        let dev_entries = video_node_names("/dev");
+        warn!(
+            "No video probe candidates after sysfs filter; /dev={:?}, /sys/class/video4linux={:?}",
+            dev_entries, sysfs_entries
+        );
+    } else {
+        debug!("Video probe candidates: {:?}", candidates);
+    }
+
     collapse_rkcif_probe_candidates(&mut candidates);
 
     // Second pass: probe the remaining candidates in parallel. Each probe
@@ -952,9 +963,33 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
     // for a single MIPI CSI pipeline. Keep only the highest-priority node per
     // (driver, bus_info) group so users see one device instead of ~11.
     dedup_platform_subdevices(&mut devices);
+    devices.retain(|device| {
+        let hide = should_hide_android_platform_node(device);
+        if hide {
+            debug!(
+                "Hiding Android platform video node: {} ({}) {}",
+                device.name,
+                device.driver,
+                device.path.display()
+            );
+        }
+        !hide
+    });
 
     info!("Found {} video capture devices", devices.len());
     Ok(devices)
+}
+
+fn video_node_names(dir: &str) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
+        .filter(|name| name.starts_with("video"))
+        .collect();
+    names.sort();
+    names
 }
 
 pub fn select_recovery_device(
@@ -1018,6 +1053,33 @@ fn dedup_platform_subdevices(devices: &mut Vec<VideoDeviceInfo>) {
         let key = (d.driver.clone(), d.bus_info.clone());
         seen.insert(key)
     });
+}
+
+fn should_hide_android_platform_node(device: &VideoDeviceInfo) -> bool {
+    if !cfg!(feature = "android") {
+        return false;
+    }
+
+    let driver = device.driver.to_ascii_lowercase();
+    let name = device.name.to_ascii_lowercase();
+    let card = device.card.to_ascii_lowercase();
+    let usb_device = driver == "uvcvideo" || device.bus_info.starts_with("usb-");
+    let known_bridge =
+        driver.contains("rkcif") || driver.contains("rk_hdmirx") || driver.contains("tc358743");
+    if usb_device || known_bridge {
+        return false;
+    }
+
+    matches!(
+        driver.as_str(),
+        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
+    ) || matches!(
+        name.as_str(),
+        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
+    ) || matches!(
+        card.as_str(),
+        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
+    )
 }
 
 /// rkcif registers many `/dev/video*` queues; probing all in parallel can
@@ -1122,6 +1184,20 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
         .unwrap_or_default()
         .to_lowercase();
     let driver = extract_uevent_value(&uevent, "driver");
+
+    if cfg!(feature = "android") {
+        let platform_skip = ["ionvideo", "amlvideo", "amlvideo2", "videosync"];
+        let driver_skip = driver
+            .as_ref()
+            .is_some_and(|driver| platform_skip.iter().any(|hint| driver == hint));
+        if driver_skip || platform_skip.iter().any(|hint| sysfs_name == *hint) {
+            debug!(
+                "Skipping Android platform video node {:?}: {}",
+                path, sysfs_name
+            );
+            return false;
+        }
+    }
 
     let mut maybe_capture = false;
     let capture_hints = [

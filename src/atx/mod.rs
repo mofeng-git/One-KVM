@@ -65,9 +65,12 @@ pub fn discover_devices() -> AtxDevices {
             let name_str = name.to_string_lossy();
             if name_str.starts_with("gpiochip") {
                 devices.gpio_chips.push(format!("/dev/{}", name_str));
-            } else if name_str.starts_with("hidraw") && is_usb_relay_hidraw(&name_str) {
+            }
+            #[cfg(unix)]
+            if name_str.starts_with("hidraw") && is_usb_relay_hidraw(&name_str) {
                 devices.usb_relays.push(format!("/dev/{}", name_str));
-            } else if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
+            }
+            if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
                 devices.serial_ports.push(format!("/dev/{}", name_str));
             }
         }

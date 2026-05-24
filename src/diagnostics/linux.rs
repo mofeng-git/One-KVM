@@ -176,6 +176,19 @@ fn get_meminfo() -> MemInfo {
 }
 
 fn get_network_addresses() -> Vec<NetworkAddress> {
+    #[cfg(target_os = "android")]
+    {
+        return get_network_addresses_android();
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        get_network_addresses_ifaddrs()
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn get_network_addresses_ifaddrs() -> Vec<NetworkAddress> {
     let all_addrs = match nix::ifaddrs::getifaddrs() {
         Ok(addrs) => addrs,
         Err(_) => return Vec::new(),
@@ -245,6 +258,101 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
     }
 
     addresses
+}
+
+#[cfg(target_os = "android")]
+fn get_network_addresses_android() -> Vec<NetworkAddress> {
+    let net_dir = match std::fs::read_dir("/sys/class/net") {
+        Ok(dir) => dir,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut addresses = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    for entry in net_dir.flatten() {
+        let iface_name = match entry.file_name().into_string() {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+
+        if iface_name == "lo" {
+            continue;
+        }
+
+        let operstate_path = entry.path().join("operstate");
+        let is_up = std::fs::read_to_string(&operstate_path)
+            .map(|s| s.trim() == "up")
+            .unwrap_or(false);
+        if !is_up {
+            continue;
+        }
+
+        let Some(ip) = android_ipv4_for_interface(&iface_name) else {
+            continue;
+        };
+        if ip.is_loopback() || ip.is_unspecified() {
+            continue;
+        }
+
+        let ip_str = ip.to_string();
+        if seen.insert((iface_name.clone(), ip_str.clone())) {
+            addresses.push(NetworkAddress {
+                interface: iface_name,
+                ip: ip_str,
+            });
+        }
+    }
+
+    addresses
+}
+
+#[cfg(target_os = "android")]
+fn android_ipv4_for_interface(iface_name: &str) -> Option<std::net::Ipv4Addr> {
+    use std::ffi::CString;
+    use std::mem::{size_of, zeroed};
+
+    let name = CString::new(iface_name).ok()?;
+    if name.as_bytes().len() >= libc::IFNAMSIZ {
+        return None;
+    }
+
+    unsafe {
+        let fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+        if fd < 0 {
+            return None;
+        }
+
+        let mut request: libc::ifreq = zeroed();
+        std::ptr::copy_nonoverlapping(
+            name.as_ptr(),
+            request.ifr_name.as_mut_ptr(),
+            name.as_bytes_with_nul().len(),
+        );
+
+        let request_code = libc::SIOCGIFADDR.try_into().ok()?;
+        let result = libc::ioctl(fd, request_code, &mut request);
+        libc::close(fd);
+        if result < 0 {
+            return None;
+        }
+
+        let sockaddr = request.ifr_ifru.ifru_addr;
+        if sockaddr.sa_family as libc::c_int != libc::AF_INET {
+            return None;
+        }
+
+        let mut storage = [0u8; size_of::<libc::sockaddr_in>()];
+        std::ptr::copy_nonoverlapping(
+            &sockaddr as *const libc::sockaddr as *const u8,
+            storage.as_mut_ptr(),
+            size_of::<libc::sockaddr>(),
+        );
+        let sockaddr_in = &*(storage.as_ptr() as *const libc::sockaddr_in);
+        Some(std::net::Ipv4Addr::from(u32::from_be(
+            sockaddr_in.sin_addr.s_addr,
+        )))
+    }
 }
 
 #[cfg(test)]

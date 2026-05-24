@@ -2,9 +2,9 @@
 
 pub mod fs;
 pub mod host;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "android")))]
 pub mod net;
-#[cfg(not(unix))]
+#[cfg(any(not(unix), target_os = "android"))]
 #[path = "net_disabled.rs"]
 pub mod net;
 pub mod serial;

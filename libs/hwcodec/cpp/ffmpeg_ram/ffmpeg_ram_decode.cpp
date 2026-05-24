@@ -137,6 +137,13 @@ public:
       av_buffer_unref(&frames_ref);
     }
 
+    if (name_.find("mediacodec") != std::string::npos && c_->priv_data) {
+      if ((ret = av_opt_set_int(c_->priv_data, "ndk_codec", 1, 0)) < 0) {
+        LOG_WARN(std::string("mediacodec decoder ndk_codec option failed, ret = ") +
+                 av_err2str(ret));
+      }
+    }
+
     if ((ret = avcodec_open2(c_, codec, NULL)) < 0) {
       set_last_error(std::string("avcodec_open2 failed, ret = ") + av_err2str(ret));
       return false;

@@ -6,11 +6,13 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use super::capture::AudioConfig;
-use super::device::{enumerate_audio_devices_with_current, find_best_audio_device, AudioDeviceInfo};
+use super::device::{
+    enumerate_audio_devices_with_current, find_best_audio_device, AudioDeviceInfo,
+};
 use super::encoder::OpusFrame;
 use super::monitor::AudioHealthMonitor;
-use super::streamer::{AudioStreamer, AudioStreamerConfig};
 use super::recovery;
+use super::streamer::{AudioStreamer, AudioStreamerConfig};
 use super::types::{AudioControllerConfig, AudioQuality, AudioStatus};
 use crate::error::{AppError, Result};
 use crate::events::EventBus;

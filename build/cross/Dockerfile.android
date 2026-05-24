@@ -1,0 +1,300 @@
+# Android build image for One-KVM
+# Based on Debian 11 for stable toolchain/runtime compatibility
+
+FROM debian:11
+
+ARG CHINAMIRRO=0
+ARG ANDROID_SDK_ROOT=/root/android-sdk
+ARG ANDROID_CMDLINE_TOOLS_VERSION=11076708_latest
+ARG ANDROID_NDK_VERSION=27.3.13750724
+ARG ANDROID_PLATFORM=36
+ARG ANDROID_BUILD_TOOLS=36.0.0
+ARG CARGO_NDK_VERSION=4.1.2
+ARG RUSTUP_DIST_SERVER_CN=https://mirrors.tuna.tsinghua.edu.cn/rustup
+ARG RUSTUP_UPDATE_ROOT_CN=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+ARG CARGO_REGISTRY_CN=sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/
+ARG MAVEN_REPOSITORY_CN=https://maven.aliyun.com/repository/public
+ARG GOOGLE_MAVEN_REPOSITORY_CN=https://maven.aliyun.com/repository/google
+ARG GRADLE_DISTRIBUTION_URL_CN=https://mirrors.cloud.tencent.com/gradle/gradle-9.1.0-bin.zip
+ARG ANDROID_CMDLINE_TOOLS_URL=
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ANDROID_HOME=${ANDROID_SDK_ROOT}
+ENV ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
+ENV ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}
+ENV ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}
+ENV ANDROID_BUILD_TOOLS=${ANDROID_BUILD_TOOLS}
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=/root/.cargo/bin:${PATH}
+ENV ONE_KVM_GRADLE_DISTRIBUTION_URL_CN=${GRADLE_DISTRIBUTION_URL_CN}
+
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        sed -i \
+            -e 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+            -e 's|http://security.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+            /etc/apt/sources.list; \
+    fi
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    wget \
+    unzip \
+    zip \
+    git \
+    bash \
+    build-essential \
+    pkg-config \
+    cmake \
+    ninja-build \
+    autoconf \
+    automake \
+    libtool \
+    nasm \
+    yasm \
+    python3 \
+    openjdk-17-jdk-headless \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER_CN}; \
+        export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT_CN}; \
+        mkdir -p /root/.cargo; \
+        printf '%s\n' \
+            '[source.crates-io]' \
+            "replace-with = 'tuna'" \
+            '[source.tuna]' \
+            "registry = '${CARGO_REGISTRY_CN}'" \
+            '[registries.tuna]' \
+            "index = '${CARGO_REGISTRY_CN}'" \
+            > /root/.cargo/config.toml; \
+    fi \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
+    && rustup target add armv7-linux-androideabi aarch64-linux-android
+
+RUN mkdir -p /opt/android-cmdline-tools \
+    && cd /tmp \
+    && if [ -n "$ANDROID_CMDLINE_TOOLS_URL" ]; then \
+        wget -q "$ANDROID_CMDLINE_TOOLS_URL" -O cmdline-tools.zip; \
+    else \
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}.zip -O cmdline-tools.zip; \
+    fi \
+    && unzip -q cmdline-tools.zip -d /opt/android-cmdline-tools \
+    && mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools/latest \
+    && mv /opt/android-cmdline-tools/cmdline-tools/* ${ANDROID_SDK_ROOT}/cmdline-tools/latest/ \
+    && rm -rf /tmp/cmdline-tools.zip /opt/android-cmdline-tools
+
+RUN mkdir -p ${ANDROID_SDK_ROOT}/licenses \
+    && yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} --licenses >/dev/null \
+    && ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
+        "platform-tools" \
+        "platforms;android-${ANDROID_PLATFORM}" \
+        "build-tools;${ANDROID_BUILD_TOOLS}" \
+        "ndk;${ANDROID_NDK_VERSION}" \
+        "cmake;3.22.1" \
+    && mkdir -p ${ANDROID_NDK_HOME}
+
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        mkdir -p /root/.gradle; \
+        printf '%s\n' \
+            "beforeSettings { settings ->" \
+            "    settings.pluginManagement.repositories.maven { url = uri('${GOOGLE_MAVEN_REPOSITORY_CN}') }" \
+            "    settings.pluginManagement.repositories.maven { url = uri('${MAVEN_REPOSITORY_CN}') }" \
+            "    settings.dependencyResolutionManagement.repositories.maven { url = uri('${GOOGLE_MAVEN_REPOSITORY_CN}') }" \
+            "    settings.dependencyResolutionManagement.repositories.maven { url = uri('${MAVEN_REPOSITORY_CN}') }" \
+            "}" \
+            "allprojects {" \
+            "    buildscript.repositories.maven { url = uri('${GOOGLE_MAVEN_REPOSITORY_CN}') }" \
+            "    buildscript.repositories.maven { url = uri('${MAVEN_REPOSITORY_CN}') }" \
+            "}" \
+            > /root/.gradle/init.gradle; \
+    fi
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libclang-dev \
+    llvm \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LIBCLANG_PATH=/usr/lib/llvm-11/lib
+
+RUN printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'set -euo pipefail' \
+        '' \
+        'PROJECT_ROOT="${ONE_KVM_ANDROID_PROJECT_ROOT:-/workspace}"' \
+        'ANDROID_DIR="${PROJECT_ROOT}/android"' \
+        'BUILD_TYPE="release"' \
+        'ARCH="${1:-all}"' \
+        'FFMPEG_ROOT="${ONE_KVM_ANDROID_FFMPEG_ROOT:-${PROJECT_ROOT}/dist/android-ffmpeg-mediacodec}"' \
+        'OUTPUT_DIR="${PROJECT_ROOT}/target/android"' \
+        'SIGNING_DIR="${PROJECT_ROOT}/target/android-signing"' \
+        'KEYSTORE_PATH="${SIGNING_DIR}/one-kvm-release.jks"' \
+        'KEY_ALIAS="one-kvm-release"' \
+        'KEY_PASSWORD="one-kvm-release"' \
+        'ANDROID_BUILD_TOOLS_DIR="${ANDROID_SDK_ROOT}/build-tools/${ANDROID_BUILD_TOOLS}"' \
+        'WRAPPER_PROPERTIES="$ANDROID_DIR/gradle/wrapper/gradle-wrapper.properties"' \
+        'GRADLE_DISTRIBUTION_URL="${ONE_KVM_GRADLE_DISTRIBUTION_URL:-}"' \
+        'GRADLE_DISTRIBUTION_URL_CN="${ONE_KVM_GRADLE_DISTRIBUTION_URL_CN:-https://mirrors.cloud.tencent.com/gradle/gradle-9.1.0-bin.zip}"' \
+        'GRADLE_NETWORK_TIMEOUT="${ONE_KVM_GRADLE_NETWORK_TIMEOUT:-120000}"' \
+        '' \
+        'usage() {' \
+        '    cat <<EOF' \
+        'Usage:' \
+        '  docker run --rm -v "$PWD:/workspace" one-kvm-android-build:cn [arm64|armv7|all|help]' \
+        '' \
+        'Commands:' \
+        '  all     Build arm64 and armv7 APKs. Default.' \
+        '  arm64   Build only arm64 APK.' \
+        '  armv7   Build only ARMv7 APK.' \
+        '  help    Show this help.' \
+        '' \
+        'APK output:' \
+        '  target/android/' \
+        'EOF' \
+        '}' \
+        '' \
+        'fail() {' \
+        '    echo "Error: $*" >&2' \
+        '    exit 1' \
+        '}' \
+        '' \
+        'copy_apks() {' \
+        '    local flavor="$1"' \
+        '    local src_dir="$ANDROID_DIR/app/build/outputs/apk/$flavor/$BUILD_TYPE"' \
+        '    local found=0' \
+        '    mkdir -p "$OUTPUT_DIR"' \
+        '    for apk in "$src_dir"/*.apk; do' \
+        '        [[ -f "$apk" ]] || continue' \
+        '        sign_apk "$apk" "$OUTPUT_DIR/$(basename "${apk/-unsigned.apk/.apk}")"' \
+        '        found=1' \
+        '    done' \
+        '    [[ "$found" == "1" ]] || fail "No APK files found in: $src_dir"' \
+        '}' \
+        '' \
+        'ensure_keystore() {' \
+        '    if [[ -f "$KEYSTORE_PATH" ]]; then' \
+        '        return' \
+        '    fi' \
+        '    mkdir -p "$SIGNING_DIR"' \
+        '    keytool -genkeypair -noprompt -keystore "$KEYSTORE_PATH" -storetype PKCS12 -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 -storepass "$KEY_PASSWORD" -keypass "$KEY_PASSWORD" -dname "CN=One-KVM, OU=One-KVM, O=One-KVM, L=Local, S=Local, C=US" >/dev/null' \
+        '}' \
+        '' \
+        'sign_apk() {' \
+        '    local input_apk="$1"' \
+        '    local output_apk="$2"' \
+        '    local aligned_apk' \
+        '    aligned_apk="$(mktemp --suffix=.apk)"' \
+        '    "$ANDROID_BUILD_TOOLS_DIR/zipalign" -f -p 4 "$input_apk" "$aligned_apk"' \
+        '    "$ANDROID_BUILD_TOOLS_DIR/apksigner" sign --ks "$KEYSTORE_PATH" --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "$output_apk" "$aligned_apk"' \
+        '    "$ANDROID_BUILD_TOOLS_DIR/apksigner" verify --verbose "$output_apk" >/dev/null' \
+        '    rm -f "$aligned_apk"' \
+        '}' \
+        '' \
+        'cd "$PROJECT_ROOT"' \
+        '' \
+        'case "$ARCH" in' \
+        'help | --help | -h)' \
+        '    usage' \
+        '    exit 0' \
+        '    ;;' \
+        'esac' \
+        '' \
+        '[[ -d "$ANDROID_DIR" ]] || fail "Android project not found: $ANDROID_DIR"' \
+        '[[ -x "$ANDROID_DIR/gradlew" ]] || fail "Gradle wrapper is not executable: $ANDROID_DIR/gradlew"' \
+        '[[ -f "$WRAPPER_PROPERTIES" ]] || fail "Gradle wrapper properties not found: $WRAPPER_PROPERTIES"' \
+        '' \
+        'ORIGINAL_WRAPPER_PROPERTIES="$(mktemp)"' \
+        'cp "$WRAPPER_PROPERTIES" "$ORIGINAL_WRAPPER_PROPERTIES"' \
+        'cleanup_wrapper_properties() {' \
+        '    cp "$ORIGINAL_WRAPPER_PROPERTIES" "$WRAPPER_PROPERTIES"' \
+        '    rm -f "$ORIGINAL_WRAPPER_PROPERTIES"' \
+        '}' \
+        'trap cleanup_wrapper_properties EXIT' \
+        '' \
+        'if [[ "${CHINAMIRRO:-0}" == "1" && -z "$GRADLE_DISTRIBUTION_URL" ]]; then' \
+        '    GRADLE_DISTRIBUTION_URL="$GRADLE_DISTRIBUTION_URL_CN"' \
+        'fi' \
+        '' \
+        'if [[ -n "$GRADLE_DISTRIBUTION_URL" ]]; then' \
+        '    WRAPPER_PROPERTIES_TMP="$(mktemp)"' \
+        '    awk -v url="$GRADLE_DISTRIBUTION_URL" -v timeout="$GRADLE_NETWORK_TIMEOUT" '"'"'' \
+        '        BEGIN { seen_url = 0; seen_timeout = 0 }' \
+        '        /^distributionUrl=/ { print "distributionUrl=" url; seen_url = 1; next }' \
+        '        /^networkTimeout=/ { print "networkTimeout=" timeout; seen_timeout = 1; next }' \
+        '        { print }' \
+        '        END {' \
+        '            if (!seen_url) print "distributionUrl=" url;' \
+        '            if (!seen_timeout) print "networkTimeout=" timeout;' \
+        '        }' \
+        '    '"'"' "$WRAPPER_PROPERTIES" > "$WRAPPER_PROPERTIES_TMP"' \
+        '    cp "$WRAPPER_PROPERTIES_TMP" "$WRAPPER_PROPERTIES"' \
+        '    rm -f "$WRAPPER_PROPERTIES_TMP"' \
+        '    find /root/.gradle/wrapper/dists -name "*.lck" -o -name "*.part" 2>/dev/null | xargs -r rm -f' \
+        'fi' \
+        '' \
+        'ensure_keystore' \
+        '' \
+        'case "$ARCH" in' \
+        'arm64)' \
+        '    ANDROID_ABIS="arm64-v8a"' \
+        '    GRADLE_TASK=":app:assembleArm64Release"' \
+        '    APK_FLAVORS="arm64"' \
+        '    ;;' \
+        'armv7)' \
+        '    ANDROID_ABIS="armeabi-v7a"' \
+        '    GRADLE_TASK=":app:assembleArm32Release"' \
+        '    APK_FLAVORS="arm32"' \
+        '    ;;' \
+        'all)' \
+        '    ANDROID_ABIS="arm64-v8a,armeabi-v7a"' \
+        '    GRADLE_TASK=":app:assembleRelease"' \
+        '    APK_FLAVORS="arm64 arm32"' \
+        '    ;;' \
+        '*) fail "Unsupported architecture: $ARCH (expected arm64, armv7, or all)" ;;' \
+        'esac' \
+        '' \
+        'printf "sdk.dir=%s\n" "$ANDROID_HOME" > "$ANDROID_DIR/local.properties"' \
+        'mkdir -p "$OUTPUT_DIR"' \
+        '' \
+        'export ONE_KVM_ANDROID_PROFILE="$BUILD_TYPE"' \
+        'export ONE_KVM_ANDROID_ABIS="$ANDROID_ABIS"' \
+        'export ONE_KVM_ANDROID_FFMPEG_ROOT="$FFMPEG_ROOT"' \
+        'export ANDROID_HOME' \
+        'export ANDROID_SDK_ROOT' \
+        'export ANDROID_NDK_HOME' \
+        'export ANDROID_NDK_ROOT' \
+        '' \
+        'echo "Building Android APK"' \
+        'echo "  task: $GRADLE_TASK"' \
+        'echo "  profile: $ONE_KVM_ANDROID_PROFILE"' \
+        'echo "  abis: $ONE_KVM_ANDROID_ABIS"' \
+        'echo "  output: $OUTPUT_DIR"' \
+        'echo "  sdk: $ANDROID_HOME"' \
+        'echo "  ndk: $ANDROID_NDK_HOME"' \
+        'echo "  build tools: $ANDROID_BUILD_TOOLS_DIR"' \
+        'echo "  ffmpeg root: $ONE_KVM_ANDROID_FFMPEG_ROOT"' \
+        'if [[ -n "$GRADLE_DISTRIBUTION_URL" ]]; then' \
+        '    echo "  gradle distribution: $GRADLE_DISTRIBUTION_URL"' \
+        'fi' \
+        '' \
+        '(' \
+        '    cd "$ANDROID_DIR"' \
+        '    ./gradlew "$GRADLE_TASK"' \
+        ')' \
+        '' \
+        'for flavor in $APK_FLAVORS; do' \
+        '    copy_apks "$flavor"' \
+        'done' \
+        '' \
+        'echo' \
+        'echo "APK output:"' \
+        'ls -1 "$OUTPUT_DIR"' \
+        > /usr/local/bin/build-one-kvm-android \
+    && chmod +x /usr/local/bin/build-one-kvm-android
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/usr/local/bin/build-one-kvm-android"]
+CMD ["all"]

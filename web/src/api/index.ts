@@ -57,7 +57,7 @@ export interface FeatureCapability {
 }
 
 export interface PlatformCapabilities {
-  mode: 'linux' | 'windows'
+  mode: 'android_amlogic' | 'linux' | 'windows'
   mode_label: string
   video_capture: FeatureCapability
   encoder: FeatureCapability

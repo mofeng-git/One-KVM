@@ -102,7 +102,7 @@ impl HidrawLinuxRelayBackend {
         device: &File,
         report: &[u8; USB_RELAY_REPORT_LEN],
     ) -> std::io::Result<()> {
-        let rc = unsafe { libc::ioctl(device.as_raw_fd(), HIDIOCSFEATURE_9, report.as_ptr()) };
+        let rc = unsafe { libc::ioctl(device.as_raw_fd(), HIDIOCSFEATURE_9 as _, report.as_ptr()) };
         if rc < 0 {
             Err(std::io::Error::last_os_error())
         } else {

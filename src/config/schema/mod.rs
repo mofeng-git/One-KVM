@@ -41,4 +41,3 @@ impl AppConfig {
         crate::platform::defaults::apply(self);
     }
 }
-

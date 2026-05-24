@@ -21,11 +21,16 @@ fn build_common(builder: &mut Build) {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let common_dir = manifest_dir.join("cpp").join("common");
 
-    bindgen::builder()
+    let mut bindings = bindgen::builder()
         .header(common_dir.join("common.h").to_string_lossy().to_string())
         .header(common_dir.join("callback.h").to_string_lossy().to_string())
-        .rustified_enum("*")
-        .parse_callbacks(Box::new(CommonCallbacks))
+        .rustified_enum(".*")
+        .parse_callbacks(Box::new(CommonCallbacks));
+    if target_os == "android" {
+        print_android_bindgen_env();
+        bindings = bindings.clang_args(android_clang_args());
+    }
+    bindings
         .generate()
         .unwrap()
         .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("common_ffi.rs"))
@@ -57,9 +62,9 @@ fn build_common(builder: &mut Build) {
     }
 
     // Unsupported platforms
-    if target_os != "windows" && target_os != "linux" {
+    if target_os != "windows" && target_os != "linux" && target_os != "android" {
         panic!(
-            "Unsupported OS: {}. Only Windows and Linux are supported.",
+            "Unsupported OS: {}. Only Windows, Linux, and Android are supported.",
             target_os
         );
     }
@@ -71,9 +76,9 @@ fn build_common(builder: &mut Build) {
 #[derive(Debug)]
 struct CommonCallbacks;
 impl bindgen::callbacks::ParseCallbacks for CommonCallbacks {
-    fn add_derives(&self, name: &str) -> Vec<String> {
+    fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
         let names = vec!["DataFormat", "SurfaceFormat", "API"];
-        if names.contains(&name) {
+        if names.contains(&info.name) {
             vec!["Serialize", "Deserialize"]
                 .drain(..)
                 .map(|s| s.to_string())
@@ -84,11 +89,122 @@ impl bindgen::callbacks::ParseCallbacks for CommonCallbacks {
     }
 }
 
+fn print_android_bindgen_env() {
+    println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
+    println!("cargo:rerun-if-env-changed=ANDROID_NDK_ROOT");
+    println!("cargo:rerun-if-env-changed=NDK_HOME");
+    println!("cargo:rerun-if-env-changed=ANDROID_HOME");
+    println!("cargo:rerun-if-env-changed=ANDROID_SDK_ROOT");
+    println!("cargo:rerun-if-env-changed=CARGO_NDK_PLATFORM");
+}
+
+fn android_clang_args() -> Vec<String> {
+    let ndk = android_ndk_home();
+    let target = env::var("TARGET").unwrap_or_default();
+    let toolchain = ndk.join("toolchains/llvm/prebuilt").join(host_tag());
+    let sysroot = toolchain.join("sysroot");
+    let clang_include = toolchain
+        .join("lib/clang")
+        .join(clang_version(&toolchain))
+        .join("include");
+    let api = env::var("CARGO_NDK_PLATFORM")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(21);
+    let clang_target = android_clang_target(&target);
+
+    vec![
+        format!("--target={clang_target}"),
+        format!("--sysroot={}", sysroot.display()),
+        format!("-D__ANDROID_API__={api}"),
+        format!("-isystem{}", clang_include.display()),
+        format!("-isystem{}", sysroot.join("usr/include").display()),
+        format!(
+            "-isystem{}",
+            sysroot.join("usr/include").join(clang_target).display()
+        ),
+    ]
+}
+
+fn android_clang_target(target: &str) -> &'static str {
+    match target {
+        "aarch64-linux-android" => "aarch64-linux-android",
+        "armv7-linux-androideabi" => "armv7a-linux-androideabi",
+        "i686-linux-android" => "i686-linux-android",
+        "x86_64-linux-android" => "x86_64-linux-android",
+        other => panic!("unsupported Android target for hwcodec bindgen: {other}"),
+    }
+}
+
+fn android_ndk_home() -> PathBuf {
+    for key in ["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"] {
+        if let Ok(value) = env::var(key) {
+            return PathBuf::from(value);
+        }
+    }
+
+    for key in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
+        if let Ok(value) = env::var(key) {
+            let ndk_dir = PathBuf::from(value).join("ndk");
+            if let Some(newest) = newest_child_dir(&ndk_dir) {
+                return newest;
+            }
+        }
+    }
+
+    panic!(
+        "hwcodec Android bindgen requires ANDROID_NDK_HOME, ANDROID_NDK_ROOT, NDK_HOME, \
+         or ANDROID_HOME/ANDROID_SDK_ROOT with an ndk directory"
+    );
+}
+
+fn newest_child_dir(path: &Path) -> Option<PathBuf> {
+    let mut entries = std::fs::read_dir(path)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries.pop()
+}
+
+fn host_tag() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "linux-x86_64"
+    } else if cfg!(target_os = "macos") {
+        "darwin-x86_64"
+    } else if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else {
+        panic!("unsupported host OS for Android NDK");
+    }
+}
+
+fn clang_version(toolchain: &Path) -> String {
+    let clang_dir = toolchain.join("lib/clang");
+    let mut entries = std::fs::read_dir(&clang_dir)
+        .unwrap_or_else(|_| panic!("missing NDK clang directory: {}", clang_dir.display()))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries
+        .pop()
+        .unwrap_or_else(|| panic!("no clang versions found under: {}", clang_dir.display()))
+}
+
 mod ffmpeg {
     use super::*;
 
     pub fn build_ffmpeg(builder: &mut Build) {
         ffmpeg_ffi();
+
+        if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+            link_android_ffmpeg(builder);
+            build_ffmpeg_ram(builder);
+            return;
+        }
 
         // Try VCPKG first, fallback to system FFmpeg via pkg-config
         if let Some(vcpkg_installed) = vcpkg_installed_root() {
@@ -102,6 +218,67 @@ mod ffmpeg {
         build_ffmpeg_ram(builder);
         build_ffmpeg_hw(builder);
         build_ffmpeg_capture(builder);
+    }
+
+    fn link_android_ffmpeg(builder: &mut Build) {
+        let root = std::env::var("ONE_KVM_ANDROID_FFMPEG_ROOT").unwrap_or_else(|_| {
+            panic!(
+                "ONE_KVM_ANDROID_FFMPEG_ROOT is required when building hwcodec for Android. \
+                 It must point to an FFmpeg Android build with MediaCodec enabled."
+            )
+        });
+        let root = PathBuf::from(root);
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        let abi = match target_arch.as_str() {
+            "aarch64" => "arm64-v8a",
+            "arm" => "armeabi-v7a",
+            "x86" => "x86",
+            "x86_64" => "x86_64",
+            _ => target_arch.as_str(),
+        };
+
+        let abi_root = root.join(abi);
+        let lib_dir = if abi_root.join("lib").exists() {
+            abi_root.join("lib")
+        } else {
+            root.join("lib")
+        };
+        let include_dir = if abi_root.join("include").exists() {
+            abi_root.join("include")
+        } else {
+            root.join("include")
+        };
+
+        if !include_dir.exists() || !lib_dir.exists() {
+            panic!(
+                "Invalid ONE_KVM_ANDROID_FFMPEG_ROOT: include/lib not found for ABI {} under {}",
+                abi,
+                root.display()
+            );
+        }
+
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        builder.include(&include_dir);
+
+        let use_static = std::env::var("ONE_KVM_ANDROID_FFMPEG_STATIC")
+            .map(|value| value != "0")
+            .unwrap_or(true);
+        for lib in ["avcodec", "avutil"] {
+            if use_static {
+                println!("cargo:rustc-link-lib=static={}", lib);
+            } else {
+                println!("cargo:rustc-link-lib={}", lib);
+            }
+        }
+
+        println!("cargo:rustc-link-lib=log");
+        println!("cargo:rustc-link-lib=mediandk");
+        println!("cargo:rustc-link-lib=android");
+        println!("cargo:rustc-link-lib=dl");
+        println!("cargo:rustc-link-lib=m");
+        println!("cargo:rustc-link-lib=z");
+        println!("cargo:rustc-link-lib=c++_shared");
+        println!("cargo:info=Using Android FFmpeg from {}", root.display());
     }
 
     fn vcpkg_installed_root() -> Option<PathBuf> {
@@ -335,7 +512,10 @@ mod ffmpeg {
             return;
         }
 
-        println!("cargo:warning=Windows QSV support library not found in {}", lib_dir.display());
+        println!(
+            "cargo:warning=Windows QSV support library not found in {}",
+            lib_dir.display()
+        );
     }
 
     fn link_os() {
@@ -358,9 +538,11 @@ mod ffmpeg {
             }
             // ARM (aarch64, arm): no X11 needed, uses RKMPP/V4L2
             v
+        } else if target_os == "android" {
+            Vec::new()
         } else {
             panic!(
-                "Unsupported OS: {}. Only Windows and Linux are supported.",
+                "Unsupported OS: {}. Only Windows, Linux, and Android are supported.",
                 target_os
             );
         };
@@ -376,9 +558,14 @@ mod ffmpeg {
         let ffi_header_path = ffmpeg_ram_dir.join("ffmpeg_ffi.h");
         println!("cargo:rerun-if-changed={}", ffi_header_path.display());
         let ffi_header = ffi_header_path.to_string_lossy().to_string();
-        bindgen::builder()
+        let mut bindings = bindgen::builder()
             .header(ffi_header)
-            .rustified_enum("*")
+            .rustified_enum(".*");
+        if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+            print_android_bindgen_env();
+            bindings = bindings.clang_args(android_clang_args());
+        }
+        bindings
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ffi.rs"))
@@ -392,9 +579,14 @@ mod ffmpeg {
             .join("ffmpeg_ram_ffi.h")
             .to_string_lossy()
             .to_string();
-        bindgen::builder()
+        let mut bindings = bindgen::builder()
             .header(ffi_header)
-            .rustified_enum("*")
+            .rustified_enum(".*");
+        if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+            print_android_bindgen_env();
+            bindings = bindings.clang_args(android_clang_args());
+        }
+        bindings
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ram_ffi.rs"))
@@ -405,7 +597,9 @@ mod ffmpeg {
         // RKMPP decode only exists on ARM builds where FFmpeg is compiled with RKMPP support.
         // Avoid compiling this file on x86/x64 where `AV_HWDEVICE_TYPE_RKMPP` doesn't exist.
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        let enable_rkmpp = target_os != "android"
+            && matches!(target_arch.as_str(), "aarch64" | "arm")
             || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             builder.file(ffmpeg_ram_dir.join("ffmpeg_ram_decode.cpp"));
@@ -431,7 +625,7 @@ mod ffmpeg {
             .to_string();
         bindgen::builder()
             .header(capture_header)
-            .rustified_enum("*")
+            .rustified_enum(".*")
             .generate()
             .unwrap()
             .write_to_file(
@@ -454,14 +648,16 @@ mod ffmpeg {
             .to_string();
         bindgen::builder()
             .header(ffi_header)
-            .rustified_enum("*")
+            .rustified_enum(".*")
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_hw_ffi.rs"))
             .unwrap();
 
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        let enable_rkmpp = target_os != "android"
+            && matches!(target_arch.as_str(), "aarch64" | "arm")
             || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             // Include RGA headers for NV16->NV12 conversion (RGA im2d API)

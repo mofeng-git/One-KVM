@@ -1,14 +1,21 @@
 use crate::error::{AppError, Result};
-use crate::video::codec::convert::{Nv12Converter, PixelConverter};
+use crate::video::codec::convert::{MjpegToNv12Decoder, Nv12Converter, PixelConverter};
 use crate::video::codec::h264::{H264Config, H264Encoder, H264InputFormat};
 use crate::video::codec::h265::{H265Config, H265Encoder, H265InputFormat};
 use crate::video::codec::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use crate::video::codec::traits::EncoderConfig;
 use crate::video::codec::vp8::{VP8Config, VP8Encoder};
 use crate::video::codec::vp9::{VP9Config, VP9Encoder};
-use crate::video::codec::MjpegTurboDecoder;
+#[cfg(feature = "android-mediacodec")]
+use crate::video::codec::AndroidMediaCodecH264Encoder;
+#[cfg(feature = "android-mediacodec")]
+use crate::video::codec::AndroidMediaCodecMjpegDecoder;
 use crate::video::format::{PixelFormat, Resolution};
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use bytes::Bytes;
+#[cfg(all(
+    any(target_arch = "aarch64", target_arch = "arm"),
+    not(target_os = "android")
+))]
 use hwcodec::ffmpeg_hw::{
     last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline,
 };
@@ -22,9 +29,15 @@ pub(super) struct EncoderThreadState {
     pub(super) nv12_converter: Option<Nv12Converter>,
     pub(super) yuv420p_converter: Option<PixelConverter>,
     pub(super) encoder_needs_yuv420p: bool,
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(all(
+        any(target_arch = "aarch64", target_arch = "arm"),
+        not(target_os = "android")
+    ))]
     pub(super) ffmpeg_hw_pipeline: Option<HwMjpegH26xPipeline>,
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(all(
+        any(target_arch = "aarch64", target_arch = "arm"),
+        not(target_os = "android")
+    ))]
     pub(super) ffmpeg_hw_enabled: bool,
     pub(super) fps: u32,
     pub(super) codec: VideoEncoderType,
@@ -39,7 +52,7 @@ pub(super) trait VideoEncoderTrait: Send {
 }
 
 pub(super) struct EncodedFrame {
-    pub(super) data: Vec<u8>,
+    pub(super) data: Bytes,
     pub(super) key: i32,
 }
 
@@ -70,6 +83,25 @@ impl VideoEncoderTrait for H264EncoderWrapper {
     }
 }
 
+fn create_h264_encoder(
+    config: &SharedVideoPipelineConfig,
+    input_format: H264InputFormat,
+    codec_name: &str,
+) -> Result<Box<dyn VideoEncoderTrait + Send>> {
+    let encoder = H264Encoder::with_codec(
+        H264Config {
+            base: EncoderConfig::h264(config.resolution, config.bitrate_kbps()),
+            bitrate_kbps: config.bitrate_kbps(),
+            gop_size: config.gop_size(),
+            fps: config.fps,
+            input_format,
+        },
+        codec_name,
+    )?;
+    info!("Created H264 encoder: {}", encoder.codec_name());
+    Ok(Box::new(H264EncoderWrapper(encoder)))
+}
+
 struct H265EncoderWrapper(H265Encoder);
 
 impl VideoEncoderTrait for H265EncoderWrapper {
@@ -97,6 +129,35 @@ impl VideoEncoderTrait for H265EncoderWrapper {
     }
 }
 
+#[cfg(feature = "android-mediacodec")]
+struct AndroidMediaCodecH264EncoderWrapper(AndroidMediaCodecH264Encoder);
+
+#[cfg(feature = "android-mediacodec")]
+impl VideoEncoderTrait for AndroidMediaCodecH264EncoderWrapper {
+    fn encode_raw(&mut self, data: &[u8], pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+        let frames = self.0.encode_raw(data, pts_ms)?;
+        Ok(frames
+            .into_iter()
+            .map(|f| EncodedFrame {
+                data: f.data,
+                key: if f.key_frame { 1 } else { 0 },
+            })
+            .collect())
+    }
+
+    fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
+        self.0.set_bitrate(bitrate_kbps)
+    }
+
+    fn codec_name(&self) -> &str {
+        self.0.codec_name()
+    }
+
+    fn request_keyframe(&mut self) {
+        self.0.request_keyframe()
+    }
+}
+
 struct VP8EncoderWrapper(VP8Encoder);
 
 impl VideoEncoderTrait for VP8EncoderWrapper {
@@ -105,7 +166,7 @@ impl VideoEncoderTrait for VP8EncoderWrapper {
         Ok(frames
             .into_iter()
             .map(|f| EncodedFrame {
-                data: f.data,
+                data: f.data.into(),
                 key: f.key,
             })
             .collect())
@@ -130,7 +191,7 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
         Ok(frames
             .into_iter()
             .map(|f| EncodedFrame {
-                data: f.data,
+                data: f.data.into(),
                 key: f.key,
             })
             .collect())
@@ -148,15 +209,98 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
 }
 
 pub(super) enum MjpegDecoderKind {
-    Turbo(MjpegTurboDecoder),
+    #[cfg(feature = "android-mediacodec")]
+    AndroidMediaCodec {
+        decoder: AndroidMediaCodecMjpegDecoder,
+        fallback: Box<MjpegDecoderKind>,
+        fallback_active: bool,
+        output: Vec<u8>,
+    },
+    Libyuv {
+        decoder: MjpegToNv12Decoder,
+    },
 }
 
 impl MjpegDecoderKind {
-    pub(super) fn decode(&mut self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(super) fn decode(&mut self, data: &[u8]) -> Result<&[u8]> {
         match self {
-            MjpegDecoderKind::Turbo(decoder) => decoder.decode_to_rgb(data),
+            #[cfg(feature = "android-mediacodec")]
+            MjpegDecoderKind::AndroidMediaCodec {
+                decoder,
+                fallback,
+                fallback_active,
+                output,
+            } => {
+                if !*fallback_active {
+                    match decoder.decode_to_nv12(data) {
+                        Ok(decoded) => {
+                            *output = decoded;
+                            return Ok(output.as_slice());
+                        }
+                        Err(AppError::VideoError(message))
+                            if message.contains("needs more input") =>
+                        {
+                            return Err(AppError::VideoError(message));
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                "Android MediaCodec MJPEG decode failed; falling back to libyuv MJPEG->NV12: {}",
+                                err
+                            );
+                            *fallback_active = true;
+                        }
+                    }
+                }
+                fallback.decode(data)
+            }
+            MjpegDecoderKind::Libyuv { decoder } => decoder.decode(data),
         }
     }
+}
+
+fn libyuv_mjpeg_decoder(resolution: Resolution) -> MjpegDecoderKind {
+    MjpegDecoderKind::Libyuv {
+        decoder: MjpegToNv12Decoder::new(resolution),
+    }
+}
+
+fn create_mjpeg_decoder(resolution: Resolution) -> Result<(MjpegDecoderKind, PixelFormat)> {
+    #[cfg(feature = "android-mediacodec")]
+    {
+        if std::env::var_os("ONE_KVM_ANDROID_MJPEG_MEDIACODEC").is_none() {
+            info!("MJPEG input detected, using libyuv decoder (MJPEG -> NV12)");
+            return Ok((libyuv_mjpeg_decoder(resolution), PixelFormat::Nv12));
+        }
+
+        info!("MJPEG input detected, trying Android MediaCodec decoder (MJPEG -> NV12)");
+        match AndroidMediaCodecMjpegDecoder::new(resolution) {
+            Ok(decoder) => {
+                info!("Using Android MediaCodec MJPEG decoder");
+                return Ok((
+                    MjpegDecoderKind::AndroidMediaCodec {
+                        decoder,
+                        fallback: Box::new(libyuv_mjpeg_decoder(resolution)),
+                        fallback_active: false,
+                        output: Vec::with_capacity(
+                            PixelFormat::Nv12
+                                .frame_size(resolution)
+                                .unwrap_or((resolution.width * resolution.height * 3 / 2) as usize),
+                        ),
+                    },
+                    PixelFormat::Nv12,
+                ));
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "Android MediaCodec MJPEG decoder unavailable; using libyuv MJPEG->NV12: {}",
+                    err
+                );
+            }
+        }
+    }
+
+    info!("MJPEG input detected, using libyuv decoder (MJPEG -> NV12)");
+    Ok((libyuv_mjpeg_decoder(resolution), PixelFormat::Nv12))
 }
 
 pub(super) fn build_encoder_state(
@@ -256,9 +400,15 @@ pub(super) fn build_encoder_state(
         }
     };
 
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(all(
+        any(target_arch = "aarch64", target_arch = "arm"),
+        not(target_os = "android")
+    ))]
     let is_rkmpp_encoder = selected_codec_name.contains("rkmpp");
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(all(
+        any(target_arch = "aarch64", target_arch = "arm"),
+        not(target_os = "android")
+    ))]
     if needs_mjpeg_decode
         && is_rkmpp_encoder
         && matches!(
@@ -298,9 +448,15 @@ pub(super) fn build_encoder_state(
             nv12_converter: None,
             yuv420p_converter: None,
             encoder_needs_yuv420p: false,
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(all(
+                any(target_arch = "aarch64", target_arch = "arm"),
+                not(target_os = "android")
+            ))]
             ffmpeg_hw_pipeline: Some(pipeline),
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(all(
+                any(target_arch = "aarch64", target_arch = "arm"),
+                not(target_os = "android")
+            ))]
             ffmpeg_hw_enabled: true,
             fps: config.fps,
             codec: config.output_codec,
@@ -309,16 +465,8 @@ pub(super) fn build_encoder_state(
     }
 
     let (mjpeg_decoder, pipeline_input_format) = if needs_mjpeg_decode {
-        info!(
-            "MJPEG input detected, using TurboJPEG decoder ({} -> RGB24)",
-            config.input_format
-        );
-        (
-            Some(MjpegDecoderKind::Turbo(MjpegTurboDecoder::new(
-                config.resolution,
-            )?)),
-            PixelFormat::Rgb24,
-        )
+        let (decoder, format) = create_mjpeg_decoder(config.resolution)?;
+        (Some(decoder), format)
     } else {
         (None, config.input_format)
     };
@@ -347,18 +495,40 @@ pub(super) fn build_encoder_state(
                 );
             }
 
-            let encoder = H264Encoder::with_codec(
-                H264Config {
-                    base: EncoderConfig::h264(config.resolution, config.bitrate_kbps()),
-                    bitrate_kbps: config.bitrate_kbps(),
-                    gop_size: config.gop_size(),
-                    fps: config.fps,
-                    input_format,
-                },
-                &codec_name,
-            )?;
-            info!("Created H264 encoder: {}", encoder.codec_name());
-            Box::new(H264EncoderWrapper(encoder))
+            #[cfg(feature = "android-mediacodec")]
+            {
+                if codec_name == "h264_mediacodec" {
+                    info!(
+                        "Creating Android MediaCodec H264 encoder for {:?} input",
+                        input_format
+                    );
+                    let pixel_format = match input_format {
+                        H264InputFormat::Nv12 => PixelFormat::Nv12,
+                        H264InputFormat::Yuv420p => PixelFormat::Yuv420,
+                        other => {
+                            return Err(AppError::VideoError(format!(
+                                "Android MediaCodec H264 does not support {:?} direct input",
+                                other
+                            )));
+                        }
+                    };
+                    let encoder = AndroidMediaCodecH264Encoder::new(
+                        config.resolution,
+                        pixel_format,
+                        config.fps,
+                        config.bitrate_kbps(),
+                    )?;
+                    info!("Created Android MediaCodec H264 encoder");
+                    Box::new(AndroidMediaCodecH264EncoderWrapper(encoder))
+                } else {
+                    create_h264_encoder(config, input_format, &codec_name)?
+                }
+            }
+
+            #[cfg(not(feature = "android-mediacodec"))]
+            {
+                create_h264_encoder(config, input_format, &codec_name)?
+            }
         }
         VideoEncoderType::H265 => {
             let codec_name = selected_codec_name.clone();
@@ -452,6 +622,11 @@ pub(super) fn build_encoder_state(
             pipeline_input_format,
             PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
         )
+    } else if codec_name.contains("mediacodec") {
+        matches!(
+            pipeline_input_format,
+            PixelFormat::Nv12 | PixelFormat::Yuv420
+        )
     } else {
         false
     };
@@ -501,9 +676,15 @@ pub(super) fn build_encoder_state(
         nv12_converter,
         yuv420p_converter,
         encoder_needs_yuv420p: needs_yuv420p,
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(all(
+            any(target_arch = "aarch64", target_arch = "arm"),
+            not(target_os = "android")
+        ))]
         ffmpeg_hw_pipeline: None,
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(all(
+            any(target_arch = "aarch64", target_arch = "arm"),
+            not(target_os = "android")
+        ))]
         ffmpeg_hw_enabled: false,
         fps: config.fps,
         codec: config.output_codec,
@@ -525,6 +706,12 @@ fn h264_direct_input_format(
             PixelFormat::Nv16 => Some(H264InputFormat::Nv16),
             PixelFormat::Nv21 => Some(H264InputFormat::Nv21),
             PixelFormat::Nv24 => Some(H264InputFormat::Nv24),
+            _ => None,
+        }
+    } else if codec_name.contains("mediacodec") {
+        match input_format {
+            PixelFormat::Nv12 => Some(H264InputFormat::Nv12),
+            PixelFormat::Yuv420 => Some(H264InputFormat::Yuv420p),
             _ => None,
         }
     } else if codec_name.contains("libx264") {

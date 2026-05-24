@@ -853,10 +853,20 @@ impl UniversalSession {
             handle.abort();
         }
 
-        self.pc
-            .close()
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to close peer connection: {}", e)))?;
+        if let Err(e) = self.pc.close().await {
+            let error = e.to_string();
+            if error.contains("mpsc send: channel closed") {
+                debug!(
+                    "{} session {} peer connection was already closed: {}",
+                    self.codec, self.session_id, error
+                );
+            } else {
+                return Err(AppError::VideoError(format!(
+                    "Failed to close peer connection: {}",
+                    error
+                )));
+            }
+        }
 
         let _ = self.state.send(ConnectionState::Closed);
 

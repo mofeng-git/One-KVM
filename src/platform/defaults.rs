@@ -1,11 +1,73 @@
-use crate::config::{AppConfig, AtxDriverType, HidBackend};
+use crate::config::AppConfig;
+#[cfg(windows)]
+use crate::config::AtxDriverType;
+#[cfg(any(windows, all(unix, feature = "android")))]
+use crate::config::HidBackend;
 
 pub fn apply(config: &mut AppConfig) {
-    if cfg!(windows) {
+    #[cfg(not(any(windows, all(unix, feature = "android"))))]
+    {
+        let _ = config;
+    }
+
+    #[cfg(all(unix, feature = "android"))]
+    {
+        apply_android(config);
+    }
+
+    #[cfg(windows)]
+    {
         apply_windows(config);
     }
 }
 
+#[cfg(all(unix, feature = "android"))]
+fn apply_android(config: &mut AppConfig) {
+    let detected_udc = crate::otg::configfs::find_udc();
+    if config
+        .hid
+        .otg_udc
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.hid.otg_udc = detected_udc;
+    }
+
+    let otg_available = config.hid.otg_udc.is_some();
+    if !config.initialized && otg_available {
+        config.hid.backend = HidBackend::Otg;
+    } else if config.hid.backend == HidBackend::Ch9329
+        && config.hid.ch9329_port == "/dev/ttyUSB0"
+        && !std::path::Path::new(&config.hid.ch9329_port).exists()
+        && otg_available
+    {
+        config.hid.backend = HidBackend::Otg;
+    }
+
+    if !config.initialized {
+        config.audio.enabled = false;
+        config.audio.device.clear();
+        config.atx.enabled = false;
+        config.rustdesk.enabled = false;
+        config.rtsp.enabled = false;
+        config.redfish.enabled = false;
+    }
+
+    config
+        .video
+        .device
+        .get_or_insert_with(|| "auto".to_string());
+    config
+        .video
+        .format
+        .get_or_insert_with(|| "MJPEG".to_string());
+    config.web.bind_address = "0.0.0.0".to_string();
+    config.web.bind_addresses = vec!["0.0.0.0".to_string()];
+}
+
+#[cfg(windows)]
 fn apply_windows(config: &mut AppConfig) {
     config.msd.enabled = false;
     config.hid.otg_udc = None;

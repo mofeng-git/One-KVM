@@ -5,13 +5,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlatformMode {
+    AndroidAmlogic,
     Linux,
     Windows,
 }
 
 impl PlatformMode {
     pub const fn current() -> Self {
-        if cfg!(windows) {
+        if cfg!(feature = "android") {
+            Self::AndroidAmlogic
+        } else if cfg!(windows) {
             Self::Windows
         } else {
             Self::Linux
@@ -20,6 +23,7 @@ impl PlatformMode {
 
     pub const fn label(self) -> &'static str {
         match self {
+            Self::AndroidAmlogic => "Android Amlogic",
             Self::Linux => "Linux",
             Self::Windows => "Windows",
         }
@@ -81,9 +85,17 @@ pub struct PlatformCapabilities {
 
 impl PlatformCapabilities {
     pub fn current() -> Self {
-        match PlatformMode::current() {
-            PlatformMode::Linux => crate::platform::linux::capabilities(),
-            PlatformMode::Windows => crate::platform::windows::capabilities(),
+        #[cfg(feature = "android")]
+        {
+            return crate::platform::android::capabilities();
+        }
+        #[cfg(windows)]
+        {
+            return crate::platform::windows::capabilities();
+        }
+        #[cfg(all(unix, not(feature = "android")))]
+        {
+            return crate::platform::linux::capabilities();
         }
     }
 }

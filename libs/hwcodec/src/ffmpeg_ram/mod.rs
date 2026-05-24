@@ -9,12 +9,18 @@ use std::ffi::c_int;
 
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ram_ffi.rs"));
 
-#[cfg(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"))]
+#[cfg(all(
+    any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"),
+    not(target_os = "android")
+))]
 pub mod decode;
 
 // Provide a small stub on non-ARM builds so dependents can still compile, but decoder
 // construction will fail (since the C++ RKMPP decoder isn't built/linked).
-#[cfg(not(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")))]
+#[cfg(any(
+    not(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")),
+    target_os = "android"
+))]
 pub mod decode {
     use crate::ffmpeg::AVPixelFormat;
 

@@ -38,6 +38,7 @@ const CSI_BRIDGE_NOSIGNAL_INTERVAL_MS: u64 = 500;
 const NOSIGNAL_POLL_MAX: Duration = Duration::from_secs(20);
 /// Throttle repeated encoding errors to avoid log flooding
 const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
+const INVALID_MJPEG_LOG_THROTTLE_SECS: u64 = 5;
 
 static PROCESS_START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
@@ -60,7 +61,10 @@ use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(all(
+    any(target_arch = "aarch64", target_arch = "arm"),
+    not(target_os = "android")
+))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
 /// Encoded video frame for distribution
@@ -480,9 +484,15 @@ impl SharedVideoPipeline {
     fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
         match cmd {
             PipelineCmd::SetBitrate { bitrate_kbps, gop } => {
-                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+                #[cfg(any(
+                    not(any(target_arch = "aarch64", target_arch = "arm")),
+                    target_os = "android"
+                ))]
                 let _ = gop;
-                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                #[cfg(all(
+                    any(target_arch = "aarch64", target_arch = "arm"),
+                    not(target_os = "android")
+                ))]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
@@ -649,12 +659,14 @@ impl SharedVideoPipeline {
             *guard = Some(cmd_tx);
         }
 
-        // Encoder loop (runs on tokio, consumes latest frame)
+        // Encoder loop uses a dedicated OS thread because FFmpeg/MediaCodec work is synchronous.
         {
             let pipeline = pipeline.clone();
             let latest_frame = latest_frame.clone();
-            tokio::spawn(async move {
-                let mut frame_count: u64 = 0;
+            let handle = tokio::runtime::Handle::current();
+            std::thread::spawn(move || {
+                let mut input_frame_count: u64 = 0;
+                let mut encoded_frame_count: u64 = 0;
                 let mut last_fps_time = Instant::now();
                 let mut fps_frame_count: u64 = 0;
                 let mut last_seq = *frame_seq_rx.borrow();
@@ -662,7 +674,7 @@ impl SharedVideoPipeline {
                 let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
-                    if frame_seq_rx.changed().await.is_err() {
+                    if handle.block_on(frame_seq_rx.changed()).is_err() {
                         break;
                     }
                     if !pipeline.running_flag.load(Ordering::Acquire) {
@@ -694,15 +706,19 @@ impl SharedVideoPipeline {
                         None => continue,
                     };
 
-                    match pipeline.encode_frame_sync(&mut encoder_state, &frame, frame_count) {
-                        Ok(Some(encoded_frame)) => {
-                            let encoded_arc = Arc::new(encoded_frame);
-                            pipeline.broadcast_encoded(encoded_arc).await;
+                    input_frame_count = input_frame_count.wrapping_add(1);
 
-                            frame_count += 1;
-                            fps_frame_count += 1;
+                    match pipeline.encode_frame_sync(&mut encoder_state, &frame, input_frame_count)
+                    {
+                        Ok(encoded_frames) => {
+                            for encoded_frame in encoded_frames {
+                                let encoded_arc = Arc::new(encoded_frame);
+                                handle.block_on(pipeline.broadcast_encoded(encoded_arc));
+
+                                encoded_frame_count = encoded_frame_count.wrapping_add(1);
+                                fps_frame_count += 1;
+                            }
                         }
-                        Ok(None) => {}
                         Err(e) => {
                             log_encoding_error(
                                 &encode_error_throttler,
@@ -718,8 +734,15 @@ impl SharedVideoPipeline {
                         fps_frame_count = 0;
                         last_fps_time = Instant::now();
 
-                        let mut s = pipeline.stats.lock().await;
-                        s.current_fps = current_fps;
+                        handle.block_on(async {
+                            let mut s = pipeline.stats.lock().await;
+                            s.current_fps = current_fps;
+                        });
+                        trace!(
+                            "Shared pipeline processed {} input frames, emitted {} encoded frames",
+                            input_frame_count,
+                            encoded_frame_count
+                        );
                     }
                 }
 
@@ -847,6 +870,8 @@ impl SharedVideoPipeline {
                 let mut sequence: u64 = 0;
                 let mut consecutive_timeouts: u32 = 0;
                 let capture_error_throttler = LogThrottler::with_secs(5);
+                let invalid_mjpeg_throttler =
+                    LogThrottler::with_secs(INVALID_MJPEG_LOG_THROTTLE_SECS);
                 let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
@@ -1207,6 +1232,20 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
+                    if pixel_format.is_compressed() && !VideoFrame::is_valid_jpeg_bytes(&owned) {
+                        if invalid_mjpeg_throttler.should_log("invalid_mjpeg_capture_frame") {
+                            let b0 = owned.first().copied().unwrap_or_default();
+                            let b1 = owned.get(1).copied().unwrap_or_default();
+                            warn!(
+                                "Dropping invalid MJPEG capture frame: size={}, starts with 0x{:02x} 0x{:02x}",
+                                owned.len(),
+                                b0,
+                                b1
+                            );
+                        }
+                        continue;
+                    }
+
                     // Notify streaming only after frame validation passes —
                     // stale/warm-up frames from V4L2 kernel queues can cause
                     // DQBUF Ok with invalid data, which would prematurely
@@ -1244,7 +1283,7 @@ impl SharedVideoPipeline {
         state: &mut EncoderThreadState,
         frame: &VideoFrame,
         frame_count: u64,
-    ) -> Result<Option<EncodedVideoFrame>> {
+    ) -> Result<Vec<EncodedVideoFrame>> {
         let fps = state.fps;
         let codec = state.codec;
         let input_format = state.input_format;
@@ -1268,7 +1307,10 @@ impl SharedVideoPipeline {
             current_ts_us.saturating_sub(start_ts_us) / 1000
         };
 
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(all(
+            any(target_arch = "aarch64", target_arch = "arm"),
+            not(target_os = "android")
+        ))]
         if state.ffmpeg_hw_enabled {
             if input_format != PixelFormat::Mjpeg {
                 return Err(AppError::VideoError(
@@ -1295,17 +1337,17 @@ impl SharedVideoPipeline {
 
             if let Some((data, is_keyframe)) = packet {
                 let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                return Ok(Some(EncodedVideoFrame {
+                return Ok(vec![EncodedVideoFrame {
                     data: Bytes::from(data),
                     pts_ms,
                     is_keyframe,
                     sequence,
                     duration: Duration::from_millis(1000 / fps as u64),
                     codec,
-                }));
+                }]);
             }
 
-            return Ok(None);
+            return Ok(Vec::new());
         }
 
         let decoded_buf = if input_format.is_compressed() {
@@ -1313,12 +1355,26 @@ impl SharedVideoPipeline {
                 .mjpeg_decoder
                 .as_mut()
                 .ok_or_else(|| AppError::VideoError("MJPEG decoder not initialized".to_string()))?;
-            let decoded = decoder.decode(raw_frame)?;
+            let decoded = match decoder.decode(raw_frame) {
+                Ok(decoded) => decoded,
+                Err(err) => {
+                    warn!("Dropping undecodable MJPEG frame before encode: {}", err);
+                    return Ok(Vec::new());
+                }
+            };
             Some(decoded)
         } else {
             None
         };
-        let raw_frame = decoded_buf.as_deref().unwrap_or(raw_frame);
+        let compacted_buf = if decoded_buf.is_none() {
+            compact_strided_frame_for_encoder(frame, raw_frame)?
+        } else {
+            None
+        };
+        let raw_frame = decoded_buf
+            .as_deref()
+            .or(compacted_buf.as_deref())
+            .unwrap_or(raw_frame);
 
         // Debug log for H265
         if codec == VideoEncoderType::H265 && frame_count % 30 == 1 {
@@ -1365,8 +1421,24 @@ impl SharedVideoPipeline {
 
         match encode_result {
             Ok(frames) => {
-                if !frames.is_empty() {
-                    let encoded = frames.into_iter().next().unwrap();
+                if frames.is_empty() {
+                    if codec == VideoEncoderType::H265 {
+                        warn!(
+                            "[Pipeline-H265] Encoder returned no frames for frame #{}",
+                            frame_count
+                        );
+                    } else {
+                        trace!(
+                            "Encoder returned no frames for input frame #{} ({})",
+                            frame_count,
+                            codec
+                        );
+                    }
+                    return Ok(Vec::new());
+                }
+
+                let mut encoded_frames = Vec::with_capacity(frames.len());
+                for encoded in frames {
                     let is_keyframe = encoded.key == 1;
                     let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
                     if codec == VideoEncoderType::H264 {
@@ -1390,23 +1462,17 @@ impl SharedVideoPipeline {
                         }
                     }
 
-                    Ok(Some(EncodedVideoFrame {
-                        data: Bytes::from(encoded.data),
+                    encoded_frames.push(EncodedVideoFrame {
+                        data: encoded.data,
                         pts_ms,
                         is_keyframe,
                         sequence,
                         duration: Duration::from_millis(1000 / fps as u64),
                         codec,
-                    }))
-                } else {
-                    if codec == VideoEncoderType::H265 {
-                        warn!(
-                            "[Pipeline-H265] Encoder returned no frames for frame #{}",
-                            frame_count
-                        );
-                    }
-                    Ok(None)
+                    });
                 }
+
+                Ok(encoded_frames)
             }
             Err(e) => {
                 if codec == VideoEncoderType::H265 {
@@ -1487,6 +1553,174 @@ impl SharedVideoPipeline {
     /// Get current config
     pub async fn config(&self) -> SharedVideoPipelineConfig {
         self.config.read().await.clone()
+    }
+}
+
+fn compact_strided_frame_for_encoder(frame: &VideoFrame, data: &[u8]) -> Result<Option<Vec<u8>>> {
+    let width = frame.resolution.width as usize;
+    let height = frame.resolution.height as usize;
+    let stride = frame.stride as usize;
+    if width == 0 || height == 0 || stride == 0 || frame.format.is_compressed() {
+        return Ok(None);
+    }
+
+    let compact_size = match frame.format {
+        PixelFormat::Nv12 | PixelFormat::Nv21 | PixelFormat::Yuv420 | PixelFormat::Yvu420 => {
+            width * height * 3 / 2
+        }
+        PixelFormat::Nv16 | PixelFormat::Yuyv | PixelFormat::Yvyu | PixelFormat::Uyvy => {
+            width * height * 2
+        }
+        PixelFormat::Nv24 | PixelFormat::Rgb24 | PixelFormat::Bgr24 => width * height * 3,
+        PixelFormat::Rgb565 => width * height * 2,
+        PixelFormat::Grey => width * height,
+        PixelFormat::Mjpeg | PixelFormat::Jpeg => return Ok(None),
+    };
+
+    if data.len() == compact_size {
+        return Ok(None);
+    }
+
+    let mut out = vec![0u8; compact_size];
+    match frame.format {
+        PixelFormat::Nv12 | PixelFormat::Nv21 => {
+            let src_y_size = stride * height;
+            let src_uv_size = stride * height / 2;
+            require_len(data, src_y_size + src_uv_size, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, width, width, height);
+            copy_rows(
+                data,
+                src_y_size,
+                stride,
+                &mut out,
+                width * height,
+                width,
+                width,
+                height / 2,
+            );
+        }
+        PixelFormat::Yuv420 | PixelFormat::Yvu420 => {
+            let src_y_size = stride * height;
+            let src_chroma_stride = stride / 2;
+            let src_chroma_size = src_chroma_stride * height / 2;
+            let dst_y_size = width * height;
+            let dst_chroma_stride = width / 2;
+            let dst_chroma_size = dst_chroma_stride * height / 2;
+            require_len(data, src_y_size + src_chroma_size * 2, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, width, width, height);
+            copy_rows(
+                data,
+                src_y_size,
+                src_chroma_stride,
+                &mut out,
+                dst_y_size,
+                dst_chroma_stride,
+                dst_chroma_stride,
+                height / 2,
+            );
+            copy_rows(
+                data,
+                src_y_size + src_chroma_size,
+                src_chroma_stride,
+                &mut out,
+                dst_y_size + dst_chroma_size,
+                dst_chroma_stride,
+                dst_chroma_stride,
+                height / 2,
+            );
+        }
+        PixelFormat::Nv16 => {
+            let src_y_size = stride * height;
+            require_len(data, src_y_size + stride * height, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, width, width, height);
+            copy_rows(
+                data,
+                src_y_size,
+                stride,
+                &mut out,
+                width * height,
+                width,
+                width,
+                height,
+            );
+        }
+        PixelFormat::Nv24 => {
+            let src_y_size = stride * height;
+            let src_uv_stride = stride * 2;
+            require_len(
+                data,
+                src_y_size + src_uv_stride * height,
+                frame.format,
+                stride,
+            )?;
+            copy_rows(data, 0, stride, &mut out, 0, width, width, height);
+            copy_rows(
+                data,
+                src_y_size,
+                src_uv_stride,
+                &mut out,
+                width * height,
+                width * 2,
+                width * 2,
+                height,
+            );
+        }
+        PixelFormat::Yuyv | PixelFormat::Yvyu | PixelFormat::Uyvy | PixelFormat::Rgb565 => {
+            let row_bytes = width * 2;
+            require_len(data, stride * height, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, row_bytes, row_bytes, height);
+        }
+        PixelFormat::Rgb24 | PixelFormat::Bgr24 => {
+            let row_bytes = width * 3;
+            require_len(data, stride * height, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, row_bytes, row_bytes, height);
+        }
+        PixelFormat::Grey => {
+            require_len(data, stride * height, frame.format, stride)?;
+            copy_rows(data, 0, stride, &mut out, 0, width, width, height);
+        }
+        PixelFormat::Mjpeg | PixelFormat::Jpeg => return Ok(None),
+    }
+
+    trace!(
+        "Compacted strided {} frame for encoder: {} -> {} bytes (stride={}, width={})",
+        frame.format,
+        data.len(),
+        out.len(),
+        stride,
+        width
+    );
+    Ok(Some(out))
+}
+
+fn require_len(data: &[u8], required: usize, format: PixelFormat, stride: usize) -> Result<()> {
+    if data.len() < required {
+        return Err(AppError::VideoError(format!(
+            "{} frame too small for stride compaction: {} < {} (stride={})",
+            format,
+            data.len(),
+            required,
+            stride
+        )));
+    }
+    Ok(())
+}
+
+fn copy_rows(
+    src: &[u8],
+    src_offset: usize,
+    src_stride: usize,
+    dst: &mut [u8],
+    dst_offset: usize,
+    dst_stride: usize,
+    row_bytes: usize,
+    rows: usize,
+) {
+    for row in 0..rows {
+        let src_start = src_offset + row * src_stride;
+        let dst_start = dst_offset + row * dst_stride;
+        dst[dst_start..dst_start + row_bytes]
+            .copy_from_slice(&src[src_start..src_start + row_bytes]);
     }
 }
 

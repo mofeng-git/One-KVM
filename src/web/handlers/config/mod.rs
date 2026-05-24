@@ -21,10 +21,13 @@ pub use hid::{get_hid_config, update_hid_config};
 #[cfg(unix)]
 pub use msd::{get_msd_config, update_msd_config};
 pub use redfish::{get_redfish_config, update_redfish_config};
-pub use rtsp::{get_rtsp_config, get_rtsp_status, update_rtsp_config};
+pub use rtsp::{
+    get_rtsp_config, get_rtsp_status, start_rtsp_service, stop_rtsp_service, update_rtsp_config,
+};
 pub use rustdesk::{
     get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,
-    regenerate_device_password, update_rustdesk_config,
+    regenerate_device_password, start_rustdesk_service, stop_rustdesk_service,
+    update_rustdesk_config,
 };
 pub use stream::{get_stream_config, update_stream_config};
 pub use video::{get_video_config, update_video_config};

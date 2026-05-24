@@ -306,4 +306,3 @@ impl HidConfig {
         }
     }
 }
-

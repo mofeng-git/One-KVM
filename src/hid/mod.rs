@@ -1,8 +1,8 @@
 //! HID path: browser (WebSocket or WebRTC DataChannel) → queue → OTG gadget or CH9329.
 
 pub mod backend;
-mod ch9329_proto;
 pub mod ch9329;
+mod ch9329_proto;
 pub mod consumer;
 pub mod datachannel;
 mod factory;

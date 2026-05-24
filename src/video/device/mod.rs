@@ -6,7 +6,10 @@ mod linux;
 mod windows;
 
 #[cfg(unix)]
-pub use linux::*;
+pub use linux::{
+    enumerate_devices, find_best_device, select_recovery_device, VideoDevice, VideoDeviceInfo,
+    VideoDeviceRecoveryHint,
+};
 #[cfg(windows)]
 pub use windows::*;
 
@@ -33,3 +36,6 @@ pub(crate) fn is_rkcif_driver(driver: &str) -> bool {
 pub(crate) fn is_csi_hdmi_bridge(device: &VideoDeviceInfo) -> bool {
     is_rk_hdmirx_device(device) || is_rkcif_driver(&device.driver)
 }
+
+#[cfg(unix)]
+pub(crate) use linux::parse_bridge_kind;

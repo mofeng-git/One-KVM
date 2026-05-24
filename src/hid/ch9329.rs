@@ -36,7 +36,6 @@ const RECONNECT_DELAY_MS: u64 = 2000;
 
 const INIT_WAIT_MS: u64 = 3000;
 
-
 struct Ch9329RuntimeState {
     initialized: AtomicBool,
     online: AtomicBool,
@@ -843,8 +842,8 @@ impl HidBackend for Ch9329Backend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::ch9329_proto::{build_packet, calculate_checksum};
+    use super::*;
 
     #[test]
     fn test_packet_building() {

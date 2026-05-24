@@ -61,4 +61,3 @@ impl std::fmt::Display for BitratePreset {
         }
     }
 }
-

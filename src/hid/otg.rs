@@ -4,6 +4,7 @@
 //! Polled timed writes (JetKVM-style). Treat `ESHUTDOWN` (108) by closing handles and reopening; keep fd on `EAGAIN` (11). Host/gadget teardown during MSD resembles PiKVM. <https://github.com/raspberrypi/linux/issues/4373>
 
 use async_trait::async_trait;
+use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use parking_lot::Mutex;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
@@ -14,7 +15,6 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use tokio::sync::watch;
 use tracing::{debug, info, trace, warn};
 
@@ -222,15 +222,7 @@ impl OtgBackend {
     }
 
     fn find_udc() -> Option<String> {
-        let udc_path = PathBuf::from("/sys/class/udc");
-        if let Ok(entries) = fs::read_dir(&udc_path) {
-            for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    return Some(name.to_string());
-                }
-            }
-        }
-        None
+        crate::otg::configfs::find_udc()
     }
 
     /// PiKVM-style: drop handle if node missing; reopen when path reappears.

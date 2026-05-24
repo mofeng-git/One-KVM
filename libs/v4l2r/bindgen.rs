@@ -16,7 +16,5 @@ impl bindgen::callbacks::ParseCallbacks for Fix753 {
 fn v4l2r_bindgen_builder(builder: bindgen::Builder) -> bindgen::Builder {
     builder
         .parse_callbacks(Box::new(Fix753))
-        .derive_partialeq(true)
-        .derive_eq(true)
         .derive_default(true)
 }

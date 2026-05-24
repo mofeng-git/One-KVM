@@ -48,6 +48,8 @@ pub enum H264EncoderType {
     Rkmpp,
     /// V4L2 M2M (ARM generic) - requires hwcodec extension
     V4l2M2m,
+    /// Android MediaCodec via FFmpeg
+    MediaCodec,
     /// Software encoding (libx264/openh264)
     Software,
     /// No encoder available
@@ -64,6 +66,7 @@ impl std::fmt::Display for H264EncoderType {
             H264EncoderType::Vaapi => write!(f, "VAAPI"),
             H264EncoderType::Rkmpp => write!(f, "RKMPP"),
             H264EncoderType::V4l2M2m => write!(f, "V4L2 M2M"),
+            H264EncoderType::MediaCodec => write!(f, "MediaCodec"),
             H264EncoderType::Software => write!(f, "Software"),
             H264EncoderType::None => write!(f, "None"),
         }
@@ -80,6 +83,7 @@ impl From<EncoderBackend> for H264EncoderType {
             EncoderBackend::Vaapi => H264EncoderType::Vaapi,
             EncoderBackend::Rkmpp => H264EncoderType::Rkmpp,
             EncoderBackend::V4l2m2m => H264EncoderType::V4l2M2m,
+            EncoderBackend::MediaCodec => H264EncoderType::MediaCodec,
             EncoderBackend::Software => H264EncoderType::Software,
         }
     }
@@ -224,10 +228,10 @@ pub fn detect_best_encoder(width: u32, height: u32) -> (H264EncoderType, Option<
     }
 }
 
-/// Encoded frame from hwcodec (cloned for ownership)
+/// Encoded frame from hwcodec.
 #[derive(Debug, Clone)]
 pub struct HwEncodeFrame {
-    pub data: Vec<u8>,
+    pub data: Bytes,
     pub pts: i64,
     pub key: i32,
 }
@@ -372,14 +376,12 @@ impl H264Encoder {
 
         self.frame_count += 1;
 
-        match self.inner.encode(data, pts_ms) {
+        match self.inner.encode_bytes(data, pts_ms) {
             Ok(frames) => {
-                // Zero-copy: drain frames from hwcodec buffer instead of cloning
-                // hwcodec returns &mut Vec, so we can take ownership via drain
                 let owned_frames: Vec<HwEncodeFrame> = frames
-                    .drain(..)
+                    .into_iter()
                     .map(|f| HwEncodeFrame {
-                        data: f.data, // Move, not clone
+                        data: f.data,
                         pts: f.pts,
                         key: f.key,
                     })

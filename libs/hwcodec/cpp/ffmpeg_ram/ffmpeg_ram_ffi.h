@@ -7,6 +7,9 @@
 
 typedef void (*RamEncodeCallback)(const uint8_t *data, int len, int64_t pts,
                                   int key, const void *obj);
+typedef void (*RamEncodePacketCallback)(void *packet, const uint8_t *data,
+                                        int len, int64_t pts, int key,
+                                        const void *obj);
 typedef void (*RamDecodeCallback)(const uint8_t *data, int len, int width,
                                   int height, int pixfmt, const void *obj);
 
@@ -18,7 +21,11 @@ void *ffmpeg_ram_new_encoder(const char *name, const char *mc_name, int width,
                              RamEncodeCallback callback);
 int ffmpeg_ram_encode(void *encoder, const uint8_t *data, int length,
                       const void *obj, int64_t ms);
+int ffmpeg_ram_encode_packet(void *encoder, const uint8_t *data, int length,
+                             const void *obj, int64_t ms,
+                             RamEncodePacketCallback callback);
 void ffmpeg_ram_free_encoder(void *encoder);
+void ffmpeg_ram_free_packet(void *packet);
 int ffmpeg_ram_get_linesize_offset_length(int pix_fmt, int width, int height,
                                           int align, int *linesize, int *offset,
                                           int *length);

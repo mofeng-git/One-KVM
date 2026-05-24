@@ -167,7 +167,10 @@ pub fn calculate_checksum(data: &[u8]) -> u8 {
 
 #[inline]
 pub fn build_packet_buf(address: u8, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
-    debug_assert!(data.len() <= MAX_DATA_LEN, "Data too long for CH9329 packet");
+    debug_assert!(
+        data.len() <= MAX_DATA_LEN,
+        "Data too long for CH9329 packet"
+    );
 
     let len = data.len() as u8;
     let packet_len = 6 + data.len();

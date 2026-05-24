@@ -25,13 +25,12 @@ pub use service::{HidDevicePaths, OtgService};
 
 /// List USB Device Controller names exposed by sysfs.
 pub fn list_udc_devices() -> Vec<String> {
-    let mut devices: Vec<String> = std::fs::read_dir("/sys/class/udc")
-        .ok()
-        .into_iter()
-        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
-        .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
-        .collect();
-
-    devices.sort();
-    devices
+    #[cfg(unix)]
+    {
+        configfs::list_udcs()
+    }
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
 }

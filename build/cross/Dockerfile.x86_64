@@ -92,6 +92,8 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
     && cd /tmp/libjpeg-turbo \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_LIBDIR=lib \
         -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
     && make -j$(nproc) \
     && make install \
@@ -102,6 +104,11 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
     && cd /tmp/libyuv \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DJPEG_FOUND=TRUE \
+        -DJPEG_INCLUDE_DIR=/usr/local/include \
+        -DJPEG_LIBRARY=/usr/local/lib/libjpeg.a \
+        -DCMAKE_C_FLAGS="-DHAVE_JPEG -I/usr/local/include" \
+        -DCMAKE_CXX_FLAGS="-DHAVE_JPEG -I/usr/local/include" \
     && make -j$(nproc) \
     && make install \
     && rm -rf /tmp/libyuv

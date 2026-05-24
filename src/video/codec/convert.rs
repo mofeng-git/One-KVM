@@ -539,8 +539,46 @@ pub struct Nv12Converter {
     resolution: Resolution,
     /// Output buffer (reused across conversions)
     output_buffer: Nv12Buffer,
-    /// Optional I420 buffer for intermediate conversions
-    i420_buffer: Option<Yuv420pBuffer>,
+}
+
+/// MJPEG decoder that writes NV12 directly using libyuv.
+pub struct MjpegToNv12Decoder {
+    resolution: Resolution,
+    output_buffer: Nv12Buffer,
+    size_checked: bool,
+}
+
+impl MjpegToNv12Decoder {
+    pub fn new(resolution: Resolution) -> Self {
+        Self {
+            resolution,
+            output_buffer: Nv12Buffer::new(resolution),
+            size_checked: false,
+        }
+    }
+
+    pub fn decode(&mut self, input: &[u8]) -> Result<&[u8]> {
+        let width = self.resolution.width as i32;
+        let height = self.resolution.height as i32;
+
+        if !self.size_checked {
+            let (src_width, src_height) = libyuv::mjpg_size(input).map_err(|e| {
+                AppError::VideoError(format!("libyuv MJPEG header read failed: {}", e))
+            })?;
+            if src_width != width || src_height != height {
+                return Err(AppError::VideoError(format!(
+                    "libyuv MJPEG size mismatch: {}x{} (expected {}x{})",
+                    src_width, src_height, width, height
+                )));
+            }
+            self.size_checked = true;
+        }
+
+        libyuv::mjpg_to_nv12(input, self.output_buffer.as_bytes_mut(), width, height)
+            .map_err(|e| AppError::VideoError(format!("libyuv MJPEG->NV12 failed: {}", e)))?;
+
+        Ok(self.output_buffer.as_bytes())
+    }
 }
 
 impl Nv12Converter {
@@ -550,7 +588,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Bgr24,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -560,7 +597,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Rgb24,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -570,7 +606,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Yuyv,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -580,7 +615,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Yuv420,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -590,7 +624,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Nv21,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: Some(Yuv420pBuffer::new(resolution)),
         }
     }
 
@@ -600,7 +633,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Nv16,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -610,7 +642,6 @@ impl Nv12Converter {
             src_format: PixelFormat::Nv24,
             resolution,
             output_buffer: Nv12Buffer::new(resolution),
-            i420_buffer: None,
         }
     }
 
@@ -621,23 +652,6 @@ impl Nv12Converter {
 
         // Handle formats that need custom conversion without holding dst borrow
         match self.src_format {
-            PixelFormat::Nv21 => {
-                let mut i420 = self.i420_buffer.take().ok_or_else(|| {
-                    AppError::VideoError("NV21 I420 buffer not initialized".to_string())
-                })?;
-                {
-                    let dst = self.output_buffer.as_bytes_mut();
-                    Self::convert_nv21_to_nv12_with_dims(
-                        self.resolution.width as usize,
-                        self.resolution.height as usize,
-                        input,
-                        dst,
-                        &mut i420,
-                    )?;
-                }
-                self.i420_buffer = Some(i420);
-                return Ok(self.output_buffer.as_bytes());
-            }
             PixelFormat::Nv16 => {
                 let dst = self.output_buffer.as_bytes_mut();
                 Self::convert_nv16_to_nv12_with_dims(
@@ -667,6 +681,7 @@ impl Nv12Converter {
             PixelFormat::Rgb24 => libyuv::rgb24_to_nv12(input, dst, width, height),
             PixelFormat::Yuyv => libyuv::yuy2_to_nv12(input, dst, width, height),
             PixelFormat::Yuv420 => libyuv::i420_to_nv12(input, dst, width, height),
+            PixelFormat::Nv21 => libyuv::nv21_to_nv12(input, dst, width, height),
             _ => {
                 return Err(AppError::VideoError(format!(
                     "Unsupported conversion to NV12: {}",
@@ -678,21 +693,6 @@ impl Nv12Converter {
         result
             .map_err(|e| AppError::VideoError(format!("libyuv NV12 conversion failed: {}", e)))?;
         Ok(self.output_buffer.as_bytes())
-    }
-
-    fn convert_nv21_to_nv12_with_dims(
-        width: usize,
-        height: usize,
-        input: &[u8],
-        dst: &mut [u8],
-        yuv: &mut Yuv420pBuffer,
-    ) -> Result<()> {
-        libyuv::nv21_to_i420(input, yuv.as_bytes_mut(), width as i32, height as i32)
-            .map_err(|e| AppError::VideoError(format!("libyuv NV21->I420 failed: {}", e)))?;
-        libyuv::i420_to_nv12(yuv.as_bytes(), dst, width as i32, height as i32)
-            .map_err(|e| AppError::VideoError(format!("libyuv I420->NV12 failed: {}", e)))?;
-
-        Ok(())
     }
 
     fn convert_nv16_to_nv12_with_dims(

@@ -114,6 +114,7 @@ const configStore = useConfigStore()
 const authStore = useAuthStore()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
+const isAndroid = computed(() => systemStore.platform?.mode === 'android_amlogic')
 const msdAvailable = computed(() => systemStore.platform?.msd.available ?? systemStore.capabilities?.msd.available ?? false)
 
 const activeSection = ref<SettingsSectionId>('appearance')
@@ -275,6 +276,7 @@ async function loadSectionData(section: SettingsSectionId) {
       await loadRtspConfig()
       return
     case 'about':
+      if (isAndroid.value) return
       await Promise.all([
         loadUpdateOverview(),
         refreshUpdateStatus(),
@@ -1882,6 +1884,7 @@ async function triggerAutoRestart() {
 }
 
 async function loadUpdateOverview() {
+  if (isAndroid.value) return
   updateLoading.value = true
   try {
     updateOverview.value = await updateApi.overview(updateChannel.value)
@@ -1897,6 +1900,7 @@ async function loadUpdateOverview() {
 }
 
 async function refreshUpdateStatus() {
+  if (isAndroid.value) return
   try {
     updateStatus.value = await updateApi.status()
 
@@ -1921,6 +1925,7 @@ function stopUpdatePolling() {
 }
 
 function startUpdatePolling() {
+  if (isAndroid.value) return
   if (updateStatusTimer !== null) return
   updateStatusTimer = window.setInterval(async () => {
     await refreshUpdateStatus()
@@ -1935,6 +1940,7 @@ function startUpdatePolling() {
 }
 
 async function startOnlineUpgrade() {
+  if (isAndroid.value) return
   try {
     updateSawRestarting.value = false
     updateSawRequestFailure.value = false
@@ -2223,7 +2229,7 @@ onMounted(async () => {
 })
 
 watch(updateChannel, async () => {
-  if (activeSection.value === 'about') {
+  if (activeSection.value === 'about' && !isAndroid.value) {
     await loadUpdateOverview()
   }
 })
@@ -4276,7 +4282,7 @@ watch(isWindows, () => {
 
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
-            <Card>
+            <Card v-if="!isAndroid">
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
                   <CardTitle>{{ t('settings.onlineUpgrade') }}</CardTitle>

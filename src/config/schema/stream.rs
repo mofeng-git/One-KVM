@@ -146,4 +146,3 @@ impl Default for RedfishConfig {
         Self { enabled: false }
     }
 }
-

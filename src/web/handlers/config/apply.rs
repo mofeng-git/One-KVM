@@ -415,7 +415,7 @@ pub async fn apply_rustdesk_config(
     let mut rustdesk_guard = state.rustdesk.write().await;
     let mut credentials_to_save = None;
 
-    if old_config.enabled && !new_config.enabled {
+    if !new_config.enabled {
         if let Some(ref service) = *rustdesk_guard {
             service
                 .stop()
@@ -493,7 +493,7 @@ pub async fn apply_rtsp_config(
 
     let mut rtsp_guard = state.rtsp.write().await;
 
-    if old_config.enabled && !new_config.enabled {
+    if !new_config.enabled {
         if let Some(ref service) = *rtsp_guard {
             service
                 .stop()

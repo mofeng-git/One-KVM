@@ -4,7 +4,7 @@ mod event;
 mod managers;
 mod session;
 mod systems;
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "android")))]
 mod virtual_media;
 
 use axum::{
@@ -200,7 +200,7 @@ pub fn create_redfish_router(state: Arc<AppState>) -> Router {
             redfish_auth_middleware,
         ));
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(feature = "android")))]
     let redfish_routes = redfish_routes.merge(virtual_media::router(state.clone()));
 
     Router::new()

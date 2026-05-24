@@ -32,17 +32,9 @@ use std::fmt;
 // Include auto-generated FFI bindings
 include!(concat!(env!("OUT_DIR"), "/yuv_ffi.rs"));
 
-// Type alias for C's size_t - adapts to platform pointer width
-#[cfg(target_pointer_width = "32")]
-type SizeT = u32;
-
-#[cfg(target_pointer_width = "64")]
-type SizeT = u64;
-
-// Helper function to convert usize to C's size_t type
 #[inline]
-fn usize_to_size_t(val: usize) -> SizeT {
-    val as SizeT
+fn usize_to_size_t(val: usize) -> usize {
+    val
 }
 
 // ============================================================================
@@ -517,6 +509,34 @@ pub fn nv21_to_i420(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Resu
         width / 2,
         dst[y_size + uv_size..].as_mut_ptr(),
         width / 2,
+        width,
+        height,
+    ))
+}
+
+/// Convert NV21 to NV12 by swapping interleaved chroma bytes.
+pub fn nv21_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
+    if width % 2 != 0 || height % 2 != 0 {
+        return Err(YuvError::InvalidDimensions);
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let y_size = w * h;
+
+    if src.len() < nv12_size(w, h) || dst.len() < nv12_size(w, h) {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    call_yuv!(NV21ToNV12(
+        src.as_ptr(),
+        width,
+        src[y_size..].as_ptr(),
+        width,
+        dst.as_mut_ptr(),
+        width,
+        dst[y_size..].as_mut_ptr(),
+        width,
         width,
         height,
     ))
@@ -1046,7 +1066,7 @@ pub fn rgb24_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Res
     i420_to_nv12(&i420_buffer, dst, width, height)
 }
 
-/// Convert BGR24 to NV12 (via two-step conversion: BGR24 → I420 → NV12)
+/// Convert BGR24 to NV12.
 pub fn bgr24_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
     if width % 2 != 0 || height % 2 != 0 {
         return Err(YuvError::InvalidDimensions);
@@ -1059,10 +1079,71 @@ pub fn bgr24_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Res
         return Err(YuvError::BufferTooSmall);
     }
 
-    // Two-step conversion: BGR24 → I420 → NV12
-    let mut i420_buffer = vec![0u8; i420_size(w, h)];
-    bgr24_to_i420(src, &mut i420_buffer, width, height)?;
-    i420_to_nv12(&i420_buffer, dst, width, height)
+    #[cfg(windows)]
+    {
+        let mut i420_buffer = vec![0u8; i420_size(w, h)];
+        bgr24_to_i420(src, &mut i420_buffer, width, height)?;
+        return i420_to_nv12(&i420_buffer, dst, width, height);
+    }
+
+    #[cfg(not(windows))]
+    {
+    let y_size = w * h;
+    call_yuv!(RGB24ToNV12(
+        src.as_ptr(),
+        width * 3,
+        dst.as_mut_ptr(),
+        width,
+        dst[y_size..].as_mut_ptr(),
+        width,
+        width,
+        height,
+    ))
+    }
+}
+
+/// Read MJPEG dimensions without decoding the frame.
+pub fn mjpg_size(src: &[u8]) -> Result<(i32, i32)> {
+    let mut width = 0;
+    let mut height = 0;
+
+    call_yuv!(MJPGSize(
+        src.as_ptr(),
+        usize_to_size_t(src.len()),
+        &mut width,
+        &mut height,
+    ))?;
+
+    Ok((width, height))
+}
+
+/// Decode MJPEG directly to NV12.
+pub fn mjpg_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
+    if width % 2 != 0 || height % 2 != 0 {
+        return Err(YuvError::InvalidDimensions);
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    if dst.len() < nv12_size(w, h) {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    let y_size = w * h;
+    let (dst_y, dst_uv) = dst.split_at_mut(y_size);
+
+    call_yuv!(MJPGToNV12(
+        src.as_ptr(),
+        usize_to_size_t(src.len()),
+        dst_y.as_mut_ptr(),
+        width,
+        dst_uv.as_mut_ptr(),
+        width,
+        width,
+        height,
+        width,
+        height,
+    ))
 }
 
 // ============================================================================

@@ -4,11 +4,11 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use super::capture::AudioConfig;
+use super::controller::AudioRecoveredCallback;
 use super::device::{enumerate_audio_devices, AudioDeviceInfo};
 use super::monitor::AudioHealthMonitor;
 use super::streamer::{AudioStreamState, AudioStreamer, AudioStreamerConfig};
 use super::types::AudioControllerConfig;
-use super::controller::AudioRecoveredCallback;
 use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 
 const AUDIO_RECOVERY_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(1);

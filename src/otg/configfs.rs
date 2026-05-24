@@ -49,16 +49,26 @@ pub fn ensure_libcomposite_loaded() -> Result<()> {
 }
 
 pub fn find_udc() -> Option<String> {
-    let udc_path = Path::new("/sys/class/udc");
-    if !udc_path.exists() {
-        return None;
-    }
+    list_udcs().into_iter().next()
+}
 
-    fs::read_dir(udc_path)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .next()
+pub fn list_udcs() -> Vec<String> {
+    let mut devices = Vec::new();
+    collect_dir_names(Path::new("/sys/class/udc"), &mut devices);
+    devices.sort();
+    devices.dedup();
+    devices
+}
+
+fn collect_dir_names(path: &Path, devices: &mut Vec<String>) {
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().trim().to_string();
+            if !name.is_empty() {
+                devices.push(name);
+            }
+        }
+    }
 }
 
 pub fn is_low_endpoint_udc(name: &str) -> bool {

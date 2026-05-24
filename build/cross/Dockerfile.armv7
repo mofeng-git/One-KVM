@@ -94,6 +94,7 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
+        -DCMAKE_INSTALL_LIBDIR=lib \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=arm \
         -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
@@ -112,6 +113,11 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
         -DCMAKE_SYSTEM_PROCESSOR=arm \
         -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
         -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+        -DJPEG_FOUND=TRUE \
+        -DJPEG_INCLUDE_DIR=/usr/arm-linux-gnueabihf/include \
+        -DJPEG_LIBRARY=/usr/arm-linux-gnueabihf/lib/libjpeg.a \
+        -DCMAKE_C_FLAGS="-DHAVE_JPEG -I/usr/arm-linux-gnueabihf/include" \
+        -DCMAKE_CXX_FLAGS="-DHAVE_JPEG -I/usr/arm-linux-gnueabihf/include" \
     && make -j$(nproc) \
     && make install \
     && rm -rf /tmp/libyuv

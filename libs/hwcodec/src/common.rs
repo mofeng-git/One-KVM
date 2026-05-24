@@ -13,7 +13,7 @@ pub enum Driver {
     FFMPEG,
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 pub(crate) fn supported_gpu(_encode: bool) -> (bool, bool, bool) {
     #[cfg(target_os = "linux")]
     use std::ffi::c_int;
@@ -39,6 +39,8 @@ pub(crate) fn supported_gpu(_encode: bool) -> (bool, bool, bool) {
             linux_support_amd() == 0,
             linux_support_intel() == 0,
         );
+        #[cfg(target_os = "android")]
+        return (false, false, false);
         #[allow(unreachable_code)]
         (false, false, false)
     }
