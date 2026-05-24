@@ -1,6 +1,6 @@
 [package]
 name = "one-kvm"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["SilentWind"]
 description = "A open and lightweight IP-KVM solution written in Rust"
