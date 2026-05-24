@@ -9,6 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{broadcast, RwLock, Semaphore};
 
 use crate::error::{AppError, Result};
+use crate::state::ShutdownAction;
 
 const DEFAULT_UPDATE_BASE_URL: &str = "https://update.one-kvm.cn";
 
@@ -128,7 +129,7 @@ impl UpdateService {
                 success: true,
                 phase: UpdatePhase::Idle,
                 progress: 0,
-                current_version: env!("CARGO_PKG_VERSION").to_string(),
+                current_version: current_version_for_update(),
                 target_version: None,
                 message: None,
                 last_error: None,
@@ -144,7 +145,7 @@ impl UpdateService {
     pub async fn overview(&self, channel: UpdateChannel) -> Result<UpdateOverviewResponse> {
         let (channels, releases) = self.fetch_manifests().await?;
 
-        let current_version = parse_version(env!("CARGO_PKG_VERSION"))?;
+        let current_version = parse_version(&current_version_for_update())?;
         let latest_version = parse_version(&channel_head_version(&channels, channel))?;
         let current_parts = parse_version_parts(&current_version)?;
         let latest_parts = parse_version_parts(&latest_version)?;
@@ -197,7 +198,7 @@ impl UpdateService {
     pub fn start_upgrade(
         self: &Arc<Self>,
         req: UpgradeRequest,
-        shutdown_tx: broadcast::Sender<()>,
+        shutdown_tx: broadcast::Sender<ShutdownAction>,
     ) -> Result<()> {
         if req.channel.is_none() == req.target_version.is_none() {
             return Err(AppError::BadRequest(
@@ -233,7 +234,7 @@ impl UpdateService {
     async fn execute_upgrade(
         &self,
         req: UpgradeRequest,
-        shutdown_tx: broadcast::Sender<()>,
+        shutdown_tx: broadcast::Sender<ShutdownAction>,
     ) -> Result<()> {
         self.set_status(
             UpdatePhase::Checking,
@@ -246,7 +247,7 @@ impl UpdateService {
 
         let (channels, releases) = self.fetch_manifests().await?;
 
-        let current_version = parse_version(env!("CARGO_PKG_VERSION"))?;
+        let current_version = parse_version(&current_version_for_update())?;
         let target_version = if let Some(channel) = req.channel {
             parse_version(&channel_head_version(&channels, channel))?
         } else {
@@ -305,7 +306,7 @@ impl UpdateService {
         )
         .await;
 
-        self.install_binary(&staging_path).await?;
+        let restart_exe = self.install_binary(&staging_path).await?;
 
         self.set_status(
             UpdatePhase::Restarting,
@@ -316,10 +317,11 @@ impl UpdateService {
         )
         .await;
 
-        let _ = shutdown_tx.send(());
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        restart_current_process()?;
+        shutdown_tx
+            .send(ShutdownAction::Restart {
+                exe_path: Some(restart_exe),
+            })
+            .map_err(|e| AppError::Internal(format!("Failed to request restart: {}", e)))?;
         Ok(())
     }
 
@@ -399,7 +401,7 @@ impl UpdateService {
         Ok(())
     }
 
-    async fn install_binary(&self, staging_path: &Path) -> Result<()> {
+    async fn install_binary(&self, staging_path: &Path) -> Result<PathBuf> {
         let current_exe = std::env::current_exe()
             .map_err(|e| AppError::Internal(format!("Failed to get current exe path: {}", e)))?;
         let exe_dir = current_exe.parent().ok_or_else(|| {
@@ -426,7 +428,7 @@ impl UpdateService {
             .await
             .map_err(|e| AppError::Internal(format!("Failed to replace executable {}", e)))?;
 
-        Ok(())
+        Ok(current_exe)
     }
 
     async fn fetch_manifests(&self) -> Result<(ChannelsManifest, ReleasesManifest)> {
@@ -481,8 +483,15 @@ impl UpdateService {
         status.message = message;
         status.last_error = last_error;
         status.success = status.phase != UpdatePhase::Failed;
-        status.current_version = env!("CARGO_PKG_VERSION").to_string();
+        status.current_version = current_version_for_update();
     }
+}
+
+fn current_version_for_update() -> String {
+    std::env::var("ONE_KVM_UPDATE_CURRENT_VERSION")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
 }
 
 fn parse_version(input: &str) -> Result<String> {
@@ -568,26 +577,4 @@ fn current_target_triple() -> Result<String> {
         }
     };
     Ok(triple.to_string())
-}
-
-fn restart_current_process() -> Result<()> {
-    let exe = std::env::current_exe()
-        .map_err(|e| AppError::Internal(format!("Failed to get current exe: {}", e)))?;
-    let args: Vec<String> = std::env::args().skip(1).collect();
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = std::process::Command::new(&exe).args(&args).exec();
-        Err(AppError::Internal(format!("Failed to restart: {}", err)))
-    }
-
-    #[cfg(not(unix))]
-    {
-        std::process::Command::new(&exe)
-            .args(&args)
-            .spawn()
-            .map_err(|e| AppError::Internal(format!("Failed to spawn restart process: {}", e)))?;
-        std::process::exit(0);
-    }
 }

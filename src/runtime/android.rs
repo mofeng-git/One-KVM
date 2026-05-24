@@ -27,7 +27,7 @@ use crate::msd::MsdController;
 use crate::otg::OtgService;
 use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
-use crate::state::AppState;
+use crate::state::{AppState, ShutdownAction};
 use crate::stream_encoder::encoder_type_to_backend;
 use crate::update::UpdateService;
 use crate::utils::bind_tcp_listener;
@@ -132,7 +132,7 @@ async fn run_async(
 ) -> Result<(), String> {
     let (db, config_store, app_config) =
         load_runtime_config(&PathBuf::from(&config.data_dir), &config).await?;
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+    let (shutdown_tx, _) = broadcast::channel::<ShutdownAction>(1);
     let state = build_app_state(
         PathBuf::from(&config.data_dir),
         db,
@@ -156,10 +156,26 @@ async fn run_async(
         .map_err(|err| format!("failed to create tokio listener: {err}"))?;
     let server = axum::serve(listener, app);
 
-    let shutdown_signal = async move {
-        let _ = stop_rx.await;
-        tracing::info!("Android stop request received");
-        let _ = shutdown_tx.send(());
+    let shutdown_signal = {
+        let mut shutdown_rx = shutdown_tx.subscribe();
+        async move {
+            tokio::select! {
+                _ = stop_rx => {
+                    tracing::info!("Android stop request received");
+                    let _ = shutdown_tx.send(ShutdownAction::Exit);
+                }
+                request = shutdown_rx.recv() => {
+                    match request {
+                        Ok(action) => {
+                            tracing::info!("Android shutdown request received: {:?}", action);
+                        }
+                        Err(err) => {
+                            tracing::warn!("Android shutdown request channel closed: {}", err);
+                        }
+                    }
+                }
+            }
+        }
     };
 
     tokio::select! {
@@ -261,7 +277,7 @@ async fn build_app_state(
     db: DatabasePool,
     config_store: ConfigStore,
     config: AppConfig,
-    shutdown_tx: broadcast::Sender<()>,
+    shutdown_tx: broadcast::Sender<ShutdownAction>,
 ) -> Result<Arc<AppState>, String> {
     let session_store = SessionStore::new(config.auth.session_timeout_secs as i64);
     let user_store = UserStore::new(db.clone_pool());

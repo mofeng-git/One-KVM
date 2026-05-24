@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { ApiError } from '@/api/request'
 import { useSystemStore } from '@/stores/system'
 import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
@@ -109,6 +110,7 @@ import {
 
 const { t, te } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
@@ -1907,10 +1909,18 @@ async function refreshUpdateStatus() {
     if (updateSawRestarting.value && !updateAutoReloadTriggered.value) {
       if (updateSawRequestFailure.value || updateStatus.value.phase === 'idle') {
         updateAutoReloadTriggered.value = true
-        window.location.reload()
+        router.replace('/login')
       }
     }
-  } catch {
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      updateAutoReloadTriggered.value = true
+      authStore.isAuthenticated = false
+      authStore.user = null
+      stopUpdatePolling()
+      router.replace('/login')
+      return
+    }
     if (updateSawRestarting.value) {
       updateSawRequestFailure.value = true
     }

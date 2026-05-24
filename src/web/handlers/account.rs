@@ -1,4 +1,5 @@
 use super::*;
+use crate::state::ShutdownAction;
 
 /// Change password request
 #[derive(Deserialize)]
@@ -108,41 +109,9 @@ pub async fn change_username(
 pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginResponse> {
     info!("System restart requested via API");
 
-    // Send shutdown signal
-    let _ = state.shutdown_tx.send(());
-
-    // Spawn restart task in background
-    tokio::spawn(async {
-        // Wait for resources to be released (OTG, video, etc.)
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        // Get current executable and args
-        let exe = match std::env::current_exe() {
-            Ok(e) => e,
-            Err(e) => {
-                tracing::error!("Failed to get current exe: {}", e);
-                std::process::exit(1);
-            }
-        };
-        let args: Vec<String> = std::env::args().skip(1).collect();
-
-        info!("Restarting: {:?} {:?}", exe, args);
-
-        // Use exec to replace current process (Unix)
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            let err = std::process::Command::new(&exe).args(&args).exec();
-            tracing::error!("Failed to restart: {}", err);
-            std::process::exit(1);
-        }
-
-        #[cfg(not(unix))]
-        {
-            let _ = std::process::Command::new(&exe).args(&args).spawn();
-            std::process::exit(0);
-        }
-    });
+    let _ = state
+        .shutdown_tx
+        .send(ShutdownAction::Restart { exe_path: None });
 
     Json(LoginResponse {
         success: true,

@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
 
 use crate::atx::AtxController;
@@ -31,6 +31,12 @@ pub struct ConfigApplyLocks {
     pub atx: Arc<Mutex<()>>,
     pub rustdesk: Arc<Mutex<()>>,
     pub rtsp: Arc<Mutex<()>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShutdownAction {
+    Exit,
+    Restart { exe_path: Option<PathBuf> },
 }
 
 impl ConfigApplyLocks {
@@ -68,7 +74,7 @@ pub struct AppState {
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
     pub update: Arc<UpdateService>,
-    pub shutdown_tx: broadcast::Sender<()>,
+    pub shutdown_tx: broadcast::Sender<ShutdownAction>,
     pub revoked_sessions: Arc<RwLock<VecDeque<String>>>,
     pub config_apply_locks: ConfigApplyLocks,
     data_dir: std::path::PathBuf,
@@ -93,7 +99,7 @@ impl AppState {
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
         update: Arc<UpdateService>,
-        shutdown_tx: broadcast::Sender<()>,
+        shutdown_tx: broadcast::Sender<ShutdownAction>,
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
         let (device_info_tx, _device_info_rx) = watch::channel(None);
@@ -127,10 +133,6 @@ impl AppState {
 
     pub fn data_dir(&self) -> &std::path::PathBuf {
         &self.data_dir
-    }
-
-    pub fn shutdown_signal(&self) -> broadcast::Receiver<()> {
-        self.shutdown_tx.subscribe()
     }
 
     pub fn subscribe_device_info(&self) -> watch::Receiver<Option<SystemEvent>> {

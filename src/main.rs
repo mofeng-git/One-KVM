@@ -27,7 +27,7 @@ use one_kvm::otg::OtgService;
 use one_kvm::platform::PlatformCapabilities;
 use one_kvm::rtsp::RtspService;
 use one_kvm::rustdesk::RustDeskService;
-use one_kvm::state::AppState;
+use one_kvm::state::{AppState, ShutdownAction};
 use one_kvm::update::UpdateService;
 use one_kvm::utils::bind_tcp_listener;
 use one_kvm::video::codec_constraints::{
@@ -181,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
 
     let user_store = UserStore::new(db.clone_pool());
 
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+    let (shutdown_tx, _) = broadcast::channel::<ShutdownAction>(1);
 
     let events = Arc::new(EventBus::new());
     tracing::info!("Event bus initialized");
@@ -622,15 +622,32 @@ async fn main() -> anyhow::Result<()> {
 
     let listeners = bind_tcp_listeners(&bind_ips, bind_port)?;
 
-    let shutdown_signal = async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install CTRL+C handler");
-        tracing::info!("Shutdown signal received");
-        let _ = shutdown_tx.send(());
+    let shutdown_signal = {
+        let mut shutdown_rx = shutdown_tx.subscribe();
+        async move {
+            tokio::select! {
+                result = tokio::signal::ctrl_c() => {
+                    result.expect("Failed to install CTRL+C handler");
+                    tracing::info!("Shutdown signal received");
+                    ShutdownAction::Exit
+                }
+                request = shutdown_rx.recv() => {
+                    match request {
+                        Ok(action) => {
+                            tracing::info!("Shutdown request received: {:?}", action);
+                            action
+                        }
+                        Err(e) => {
+                            tracing::warn!("Shutdown request channel closed: {}", e);
+                            ShutdownAction::Exit
+                        }
+                    }
+                }
+            }
+        }
     };
 
-    if config.web.https_enabled {
+    let shutdown_action = if config.web.https_enabled {
         let tls_config = if let (Some(cert_path), Some(key_path)) =
             (&config.web.ssl_cert_path, &config.web.ssl_key_path)
         {
@@ -663,7 +680,7 @@ async fn main() -> anyhow::Result<()> {
             servers.push(server);
         }
 
-        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTPS").await;
+        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTPS").await
     } else {
         let servers = FuturesUnordered::new();
         for listener in listeners {
@@ -675,10 +692,13 @@ async fn main() -> anyhow::Result<()> {
             servers.push(async move { server.await });
         }
 
-        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTP").await;
-    }
+        run_servers_until_shutdown(servers, shutdown_signal, &state, "HTTP").await
+    };
 
     tracing::info!("Server shutdown complete");
+    if let ShutdownAction::Restart { exe_path } = shutdown_action {
+        restart_current_process(exe_path)?;
+    }
     Ok(())
 }
 
@@ -741,23 +761,46 @@ async fn open_database_pool(data_dir: &Path) -> anyhow::Result<DatabasePool> {
 
 async fn run_servers_until_shutdown<F, E>(
     mut servers: FuturesUnordered<F>,
-    shutdown_signal: impl Future<Output = ()>,
+    shutdown_signal: impl Future<Output = ShutdownAction>,
     state: &Arc<AppState>,
     protocol: &'static str,
-) where
+) -> ShutdownAction
+where
     F: Future<Output = Result<(), E>> + Send,
     E: std::fmt::Display,
 {
-    tokio::select! {
-        _ = shutdown_signal => {
-            cleanup(state).await;
+    let action = tokio::select! {
+        action = shutdown_signal => {
+            action
         }
         result = servers.next() => {
             if let Some(Err(e)) = result {
                 tracing::error!("{} server error: {}", protocol, e);
             }
-            cleanup(state).await;
+            ShutdownAction::Exit
         }
+    };
+    cleanup(state).await;
+    action
+}
+
+fn restart_current_process(exe_path: Option<PathBuf>) -> anyhow::Result<()> {
+    let exe = exe_path.unwrap_or(std::env::current_exe()?);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    tracing::info!("Restarting: {:?} {:?}", exe, args);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = std::process::Command::new(&exe).args(&args).exec();
+        Err(anyhow::anyhow!("Failed to restart: {}", err))
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::process::Command::new(&exe).args(&args).spawn()?;
+        std::process::exit(0);
     }
 }
 
