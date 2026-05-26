@@ -125,8 +125,8 @@ EOF
     chmod 755 "$PKG_DIR/DEBIAN/prerm"
 
     # Create control file
-    BASE_DEPS="libc6 (>= 2.31), libgcc-s1, libstdc++6, libasound2 (>= 1.1), libdrm2 (>= 2.4)"
-    AMD64_DEPS="libva2 (>= 2.0), libva-drm2 (>= 2.10), libva-x11-2 (>= 2.10), libmfx1 (>= 21.1), libx11-6 (>= 1.6), libxcb1 (>= 1.14), i965-va-driver-shaders (>= 2.4), intel-media-va-driver-non-free (>= 21.1)"
+    BASE_DEPS="libc6 (>= 2.31), libgcc-s1, libstdc++6, libasound2t64 (>= 1.1) | libasound2 (>= 1.1), libdrm2 (>= 2.4)"
+    AMD64_DEPS="libva2 (>= 2.0), libva-drm2 (>= 2.10), libva-x11-2 (>= 2.10), libmfx-gen1.2 (>= 22.0) | libmfx1 (>= 21.1), libx11-6 (>= 1.6), libxcb1 (>= 1.14), i965-va-driver-shaders (>= 2.4), intel-media-va-driver-non-free (>= 21.1)"
     DEPS="$BASE_DEPS"
     if [ "$DEB_ARCH" = "amd64" ]; then
         DEPS="$DEPS, $AMD64_DEPS"
