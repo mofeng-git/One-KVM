@@ -300,12 +300,27 @@ impl OtgGadgetManager {
 
         let strings_path = self.config_path.join("strings/0x409");
         create_dir(&strings_path)?;
-        write_file(&strings_path.join("configuration"), "Config 1: HID + MSD")?;
+        write_file(
+            &strings_path.join("configuration"),
+            self.configuration_label(),
+        )?;
 
         write_file(&self.config_path.join("MaxPower"), "500")?;
 
         debug!("Created configuration c.1");
         Ok(())
+    }
+
+    fn configuration_label(&self) -> &'static str {
+        if self
+            .functions
+            .iter()
+            .any(|func| func.name().starts_with("mass_storage."))
+        {
+            "Config 1: HID + MSD"
+        } else {
+            "Config 1: HID"
+        }
     }
 
     pub fn gadget_path(&self) -> &PathBuf {
