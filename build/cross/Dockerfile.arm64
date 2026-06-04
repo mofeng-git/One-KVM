@@ -7,6 +7,7 @@ FROM debian:11
 ARG LINUX_HEADERS_VERSION=6.6
 ARG LINUX_HEADERS_SHA256=
 ARG CHINAMIRRO=0
+ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
 
 # Optionally use Tsinghua mirrors for builds in China.
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
@@ -105,8 +106,11 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
     && rm -rf /tmp/libjpeg-turbo
 
 # Build static libyuv from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
+RUN git init /tmp/libyuv \
     && cd /tmp/libyuv \
+    && git remote add origin https://github.com/lemenkov/libyuv \
+    && git fetch --depth 1 origin ${LIBYUV_REV} \
+    && git checkout --detach FETCH_HEAD \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
