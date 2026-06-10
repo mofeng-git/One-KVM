@@ -44,8 +44,6 @@ val oneKvmVersion = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
     ?.groupValues
     ?.get(1)
     ?: throw GradleException("Failed to resolve version from root Cargo.toml")
-val androidFfmpegSourceDir = rootProject.layout.projectDirectory
-    .dir("../.tmp/android-ffmpeg-check/src/ffmpeg-rockchip")
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
@@ -207,7 +205,6 @@ tasks.register<Exec>("buildAndroidFfmpegMediaCodec") {
     group = "build"
 
     val ffmpegRoot = file(androidFfmpegRoot.get())
-    val sourceDir = androidFfmpegSourceDir.asFile
     val scriptFile = androidFfmpegBuildScript.asFile
     val stampFile = ffmpegRoot.resolve(".one-kvm-android-ffmpeg.stamp")
 
@@ -215,8 +212,6 @@ tasks.register<Exec>("buildAndroidFfmpegMediaCodec") {
     commandLine(
         "bash",
         scriptFile.absolutePath,
-        "--source",
-        sourceDir.absolutePath,
         "--output",
         ffmpegRoot.absolutePath,
         "--ndk",
@@ -227,7 +222,6 @@ tasks.register<Exec>("buildAndroidFfmpegMediaCodec") {
         selectedAndroidAbis.joinToString(","),
     )
 
-    inputs.dir(sourceDir)
     inputs.file(scriptFile)
     outputs.dir(ffmpegRoot)
 
@@ -235,12 +229,6 @@ tasks.register<Exec>("buildAndroidFfmpegMediaCodec") {
         val hasAndroidFfmpeg = androidFfmpegRequiredFiles(ffmpegRoot).all { it.exists() }
         val hasCurrentBuildStamp =
             stampFile.exists() && stampFile.readText() == androidFfmpegBuildStamp(scriptFile)
-        if (!hasAndroidFfmpeg && !sourceDir.resolve("configure").exists()) {
-            throw GradleException(
-                "Missing Android FFmpeg MediaCodec build at ${ffmpegRoot.absolutePath}, " +
-                    "and source was not found at ${sourceDir.absolutePath}",
-            )
-        }
         !hasAndroidFfmpeg || !hasCurrentBuildStamp
     }
 

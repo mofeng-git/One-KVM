@@ -5,13 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-SOURCE_DIR=""
 OUTPUT_DIR="${PROJECT_ROOT}/dist/android-alsa"
 ANDROID_API="${ANDROID_API:-21}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 BUILD_ABIS="arm64-v8a armeabi-v7a"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
-ALSA_REPO="${ALSA_REPO:-https://github.com/alsa-project/alsa-lib.git}"
+ALSA_VERSION="${ALSA_VERSION:-1.2.15}"
 
 usage() {
     cat <<'EOF'
@@ -19,8 +18,6 @@ Usage:
   scripts/build-android-alsa.sh [options]
 
 Options:
-  --source <dir>          Existing alsa-lib source checkout. If omitted, the
-                          script clones it into .tmp/android-alsa-src.
   --output <dir>          Output root. Default: dist/android-alsa
   --ndk <dir>             Android NDK root. Defaults to ANDROID_NDK_HOME or ANDROID_NDK_ROOT.
   --api <level>           Android API level. Default: 21.
@@ -44,10 +41,6 @@ fail() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --source)
-        SOURCE_DIR="${2:-}"
-        shift 2
-        ;;
     --output)
         OUTPUT_DIR="${2:-}"
         shift 2
@@ -77,16 +70,15 @@ done
 [[ -n "$NDK_ROOT" ]] || fail "--ndk or ANDROID_NDK_HOME/ANDROID_NDK_ROOT is required"
 [[ -d "$NDK_ROOT/toolchains/llvm/prebuilt" ]] || fail "Invalid NDK root: $NDK_ROOT"
 
-if [[ -z "$SOURCE_DIR" ]]; then
-    SOURCE_DIR="${PROJECT_ROOT}/.tmp/android-alsa-src"
-    if [[ ! -d "$SOURCE_DIR/.git" ]]; then
-        rm -rf "$SOURCE_DIR"
-        git clone --depth 1 "$ALSA_REPO" "$SOURCE_DIR"
-    fi
-fi
-
-[[ -d "$SOURCE_DIR" ]] || fail "alsa-lib source not found: $SOURCE_DIR"
-[[ -f "$SOURCE_DIR/configure.ac" || -f "$SOURCE_DIR/configure" ]] || fail "alsa-lib source layout not recognized under: $SOURCE_DIR"
+SOURCE_DIR="${PROJECT_ROOT}/.tmp/android-alsa-src"
+rm -rf "$SOURCE_DIR"
+mkdir -p "${PROJECT_ROOT}/.tmp"
+archive="${PROJECT_ROOT}/.tmp/alsa-lib-${ALSA_VERSION}.tar.bz2"
+url="https://www.alsa-project.org/files/pub/lib/alsa-lib-${ALSA_VERSION}.tar.bz2"
+echo "Downloading ALSA ${ALSA_VERSION}: $url"
+curl -fL "$url" -o "$archive"
+tar -xjf "$archive" -C "${PROJECT_ROOT}/.tmp"
+mv "${PROJECT_ROOT}/.tmp/alsa-lib-${ALSA_VERSION}" "$SOURCE_DIR"
 
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 mkdir -p "$OUTPUT_DIR"
@@ -94,11 +86,6 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 HOST_TAG="$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64"
 TOOLCHAIN="${NDK_ROOT}/toolchains/llvm/prebuilt/${HOST_TAG}"
-ANDROID_TOOLCHAIN_FILE="${NDK_ROOT}/build/cmake/android.toolchain.cmake"
-[[ -d "$TOOLCHAIN/bin" ]] || fail "NDK LLVM toolchain not found: $TOOLCHAIN"
-[[ -f "$ANDROID_TOOLCHAIN_FILE" ]] || fail "NDK CMake toolchain not found: $ANDROID_TOOLCHAIN_FILE"
-command -v cmake >/dev/null 2>&1 || fail "cmake is required"
-command -v autoreconf >/dev/null 2>&1 || fail "autoreconf is required"
 
 normalize_abis() {
     printf '%s\n' "$BUILD_ABIS" | tr ',' ' '
@@ -147,14 +134,6 @@ build_one() {
 
     clean_generated_source_headers
 
-    if [[ -f "$SOURCE_DIR/config.status" || -f "$SOURCE_DIR/Makefile" ]]; then
-        (
-            cd "$SOURCE_DIR"
-            make distclean >/dev/null 2>&1 || true
-        )
-        clean_generated_source_headers
-    fi
-
     if [[ ! -x "$SOURCE_DIR/configure" ]]; then
         (
             cd "$SOURCE_DIR"
@@ -178,6 +157,8 @@ build_one() {
             --disable-doc \
             --disable-oss \
             --disable-seq \
+            --disable-ucm \
+            --disable-topology \
             --disable-rawmidi \
             --disable-hwdep \
             --disable-usb \

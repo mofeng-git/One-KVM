@@ -17,28 +17,21 @@ fail() {
 build_android() {
     local arch="$1"
     local docker_build_args=()
-    local docker_mount_args=()
     local gradle_distribution_url="${ONE_KVM_GRADLE_DISTRIBUTION_URL:-}"
     local gradle_distribution_url_cn="${ONE_KVM_GRADLE_DISTRIBUTION_URL_CN:-https://mirrors.cloud.tencent.com/gradle/gradle-9.1.0-bin.zip}"
     local gradle_network_timeout="${ONE_KVM_GRADLE_NETWORK_TIMEOUT:-120000}"
-    local gradle_cache="${ONE_KVM_ANDROID_GRADLE_CACHE_DIR:-one-kvm-android-gradle-cache}"
-    local cargo_registry_cache="${ONE_KVM_ANDROID_CARGO_REGISTRY_CACHE_DIR:-one-kvm-android-cargo-registry}"
-    local cargo_git_cache="${ONE_KVM_ANDROID_CARGO_GIT_CACHE_DIR:-one-kvm-android-cargo-git}"
-
-    add_cache_mount() {
-        local source="$1"
-        local target="$2"
-
-        if [[ "$source" == /* || "$source" == ./* || "$source" == ../* ]]; then
-            mkdir -p "$source"
-            source="$(cd "$source" && pwd)"
-        fi
-
-        docker_mount_args+=("-v" "$source:$target")
-    }
 
     if [[ "${CHINAMIRRO:-}" == "1" ]]; then
         docker_build_args+=("--build-arg" "CHINAMIRRO=1")
+        docker_build_args+=("--build-arg" "DEBIAN_IMAGE=${DEBIAN_IMAGE:-docker.1ms.run/library/debian:11}")
+        docker_build_args+=("--build-arg" "RUSTUP_DIST_SERVER_CN=${RUSTUP_DIST_SERVER_CN:-https://rsproxy.cn}")
+        docker_build_args+=("--build-arg" "RUSTUP_UPDATE_ROOT_CN=${RUSTUP_UPDATE_ROOT_CN:-https://rsproxy.cn/rustup}")
+        docker_build_args+=("--build-arg" "CARGO_INDEX_CN=${CARGO_INDEX_CN:-https://rsproxy.cn/crates.io-index}")
+        docker_build_args+=("--build-arg" "CARGO_REGISTRY_CN=${CARGO_REGISTRY_CN:-sparse+https://rsproxy.cn/index/}")
+        docker_build_args+=("--build-arg" "MAVEN_REPOSITORY_CN=${MAVEN_REPOSITORY_CN:-https://maven.aliyun.com/repository/public}")
+        docker_build_args+=("--build-arg" "GOOGLE_MAVEN_REPOSITORY_CN=${GOOGLE_MAVEN_REPOSITORY_CN:-https://maven.aliyun.com/repository/google}")
+        docker_build_args+=("--build-arg" "GRADLE_PLUGIN_REPOSITORY_CN=${GRADLE_PLUGIN_REPOSITORY_CN:-https://maven.aliyun.com/repository/gradle-plugin}")
+        docker_build_args+=("--build-arg" "GRADLE_DISTRIBUTION_URL_CN=$gradle_distribution_url_cn")
         if [[ -z "$gradle_distribution_url" ]]; then
             gradle_distribution_url="$gradle_distribution_url_cn"
         fi
@@ -55,16 +48,12 @@ build_android() {
             "$PROJECT_ROOT/build/cross"
     fi
 
-    add_cache_mount "$gradle_cache" "/root/.gradle"
-    add_cache_mount "$cargo_registry_cache" "/root/.cargo/registry"
-    add_cache_mount "$cargo_git_cache" "/root/.cargo/git"
-
     echo "=== Building Android APK: $arch ==="
     docker run --rm \
         -v "$PROJECT_ROOT:/workspace" \
-        "${docker_mount_args[@]}" \
         -w /workspace \
         -e "CHINAMIRRO=${CHINAMIRRO:-0}" \
+        -e "GH_PROXY=${GH_PROXY:-https://gh-proxy.com}" \
         -e "ONE_KVM_GRADLE_DISTRIBUTION_URL=$gradle_distribution_url" \
         -e "ONE_KVM_GRADLE_DISTRIBUTION_URL_CN=$gradle_distribution_url_cn" \
         -e "ONE_KVM_GRADLE_NETWORK_TIMEOUT=$gradle_network_timeout" \
@@ -102,9 +91,6 @@ Examples:
   CHINAMIRRO=1 ONE_KVM_GRADLE_DISTRIBUTION_URL=https://mirrors.aliyun.com/macports/distfiles/gradle/gradle-9.1.0-bin.zip build/build-android.sh all
 
 Environment:
-  ONE_KVM_ANDROID_GRADLE_CACHE_DIR          Host Gradle cache path or Docker volume name
-  ONE_KVM_ANDROID_CARGO_REGISTRY_CACHE_DIR  Host Cargo registry cache path or Docker volume name
-  ONE_KVM_ANDROID_CARGO_GIT_CACHE_DIR       Host Cargo git cache path or Docker volume name
   ONE_KVM_ANDROID_SKIP_DOCKER_BUILD=1       Reuse an already loaded Docker image
 
 APK output:

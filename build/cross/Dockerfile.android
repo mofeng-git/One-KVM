@@ -1,7 +1,8 @@
 # Android build image for One-KVM
 # Based on Debian 11 for stable toolchain/runtime compatibility
 
-FROM debian:11
+ARG DEBIAN_IMAGE=debian:11
+FROM ${DEBIAN_IMAGE}
 
 ARG CHINAMIRRO=0
 ARG ANDROID_SDK_ROOT=/root/android-sdk
@@ -10,11 +11,13 @@ ARG ANDROID_NDK_VERSION=27.3.13750724
 ARG ANDROID_PLATFORM=36
 ARG ANDROID_BUILD_TOOLS=36.0.0
 ARG CARGO_NDK_VERSION=4.1.2
-ARG RUSTUP_DIST_SERVER_CN=https://mirrors.tuna.tsinghua.edu.cn/rustup
-ARG RUSTUP_UPDATE_ROOT_CN=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
-ARG CARGO_REGISTRY_CN=sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/
+ARG RUSTUP_DIST_SERVER_CN=https://rsproxy.cn
+ARG RUSTUP_UPDATE_ROOT_CN=https://rsproxy.cn/rustup
+ARG CARGO_INDEX_CN=https://rsproxy.cn/crates.io-index
+ARG CARGO_REGISTRY_CN=sparse+https://rsproxy.cn/index/
 ARG MAVEN_REPOSITORY_CN=https://maven.aliyun.com/repository/public
 ARG GOOGLE_MAVEN_REPOSITORY_CN=https://maven.aliyun.com/repository/google
+ARG GRADLE_PLUGIN_REPOSITORY_CN=https://maven.aliyun.com/repository/gradle-plugin
 ARG GRADLE_DISTRIBUTION_URL_CN=https://mirrors.cloud.tencent.com/gradle/gradle-9.1.0-bin.zip
 ARG ANDROID_CMDLINE_TOOLS_URL=
 
@@ -29,9 +32,8 @@ ENV PATH=/root/.cargo/bin:${PATH}
 ENV ONE_KVM_GRADLE_DISTRIBUTION_URL_CN=${GRADLE_DISTRIBUTION_URL_CN}
 
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
-        sed -i \
-            -e 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|g' \
-            -e 's|http://security.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+        sed -i -E \
+            -e 's|http://deb.debian.org/debian([[:space:]])|http://mirrors.tuna.tsinghua.edu.cn/debian\1|g' \
             /etc/apt/sources.list; \
     fi
 
@@ -39,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     wget \
+    bzip2 \
     unzip \
     zip \
     git \
@@ -63,11 +66,15 @@ RUN if [ "$CHINAMIRRO" = "1" ]; then \
         mkdir -p /root/.cargo; \
         printf '%s\n' \
             '[source.crates-io]' \
-            "replace-with = 'tuna'" \
-            '[source.tuna]' \
+            "replace-with = 'rsproxy-sparse'" \
+            '[source.rsproxy]' \
+            "registry = '${CARGO_INDEX_CN}'" \
+            '[source.rsproxy-sparse]' \
             "registry = '${CARGO_REGISTRY_CN}'" \
-            '[registries.tuna]' \
-            "index = '${CARGO_REGISTRY_CN}'" \
+            '[registries.rsproxy]' \
+            "index = '${CARGO_INDEX_CN}'" \
+            '[net]' \
+            'git-fetch-with-cli = true' \
             > /root/.cargo/config.toml; \
     fi \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
@@ -102,6 +109,7 @@ RUN if [ "$CHINAMIRRO" = "1" ]; then \
             "beforeSettings { settings ->" \
             "    settings.pluginManagement.repositories.maven { url = uri('${GOOGLE_MAVEN_REPOSITORY_CN}') }" \
             "    settings.pluginManagement.repositories.maven { url = uri('${MAVEN_REPOSITORY_CN}') }" \
+            "    settings.pluginManagement.repositories.maven { url = uri('${GRADLE_PLUGIN_REPOSITORY_CN}') }" \
             "    settings.dependencyResolutionManagement.repositories.maven { url = uri('${GOOGLE_MAVEN_REPOSITORY_CN}') }" \
             "    settings.dependencyResolutionManagement.repositories.maven { url = uri('${MAVEN_REPOSITORY_CN}') }" \
             "}" \
@@ -238,7 +246,9 @@ RUN printf '%s\n' \
         '    '"'"' "$WRAPPER_PROPERTIES" > "$WRAPPER_PROPERTIES_TMP"' \
         '    cp "$WRAPPER_PROPERTIES_TMP" "$WRAPPER_PROPERTIES"' \
         '    rm -f "$WRAPPER_PROPERTIES_TMP"' \
-        '    find /root/.gradle/wrapper/dists -name "*.lck" -o -name "*.part" 2>/dev/null | xargs -r rm -f' \
+        '    if [[ -d /root/.gradle/wrapper/dists ]]; then' \
+        '        find /root/.gradle/wrapper/dists \( -name "*.lck" -o -name "*.part" \) -print0 | xargs -0 -r rm -f' \
+        '    fi' \
         'fi' \
         '' \
         'ensure_keystore' \
