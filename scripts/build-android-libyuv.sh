@@ -5,14 +5,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-SOURCE_DIR=""
 OUTPUT_DIR="${PROJECT_ROOT}/dist/android-libyuv"
 JPEG_ROOT="${ONE_KVM_ANDROID_TURBOJPEG_ROOT:-${PROJECT_ROOT}/dist/android-turbojpeg}"
 ANDROID_API="${ANDROID_API:-21}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 BUILD_ABIS="arm64-v8a armeabi-v7a"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
-LIBYUV_REPO="${LIBYUV_REPO:-https://github.com/lemenkov/libyuv.git}"
+LIBYUV_REV="${LIBYUV_REV:-957f295ea946cbbd13fcfc46e7066f2efa801233}"
 
 usage() {
     cat <<'EOF'
@@ -20,8 +19,6 @@ Usage:
   scripts/build-android-libyuv.sh [options]
 
 Options:
-  --source <dir>          Existing libyuv source checkout. If omitted, the script
-                          clones libyuv into .tmp/android-libyuv-src.
   --output <dir>          Output root. Default: dist/android-libyuv
   --ndk <dir>             Android NDK root. Defaults to ANDROID_NDK_HOME or ANDROID_NDK_ROOT.
   --api <level>           Android API level. Default: 21.
@@ -51,10 +48,6 @@ fail() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --source)
-        SOURCE_DIR="${2:-}"
-        shift 2
-        ;;
     --output)
         OUTPUT_DIR="${2:-}"
         shift 2
@@ -88,27 +81,29 @@ done
 [[ -n "$NDK_ROOT" ]] || fail "--ndk or ANDROID_NDK_HOME/ANDROID_NDK_ROOT is required"
 [[ -d "$NDK_ROOT/toolchains/llvm/prebuilt" ]] || fail "Invalid NDK root: $NDK_ROOT"
 
-if [[ -z "$SOURCE_DIR" ]]; then
-    SOURCE_DIR="${PROJECT_ROOT}/.tmp/android-libyuv-src"
-    if [[ ! -d "$SOURCE_DIR/.git" ]]; then
-        rm -rf "$SOURCE_DIR"
-        git clone --depth 1 "$LIBYUV_REPO" "$SOURCE_DIR"
-    fi
+SOURCE_DIR="${PROJECT_ROOT}/.tmp/android-libyuv-src"
+rm -rf "$SOURCE_DIR"
+repo_url="https://github.com/lemenkov/libyuv.git"
+if [[ "${CHINAMIRRO:-0}" == "1" ]]; then
+    repo_url="${GH_PROXY:-https://gh-proxy.com}"
+    repo_url="${repo_url%/}/https://github.com/lemenkov/libyuv.git"
 fi
-
-[[ -d "$SOURCE_DIR" ]] || fail "libyuv source not found: $SOURCE_DIR"
-[[ -f "$SOURCE_DIR/CMakeLists.txt" ]] || fail "libyuv CMakeLists.txt not found under: $SOURCE_DIR"
+echo "Cloning libyuv source: $repo_url"
+git init "$SOURCE_DIR"
+(
+    cd "$SOURCE_DIR"
+    git remote add origin "$repo_url"
+    git fetch --depth 1 origin "$LIBYUV_REV"
+    git checkout --detach FETCH_HEAD
+)
 
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 HOST_TAG="$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64"
-TOOLCHAIN="${NDK_ROOT}/toolchains/llvm/prebuilt/${HOST_TAG}"
 ANDROID_TOOLCHAIN_FILE="${NDK_ROOT}/build/cmake/android.toolchain.cmake"
-[[ -d "$TOOLCHAIN/bin" ]] || fail "NDK LLVM toolchain not found: $TOOLCHAIN"
 [[ -f "$ANDROID_TOOLCHAIN_FILE" ]] || fail "NDK CMake toolchain not found: $ANDROID_TOOLCHAIN_FILE"
-command -v cmake >/dev/null 2>&1 || fail "cmake is required"
 
 normalize_abis() {
     printf '%s\n' "$BUILD_ABIS" | tr ',' ' '

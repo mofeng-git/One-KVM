@@ -5,21 +5,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-SOURCE_DIR=""
 OUTPUT_DIR="${PROJECT_ROOT}/dist/android-ffmpeg-mediacodec"
 ANDROID_API="${ANDROID_API:-21}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 BUILD_ABIS="arm64-v8a armeabi-v7a"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+FFMPEG_ROCKCHIP_REV="${FFMPEG_ROCKCHIP_REV:-40c412daccf08164493da0de990eb99a8948116b}"
 
 usage() {
     cat <<'EOF'
 Usage:
-  scripts/build-android-ffmpeg-mediacodec.sh --source <ffmpeg-source-dir> [options]
-
-Required:
-  --source <dir>          FFmpeg source directory. For the downloaded package,
-                          use the extracted ffmpeg-rockchip directory.
+  scripts/build-android-ffmpeg-mediacodec.sh [options]
 
 Options:
   --output <dir>          Output root. Default: dist/android-ffmpeg-mediacodec
@@ -35,9 +31,7 @@ The output layout is compatible with ONE_KVM_ANDROID_FFMPEG_ROOT:
   <output>/armeabi-v7a/lib
 
 Example:
-  scripts/build-android-ffmpeg-mediacodec.sh \
-    --source .tmp/android-ffmpeg-check/src/ffmpeg-rockchip \
-    --output /opt/one-kvm/android-ffmpeg
+  scripts/build-android-ffmpeg-mediacodec.sh --output /opt/one-kvm/android-ffmpeg
 
   export ONE_KVM_ANDROID_FFMPEG_ROOT=/opt/one-kvm/android-ffmpeg
   cd android && ./gradlew :app:assembleDebug
@@ -51,10 +45,6 @@ fail() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --source)
-        SOURCE_DIR="${2:-}"
-        shift 2
-        ;;
     --output)
         OUTPUT_DIR="${2:-}"
         shift 2
@@ -81,11 +71,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "$SOURCE_DIR" ]] || fail "--source is required"
-[[ -d "$SOURCE_DIR" ]] || fail "FFmpeg source not found: $SOURCE_DIR"
-[[ -x "$SOURCE_DIR/configure" ]] || fail "FFmpeg configure script not found under: $SOURCE_DIR"
+SOURCE_DIR="${PROJECT_ROOT}/.tmp/android-ffmpeg-check/src/ffmpeg-rockchip"
+rm -rf "$SOURCE_DIR"
+mkdir -p "$(dirname "$SOURCE_DIR")"
+repo_url="https://github.com/nyanmisaka/ffmpeg-rockchip.git"
+if [[ "${CHINAMIRRO:-0}" == "1" ]]; then
+    repo_url="${GH_PROXY:-https://gh-proxy.com}"
+    repo_url="${repo_url%/}/https://github.com/nyanmisaka/ffmpeg-rockchip.git"
+fi
+echo "Cloning FFmpeg source: $repo_url"
+git init "$SOURCE_DIR"
+(
+    cd "$SOURCE_DIR"
+    git remote add origin "$repo_url"
+    git fetch --depth 1 origin "$FFMPEG_ROCKCHIP_REV"
+    git checkout --detach FETCH_HEAD
+)
+
 [[ -n "$NDK_ROOT" ]] || fail "--ndk or ANDROID_NDK_HOME/ANDROID_NDK_ROOT is required"
-[[ -d "$NDK_ROOT/toolchains/llvm/prebuilt" ]] || fail "Invalid NDK root: $NDK_ROOT"
 
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 mkdir -p "$OUTPUT_DIR"
@@ -93,7 +96,6 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 HOST_TAG="$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64"
 TOOLCHAIN="${NDK_ROOT}/toolchains/llvm/prebuilt/${HOST_TAG}"
-[[ -d "$TOOLCHAIN/bin" ]] || fail "NDK LLVM toolchain not found: $TOOLCHAIN"
 
 normalize_abis() {
     printf '%s\n' "$BUILD_ABIS" | tr ',' ' '
@@ -105,11 +107,6 @@ patch_android_ffmpeg_mjpeg_mediacodec() {
     local mediacodecdec="${avcodec_dir}/mediacodecdec.c"
     local allcodecs="${avcodec_dir}/allcodecs.c"
     local makefile="${avcodec_dir}/Makefile"
-
-    [[ -f "$mediacodecdec" ]] || fail "FFmpeg mediacodecdec.c not found: $mediacodecdec"
-    [[ -f "$allcodecs" ]] || fail "FFmpeg allcodecs.c not found: $allcodecs"
-    [[ -f "$makefile" ]] || fail "FFmpeg libavcodec Makefile not found: $makefile"
-    [[ -f "$configure_file" ]] || fail "FFmpeg configure not found: $configure_file"
 
     python3 - "$mediacodecdec" "$allcodecs" "$configure_file" "$makefile" <<'PY'
 from pathlib import Path
@@ -217,8 +214,6 @@ build_one() {
     strip="${TOOLCHAIN}/bin/llvm-strip"
     extra_cflags="-fPIC"
     extra_ldflags=""
-
-    [[ -x "$cc" ]] || fail "Missing compiler: $cc"
 
     if [[ "$abi" == "armeabi-v7a" ]]; then
         extra_cflags="${extra_cflags} -march=armv7-a -mfloat-abi=softfp -mfpu=neon"

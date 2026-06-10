@@ -1,19 +1,26 @@
 # Cross-compilation image for ARMv7 based on Debian 11
 # Build on Debian 11 (GLIBC 2.31) for maximum runtime compatibility
 
-FROM debian:11
+ARG DEBIAN_IMAGE=debian:11
+FROM ${DEBIAN_IMAGE}
 
-# Linux headers used by v4l2r bindgen
-ARG LINUX_HEADERS_VERSION=6.6
-ARG LINUX_HEADERS_SHA256=
 ARG CHINAMIRRO=0
+ARG GH_PROXY=https://gh-proxy.com/
+ARG RUSTUP_DIST_SERVER_CN=https://rsproxy.cn
+ARG RUSTUP_UPDATE_ROOT_CN=https://rsproxy.cn/rustup
+ARG CARGO_INDEX_CN=https://rsproxy.cn/crates.io-index
+ARG CARGO_REGISTRY_CN=sparse+https://rsproxy.cn/index/
+ARG LIBJPEG_TURBO_VERSION=3.1.4.1
 ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
+ARG LIBVPX_VERSION=1.16.0
+ARG X265_VERSION=3.4
+ARG OPUS_VERSION=1.5.2
+ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
 
-# Optionally use Tsinghua mirrors for builds in China.
+# Optionally use China mirrors for builds in China.
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
-        sed -i \
-            -e 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|g' \
-            -e 's|http://security.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+        sed -i -E \
+            -e 's|http://deb.debian.org/debian([[:space:]])|http://mirrors.tuna.tsinghua.edu.cn/debian\1|g' \
             /etc/apt/sources.list; \
     fi
 
@@ -22,19 +29,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     && if [ "$CHINAMIRRO" = "1" ]; then \
-        export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup; \
-        export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup; \
+        export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER_CN}; \
+        export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT_CN}; \
     fi \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
     && if [ "$CHINAMIRRO" = "1" ]; then \
         mkdir -p /root/.cargo; \
         printf '%s\n' \
             '[source.crates-io]' \
-            "replace-with = 'tuna'" \
-            '[source.tuna]' \
-            'registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"' \
-            '[registries.tuna]' \
-            'index = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"' \
+            "replace-with = 'rsproxy-sparse'" \
+            '[source.rsproxy]' \
+            "registry = '${CARGO_INDEX_CN}'" \
+            '[source.rsproxy-sparse]' \
+            "registry = '${CARGO_REGISTRY_CN}'" \
+            '[registries.rsproxy]' \
+            "index = '${CARGO_INDEX_CN}'" \
+            '[net]' \
+            'git-fetch-with-cli = true' \
             > /root/.cargo/config.toml; \
     fi \
     && rm -rf /var/lib/apt/lists/*
@@ -70,6 +81,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install ARMv7 development libraries (without VAAPI/X11 for ARM)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl1.1 \
+    libssl1.1:armhf \
     libasound2-dev:armhf \
     libv4l-dev:armhf \
     libudev-dev:armhf \
@@ -78,20 +91,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdrm-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
-# Install newer V4L2 headers for v4l2r bindgen
-RUN mkdir -p /opt/v4l2-headers \
-    && wget -q https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${LINUX_HEADERS_VERSION}.tar.xz -O /tmp/linux-headers.tar.xz \
-    && if [ -n "$LINUX_HEADERS_SHA256" ]; then echo "$LINUX_HEADERS_SHA256  /tmp/linux-headers.tar.xz" | sha256sum -c -; fi \
-    && tar -xf /tmp/linux-headers.tar.xz -C /tmp \
-    && cd /tmp/linux-${LINUX_HEADERS_VERSION} \
-    && make ARCH=arm headers_install INSTALL_HDR_PATH=/opt/v4l2-headers \
-    && rm -rf /tmp/linux-${LINUX_HEADERS_VERSION} /tmp/linux-headers.tar.xz
-
-ENV V4L2R_VIDEODEV2_H_PATH=/opt/v4l2-headers/include
-
 # Build static libjpeg-turbo from source (cross-compile for ARMv7)
-RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/libjpeg-turbo \
     && cd /tmp/libjpeg-turbo \
+    && git remote add origin "${github_prefix}https://github.com/libjpeg-turbo/libjpeg-turbo.git" \
+    && git fetch --depth 1 origin "refs/tags/${LIBJPEG_TURBO_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
@@ -107,7 +114,9 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
 # Build static libyuv from source (cross-compile for ARMv7)
 RUN git init /tmp/libyuv \
     && cd /tmp/libyuv \
-    && git remote add origin https://github.com/lemenkov/libyuv \
+    && github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git remote add origin "${github_prefix}https://github.com/lemenkov/libyuv" \
     && git fetch --depth 1 origin ${LIBYUV_REV} \
     && git checkout --detach FETCH_HEAD \
     && mkdir build && cd build \
@@ -127,8 +136,13 @@ RUN git init /tmp/libyuv \
     && rm -rf /tmp/libyuv
 
 # Build static libvpx from source (cross-compile for ARMv7)
-RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/libvpx \
     && cd /tmp/libvpx \
+    && git remote add origin "${github_prefix}https://github.com/webmproject/libvpx.git" \
+    && git fetch --depth 1 origin "refs/tags/v${LIBVPX_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && export CC=arm-linux-gnueabihf-gcc \
     && export CXX=arm-linux-gnueabihf-g++ \
     && export LD=arm-linux-gnueabihf-ld \
@@ -145,7 +159,9 @@ RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
     && rm -rf /tmp/libvpx
 
 # Build static libx264 from source (cross-compile for ARMv7)
-RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git clone --depth 1 "${github_prefix}https://github.com/mirror/x264.git" /tmp/x264 \
     && cd /tmp/x264 \
     && export CC=arm-linux-gnueabihf-gcc \
     && export AR=arm-linux-gnueabihf-ar \
@@ -162,12 +178,18 @@ RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
     && rm -rf /tmp/x264
 
 # Build static libx265 from source (cross-compile for ARMv7)
-RUN git clone --depth 1 https://bitbucket.org/multicoreware/x265_git /tmp/x265 \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/x265 \
     && cd /tmp/x265 \
+    && git remote add origin "${github_prefix}https://github.com/videolan/x265.git" \
+    && git fetch --depth 1 origin "refs/tags/${X265_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && cd source \
     && mkdir -p build \
     && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_ASM_NASM_FLAGS="-w-macro-params-legacy" \
         -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=arm \
@@ -197,12 +219,15 @@ Cflags: -I\${includedir}
 EOF
 
 # Build static libopus from source (cross-compile for ARMv7)
-RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && wget -O /tmp/opus.tar.gz "${github_prefix}https://github.com/xiph/opus/releases/download/v${OPUS_VERSION}/opus-${OPUS_VERSION}.tar.gz" \
+    && tar -xzf /tmp/opus.tar.gz -C /tmp \
+    && mv "/tmp/opus-${OPUS_VERSION}" /tmp/opus \
     && cd /tmp/opus \
     && export CC=arm-linux-gnueabihf-gcc \
     && export AR=arm-linux-gnueabihf-ar \
     && export RANLIB=arm-linux-gnueabihf-ranlib \
-    && ./autogen.sh \
     && ./configure \
         --prefix=/usr/arm-linux-gnueabihf \
         --host=arm-linux-gnueabihf \
@@ -210,13 +235,20 @@ RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
         --disable-doc \
     && make -j$(nproc) \
     && make install \
-    && rm -rf /tmp/opus
+    && rm -rf /tmp/opus /tmp/opus.tar.gz
 
 # Download and build FFmpeg with RKMPP support
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
-    && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
-    && tar -xzf ffmpeg.tar.gz \
-    && cd ffmpeg \
+    && github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git clone --depth 1 "https://gitee.com/nyanmisaka/mpp.git" rkmpp \
+    && git clone --depth 1 "https://gitee.com/nyanmisaka/rga.git" rkrga \
+    && git init ffmpeg-rockchip \
+    && cd ffmpeg-rockchip \
+    && git remote add origin "${github_prefix}https://github.com/nyanmisaka/ffmpeg-rockchip.git" \
+    && git fetch --depth 1 origin ${FFMPEG_ROCKCHIP_REV} \
+    && git checkout --detach FETCH_HEAD \
+    && cd .. \
     # Build RKMPP
     && mkdir -p rkmpp/build && cd rkmpp/build \
     && cmake .. \
@@ -347,8 +379,8 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
 
 # Add Rust target
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
-        export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup; \
-        export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup; \
+        export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER_CN}; \
+        export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT_CN}; \
     fi \
     && rustup target add armv7-unknown-linux-gnueabihf
 

@@ -21,16 +21,21 @@ build_arch() {
 
     case "${CHINAMIRRO:-}" in
         1|true|TRUE|yes|YES|on|ON)
-            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--build-arg CHINAMIRRO=1"
-            echo "=== China mirror acceleration: enabled (Tsinghua) ==="
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://gh-proxy.com/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-docker.1ms.run/library/debian:11}"
+            cross_build_opts="$cross_build_opts --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg NO_PROXY="
+            cross_build_opts="$cross_build_opts --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg no_proxy="
+            echo "=== China mirror acceleration: enabled ==="
             echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
             env \
                 CROSS_BUILD_OPTS="$cross_build_opts" \
-                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=tuna \
-                CARGO_SOURCE_TUNA_REGISTRY=sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/ \
+                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=rsproxy-sparse \
+                CARGO_SOURCE_RSPROXY_REGISTRY=https://rsproxy.cn/crates.io-index \
+                CARGO_SOURCE_RSPROXY_SPARSE_REGISTRY=sparse+https://rsproxy.cn/index/ \
+                CARGO_REGISTRIES_RSPROXY_INDEX=https://rsproxy.cn/crates.io-index \
                 CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
-                RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup \
-                RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup \
+                CARGO_NET_GIT_FETCH_WITH_CLI=true \
+                RUSTUP_DIST_SERVER=https://rsproxy.cn \
+                RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
                 cross build --release --target "$rust_target"
             return
             ;;
@@ -66,7 +71,7 @@ case "${1:-all}" in
         echo "Examples:"
         echo "  $0              # Build all"
         echo "  $0 x86_64       # Build x86_64 only"
-        echo "  CHINAMIRRO=1 $0 arm64  # Build with Tsinghua mirrors"
+        echo "  CHINAMIRRO=1 $0 arm64  # Build with China mirrors"
         exit 0
         ;;
     *)
@@ -80,18 +85,6 @@ echo "Binaries built:"
 for target in "${ARCH_MAP[@]}"; do
     if [ -f "$PROJECT_DIR/target/$target/release/one-kvm" ]; then
         echo "  $target: OK"
-    fi
-done
-echo ""
-echo "Static libraries:"
-for target in "${ARCH_MAP[@]}"; do
-    case "$target" in
-        x86_64-unknown-linux-gnu) gnu_target="x86_64-linux-gnu" ;;
-        aarch64-unknown-linux-gnu) gnu_target="aarch64-linux-gnu" ;;
-        armv7-unknown-linux-gnueabihf) gnu_target="armv7-linux-gnueabihf" ;;
-    esac
-    if [ -d "$PROJECT_DIR/target/one-kvm-libs/$gnu_target/lib" ]; then
-        echo "  $gnu_target: OK"
     fi
 done
 echo ""
