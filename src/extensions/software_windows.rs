@@ -7,6 +7,7 @@ pub fn default_binary_path(id: ExtensionId) -> &'static str {
         ExtensionId::Ttyd => "ttyd.win32.exe",
         ExtensionId::Gostc => "gostc.exe",
         ExtensionId::Easytier => "easytier-core.exe",
+        ExtensionId::Frpc => "frpc.exe",
     }
 }
 

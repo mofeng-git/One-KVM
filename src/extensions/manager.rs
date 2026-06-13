@@ -1,16 +1,18 @@
 use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
+use toml_edit::DocumentMut;
 
 use super::types::*;
 use crate::events::EventBus;
 
 const LOG_BUFFER_SIZE: usize = 200;
-const LOG_BATCH_SIZE: usize = 16;
 
 #[cfg(unix)]
 pub const TTYD_SOCKET_PATH: &str = "/var/run/one-kvm/ttyd.sock";
@@ -25,6 +27,12 @@ const TTYD_TCP_PORT: &str = "7681";
 struct ExtensionProcess {
     child: Child,
     logs: Arc<RwLock<VecDeque<String>>>,
+    _temp_dir: Option<TempDir>,
+}
+
+struct ExtensionLaunch {
+    args: Vec<String>,
+    temp_dir: Option<TempDir>,
 }
 
 pub struct ExtensionManager {
@@ -82,6 +90,17 @@ impl ExtensionManager {
             ExtensionId::Easytier => {
                 config.easytier.enabled && !config.easytier.network_name.is_empty()
             }
+            ExtensionId::Frpc => {
+                config.frpc.enabled
+                    && match config.frpc.config_mode {
+                        FrpcConfigMode::Quick => {
+                            !config.frpc.proxy_name.trim().is_empty()
+                                && !config.frpc.server_addr.trim().is_empty()
+                                && !config.frpc.token.is_empty()
+                        }
+                        FrpcConfigMode::Full => !config.frpc.custom_toml.trim().is_empty(),
+                    }
+            }
         }
     }
 
@@ -135,17 +154,17 @@ impl ExtensionManager {
 
         self.stop(id).await.ok();
 
-        let args = self.build_args(id, config).await?;
+        let launch = self.build_launch(id, config).await?;
 
         tracing::info!(
             "Starting extension {}: {} {}",
             id,
             id.binary_path().display(),
-            Self::redact_args_for_log(&args).join(" ")
+            launch.args.join(" ")
         );
 
         let mut child = Command::new(id.binary_path())
-            .args(&args)
+            .args(&launch.args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
@@ -172,9 +191,21 @@ impl ExtensionManager {
 
         let pid = child.id();
         tracing::info!("Extension {} started with PID {:?}", id, pid);
+        Self::push_log(
+            &logs,
+            format!("Extension {} started with PID {:?}", id, pid),
+        )
+        .await;
 
         let mut processes = self.processes.write().await;
-        processes.insert(id, ExtensionProcess { child, logs });
+        processes.insert(
+            id,
+            ExtensionProcess {
+                child,
+                logs,
+                _temp_dir: launch.temp_dir,
+            },
+        );
         drop(processes);
         self.mark_ttyd_status_dirty(id).await;
 
@@ -212,22 +243,14 @@ impl ExtensionManager {
     ) {
         let reader = BufReader::new(reader);
         let mut lines = reader.lines();
-        let mut local_buffer = Vec::with_capacity(LOG_BATCH_SIZE);
 
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
                     tracing::info!("[{}] {}", id, line);
-                    local_buffer.push(line);
-
-                    if local_buffer.len() >= LOG_BATCH_SIZE {
-                        Self::flush_logs(&logs, &mut local_buffer).await;
-                    }
+                    Self::push_log(&logs, line).await;
                 }
                 Ok(None) => {
-                    if !local_buffer.is_empty() {
-                        Self::flush_logs(&logs, &mut local_buffer).await;
-                    }
                     break;
                 }
                 Err(e) => {
@@ -238,29 +261,27 @@ impl ExtensionManager {
         }
     }
 
-    async fn flush_logs(logs: &RwLock<VecDeque<String>>, buffer: &mut Vec<String>) {
+    async fn push_log(logs: &RwLock<VecDeque<String>>, line: String) {
         let mut logs = logs.write().await;
-        for line in buffer.drain(..) {
-            if logs.len() >= LOG_BUFFER_SIZE {
-                logs.pop_front();
-            }
-            logs.push_back(line);
+        if logs.len() >= LOG_BUFFER_SIZE {
+            logs.pop_front();
         }
+        logs.push_back(line);
     }
 
-    async fn build_args(
+    async fn build_launch(
         &self,
         id: ExtensionId,
         config: &ExtensionsConfig,
-    ) -> Result<Vec<String>, String> {
-        match id {
+    ) -> Result<ExtensionLaunch, String> {
+        let args = match id {
             ExtensionId::Ttyd => {
                 let c = &config.ttyd;
 
                 let mut args = Self::build_ttyd_listen_args().await?;
 
                 args.push(c.shell.clone());
-                Ok(args)
+                args
             }
 
             ExtensionId::Gostc => {
@@ -282,7 +303,7 @@ impl ExtensionManager {
 
                 args.extend(["-key".to_string(), c.key.clone()]);
 
-                Ok(args)
+                args
             }
 
             ExtensionId::Easytier => {
@@ -314,9 +335,153 @@ impl ExtensionManager {
                     args.push("-d".to_string());
                 }
 
-                Ok(args)
+                args
+            }
+
+            ExtensionId::Frpc => {
+                return Self::build_frpc_launch(&config.frpc).await;
+            }
+        };
+
+        Ok(ExtensionLaunch {
+            args,
+            temp_dir: None,
+        })
+    }
+
+    async fn build_frpc_launch(config: &FrpcConfig) -> Result<ExtensionLaunch, String> {
+        let config_text = match config.config_mode {
+            FrpcConfigMode::Quick => Self::build_frpc_quick_toml(config)?,
+            FrpcConfigMode::Full => Self::validate_frpc_full_toml(config)?.to_string(),
+        };
+
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| format!("Failed to create FRPC config dir: {}", e))?;
+        let config_path = temp_dir.path().join("frpc.toml");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(temp_dir.path(), std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| format!("Failed to protect FRPC config dir: {}", e))?;
+        }
+
+        tokio::fs::write(&config_path, config_text)
+            .await
+            .map_err(|e| format!("Failed to write FRPC config: {}", e))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            tokio::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600))
+                .await
+                .map_err(|e| format!("Failed to protect FRPC config: {}", e))?;
+        }
+
+        Ok(ExtensionLaunch {
+            args: vec!["-c".to_string(), Self::path_to_arg(&config_path)],
+            temp_dir: Some(temp_dir),
+        })
+    }
+
+    fn validate_frpc_full_toml(config: &FrpcConfig) -> Result<&str, String> {
+        let trimmed = config.custom_toml.trim();
+        if trimmed.is_empty() {
+            return Err("FRPC full configuration is required".into());
+        }
+
+        trimmed
+            .parse::<DocumentMut>()
+            .map_err(|e| format!("FRPC full configuration is not valid TOML: {}", e))?;
+
+        Ok(config.custom_toml.as_str())
+    }
+
+    fn build_frpc_quick_toml(config: &FrpcConfig) -> Result<String, String> {
+        if config.proxy_name.trim().is_empty() {
+            return Err("FRPC proxy name is required".into());
+        }
+        if config.server_addr.trim().is_empty() {
+            return Err("FRPC server address is required".into());
+        }
+        if config.token.is_empty() {
+            return Err("FRPC token is required".into());
+        }
+        if config.local_ip.trim().is_empty() {
+            return Err("FRPC local IP is required".into());
+        }
+
+        let proxy_type = match config.proxy_type {
+            FrpProxyType::Tcp => "tcp",
+            FrpProxyType::Udp => "udp",
+            FrpProxyType::Http => "http",
+            FrpProxyType::Https => "https",
+            FrpProxyType::Stcp => "stcp",
+            FrpProxyType::Sudp => "sudp",
+            FrpProxyType::Xtcp => "xtcp",
+        };
+
+        let mut toml = String::new();
+        toml.push_str(&format!(
+            "serverAddr = {}\nserverPort = {}\n\n",
+            Self::toml_string(config.server_addr.trim()),
+            config.server_port
+        ));
+        toml.push_str("[auth]\n");
+        toml.push_str("method = \"token\"\n");
+        toml.push_str(&format!("token = {}\n\n", Self::toml_string(&config.token)));
+        toml.push_str("[transport]\n");
+        toml.push_str("protocol = \"tcp\"\n\n");
+        toml.push_str("[transport.tls]\n");
+        toml.push_str(&format!("enable = {}\n\n", config.tls));
+        toml.push_str("[[proxies]]\n");
+        toml.push_str(&format!(
+            "name = {}\ntype = {}\nlocalIP = {}\nlocalPort = {}\n",
+            Self::toml_string(config.proxy_name.trim()),
+            Self::toml_string(proxy_type),
+            Self::toml_string(config.local_ip.trim()),
+            config.local_port
+        ));
+
+        match config.proxy_type {
+            FrpProxyType::Tcp | FrpProxyType::Udp => {
+                let remote_port = config.remote_port.ok_or_else(|| {
+                    "FRPC remote port is required for TCP/UDP proxies".to_string()
+                })?;
+                toml.push_str(&format!("remotePort = {}\n", remote_port));
+            }
+            FrpProxyType::Http | FrpProxyType::Https => {
+                if let Some(domain) = config
+                    .custom_domain
+                    .as_ref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
+                    toml.push_str(&format!(
+                        "customDomains = [{}]\n",
+                        Self::toml_string(domain)
+                    ));
+                }
+            }
+            FrpProxyType::Stcp | FrpProxyType::Sudp | FrpProxyType::Xtcp => {
+                if !config.secret_key.is_empty() {
+                    toml.push_str(&format!(
+                        "secretKey = {}\n",
+                        Self::toml_string(&config.secret_key)
+                    ));
+                }
             }
         }
+
+        Ok(toml)
+    }
+
+    fn toml_string(value: &str) -> String {
+        serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+    }
+
+    fn path_to_arg(path: &PathBuf) -> String {
+        path.to_string_lossy().to_string()
     }
 
     #[cfg(unix)]
@@ -354,34 +519,6 @@ impl ExtensionManager {
             cwd,
             "-W".to_string(),
         ])
-    }
-
-    fn redact_args_for_log(args: &[String]) -> Vec<String> {
-        let mut redacted = Vec::with_capacity(args.len());
-        let mut redact_next = false;
-
-        for arg in args {
-            if redact_next {
-                redacted.push("****".to_string());
-                redact_next = false;
-                continue;
-            }
-
-            if arg == "-key" || arg == "--key" {
-                redacted.push(arg.clone());
-                redact_next = true;
-            } else if let Some((flag, _)) = arg.split_once('=') {
-                if flag == "-key" || flag == "--key" {
-                    redacted.push(format!("{}=****", flag));
-                } else {
-                    redacted.push(arg.clone());
-                }
-            } else {
-                redacted.push(arg.clone());
-            }
-        }
-
-        redacted
     }
 
     #[cfg(unix)]

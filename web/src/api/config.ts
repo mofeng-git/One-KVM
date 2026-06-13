@@ -24,6 +24,8 @@ import type {
   GostcConfigUpdate,
   EasytierConfig,
   EasytierConfigUpdate,
+  FrpcConfig,
+  FrpcConfigUpdate,
   WebConfigResponse,
   WebConfigUpdate,
 } from '@/types/generated'
@@ -156,6 +158,12 @@ export const extensionsApi = {
 
   updateEasytier: (config: EasytierConfigUpdate) =>
     request<EasytierConfig>('/extensions/easytier/config', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  updateFrpc: (config: FrpcConfigUpdate) =>
+    request<FrpcConfig>('/extensions/frpc/config', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),

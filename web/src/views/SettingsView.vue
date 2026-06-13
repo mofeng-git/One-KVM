@@ -43,6 +43,7 @@ import type {
   OtgHidProfile,
   OtgHidFunctions,
 } from '@/types/generated'
+import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { getVideoFormatState } from '@/lib/video-format-support'
@@ -218,6 +219,7 @@ function selectSection(id: string) {
 function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
+  if (value === 'ext-frpc') return 'ext-remote-access'
   return isSettingsSectionId(value) ? value : null
 }
 
@@ -315,11 +317,13 @@ const extensionLogs = ref<Record<string, string[]>>({
   ttyd: [],
   gostc: [],
   easytier: [],
+  frpc: [],
 })
 const showLogs = ref<Record<string, boolean>>({
   ttyd: false,
   gostc: false,
   easytier: false,
+  frpc: false,
 })
 
 const showTerminalDialog = ref(false)
@@ -328,6 +332,22 @@ const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
   gostc: { enabled: false, addr: '', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
+  frpc: {
+    enabled: false,
+    config_mode: FrpcConfigMode.Quick,
+    proxy_name: '',
+    proxy_type: FrpProxyType.Tcp,
+    server_addr: '',
+    server_port: 7000,
+    token: '',
+    local_ip: '127.0.0.1',
+    local_port: 22,
+    remote_port: undefined as number | undefined,
+    custom_domain: '',
+    secret_key: '',
+    tls: true,
+    custom_toml: '',
+  },
 })
 
 const gostcValidationMessage = computed(() => {
@@ -338,6 +358,25 @@ const gostcValidationMessage = computed(() => {
 
 const easytierValidationMessage = computed(() => {
   if (!extConfig.value.easytier.network_name?.trim()) return t('extensions.easytier.networkNameRequired')
+  return ''
+})
+
+const frpcRemotePortRequired = computed(() => ['tcp', 'udp'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcRemotePort = computed(() => ['tcp', 'udp', 'stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcCustomDomain = computed(() => ['http', 'https'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcSecretKey = computed(() => ['stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type))
+const frpcQuickMode = computed(() => extConfig.value.frpc.config_mode === FrpcConfigMode.Quick)
+
+const frpcValidationMessage = computed(() => {
+  if (extConfig.value.frpc.config_mode === FrpcConfigMode.Full) {
+    if (!extConfig.value.frpc.custom_toml?.trim()) return t('extensions.frpc.fullConfigRequired')
+    return ''
+  }
+  if (!extConfig.value.frpc.proxy_name?.trim()) return t('extensions.frpc.proxyNameRequired')
+  if (!extConfig.value.frpc.server_addr?.trim()) return t('extensions.frpc.serverAddrRequired')
+  if (!extConfig.value.frpc.token) return t('extensions.frpc.tokenRequired')
+  if (!extConfig.value.frpc.local_ip?.trim()) return t('extensions.frpc.localIpRequired')
+  if (frpcRemotePortRequired.value && !extConfig.value.frpc.remote_port) return t('extensions.frpc.remotePortRequired')
   return ''
 })
 
@@ -1373,6 +1412,23 @@ async function loadExtensions() {
         peer_urls: easytier.peer_urls || [],
         virtual_ip: easytier.virtual_ip || '',
       }
+      const frpc = extensions.value.frpc.config
+      extConfig.value.frpc = {
+        enabled: frpc.enabled,
+        config_mode: frpc.config_mode || FrpcConfigMode.Quick,
+        proxy_name: frpc.proxy_name,
+        proxy_type: frpc.proxy_type,
+        server_addr: frpc.server_addr,
+        server_port: frpc.server_port,
+        token: frpc.token,
+        local_ip: frpc.local_ip,
+        local_port: frpc.local_port,
+        remote_port: frpc.remote_port,
+        custom_domain: frpc.custom_domain || '',
+        secret_key: frpc.secret_key,
+        tls: frpc.tls,
+        custom_toml: frpc.custom_toml || '',
+      }
     }
   } catch {
   } finally {
@@ -1380,8 +1436,11 @@ async function loadExtensions() {
   }
 }
 
-async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
-  if ((id === 'gostc' || id === 'easytier') && !validateExtensionConfig(id)) return
+type ExtensionConfigId = 'ttyd' | 'gostc' | 'easytier' | 'frpc'
+type ValidatedExtensionConfigId = Exclude<ExtensionConfigId, 'ttyd'>
+
+async function startExtension(id: ExtensionConfigId) {
+  if (id !== 'ttyd' && !validateExtensionConfig(id)) return
 
   try {
     await extensionsApi.start(id)
@@ -1390,7 +1449,7 @@ async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function stopExtension(id: 'ttyd' | 'gostc' | 'easytier') {
+async function stopExtension(id: ExtensionConfigId) {
   try {
     await extensionsApi.stop(id)
     await loadExtensions()
@@ -1398,7 +1457,7 @@ async function stopExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
+async function refreshExtensionLogs(id: ExtensionConfigId) {
   try {
     const result = await extensionsApi.logs(id, 100)
     extensionLogs.value[id] = result.logs
@@ -1406,8 +1465,12 @@ async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
-  if ((id === 'gostc' || id === 'easytier') && extConfig.value[id].enabled && !validateExtensionConfig(id)) return
+async function saveExtensionConfig(id: ExtensionConfigId) {
+  if (id !== 'ttyd') {
+    const shouldValidate = extConfig.value[id].enabled
+      || (id === 'frpc' && extConfig.value.frpc.config_mode === FrpcConfigMode.Full)
+    if (shouldValidate && !validateExtensionConfig(id)) return
+  }
 
   loading.value = true
   try {
@@ -1417,6 +1480,14 @@ async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
       await extensionsApi.updateGostc(extConfig.value.gostc)
     } else if (id === 'easytier') {
       await extensionsApi.updateEasytier(extConfig.value.easytier)
+    } else if (id === 'frpc') {
+      const frpc = extConfig.value.frpc
+      await extensionsApi.updateFrpc({
+        ...frpc,
+        remote_port: frpcQuickMode.value && showFrpcRemotePort.value ? frpc.remote_port : undefined,
+        custom_domain: frpcQuickMode.value && showFrpcCustomDomain.value ? frpc.custom_domain || undefined : undefined,
+        secret_key: frpcQuickMode.value && showFrpcSecretKey.value ? frpc.secret_key : '',
+      })
     }
     await loadExtensions()
     saved.value = true
@@ -1662,10 +1733,15 @@ function showValidationError(message: string): boolean {
   return false
 }
 
-function validateExtensionConfig(id: 'gostc' | 'easytier'): boolean {
-  const message = id === 'gostc'
-    ? gostcValidationMessage.value
-    : easytierValidationMessage.value
+function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
+  let message = ''
+  if (id === 'gostc') {
+    message = gostcValidationMessage.value
+  } else if (id === 'easytier') {
+    message = easytierValidationMessage.value
+  } else {
+    message = frpcValidationMessage.value
+  }
 
   return !message || showValidationError(message)
 }
@@ -3979,6 +4055,183 @@ watch(isWindows, () => {
             <!-- Save button -->
             <div v-if="extensions?.easytier?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+            <!-- FRPC -->
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between gap-4">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.frpc.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.frpc.desc') }}</CardDescription>
+                  </div>
+                  <Badge :variant="extensions?.frpc?.available ? 'default' : 'destructive'">
+                    {{ extensions?.frpc?.available ? t('extensions.available') : t('extensions.unavailable') }}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div v-if="!extensions?.frpc?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'frpc.exe' : '/usr/bin/frpc' }) }}
+                </div>
+                <template v-else>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div :class="['w-2 h-2 rounded-full', getExtStatusClass(extensions?.frpc?.status)]" />
+                      <span class="text-sm">{{ getExtStatusText(extensions?.frpc?.status) }}</span>
+                    </div>
+                    <div class="flex gap-2">
+                      <Button
+                        v-if="!isExtRunning(extensions?.frpc?.status)"
+                        size="sm"
+                        @click="startExtension('frpc')"
+                        :disabled="extensionsLoading || !!frpcValidationMessage"
+                      >
+                        <Play class="h-4 w-4 mr-1" />
+                        {{ t('extensions.start') }}
+                      </Button>
+                      <Button
+                        v-else
+                        size="sm"
+                        variant="outline"
+                        @click="stopExtension('frpc')"
+                        :disabled="extensionsLoading"
+                      >
+                        <Square class="h-4 w-4 mr-1" />
+                        {{ t('extensions.stop') }}
+                      </Button>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div class="grid gap-4">
+                    <div class="flex items-center justify-between">
+                      <Label>{{ t('extensions.autoStart') }}</Label>
+                      <Switch v-model="extConfig.frpc.enabled" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                    </div>
+                    <div class="grid grid-cols-2 rounded-md bg-muted p-1">
+                      <button
+                        type="button"
+                        :class="[
+                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                          frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                        @click="extConfig.frpc.config_mode = FrpcConfigMode.Quick"
+                      >
+                        {{ t('extensions.frpc.quickConfig') }}
+                      </button>
+                      <button
+                        type="button"
+                        :class="[
+                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                          !frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                        @click="extConfig.frpc.config_mode = FrpcConfigMode.Full"
+                      >
+                        {{ t('extensions.frpc.fullConfig') }}
+                      </button>
+                    </div>
+                    <template v-if="frpcQuickMode">
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.proxyType') }}</Label>
+                        <div class="sm:col-span-3">
+                          <RadioGroup v-model="extConfig.frpc.proxy_type" class="flex flex-wrap gap-4" :disabled="isExtRunning(extensions?.frpc?.status)">
+                            <div v-for="type in ['tcp', 'udp', 'http', 'https', 'stcp', 'sudp', 'xtcp']" :key="type" class="flex items-center space-x-2">
+                              <RadioGroupItem :value="type" :id="`frpc-${type}`" />
+                              <Label :for="`frpc-${type}`" class="cursor-pointer uppercase">{{ type }}</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.proxyName') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.proxy_name" :placeholder="t('extensions.frpc.proxyNamePlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.proxy_name?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.proxyNameRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.serverAddr') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.server_addr" :placeholder="t('extensions.frpc.serverAddrPlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.server_addr?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.serverAddrRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.serverPort') }}</Label>
+                        <Input v-model.number="extConfig.frpc.server_port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.token') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.token" type="password" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.token" class="text-xs text-destructive">{{ t('extensions.frpc.tokenRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.localIp') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.local_ip" placeholder="127.0.0.1" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.local_ip?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.localIpRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.localPort') }}</Label>
+                        <Input v-model.number="extConfig.frpc.local_port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div v-if="showFrpcRemotePort" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.remotePort') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model.number="extConfig.frpc.remote_port" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && frpcRemotePortRequired && !extConfig.frpc.remote_port" class="text-xs text-destructive">{{ t('extensions.frpc.remotePortRequired') }}</p>
+                        </div>
+                      </div>
+                      <div v-if="showFrpcCustomDomain" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.customDomain') }}</Label>
+                        <Input v-model="extConfig.frpc.custom_domain" class="sm:col-span-3" :placeholder="t('extensions.frpc.customDomainPlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div v-if="showFrpcSecretKey" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.secretKey') }}</Label>
+                        <Input v-model="extConfig.frpc.secret_key" class="sm:col-span-3" type="password" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.tls') }}</Label>
+                        <div class="sm:col-span-3">
+                          <Switch v-model="extConfig.frpc.tls" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                        </div>
+                      </div>
+                    </template>
+                    <div v-else class="space-y-1">
+                      <Textarea
+                        v-model="extConfig.frpc.custom_toml"
+                        class="min-h-[300px] font-mono text-xs"
+                        spellcheck="false"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.frpc.fullConfigHint') }}</p>
+                      <p v-if="!extConfig.frpc.custom_toml?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.fullConfigRequired') }}</p>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <button type="button" @click="showLogs.frpc = !showLogs.frpc; if (showLogs.frpc) refreshExtensionLogs('frpc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />
+                      {{ t('extensions.viewLogs') }}
+                    </button>
+                    <div v-if="showLogs.frpc" class="space-y-2">
+                      <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.frpc || []).join('\n') || t('extensions.noLogs') }}</pre>
+                      <Button variant="ghost" size="sm" @click="refreshExtensionLogs('frpc')">
+                        <RefreshCw class="h-3 w-3 mr-1" />
+                        {{ t('common.refresh') }}
+                      </Button>
+                    </div>
+                  </div>
+                </template>
+              </CardContent>
+            </Card>
+            <div v-if="extensions?.frpc?.available" class="flex justify-end">
+              <Button :disabled="loading || isExtRunning(extensions?.frpc?.status)" @click="saveExtensionConfig('frpc')">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

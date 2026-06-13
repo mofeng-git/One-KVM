@@ -205,6 +205,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/extensions/easytier/config",
             patch(handlers::extensions::update_easytier_config),
         )
+        .route(
+            "/extensions/frpc/config",
+            patch(handlers::extensions::update_frpc_config),
+        )
         // Terminal (ttyd) reverse proxy - WebSocket and HTTP
         .route("/terminal", get(handlers::terminal::terminal_index))
         .route("/terminal/", get(handlers::terminal::terminal_index))
