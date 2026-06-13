@@ -1286,10 +1286,10 @@ async function saveConfig() {
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      await configStore.updateMsd({
-        enabled: config.value.msd_enabled,
-      })
       await configStore.updateHid(hidUpdate)
+      await configStore.updateMsd({
+        enabled: config.value.hid_backend === 'otg' && config.value.msd_enabled,
+      })
     }
 
     if (activeSection.value === 'msd') {

@@ -15,7 +15,7 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
 use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
 use super::ch9329_proto::{
@@ -35,6 +35,8 @@ const PROBE_INTERVAL_MS: u64 = 100;
 const RECONNECT_DELAY_MS: u64 = 2000;
 
 const INIT_WAIT_MS: u64 = 3000;
+
+const RECONNECT_COMMAND_POLL_MS: u64 = 100;
 
 struct Ch9329RuntimeState {
     initialized: AtomicBool,
@@ -117,15 +119,15 @@ pub struct Ch9329Backend {
     baud_rate: u32,
     worker_tx: Mutex<Option<mpsc::Sender<WorkerCommand>>>,
     worker_handle: Mutex<Option<thread::JoinHandle<()>>>,
-    keyboard_state: Mutex<KeyboardReport>,
-    mouse_buttons: AtomicU8,
+    keyboard_state: Arc<Mutex<KeyboardReport>>,
+    mouse_buttons: Arc<AtomicU8>,
     screen_resolution: RwLock<(u32, u32)>,
     chip_info: Arc<RwLock<Option<ChipInfo>>>,
     led_status: Arc<RwLock<LedStatus>>,
     address: u8,
-    last_abs_x: AtomicU16,
-    last_abs_y: AtomicU16,
-    relative_mouse_active: AtomicBool,
+    last_abs_x: Arc<AtomicU16>,
+    last_abs_y: Arc<AtomicU16>,
+    relative_mouse_active: Arc<AtomicBool>,
     runtime: Arc<Ch9329RuntimeState>,
 }
 
@@ -140,15 +142,15 @@ impl Ch9329Backend {
             baud_rate,
             worker_tx: Mutex::new(None),
             worker_handle: Mutex::new(None),
-            keyboard_state: Mutex::new(KeyboardReport::default()),
-            mouse_buttons: AtomicU8::new(0),
+            keyboard_state: Arc::new(Mutex::new(KeyboardReport::default())),
+            mouse_buttons: Arc::new(AtomicU8::new(0)),
             screen_resolution: RwLock::new((1920, 1080)),
             chip_info: Arc::new(RwLock::new(None)),
             led_status: Arc::new(RwLock::new(LedStatus::default())),
             address: DEFAULT_ADDR,
-            last_abs_x: AtomicU16::new(0),
-            last_abs_y: AtomicU16::new(0),
-            relative_mouse_active: AtomicBool::new(false),
+            last_abs_x: Arc::new(AtomicU16::new(0)),
+            last_abs_y: Arc::new(AtomicU16::new(0)),
+            relative_mouse_active: Arc::new(AtomicBool::new(false)),
             runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
@@ -168,9 +170,27 @@ impl Ch9329Backend {
         std::path::Path::new(&self.port_path).exists()
     }
 
-    fn serial_error_to_hid_error(e: serialport::Error, operation: &str) -> AppError {
+    fn serial_error_to_hid_error(
+        port_path: &str,
+        e: serialport::Error,
+        operation: &str,
+    ) -> AppError {
+        let port_present = {
+            #[cfg(windows)]
+            {
+                crate::utils::list_serial_ports()
+                    .iter()
+                    .any(|port| port.eq_ignore_ascii_case(port_path))
+            }
+            #[cfg(not(windows))]
+            {
+                std::path::Path::new(port_path).exists()
+            }
+        };
+
         let error_code = match e.kind() {
-            serialport::ErrorKind::NoDevice => "port_not_found",
+            serialport::ErrorKind::NoDevice if !port_present => "port_not_found",
+            serialport::ErrorKind::NoDevice => "device_unavailable",
             serialport::ErrorKind::InvalidInput => "invalid_config",
             serialport::ErrorKind::Io(_) => "io_error",
             _ => "serial_error",
@@ -204,7 +224,7 @@ impl Ch9329Backend {
         serialport::new(port_path, baud_rate)
             .timeout(Duration::from_millis(RESPONSE_TIMEOUT_MS))
             .open()
-            .map_err(|e| Self::serial_error_to_hid_error(e, "Failed to open serial port"))
+            .map_err(|e| Self::serial_error_to_hid_error(port_path, e, "Failed to open serial port"))
     }
 
     fn write_packet(
@@ -302,6 +322,28 @@ impl Ch9329Backend {
             .ok_or_else(|| Self::backend_error("Failed to parse chip info", "invalid_response"))
     }
 
+    fn open_ready_port(
+        port_path: &str,
+        baud_rate: u32,
+        address: u8,
+    ) -> Result<(Box<dyn serialport::SerialPort>, ChipInfo)> {
+        Self::open_port(port_path, baud_rate).and_then(|mut port| {
+            let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
+            Ok((port, info))
+        })
+    }
+
+    fn record_runtime_error(runtime: &Arc<Ch9329RuntimeState>, err: &AppError) {
+        if let AppError::HidError {
+            reason, error_code, ..
+        } = err
+        {
+            runtime.set_error(reason.clone(), error_code.clone());
+        } else {
+            runtime.set_error(err.to_string(), "error");
+        }
+    }
+
     fn update_chip_info_cache(
         chip_info: &Arc<RwLock<Option<ChipInfo>>>,
         led_status: &Arc<RwLock<LedStatus>>,
@@ -342,6 +384,49 @@ impl Ch9329Backend {
         })
     }
 
+    fn wait_reconnect_delay(rx: &mpsc::Receiver<WorkerCommand>) -> bool {
+        let deadline = Instant::now() + Duration::from_millis(RECONNECT_DELAY_MS);
+        loop {
+            let now = Instant::now();
+            if now >= deadline {
+                return true;
+            }
+
+            let remaining = deadline.saturating_duration_since(now);
+            let timeout = remaining.min(Duration::from_millis(RECONNECT_COMMAND_POLL_MS));
+            match rx.recv_timeout(timeout) {
+                Ok(WorkerCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return false;
+                }
+                Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+        }
+    }
+
+    fn release_state_on_port(port: &mut dyn serialport::SerialPort, address: u8) -> Result<()> {
+        let reset_sequence = [(cmd::SEND_KB_GENERAL_DATA, vec![0; 8])];
+
+        for (cmd, data) in reset_sequence {
+            Self::xfer_packet(port, address, cmd, &data)?;
+        }
+
+        Ok(())
+    }
+
+    fn clear_local_state(
+        keyboard_state: &Arc<Mutex<KeyboardReport>>,
+        mouse_buttons: &Arc<AtomicU8>,
+        last_abs_x: &Arc<AtomicU16>,
+        last_abs_y: &Arc<AtomicU16>,
+        relative_mouse_active: &Arc<AtomicBool>,
+    ) {
+        keyboard_state.lock().clear();
+        mouse_buttons.store(0, Ordering::Relaxed);
+        last_abs_x.store(0, Ordering::Relaxed);
+        last_abs_y.store(0, Ordering::Relaxed);
+        relative_mouse_active.store(false, Ordering::Relaxed);
+    }
+
     fn worker_reconnect_loop(
         rx: &mpsc::Receiver<WorkerCommand>,
         port_path: &str,
@@ -351,18 +436,9 @@ impl Ch9329Backend {
         led_status: &Arc<RwLock<LedStatus>>,
         runtime: &Arc<Ch9329RuntimeState>,
     ) -> Option<Box<dyn serialport::SerialPort>> {
+        runtime.set_offline();
         loop {
-            match rx.recv_timeout(Duration::from_millis(RECONNECT_DELAY_MS)) {
-                Ok(WorkerCommand::Shutdown) => return None,
-                Ok(_) => continue,
-                Err(mpsc::RecvTimeoutError::Disconnected) => return None,
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-            }
-
-            match Self::open_port(port_path, baud_rate).and_then(|mut port| {
-                let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
-                Ok((port, info))
-            }) {
+            match Self::open_ready_port(port_path, baud_rate, address) {
                 Ok((port, info)) => {
                     info!(
                         "CH9329 reconnected: {}, USB: {}",
@@ -380,11 +456,9 @@ impl Ch9329Backend {
                     return Some(port);
                 }
                 Err(err) => {
-                    if let AppError::HidError {
-                        reason, error_code, ..
-                    } = err
-                    {
-                        runtime.set_error(reason, error_code);
+                    Self::record_runtime_error(runtime, &err);
+                    if !Self::wait_reconnect_delay(rx) {
+                        return None;
                     }
                 }
             }
@@ -437,36 +511,43 @@ impl Ch9329Backend {
         chip_info: Arc<RwLock<Option<ChipInfo>>>,
         led_status: Arc<RwLock<LedStatus>>,
         runtime: Arc<Ch9329RuntimeState>,
+        keyboard_state: Arc<Mutex<KeyboardReport>>,
+        mouse_buttons: Arc<AtomicU8>,
+        last_abs_x: Arc<AtomicU16>,
+        last_abs_y: Arc<AtomicU16>,
+        relative_mouse_active: Arc<AtomicBool>,
         init_tx: mpsc::Sender<Result<ChipInfo>>,
     ) {
         runtime.set_initialized(true);
 
-        let mut port = match Self::open_port(&port_path, baud_rate).and_then(|mut port| {
-            let info = Self::query_chip_info_on_port(port.as_mut(), address)?;
-            Ok((port, info))
-        }) {
-            Ok((port, info)) => {
-                info!(
-                    "CH9329 serial port opened: {} @ {} baud",
-                    port_path, baud_rate
-                );
-                if Self::update_chip_info_cache(&chip_info, &led_status, info.clone()) {
-                    runtime.notify();
+        let mut init_tx = Some(init_tx);
+        let mut port = loop {
+            match Self::open_ready_port(&port_path, baud_rate, address) {
+                Ok((port, info)) => {
+                    info!(
+                        "CH9329 serial port opened: {} @ {} baud",
+                        port_path, baud_rate
+                    );
+                    if Self::update_chip_info_cache(&chip_info, &led_status, info.clone()) {
+                        runtime.notify();
+                    }
+                    runtime.set_online();
+                    if let Some(init_tx) = init_tx.take() {
+                        let _ = init_tx.send(Ok(info));
+                    }
+                    break port;
                 }
-                runtime.set_online();
-                let _ = init_tx.send(Ok(info));
-                port
-            }
-            Err(err) => {
-                if let AppError::HidError {
-                    reason, error_code, ..
-                } = &err
-                {
-                    runtime.set_error(reason.clone(), error_code.clone());
+                Err(err) => {
+                    Self::record_runtime_error(&runtime, &err);
+                    if let Some(init_tx) = init_tx.take() {
+                        let _ = init_tx.send(Err(err));
+                    }
+                    if !Self::wait_reconnect_delay(&rx) {
+                        runtime.set_offline();
+                        runtime.set_initialized(false);
+                        return;
+                    }
                 }
-                let _ = init_tx.send(Err(err));
-                runtime.set_initialized(false);
-                return;
             }
         };
 
@@ -482,6 +563,7 @@ impl Ch9329Backend {
                         }
 
                         Self::try_best_effort_reset(port.as_mut(), address);
+                        drop(port);
 
                         let Some(new_port) = Self::worker_reconnect_loop(
                             &rx,
@@ -500,28 +582,17 @@ impl Ch9329Backend {
                     }
                 }
                 Ok(WorkerCommand::ResetState) => {
-                    let reset_sequence = [
-                        (cmd::SEND_KB_GENERAL_DATA, vec![0; 8]),
-                        (cmd::SEND_MS_ABS_DATA, vec![0x02, 0, 0, 0, 0, 0, 0]),
-                        (cmd::SEND_KB_MEDIA_DATA, vec![0x02, 0x00, 0x00, 0x00]),
-                    ];
-
-                    let mut reset_failed = false;
-                    for (cmd, data) in reset_sequence {
-                        if let Err(err) = Self::xfer_packet(port.as_mut(), address, cmd, &data) {
-                            if let AppError::HidError {
-                                reason, error_code, ..
-                            } = err
-                            {
-                                runtime.set_error(reason, error_code);
-                            }
-                            reset_failed = true;
-                            Self::try_best_effort_reset(port.as_mut(), address);
-                            break;
-                        }
-                    }
-
-                    if reset_failed {
+                    Self::clear_local_state(
+                        &keyboard_state,
+                        &mouse_buttons,
+                        &last_abs_x,
+                        &last_abs_y,
+                        &relative_mouse_active,
+                    );
+                    if let Err(err) = Self::release_state_on_port(port.as_mut(), address) {
+                        Self::record_runtime_error(&runtime, &err);
+                        Self::try_best_effort_reset(port.as_mut(), address);
+                        drop(port);
                         let Some(new_port) = Self::worker_reconnect_loop(
                             &rx,
                             &port_path,
@@ -556,6 +627,7 @@ impl Ch9329Backend {
                             }
 
                             Self::try_best_effort_reset(port.as_mut(), address);
+                            drop(port);
 
                             let Some(new_port) = Self::worker_reconnect_loop(
                                 &rx,
@@ -596,12 +668,29 @@ impl HidBackend for Ch9329Backend {
         let chip_info = self.chip_info.clone();
         let led_status = self.led_status.clone();
         let runtime = self.runtime.clone();
+        let keyboard_state = self.keyboard_state.clone();
+        let mouse_buttons = self.mouse_buttons.clone();
+        let last_abs_x = self.last_abs_x.clone();
+        let last_abs_y = self.last_abs_y.clone();
+        let relative_mouse_active = self.relative_mouse_active.clone();
 
         let handle = thread::Builder::new()
             .name("ch9329-worker".to_string())
             .spawn(move || {
                 Self::worker_loop(
-                    port_path, baud_rate, address, rx, chip_info, led_status, runtime, init_tx,
+                    port_path,
+                    baud_rate,
+                    address,
+                    rx,
+                    chip_info,
+                    led_status,
+                    runtime,
+                    keyboard_state,
+                    mouse_buttons,
+                    last_abs_x,
+                    last_abs_y,
+                    relative_mouse_active,
+                    init_tx,
                 );
             })
             .map_err(|e| AppError::Internal(format!("Failed to spawn CH9329 worker: {}", e)))?;
@@ -626,7 +715,6 @@ impl HidBackend for Ch9329Backend {
                 Ok(())
             }
             Ok(Err(err)) => {
-                let _ = handle.join();
                 self.record_error(
                     format!(
                         "CH9329 not responding on {} @ {} baud: {}",
@@ -634,10 +722,13 @@ impl HidBackend for Ch9329Backend {
                     ),
                     "init_failed",
                 );
-                Err(AppError::Internal(format!(
-                    "CH9329 not responding on {} @ {} baud: {}",
+                warn!(
+                    "CH9329 not responding on {} @ {} baud, retrying in background: {}",
                     self.port_path, self.baud_rate, err
-                )))
+                );
+                *self.worker_tx.lock() = Some(tx);
+                *self.worker_handle.lock() = Some(handle);
+                Ok(())
             }
             Err(_) => {
                 let _ = tx.send(WorkerCommand::Shutdown);

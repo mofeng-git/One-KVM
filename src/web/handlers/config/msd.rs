@@ -25,6 +25,7 @@ pub async fn update_msd_config(
         .config
         .update(|config| {
             req.apply_to(&mut config.msd);
+            config.enforce_invariants();
         })
         .await?;
 

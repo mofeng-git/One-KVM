@@ -132,6 +132,7 @@ pub async fn setup_init(
             if let Some(enabled) = req.msd_enabled {
                 config.msd.enabled = enabled;
             }
+            config.enforce_invariants();
 
             // Extension settings
             if let Some(enabled) = req.ttyd_enabled {

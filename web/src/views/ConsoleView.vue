@@ -319,6 +319,7 @@ function hidErrorHint(errorCode?: string | null, backend?: string | null, reason
     case 'io_error':
     case 'write_failed':
     case 'read_failed':
+    case 'device_unavailable':
       if (backend === 'otg') return t('hid.errorHints.otgIoError')
       if (backend === 'ch9329') return t('hid.errorHints.ch9329IoError')
       return t('hid.errorHints.ioError')

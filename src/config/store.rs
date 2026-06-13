@@ -27,7 +27,8 @@ impl ConfigStore {
     }
 
     pub async fn load(&self) -> Result<()> {
-        let config = Self::load_config(&self.pool).await?;
+        let mut config = Self::load_config(&self.pool).await?;
+        config.enforce_invariants();
         self.cache.store(Arc::new(config));
         Ok(())
     }
@@ -73,6 +74,8 @@ impl ConfigStore {
 
     pub async fn set(&self, config: AppConfig) -> Result<()> {
         let _guard = self.write_lock.lock().await;
+        let mut config = config;
+        config.enforce_invariants();
         Self::save_config_to_db(&self.pool, &config).await?;
         self.cache.store(Arc::new(config));
 
@@ -91,6 +94,7 @@ impl ConfigStore {
         let current = self.cache.load();
         let mut config = (**current).clone();
         f(&mut config);
+        config.enforce_invariants();
 
         Self::save_config_to_db(&self.pool, &config).await?;
 

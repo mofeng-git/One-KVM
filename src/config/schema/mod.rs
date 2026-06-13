@@ -37,7 +37,14 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
+    pub fn enforce_invariants(&mut self) {
+        if self.hid.backend != HidBackend::Otg {
+            self.msd.enabled = false;
+        }
+    }
+
     pub fn apply_platform_defaults(&mut self) {
         crate::platform::defaults::apply(self);
+        self.enforce_invariants();
     }
 }

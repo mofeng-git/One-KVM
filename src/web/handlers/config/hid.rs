@@ -25,6 +25,7 @@ pub async fn update_hid_config(
         .config
         .update(|config| {
             req.apply_to(&mut config.hid);
+            config.enforce_invariants();
         })
         .await?;
 

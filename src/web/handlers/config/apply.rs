@@ -167,7 +167,8 @@ pub async fn apply_hid_config(
     new_config: &HidConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_msd_enabled = state.config.get().msd.enabled;
+    let current_config = state.config.get();
+    let current_msd_enabled = current_config.msd.enabled && new_config.backend == HidBackend::Otg;
     new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
 
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
@@ -235,18 +236,19 @@ pub async fn apply_msd_config(
     new_config: &MsdConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    state
-        .config
-        .get()
+    let current_config = state.config.get();
+    let hid_backend_is_otg = current_config.hid.backend == HidBackend::Otg;
+    let effective_new_msd_enabled = new_config.enabled && hid_backend_is_otg;
+    current_config
         .hid
-        .validate_otg_endpoint_budget(new_config.enabled)?;
+        .validate_otg_endpoint_budget(effective_new_msd_enabled)?;
 
     tracing::info!("MSD config sent, checking if reload needed...");
     tracing::debug!("Old MSD config: {:?}", old_config);
     tracing::debug!("New MSD config: {:?}", new_config);
 
     let old_msd_enabled = old_config.enabled;
-    let new_msd_enabled = new_config.enabled;
+    let new_msd_enabled = effective_new_msd_enabled;
     let msd_dir_changed = old_config.msd_dir != new_config.msd_dir;
 
     tracing::info!(
