@@ -363,7 +363,7 @@ mod tests {
     fn parse_cpu_model_from_model_name_field() {
         let input = "processor\t: 0\nmodel name\t: Intel(R) Xeon(R)\n";
         assert_eq!(
-            parse_cpu_model_from_cpuinfo_content(input),
+            parse_cpu_model_from_cpuinfo_content(Some(input)),
             Some("Intel(R) Xeon(R)".to_string())
         );
     }
@@ -372,7 +372,7 @@ mod tests {
     fn parse_cpu_model_from_model_field() {
         let input = "processor\t: 0\nModel\t\t: Raspberry Pi 4 Model B Rev 1.4\n";
         assert_eq!(
-            parse_cpu_model_from_cpuinfo_content(input),
+            parse_cpu_model_from_cpuinfo_content(Some(input)),
             Some("Raspberry Pi 4 Model B Rev 1.4".to_string())
         );
     }

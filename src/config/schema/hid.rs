@@ -36,6 +36,38 @@ impl Default for OtgDescriptorConfig {
 
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Ch9329DescriptorConfig {
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub manufacturer: String,
+    pub product: String,
+    pub serial_number: Option<String>,
+}
+
+impl Default for Ch9329DescriptorConfig {
+    fn default() -> Self {
+        Self {
+            vendor_id: 0x1a86,
+            product_id: 0xe129,
+            manufacturer: "WCH.CN".to_string(),
+            product: "CH9329".to_string(),
+            serial_number: None,
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Ch9329DescriptorState {
+    pub descriptor: Ch9329DescriptorConfig,
+    pub manufacturer_enabled: bool,
+    pub product_enabled: bool,
+    pub serial_enabled: bool,
+    pub config_mode_available: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum OtgHidProfile {
@@ -191,6 +223,10 @@ pub struct HidConfig {
     pub otg_keyboard_leds: bool,
     pub ch9329_port: String,
     pub ch9329_baudrate: u32,
+    #[serde(default)]
+    pub ch9329_hybrid_mouse: bool,
+    #[serde(default)]
+    pub ch9329_descriptor: Ch9329DescriptorConfig,
     pub mouse_absolute: bool,
 }
 
@@ -206,6 +242,8 @@ impl Default for HidConfig {
             otg_keyboard_leds: false,
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
+            ch9329_hybrid_mouse: false,
+            ch9329_descriptor: Ch9329DescriptorConfig::default(),
             mouse_absolute: true,
         }
     }

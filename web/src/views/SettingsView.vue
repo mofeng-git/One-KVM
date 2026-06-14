@@ -42,6 +42,8 @@ import type {
   OtgEndpointBudget,
   OtgHidProfile,
   OtgHidFunctions,
+  Ch9329DescriptorConfig,
+  Ch9329DescriptorState,
 } from '@/types/generated'
 import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
@@ -561,6 +563,7 @@ const config = ref({
     consumer: true,
   } as OtgHidFunctions,
   hid_otg_keyboard_leds: false,
+  hid_ch9329_hybrid_mouse: false,
   msd_enabled: false,
   msd_dir: '',
   encoder_backend: 'auto',
@@ -953,11 +956,134 @@ const otgProductIdHex = ref('0104')
 const otgManufacturer = ref('One-KVM')
 const otgProduct = ref('One-KVM USB Device')
 const otgSerialNumber = ref('')
+const ch9329VendorIdHex = ref('1a86')
+const ch9329ProductIdHex = ref('e129')
+const ch9329Manufacturer = ref('WCH.CN')
+const ch9329Product = ref('CH9329')
+const ch9329SerialNumber = ref('')
+const ch9329DescriptorLoaded = ref(false)
+const ch9329DescriptorLoading = ref(false)
+const ch9329DescriptorError = ref('')
+const ch9329DescriptorSource = ref<{ port: string; baudrate: number } | null>(null)
+const ch9329DescriptorBaseline = ref<{
+  vendorId: string
+  productId: string
+  manufacturer: string
+  product: string
+  serialNumber: string
+} | null>(null)
+const utf8Encoder = new TextEncoder()
 
 const validateHex = (event: Event, _field: string) => {
   const input = event.target as HTMLInputElement
   input.value = input.value.replace(/[^0-9a-fA-F]/g, '').toLowerCase()
 }
+
+function utf8ByteLength(value: string): number {
+  return utf8Encoder.encode(value).length
+}
+
+function applyCh9329DescriptorForm(descriptor: Ch9329DescriptorConfig, defaults = false) {
+  ch9329VendorIdHex.value = descriptor.vendor_id?.toString(16).padStart(4, '0') || '1a86'
+  ch9329ProductIdHex.value = descriptor.product_id?.toString(16).padStart(4, '0') || 'e129'
+  ch9329Manufacturer.value = descriptor.manufacturer || (defaults ? 'WCH.CN' : '')
+  ch9329Product.value = descriptor.product || (defaults ? 'CH9329' : '')
+  ch9329SerialNumber.value = descriptor.serial_number || ''
+}
+
+function applyCh9329DescriptorState(state: Ch9329DescriptorState) {
+  applyCh9329DescriptorForm(state.descriptor)
+  ch9329DescriptorBaseline.value = currentCh9329DescriptorForm()
+  if (!state.config_mode_available) {
+    ch9329DescriptorError.value = t('settings.ch9329ConfigModeUnavailable')
+  }
+}
+
+function currentCh9329DescriptorForm() {
+  return {
+    vendorId: ch9329VendorIdHex.value.toLowerCase().padStart(4, '0'),
+    productId: ch9329ProductIdHex.value.toLowerCase().padStart(4, '0'),
+    manufacturer: ch9329Manufacturer.value,
+    product: ch9329Product.value,
+    serialNumber: ch9329SerialNumber.value,
+  }
+}
+
+function currentCh9329DescriptorSource() {
+  return {
+    port: config.value.hid_serial_device || '',
+    baudrate: Number(config.value.hid_serial_baudrate) || 9600,
+  }
+}
+
+function clearCh9329DescriptorState() {
+  ch9329DescriptorLoaded.value = false
+  ch9329DescriptorLoading.value = false
+  ch9329DescriptorError.value = ''
+  ch9329DescriptorSource.value = null
+  ch9329DescriptorBaseline.value = null
+}
+
+const isCh9329DescriptorSourceCurrent = computed(() => {
+  if (config.value.hid_backend !== 'ch9329') return false
+  const source = ch9329DescriptorSource.value
+  if (!source) return false
+  const current = currentCh9329DescriptorSource()
+  return source.port === current.port && source.baudrate === current.baudrate
+})
+
+async function loadCh9329Descriptor() {
+  if (config.value.hid_backend !== 'ch9329') return
+  const source = currentCh9329DescriptorSource()
+  ch9329DescriptorLoading.value = true
+  ch9329DescriptorLoaded.value = false
+  ch9329DescriptorSource.value = null
+  ch9329DescriptorError.value = ''
+  try {
+    const state = await hidApi.ch9329Descriptor({
+      port: source.port,
+      baudRate: source.baudrate,
+    })
+    applyCh9329DescriptorState(state)
+    ch9329DescriptorLoaded.value = true
+    ch9329DescriptorSource.value = source
+  } catch (e) {
+    ch9329DescriptorError.value = e instanceof Error ? e.message : t('settings.ch9329DescriptorLoadFailed')
+  } finally {
+    ch9329DescriptorLoading.value = false
+  }
+}
+
+const isCh9329DescriptorValid = computed(() => {
+  if (config.value.hid_backend !== 'ch9329') return true
+  return utf8ByteLength(ch9329Manufacturer.value) <= 23
+    && utf8ByteLength(ch9329Product.value) <= 23
+    && utf8ByteLength(ch9329SerialNumber.value) <= 23
+})
+
+const canEditCh9329Descriptor = computed(() =>
+  config.value.hid_backend === 'ch9329'
+  && ch9329DescriptorLoaded.value
+  && isCh9329DescriptorSourceCurrent.value
+  && !ch9329DescriptorLoading.value
+)
+
+const isCh9329DescriptorDirty = computed(() => {
+  if (!canEditCh9329Descriptor.value || !ch9329DescriptorBaseline.value) return false
+  const current = currentCh9329DescriptorForm()
+  const baseline = ch9329DescriptorBaseline.value
+  return current.vendorId !== baseline.vendorId
+    || current.productId !== baseline.productId
+    || current.manufacturer !== baseline.manufacturer
+    || current.product !== baseline.product
+    || current.serialNumber !== baseline.serialNumber
+})
+
+const isHidSettingsValid = computed(() =>
+  isHidFunctionSelectionValid.value
+  && isOtgEndpointBudgetValid.value
+  && isCh9329DescriptorValid.value
+)
 
 watch(() => config.value.msd_enabled, (enabled) => {
   if (!enabled && activeSection.value === 'msd') {
@@ -1265,13 +1391,23 @@ async function saveConfig() {
     }
 
     if (activeSection.value === 'hid') {
-      if (!isHidFunctionSelectionValid.value || !isOtgEndpointBudgetValid.value) {
+      if (!isHidSettingsValid.value) {
         return
       }
       const hidUpdate: any = {
         backend: config.value.hid_backend as any,
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
+        ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
+      }
+      if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
+        hidUpdate.ch9329_descriptor = {
+          vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
+          product_id: parseInt(ch9329ProductIdHex.value, 16) || 0xe129,
+          manufacturer: ch9329Manufacturer.value,
+          product: ch9329Product.value,
+          serial_number: ch9329SerialNumber.value || '',
+        }
       }
       if (config.value.hid_backend === 'otg') {
         hidUpdate.otg_descriptor = {
@@ -1287,9 +1423,11 @@ async function saveConfig() {
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
       await configStore.updateHid(hidUpdate)
-      await configStore.updateMsd({
-        enabled: config.value.hid_backend === 'otg' && config.value.msd_enabled,
-      })
+      if (config.value.hid_backend === 'otg') {
+        await configStore.updateMsd({ enabled: config.value.msd_enabled })
+      } else {
+        await configStore.updateMsd({ enabled: false })
+      }
     }
 
     if (activeSection.value === 'msd') {
@@ -1298,7 +1436,9 @@ async function saveConfig() {
       })
     }
 
-    await loadSectionData(activeSection.value)
+    if (activeSection.value !== 'hid') {
+      await loadSectionData(activeSection.value)
+    }
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch {
@@ -1335,6 +1475,7 @@ async function loadConfig() {
         consumer: hid.otg_functions?.consumer ?? true,
       } as OtgHidFunctions,
       hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
+      hid_ch9329_hybrid_mouse: hid.ch9329_hybrid_mouse ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       encoder_backend: stream.encoder || 'auto',
@@ -1350,6 +1491,16 @@ async function loadConfig() {
       otgManufacturer.value = hid.otg_descriptor.manufacturer || 'One-KVM'
       otgProduct.value = hid.otg_descriptor.product || 'One-KVM USB Device'
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
+    }
+    if (hid.ch9329_descriptor) {
+      if (hid.backend !== 'ch9329') {
+        applyCh9329DescriptorForm(hid.ch9329_descriptor, true)
+      }
+    }
+    if (hid.backend === 'ch9329') {
+      await loadCh9329Descriptor()
+    } else {
+      clearCh9329DescriptorState()
     }
 
   } catch {
@@ -2323,7 +2474,21 @@ watch(updateChannel, async () => {
 watch(() => config.value.hid_backend, () => {
   otgSelfCheckResult.value = null
   otgSelfCheckError.value = ''
+  if (config.value.hid_backend === 'ch9329') {
+    void loadCh9329Descriptor()
+  } else {
+    clearCh9329DescriptorState()
+  }
 })
+
+watch(
+  () => [config.value.hid_serial_device, config.value.hid_serial_baudrate],
+  () => {
+    if (config.value.hid_backend === 'ch9329' && !isCh9329DescriptorSourceCurrent.value) {
+      clearCh9329DescriptorState()
+    }
+  },
+)
 
 watch(() => route.query.tab, (tab) => {
   const section = normalizeSettingsSection(tab)
@@ -2724,6 +2889,109 @@ watch(isWindows, () => {
                     <option :value="115200">115200</option>
                   </select>
                 </div>
+
+                <template v-if="config.hid_backend === 'ch9329'">
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.ch9329Options') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.ch9329OptionsDesc') }}</p>
+                    </div>
+                    <div class="space-y-3 rounded-md border border-border/60 p-3">
+                      <div class="flex items-center justify-between gap-4">
+                        <div>
+                          <Label>{{ t('settings.ch9329HybridMouse') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_ch9329_hybrid_mouse" />
+                      </div>
+                    </div>
+                  </div>
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 class="text-sm font-medium">{{ t('settings.ch9329Descriptor') }}</h4>
+                          <p class="text-sm text-muted-foreground">{{ t('settings.ch9329DescriptorDesc') }}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" :aria-label="t('common.refresh')" :disabled="ch9329DescriptorLoading" @click="loadCh9329Descriptor">
+                          <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': ch9329DescriptorLoading }" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p v-if="ch9329DescriptorLoading" class="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 class="h-4 w-4 animate-spin" />
+                      {{ t('settings.ch9329DescriptorLoading') }}
+                    </p>
+                    <p v-else-if="ch9329DescriptorError" class="text-sm text-destructive">
+                      {{ ch9329DescriptorError }}
+                    </p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div class="space-y-2">
+                        <Label for="ch9329-vid">{{ t('settings.vendorId') }}</Label>
+                        <Input
+                          id="ch9329-vid"
+                          v-model="ch9329VendorIdHex"
+                          placeholder="1a86"
+                          maxlength="4"
+                          :disabled="!canEditCh9329Descriptor"
+                          @input="validateHex($event, 'ch9329-vid')"
+                        />
+                      </div>
+                      <div class="space-y-2">
+                        <Label for="ch9329-pid">{{ t('settings.productId') }}</Label>
+                        <Input
+                          id="ch9329-pid"
+                          v-model="ch9329ProductIdHex"
+                          placeholder="e129"
+                          maxlength="4"
+                          :disabled="!canEditCh9329Descriptor"
+                          @input="validateHex($event, 'ch9329-pid')"
+                        />
+                      </div>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-manufacturer">{{ t('settings.manufacturer') }}</Label>
+                      <Input
+                        id="ch9329-manufacturer"
+                        v-model="ch9329Manufacturer"
+                        placeholder="WCH.CN"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-product">{{ t('settings.productName') }}</Label>
+                      <Input
+                        id="ch9329-product"
+                        v-model="ch9329Product"
+                        placeholder="CH9329"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-serial">{{ t('settings.serialNumber') }}</Label>
+                      <Input
+                        id="ch9329-serial"
+                        v-model="ch9329SerialNumber"
+                        :placeholder="t('settings.serialNumberAuto')"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <p v-if="!ch9329DescriptorLoading && !ch9329DescriptorLoaded && !ch9329DescriptorError" class="text-xs text-muted-foreground">
+                      {{ t('settings.ch9329DescriptorReadRequired') }}
+                    </p>
+                    <p v-if="!isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.ch9329StringLengthWarning') }}
+                    </p>
+                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                      {{ t('settings.ch9329DescriptorWarning') }}
+                    </p>
+                  </div>
+                </template>
 
                 <!-- OTG Descriptor Settings -->
                 <template v-if="config.hid_backend === 'otg'">
@@ -4678,8 +4946,16 @@ watch(isWindows, () => {
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
               </p>
+              <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ t('settings.ch9329StringLengthWarning') }}</span>
+              </p>
+              <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
+              </p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
-              <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
+              <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

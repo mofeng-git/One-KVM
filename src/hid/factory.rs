@@ -39,13 +39,19 @@ impl HidBackendFactory {
     async fn create(&self, backend_type: &HidBackendType) -> Result<Option<Arc<dyn HidBackend>>> {
         match backend_type {
             HidBackendType::Otg => self.create_otg_backend().await.map(Some),
-            HidBackendType::Ch9329 { port, baud_rate } => {
+            HidBackendType::Ch9329 {
+                port,
+                baud_rate,
+                hybrid_mouse,
+            } => {
                 info!(
-                    "Initializing CH9329 HID backend on {} @ {} baud",
-                    port, baud_rate
+                    "Initializing CH9329 HID backend on {} @ {} baud, hybrid_mouse={}",
+                    port, baud_rate, hybrid_mouse
                 );
-                Ok(Some(Arc::new(ch9329::Ch9329Backend::with_baud_rate(
-                    port, *baud_rate,
+                Ok(Some(Arc::new(ch9329::Ch9329Backend::with_options(
+                    port,
+                    *baud_rate,
+                    *hybrid_mouse,
                 )?)))
             }
             HidBackendType::None => {

@@ -294,10 +294,61 @@ impl OtgHidFunctionsUpdate {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct Ch9329DescriptorConfigUpdate {
+    pub vendor_id: Option<u16>,
+    pub product_id: Option<u16>,
+    pub manufacturer: Option<String>,
+    pub product: Option<String>,
+    pub serial_number: Option<String>,
+}
+
+impl Ch9329DescriptorConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        Self::validate_optional_string("Manufacturer", self.manufacturer.as_deref())?;
+        Self::validate_optional_string("Product", self.product.as_deref())?;
+        Self::validate_optional_string("Serial number", self.serial_number.as_deref())?;
+        Ok(())
+    }
+
+    fn validate_optional_string(label: &str, value: Option<&str>) -> crate::error::Result<()> {
+        if let Some(value) = value {
+            if value.as_bytes().len() > 23 {
+                return Err(AppError::BadRequest(format!(
+                    "{} string too long (max 23 bytes for CH9329)",
+                    label
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut Ch9329DescriptorConfig) {
+        if let Some(v) = self.vendor_id {
+            config.vendor_id = v;
+        }
+        if let Some(v) = self.product_id {
+            config.product_id = v;
+        }
+        if let Some(ref v) = self.manufacturer {
+            config.manufacturer = v.clone();
+        }
+        if let Some(ref v) = self.product {
+            config.product = v.clone();
+        }
+        if let Some(ref v) = self.serial_number {
+            config.serial_number = if v.is_empty() { None } else { Some(v.clone()) };
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
     pub backend: Option<HidBackend>,
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
+    pub ch9329_hybrid_mouse: Option<bool>,
+    pub ch9329_descriptor: Option<Ch9329DescriptorConfigUpdate>,
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub otg_profile: Option<OtgHidProfile>,
@@ -320,6 +371,9 @@ impl HidConfigUpdate {
         if let Some(ref desc) = self.otg_descriptor {
             desc.validate()?;
         }
+        if let Some(ref desc) = self.ch9329_descriptor {
+            desc.validate()?;
+        }
         Ok(())
     }
 
@@ -332,6 +386,12 @@ impl HidConfigUpdate {
         }
         if let Some(baudrate) = self.ch9329_baudrate {
             config.ch9329_baudrate = baudrate;
+        }
+        if let Some(enabled) = self.ch9329_hybrid_mouse {
+            config.ch9329_hybrid_mouse = enabled;
+        }
+        if let Some(ref desc) = self.ch9329_descriptor {
+            desc.apply_to(&mut config.ch9329_descriptor);
         }
         if let Some(ref udc) = self.otg_udc {
             config.otg_udc = Some(udc.clone());

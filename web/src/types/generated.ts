@@ -54,6 +54,22 @@ export interface OtgHidFunctions {
 	consumer: boolean;
 }
 
+export interface Ch9329DescriptorConfig {
+	vendor_id: number;
+	product_id: number;
+	manufacturer: string;
+	product: string;
+	serial_number?: string;
+}
+
+export interface Ch9329DescriptorState {
+	descriptor: Ch9329DescriptorConfig;
+	manufacturer_enabled: boolean;
+	product_enabled: boolean;
+	serial_enabled: boolean;
+	config_mode_available: boolean;
+}
+
 export interface HidConfig {
 	backend: HidBackend;
 	otg_udc?: string;
@@ -64,6 +80,8 @@ export interface HidConfig {
 	otg_keyboard_leds?: boolean;
 	ch9329_port: string;
 	ch9329_baudrate: number;
+	ch9329_hybrid_mouse?: boolean;
+	ch9329_descriptor?: Ch9329DescriptorConfig;
 	mouse_absolute: boolean;
 }
 
@@ -175,6 +193,11 @@ export interface EasytierConfig {
 	virtual_ip?: string;
 }
 
+export enum FrpcConfigMode {
+	Quick = "quick",
+	Full = "full",
+}
+
 export enum FrpProxyType {
 	Tcp = "tcp",
 	Udp = "udp",
@@ -183,11 +206,6 @@ export enum FrpProxyType {
 	Stcp = "stcp",
 	Sudp = "sudp",
 	Xtcp = "xtcp",
-}
-
-export enum FrpcConfigMode {
-	Quick = "quick",
-	Full = "full",
 }
 
 export interface FrpcConfig {
@@ -302,29 +320,20 @@ export interface AuthConfigUpdate {
 	single_user_allow_multiple_sessions?: boolean;
 }
 
+export interface Ch9329DescriptorConfigUpdate {
+	vendor_id?: number;
+	product_id?: number;
+	manufacturer?: string;
+	product?: string;
+	serial_number?: string;
+}
+
 export interface EasytierConfigUpdate {
 	enabled?: boolean;
 	network_name?: string;
 	network_secret?: string;
 	peer_urls?: string[];
 	virtual_ip?: string;
-}
-
-export interface FrpcConfigUpdate {
-	enabled?: boolean;
-	config_mode?: FrpcConfigMode;
-	proxy_name?: string;
-	proxy_type?: FrpProxyType;
-	server_addr?: string;
-	server_port?: number;
-	token?: string;
-	local_ip?: string;
-	local_port?: number;
-	remote_port?: number;
-	custom_domain?: string;
-	secret_key?: string;
-	tls?: boolean;
-	custom_toml?: string;
 }
 
 export type ExtensionStatus = 
@@ -382,6 +391,23 @@ export interface ExtensionsStatus {
 	frpc: FrpcInfo;
 }
 
+export interface FrpcConfigUpdate {
+	enabled?: boolean;
+	config_mode?: FrpcConfigMode;
+	proxy_name?: string;
+	proxy_type?: FrpProxyType;
+	server_addr?: string;
+	server_port?: number;
+	token?: string;
+	local_ip?: string;
+	local_port?: number;
+	remote_port?: number | null;
+	custom_domain?: string | null;
+	secret_key?: string;
+	tls?: boolean;
+	custom_toml?: string;
+}
+
 export interface GostcConfigUpdate {
 	enabled?: boolean;
 	addr?: string;
@@ -409,6 +435,8 @@ export interface HidConfigUpdate {
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
+	ch9329_hybrid_mouse?: boolean;
+	ch9329_descriptor?: Ch9329DescriptorConfigUpdate;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
 	otg_profile?: OtgHidProfile;

@@ -315,6 +315,7 @@ async fn build_app_state(
         config::HidBackend::Ch9329 => HidBackendType::Ch9329 {
             port: config.hid.ch9329_port.clone(),
             baud_rate: config.hid.ch9329_baudrate,
+            hybrid_mouse: config.hid.ch9329_hybrid_mouse,
         },
         config::HidBackend::None => HidBackendType::None,
     };

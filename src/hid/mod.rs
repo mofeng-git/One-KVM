@@ -98,6 +98,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
+use crate::config::{Ch9329DescriptorConfig, Ch9329DescriptorState};
 use crate::error::{AppError, Result};
 use crate::events::EventBus;
 #[cfg(unix)]
@@ -285,6 +286,36 @@ impl HidController {
 
     pub async fn snapshot(&self) -> HidRuntimeState {
         self.runtime_state.read().await.clone()
+    }
+
+    async fn ch9329_backend(&self) -> Result<Arc<dyn HidBackend>> {
+        if !matches!(
+            *self.backend_type.read().await,
+            HidBackendType::Ch9329 { .. }
+        ) {
+            return Err(AppError::BadRequest(
+                "Current HID backend is not CH9329".to_string(),
+            ));
+        }
+        self.backend
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::BadRequest("CH9329 backend not available".to_string()))
+    }
+
+    pub async fn apply_ch9329_descriptor(
+        &self,
+        descriptor: &Ch9329DescriptorConfig,
+    ) -> Result<Ch9329DescriptorState> {
+        self.ch9329_backend()
+            .await?
+            .apply_ch9329_descriptor(descriptor)
+            .await
+    }
+
+    pub async fn read_ch9329_descriptor(&self) -> Result<Ch9329DescriptorState> {
+        self.ch9329_backend().await?.read_ch9329_descriptor().await
     }
 
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {

@@ -1,5 +1,5 @@
 import { request, ApiError } from './request'
-import type { CanonicalKey } from '@/types/generated'
+import type { CanonicalKey, Ch9329DescriptorState } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 
 const API_BASE = '/api'
@@ -434,6 +434,14 @@ export const hidApi = {
 
   reset: () =>
     request<{ success: boolean }>('/hid/reset', { method: 'POST' }),
+
+  ch9329Descriptor: (params?: { port?: string; baudRate?: number }) => {
+    const query = new URLSearchParams()
+    if (params?.port) query.set('port', params.port)
+    if (params?.baudRate) query.set('baud_rate', String(params.baudRate))
+    const suffix = query.toString()
+    return request<Ch9329DescriptorState>(`/hid/ch9329/descriptor${suffix ? `?${suffix}` : ''}`)
+  },
 
   consumer: async (usage: number) => {
     await ensureHidConnection()

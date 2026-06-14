@@ -33,6 +33,7 @@ fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
         HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
             port: config.ch9329_port.clone(),
             baud_rate: config.ch9329_baudrate,
+            hybrid_mouse: config.ch9329_hybrid_mouse,
         },
         HidBackend::None => crate::hid::HidBackendType::None,
     }
@@ -179,10 +180,12 @@ pub async fn apply_hid_config(
         old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
     let endpoint_budget_changed =
         old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit();
+    let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
 
     if old_config.backend == new_config.backend
         && old_config.ch9329_port == new_config.ch9329_port
         && old_config.ch9329_baudrate == new_config.ch9329_baudrate
+        && !ch9329_runtime_changed
         && old_config.otg_udc == new_config.otg_udc
         && !descriptor_changed
         && !hid_functions_changed
