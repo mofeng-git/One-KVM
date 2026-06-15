@@ -18,6 +18,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::atx::AtxController;
 use crate::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use crate::auth::{SessionStore, UserStore};
+use crate::computer_use::ComputerUseManager;
 use crate::config::{self, AppConfig, ConfigStore};
 use crate::db::DatabasePool;
 use crate::events::EventBus;
@@ -483,6 +484,7 @@ async fn build_app_state(
     };
 
     let update_service = Arc::new(UpdateService::new(data_dir.join("updates")));
+    let computer_use = ComputerUseManager::new(config_store.clone(), hid.clone());
     let state = AppState::new(
         db,
         config_store.clone(),
@@ -492,6 +494,7 @@ async fn build_app_state(
         stream_manager,
         webrtc_streamer,
         hid,
+        computer_use,
         msd,
         atx,
         audio,

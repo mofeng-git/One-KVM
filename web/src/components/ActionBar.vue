@@ -39,6 +39,7 @@ import {
   BarChart3,
   Terminal,
   MoreHorizontal,
+  Bot,
 } from 'lucide-vue-next'
 import PasteModal from '@/components/PasteModal.vue'
 import AtxPopover from '@/components/AtxPopover.vue'
@@ -77,6 +78,7 @@ const emit = defineEmits<{
   (e: 'reset'): void
   (e: 'wol', macAddress: string): void
   (e: 'openTerminal'): void
+  (e: 'openComputerUse'): void
 }>()
 
 const pasteOpen = ref(false)
@@ -384,6 +386,26 @@ const hasOverflow = computed(() => {
         </div>
 
         <div v-if="isVisible('stats') || isVisible('extension') || isVisible('settings')" class="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+
+        <!-- Computer Use - Always visible -->
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+                @click="emit('openComputerUse')"
+              >
+                <Bot class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span class="hidden xl:inline">AI</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Computer Use</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <!-- Virtual Keyboard - Always visible -->
         <TooltipProvider>

@@ -13,6 +13,8 @@ pub mod audio;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod auth;
 #[cfg(any(feature = "android", feature = "desktop"))]
+pub mod computer_use;
+#[cfg(any(feature = "android", feature = "desktop"))]
 pub mod config;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod db;

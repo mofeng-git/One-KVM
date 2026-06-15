@@ -47,6 +47,7 @@ fn sanitize_config_for_api(config: &mut AppConfig) {
     config.auth.totp_secret = None;
 
     config.stream.turn_password = None;
+    config.computer_use.openai_api_key = None;
 
     config.rustdesk.device_password.clear();
     config.rustdesk.relay_key = None;
