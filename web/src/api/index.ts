@@ -67,6 +67,7 @@ export interface PlatformCapabilities {
   otg: FeatureCapability
   audio: FeatureCapability
   rustdesk: FeatureCapability
+  vnc: FeatureCapability
   diagnostics: FeatureCapability
   extensions: FeatureCapability
   service_installation: FeatureCapability
@@ -86,6 +87,7 @@ export const systemApi = {
         atx: { available: boolean; backend?: string; reason?: string }
         audio: { available: boolean; backend?: string; reason?: string }
         rustdesk: { available: boolean; backend?: string; reason?: string }
+        vnc: { available: boolean; backend?: string; reason?: string }
       }
       disk_space?: {
         total: number
@@ -206,6 +208,7 @@ export interface StreamConstraintsResponse {
   sources: {
     rustdesk: boolean
     rtsp: boolean
+    vnc: boolean
   }
   reason: string
   current_mode: string
@@ -719,6 +722,7 @@ export {
   redfishConfigApi,
   rustdeskConfigApi,
   rtspConfigApi,
+  vncConfigApi,
   webConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
@@ -729,6 +733,10 @@ export {
   type RedfishConfigUpdate,
   type RtspConfigUpdate,
   type RtspStatusResponse,
+  type VncConfigResponse,
+  type VncConfigUpdate,
+  type VncEncoding,
+  type VncStatusResponse,
   type WebConfig,
   type WebConfigUpdate,
 } from './config'

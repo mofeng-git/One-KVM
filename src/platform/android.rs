@@ -36,6 +36,7 @@ pub fn capabilities() -> PlatformCapabilities {
         audio: FeatureCapability::available(["alsa", "opus"])
             .with_selected_backend(Some("alsa".to_string())),
         rustdesk: FeatureCapability::available(["builtin"]),
+        vnc: FeatureCapability::available(["builtin", "tight_jpeg", "h264"]),
         diagnostics: FeatureCapability::available(["android_linux"]),
         extensions: FeatureCapability::unsupported("unsupported on Android Amlogic v1"),
         service_installation: FeatureCapability::available(["android_foreground_service"]),

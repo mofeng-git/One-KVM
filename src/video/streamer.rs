@@ -375,8 +375,8 @@ impl Streamer {
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
         // This prevents race conditions where clients try to reconnect and reopen the device
-        debug!("Disconnecting all MJPEG clients before config change...");
-        self.mjpeg_handler.disconnect_all_clients();
+        debug!("Disconnecting HTTP MJPEG clients before config change...");
+        self.mjpeg_handler.disconnect_non_vnc_clients();
 
         // Give clients time to receive the disconnect signal and close their connections
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

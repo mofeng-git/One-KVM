@@ -62,14 +62,6 @@ export interface Ch9329DescriptorConfig {
 	serial_number?: string;
 }
 
-export interface Ch9329DescriptorState {
-	descriptor: Ch9329DescriptorConfig;
-	manufacturer_enabled: boolean;
-	product_enabled: boolean;
-	serial_enabled: boolean;
-	config_mode_available: boolean;
-}
-
 export interface HidConfig {
 	backend: HidBackend;
 	otg_udc?: string;
@@ -234,9 +226,29 @@ export interface ExtensionsConfig {
 
 export interface RustDeskConfig {
 	enabled: boolean;
+	codec: RustDeskCodec;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
+}
+
+export enum RustDeskCodec {
+	H264 = "h264",
+	H265 = "h265",
+}
+
+export enum VncEncoding {
+	TightJpeg = "tight_jpeg",
+	H264 = "h264",
+}
+
+export interface VncConfig {
+	enabled: boolean;
+	bind: string;
+	port: number;
+	encoding: VncEncoding;
+	jpeg_quality: number;
+	allow_one_client: boolean;
 }
 
 export enum RtspCodec {
@@ -270,6 +282,7 @@ export interface AppConfig {
 	web: WebConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
+	vnc: VncConfig;
 	rtsp: RtspConfig;
 	redfish: RedfishConfig;
 }
@@ -326,6 +339,14 @@ export interface Ch9329DescriptorConfigUpdate {
 	manufacturer?: string;
 	product?: string;
 	serial_number?: string;
+}
+
+export interface Ch9329DescriptorState {
+	descriptor: Ch9329DescriptorConfig;
+	manufacturer_enabled: boolean;
+	product_enabled: boolean;
+	serial_enabled: boolean;
+	config_mode_available: boolean;
 }
 
 export interface EasytierConfigUpdate {
@@ -480,6 +501,7 @@ export interface RtspStatusResponse {
 
 export interface RustDeskConfigUpdate {
 	enabled?: boolean;
+	codec?: RustDeskCodec;
 	rendezvous_server?: string;
 	relay_server?: string;
 	relay_key?: string;
@@ -533,6 +555,32 @@ export interface VideoConfigUpdate {
 	height?: number;
 	fps?: number;
 	quality?: number;
+}
+
+export interface VncConfigResponse {
+	enabled: boolean;
+	bind: string;
+	port: number;
+	encoding: VncEncoding;
+	jpeg_quality: number;
+	allow_one_client: boolean;
+	has_password: boolean;
+}
+
+export interface VncConfigUpdate {
+	enabled?: boolean;
+	bind?: string;
+	port?: number;
+	encoding?: VncEncoding;
+	jpeg_quality?: number;
+	allow_one_client?: boolean;
+	password?: string;
+}
+
+export interface VncStatusResponse {
+	config: VncConfigResponse;
+	service_status: string;
+	connection_count: number;
 }
 
 /**

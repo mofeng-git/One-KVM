@@ -51,6 +51,8 @@ pub mod utils;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod video;
 #[cfg(any(feature = "android", feature = "desktop"))]
+pub mod vnc;
+#[cfg(any(feature = "android", feature = "desktop"))]
 pub mod web;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod webrtc;

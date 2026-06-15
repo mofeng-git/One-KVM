@@ -2,6 +2,7 @@ use crate::config::*;
 use crate::error::AppError;
 use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
+use crate::vnc::VncServiceStatus;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 #[cfg(unix)]
@@ -765,6 +766,7 @@ fn validate_rustdesk_relay_key(key: &str) -> Result<(), AppError> {
 #[derive(Debug, Deserialize)]
 pub struct RustDeskConfigUpdate {
     pub enabled: Option<bool>,
+    pub codec: Option<crate::rustdesk::config::RustDeskCodec>,
     pub rendezvous_server: Option<String>,
     pub relay_server: Option<String>,
     pub relay_key: Option<String>,
@@ -820,6 +822,9 @@ impl RustDeskConfigUpdate {
     pub fn apply_to(&self, config: &mut RustDeskConfig) {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
+        }
+        if let Some(codec) = self.codec {
+            config.codec = codec;
         }
         if let Some(ref server) = self.rendezvous_server {
             config.rendezvous_server = server.clone();
@@ -902,6 +907,125 @@ pub struct RtspConfigUpdate {
     pub codec: Option<RtspCodec>,
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct VncConfigResponse {
+    pub enabled: bool,
+    pub bind: String,
+    pub port: u16,
+    pub encoding: VncEncoding,
+    pub jpeg_quality: u8,
+    pub allow_one_client: bool,
+    pub has_password: bool,
+}
+
+impl From<&VncConfig> for VncConfigResponse {
+    fn from(config: &VncConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            bind: config.bind.clone(),
+            port: config.port,
+            encoding: config.encoding.clone(),
+            jpeg_quality: config.jpeg_quality,
+            allow_one_client: config.allow_one_client,
+            has_password: config.password.as_deref().is_some_and(|p| !p.is_empty()),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct VncStatusResponse {
+    pub config: VncConfigResponse,
+    pub service_status: String,
+    pub connection_count: u32,
+}
+
+impl VncStatusResponse {
+    pub fn new(config: &VncConfig, status: VncServiceStatus, connection_count: usize) -> Self {
+        Self {
+            config: VncConfigResponse::from(config),
+            service_status: status.to_string(),
+            connection_count: connection_count as u32,
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct VncConfigUpdate {
+    pub enabled: Option<bool>,
+    pub bind: Option<String>,
+    pub port: Option<u16>,
+    pub encoding: Option<VncEncoding>,
+    pub jpeg_quality: Option<u8>,
+    pub allow_one_client: Option<bool>,
+    pub password: Option<String>,
+}
+
+impl VncConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(port) = self.port {
+            if port == 0 {
+                return Err(AppError::BadRequest("VNC port cannot be 0".into()));
+            }
+        }
+        if let Some(ref bind) = self.bind {
+            if bind.parse::<std::net::IpAddr>().is_err() {
+                return Err(AppError::BadRequest("VNC bind must be a valid IP".into()));
+            }
+        }
+        if let Some(quality) = self.jpeg_quality {
+            if !(10..=100).contains(&quality) {
+                return Err(AppError::BadRequest(
+                    "VNC JPEG quality must be 10-100".into(),
+                ));
+            }
+        }
+        if let Some(ref password) = self.password {
+            if !password.is_empty() && password.len() > 8 {
+                return Err(AppError::BadRequest(
+                    "VNCAuth password must be at most 8 characters".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_merged(&self, config: &VncConfig) -> crate::error::Result<()> {
+        if config.enabled && config.password.as_deref().unwrap_or("").is_empty() {
+            return Err(AppError::BadRequest("VNC password is required".into()));
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut VncConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref bind) = self.bind {
+            config.bind = bind.clone();
+        }
+        if let Some(port) = self.port {
+            config.port = port;
+        }
+        if let Some(ref encoding) = self.encoding {
+            config.encoding = encoding.clone();
+        }
+        if let Some(quality) = self.jpeg_quality {
+            config.jpeg_quality = quality;
+        }
+        if let Some(allow_one_client) = self.allow_one_client {
+            config.allow_one_client = allow_one_client;
+        }
+        if let Some(ref password) = self.password {
+            if !password.is_empty() {
+                config.password = Some(password.clone());
+            }
+        }
+    }
 }
 
 impl RtspConfigUpdate {
@@ -1188,6 +1312,7 @@ mod tests {
     fn rustdesk_relay_key_accepts_hbbs_style_base64_32_bytes() {
         let update = RustDeskConfigUpdate {
             enabled: None,
+            codec: None,
             rendezvous_server: None,
             relay_server: None,
             relay_key: Some("pLU0pEj2IZnNVKzrIO1pIdwGA3dOVJJLkFIYGOCGH1E=".to_string()),
@@ -1202,6 +1327,7 @@ mod tests {
         let not_32 = "AAAAAAAAAAAAAAAAAAAAAA==".to_string();
         let update = RustDeskConfigUpdate {
             enabled: None,
+            codec: None,
             rendezvous_server: None,
             relay_server: None,
             relay_key: Some(not_32),

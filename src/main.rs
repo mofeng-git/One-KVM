@@ -31,10 +31,12 @@ use one_kvm::state::{AppState, ShutdownAction};
 use one_kvm::update::UpdateService;
 use one_kvm::utils::bind_tcp_listener;
 use one_kvm::video::codec_constraints::{
-    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+    enforce_constraints_with_stream_manager, validate_third_party_codec_compatibility,
+    StreamCodecConstraints,
 };
 use one_kvm::video::format::{PixelFormat, Resolution};
 use one_kvm::video::{Streamer, VideoStreamManager};
+use one_kvm::vnc::VncService;
 use one_kvm::web;
 use one_kvm::webrtc::{WebRtcStreamer, WebRtcStreamerConfig};
 
@@ -486,7 +488,18 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    let rustdesk = if config.rustdesk.is_valid() {
+    let third_party_codec_config_valid = match validate_third_party_codec_compatibility(&config) {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::warn!(
+                    "Third-party access codec configuration is invalid; RustDesk/VNC/RTSP will not start: {}",
+                    e
+                );
+            false
+        }
+    };
+
+    let rustdesk = if third_party_codec_config_valid && config.rustdesk.is_valid() {
         tracing::info!(
             "Initializing RustDesk service: ID={} -> {}",
             config.rustdesk.device_id,
@@ -510,7 +523,7 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let rtsp = if config.rtsp.enabled {
+    let rtsp = if third_party_codec_config_valid && config.rtsp.enabled {
         tracing::info!(
             "Initializing RTSP service: rtsp://{}:{}/{}",
             config.rtsp.bind,
@@ -521,6 +534,23 @@ async fn main() -> anyhow::Result<()> {
         Some(Arc::new(service))
     } else {
         tracing::info!("RTSP disabled in configuration");
+        None
+    };
+
+    let vnc = if third_party_codec_config_valid && config.vnc.enabled {
+        tracing::info!(
+            "Initializing VNC service: {}:{} ({:?})",
+            config.vnc.bind,
+            config.vnc.port,
+            config.vnc.encoding
+        );
+        Some(Arc::new(VncService::new(
+            config.vnc.clone(),
+            stream_manager.clone(),
+            hid.clone(),
+        )))
+    } else {
+        tracing::info!("VNC disabled in configuration");
         None
     };
 
@@ -541,6 +571,7 @@ async fn main() -> anyhow::Result<()> {
         atx,
         audio,
         rustdesk.clone(),
+        vnc.clone(),
         rtsp.clone(),
         extensions.clone(),
         events.clone(),
@@ -571,6 +602,13 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             tracing::info!("RustDesk service started");
+        }
+    }
+    if let Some(ref service) = vnc {
+        if let Err(e) = service.start().await {
+            tracing::error!("Failed to start VNC service: {}", e);
+        } else {
+            tracing::info!("VNC service started");
         }
     }
 
@@ -1132,6 +1170,14 @@ async fn cleanup(state: &Arc<AppState>) {
             tracing::warn!("Failed to stop RustDesk service: {}", e);
         } else {
             tracing::info!("RustDesk service stopped");
+        }
+    }
+
+    if let Some(ref service) = *state.vnc.read().await {
+        if let Err(e) = service.stop().await {
+            tracing::warn!("Failed to stop VNC service: {}", e);
+        } else {
+            tracing::info!("VNC service stopped");
         }
     }
 

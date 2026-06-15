@@ -32,10 +32,12 @@ use crate::stream_encoder::encoder_type_to_backend;
 use crate::update::UpdateService;
 use crate::utils::bind_tcp_listener;
 use crate::video::codec_constraints::{
-    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+    enforce_constraints_with_stream_manager, validate_third_party_codec_compatibility,
+    StreamCodecConstraints,
 };
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::{Streamer, VideoStreamManager};
+use crate::vnc::VncService;
 use crate::web;
 use crate::webrtc::{config::WebRtcConfig, WebRtcStreamer, WebRtcStreamerConfig};
 
@@ -440,7 +442,18 @@ async fn build_app_state(
         tracing::warn!("Failed to initialize Android stream manager: {}", err);
     }
 
-    let rustdesk = if config.rustdesk.is_valid() {
+    let third_party_codec_config_valid = match validate_third_party_codec_compatibility(&config) {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::warn!(
+                    "Android third-party access codec configuration is invalid; RustDesk/VNC/RTSP will not start: {}",
+                    e
+                );
+            false
+        }
+    };
+
+    let rustdesk = if third_party_codec_config_valid && config.rustdesk.is_valid() {
         Some(Arc::new(RustDeskService::new(
             config.rustdesk.clone(),
             stream_manager.clone(),
@@ -451,10 +464,19 @@ async fn build_app_state(
         None
     };
 
-    let rtsp = if config.rtsp.enabled {
+    let rtsp = if third_party_codec_config_valid && config.rtsp.enabled {
         Some(Arc::new(RtspService::new(
             config.rtsp.clone(),
             stream_manager.clone(),
+        )))
+    } else {
+        None
+    };
+    let vnc = if third_party_codec_config_valid && config.vnc.enabled {
+        Some(Arc::new(VncService::new(
+            config.vnc.clone(),
+            stream_manager.clone(),
+            hid.clone(),
         )))
     } else {
         None
@@ -474,6 +496,7 @@ async fn build_app_state(
         atx,
         audio,
         rustdesk.clone(),
+        vnc.clone(),
         rtsp.clone(),
         extensions.clone(),
         events.clone(),
@@ -487,6 +510,11 @@ async fn build_app_state(
     if let Some(service) = rustdesk {
         if let Err(err) = service.start().await {
             tracing::warn!("Failed to start Android RustDesk service: {}", err);
+        }
+    }
+    if let Some(service) = vnc {
+        if let Err(err) = service.start().await {
+            tracing::warn!("Failed to start Android VNC service: {}", err);
         }
     }
     if let Some(service) = rtsp {
@@ -671,6 +699,12 @@ async fn cleanup(state: &Arc<AppState>) {
     if let Some(service) = state.rustdesk.read().await.as_ref() {
         if let Err(err) = service.stop().await {
             tracing::warn!("Failed to stop Android RustDesk service: {}", err);
+        }
+    }
+
+    if let Some(service) = state.vnc.read().await.as_ref() {
+        if let Err(err) = service.stop().await {
+            tracing::warn!("Failed to stop Android VNC service: {}", err);
         }
     }
 

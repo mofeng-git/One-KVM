@@ -32,6 +32,7 @@ pub struct AppConfig {
     pub web: WebConfig,
     pub extensions: ExtensionsConfig,
     pub rustdesk: RustDeskConfig,
+    pub vnc: VncConfig,
     pub rtsp: RtspConfig,
     pub redfish: RedfishConfig,
 }

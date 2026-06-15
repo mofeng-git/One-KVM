@@ -9,6 +9,7 @@ import {
   rtspConfigApi,
   rustdeskConfigApi,
   streamConfigApi,
+  vncConfigApi,
   videoConfigApi,
   webConfigApi,
 } from '@/api'
@@ -36,6 +37,9 @@ import type {
   RustDeskConfigUpdate as ApiRustDeskConfigUpdate,
   RustDeskStatusResponse as ApiRustDeskStatusResponse,
   RustDeskPasswordResponse as ApiRustDeskPasswordResponse,
+  VncConfigResponse as ApiVncConfigResponse,
+  VncConfigUpdate as ApiVncConfigUpdate,
+  VncStatusResponse as ApiVncStatusResponse,
   WebConfig,
   WebConfigUpdate,
 } from '@/api'
@@ -57,6 +61,8 @@ export const useConfigStore = defineStore('config', () => {
   const atx = ref<AtxConfig | null>(null)
   const rtspConfig = ref<ApiRtspConfigResponse | null>(null)
   const rtspStatus = ref<ApiRtspStatusResponse | null>(null)
+  const vncConfig = ref<ApiVncConfigResponse | null>(null)
+  const vncStatus = ref<ApiVncStatusResponse | null>(null)
   const rustdeskConfig = ref<ApiRustDeskConfigResponse | null>(null)
   const rustdeskStatus = ref<ApiRustDeskStatusResponse | null>(null)
   const rustdeskPassword = ref<ApiRustDeskPasswordResponse | null>(null)
@@ -70,6 +76,7 @@ export const useConfigStore = defineStore('config', () => {
   const webLoading = ref(false)
   const atxLoading = ref(false)
   const rtspLoading = ref(false)
+  const vncLoading = ref(false)
   const rustdeskLoading = ref(false)
 
   const authError = ref<string | null>(null)
@@ -81,6 +88,7 @@ export const useConfigStore = defineStore('config', () => {
   const webError = ref<string | null>(null)
   const atxError = ref<string | null>(null)
   const rtspError = ref<string | null>(null)
+  const vncError = ref<string | null>(null)
   const rustdeskError = ref<string | null>(null)
 
   let authPromise: Promise<AuthConfig> | null = null
@@ -93,6 +101,8 @@ export const useConfigStore = defineStore('config', () => {
   let atxPromise: Promise<AtxConfig> | null = null
   let rtspPromise: Promise<ApiRtspConfigResponse> | null = null
   let rtspStatusPromise: Promise<ApiRtspStatusResponse> | null = null
+  let vncPromise: Promise<ApiVncConfigResponse> | null = null
+  let vncStatusPromise: Promise<ApiVncStatusResponse> | null = null
   let rustdeskPromise: Promise<ApiRustDeskConfigResponse> | null = null
   let rustdeskStatusPromise: Promise<ApiRustDeskStatusResponse> | null = null
   let rustdeskPasswordPromise: Promise<ApiRustDeskPasswordResponse> | null = null
@@ -318,6 +328,51 @@ export const useConfigStore = defineStore('config', () => {
     return request
   }
 
+  async function refreshVncConfig() {
+    if (vncLoading.value && vncPromise) return vncPromise
+    vncLoading.value = true
+    vncError.value = null
+    const request = vncConfigApi.get()
+      .then((response) => {
+        vncConfig.value = response
+        return response
+      })
+      .catch((error) => {
+        vncError.value = normalizeErrorMessage(error)
+        throw error
+      })
+      .finally(() => {
+        vncLoading.value = false
+        vncPromise = null
+      })
+
+    vncPromise = request
+    return request
+  }
+
+  async function refreshVncStatus() {
+    if (vncLoading.value && vncStatusPromise) return vncStatusPromise
+    vncLoading.value = true
+    vncError.value = null
+    const request = vncConfigApi.getStatus()
+      .then((response) => {
+        vncStatus.value = response
+        vncConfig.value = response.config
+        return response
+      })
+      .catch((error) => {
+        vncError.value = normalizeErrorMessage(error)
+        throw error
+      })
+      .finally(() => {
+        vncLoading.value = false
+        vncStatusPromise = null
+      })
+
+    vncStatusPromise = request
+    return request
+  }
+
   async function refreshRustdeskConfig() {
     if (rustdeskLoading.value && rustdeskPromise) return rustdeskPromise
     rustdeskLoading.value = true
@@ -430,6 +485,11 @@ export const useConfigStore = defineStore('config', () => {
     return refreshRtspConfig()
   }
 
+  function ensureVncConfig() {
+    if (vncConfig.value) return Promise.resolve(vncConfig.value)
+    return refreshVncConfig()
+  }
+
   function ensureRustdeskConfig() {
     if (rustdeskConfig.value) return Promise.resolve(rustdeskConfig.value)
     return refreshRustdeskConfig()
@@ -489,6 +549,12 @@ export const useConfigStore = defineStore('config', () => {
     return response
   }
 
+  async function updateVnc(update: ApiVncConfigUpdate) {
+    const response = await vncConfigApi.update(update)
+    vncConfig.value = response
+    return response
+  }
+
   async function updateRustdesk(update: ApiRustDeskConfigUpdate) {
     const response = await rustdeskConfigApi.update(update)
     rustdeskConfig.value = response
@@ -518,6 +584,8 @@ export const useConfigStore = defineStore('config', () => {
     atx,
     rtspConfig,
     rtspStatus,
+    vncConfig,
+    vncStatus,
     rustdeskConfig,
     rustdeskStatus,
     rustdeskPassword,
@@ -530,6 +598,7 @@ export const useConfigStore = defineStore('config', () => {
     webLoading,
     atxLoading,
     rtspLoading,
+    vncLoading,
     rustdeskLoading,
     authError,
     videoError,
@@ -540,6 +609,7 @@ export const useConfigStore = defineStore('config', () => {
     webError,
     atxError,
     rtspError,
+    vncError,
     rustdeskError,
     refreshAuth,
     refreshVideo,
@@ -551,6 +621,8 @@ export const useConfigStore = defineStore('config', () => {
     refreshAtx,
     refreshRtspConfig,
     refreshRtspStatus,
+    refreshVncConfig,
+    refreshVncStatus,
     refreshRustdeskConfig,
     refreshRustdeskStatus,
     refreshRustdeskPassword,
@@ -563,6 +635,7 @@ export const useConfigStore = defineStore('config', () => {
     ensureWeb,
     ensureAtx,
     ensureRtspConfig,
+    ensureVncConfig,
     ensureRustdeskConfig,
     updateAuth,
     updateVideo,
@@ -573,6 +646,7 @@ export const useConfigStore = defineStore('config', () => {
     updateWeb,
     updateAtx,
     updateRtsp,
+    updateVnc,
     updateRustdesk,
     regenerateRustdeskId,
     regenerateRustdeskPassword,

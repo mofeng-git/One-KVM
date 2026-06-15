@@ -16,6 +16,7 @@ pub fn capabilities() -> PlatformCapabilities {
         otg: FeatureCapability::available(["configfs"]),
         audio: FeatureCapability::available(["alsa"]),
         rustdesk: FeatureCapability::available(["builtin"]),
+        vnc: FeatureCapability::available(["builtin", "tight_jpeg", "h264"]),
         diagnostics: FeatureCapability::available(["linux"]),
         extensions: FeatureCapability::available(["linux"]),
         service_installation: FeatureCapability::available(["systemd"]),

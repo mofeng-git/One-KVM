@@ -143,6 +143,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/rustdesk/stop",
             post(handlers::config::stop_rustdesk_service),
         )
+        // VNC configuration endpoints
+        .route("/config/vnc", get(handlers::config::get_vnc_config))
+        .route("/config/vnc", patch(handlers::config::update_vnc_config))
+        .route("/config/vnc/status", get(handlers::config::get_vnc_status))
+        .route(
+            "/config/vnc/start",
+            post(handlers::config::start_vnc_service),
+        )
+        .route("/config/vnc/stop", post(handlers::config::stop_vnc_service))
         // RTSP configuration endpoints
         .route("/config/rtsp", get(handlers::config::get_rtsp_config))
         .route("/config/rtsp", patch(handlers::config::update_rtsp_config))

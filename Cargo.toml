@@ -58,6 +58,7 @@ desktop = [
     "dep:ventoy-img",
     "dep:protobuf",
     "dep:sodiumoxide",
+    "dep:des",
     "dep:sha2",
     "dep:typeshare",
     "dep:hwcodec",
@@ -104,6 +105,7 @@ android = [
     "dep:serialport",
     "dep:sha2",
     "dep:sodiumoxide",
+    "dep:des",
     "dep:sqlx",
     "dep:alsa",
     "dep:audiopus",
@@ -222,6 +224,7 @@ ventoy-img = { path = "libs/ventoy-img-rs", optional = true }
 # RustDesk protocol support
 protobuf = { version = "3.7", features = ["with-bytes"], optional = true }
 sodiumoxide = { version = "0.2", optional = true }
+des = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
 # TypeScript type generation
 typeshare = { version = "1.0", optional = true }

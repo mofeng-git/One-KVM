@@ -20,6 +20,7 @@ import {
   systemApi,
   updateApi,
   usbApi,
+  vncConfigApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
@@ -27,6 +28,8 @@ import {
   type RustDeskPasswordResponse,
   type RtspStatusResponse,
   type RtspConfigUpdate,
+  type VncConfigUpdate,
+  type VncStatusResponse,
   type WebConfig,
   type UpdateOverviewResponse,
   type UpdateStatusResponse,
@@ -105,7 +108,6 @@ import {
   ExternalLink,
   Copy,
   ScreenShare,
-  Radio,
   Globe,
   Loader2,
   AlertTriangle,
@@ -136,8 +138,7 @@ const SETTINGS_SECTION_IDS = [
   'atx',
   'environment',
   'ext-ttyd',
-  'ext-rustdesk',
-  'ext-rtsp',
+  'third-party-access',
   'ext-remote-access',
   'about',
 ] as const
@@ -167,8 +168,7 @@ const navGroups = computed(() => [
     title: t('settings.extensions'),
     items: [
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
-      { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
-      { id: 'ext-rtsp', label: t('extensions.rtsp.title'), icon: Radio },
+      { id: 'third-party-access', label: t('extensions.thirdPartyAccess.title'), icon: ScreenShare },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
     ]
   },
@@ -200,8 +200,7 @@ const sectionMeta = computed(() => {
 function sectionSubtitleKey(id: string): string {
   switch (id) {
     case 'ext-ttyd': return 'extTtydSubtitle'
-    case 'ext-rustdesk': return 'extRustdeskSubtitle'
-    case 'ext-rtsp': return 'extRtspSubtitle'
+    case 'third-party-access': return 'thirdPartyAccessSubtitle'
     case 'ext-remote-access': return 'extRemoteAccessSubtitle'
     default: return `${id}Subtitle`
   }
@@ -222,6 +221,7 @@ function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
   if (value === 'ext-frpc') return 'ext-remote-access'
+  if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp') return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
 
@@ -272,14 +272,13 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'ext-remote-access':
       await loadExtensions()
       return
-    case 'ext-rustdesk':
+    case 'third-party-access':
       await Promise.all([
         loadRustdeskConfig(),
         loadRustdeskPassword(),
+        loadRtspConfig(),
+        loadVncConfig(),
       ])
-      return
-    case 'ext-rtsp':
-      await loadRtspConfig()
       return
     case 'about':
       if (isAndroid.value) return
@@ -390,6 +389,7 @@ const rustdeskCopied = ref<'id' | 'password' | null>(null)
 const { copy: clipboardCopy } = useClipboard()
 const rustdeskLocalConfig = ref({
   enabled: false,
+  codec: 'h264' as 'h264' | 'h265',
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
@@ -415,6 +415,18 @@ const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
   password: '',
 })
 
+const vncStatus = ref<VncStatusResponse | null>(null)
+const vncLoading = ref(false)
+const vncLocalConfig = ref<VncConfigUpdate & { password?: string }>({
+  enabled: false,
+  bind: '0.0.0.0',
+  port: 5900,
+  encoding: 'tight_jpeg',
+  jpeg_quality: 80,
+  allow_one_client: true,
+  password: '',
+})
+
 function formatHostForUrl(hostname: string): string {
   if (!hostname) return '127.0.0.1'
   return hostname.includes(':') && !hostname.startsWith('[')
@@ -427,6 +439,12 @@ const rtspStreamUrl = computed(() => {
   const path = (rtspLocalConfig.value.path || 'live').trim().replace(/^\/+|\/+$/g, '') || 'live'
   const port = Number(rtspLocalConfig.value.port) || 8554
   return `rtsp://${host}:${port}/${path}`
+})
+
+const vncStreamUrl = computed(() => {
+  const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
+  const port = Number(vncLocalConfig.value.port) || 5900
+  return `${host}:${port}`
 })
 
 const webServerConfig = ref<WebConfig>({
@@ -1839,6 +1857,7 @@ function applyRustdeskStatus(status: RustDeskStatusResponse) {
   rustdeskStatus.value = status
   rustdeskLocalConfig.value = {
     enabled: config.enabled,
+    codec: config.codec || 'h264',
     rendezvous_server: config.rendezvous_server,
     relay_server: config.relay_server || '',
     relay_key: config.relay_key || '',
@@ -1899,6 +1918,17 @@ function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
 
 function validateRustdeskConfig(): boolean {
   return !rustdeskValidationMessage.value || showValidationError(rustdeskValidationMessage.value)
+}
+
+function validateVncConfig(enabled = vncLocalConfig.value.enabled): boolean {
+  const password = (vncLocalConfig.value.password || '').trim()
+  if (enabled && !vncStatus.value?.config.has_password && !password) {
+    return showValidationError(t('extensions.vnc.passwordRequired'))
+  }
+  if (password.length > 8) {
+    return showValidationError(t('extensions.vnc.passwordMaxLength'))
+  }
+  return true
 }
 
 function normalizeRtspPath(path: string): string {
@@ -2222,23 +2252,26 @@ function updateStatusBadgeText(): string {
     || updatePhaseText(updateStatus.value?.phase)
 }
 
+function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
+  return {
+    enabled,
+    codec: rustdeskLocalConfig.value.codec,
+    rendezvous_server: normalizeRustdeskServer(
+      rustdeskLocalConfig.value.rendezvous_server,
+      21116,
+    ),
+    relay_server: normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117),
+    relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
+  }
+}
+
 async function saveRustdeskConfig() {
   if (rustdeskLocalConfig.value.enabled && !validateRustdeskConfig()) return
 
   loading.value = true
   saved.value = false
   try {
-    const rendezvousServer = normalizeRustdeskServer(
-      rustdeskLocalConfig.value.rendezvous_server,
-      21116,
-    )
-    const relayServer = normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117)
-    await configStore.updateRustdesk({
-      enabled: rustdeskLocalConfig.value.enabled,
-      rendezvous_server: rendezvousServer,
-      relay_server: relayServer,
-      relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
-    })
+    await configStore.updateRustdesk(rustdeskUpdatePayload())
     await loadRustdeskConfig()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
@@ -2279,6 +2312,7 @@ async function startRustdesk() {
 
   rustdeskLoading.value = true
   try {
+    await configStore.updateRustdesk(rustdeskUpdatePayload(true))
     const status = await rustdeskConfigApi.start()
     applyRustdeskStatus(status)
   } catch {
@@ -2373,23 +2407,24 @@ async function loadRtspConfig() {
   }
 }
 
+function rtspUpdatePayload(enabled = !!rtspLocalConfig.value.enabled): RtspConfigUpdate {
+  return {
+    enabled,
+    bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
+    port: Number(rtspLocalConfig.value.port) || 8554,
+    path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
+    allow_one_client: !!rtspLocalConfig.value.allow_one_client,
+    codec: rtspLocalConfig.value.codec || 'h264',
+    username: (rtspLocalConfig.value.username || '').trim(),
+    password: (rtspLocalConfig.value.password || '').trim(),
+  }
+}
+
 async function saveRtspConfig() {
   loading.value = true
   saved.value = false
   try {
-    const update: RtspConfigUpdate = {
-      enabled: !!rtspLocalConfig.value.enabled,
-      bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
-      port: Number(rtspLocalConfig.value.port) || 8554,
-      path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
-      allow_one_client: !!rtspLocalConfig.value.allow_one_client,
-      codec: rtspLocalConfig.value.codec || 'h264',
-      username: (rtspLocalConfig.value.username || '').trim(),
-    }
-
-    update.password = (rtspLocalConfig.value.password || '').trim()
-
-    await configStore.updateRtsp(update)
+    await configStore.updateRtsp(rtspUpdatePayload())
     await loadRtspConfig()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
@@ -2402,6 +2437,7 @@ async function saveRtspConfig() {
 async function startRtsp() {
   rtspLoading.value = true
   try {
+    await configStore.updateRtsp(rtspUpdatePayload(true))
     const status = await rtspConfigApi.start()
     applyRtspStatus(status)
   } catch {
@@ -2418,6 +2454,108 @@ async function stopRtsp() {
   } catch {
   } finally {
     rtspLoading.value = false
+  }
+}
+
+function applyVncStatus(status: VncStatusResponse) {
+  vncStatus.value = status
+  vncLocalConfig.value = {
+    enabled: status.config.enabled,
+    bind: status.config.bind,
+    port: status.config.port,
+    encoding: status.config.encoding,
+    jpeg_quality: status.config.jpeg_quality,
+    allow_one_client: status.config.allow_one_client,
+    password: '',
+  }
+}
+
+async function loadVncConfig() {
+  vncLoading.value = true
+  try {
+    const status = await configStore.refreshVncStatus()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+function vncUpdatePayload(enabled = !!vncLocalConfig.value.enabled): VncConfigUpdate {
+  const update: VncConfigUpdate = {
+    enabled,
+    bind: vncLocalConfig.value.bind?.trim() || '0.0.0.0',
+    port: Number(vncLocalConfig.value.port) || 5900,
+    encoding: vncLocalConfig.value.encoding || 'tight_jpeg',
+    jpeg_quality: Number(vncLocalConfig.value.jpeg_quality) || 80,
+    allow_one_client: !!vncLocalConfig.value.allow_one_client,
+  }
+  const password = (vncLocalConfig.value.password || '').trim()
+  if (password) update.password = password
+  return update
+}
+
+async function saveVncConfig() {
+  if (!validateVncConfig()) return
+
+  loading.value = true
+  saved.value = false
+  try {
+    await configStore.updateVnc(vncUpdatePayload())
+    await loadVncConfig()
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch {
+  } finally {
+    loading.value = false
+  }
+}
+
+async function startVnc() {
+  if (!validateVncConfig(true)) return
+
+  vncLoading.value = true
+  try {
+    await configStore.updateVnc(vncUpdatePayload(true))
+    const status = await vncConfigApi.start()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+async function stopVnc() {
+  vncLoading.value = true
+  try {
+    const status = await vncConfigApi.stop()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+function getVncServiceStatusText(status: string | undefined): string {
+  if (!status) return t('extensions.stopped')
+  switch (status) {
+    case 'running': return t('extensions.running')
+    case 'starting': return t('extensions.starting')
+    case 'stopped': return t('extensions.stopped')
+    default:
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getVncStatusClass(status: string | undefined): string {
+  switch (status) {
+    case 'running': return 'bg-green-500'
+    case 'starting': return 'bg-yellow-500'
+    case 'stopped': return 'bg-gray-400'
+    default:
+      if (status?.startsWith('error:')) return 'bg-red-500'
+      return 'bg-gray-400'
   }
 }
 
@@ -4506,7 +4644,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- RTSP Section -->
-          <div v-show="activeSection === 'ext-rtsp'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4631,8 +4769,134 @@ watch(isWindows, () => {
             </div>
           </div>
 
+          <!-- VNC Section -->
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.vnc.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.vnc.desc') }}</CardDescription>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Badge :variant="vncStatus?.service_status === 'running' ? 'default' : 'secondary'">
+                      {{ getVncServiceStatusText(vncStatus?.service_status) }}
+                    </Badge>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadVncConfig" :disabled="vncLoading">
+                      <RefreshCw :class="['h-4 w-4', vncLoading ? 'animate-spin' : '']" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-2 h-2 rounded-full', getVncStatusClass(vncStatus?.service_status)]" />
+                    <span class="text-sm">{{ getVncServiceStatusText(vncStatus?.service_status) }}</span>
+                    <template v-if="vncStatus?.connection_count">
+                      <span class="text-muted-foreground">|</span>
+                      <span class="text-sm text-muted-foreground">{{ t('extensions.vnc.clients', { count: vncStatus.connection_count }) }}</span>
+                    </template>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="vncStatus?.service_status !== 'running' && vncStatus?.service_status !== 'starting'"
+                      size="sm"
+                      @click="startVnc"
+                      :disabled="vncLoading || vncStatus?.service_status === 'starting'"
+                    >
+                      <Play class="h-4 w-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      @click="stopVnc"
+                      :disabled="vncLoading"
+                    >
+                      <Square class="h-4 w-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+
+                <div class="grid gap-4">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.autoStart') }}</Label>
+                    <Switch v-model="vncLocalConfig.enabled" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
+                    <Input v-model="vncLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.port') }}</Label>
+                    <Input v-model.number="vncLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.encoding') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="vncLocalConfig.encoding" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="vncStatus?.service_status === 'running'">
+                        <option value="tight_jpeg">{{ t('extensions.vnc.encodingTightJpeg') }}</option>
+                        <option value="h264">{{ t('extensions.vnc.encodingH264') }}</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.encodingHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.jpegQuality') }}</Label>
+                    <Input v-model.number="vncLocalConfig.jpeg_quality" class="sm:col-span-3" type="number" min="10" max="100" :disabled="vncStatus?.service_status === 'running' || vncLocalConfig.encoding !== 'tight_jpeg'" />
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.vnc.allowOneClient') }}</Label>
+                    <Switch v-model="vncLocalConfig.allow_one_client" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.password') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <div class="relative">
+                        <Input
+                          v-model="vncLocalConfig.password"
+                          :type="showPasswords ? 'text' : 'password'"
+                          maxlength="8"
+                          autocomplete="off"
+                          :placeholder="vncStatus?.config.has_password ? t('extensions.vnc.passwordPlaceholder') : t('extensions.vnc.passwordRequiredPlaceholder')"
+                          :disabled="vncStatus?.service_status === 'running'"
+                        />
+                        <button
+                          type="button"
+                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
+                          @click="showPasswords = !showPasswords"
+                        >
+                          <Eye v-if="!showPasswords" class="h-4 w-4" />
+                          <EyeOff v-else class="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p v-if="vncStatus?.config.has_password" class="text-xs text-muted-foreground">{{ t('extensions.vnc.passwordSaved') }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
+                  <p class="text-sm font-medium">{{ t('extensions.vnc.urlPreview') }}</p>
+                  <code class="font-mono text-sm break-all">{{ vncStreamUrl }}</code>
+                </div>
+              </CardContent>
+            </Card>
+            <div class="flex justify-end">
+              <Button :disabled="loading || vncLoading || vncStatus?.service_status === 'running'" @click="saveVncConfig">
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+
           <!-- RustDesk Section -->
-          <div v-show="activeSection === 'ext-rustdesk'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4691,6 +4955,16 @@ watch(isWindows, () => {
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
                     <Switch v-model="rustdeskLocalConfig.enabled" :disabled="rustdeskStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="rustdeskLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="rustdeskStatus?.service_status === 'running'">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.codecHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>

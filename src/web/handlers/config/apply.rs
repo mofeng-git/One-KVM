@@ -6,7 +6,8 @@ use crate::rtsp::RtspService;
 use crate::state::AppState;
 use crate::stream_encoder::encoder_type_to_backend;
 use crate::video::codec_constraints::{
-    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+    enforce_constraints_with_stream_manager, validate_third_party_codec_compatibility,
+    StreamCodecConstraints,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
@@ -409,6 +410,27 @@ pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<O
     Ok(enforcement.message)
 }
 
+fn validate_rustdesk_candidate(
+    state: &Arc<AppState>,
+    new_config: &crate::rustdesk::config::RustDeskConfig,
+) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rustdesk = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
+fn validate_vnc_candidate(state: &Arc<AppState>, new_config: &VncConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.vnc = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
+fn validate_rtsp_candidate(state: &Arc<AppState>, new_config: &RtspConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rtsp = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
 pub async fn apply_rustdesk_config(
     state: &Arc<AppState>,
     old_config: &crate::rustdesk::config::RustDeskConfig,
@@ -416,6 +438,8 @@ pub async fn apply_rustdesk_config(
     options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RustDesk config changes...");
+
+    validate_rustdesk_candidate(state, new_config)?;
 
     let mut rustdesk_guard = state.rustdesk.write().await;
     let mut credentials_to_save = None;
@@ -433,6 +457,7 @@ pub async fn apply_rustdesk_config(
 
     if new_config.enabled {
         let need_restart = options.force
+            || old_config.codec != new_config.codec
             || old_config.rendezvous_server != new_config.rendezvous_server
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
@@ -488,6 +513,77 @@ pub async fn apply_rustdesk_config(
     Ok(())
 }
 
+pub async fn apply_vnc_config(
+    state: &Arc<AppState>,
+    old_config: &VncConfig,
+    new_config: &VncConfig,
+    options: ConfigApplyOptions,
+) -> Result<()> {
+    tracing::info!("Applying VNC config changes...");
+
+    validate_vnc_candidate(state, new_config)?;
+
+    if new_config.enabled {
+        let mut candidate = state.config.get().as_ref().clone();
+        candidate.vnc = new_config.clone();
+        let constraints = StreamCodecConstraints::from_config(&candidate);
+        match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
+            Ok(result) if result.changed => {
+                if let Some(message) = result.message {
+                    tracing::info!("{}", message);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(
+                "Failed to enforce VNC stream constraints before start: {}",
+                e
+            ),
+        }
+    }
+
+    let mut vnc_guard = state.vnc.write().await;
+
+    if !new_config.enabled {
+        if let Some(ref service) = *vnc_guard {
+            service.stop().await?;
+        }
+        *vnc_guard = None;
+    }
+
+    if new_config.enabled {
+        let need_restart = options.force
+            || old_config.bind != new_config.bind
+            || old_config.port != new_config.port
+            || old_config.encoding != new_config.encoding
+            || old_config.password != new_config.password
+            || old_config.jpeg_quality != new_config.jpeg_quality
+            || old_config.allow_one_client != new_config.allow_one_client;
+
+        if vnc_guard.is_none() {
+            let service = crate::vnc::VncService::new(
+                new_config.clone(),
+                state.stream_manager.clone(),
+                state.hid.clone(),
+            );
+            service.start().await?;
+            *vnc_guard = Some(Arc::new(service));
+            tracing::info!("VNC service started");
+        } else if need_restart {
+            if let Some(ref service) = *vnc_guard {
+                service.restart(new_config.clone()).await?;
+                tracing::info!("VNC service restarted");
+            }
+        }
+    }
+
+    drop(vnc_guard);
+    if let Some(message) = enforce_stream_codec_constraints(state).await? {
+        tracing::info!("{}", message);
+    }
+
+    Ok(())
+}
+
 pub async fn apply_rtsp_config(
     state: &Arc<AppState>,
     old_config: &RtspConfig,
@@ -495,6 +591,8 @@ pub async fn apply_rtsp_config(
     options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RTSP config changes...");
+
+    validate_rtsp_candidate(state, new_config)?;
 
     let mut rtsp_guard = state.rtsp.write().await;
 

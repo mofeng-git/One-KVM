@@ -36,6 +36,7 @@ pub struct Capabilities {
     pub atx: CapabilityInfo,
     pub audio: CapabilityInfo,
     pub rustdesk: CapabilityInfo,
+    pub vnc: CapabilityInfo,
 }
 
 #[derive(Serialize)]
@@ -105,6 +106,11 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
                 available: config.rustdesk.enabled && platform.rustdesk.available,
                 backend: platform.rustdesk.selected_backend.clone(),
                 reason: platform.rustdesk.reason.clone(),
+            },
+            vnc: CapabilityInfo {
+                available: config.vnc.enabled && platform.vnc.available,
+                backend: platform.vnc.selected_backend.clone(),
+                reason: platform.vnc.reason.clone(),
             },
         },
         disk_space,

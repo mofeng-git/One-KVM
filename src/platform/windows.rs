@@ -26,6 +26,8 @@ pub fn capabilities() -> PlatformCapabilities {
             .with_selected_backend(Some("wasapi".to_string())),
         rustdesk: FeatureCapability::available(["builtin", "tcp_direct", "relay"])
             .with_selected_backend(Some("builtin".to_string())),
+        vnc: FeatureCapability::available(["builtin", "tight_jpeg", "h264"])
+            .with_selected_backend(Some("builtin".to_string())),
         diagnostics: FeatureCapability::available(["windows"]),
         extensions: FeatureCapability::available(["windows_safe"]),
         service_installation: FeatureCapability::available(["windows_service"]),
