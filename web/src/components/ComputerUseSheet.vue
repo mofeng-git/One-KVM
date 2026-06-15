@@ -335,6 +335,7 @@ onMounted(loadConfig)
                 <Input
                   v-model="apiKey"
                   type="password"
+                  autocomplete="off"
                   :placeholder="config?.api_key_configured ? `已配置：${config.api_key_source}` : 'sk-...'"
                 />
               </div>

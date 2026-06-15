@@ -11,6 +11,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
+import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi } from '@/api'
 import type { ComputerUseScreenshot, ComputerUseSession } from '@/api'
@@ -185,7 +186,10 @@ const changingPassword = ref(false)
 
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
-const showTerminal = computed(() => ttydStatus.value?.available !== false)
+const featureVisibility = useFeatureVisibility()
+const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
+const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
+const showComputerUse = computed(() => featureVisibility.value.computerUse)
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
@@ -772,6 +776,7 @@ function clearComputerUseTimeline() {
 }
 
 async function openComputerUse() {
+  if (!showComputerUse.value) return
   computerUseOpen.value = true
   await computerUseSocket.connect().catch(() => {})
   computerUseSession.value = await computerUseApi.session().catch(() => computerUseSession.value)
@@ -1818,6 +1823,14 @@ watch(() => webrtc.videoTrack.value, async (track) => {
   }
 })
 
+watch(showTerminal, (visible) => {
+  if (!visible) showTerminalDialog.value = false
+})
+
+watch(showComputerUse, (visible) => {
+  if (!visible) computerUseOpen.value = false
+})
+
 watch(() => webrtc.audioTrack.value, async (track) => {
   videoDebugLog('WebRTC audio track ref changed', {
     hasTrack: Boolean(track),
@@ -2820,6 +2833,7 @@ onUnmounted(() => {
       :video-mode="videoMode"
       :ttyd-running="ttydStatus?.running"
       :show-terminal="showTerminal"
+      :show-computer-use="showComputerUse"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="statsSheetOpen = true"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
@@ -3037,6 +3051,7 @@ onUnmounted(() => {
         </div>
         </div>
         <ComputerUseSheet
+          v-if="showComputerUse"
           v-model:open="computerUseOpen"
           :connected="computerUseSocket.connected.value"
           :ws-error="computerUseSocket.error.value"
@@ -3120,6 +3135,7 @@ onUnmounted(() => {
               id="currentPassword"
               v-model="currentPassword"
               type="password"
+              autocomplete="current-password"
               :placeholder="t('auth.currentPasswordPlaceholder')"
             />
           </div>
@@ -3129,6 +3145,7 @@ onUnmounted(() => {
               id="newPassword"
               v-model="newPassword"
               type="password"
+              autocomplete="new-password"
               :placeholder="t('auth.newPasswordPlaceholder')"
             />
           </div>
@@ -3138,6 +3155,7 @@ onUnmounted(() => {
               id="confirmPassword"
               v-model="confirmPassword"
               type="password"
+              autocomplete="new-password"
               :placeholder="t('auth.confirmPasswordPlaceholder')"
             />
           </div>

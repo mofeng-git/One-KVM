@@ -51,6 +51,7 @@ import type {
 import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
+import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
@@ -111,6 +112,7 @@ import {
   Globe,
   Loader2,
   AlertTriangle,
+  Bot,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -119,6 +121,7 @@ const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
+const featureVisibility = useFeatureVisibility()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
 const isAndroid = computed(() => systemStore.platform?.mode === 'android_amlogic')
@@ -2762,6 +2765,29 @@ watch(isWindows, () => {
                 <LanguageToggleButton variant="outline" size="sm" label-mode="current" />
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.featureVisibility') }}</CardTitle>
+                <CardDescription>{{ t('settings.featureVisibilityDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-1">
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-web-terminal" class="flex min-w-0 items-center gap-2 font-normal">
+                    <Terminal class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('actionbar.webTerminal') }}</span>
+                  </Label>
+                  <Switch id="feature-web-terminal" v-model="featureVisibility.webTerminal" />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-computer-use" class="flex min-w-0 items-center gap-2 font-normal">
+                    <Bot class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
+                  </Label>
+                  <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <!-- Account Section -->
@@ -2968,6 +2994,7 @@ watch(isWindows, () => {
                         id="turn-password"
                         v-model="config.turn_password"
                         :type="showPasswords ? 'text' : 'password'"
+                        autocomplete="off"
                         :disabled="!config.stun_server && !config.turn_server"
                       />
                       <button
@@ -4320,7 +4347,7 @@ watch(isWindows, () => {
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
                       <div class="sm:col-span-3 space-y-1">
-                        <Input v-model="extConfig.gostc.key" type="password" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                        <Input v-model="extConfig.gostc.key" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.gostc?.status)" />
                         <p v-if="extConfig.gostc.enabled && !extConfig.gostc.key" class="text-xs text-destructive">{{ t('extensions.gostc.keyRequired') }}</p>
                       </div>
                     </div>
@@ -4416,7 +4443,7 @@ watch(isWindows, () => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
-                      <Input v-model="extConfig.easytier.network_secret" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                      <Input v-model="extConfig.easytier.network_secret" type="password" autocomplete="off" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.peers') }}</Label>
@@ -4572,7 +4599,7 @@ watch(isWindows, () => {
                       <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                         <Label class="sm:text-right">{{ t('extensions.frpc.token') }}</Label>
                         <div class="sm:col-span-3 space-y-1">
-                          <Input v-model="extConfig.frpc.token" type="password" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <Input v-model="extConfig.frpc.token" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.frpc?.status)" />
                           <p v-if="extConfig.frpc.enabled && !extConfig.frpc.token" class="text-xs text-destructive">{{ t('extensions.frpc.tokenRequired') }}</p>
                         </div>
                       </div>
@@ -4600,7 +4627,7 @@ watch(isWindows, () => {
                       </div>
                       <div v-if="showFrpcSecretKey" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                         <Label class="sm:text-right">{{ t('extensions.frpc.secretKey') }}</Label>
-                        <Input v-model="extConfig.frpc.secret_key" class="sm:col-span-3" type="password" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                        <Input v-model="extConfig.frpc.secret_key" class="sm:col-span-3" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.frpc?.status)" />
                       </div>
                       <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                         <Label class="sm:text-right">{{ t('extensions.frpc.tls') }}</Label>

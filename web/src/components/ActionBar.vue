@@ -5,9 +5,9 @@ import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { Button } from '@/components/ui/button'
 import {
-  Popover,
   PopoverContent,
   PopoverTrigger,
+  Popover,
 } from '@/components/ui/popover'
 import {
   Tooltip,
@@ -32,7 +32,6 @@ import {
   ClipboardPaste,
   HardDrive,
   Keyboard,
-  Cable,
   Settings,
   Maximize,
   Power,
@@ -65,6 +64,7 @@ const props = defineProps<{
   videoMode?: VideoMode
   ttydRunning?: boolean
   showTerminal?: boolean
+  showComputerUse?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -87,7 +87,6 @@ const videoPopoverOpen = ref(false)
 const hidPopoverOpen = ref(false)
 const audioPopoverOpen = ref(false)
 const msdDialogOpen = ref(false)
-const extensionOpen = ref(false)
 
 const mobileAtxOpen = ref(false)
 const mobilePasteOpen = ref(false)
@@ -126,7 +125,7 @@ let resizeObserver: ResizeObserver | null = null
 type CollapsibleItem =
   | 'video' | 'audio' | 'hid'
   | 'msd' | 'atx' | 'paste'
-  | 'stats' | 'extension' | 'settings'
+  | 'stats' | 'terminal' | 'settings'
 
 interface ItemSpec {
   id: CollapsibleItem
@@ -141,7 +140,7 @@ const ITEM_SPECS: ItemSpec[] = [
   { id: 'atx',       side: 'left' },
   { id: 'paste',     side: 'left' },
   { id: 'stats',     side: 'right' },
-  { id: 'extension', side: 'right' },
+  { id: 'terminal',  side: 'right' },
   { id: 'settings',  side: 'right' },
 ]
 
@@ -197,7 +196,7 @@ const RIGHT_FIXED_PX = 120
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
-    if (item.id === 'extension' && props.showTerminal === false) return false
+    if (item.id === 'terminal' && props.showTerminal === false) return false
     return true
   })
   return items
@@ -342,30 +341,27 @@ const hasOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
-        <!-- Extension Menu - Adaptive -->
-        <div v-if="props.showTerminal !== false && isVisible('extension')">
-          <Popover v-model:open="extensionOpen">
-            <PopoverTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-                <Cable class="h-4 w-4" />
-                <span v-if="visibleSet.get('extension') === 'label'">{{ t('actionbar.extension') }}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-48 p-1" align="start">
-              <div class="space-y-0.5">
+        <!-- Web Terminal - Adaptive -->
+        <div v-if="props.showTerminal !== false && isVisible('terminal')">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
                 <Button
                   variant="ghost"
                   size="sm"
-                  class="w-full justify-start gap-2 h-8"
+                  class="h-8 gap-1.5 text-xs"
                   :disabled="!props.ttydRunning"
-                  @click="extensionOpen = false; emit('openTerminal')"
+                  @click="emit('openTerminal')"
                 >
                   <Terminal class="h-4 w-4" />
-                  {{ t('extensions.ttyd.title') }}
+                  <span v-if="visibleSet.get('terminal') === 'label'">{{ t('actionbar.webTerminal') }}</span>
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ t('extensions.ttyd.title') }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <!-- Settings - Adaptive -->
@@ -385,10 +381,10 @@ const hasOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
-        <div v-if="isVisible('stats') || isVisible('extension') || isVisible('settings')" class="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+        <div v-if="isVisible('stats') || isVisible('terminal') || isVisible('settings')" class="h-5 w-px bg-slate-200 dark:bg-slate-700" />
 
-        <!-- Computer Use - Always visible -->
-        <TooltipProvider>
+        <!-- Computer Use - Optional -->
+        <TooltipProvider v-if="props.showComputerUse !== false">
           <Tooltip>
             <TooltipTrigger as-child>
               <Button
@@ -473,7 +469,7 @@ const hasOverflow = computed(() => {
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
 
-            <DropdownMenuSeparator v-if="(!isVisible('msd') || !isVisible('atx') || !isVisible('paste')) && (!isVisible('stats') || (props.showTerminal !== false && !isVisible('extension')) || !isVisible('settings'))" />
+            <DropdownMenuSeparator v-if="(!isVisible('msd') || !isVisible('atx') || !isVisible('paste')) && (!isVisible('stats') || (props.showTerminal !== false && !isVisible('terminal')) || !isVisible('settings'))" />
 
             <!-- Stats -->
             <DropdownMenuItem v-if="!isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
@@ -481,14 +477,14 @@ const hasOverflow = computed(() => {
               {{ t('actionbar.stats') }}
             </DropdownMenuItem>
 
-            <!-- Extension -->
+            <!-- Web Terminal -->
             <DropdownMenuItem
-              v-if="props.showTerminal !== false && !isVisible('extension')"
+              v-if="props.showTerminal !== false && !isVisible('terminal')"
               :disabled="!props.ttydRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >
               <Terminal class="h-4 w-4 mr-2" />
-              {{ t('extensions.ttyd.title') }}
+              {{ t('actionbar.webTerminal') }}
             </DropdownMenuItem>
 
             <!-- Settings -->
@@ -558,9 +554,9 @@ const hasOverflow = computed(() => {
       <!-- Stats -->
       <Button data-measure="stats-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="h-4 w-4" /></Button>
       <Button data-measure="stats-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="h-4 w-4" />{{ t('actionbar.stats') }}</Button>
-      <!-- Extension -->
-      <Button data-measure="extension-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Cable class="h-4 w-4" /></Button>
-      <Button data-measure="extension-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Cable class="h-4 w-4" />{{ t('actionbar.extension') }}</Button>
+      <!-- Web Terminal -->
+      <Button data-measure="terminal-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="h-4 w-4" /></Button>
+      <Button data-measure="terminal-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="h-4 w-4" />{{ t('actionbar.webTerminal') }}</Button>
       <!-- Settings -->
       <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="h-4 w-4" /></Button>
       <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="h-4 w-4" />{{ t('actionbar.settings') }}</Button>

@@ -1,5 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { buildWsUrl } from '@/types/websocket'
+import { generateUUID } from '@/lib/utils'
 import type { ComputerUseScreenshot, ComputerUseSession, ComputerUseAction } from '@/api'
 
 export type ComputerUseServerMessage =
@@ -16,7 +17,7 @@ export function useComputerUseSocket(options: {
 }) {
   const connected = ref(false)
   const error = ref<string | null>(null)
-  const clientId = crypto.randomUUID()
+  const clientId = generateUUID()
   let ws: WebSocket | null = null
   let connectPromise: Promise<void> | null = null
 
