@@ -4,6 +4,7 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use crate::atx::AtxController;
 use crate::audio::AudioController;
 use crate::auth::{SessionStore, UserStore};
+use crate::computer_use::ComputerUseManager;
 use crate::config::ConfigStore;
 use crate::db::DatabasePool;
 use crate::events::{
@@ -64,6 +65,7 @@ pub struct AppState {
     pub stream_manager: Arc<VideoStreamManager>,
     pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
+    pub computer_use: Arc<ComputerUseManager>,
     #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
@@ -91,6 +93,7 @@ impl AppState {
         stream_manager: Arc<VideoStreamManager>,
         webrtc: Arc<WebRtcStreamer>,
         hid: Arc<HidController>,
+        computer_use: Arc<ComputerUseManager>,
         #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
@@ -114,6 +117,7 @@ impl AppState {
             stream_manager,
             webrtc,
             hid,
+            computer_use,
             #[cfg(unix)]
             msd: Arc::new(RwLock::new(msd)),
             atx: Arc::new(RwLock::new(atx)),

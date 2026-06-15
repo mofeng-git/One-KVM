@@ -454,6 +454,90 @@ export const hidApi = {
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
+export type ComputerUseStatus =
+  | 'idle'
+  | 'waiting_screenshot'
+  | 'thinking'
+  | 'executing'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+
+export type ComputerUseButton = 'left' | 'middle' | 'right'
+
+export type ComputerUseAction =
+  | { type: 'click'; x: number; y: number; button?: ComputerUseButton }
+  | { type: 'double_click'; x: number; y: number; button?: ComputerUseButton }
+  | { type: 'move'; x: number; y: number }
+  | { type: 'drag'; path: Array<{ x: number; y: number }>; button?: ComputerUseButton }
+  | { type: 'scroll'; x: number; y: number; dx?: number; dy?: number }
+  | { type: 'type'; text: string }
+  | { type: 'keypress'; keys: string[] }
+  | { type: 'wait'; ms: number }
+  | { type: 'screenshot' }
+
+export interface ComputerUseScreenshot {
+  data_url: string
+  width: number
+  height: number
+}
+
+export type ComputerUseConversationMessage =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; text: string }
+
+export interface ComputerUseConfig {
+  enabled: boolean
+  provider: string
+  base_url: string
+  model: string
+  max_steps: number
+  timeout_seconds: number
+  api_key_configured: boolean
+  api_key_source: string
+}
+
+export interface ComputerUseSession {
+  id: string | null
+  status: ComputerUseStatus
+  prompt: string | null
+  step: number
+  max_steps: number
+  last_error: string | null
+  final_message: string | null
+}
+
+export const computerUseApi = {
+  config: () => request<ComputerUseConfig>('/config/computer-use'),
+
+  updateConfig: (data: {
+    enabled?: boolean
+    base_url?: string
+    model?: string
+    max_steps?: number
+    timeout_seconds?: number
+    openai_api_key?: string
+    clear_openai_api_key?: boolean
+  }) =>
+    request<ComputerUseConfig>('/config/computer-use', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  session: () => request<ComputerUseSession>('/computer-use/session'),
+
+  start: (data: { prompt: string; continue_conversation?: boolean; client_id: string; max_steps?: number; timeout_seconds?: number }) =>
+    request<ComputerUseSession>('/computer-use/session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  stop: () =>
+    request<ComputerUseSession>('/computer-use/session/stop', {
+      method: 'POST',
+    }),
+}
+
 export const atxApi = {
   status: () =>
     request<{

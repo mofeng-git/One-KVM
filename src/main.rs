@@ -15,6 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use one_kvm::atx::AtxController;
 use one_kvm::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use one_kvm::auth::{SessionStore, UserStore};
+use one_kvm::computer_use::ComputerUseManager;
 use one_kvm::config::{self, AppConfig, ConfigStore};
 use one_kvm::db::DatabasePool;
 use one_kvm::events::EventBus;
@@ -525,6 +526,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let update_service = Arc::new(UpdateService::new(data_dir.join("updates")));
+    let computer_use = ComputerUseManager::new(config_store.clone(), hid.clone());
 
     let state = AppState::new(
         db.clone(),
@@ -536,6 +538,7 @@ async fn main() -> anyhow::Result<()> {
         stream_manager,
         webrtc_streamer.clone(),
         hid,
+        computer_use,
         #[cfg(unix)]
         msd,
         atx,

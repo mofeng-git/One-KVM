@@ -161,6 +161,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
+        .route("/config/computer-use", get(handlers::computer_use_config))
+        .route(
+            "/config/computer-use",
+            patch(handlers::computer_use_update_config),
+        )
+        .route("/computer-use/session", get(handlers::computer_use_session))
+        .route("/computer-use/session", post(handlers::computer_use_start))
+        .route(
+            "/computer-use/session/stop",
+            post(handlers::computer_use_stop),
+        )
+        .route("/ws/computer-use", any(handlers::computer_use_ws))
         // Auth configuration
         .route("/config/auth", get(handlers::config::get_auth_config))
         .route("/config/auth", patch(handlers::config::update_auth_config))
