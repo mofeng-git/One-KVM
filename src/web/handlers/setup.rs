@@ -132,6 +132,7 @@ pub async fn setup_init(
             if let Some(enabled) = req.msd_enabled {
                 config.msd.enabled = enabled;
             }
+            config.enforce_invariants();
 
             // Extension settings
             if let Some(enabled) = req.ttyd_enabled {
@@ -169,6 +170,7 @@ pub async fn setup_init(
         crate::config::HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
             port: new_config.hid.ch9329_port.clone(),
             baud_rate: new_config.hid.ch9329_baudrate,
+            hybrid_mouse: new_config.hid.ch9329_hybrid_mouse,
         },
         crate::config::HidBackend::None => crate::hid::HidBackendType::None,
     };

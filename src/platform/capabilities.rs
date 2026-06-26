@@ -78,6 +78,7 @@ pub struct PlatformCapabilities {
     pub otg: FeatureCapability,
     pub audio: FeatureCapability,
     pub rustdesk: FeatureCapability,
+    pub vnc: FeatureCapability,
     pub diagnostics: FeatureCapability,
     pub extensions: FeatureCapability,
     pub service_installation: FeatureCapability,

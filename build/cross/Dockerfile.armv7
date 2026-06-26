@@ -263,6 +263,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && make -j$(nproc) \
     && make install \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/arm-linux-gnueabihf/lib/pkgconfig/rockchip_mpp.pc \
+    && rm -f /usr/arm-linux-gnueabihf/lib/librockchip_mpp.so* \
     && cd ../.. \
     # Build RKRGA - create cross file for meson
     && echo '[binaries]' > /tmp/armhf-cross.txt \
@@ -290,6 +291,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && ar rcs /usr/arm-linux-gnueabihf/lib/librga.a $(find build -name '*.o') \
     && ranlib /usr/arm-linux-gnueabihf/lib/librga.a \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/arm-linux-gnueabihf/lib/pkgconfig/librga.pc \
+    && rm -f /usr/arm-linux-gnueabihf/lib/librga.so* \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
     && echo '#!/bin/sh' > /tmp/armhf-pkg-config \
@@ -396,7 +398,7 @@ ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
     LIBYUV_STATIC=1 \
     OPUS_STATIC=1 \
     PKG_CONFIG_ALL_STATIC=1 \
-    RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc"
+    RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc -C link-arg=-Wl,--allow-multiple-definition"
 
 # Default command
 CMD ["bash"]

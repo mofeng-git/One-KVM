@@ -338,7 +338,7 @@ mod ffmpeg {
                 println!("cargo:rustc-link-lib=static=avcodec");
                 println!("cargo:rustc-link-lib=static=avutil");
 
-                // Link hardware acceleration dependencies (dynamic)
+                // Link hardware acceleration dependencies
                 // These vary by architecture
                 if target_arch == "x86_64" {
                     // VAAPI for x86_64
@@ -347,13 +347,11 @@ mod ffmpeg {
                     println!("cargo:rustc-link-lib=va-x11"); // Required for vaGetDisplay
                     println!("cargo:rustc-link-lib=mfx");
                 } else {
-                    // RKMPP for ARM
-                    println!("cargo:rustc-link-lib=rockchip_mpp");
-                    let rga_static = lib_dir.join("librga.a");
-                    if rga_static.exists() {
-                        println!("cargo:rustc-link-lib=static=rga");
-                    } else {
-                        println!("cargo:rustc-link-lib=rga");
+                    for lib in ["rockchip_mpp", "rga"] {
+                        if !lib_dir.join(format!("lib{lib}.a")).exists() {
+                            panic!("missing static library: lib{lib}.a");
+                        }
+                        println!("cargo:rustc-link-lib=static={}", lib);
                     }
                 }
 
@@ -412,12 +410,6 @@ mod ffmpeg {
                                 // For static linking, link FFmpeg libs statically, others dynamically
                                 if lib_name.starts_with("av") || lib_name == "swresample" {
                                     println!("cargo:rustc-link-lib=static={}", lib_name);
-                                } else if lib_name == "rga"
-                                    && link_paths
-                                        .iter()
-                                        .any(|path| Path::new(path).join("librga.a").exists())
-                                {
-                                    println!("cargo:rustc-link-lib=static=rga");
                                 } else {
                                     // Runtime libraries (va, drm, etc.) must be dynamic
                                     println!("cargo:rustc-link-lib={}", lib_name);

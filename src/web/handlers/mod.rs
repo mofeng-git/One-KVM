@@ -7,6 +7,7 @@ mod account;
 mod atx_api;
 mod audio_api;
 mod auth;
+mod computer_use;
 mod hid_api;
 mod inventory;
 #[cfg(unix)]
@@ -21,6 +22,7 @@ pub use account::*;
 pub use atx_api::*;
 pub use audio_api::*;
 pub use auth::*;
+pub use computer_use::*;
 pub use hid_api::*;
 pub use inventory::*;
 #[cfg(unix)]

@@ -23,6 +23,10 @@ function t(key: string, params?: Record<string, unknown>): string {
   return String(i18n.global.t(key, params as any))
 }
 
+function hasTranslation(key: string): boolean {
+  return i18n.global.te(key)
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -52,9 +56,73 @@ function getToastKey(endpoint: string, config?: ApiRequestConfig): string {
 function getErrorMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object') {
     const message = (data as any).message
-    if (typeof message === 'string' && message.trim()) return message
+    if (typeof message === 'string' && message.trim()) return localizeBackendErrorMessage(message)
   }
-  return fallback
+  return localizeBackendErrorMessage(fallback)
+}
+
+function extractCh9329Command(reason: string): string {
+  const match = reason.match(/cmd 0x([0-9a-f]{2})/i)
+  const cmd = match?.[1]
+  return cmd ? `0x${cmd.toUpperCase()}` : ''
+}
+
+function localizeHidErrorMessage(raw: string): string | null {
+  const match = raw.match(/^HID error \[([^\]]+)\]: (.*) \(code: ([^)]+)\)$/)
+  if (!match) return null
+
+  const backend = match[1] ?? ''
+  const reason = match[2] ?? ''
+  const code = match[3] ?? ''
+  const command = extractCh9329Command(reason)
+
+  const keyByCode: Record<string, string> = {
+    udc_not_configured: 'hid.errorHints.udcNotConfigured',
+    disabled: 'hid.errorHints.disabled',
+    enoent: 'hid.errorHints.hidDeviceMissing',
+    not_opened: 'hid.errorHints.notOpened',
+    port_not_found: 'hid.errorHints.portNotFound',
+    invalid_config: 'hid.errorHints.invalidConfig',
+    no_response: command ? 'hid.errorHints.noResponseWithCmd' : 'hid.errorHints.noResponse',
+    protocol_error: 'hid.errorHints.protocolError',
+    invalid_response: 'hid.errorHints.protocolError',
+    enxio: 'hid.errorHints.deviceDisconnected',
+    enodev: 'hid.errorHints.deviceDisconnected',
+    serial_error: 'hid.errorHints.serialError',
+    init_failed: 'hid.errorHints.initFailed',
+    shutdown: 'hid.errorHints.shutdown',
+    reconnecting: 'hid.errorHints.reconnecting',
+    worker_stopped: 'hid.errorHints.workerStopped',
+  }
+
+  const ioErrorCodes = new Set([
+    'eio',
+    'epipe',
+    'eshutdown',
+    'io_error',
+    'write_failed',
+    'read_failed',
+    'device_unavailable',
+  ])
+
+  const key = keyByCode[code]
+    ?? (ioErrorCodes.has(code)
+      ? backend === 'otg'
+        ? 'hid.errorHints.otgIoError'
+        : backend === 'ch9329'
+          ? 'hid.errorHints.ch9329IoError'
+          : 'hid.errorHints.ioError'
+      : '')
+
+  if (key && hasTranslation(key)) {
+    return t(key, { cmd: command })
+  }
+
+  return t('hid.errorHints.backendError', { backend })
+}
+
+function localizeBackendErrorMessage(raw: string): string {
+  return localizeHidErrorMessage(raw) ?? raw
 }
 
 export async function request<T>(

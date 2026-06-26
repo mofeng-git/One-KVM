@@ -274,6 +274,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && make -j$(nproc) \
     && make install \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/aarch64-linux-gnu/lib/pkgconfig/rockchip_mpp.pc \
+    && rm -f /usr/aarch64-linux-gnu/lib/librockchip_mpp.so* \
     && cd ../.. \
     # Build RKRGA - create cross file for meson
     && echo '[binaries]' > /tmp/aarch64-cross.txt \
@@ -301,6 +302,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && ar rcs /usr/aarch64-linux-gnu/lib/librga.a $(find build -name '*.o') \
     && ranlib /usr/aarch64-linux-gnu/lib/librga.a \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/aarch64-linux-gnu/lib/pkgconfig/librga.pc \
+    && rm -f /usr/aarch64-linux-gnu/lib/librga.so* \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
     && echo '#!/bin/sh' > /tmp/aarch64-pkg-config \
@@ -407,4 +409,4 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     LIBYUV_STATIC=1 \
     OPUS_STATIC=1 \
     PKG_CONFIG_ALL_STATIC=1 \
-    RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"
+    RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc -C link-arg=-Wl,--allow-multiple-definition"

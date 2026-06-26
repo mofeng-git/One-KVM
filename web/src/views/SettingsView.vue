@@ -20,6 +20,7 @@ import {
   systemApi,
   updateApi,
   usbApi,
+  vncConfigApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
@@ -27,6 +28,8 @@ import {
   type RustDeskPasswordResponse,
   type RtspStatusResponse,
   type RtspConfigUpdate,
+  type VncConfigUpdate,
+  type VncStatusResponse,
   type WebConfig,
   type UpdateOverviewResponse,
   type UpdateStatusResponse,
@@ -42,9 +45,13 @@ import type {
   OtgEndpointBudget,
   OtgHidProfile,
   OtgHidFunctions,
+  Ch9329DescriptorConfig,
+  Ch9329DescriptorState,
 } from '@/types/generated'
+import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
+import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
@@ -102,10 +109,10 @@ import {
   ExternalLink,
   Copy,
   ScreenShare,
-  Radio,
   Globe,
   Loader2,
   AlertTriangle,
+  Bot,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -114,6 +121,7 @@ const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
+const featureVisibility = useFeatureVisibility()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
 const isAndroid = computed(() => systemStore.platform?.mode === 'android_amlogic')
@@ -133,8 +141,7 @@ const SETTINGS_SECTION_IDS = [
   'atx',
   'environment',
   'ext-ttyd',
-  'ext-rustdesk',
-  'ext-rtsp',
+  'third-party-access',
   'ext-remote-access',
   'about',
 ] as const
@@ -164,8 +171,7 @@ const navGroups = computed(() => [
     title: t('settings.extensions'),
     items: [
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
-      { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
-      { id: 'ext-rtsp', label: t('extensions.rtsp.title'), icon: Radio },
+      { id: 'third-party-access', label: t('extensions.thirdPartyAccess.title'), icon: ScreenShare },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
     ]
   },
@@ -197,8 +203,7 @@ const sectionMeta = computed(() => {
 function sectionSubtitleKey(id: string): string {
   switch (id) {
     case 'ext-ttyd': return 'extTtydSubtitle'
-    case 'ext-rustdesk': return 'extRustdeskSubtitle'
-    case 'ext-rtsp': return 'extRtspSubtitle'
+    case 'third-party-access': return 'thirdPartyAccessSubtitle'
     case 'ext-remote-access': return 'extRemoteAccessSubtitle'
     default: return `${id}Subtitle`
   }
@@ -218,6 +223,8 @@ function selectSection(id: string) {
 function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
+  if (value === 'ext-frpc') return 'ext-remote-access'
+  if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp') return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
 
@@ -268,14 +275,13 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'ext-remote-access':
       await loadExtensions()
       return
-    case 'ext-rustdesk':
+    case 'third-party-access':
       await Promise.all([
         loadRustdeskConfig(),
         loadRustdeskPassword(),
+        loadRtspConfig(),
+        loadVncConfig(),
       ])
-      return
-    case 'ext-rtsp':
-      await loadRtspConfig()
       return
     case 'about':
       if (isAndroid.value) return
@@ -315,11 +321,13 @@ const extensionLogs = ref<Record<string, string[]>>({
   ttyd: [],
   gostc: [],
   easytier: [],
+  frpc: [],
 })
 const showLogs = ref<Record<string, boolean>>({
   ttyd: false,
   gostc: false,
   easytier: false,
+  frpc: false,
 })
 
 const showTerminalDialog = ref(false)
@@ -328,6 +336,22 @@ const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
   gostc: { enabled: false, addr: '', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
+  frpc: {
+    enabled: false,
+    config_mode: FrpcConfigMode.Quick,
+    proxy_name: '',
+    proxy_type: FrpProxyType.Tcp,
+    server_addr: '',
+    server_port: 7000,
+    token: '',
+    local_ip: '127.0.0.1',
+    local_port: 22,
+    remote_port: undefined as number | undefined,
+    custom_domain: '',
+    secret_key: '',
+    tls: true,
+    custom_toml: '',
+  },
 })
 
 const gostcValidationMessage = computed(() => {
@@ -341,6 +365,25 @@ const easytierValidationMessage = computed(() => {
   return ''
 })
 
+const frpcRemotePortRequired = computed(() => ['tcp', 'udp'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcRemotePort = computed(() => ['tcp', 'udp', 'stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcCustomDomain = computed(() => ['http', 'https'].includes(extConfig.value.frpc.proxy_type))
+const showFrpcSecretKey = computed(() => ['stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type))
+const frpcQuickMode = computed(() => extConfig.value.frpc.config_mode === FrpcConfigMode.Quick)
+
+const frpcValidationMessage = computed(() => {
+  if (extConfig.value.frpc.config_mode === FrpcConfigMode.Full) {
+    if (!extConfig.value.frpc.custom_toml?.trim()) return t('extensions.frpc.fullConfigRequired')
+    return ''
+  }
+  if (!extConfig.value.frpc.proxy_name?.trim()) return t('extensions.frpc.proxyNameRequired')
+  if (!extConfig.value.frpc.server_addr?.trim()) return t('extensions.frpc.serverAddrRequired')
+  if (!extConfig.value.frpc.token) return t('extensions.frpc.tokenRequired')
+  if (!extConfig.value.frpc.local_ip?.trim()) return t('extensions.frpc.localIpRequired')
+  if (frpcRemotePortRequired.value && !extConfig.value.frpc.remote_port) return t('extensions.frpc.remotePortRequired')
+  return ''
+})
+
 const rustdeskConfig = ref<RustDeskConfigResponse | null>(null)
 const rustdeskStatus = ref<RustDeskStatusResponse | null>(null)
 const rustdeskPassword = ref<RustDeskPasswordResponse | null>(null)
@@ -349,6 +392,7 @@ const rustdeskCopied = ref<'id' | 'password' | null>(null)
 const { copy: clipboardCopy } = useClipboard()
 const rustdeskLocalConfig = ref({
   enabled: false,
+  codec: 'h264' as 'h264' | 'h265',
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
@@ -374,6 +418,18 @@ const rtspLocalConfig = ref<RtspConfigUpdate & { password?: string }>({
   password: '',
 })
 
+const vncStatus = ref<VncStatusResponse | null>(null)
+const vncLoading = ref(false)
+const vncLocalConfig = ref<VncConfigUpdate & { password?: string }>({
+  enabled: false,
+  bind: '0.0.0.0',
+  port: 5900,
+  encoding: 'tight_jpeg',
+  jpeg_quality: 80,
+  allow_one_client: true,
+  password: '',
+})
+
 function formatHostForUrl(hostname: string): string {
   if (!hostname) return '127.0.0.1'
   return hostname.includes(':') && !hostname.startsWith('[')
@@ -386,6 +442,12 @@ const rtspStreamUrl = computed(() => {
   const path = (rtspLocalConfig.value.path || 'live').trim().replace(/^\/+|\/+$/g, '') || 'live'
   const port = Number(rtspLocalConfig.value.port) || 8554
   return `rtsp://${host}:${port}/${path}`
+})
+
+const vncStreamUrl = computed(() => {
+  const host = formatHostForUrl(window.location.hostname || '127.0.0.1')
+  const port = Number(vncLocalConfig.value.port) || 5900
+  return `${host}:${port}`
 })
 
 const webServerConfig = ref<WebConfig>({
@@ -522,6 +584,7 @@ const config = ref({
     consumer: true,
   } as OtgHidFunctions,
   hid_otg_keyboard_leds: false,
+  hid_ch9329_hybrid_mouse: false,
   msd_enabled: false,
   msd_dir: '',
   encoder_backend: 'auto',
@@ -914,11 +977,134 @@ const otgProductIdHex = ref('0104')
 const otgManufacturer = ref('One-KVM')
 const otgProduct = ref('One-KVM USB Device')
 const otgSerialNumber = ref('')
+const ch9329VendorIdHex = ref('1a86')
+const ch9329ProductIdHex = ref('e129')
+const ch9329Manufacturer = ref('WCH.CN')
+const ch9329Product = ref('CH9329')
+const ch9329SerialNumber = ref('')
+const ch9329DescriptorLoaded = ref(false)
+const ch9329DescriptorLoading = ref(false)
+const ch9329DescriptorError = ref('')
+const ch9329DescriptorSource = ref<{ port: string; baudrate: number } | null>(null)
+const ch9329DescriptorBaseline = ref<{
+  vendorId: string
+  productId: string
+  manufacturer: string
+  product: string
+  serialNumber: string
+} | null>(null)
+const utf8Encoder = new TextEncoder()
 
 const validateHex = (event: Event, _field: string) => {
   const input = event.target as HTMLInputElement
   input.value = input.value.replace(/[^0-9a-fA-F]/g, '').toLowerCase()
 }
+
+function utf8ByteLength(value: string): number {
+  return utf8Encoder.encode(value).length
+}
+
+function applyCh9329DescriptorForm(descriptor: Ch9329DescriptorConfig, defaults = false) {
+  ch9329VendorIdHex.value = descriptor.vendor_id?.toString(16).padStart(4, '0') || '1a86'
+  ch9329ProductIdHex.value = descriptor.product_id?.toString(16).padStart(4, '0') || 'e129'
+  ch9329Manufacturer.value = descriptor.manufacturer || (defaults ? 'WCH.CN' : '')
+  ch9329Product.value = descriptor.product || (defaults ? 'CH9329' : '')
+  ch9329SerialNumber.value = descriptor.serial_number || ''
+}
+
+function applyCh9329DescriptorState(state: Ch9329DescriptorState) {
+  applyCh9329DescriptorForm(state.descriptor)
+  ch9329DescriptorBaseline.value = currentCh9329DescriptorForm()
+  if (!state.config_mode_available) {
+    ch9329DescriptorError.value = t('settings.ch9329ConfigModeUnavailable')
+  }
+}
+
+function currentCh9329DescriptorForm() {
+  return {
+    vendorId: ch9329VendorIdHex.value.toLowerCase().padStart(4, '0'),
+    productId: ch9329ProductIdHex.value.toLowerCase().padStart(4, '0'),
+    manufacturer: ch9329Manufacturer.value,
+    product: ch9329Product.value,
+    serialNumber: ch9329SerialNumber.value,
+  }
+}
+
+function currentCh9329DescriptorSource() {
+  return {
+    port: config.value.hid_serial_device || '',
+    baudrate: Number(config.value.hid_serial_baudrate) || 9600,
+  }
+}
+
+function clearCh9329DescriptorState() {
+  ch9329DescriptorLoaded.value = false
+  ch9329DescriptorLoading.value = false
+  ch9329DescriptorError.value = ''
+  ch9329DescriptorSource.value = null
+  ch9329DescriptorBaseline.value = null
+}
+
+const isCh9329DescriptorSourceCurrent = computed(() => {
+  if (config.value.hid_backend !== 'ch9329') return false
+  const source = ch9329DescriptorSource.value
+  if (!source) return false
+  const current = currentCh9329DescriptorSource()
+  return source.port === current.port && source.baudrate === current.baudrate
+})
+
+async function loadCh9329Descriptor() {
+  if (config.value.hid_backend !== 'ch9329') return
+  const source = currentCh9329DescriptorSource()
+  ch9329DescriptorLoading.value = true
+  ch9329DescriptorLoaded.value = false
+  ch9329DescriptorSource.value = null
+  ch9329DescriptorError.value = ''
+  try {
+    const state = await hidApi.ch9329Descriptor({
+      port: source.port,
+      baudRate: source.baudrate,
+    })
+    applyCh9329DescriptorState(state)
+    ch9329DescriptorLoaded.value = true
+    ch9329DescriptorSource.value = source
+  } catch (e) {
+    ch9329DescriptorError.value = e instanceof Error ? e.message : t('settings.ch9329DescriptorLoadFailed')
+  } finally {
+    ch9329DescriptorLoading.value = false
+  }
+}
+
+const isCh9329DescriptorValid = computed(() => {
+  if (config.value.hid_backend !== 'ch9329') return true
+  return utf8ByteLength(ch9329Manufacturer.value) <= 23
+    && utf8ByteLength(ch9329Product.value) <= 23
+    && utf8ByteLength(ch9329SerialNumber.value) <= 23
+})
+
+const canEditCh9329Descriptor = computed(() =>
+  config.value.hid_backend === 'ch9329'
+  && ch9329DescriptorLoaded.value
+  && isCh9329DescriptorSourceCurrent.value
+  && !ch9329DescriptorLoading.value
+)
+
+const isCh9329DescriptorDirty = computed(() => {
+  if (!canEditCh9329Descriptor.value || !ch9329DescriptorBaseline.value) return false
+  const current = currentCh9329DescriptorForm()
+  const baseline = ch9329DescriptorBaseline.value
+  return current.vendorId !== baseline.vendorId
+    || current.productId !== baseline.productId
+    || current.manufacturer !== baseline.manufacturer
+    || current.product !== baseline.product
+    || current.serialNumber !== baseline.serialNumber
+})
+
+const isHidSettingsValid = computed(() =>
+  isHidFunctionSelectionValid.value
+  && isOtgEndpointBudgetValid.value
+  && isCh9329DescriptorValid.value
+)
 
 watch(() => config.value.msd_enabled, (enabled) => {
   if (!enabled && activeSection.value === 'msd') {
@@ -1226,13 +1412,23 @@ async function saveConfig() {
     }
 
     if (activeSection.value === 'hid') {
-      if (!isHidFunctionSelectionValid.value || !isOtgEndpointBudgetValid.value) {
+      if (!isHidSettingsValid.value) {
         return
       }
       const hidUpdate: any = {
         backend: config.value.hid_backend as any,
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
+        ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
+      }
+      if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
+        hidUpdate.ch9329_descriptor = {
+          vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
+          product_id: parseInt(ch9329ProductIdHex.value, 16) || 0xe129,
+          manufacturer: ch9329Manufacturer.value,
+          product: ch9329Product.value,
+          serial_number: ch9329SerialNumber.value || '',
+        }
       }
       if (config.value.hid_backend === 'otg') {
         hidUpdate.otg_descriptor = {
@@ -1247,10 +1443,12 @@ async function saveConfig() {
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      await configStore.updateMsd({
-        enabled: config.value.msd_enabled,
-      })
       await configStore.updateHid(hidUpdate)
+      if (config.value.hid_backend === 'otg') {
+        await configStore.updateMsd({ enabled: config.value.msd_enabled })
+      } else {
+        await configStore.updateMsd({ enabled: false })
+      }
     }
 
     if (activeSection.value === 'msd') {
@@ -1259,7 +1457,9 @@ async function saveConfig() {
       })
     }
 
-    await loadSectionData(activeSection.value)
+    if (activeSection.value !== 'hid') {
+      await loadSectionData(activeSection.value)
+    }
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch {
@@ -1296,6 +1496,7 @@ async function loadConfig() {
         consumer: hid.otg_functions?.consumer ?? true,
       } as OtgHidFunctions,
       hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
+      hid_ch9329_hybrid_mouse: hid.ch9329_hybrid_mouse ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       encoder_backend: stream.encoder || 'auto',
@@ -1311,6 +1512,16 @@ async function loadConfig() {
       otgManufacturer.value = hid.otg_descriptor.manufacturer || 'One-KVM'
       otgProduct.value = hid.otg_descriptor.product || 'One-KVM USB Device'
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
+    }
+    if (hid.ch9329_descriptor) {
+      if (hid.backend !== 'ch9329') {
+        applyCh9329DescriptorForm(hid.ch9329_descriptor, true)
+      }
+    }
+    if (hid.backend === 'ch9329') {
+      await loadCh9329Descriptor()
+    } else {
+      clearCh9329DescriptorState()
     }
 
   } catch {
@@ -1373,6 +1584,23 @@ async function loadExtensions() {
         peer_urls: easytier.peer_urls || [],
         virtual_ip: easytier.virtual_ip || '',
       }
+      const frpc = extensions.value.frpc.config
+      extConfig.value.frpc = {
+        enabled: frpc.enabled,
+        config_mode: frpc.config_mode || FrpcConfigMode.Quick,
+        proxy_name: frpc.proxy_name,
+        proxy_type: frpc.proxy_type,
+        server_addr: frpc.server_addr,
+        server_port: frpc.server_port,
+        token: frpc.token,
+        local_ip: frpc.local_ip,
+        local_port: frpc.local_port,
+        remote_port: frpc.remote_port,
+        custom_domain: frpc.custom_domain || '',
+        secret_key: frpc.secret_key,
+        tls: frpc.tls,
+        custom_toml: frpc.custom_toml || '',
+      }
     }
   } catch {
   } finally {
@@ -1380,8 +1608,11 @@ async function loadExtensions() {
   }
 }
 
-async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
-  if ((id === 'gostc' || id === 'easytier') && !validateExtensionConfig(id)) return
+type ExtensionConfigId = 'ttyd' | 'gostc' | 'easytier' | 'frpc'
+type ValidatedExtensionConfigId = Exclude<ExtensionConfigId, 'ttyd'>
+
+async function startExtension(id: ExtensionConfigId) {
+  if (id !== 'ttyd' && !validateExtensionConfig(id)) return
 
   try {
     await extensionsApi.start(id)
@@ -1390,7 +1621,7 @@ async function startExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function stopExtension(id: 'ttyd' | 'gostc' | 'easytier') {
+async function stopExtension(id: ExtensionConfigId) {
   try {
     await extensionsApi.stop(id)
     await loadExtensions()
@@ -1398,7 +1629,7 @@ async function stopExtension(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
+async function refreshExtensionLogs(id: ExtensionConfigId) {
   try {
     const result = await extensionsApi.logs(id, 100)
     extensionLogs.value[id] = result.logs
@@ -1406,8 +1637,12 @@ async function refreshExtensionLogs(id: 'ttyd' | 'gostc' | 'easytier') {
   }
 }
 
-async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
-  if ((id === 'gostc' || id === 'easytier') && extConfig.value[id].enabled && !validateExtensionConfig(id)) return
+async function saveExtensionConfig(id: ExtensionConfigId) {
+  if (id !== 'ttyd') {
+    const shouldValidate = extConfig.value[id].enabled
+      || (id === 'frpc' && extConfig.value.frpc.config_mode === FrpcConfigMode.Full)
+    if (shouldValidate && !validateExtensionConfig(id)) return
+  }
 
   loading.value = true
   try {
@@ -1417,6 +1652,14 @@ async function saveExtensionConfig(id: 'ttyd' | 'gostc' | 'easytier') {
       await extensionsApi.updateGostc(extConfig.value.gostc)
     } else if (id === 'easytier') {
       await extensionsApi.updateEasytier(extConfig.value.easytier)
+    } else if (id === 'frpc') {
+      const frpc = extConfig.value.frpc
+      await extensionsApi.updateFrpc({
+        ...frpc,
+        remote_port: frpcQuickMode.value && showFrpcRemotePort.value ? frpc.remote_port : undefined,
+        custom_domain: frpcQuickMode.value && showFrpcCustomDomain.value ? frpc.custom_domain || undefined : undefined,
+        secret_key: frpcQuickMode.value && showFrpcSecretKey.value ? frpc.secret_key : '',
+      })
     }
     await loadExtensions()
     saved.value = true
@@ -1617,6 +1860,7 @@ function applyRustdeskStatus(status: RustDeskStatusResponse) {
   rustdeskStatus.value = status
   rustdeskLocalConfig.value = {
     enabled: config.enabled,
+    codec: config.codec || 'h264',
     rendezvous_server: config.rendezvous_server,
     relay_server: config.relay_server || '',
     relay_key: config.relay_key || '',
@@ -1662,16 +1906,32 @@ function showValidationError(message: string): boolean {
   return false
 }
 
-function validateExtensionConfig(id: 'gostc' | 'easytier'): boolean {
-  const message = id === 'gostc'
-    ? gostcValidationMessage.value
-    : easytierValidationMessage.value
+function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
+  let message = ''
+  if (id === 'gostc') {
+    message = gostcValidationMessage.value
+  } else if (id === 'easytier') {
+    message = easytierValidationMessage.value
+  } else {
+    message = frpcValidationMessage.value
+  }
 
   return !message || showValidationError(message)
 }
 
 function validateRustdeskConfig(): boolean {
   return !rustdeskValidationMessage.value || showValidationError(rustdeskValidationMessage.value)
+}
+
+function validateVncConfig(enabled = vncLocalConfig.value.enabled): boolean {
+  const password = (vncLocalConfig.value.password || '').trim()
+  if (enabled && !vncStatus.value?.config.has_password && !password) {
+    return showValidationError(t('extensions.vnc.passwordRequired'))
+  }
+  if (password.length > 8) {
+    return showValidationError(t('extensions.vnc.passwordMaxLength'))
+  }
+  return true
 }
 
 function normalizeRtspPath(path: string): string {
@@ -1995,23 +2255,26 @@ function updateStatusBadgeText(): string {
     || updatePhaseText(updateStatus.value?.phase)
 }
 
+function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
+  return {
+    enabled,
+    codec: rustdeskLocalConfig.value.codec,
+    rendezvous_server: normalizeRustdeskServer(
+      rustdeskLocalConfig.value.rendezvous_server,
+      21116,
+    ),
+    relay_server: normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117),
+    relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
+  }
+}
+
 async function saveRustdeskConfig() {
   if (rustdeskLocalConfig.value.enabled && !validateRustdeskConfig()) return
 
   loading.value = true
   saved.value = false
   try {
-    const rendezvousServer = normalizeRustdeskServer(
-      rustdeskLocalConfig.value.rendezvous_server,
-      21116,
-    )
-    const relayServer = normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117)
-    await configStore.updateRustdesk({
-      enabled: rustdeskLocalConfig.value.enabled,
-      rendezvous_server: rendezvousServer,
-      relay_server: relayServer,
-      relay_key: normalizeRustdeskRelayKey(rustdeskLocalConfig.value.relay_key),
-    })
+    await configStore.updateRustdesk(rustdeskUpdatePayload())
     await loadRustdeskConfig()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
@@ -2052,6 +2315,7 @@ async function startRustdesk() {
 
   rustdeskLoading.value = true
   try {
+    await configStore.updateRustdesk(rustdeskUpdatePayload(true))
     const status = await rustdeskConfigApi.start()
     applyRustdeskStatus(status)
   } catch {
@@ -2146,23 +2410,24 @@ async function loadRtspConfig() {
   }
 }
 
+function rtspUpdatePayload(enabled = !!rtspLocalConfig.value.enabled): RtspConfigUpdate {
+  return {
+    enabled,
+    bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
+    port: Number(rtspLocalConfig.value.port) || 8554,
+    path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
+    allow_one_client: !!rtspLocalConfig.value.allow_one_client,
+    codec: rtspLocalConfig.value.codec || 'h264',
+    username: (rtspLocalConfig.value.username || '').trim(),
+    password: (rtspLocalConfig.value.password || '').trim(),
+  }
+}
+
 async function saveRtspConfig() {
   loading.value = true
   saved.value = false
   try {
-    const update: RtspConfigUpdate = {
-      enabled: !!rtspLocalConfig.value.enabled,
-      bind: rtspLocalConfig.value.bind?.trim() || '0.0.0.0',
-      port: Number(rtspLocalConfig.value.port) || 8554,
-      path: normalizeRtspPath(rtspLocalConfig.value.path || 'live'),
-      allow_one_client: !!rtspLocalConfig.value.allow_one_client,
-      codec: rtspLocalConfig.value.codec || 'h264',
-      username: (rtspLocalConfig.value.username || '').trim(),
-    }
-
-    update.password = (rtspLocalConfig.value.password || '').trim()
-
-    await configStore.updateRtsp(update)
+    await configStore.updateRtsp(rtspUpdatePayload())
     await loadRtspConfig()
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
@@ -2175,6 +2440,7 @@ async function saveRtspConfig() {
 async function startRtsp() {
   rtspLoading.value = true
   try {
+    await configStore.updateRtsp(rtspUpdatePayload(true))
     const status = await rtspConfigApi.start()
     applyRtspStatus(status)
   } catch {
@@ -2191,6 +2457,108 @@ async function stopRtsp() {
   } catch {
   } finally {
     rtspLoading.value = false
+  }
+}
+
+function applyVncStatus(status: VncStatusResponse) {
+  vncStatus.value = status
+  vncLocalConfig.value = {
+    enabled: status.config.enabled,
+    bind: status.config.bind,
+    port: status.config.port,
+    encoding: status.config.encoding,
+    jpeg_quality: status.config.jpeg_quality,
+    allow_one_client: status.config.allow_one_client,
+    password: '',
+  }
+}
+
+async function loadVncConfig() {
+  vncLoading.value = true
+  try {
+    const status = await configStore.refreshVncStatus()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+function vncUpdatePayload(enabled = !!vncLocalConfig.value.enabled): VncConfigUpdate {
+  const update: VncConfigUpdate = {
+    enabled,
+    bind: vncLocalConfig.value.bind?.trim() || '0.0.0.0',
+    port: Number(vncLocalConfig.value.port) || 5900,
+    encoding: vncLocalConfig.value.encoding || 'tight_jpeg',
+    jpeg_quality: Number(vncLocalConfig.value.jpeg_quality) || 80,
+    allow_one_client: !!vncLocalConfig.value.allow_one_client,
+  }
+  const password = (vncLocalConfig.value.password || '').trim()
+  if (password) update.password = password
+  return update
+}
+
+async function saveVncConfig() {
+  if (!validateVncConfig()) return
+
+  loading.value = true
+  saved.value = false
+  try {
+    await configStore.updateVnc(vncUpdatePayload())
+    await loadVncConfig()
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch {
+  } finally {
+    loading.value = false
+  }
+}
+
+async function startVnc() {
+  if (!validateVncConfig(true)) return
+
+  vncLoading.value = true
+  try {
+    await configStore.updateVnc(vncUpdatePayload(true))
+    const status = await vncConfigApi.start()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+async function stopVnc() {
+  vncLoading.value = true
+  try {
+    const status = await vncConfigApi.stop()
+    applyVncStatus(status)
+  } catch {
+  } finally {
+    vncLoading.value = false
+  }
+}
+
+function getVncServiceStatusText(status: string | undefined): string {
+  if (!status) return t('extensions.stopped')
+  switch (status) {
+    case 'running': return t('extensions.running')
+    case 'starting': return t('extensions.starting')
+    case 'stopped': return t('extensions.stopped')
+    default:
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getVncStatusClass(status: string | undefined): string {
+  switch (status) {
+    case 'running': return 'bg-green-500'
+    case 'starting': return 'bg-yellow-500'
+    case 'stopped': return 'bg-gray-400'
+    default:
+      if (status?.startsWith('error:')) return 'bg-red-500'
+      return 'bg-gray-400'
   }
 }
 
@@ -2247,7 +2615,21 @@ watch(updateChannel, async () => {
 watch(() => config.value.hid_backend, () => {
   otgSelfCheckResult.value = null
   otgSelfCheckError.value = ''
+  if (config.value.hid_backend === 'ch9329') {
+    void loadCh9329Descriptor()
+  } else {
+    clearCh9329DescriptorState()
+  }
 })
+
+watch(
+  () => [config.value.hid_serial_device, config.value.hid_serial_baudrate],
+  () => {
+    if (config.value.hid_backend === 'ch9329' && !isCh9329DescriptorSourceCurrent.value) {
+      clearCh9329DescriptorState()
+    }
+  },
+)
 
 watch(() => route.query.tab, (tab) => {
   const section = normalizeSettingsSection(tab)
@@ -2381,6 +2763,29 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent>
                 <LanguageToggleButton variant="outline" size="sm" label-mode="current" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.featureVisibility') }}</CardTitle>
+                <CardDescription>{{ t('settings.featureVisibilityDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-1">
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-web-terminal" class="flex min-w-0 items-center gap-2 font-normal">
+                    <Terminal class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('actionbar.webTerminal') }}</span>
+                  </Label>
+                  <Switch id="feature-web-terminal" v-model="featureVisibility.webTerminal" />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-computer-use" class="flex min-w-0 items-center gap-2 font-normal">
+                    <Bot class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
+                  </Label>
+                  <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -2589,6 +2994,7 @@ watch(isWindows, () => {
                         id="turn-password"
                         v-model="config.turn_password"
                         :type="showPasswords ? 'text' : 'password'"
+                        autocomplete="off"
                         :disabled="!config.stun_server && !config.turn_server"
                       />
                       <button
@@ -2648,6 +3054,109 @@ watch(isWindows, () => {
                     <option :value="115200">115200</option>
                   </select>
                 </div>
+
+                <template v-if="config.hid_backend === 'ch9329'">
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.ch9329Options') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.ch9329OptionsDesc') }}</p>
+                    </div>
+                    <div class="space-y-3 rounded-md border border-border/60 p-3">
+                      <div class="flex items-center justify-between gap-4">
+                        <div>
+                          <Label>{{ t('settings.ch9329HybridMouse') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_ch9329_hybrid_mouse" />
+                      </div>
+                    </div>
+                  </div>
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 class="text-sm font-medium">{{ t('settings.ch9329Descriptor') }}</h4>
+                          <p class="text-sm text-muted-foreground">{{ t('settings.ch9329DescriptorDesc') }}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" :aria-label="t('common.refresh')" :disabled="ch9329DescriptorLoading" @click="loadCh9329Descriptor">
+                          <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': ch9329DescriptorLoading }" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p v-if="ch9329DescriptorLoading" class="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 class="h-4 w-4 animate-spin" />
+                      {{ t('settings.ch9329DescriptorLoading') }}
+                    </p>
+                    <p v-else-if="ch9329DescriptorError" class="text-sm text-destructive">
+                      {{ ch9329DescriptorError }}
+                    </p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div class="space-y-2">
+                        <Label for="ch9329-vid">{{ t('settings.vendorId') }}</Label>
+                        <Input
+                          id="ch9329-vid"
+                          v-model="ch9329VendorIdHex"
+                          placeholder="1a86"
+                          maxlength="4"
+                          :disabled="!canEditCh9329Descriptor"
+                          @input="validateHex($event, 'ch9329-vid')"
+                        />
+                      </div>
+                      <div class="space-y-2">
+                        <Label for="ch9329-pid">{{ t('settings.productId') }}</Label>
+                        <Input
+                          id="ch9329-pid"
+                          v-model="ch9329ProductIdHex"
+                          placeholder="e129"
+                          maxlength="4"
+                          :disabled="!canEditCh9329Descriptor"
+                          @input="validateHex($event, 'ch9329-pid')"
+                        />
+                      </div>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-manufacturer">{{ t('settings.manufacturer') }}</Label>
+                      <Input
+                        id="ch9329-manufacturer"
+                        v-model="ch9329Manufacturer"
+                        placeholder="WCH.CN"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-product">{{ t('settings.productName') }}</Label>
+                      <Input
+                        id="ch9329-product"
+                        v-model="ch9329Product"
+                        placeholder="CH9329"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="ch9329-serial">{{ t('settings.serialNumber') }}</Label>
+                      <Input
+                        id="ch9329-serial"
+                        v-model="ch9329SerialNumber"
+                        :placeholder="t('settings.serialNumberAuto')"
+                        maxlength="23"
+                        :disabled="!canEditCh9329Descriptor"
+                      />
+                    </div>
+                    <p v-if="!ch9329DescriptorLoading && !ch9329DescriptorLoaded && !ch9329DescriptorError" class="text-xs text-muted-foreground">
+                      {{ t('settings.ch9329DescriptorReadRequired') }}
+                    </p>
+                    <p v-if="!isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.ch9329StringLengthWarning') }}
+                    </p>
+                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                      {{ t('settings.ch9329DescriptorWarning') }}
+                    </p>
+                  </div>
+                </template>
 
                 <!-- OTG Descriptor Settings -->
                 <template v-if="config.hid_backend === 'otg'">
@@ -3838,7 +4347,7 @@ watch(isWindows, () => {
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
                       <div class="sm:col-span-3 space-y-1">
-                        <Input v-model="extConfig.gostc.key" type="password" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                        <Input v-model="extConfig.gostc.key" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.gostc?.status)" />
                         <p v-if="extConfig.gostc.enabled && !extConfig.gostc.key" class="text-xs text-destructive">{{ t('extensions.gostc.keyRequired') }}</p>
                       </div>
                     </div>
@@ -3934,7 +4443,7 @@ watch(isWindows, () => {
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
-                      <Input v-model="extConfig.easytier.network_secret" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                      <Input v-model="extConfig.easytier.network_secret" type="password" autocomplete="off" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                       <Label class="sm:text-right">{{ t('extensions.easytier.peers') }}</Label>
@@ -3982,10 +4491,187 @@ watch(isWindows, () => {
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
+            <!-- FRPC -->
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between gap-4">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.frpc.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.frpc.desc') }}</CardDescription>
+                  </div>
+                  <Badge :variant="extensions?.frpc?.available ? 'default' : 'destructive'">
+                    {{ extensions?.frpc?.available ? t('extensions.available') : t('extensions.unavailable') }}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div v-if="!extensions?.frpc?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'frpc.exe' : '/usr/bin/frpc' }) }}
+                </div>
+                <template v-else>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div :class="['w-2 h-2 rounded-full', getExtStatusClass(extensions?.frpc?.status)]" />
+                      <span class="text-sm">{{ getExtStatusText(extensions?.frpc?.status) }}</span>
+                    </div>
+                    <div class="flex gap-2">
+                      <Button
+                        v-if="!isExtRunning(extensions?.frpc?.status)"
+                        size="sm"
+                        @click="startExtension('frpc')"
+                        :disabled="extensionsLoading || !!frpcValidationMessage"
+                      >
+                        <Play class="h-4 w-4 mr-1" />
+                        {{ t('extensions.start') }}
+                      </Button>
+                      <Button
+                        v-else
+                        size="sm"
+                        variant="outline"
+                        @click="stopExtension('frpc')"
+                        :disabled="extensionsLoading"
+                      >
+                        <Square class="h-4 w-4 mr-1" />
+                        {{ t('extensions.stop') }}
+                      </Button>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div class="grid gap-4">
+                    <div class="flex items-center justify-between">
+                      <Label>{{ t('extensions.autoStart') }}</Label>
+                      <Switch v-model="extConfig.frpc.enabled" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                    </div>
+                    <div class="grid grid-cols-2 rounded-md bg-muted p-1">
+                      <button
+                        type="button"
+                        :class="[
+                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                          frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                        @click="extConfig.frpc.config_mode = FrpcConfigMode.Quick"
+                      >
+                        {{ t('extensions.frpc.quickConfig') }}
+                      </button>
+                      <button
+                        type="button"
+                        :class="[
+                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                          !frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                        @click="extConfig.frpc.config_mode = FrpcConfigMode.Full"
+                      >
+                        {{ t('extensions.frpc.fullConfig') }}
+                      </button>
+                    </div>
+                    <template v-if="frpcQuickMode">
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.proxyType') }}</Label>
+                        <div class="sm:col-span-3">
+                          <RadioGroup v-model="extConfig.frpc.proxy_type" class="flex flex-wrap gap-4" :disabled="isExtRunning(extensions?.frpc?.status)">
+                            <div v-for="type in ['tcp', 'udp', 'http', 'https', 'stcp', 'sudp', 'xtcp']" :key="type" class="flex items-center space-x-2">
+                              <RadioGroupItem :value="type" :id="`frpc-${type}`" />
+                              <Label :for="`frpc-${type}`" class="cursor-pointer uppercase">{{ type }}</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.proxyName') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.proxy_name" :placeholder="t('extensions.frpc.proxyNamePlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.proxy_name?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.proxyNameRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.serverAddr') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.server_addr" :placeholder="t('extensions.frpc.serverAddrPlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.server_addr?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.serverAddrRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.serverPort') }}</Label>
+                        <Input v-model.number="extConfig.frpc.server_port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.token') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.token" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.token" class="text-xs text-destructive">{{ t('extensions.frpc.tokenRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.localIp') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model="extConfig.frpc.local_ip" placeholder="127.0.0.1" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && !extConfig.frpc.local_ip?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.localIpRequired') }}</p>
+                        </div>
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.localPort') }}</Label>
+                        <Input v-model.number="extConfig.frpc.local_port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div v-if="showFrpcRemotePort" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.remotePort') }}</Label>
+                        <div class="sm:col-span-3 space-y-1">
+                          <Input v-model.number="extConfig.frpc.remote_port" type="number" min="1" max="65535" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                          <p v-if="extConfig.frpc.enabled && frpcRemotePortRequired && !extConfig.frpc.remote_port" class="text-xs text-destructive">{{ t('extensions.frpc.remotePortRequired') }}</p>
+                        </div>
+                      </div>
+                      <div v-if="showFrpcCustomDomain" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.customDomain') }}</Label>
+                        <Input v-model="extConfig.frpc.custom_domain" class="sm:col-span-3" :placeholder="t('extensions.frpc.customDomainPlaceholder')" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div v-if="showFrpcSecretKey" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.secretKey') }}</Label>
+                        <Input v-model="extConfig.frpc.secret_key" class="sm:col-span-3" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                      </div>
+                      <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                        <Label class="sm:text-right">{{ t('extensions.frpc.tls') }}</Label>
+                        <div class="sm:col-span-3">
+                          <Switch v-model="extConfig.frpc.tls" :disabled="isExtRunning(extensions?.frpc?.status)" />
+                        </div>
+                      </div>
+                    </template>
+                    <div v-else class="space-y-1">
+                      <Textarea
+                        v-model="extConfig.frpc.custom_toml"
+                        class="min-h-[300px] font-mono text-xs"
+                        spellcheck="false"
+                        :disabled="isExtRunning(extensions?.frpc?.status)"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.frpc.fullConfigHint') }}</p>
+                      <p v-if="!extConfig.frpc.custom_toml?.trim()" class="text-xs text-destructive">{{ t('extensions.frpc.fullConfigRequired') }}</p>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <button type="button" @click="showLogs.frpc = !showLogs.frpc; if (showLogs.frpc) refreshExtensionLogs('frpc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />
+                      {{ t('extensions.viewLogs') }}
+                    </button>
+                    <div v-if="showLogs.frpc" class="space-y-2">
+                      <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.frpc || []).join('\n') || t('extensions.noLogs') }}</pre>
+                      <Button variant="ghost" size="sm" @click="refreshExtensionLogs('frpc')">
+                        <RefreshCw class="h-3 w-3 mr-1" />
+                        {{ t('common.refresh') }}
+                      </Button>
+                    </div>
+                  </div>
+                </template>
+              </CardContent>
+            </Card>
+            <div v-if="extensions?.frpc?.available" class="flex justify-end">
+              <Button :disabled="loading || isExtRunning(extensions?.frpc?.status)" @click="saveExtensionConfig('frpc')">
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
           </div>
 
           <!-- RTSP Section -->
-          <div v-show="activeSection === 'ext-rtsp'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4110,8 +4796,134 @@ watch(isWindows, () => {
             </div>
           </div>
 
+          <!-- VNC Section -->
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.vnc.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.vnc.desc') }}</CardDescription>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Badge :variant="vncStatus?.service_status === 'running' ? 'default' : 'secondary'">
+                      {{ getVncServiceStatusText(vncStatus?.service_status) }}
+                    </Badge>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadVncConfig" :disabled="vncLoading">
+                      <RefreshCw :class="['h-4 w-4', vncLoading ? 'animate-spin' : '']" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-2 h-2 rounded-full', getVncStatusClass(vncStatus?.service_status)]" />
+                    <span class="text-sm">{{ getVncServiceStatusText(vncStatus?.service_status) }}</span>
+                    <template v-if="vncStatus?.connection_count">
+                      <span class="text-muted-foreground">|</span>
+                      <span class="text-sm text-muted-foreground">{{ t('extensions.vnc.clients', { count: vncStatus.connection_count }) }}</span>
+                    </template>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="vncStatus?.service_status !== 'running' && vncStatus?.service_status !== 'starting'"
+                      size="sm"
+                      @click="startVnc"
+                      :disabled="vncLoading || vncStatus?.service_status === 'starting'"
+                    >
+                      <Play class="h-4 w-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      @click="stopVnc"
+                      :disabled="vncLoading"
+                    >
+                      <Square class="h-4 w-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+
+                <div class="grid gap-4">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.autoStart') }}</Label>
+                    <Switch v-model="vncLocalConfig.enabled" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
+                    <Input v-model="vncLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.port') }}</Label>
+                    <Input v-model.number="vncLocalConfig.port" class="sm:col-span-3" type="number" min="1" max="65535" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.encoding') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="vncLocalConfig.encoding" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="vncStatus?.service_status === 'running'">
+                        <option value="tight_jpeg">{{ t('extensions.vnc.encodingTightJpeg') }}</option>
+                        <option value="h264">{{ t('extensions.vnc.encodingH264') }}</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.encodingHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.jpegQuality') }}</Label>
+                    <Input v-model.number="vncLocalConfig.jpeg_quality" class="sm:col-span-3" type="number" min="10" max="100" :disabled="vncStatus?.service_status === 'running' || vncLocalConfig.encoding !== 'tight_jpeg'" />
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.vnc.allowOneClient') }}</Label>
+                    <Switch v-model="vncLocalConfig.allow_one_client" :disabled="vncStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.vnc.password') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <div class="relative">
+                        <Input
+                          v-model="vncLocalConfig.password"
+                          :type="showPasswords ? 'text' : 'password'"
+                          maxlength="8"
+                          autocomplete="off"
+                          :placeholder="vncStatus?.config.has_password ? t('extensions.vnc.passwordPlaceholder') : t('extensions.vnc.passwordRequiredPlaceholder')"
+                          :disabled="vncStatus?.service_status === 'running'"
+                        />
+                        <button
+                          type="button"
+                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
+                          @click="showPasswords = !showPasswords"
+                        >
+                          <Eye v-if="!showPasswords" class="h-4 w-4" />
+                          <EyeOff v-else class="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p v-if="vncStatus?.config.has_password" class="text-xs text-muted-foreground">{{ t('extensions.vnc.passwordSaved') }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
+                  <p class="text-sm font-medium">{{ t('extensions.vnc.urlPreview') }}</p>
+                  <code class="font-mono text-sm break-all">{{ vncStreamUrl }}</code>
+                </div>
+              </CardContent>
+            </Card>
+            <div class="flex justify-end">
+              <Button :disabled="loading || vncLoading || vncStatus?.service_status === 'running'" @click="saveVncConfig">
+                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+
           <!-- RustDesk Section -->
-          <div v-show="activeSection === 'ext-rustdesk'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4170,6 +4982,16 @@ watch(isWindows, () => {
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
                     <Switch v-model="rustdeskLocalConfig.enabled" :disabled="rustdeskStatus?.service_status === 'running'" />
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <select v-model="rustdeskLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="rustdeskStatus?.service_status === 'running'">
+                        <option value="h264">H.264</option>
+                        <option value="h265">H.265</option>
+                      </select>
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.codecHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
@@ -4425,8 +5247,16 @@ watch(isWindows, () => {
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
               </p>
+              <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ t('settings.ch9329StringLengthWarning') }}</span>
+              </p>
+              <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
+              </p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
-              <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidFunctionSelectionValid)" @click="saveConfig">
+              <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

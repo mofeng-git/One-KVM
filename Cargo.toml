@@ -1,6 +1,6 @@
 [package]
 name = "one-kvm"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["SilentWind"]
 description = "A open and lightweight IP-KVM solution written in Rust"
@@ -20,6 +20,7 @@ desktop = [
     "dep:sqlx",
     "dep:serde",
     "dep:serde_json",
+    "dep:toml_edit",
     "dep:tracing",
     "dep:tracing-subscriber",
     "dep:thiserror",
@@ -38,6 +39,7 @@ desktop = [
     "dep:axum-server",
     "dep:clap",
     "dep:time",
+    "dep:tempfile",
     "dep:bytes",
     "dep:bytemuck",
     "dep:xxhash-rust",
@@ -56,6 +58,7 @@ desktop = [
     "dep:ventoy-img",
     "dep:protobuf",
     "dep:sodiumoxide",
+    "dep:des",
     "dep:sha2",
     "dep:typeshare",
     "dep:hwcodec",
@@ -98,14 +101,17 @@ android = [
     "dep:sdp-types",
     "dep:serde",
     "dep:serde_json",
+    "dep:toml_edit",
     "dep:serialport",
     "dep:sha2",
     "dep:sodiumoxide",
+    "dep:des",
     "dep:sqlx",
     "dep:alsa",
     "dep:audiopus",
     "dep:thiserror",
     "dep:time",
+    "dep:tempfile",
     "dep:tokio",
     "dep:tokio-tungstenite",
     "dep:tokio-util",
@@ -143,6 +149,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"], optional = tru
 # Serialization
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+toml_edit = { version = "0.25", optional = true }
 
 # Logging
 tracing = { version = "0.1", optional = true }
@@ -160,6 +167,7 @@ rand = { version = "0.9", optional = true }
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"], optional = true }
 base64 = { version = "0.22", optional = true }
+tempfile = { version = "3", optional = true }
 
 # HTTP client (for URL downloads)
 # Use rustls by default, but allow native-tls for systems with older GLIBC
@@ -216,6 +224,7 @@ ventoy-img = { path = "libs/ventoy-img-rs", optional = true }
 # RustDesk protocol support
 protobuf = { version = "3.7", features = ["with-bytes"], optional = true }
 sodiumoxide = { version = "0.2", optional = true }
+des = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
 # TypeScript type generation
 typeshare = { version = "1.0", optional = true }

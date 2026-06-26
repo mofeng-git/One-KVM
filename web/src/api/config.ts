@@ -24,6 +24,8 @@ import type {
   GostcConfigUpdate,
   EasytierConfig,
   EasytierConfigUpdate,
+  FrpcConfig,
+  FrpcConfigUpdate,
   WebConfigResponse,
   WebConfigUpdate,
 } from '@/types/generated'
@@ -159,10 +161,17 @@ export const extensionsApi = {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
+
+  updateFrpc: (config: FrpcConfigUpdate) =>
+    request<FrpcConfig>('/extensions/frpc/config', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
 }
 
 export interface RustDeskConfigResponse {
   enabled: boolean
+  codec: 'h264' | 'h265'
   rendezvous_server: string
   relay_server: string | null
   device_id: string
@@ -179,6 +188,7 @@ export interface RustDeskStatusResponse {
 
 export interface RustDeskConfigUpdate {
   enabled?: boolean
+  codec?: 'h264' | 'h265'
   rendezvous_server?: string
   relay_server?: string
   relay_key?: string
@@ -261,6 +271,50 @@ export const rtspConfigApi = {
   start: () => request<RtspStatusResponse>('/config/rtsp/start', { method: 'POST' }),
 
   stop: () => request<RtspStatusResponse>('/config/rtsp/stop', { method: 'POST' }),
+}
+
+export type VncEncoding = 'tight_jpeg' | 'h264'
+
+export interface VncConfigResponse {
+  enabled: boolean
+  bind: string
+  port: number
+  encoding: VncEncoding
+  jpeg_quality: number
+  allow_one_client: boolean
+  has_password: boolean
+}
+
+export interface VncConfigUpdate {
+  enabled?: boolean
+  bind?: string
+  port?: number
+  encoding?: VncEncoding
+  jpeg_quality?: number
+  allow_one_client?: boolean
+  password?: string
+}
+
+export interface VncStatusResponse {
+  config: VncConfigResponse
+  service_status: string
+  connection_count: number
+}
+
+export const vncConfigApi = {
+  get: () => request<VncConfigResponse>('/config/vnc'),
+
+  update: (config: VncConfigUpdate) =>
+    request<VncConfigResponse>('/config/vnc', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  getStatus: () => request<VncStatusResponse>('/config/vnc/status'),
+
+  start: () => request<VncStatusResponse>('/config/vnc/start', { method: 'POST' }),
+
+  stop: () => request<VncStatusResponse>('/config/vnc/stop', { method: 'POST' }),
 }
 
 export type WebConfig = WebConfigResponse

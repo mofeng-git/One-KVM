@@ -73,6 +73,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/webrtc/close", post(handlers::webrtc_close_session))
         // HID endpoints
         .route("/hid/status", get(handlers::hid_status))
+        .route(
+            "/hid/ch9329/descriptor",
+            get(handlers::hid_ch9329_descriptor),
+        )
         .route("/hid/reset", post(handlers::hid_reset))
         // WebSocket HID endpoint (for MJPEG mode)
         .route("/ws/hid", any(ws_hid_handler))
@@ -139,6 +143,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/rustdesk/stop",
             post(handlers::config::stop_rustdesk_service),
         )
+        // VNC configuration endpoints
+        .route("/config/vnc", get(handlers::config::get_vnc_config))
+        .route("/config/vnc", patch(handlers::config::update_vnc_config))
+        .route("/config/vnc/status", get(handlers::config::get_vnc_status))
+        .route(
+            "/config/vnc/start",
+            post(handlers::config::start_vnc_service),
+        )
+        .route("/config/vnc/stop", post(handlers::config::stop_vnc_service))
         // RTSP configuration endpoints
         .route("/config/rtsp", get(handlers::config::get_rtsp_config))
         .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
@@ -157,6 +170,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
+        .route("/config/computer-use", get(handlers::computer_use_config))
+        .route(
+            "/config/computer-use",
+            patch(handlers::computer_use_update_config),
+        )
+        .route("/computer-use/session", get(handlers::computer_use_session))
+        .route("/computer-use/session", post(handlers::computer_use_start))
+        .route(
+            "/computer-use/session/stop",
+            post(handlers::computer_use_stop),
+        )
+        .route("/ws/computer-use", any(handlers::computer_use_ws))
         // Auth configuration
         .route("/config/auth", get(handlers::config::get_auth_config))
         .route("/config/auth", patch(handlers::config::update_auth_config))
@@ -204,6 +229,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/extensions/easytier/config",
             patch(handlers::extensions::update_easytier_config),
+        )
+        .route(
+            "/extensions/frpc/config",
+            patch(handlers::extensions::update_frpc_config),
         )
         // Terminal (ttyd) reverse proxy - WebSocket and HTTP
         .route("/terminal", get(handlers::terminal::terminal_index))

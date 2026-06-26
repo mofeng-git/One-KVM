@@ -6,7 +6,8 @@ use crate::rtsp::RtspService;
 use crate::state::AppState;
 use crate::stream_encoder::encoder_type_to_backend;
 use crate::video::codec_constraints::{
-    enforce_constraints_with_stream_manager, StreamCodecConstraints,
+    enforce_constraints_with_stream_manager, validate_third_party_codec_compatibility,
+    StreamCodecConstraints,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
@@ -33,6 +34,7 @@ fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
         HidBackend::Ch9329 => crate::hid::HidBackendType::Ch9329 {
             port: config.ch9329_port.clone(),
             baud_rate: config.ch9329_baudrate,
+            hybrid_mouse: config.ch9329_hybrid_mouse,
         },
         HidBackend::None => crate::hid::HidBackendType::None,
     }
@@ -167,7 +169,8 @@ pub async fn apply_hid_config(
     new_config: &HidConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_msd_enabled = state.config.get().msd.enabled;
+    let current_config = state.config.get();
+    let current_msd_enabled = current_config.msd.enabled && new_config.backend == HidBackend::Otg;
     new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
 
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
@@ -178,10 +181,12 @@ pub async fn apply_hid_config(
         old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
     let endpoint_budget_changed =
         old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit();
+    let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
 
     if old_config.backend == new_config.backend
         && old_config.ch9329_port == new_config.ch9329_port
         && old_config.ch9329_baudrate == new_config.ch9329_baudrate
+        && !ch9329_runtime_changed
         && old_config.otg_udc == new_config.otg_udc
         && !descriptor_changed
         && !hid_functions_changed
@@ -235,18 +240,19 @@ pub async fn apply_msd_config(
     new_config: &MsdConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    state
-        .config
-        .get()
+    let current_config = state.config.get();
+    let hid_backend_is_otg = current_config.hid.backend == HidBackend::Otg;
+    let effective_new_msd_enabled = new_config.enabled && hid_backend_is_otg;
+    current_config
         .hid
-        .validate_otg_endpoint_budget(new_config.enabled)?;
+        .validate_otg_endpoint_budget(effective_new_msd_enabled)?;
 
     tracing::info!("MSD config sent, checking if reload needed...");
     tracing::debug!("Old MSD config: {:?}", old_config);
     tracing::debug!("New MSD config: {:?}", new_config);
 
     let old_msd_enabled = old_config.enabled;
-    let new_msd_enabled = new_config.enabled;
+    let new_msd_enabled = effective_new_msd_enabled;
     let msd_dir_changed = old_config.msd_dir != new_config.msd_dir;
 
     tracing::info!(
@@ -404,6 +410,27 @@ pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<O
     Ok(enforcement.message)
 }
 
+fn validate_rustdesk_candidate(
+    state: &Arc<AppState>,
+    new_config: &crate::rustdesk::config::RustDeskConfig,
+) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rustdesk = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
+fn validate_vnc_candidate(state: &Arc<AppState>, new_config: &VncConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.vnc = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
+fn validate_rtsp_candidate(state: &Arc<AppState>, new_config: &RtspConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rtsp = new_config.clone();
+    validate_third_party_codec_compatibility(&candidate)
+}
+
 pub async fn apply_rustdesk_config(
     state: &Arc<AppState>,
     old_config: &crate::rustdesk::config::RustDeskConfig,
@@ -411,6 +438,8 @@ pub async fn apply_rustdesk_config(
     options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RustDesk config changes...");
+
+    validate_rustdesk_candidate(state, new_config)?;
 
     let mut rustdesk_guard = state.rustdesk.write().await;
     let mut credentials_to_save = None;
@@ -428,6 +457,7 @@ pub async fn apply_rustdesk_config(
 
     if new_config.enabled {
         let need_restart = options.force
+            || old_config.codec != new_config.codec
             || old_config.rendezvous_server != new_config.rendezvous_server
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
@@ -483,6 +513,77 @@ pub async fn apply_rustdesk_config(
     Ok(())
 }
 
+pub async fn apply_vnc_config(
+    state: &Arc<AppState>,
+    old_config: &VncConfig,
+    new_config: &VncConfig,
+    options: ConfigApplyOptions,
+) -> Result<()> {
+    tracing::info!("Applying VNC config changes...");
+
+    validate_vnc_candidate(state, new_config)?;
+
+    if new_config.enabled {
+        let mut candidate = state.config.get().as_ref().clone();
+        candidate.vnc = new_config.clone();
+        let constraints = StreamCodecConstraints::from_config(&candidate);
+        match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
+            Ok(result) if result.changed => {
+                if let Some(message) = result.message {
+                    tracing::info!("{}", message);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(
+                "Failed to enforce VNC stream constraints before start: {}",
+                e
+            ),
+        }
+    }
+
+    let mut vnc_guard = state.vnc.write().await;
+
+    if !new_config.enabled {
+        if let Some(ref service) = *vnc_guard {
+            service.stop().await?;
+        }
+        *vnc_guard = None;
+    }
+
+    if new_config.enabled {
+        let need_restart = options.force
+            || old_config.bind != new_config.bind
+            || old_config.port != new_config.port
+            || old_config.encoding != new_config.encoding
+            || old_config.password != new_config.password
+            || old_config.jpeg_quality != new_config.jpeg_quality
+            || old_config.allow_one_client != new_config.allow_one_client;
+
+        if vnc_guard.is_none() {
+            let service = crate::vnc::VncService::new(
+                new_config.clone(),
+                state.stream_manager.clone(),
+                state.hid.clone(),
+            );
+            service.start().await?;
+            *vnc_guard = Some(Arc::new(service));
+            tracing::info!("VNC service started");
+        } else if need_restart {
+            if let Some(ref service) = *vnc_guard {
+                service.restart(new_config.clone()).await?;
+                tracing::info!("VNC service restarted");
+            }
+        }
+    }
+
+    drop(vnc_guard);
+    if let Some(message) = enforce_stream_codec_constraints(state).await? {
+        tracing::info!("{}", message);
+    }
+
+    Ok(())
+}
+
 pub async fn apply_rtsp_config(
     state: &Arc<AppState>,
     old_config: &RtspConfig,
@@ -490,6 +591,8 @@ pub async fn apply_rtsp_config(
     options: ConfigApplyOptions,
 ) -> Result<()> {
     tracing::info!("Applying RTSP config changes...");
+
+    validate_rtsp_candidate(state, new_config)?;
 
     let mut rtsp_guard = state.rtsp.write().await;
 

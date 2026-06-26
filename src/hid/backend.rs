@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use super::types::{ConsumerEvent, KeyboardEvent, MouseEvent};
+use crate::config::{Ch9329DescriptorConfig, Ch9329DescriptorState};
 use crate::error::Result;
 use crate::events::LedState;
 
@@ -21,6 +22,8 @@ pub enum HidBackendType {
         port: String,
         #[serde(default = "default_ch9329_baud_rate")]
         baud_rate: u32,
+        #[serde(default)]
+        hybrid_mouse: bool,
     },
     #[default]
     None,
@@ -60,6 +63,21 @@ pub trait HidBackend: Send + Sync {
     async fn send_consumer(&self, _event: ConsumerEvent) -> Result<()> {
         Err(crate::error::AppError::BadRequest(
             "Consumer control not supported by this backend".to_string(),
+        ))
+    }
+
+    async fn apply_ch9329_descriptor(
+        &self,
+        _descriptor: &Ch9329DescriptorConfig,
+    ) -> Result<Ch9329DescriptorState> {
+        Err(crate::error::AppError::BadRequest(
+            "CH9329 descriptor configuration is not supported by this backend".to_string(),
+        ))
+    }
+
+    async fn read_ch9329_descriptor(&self) -> Result<Ch9329DescriptorState> {
+        Err(crate::error::AppError::BadRequest(
+            "CH9329 descriptor reading is not supported by this backend".to_string(),
         ))
     }
 

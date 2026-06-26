@@ -54,6 +54,14 @@ export interface OtgHidFunctions {
 	consumer: boolean;
 }
 
+export interface Ch9329DescriptorConfig {
+	vendor_id: number;
+	product_id: number;
+	manufacturer: string;
+	product: string;
+	serial_number?: string;
+}
+
 export interface HidConfig {
 	backend: HidBackend;
 	otg_udc?: string;
@@ -64,6 +72,8 @@ export interface HidConfig {
 	otg_keyboard_leds?: boolean;
 	ch9329_port: string;
 	ch9329_baudrate: number;
+	ch9329_hybrid_mouse?: boolean;
+	ch9329_descriptor?: Ch9329DescriptorConfig;
 	mouse_absolute: boolean;
 }
 
@@ -175,17 +185,70 @@ export interface EasytierConfig {
 	virtual_ip?: string;
 }
 
+export enum FrpcConfigMode {
+	Quick = "quick",
+	Full = "full",
+}
+
+export enum FrpProxyType {
+	Tcp = "tcp",
+	Udp = "udp",
+	Http = "http",
+	Https = "https",
+	Stcp = "stcp",
+	Sudp = "sudp",
+	Xtcp = "xtcp",
+}
+
+export interface FrpcConfig {
+	enabled: boolean;
+	config_mode: FrpcConfigMode;
+	proxy_name: string;
+	proxy_type: FrpProxyType;
+	server_addr: string;
+	server_port: number;
+	token: string;
+	local_ip: string;
+	local_port: number;
+	remote_port?: number;
+	custom_domain?: string;
+	secret_key: string;
+	tls: boolean;
+	custom_toml: string;
+}
+
 export interface ExtensionsConfig {
 	ttyd: TtydConfig;
 	gostc: GostcConfig;
 	easytier: EasytierConfig;
+	frpc: FrpcConfig;
 }
 
 export interface RustDeskConfig {
 	enabled: boolean;
+	codec: RustDeskCodec;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
+}
+
+export enum RustDeskCodec {
+	H264 = "h264",
+	H265 = "h265",
+}
+
+export enum VncEncoding {
+	TightJpeg = "tight_jpeg",
+	H264 = "h264",
+}
+
+export interface VncConfig {
+	enabled: boolean;
+	bind: string;
+	port: number;
+	encoding: VncEncoding;
+	jpeg_quality: number;
+	allow_one_client: boolean;
 }
 
 export enum RtspCodec {
@@ -219,6 +282,7 @@ export interface AppConfig {
 	web: WebConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
+	vnc: VncConfig;
 	rtsp: RtspConfig;
 	redfish: RedfishConfig;
 }
@@ -269,6 +333,22 @@ export interface AuthConfigUpdate {
 	single_user_allow_multiple_sessions?: boolean;
 }
 
+export interface Ch9329DescriptorConfigUpdate {
+	vendor_id?: number;
+	product_id?: number;
+	manufacturer?: string;
+	product?: string;
+	serial_number?: string;
+}
+
+export interface Ch9329DescriptorState {
+	descriptor: Ch9329DescriptorConfig;
+	manufacturer_enabled: boolean;
+	product_enabled: boolean;
+	serial_enabled: boolean;
+	config_mode_available: boolean;
+}
+
 export interface EasytierConfigUpdate {
 	enabled?: boolean;
 	network_name?: string;
@@ -299,6 +379,7 @@ export enum ExtensionId {
 	Ttyd = "ttyd",
 	Gostc = "gostc",
 	Easytier = "easytier",
+	Frpc = "frpc",
 }
 
 export interface ExtensionLogs {
@@ -318,10 +399,34 @@ export interface GostcInfo {
 	config: GostcConfig;
 }
 
+export interface FrpcInfo {
+	available: boolean;
+	status: ExtensionStatus;
+	config: FrpcConfig;
+}
+
 export interface ExtensionsStatus {
 	ttyd: TtydInfo;
 	gostc: GostcInfo;
 	easytier: EasytierInfo;
+	frpc: FrpcInfo;
+}
+
+export interface FrpcConfigUpdate {
+	enabled?: boolean;
+	config_mode?: FrpcConfigMode;
+	proxy_name?: string;
+	proxy_type?: FrpProxyType;
+	server_addr?: string;
+	server_port?: number;
+	token?: string;
+	local_ip?: string;
+	local_port?: number;
+	remote_port?: number | null;
+	custom_domain?: string | null;
+	secret_key?: string;
+	tls?: boolean;
+	custom_toml?: string;
 }
 
 export interface GostcConfigUpdate {
@@ -351,6 +456,8 @@ export interface HidConfigUpdate {
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
+	ch9329_hybrid_mouse?: boolean;
+	ch9329_descriptor?: Ch9329DescriptorConfigUpdate;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
 	otg_profile?: OtgHidProfile;
@@ -394,6 +501,7 @@ export interface RtspStatusResponse {
 
 export interface RustDeskConfigUpdate {
 	enabled?: boolean;
+	codec?: RustDeskCodec;
 	rendezvous_server?: string;
 	relay_server?: string;
 	relay_key?: string;
@@ -447,6 +555,32 @@ export interface VideoConfigUpdate {
 	height?: number;
 	fps?: number;
 	quality?: number;
+}
+
+export interface VncConfigResponse {
+	enabled: boolean;
+	bind: string;
+	port: number;
+	encoding: VncEncoding;
+	jpeg_quality: number;
+	allow_one_client: boolean;
+	has_password: boolean;
+}
+
+export interface VncConfigUpdate {
+	enabled?: boolean;
+	bind?: string;
+	port?: number;
+	encoding?: VncEncoding;
+	jpeg_quality?: number;
+	allow_one_client?: boolean;
+	password?: string;
+}
+
+export interface VncStatusResponse {
+	config: VncConfigResponse;
+	service_status: string;
+	connection_count: number;
 }
 
 /**
@@ -597,4 +731,3 @@ export enum CanonicalKey {
 	AltRight = "AltRight",
 	MetaRight = "MetaRight",
 }
-

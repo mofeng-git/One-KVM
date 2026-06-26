@@ -17,6 +17,10 @@ pub mod cmd {
     pub const SEND_KB_MEDIA_DATA: u8 = 0x03;
     pub const SEND_MS_ABS_DATA: u8 = 0x04;
     pub const SEND_MS_REL_DATA: u8 = 0x05;
+    pub const GET_PARA_CFG: u8 = 0x08;
+    pub const SET_PARA_CFG: u8 = 0x09;
+    pub const GET_USB_STRING: u8 = 0x0A;
+    pub const SET_USB_STRING: u8 = 0x0B;
     pub const RESET: u8 = 0x0F;
 }
 

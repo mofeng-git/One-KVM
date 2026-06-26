@@ -4,6 +4,7 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use crate::atx::AtxController;
 use crate::audio::AudioController;
 use crate::auth::{SessionStore, UserStore};
+use crate::computer_use::ComputerUseManager;
 use crate::config::ConfigStore;
 use crate::db::DatabasePool;
 use crate::events::{
@@ -20,6 +21,7 @@ use crate::rtsp::RtspService;
 use crate::rustdesk::RustDeskService;
 use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
+use crate::vnc::VncService;
 use crate::webrtc::WebRtcStreamer;
 
 #[derive(Clone)]
@@ -30,6 +32,7 @@ pub struct ConfigApplyLocks {
     pub audio: Arc<Mutex<()>>,
     pub atx: Arc<Mutex<()>>,
     pub rustdesk: Arc<Mutex<()>>,
+    pub vnc: Arc<Mutex<()>>,
     pub rtsp: Arc<Mutex<()>>,
 }
 
@@ -48,6 +51,7 @@ impl ConfigApplyLocks {
             audio: Arc::new(Mutex::new(())),
             atx: Arc::new(Mutex::new(())),
             rustdesk: Arc::new(Mutex::new(())),
+            vnc: Arc::new(Mutex::new(())),
             rtsp: Arc::new(Mutex::new(())),
         }
     }
@@ -64,11 +68,13 @@ pub struct AppState {
     pub stream_manager: Arc<VideoStreamManager>,
     pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
+    pub computer_use: Arc<ComputerUseManager>,
     #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
     pub audio: Arc<AudioController>,
     pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
+    pub vnc: Arc<RwLock<Option<Arc<VncService>>>>,
     pub rtsp: Arc<RwLock<Option<Arc<RtspService>>>>,
     pub extensions: Arc<ExtensionManager>,
     pub events: Arc<EventBus>,
@@ -91,10 +97,12 @@ impl AppState {
         stream_manager: Arc<VideoStreamManager>,
         webrtc: Arc<WebRtcStreamer>,
         hid: Arc<HidController>,
+        computer_use: Arc<ComputerUseManager>,
         #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
         rustdesk: Option<Arc<RustDeskService>>,
+        vnc: Option<Arc<VncService>>,
         rtsp: Option<Arc<RtspService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
@@ -114,11 +122,13 @@ impl AppState {
             stream_manager,
             webrtc,
             hid,
+            computer_use,
             #[cfg(unix)]
             msd: Arc::new(RwLock::new(msd)),
             atx: Arc::new(RwLock::new(atx)),
             audio,
             rustdesk: Arc::new(RwLock::new(rustdesk)),
+            vnc: Arc::new(RwLock::new(vnc)),
             rtsp: Arc::new(RwLock::new(rtsp)),
             extensions,
             events,

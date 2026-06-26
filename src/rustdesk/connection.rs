@@ -18,9 +18,7 @@ use crate::hid::{CanonicalKey, HidController, KeyEventType, KeyboardEvent, Keybo
 use crate::utils::hostname_from_etc;
 use crate::video::codec::registry::{EncoderRegistry, VideoEncoderType};
 use crate::video::codec::BitratePreset;
-use crate::video::codec_constraints::{
-    encoder_codec_to_id, encoder_codec_to_video_codec, video_codec_to_encoder_codec,
-};
+use crate::video::codec_constraints::{encoder_codec_to_id, encoder_codec_to_video_codec};
 use crate::video::stream_manager::VideoStreamManager;
 
 use super::bytes_codec::{read_frame, write_frame, write_frame_buffered};
@@ -160,6 +158,8 @@ pub struct Connection {
     last_caps_lock: bool,
     /// Whether relative mouse mode is currently active for this connection
     relative_mouse_active: bool,
+    /// Server-configured RustDesk video codec.
+    configured_codec: VideoEncoderType,
 }
 
 /// Messages sent to connection handler
@@ -209,6 +209,11 @@ impl Connection {
         // This is used for encrypting the symmetric key exchange
         let temp_keypair = box_::gen_keypair();
 
+        let configured_codec = match config.codec {
+            super::config::RustDeskCodec::H264 => VideoEncoderType::H264,
+            super::config::RustDeskCodec::H265 => VideoEncoderType::H265,
+        };
+
         let conn = Self {
             id,
             device_id: config.device_id.clone(),
@@ -238,6 +243,7 @@ impl Connection {
             last_test_delay_sent: None,
             last_caps_lock: false,
             relative_mouse_active: false,
+            configured_codec,
         };
 
         (conn, rx)
@@ -628,43 +634,29 @@ impl Connection {
         Ok(true)
     }
 
-    /// Negotiate video codec - select the best available encoder
-    /// Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding on embedded devices)
+    /// Negotiate video codec from the server-configured RustDesk codec.
     async fn negotiate_video_codec(&self) -> VideoEncoderType {
         let registry = EncoderRegistry::global();
         let constraints = self.current_codec_constraints().await;
+        let configured = self.configured_codec;
 
-        // Check availability in priority order
-        // H264 is preferred because it has the best hardware encoder support (RKMPP, VAAPI, etc.)
-        // and most RustDesk clients support H264 hardware decoding
-        if constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H264)
-            && registry.is_codec_available(VideoEncoderType::H264)
-        {
-            return VideoEncoderType::H264;
-        }
-        if constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H265)
-            && registry.is_codec_available(VideoEncoderType::H265)
-        {
-            return VideoEncoderType::H265;
-        }
-        if constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::VP8)
-            && registry.is_codec_available(VideoEncoderType::VP8)
-        {
-            return VideoEncoderType::VP8;
-        }
-        if constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::VP9)
-            && registry.is_codec_available(VideoEncoderType::VP9)
-        {
-            return VideoEncoderType::VP9;
+        if !constraints.is_webrtc_codec_allowed(encoder_codec_to_video_codec(configured)) {
+            warn!(
+                "Configured RustDesk codec {} is blocked by constraints: {}",
+                encoder_codec_to_id(configured),
+                constraints.reason
+            );
+            return configured;
         }
 
-        // Fallback to preferred allowed codec
-        let preferred = constraints.preferred_webrtc_codec();
-        warn!(
-            "No allowed encoder available in priority order, falling back to {}",
-            encoder_codec_to_id(video_codec_to_encoder_codec(preferred))
-        );
-        video_codec_to_encoder_codec(preferred)
+        if !registry.is_codec_available(configured) {
+            warn!(
+                "Configured RustDesk codec {} is not reported available; attempting to use it anyway",
+                encoder_codec_to_id(configured)
+            );
+        }
+
+        configured
     }
 
     async fn current_codec_constraints(
@@ -740,53 +732,10 @@ impl Connection {
             }
         }
 
-        // Check if client sent supported_decoding with a codec preference
+        // Codec switching is locked to the server-configured RustDesk codec.
         if let Some(supported_decoding) = opt.supported_decoding.as_ref() {
             let prefer = supported_decoding.prefer.value();
             debug!("Client codec preference: prefer={}", prefer);
-
-            // Map RustDesk PreferCodec enum to our VideoEncoderType
-            // From proto: Auto=0, VP9=1, H264=2, H265=3, VP8=4, AV1=5
-            let requested_codec = match prefer {
-                1 => Some(VideoEncoderType::VP9),
-                2 => Some(VideoEncoderType::H264),
-                3 => Some(VideoEncoderType::H265),
-                4 => Some(VideoEncoderType::VP8),
-                // Auto(0) or AV1(5) or unknown: use current or negotiate
-                _ => None,
-            };
-
-            if let Some(new_codec) = requested_codec {
-                // Check if this codec is different from current and available
-                if self.negotiated_codec != Some(new_codec) {
-                    let constraints = self.current_codec_constraints().await;
-                    if !constraints.is_webrtc_codec_allowed(encoder_codec_to_video_codec(new_codec))
-                    {
-                        warn!(
-                            "Client requested codec {:?} but it's blocked by constraints: {}",
-                            new_codec, constraints.reason
-                        );
-                        return Ok(());
-                    }
-
-                    let registry = EncoderRegistry::global();
-                    if registry.is_codec_available(new_codec) {
-                        info!(
-                            "Client requested codec switch: {:?} -> {:?}",
-                            self.negotiated_codec, new_codec
-                        );
-                        // Switch codec
-                        if let Err(e) = self.switch_video_codec(new_codec).await {
-                            warn!("Failed to switch video codec: {}", e);
-                        }
-                    } else {
-                        warn!(
-                            "Client requested codec {:?} but it's not available",
-                            new_codec
-                        );
-                    }
-                }
-            }
         }
 
         // Log custom_image_quality (accept but don't process)
@@ -798,31 +747,6 @@ impl Connection {
         }
         if opt.custom_fps > 0 {
             debug!("Client requested FPS: {}", opt.custom_fps);
-        }
-
-        Ok(())
-    }
-
-    /// Switch video codec dynamically
-    /// Stops current video task, changes codec, and restarts
-    async fn switch_video_codec(&mut self, new_codec: VideoEncoderType) -> anyhow::Result<()> {
-        // Stop current video streaming task
-        if let Some(task) = self.video_task.take() {
-            info!("Stopping video task for codec switch");
-            task.abort();
-            // Wait a bit for cleanup
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        }
-
-        // Update negotiated codec
-        self.negotiated_codec = Some(new_codec);
-
-        // Restart video streaming with new codec if we have a video_tx
-        if let Some(ref video_tx) = self.video_frame_tx {
-            info!("Restarting video streaming with codec {:?}", new_codec);
-            self.start_video_streaming(video_tx.clone());
-        } else {
-            warn!("No video_tx available, cannot restart video streaming");
         }
 
         Ok(())
@@ -1105,18 +1029,15 @@ impl Connection {
             let constraints = self.current_codec_constraints().await;
 
             // Check which encoders are available (include software fallback)
-            let h264_available = constraints
-                .is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H264)
+            let configured = self.configured_codec;
+            let h264_available = configured == VideoEncoderType::H264
+                && constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H264)
                 && registry.is_codec_available(VideoEncoderType::H264);
-            let h265_available = constraints
-                .is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H265)
+            let h265_available = configured == VideoEncoderType::H265
+                && constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H265)
                 && registry.is_codec_available(VideoEncoderType::H265);
-            let vp8_available = constraints
-                .is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::VP8)
-                && registry.is_codec_available(VideoEncoderType::VP8);
-            let vp9_available = constraints
-                .is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::VP9)
-                && registry.is_codec_available(VideoEncoderType::VP9);
+            let vp8_available = false;
+            let vp9_available = false;
 
             info!(
                 "Server encoding capabilities: H264={}, H265={}, VP8={}, VP9={}",

@@ -7,6 +7,44 @@ use crate::state::AppState;
 use super::apply::{apply_rtsp_config, try_apply_lock, ConfigApplyOptions};
 use super::types::{RtspConfigResponse, RtspConfigUpdate, RtspStatusResponse};
 
+fn validate_candidate(state: &Arc<AppState>, config: &crate::config::RtspConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rtsp = config.clone();
+    crate::video::codec_constraints::validate_third_party_codec_compatibility(&candidate)
+}
+
+async fn persist_and_apply(
+    state: &Arc<AppState>,
+    old_config: crate::config::RtspConfig,
+    new_config: crate::config::RtspConfig,
+) -> Result<crate::config::RtspConfig> {
+    validate_candidate(state, &new_config)?;
+    state
+        .config
+        .update(|config| {
+            config.rtsp = new_config.clone();
+        })
+        .await?;
+    let stored_config = state.config.get().rtsp.clone();
+    apply_rtsp_config(
+        state,
+        &old_config,
+        &stored_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
+    Ok(stored_config)
+}
+
+async fn current_status(state: &Arc<AppState>) -> crate::rtsp::RtspServiceStatus {
+    let guard = state.rtsp.read().await;
+    if let Some(ref service) = *guard {
+        service.status().await
+    } else {
+        crate::rtsp::RtspServiceStatus::Stopped
+    }
+}
+
 pub async fn get_rtsp_config(State(state): State<Arc<AppState>>) -> Json<RtspConfigResponse> {
     let config = state.config.get();
     Json(RtspConfigResponse::from(&config.rtsp))
@@ -14,14 +52,7 @@ pub async fn get_rtsp_config(State(state): State<Arc<AppState>>) -> Json<RtspCon
 
 pub async fn get_rtsp_status(State(state): State<Arc<AppState>>) -> Json<RtspStatusResponse> {
     let config = state.config.get().rtsp.clone();
-    let status = {
-        let guard = state.rtsp.read().await;
-        if let Some(ref service) = *guard {
-            service.status().await
-        } else {
-            crate::rtsp::RtspServiceStatus::Stopped
-        }
-    };
+    let status = current_status(&state).await;
 
     Json(RtspStatusResponse::new(&config, status))
 }
@@ -34,22 +65,9 @@ pub async fn update_rtsp_config(
 
     let _apply_guard = try_apply_lock(&state.config_apply_locks.rtsp, "rtsp")?;
     let old_config = state.config.get().rtsp.clone();
-
-    state
-        .config
-        .update(|config| {
-            req.apply_to(&mut config.rtsp);
-        })
-        .await?;
-
-    let new_config = state.config.get().rtsp.clone();
-    apply_rtsp_config(
-        &state,
-        &old_config,
-        &new_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
+    let mut merged_config = old_config.clone();
+    req.apply_to(&mut merged_config);
+    let new_config = persist_and_apply(&state, old_config, merged_config).await?;
 
     Ok(Json(RtspConfigResponse::from(&new_config)))
 }
@@ -61,25 +79,10 @@ pub async fn start_rtsp_service(
     let current_config = state.config.get().rtsp.clone();
     let mut start_config = current_config.clone();
     start_config.enabled = true;
+    let stored_config = persist_and_apply(&state, current_config, start_config).await?;
+    let status = current_status(&state).await;
 
-    apply_rtsp_config(
-        &state,
-        &current_config,
-        &start_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
-
-    let status = {
-        let guard = state.rtsp.read().await;
-        if let Some(ref service) = *guard {
-            service.status().await
-        } else {
-            crate::rtsp::RtspServiceStatus::Stopped
-        }
-    };
-
-    Ok(Json(RtspStatusResponse::new(&current_config, status)))
+    Ok(Json(RtspStatusResponse::new(&stored_config, status)))
 }
 
 pub async fn stop_rtsp_service(
@@ -90,22 +93,8 @@ pub async fn stop_rtsp_service(
     let mut stop_config = current_config.clone();
     stop_config.enabled = false;
 
-    apply_rtsp_config(
-        &state,
-        &current_config,
-        &stop_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
+    let stored_config = persist_and_apply(&state, current_config, stop_config).await?;
+    let status = current_status(&state).await;
 
-    let status = {
-        let guard = state.rtsp.read().await;
-        if let Some(ref service) = *guard {
-            service.status().await
-        } else {
-            crate::rtsp::RtspServiceStatus::Stopped
-        }
-    };
-
-    Ok(Json(RtspStatusResponse::new(&current_config, status)))
+    Ok(Json(RtspStatusResponse::new(&stored_config, status)))
 }

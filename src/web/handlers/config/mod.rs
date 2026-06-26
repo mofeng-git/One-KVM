@@ -12,6 +12,7 @@ mod rtsp;
 mod rustdesk;
 mod stream;
 pub(crate) mod video;
+mod vnc;
 mod web;
 
 pub use atx::{get_atx_config, update_atx_config};
@@ -31,6 +32,9 @@ pub use rustdesk::{
 };
 pub use stream::{get_stream_config, update_stream_config};
 pub use video::{get_video_config, update_video_config};
+pub use vnc::{
+    get_vnc_config, get_vnc_status, start_vnc_service, stop_vnc_service, update_vnc_config,
+};
 pub use web::{get_web_config, update_web_config};
 
 use axum::{extract::State, Json};
@@ -43,6 +47,7 @@ fn sanitize_config_for_api(config: &mut AppConfig) {
     config.auth.totp_secret = None;
 
     config.stream.turn_password = None;
+    config.computer_use.openai_api_key = None;
 
     config.rustdesk.device_password.clear();
     config.rustdesk.relay_key = None;
@@ -52,6 +57,7 @@ fn sanitize_config_for_api(config: &mut AppConfig) {
     config.rustdesk.signing_private_key = None;
 
     config.rtsp.password = None;
+    config.vnc.password = None;
 }
 
 pub async fn get_all_config(State(state): State<Arc<AppState>>) -> Json<AppConfig> {

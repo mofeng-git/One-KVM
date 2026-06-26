@@ -7,6 +7,7 @@ pub fn default_binary_path(id: ExtensionId) -> &'static str {
         ExtensionId::Ttyd => "/usr/bin/ttyd",
         ExtensionId::Gostc => "/usr/bin/gostc",
         ExtensionId::Easytier => "/usr/bin/easytier-core",
+        ExtensionId::Frpc => "/usr/bin/frpc",
     }
 }
 

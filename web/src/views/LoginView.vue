@@ -82,6 +82,7 @@ async function handleLogin() {
                 id="username"
                 v-model="username"
                 type="text"
+                autocomplete="username"
                 :placeholder="t('auth.username')"
                 class="pl-10"
               />
@@ -96,6 +97,7 @@ async function handleLogin() {
                 id="password"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
                 :placeholder="t('auth.password')"
                 class="pl-10 pr-10"
               />

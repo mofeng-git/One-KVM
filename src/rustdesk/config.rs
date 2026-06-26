@@ -2,10 +2,21 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 #[typeshare]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum RustDeskCodec {
+    #[default]
+    H264,
+    H265,
+}
+
+#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RustDeskConfig {
     pub enabled: bool,
+    pub codec: RustDeskCodec,
     pub rendezvous_server: String,
     pub relay_server: Option<String>,
     #[typeshare(skip)]
@@ -29,6 +40,7 @@ impl Default for RustDeskConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            codec: RustDeskCodec::H264,
             rendezvous_server: String::new(),
             relay_server: None,
             relay_key: None,

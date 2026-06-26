@@ -8,9 +8,58 @@ use crate::state::AppState;
 use super::apply::{apply_rustdesk_config, try_apply_lock, ConfigApplyOptions};
 use super::types::RustDeskConfigUpdate;
 
+fn validate_candidate(state: &Arc<AppState>, config: &RustDeskConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rustdesk = config.clone();
+    crate::video::codec_constraints::validate_third_party_codec_compatibility(&candidate)
+}
+
+async fn persist_and_apply(
+    state: &Arc<AppState>,
+    old_config: RustDeskConfig,
+    new_config: RustDeskConfig,
+) -> Result<RustDeskConfig> {
+    validate_candidate(state, &new_config)?;
+    state
+        .config
+        .update(|config| {
+            config.rustdesk = new_config.clone();
+        })
+        .await?;
+    let stored_config = state.config.get().rustdesk.clone();
+    apply_rustdesk_config(
+        state,
+        &old_config,
+        &stored_config,
+        ConfigApplyOptions::forced(),
+    )
+    .await?;
+    Ok(stored_config)
+}
+
+async fn current_status(state: &Arc<AppState>, config: RustDeskConfig) -> RustDeskStatusResponse {
+    let (service_status, rendezvous_status) = {
+        let guard = state.rustdesk.read().await;
+        if let Some(ref service) = *guard {
+            let status = format!("{}", service.status());
+            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
+            (status, rv_status)
+        } else {
+            ("not_initialized".to_string(), None)
+        }
+    };
+
+    RustDeskStatusResponse {
+        config: RustDeskConfigResponse::from(&config),
+        service_status,
+        rendezvous_status,
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct RustDeskConfigResponse {
     pub enabled: bool,
+    pub codec: crate::rustdesk::config::RustDeskCodec,
     pub rendezvous_server: String,
     pub relay_server: Option<String>,
     pub device_id: String,
@@ -23,6 +72,7 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
     fn from(config: &RustDeskConfig) -> Self {
         Self {
             enabled: config.enabled,
+            codec: config.codec,
             rendezvous_server: config.rendezvous_server.clone(),
             relay_server: config.relay_server.clone(),
             device_id: config.device_id.clone(),
@@ -50,23 +100,7 @@ pub async fn get_rustdesk_status(
     State(state): State<Arc<AppState>>,
 ) -> Json<RustDeskStatusResponse> {
     let config = state.config.get().rustdesk.clone();
-
-    let (service_status, rendezvous_status) = {
-        let guard = state.rustdesk.read().await;
-        if let Some(ref service) = *guard {
-            let status = format!("{}", service.status());
-            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
-            (status, rv_status)
-        } else {
-            ("not_initialized".to_string(), None)
-        }
-    };
-
-    Json(RustDeskStatusResponse {
-        config: RustDeskConfigResponse::from(&config),
-        service_status,
-        rendezvous_status,
-    })
+    Json(current_status(&state, config).await)
 }
 
 pub async fn update_rustdesk_config(
@@ -81,22 +115,7 @@ pub async fn update_rustdesk_config(
     req.apply_to(&mut merged_config);
     req.validate_merged(&merged_config)?;
 
-    state
-        .config
-        .update(|config| {
-            config.rustdesk = merged_config.clone();
-        })
-        .await?;
-
-    let new_config = state.config.get().rustdesk.clone();
-
-    apply_rustdesk_config(
-        &state,
-        &old_config,
-        &new_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
+    let new_config = persist_and_apply(&state, old_config, merged_config).await?;
 
     let constraints = state.stream_manager.codec_constraints().await;
     if constraints.rustdesk_enabled || constraints.rtsp_enabled {
@@ -152,31 +171,8 @@ pub async fn start_rustdesk_service(
     let current_config = state.config.get().rustdesk.clone();
     let mut start_config = current_config.clone();
     start_config.enabled = true;
-
-    apply_rustdesk_config(
-        &state,
-        &current_config,
-        &start_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
-
-    let (service_status, rendezvous_status) = {
-        let guard = state.rustdesk.read().await;
-        if let Some(ref service) = *guard {
-            let status = format!("{}", service.status());
-            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
-            (status, rv_status)
-        } else {
-            ("not_initialized".to_string(), None)
-        }
-    };
-
-    Ok(Json(RustDeskStatusResponse {
-        config: RustDeskConfigResponse::from(&current_config),
-        service_status,
-        rendezvous_status,
-    }))
+    let stored_config = persist_and_apply(&state, current_config, start_config).await?;
+    Ok(Json(current_status(&state, stored_config).await))
 }
 
 pub async fn stop_rustdesk_service(
@@ -187,28 +183,6 @@ pub async fn stop_rustdesk_service(
     let mut stop_config = current_config.clone();
     stop_config.enabled = false;
 
-    apply_rustdesk_config(
-        &state,
-        &current_config,
-        &stop_config,
-        ConfigApplyOptions::forced(),
-    )
-    .await?;
-
-    let (service_status, rendezvous_status) = {
-        let guard = state.rustdesk.read().await;
-        if let Some(ref service) = *guard {
-            let status = format!("{}", service.status());
-            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
-            (status, rv_status)
-        } else {
-            ("not_initialized".to_string(), None)
-        }
-    };
-
-    Ok(Json(RustDeskStatusResponse {
-        config: RustDeskConfigResponse::from(&current_config),
-        service_status,
-        rendezvous_status,
-    }))
+    let stored_config = persist_and_apply(&state, current_config, stop_config).await?;
+    Ok(Json(current_status(&state, stored_config).await))
 }

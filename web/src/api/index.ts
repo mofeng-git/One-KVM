@@ -1,5 +1,5 @@
 import { request, ApiError } from './request'
-import type { CanonicalKey } from '@/types/generated'
+import type { CanonicalKey, Ch9329DescriptorState } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 
 const API_BASE = '/api'
@@ -67,6 +67,7 @@ export interface PlatformCapabilities {
   otg: FeatureCapability
   audio: FeatureCapability
   rustdesk: FeatureCapability
+  vnc: FeatureCapability
   diagnostics: FeatureCapability
   extensions: FeatureCapability
   service_installation: FeatureCapability
@@ -86,6 +87,7 @@ export const systemApi = {
         atx: { available: boolean; backend?: string; reason?: string }
         audio: { available: boolean; backend?: string; reason?: string }
         rustdesk: { available: boolean; backend?: string; reason?: string }
+        vnc: { available: boolean; backend?: string; reason?: string }
       }
       disk_space?: {
         total: number
@@ -206,6 +208,7 @@ export interface StreamConstraintsResponse {
   sources: {
     rustdesk: boolean
     rtsp: boolean
+    vnc: boolean
   }
   reason: string
   current_mode: string
@@ -435,6 +438,14 @@ export const hidApi = {
   reset: () =>
     request<{ success: boolean }>('/hid/reset', { method: 'POST' }),
 
+  ch9329Descriptor: (params?: { port?: string; baudRate?: number }) => {
+    const query = new URLSearchParams()
+    if (params?.port) query.set('port', params.port)
+    if (params?.baudRate) query.set('baud_rate', String(params.baudRate))
+    const suffix = query.toString()
+    return request<Ch9329DescriptorState>(`/hid/ch9329/descriptor${suffix ? `?${suffix}` : ''}`)
+  },
+
   consumer: async (usage: number) => {
     await ensureHidConnection()
     await hidWs.sendConsumer({ usage })
@@ -444,6 +455,90 @@ export const hidApi = {
   connectWebSocket: () => hidWs.connect(),
   disconnectWebSocket: () => hidWs.disconnect(),
   isWebSocketConnected: () => hidWs.connected.value,
+}
+
+export type ComputerUseStatus =
+  | 'idle'
+  | 'waiting_screenshot'
+  | 'thinking'
+  | 'executing'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+
+export type ComputerUseButton = 'left' | 'middle' | 'right'
+
+export type ComputerUseAction =
+  | { type: 'click'; x: number; y: number; button?: ComputerUseButton }
+  | { type: 'double_click'; x: number; y: number; button?: ComputerUseButton }
+  | { type: 'move'; x: number; y: number }
+  | { type: 'drag'; path: Array<{ x: number; y: number }>; button?: ComputerUseButton }
+  | { type: 'scroll'; x: number; y: number; dx?: number; dy?: number }
+  | { type: 'type'; text: string }
+  | { type: 'keypress'; keys: string[] }
+  | { type: 'wait'; ms: number }
+  | { type: 'screenshot' }
+
+export interface ComputerUseScreenshot {
+  data_url: string
+  width: number
+  height: number
+}
+
+export type ComputerUseConversationMessage =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; text: string }
+
+export interface ComputerUseConfig {
+  enabled: boolean
+  provider: string
+  base_url: string
+  model: string
+  max_steps: number
+  timeout_seconds: number
+  api_key_configured: boolean
+  api_key_source: string
+}
+
+export interface ComputerUseSession {
+  id: string | null
+  status: ComputerUseStatus
+  prompt: string | null
+  step: number
+  max_steps: number
+  last_error: string | null
+  final_message: string | null
+}
+
+export const computerUseApi = {
+  config: () => request<ComputerUseConfig>('/config/computer-use'),
+
+  updateConfig: (data: {
+    enabled?: boolean
+    base_url?: string
+    model?: string
+    max_steps?: number
+    timeout_seconds?: number
+    openai_api_key?: string
+    clear_openai_api_key?: boolean
+  }) =>
+    request<ComputerUseConfig>('/config/computer-use', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  session: () => request<ComputerUseSession>('/computer-use/session'),
+
+  start: (data: { prompt: string; continue_conversation?: boolean; client_id: string; max_steps?: number; timeout_seconds?: number }) =>
+    request<ComputerUseSession>('/computer-use/session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  stop: () =>
+    request<ComputerUseSession>('/computer-use/session/stop', {
+      method: 'POST',
+    }),
 }
 
 export const atxApi = {
@@ -711,6 +806,7 @@ export {
   redfishConfigApi,
   rustdeskConfigApi,
   rtspConfigApi,
+  vncConfigApi,
   webConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
@@ -721,6 +817,10 @@ export {
   type RedfishConfigUpdate,
   type RtspConfigUpdate,
   type RtspStatusResponse,
+  type VncConfigResponse,
+  type VncConfigUpdate,
+  type VncEncoding,
+  type VncStatusResponse,
   type WebConfig,
   type WebConfigUpdate,
 } from './config'

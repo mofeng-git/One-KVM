@@ -13,6 +13,8 @@ pub mod audio;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod auth;
 #[cfg(any(feature = "android", feature = "desktop"))]
+pub mod computer_use;
+#[cfg(any(feature = "android", feature = "desktop"))]
 pub mod config;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod db;
@@ -50,6 +52,8 @@ pub mod update;
 pub mod utils;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod video;
+#[cfg(any(feature = "android", feature = "desktop"))]
+pub mod vnc;
 #[cfg(any(feature = "android", feature = "desktop"))]
 pub mod web;
 #[cfg(any(feature = "android", feature = "desktop"))]

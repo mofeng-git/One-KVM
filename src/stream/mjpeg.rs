@@ -396,15 +396,29 @@ impl MjpegStreamHandler {
     }
 
     pub fn disconnect_all_clients(&self) {
+        self.disconnect_clients_matching(|_| true);
+    }
+
+    pub fn disconnect_non_vnc_clients(&self) {
+        self.disconnect_clients_matching(|id| !id.starts_with("vnc-"));
+    }
+
+    fn disconnect_clients_matching(&self, should_disconnect: impl Fn(&str) -> bool) {
         let count = {
             let mut clients = self.clients.write();
-            let count = clients.len();
-            clients.clear();
-            count
+            let before = clients.len();
+            clients.retain(|id, _| !should_disconnect(id));
+            before - clients.len()
         };
+        let remaining = self.client_count();
         if count > 0 {
-            info!("Disconnected all {} MJPEG clients for config change", count);
+            info!(
+                "Disconnected {} MJPEG clients for config change (remaining: {})",
+                count, remaining
+            );
         }
+        // Wake all subscribers. HTTP MJPEG clients will close, while persistent
+        // consumers such as VNC wait for the next frame after capture restarts.
         self.set_offline();
     }
 }

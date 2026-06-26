@@ -241,6 +241,7 @@ pub struct StreamConstraintsResponse {
 pub struct ConstraintSources {
     pub rustdesk: bool,
     pub rtsp: bool,
+    pub vnc: bool,
 }
 
 /// Get stream codec constraints derived from enabled services.
@@ -267,6 +268,7 @@ pub async fn stream_constraints_get(
         sources: ConstraintSources {
             rustdesk: constraints.rustdesk_enabled,
             rtsp: constraints.rtsp_enabled,
+            vnc: constraints.vnc_enabled,
         },
         reason: constraints.reason,
         current_mode,
