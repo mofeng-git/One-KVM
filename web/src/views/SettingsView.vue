@@ -224,6 +224,7 @@ function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
   if (value === 'ext-frpc') return 'ext-remote-access'
+  if (value === 'redfish') return 'third-party-access'
   if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp') return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
@@ -242,10 +243,7 @@ async function loadSectionData(section: SettingsSectionId) {
       await loadAuthConfig()
       return
     case 'network':
-      await Promise.all([
-        loadWebServerConfig(),
-        loadRedfishConfig(),
-      ])
+      await loadWebServerConfig()
       return
     case 'video':
       await Promise.all([
@@ -277,6 +275,8 @@ async function loadSectionData(section: SettingsSectionId) {
       return
     case 'third-party-access':
       await Promise.all([
+        loadWebServerConfig(),
+        loadRedfishConfig(),
         loadRustdeskConfig(),
         loadRustdeskPassword(),
         loadRtspConfig(),
@@ -520,9 +520,12 @@ const previewAccessUrl = computed(() => {
   const host = firstAddr.includes(':') ? `[${firstAddr}]` : firstAddr
   return `${scheme}://${host}:${port}`
 })
+const redfishAccessUrl = computed(() => `${previewAccessUrl.value}/redfish/v1/`)
 
 const previewUrlCopied = ref(false)
+const redfishUrlCopied = ref(false)
 let previewUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
+let redfishUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copyPreviewUrl() {
   const ok = await clipboardCopy(previewAccessUrl.value)
@@ -536,6 +539,20 @@ async function copyPreviewUrl() {
 
 function openPreviewUrl() {
   window.open(previewAccessUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+async function copyRedfishUrl() {
+  const ok = await clipboardCopy(redfishAccessUrl.value)
+  if (!ok) return
+  redfishUrlCopied.value = true
+  if (redfishUrlCopiedTimer) clearTimeout(redfishUrlCopiedTimer)
+  redfishUrlCopiedTimer = setTimeout(() => {
+    redfishUrlCopied.value = false
+  }, 1500)
+}
+
+function openRedfishUrl() {
+  window.open(redfishAccessUrl.value, '_blank', 'noopener,noreferrer')
 }
 
 interface DeviceConfig {
@@ -3890,34 +3907,6 @@ watch(isWindows, () => {
                 </Button>
               </CardFooter>
             </Card>
-
-            <!-- Redfish API Card -->
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ t('settings.redfishTitle') }}</CardTitle>
-                <CardDescription>{{ t('settings.redfishDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-5">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.redfishEnabled') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
-                  </div>
-                  <Switch v-model="redfishEnabled" />
-                </div>
-              </CardContent>
-              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
-                </p>
-                <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
-                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
-                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
-                </Button>
-              </CardFooter>
-            </Card>
           </div>
 
           <!-- MSD Section -->
@@ -4726,7 +4715,10 @@ watch(isWindows, () => {
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
-                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="rtspStatus?.service_status === 'running'" />
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="rtspLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="rtspStatus?.service_status === 'running'" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.bindHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
@@ -4856,7 +4848,10 @@ watch(isWindows, () => {
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
-                    <Input v-model="vncLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="vncStatus?.service_status === 'running'" />
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="vncLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="vncStatus?.service_status === 'running'" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.bindHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.port') }}</Label>
@@ -5110,6 +5105,112 @@ watch(isWindows, () => {
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
+          </div>
+
+          <!-- Redfish Section -->
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+            <!-- Auto-restart: restarting progress -->
+            <div
+              v-if="autoRestarting"
+              class="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-sm"
+            >
+              <RefreshCw class="h-4 w-4 animate-spin text-primary shrink-0" />
+              <div class="flex-1 min-w-0">
+                <p class="font-medium">{{ t('settings.autoRestarting') }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ webServerConfig.https_enabled
+                    ? t('settings.autoRestartingHttpsDesc', { sec: autoRestartCountdown })
+                    : t('settings.autoRestartingDesc') }}
+                </p>
+              </div>
+              <span v-if="webServerConfig.https_enabled && autoRestartCountdown > 0"
+                class="tabular-nums text-lg font-bold text-primary shrink-0">
+                {{ autoRestartCountdown }}
+              </span>
+            </div>
+
+            <!-- Auto-restart: HTTPS manual redirect (cert must be accepted by user) -->
+            <div
+              v-if="autoRestartManualUrl"
+              class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-4 space-y-3"
+            >
+              <div class="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                <Lock class="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p class="font-medium">{{ t('settings.httpsManualRedirectTitle') }}</p>
+                  <p class="text-xs mt-0.5 opacity-80">{{ t('settings.httpsManualRedirectDesc') }}</p>
+                </div>
+              </div>
+              <a
+                :href="autoRestartManualUrl"
+                class="flex items-center justify-center gap-2 w-full rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 transition-colors"
+              >
+                <ExternalLink class="h-4 w-4" />
+                {{ autoRestartManualUrl }}
+              </a>
+            </div>
+
+            <!-- Auto-restart: failure / timeout -->
+            <div
+              v-if="autoRestartFailed"
+              class="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+            >
+              <p class="text-destructive">{{ t('settings.autoRestartFailed') }}</p>
+              <Button variant="outline" size="sm" @click="triggerAutoRestart">
+                <RefreshCw class="h-3 w-3 mr-1" />
+                {{ t('common.retry') }}
+              </Button>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.redfishTitle') }}</CardTitle>
+                <CardDescription>{{ t('settings.redfishDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-5">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.redfishEnabled') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
+                  </div>
+                  <Switch v-model="redfishEnabled" />
+                </div>
+                <div class="rounded-md border bg-muted/40 p-3 space-y-1.5">
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.redfishEndpoint') }}</p>
+                  <div class="flex items-center gap-2">
+                    <code class="font-mono text-xs sm:text-sm break-all flex-1 min-w-0">{{ redfishAccessUrl }}</code>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.copyRedfishUrl')"
+                      :aria-label="t('settings.copyRedfishUrl')"
+                      @click="copyRedfishUrl"
+                    >
+                      <Check v-if="redfishUrlCopied" class="h-3.5 w-3.5 text-emerald-600" />
+                      <Copy v-else class="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.openRedfishEndpoint')"
+                      :aria-label="t('settings.openRedfishEndpoint')"
+                      @click="openRedfishUrl"
+                    >
+                      <ExternalLink class="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
+                  <RefreshCw v-if="autoRestarting || redfishSaving" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
 
           <!-- About Section -->
