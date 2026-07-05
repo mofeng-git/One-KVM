@@ -38,7 +38,6 @@ const CSI_BRIDGE_NOSIGNAL_INTERVAL_MS: u64 = 500;
 const NOSIGNAL_POLL_MAX: Duration = Duration::from_secs(20);
 /// Throttle repeated encoding errors to avoid log flooding
 const ENCODE_ERROR_THROTTLE_SECS: u64 = 5;
-const INVALID_MJPEG_LOG_THROTTLE_SECS: u64 = 5;
 
 static PROCESS_START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
@@ -61,6 +60,7 @@ use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+
 #[cfg(all(
     any(target_arch = "aarch64", target_arch = "arm"),
     not(target_os = "android")
@@ -870,8 +870,6 @@ impl SharedVideoPipeline {
                 let mut sequence: u64 = 0;
                 let mut consecutive_timeouts: u32 = 0;
                 let capture_error_throttler = LogThrottler::with_secs(5);
-                let invalid_mjpeg_throttler =
-                    LogThrottler::with_secs(INVALID_MJPEG_LOG_THROTTLE_SECS);
                 let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
@@ -1232,24 +1230,8 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
-                    if pixel_format.is_compressed() && !VideoFrame::is_valid_jpeg_bytes(&owned) {
-                        if invalid_mjpeg_throttler.should_log("invalid_mjpeg_capture_frame") {
-                            let b0 = owned.first().copied().unwrap_or_default();
-                            let b1 = owned.get(1).copied().unwrap_or_default();
-                            warn!(
-                                "Dropping invalid MJPEG capture frame: size={}, starts with 0x{:02x} 0x{:02x}",
-                                owned.len(),
-                                b0,
-                                b1
-                            );
-                        }
-                        continue;
-                    }
 
-                    // Notify streaming only after frame validation passes —
-                    // stale/warm-up frames from V4L2 kernel queues can cause
-                    // DQBUF Ok with invalid data, which would prematurely
-                    // clear the frontend error overlay.
+                    // Notify streaming only after the short-frame guard passes.
                     pipeline.notify_state(PipelineStateNotification::streaming());
                     let frame = Arc::new(VideoFrame::from_pooled(
                         Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),

@@ -27,7 +27,9 @@ use crate::video::capture::status::{
     capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
     CaptureIoErrorKind,
 };
-use crate::video::capture::{is_source_changed_error, BridgeContext, CaptureStream};
+use crate::video::capture::{
+    is_source_changed_error, BridgeContext, CaptureStream, DEFAULT_CAPTURE_BUFFER_COUNT,
+};
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 
@@ -769,7 +771,7 @@ impl Streamer {
         const MAX_RETRIES: u32 = 5;
         const RETRY_DELAY_MS: u64 = 200;
         const IDLE_STOP_DELAY_SECS: u64 = 5;
-        const BUFFER_COUNT: u32 = 2;
+        const BUFFER_COUNT: u32 = DEFAULT_CAPTURE_BUFFER_COUNT;
         /// Initial back-off after signal loss before the first soft restart.
         ///
         /// PiKVM/ustreamer drops to sub-second recovery because it subscribes to
