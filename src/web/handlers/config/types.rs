@@ -1335,4 +1335,82 @@ mod tests {
         };
         assert!(update.validate().is_err());
     }
+
+    #[test]
+    fn ipv6_bind_vnc_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                jpeg_quality: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_vnc_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:5900", "[::1]:5900"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                jpeg_quality: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:8554", "[::1]:8554"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
+    }
 }

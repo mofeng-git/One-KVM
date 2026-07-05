@@ -8,6 +8,7 @@ use tokio::sync::{broadcast, Mutex, RwLock};
 
 use crate::config::RtspConfig;
 use crate::error::{AppError, Result};
+use crate::utils::{bind_socket_addr, bind_tcp_listener};
 use crate::video::VideoStreamManager;
 
 use super::auth::{extract_basic_auth, rtsp_auth_credentials};
@@ -73,12 +74,17 @@ impl RtspService {
             tracing::debug!("Failed to request keyframe on RTSP start: {}", err);
         }
 
-        let bind_addr: SocketAddr = format!("{}:{}", config.bind, config.port)
-            .parse()
+        let bind_addr = bind_socket_addr(&config.bind, config.port)
             .map_err(|e| AppError::BadRequest(format!("Invalid RTSP bind address: {}", e)))?;
 
-        let listener = TcpListener::bind(bind_addr).await.map_err(|e| {
+        let listener = bind_tcp_listener(bind_addr).map_err(|e| {
             AppError::Io(io::Error::new(e.kind(), format!("RTSP bind failed: {}", e)))
+        })?;
+        let listener = TcpListener::from_std(listener).map_err(|e| {
+            AppError::Io(io::Error::new(
+                e.kind(),
+                format!("RTSP listener setup failed: {}", e),
+            ))
         })?;
 
         let service_config = self.config.clone();

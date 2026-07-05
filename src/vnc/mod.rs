@@ -17,6 +17,7 @@ use crate::config::{VncConfig, VncEncoding};
 use crate::error::{AppError, Result};
 use crate::hid::HidController;
 use crate::stream::mjpeg::ClientGuard;
+use crate::utils::{bind_socket_addr, bind_tcp_listener};
 use crate::video::codec::{BitratePreset, VideoCodecType};
 use crate::video::stream_manager::VideoStreamManager;
 
@@ -108,13 +109,18 @@ impl VncService {
             return Err(err);
         }
 
-        let bind_addr: SocketAddr = format!("{}:{}", config.bind, config.port)
-            .parse()
+        let bind_addr = bind_socket_addr(&config.bind, config.port)
             .map_err(|e| AppError::BadRequest(format!("Invalid VNC bind address: {}", e)))?;
-        let listener = TcpListener::bind(bind_addr).await.map_err(|e| {
+        let listener = bind_tcp_listener(bind_addr).map_err(|e| {
             AppError::Io(std::io::Error::new(
                 e.kind(),
                 format!("VNC bind failed: {}", e),
+            ))
+        })?;
+        let listener = TcpListener::from_std(listener).map_err(|e| {
+            AppError::Io(std::io::Error::new(
+                e.kind(),
+                format!("VNC listener setup failed: {}", e),
             ))
         })?;
 
