@@ -608,19 +608,39 @@ impl AtxConfigUpdate {
                 }
             }
             crate::atx::AtxDriverType::UsbRelay => {
-                Self::validate_device_path(&config.device, "ATX USB relay")?;
-                Self::validate_output_channel(&config.power, "power", 1, 8)?;
-                Self::validate_output_channel(&config.reset, "reset", 1, 8)?;
+                Self::validate_device_path(&config.device, "ATX LCUS HID relay")?;
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
             }
             crate::atx::AtxDriverType::Serial => {
-                Self::validate_device_path(&config.device, "ATX serial")?;
+                Self::validate_device_path(&config.device, "ATX LCUS serial relay")?;
                 if config.baud_rate == 0 {
                     return Err(AppError::BadRequest(
                         "ATX baud_rate must be greater than 0".to_string(),
                     ));
                 }
-                Self::validate_output_channel(&config.power, "power", 1, u8::MAX as u32)?;
-                Self::validate_output_channel(&config.reset, "reset", 1, u8::MAX as u32)?;
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
             }
             crate::atx::AtxDriverType::None => {}
         };
@@ -1289,6 +1309,27 @@ mod tests {
             enabled: None,
             device: None,
             pin: Some(0),
+            active_level: None,
+        });
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_lcus_serial_channel_over_8() {
+        let mut current = AtxConfig::default();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::Serial;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
+        current.power.pin = 1;
+        current.baud_rate = 9600;
+
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: None,
+            device: None,
+            pin: Some(9),
             active_level: None,
         });
 

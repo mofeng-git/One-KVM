@@ -7,7 +7,7 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 
 use super::traits::{validate_serial_config, AtxKeyBackend, SharedSerialHandle};
-use super::types::AtxKeyConfig;
+use super::types::{AtxKeyConfig, LCUS_RELAY_MAX_CHANNEL};
 use crate::error::{AppError, Result};
 
 pub struct SerialRelayBackend {
@@ -44,15 +44,23 @@ impl SerialRelayBackend {
     fn send_command(&self, on: bool) -> Result<()> {
         let channel = u8::try_from(self.config.pin).map_err(|_| {
             AppError::Config(format!(
-                "Serial relay channel {} exceeds max {}",
-                self.config.pin,
-                u8::MAX
+                "LCUS serial relay channel {} exceeds max {}",
+                self.config.pin, LCUS_RELAY_MAX_CHANNEL
             ))
         })?;
+        if channel == 0 {
+            return Err(AppError::Config(
+                "LCUS serial relay channel must be 1-based (>= 1)".to_string(),
+            ));
+        }
+        if channel > LCUS_RELAY_MAX_CHANNEL {
+            return Err(AppError::Config(format!(
+                "LCUS serial relay channel must be <= {}",
+                LCUS_RELAY_MAX_CHANNEL
+            )));
+        }
 
-        let state = if on { 1 } else { 0 };
-        let checksum = 0xA0u8.wrapping_add(channel).wrapping_add(state);
-        let cmd = [0xA0, channel, state, checksum];
+        let cmd = Self::build_command(channel, on);
 
         let serial_handle = self
             .serial_handle
@@ -60,15 +68,21 @@ impl SerialRelayBackend {
             .unwrap()
             .as_ref()
             .cloned()
-            .ok_or_else(|| AppError::Internal("Serial relay not initialized".to_string()))?;
+            .ok_or_else(|| AppError::Internal("LCUS serial relay not initialized".to_string()))?;
         let mut port = serial_handle.lock().unwrap();
 
         port.write_all(&cmd)
-            .map_err(|e| AppError::Internal(format!("Serial relay write failed: {}", e)))?;
+            .map_err(|e| AppError::Internal(format!("LCUS serial relay write failed: {}", e)))?;
         port.flush()
-            .map_err(|e| AppError::Internal(format!("Serial relay flush failed: {}", e)))?;
+            .map_err(|e| AppError::Internal(format!("LCUS serial relay flush failed: {}", e)))?;
 
         Ok(())
+    }
+
+    pub fn build_command(channel: u8, on: bool) -> [u8; 4] {
+        let state = if on { 1 } else { 0 };
+        let checksum = 0xA0u8.wrapping_add(channel).wrapping_add(state);
+        [0xA0, channel, state, checksum]
     }
 }
 
@@ -78,7 +92,7 @@ impl AtxKeyBackend for SerialRelayBackend {
         validate_serial_config(&self.config)?;
 
         info!(
-            "Initializing Serial relay ATX backend on {} channel {}",
+            "Initializing LCUS serial relay ATX backend on {} channel {}",
             self.config.device, self.config.pin
         );
 
@@ -92,7 +106,7 @@ impl AtxKeyBackend for SerialRelayBackend {
         self.initialized.store(true, Ordering::Relaxed);
 
         debug!(
-            "Serial relay channel {} configured successfully",
+            "LCUS serial relay channel {} configured successfully",
             self.config.pin
         );
         Ok(())
@@ -101,12 +115,12 @@ impl AtxKeyBackend for SerialRelayBackend {
     async fn pulse(&self, duration: Duration) -> Result<()> {
         if !self.is_initialized() {
             return Err(AppError::Internal(
-                "Serial relay not initialized".to_string(),
+                "LCUS serial relay not initialized".to_string(),
             ));
         }
 
         info!(
-            "Pulse serial relay on {} pin {}",
+            "Pulse LCUS serial relay on {} channel {}",
             self.config.device, self.config.pin
         );
         self.send_command(true)?;
@@ -128,6 +142,23 @@ impl AtxKeyBackend for SerialRelayBackend {
 
     fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SerialRelayBackend;
+
+    #[test]
+    fn lcus_serial_relay_command_format() {
+        assert_eq!(
+            SerialRelayBackend::build_command(1, true),
+            [0xA0, 0x01, 0x01, 0xA2]
+        );
+        assert_eq!(
+            SerialRelayBackend::build_command(1, false),
+            [0xA0, 0x01, 0x00, 0xA1]
+        );
     }
 }
 
