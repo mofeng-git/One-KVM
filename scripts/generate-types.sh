@@ -20,6 +20,9 @@ typeshare "$PROJECT_ROOT/src" \
   --lang=typescript \
   --output-file="$OUTPUT_FILE"
 
+# Keep generated output stable for git diff --check.
+perl -0pi -e 's/\n+\z/\n/' "$OUTPUT_FILE"
+
 echo ""
 echo "TypeScript types generated successfully!"
 echo "Output: $OUTPUT_FILE"

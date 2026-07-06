@@ -1,5 +1,14 @@
 import { request, ApiError } from './request'
-import type { CanonicalKey, Ch9329DescriptorState } from '@/types/generated'
+import type {
+  CanonicalKey,
+  Ch9329DescriptorState,
+  ComputerUseButton,
+  ComputerUseConfigResponse,
+  ComputerUseConfigUpdate,
+  ComputerUseSessionStatus,
+  ComputerUseSessionSummary,
+  ComputerUseStartRequest,
+} from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 
 const API_BASE = '/api'
@@ -457,16 +466,7 @@ export const hidApi = {
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
-export type ComputerUseStatus =
-  | 'idle'
-  | 'waiting_screenshot'
-  | 'thinking'
-  | 'executing'
-  | 'completed'
-  | 'failed'
-  | 'stopped'
-
-export type ComputerUseButton = 'left' | 'middle' | 'right'
+export type ComputerUseStatus = ComputerUseSessionStatus
 
 export type ComputerUseAction =
   | { type: 'click'; x: number; y: number; button?: ComputerUseButton }
@@ -479,49 +479,18 @@ export type ComputerUseAction =
   | { type: 'wait'; ms: number }
   | { type: 'screenshot' }
 
-export interface ComputerUseScreenshot {
-  data_url: string
-  width: number
-  height: number
-}
-
 export type ComputerUseConversationMessage =
   | { role: 'user'; text: string }
   | { role: 'assistant'; text: string }
 
-export interface ComputerUseConfig {
-  enabled: boolean
-  provider: string
-  base_url: string
-  model: string
-  max_steps: number
-  timeout_seconds: number
-  api_key_configured: boolean
-  api_key_source: string
-}
+export type ComputerUseConfig = ComputerUseConfigResponse
 
-export interface ComputerUseSession {
-  id: string | null
-  status: ComputerUseStatus
-  prompt: string | null
-  step: number
-  max_steps: number
-  last_error: string | null
-  final_message: string | null
-}
+export type ComputerUseSession = ComputerUseSessionSummary
 
 export const computerUseApi = {
   config: () => request<ComputerUseConfig>('/config/computer-use'),
 
-  updateConfig: (data: {
-    enabled?: boolean
-    base_url?: string
-    model?: string
-    max_steps?: number
-    timeout_seconds?: number
-    openai_api_key?: string
-    clear_openai_api_key?: boolean
-  }) =>
+  updateConfig: (data: ComputerUseConfigUpdate) =>
     request<ComputerUseConfig>('/config/computer-use', {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -529,7 +498,7 @@ export const computerUseApi = {
 
   session: () => request<ComputerUseSession>('/computer-use/session'),
 
-  start: (data: { prompt: string; continue_conversation?: boolean; client_id: string; max_steps?: number; timeout_seconds?: number }) =>
+  start: (data: ComputerUseStartRequest) =>
     request<ComputerUseSession>('/computer-use/session', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -847,6 +816,13 @@ export type {
   StreamMode,
   EncoderType,
   BitratePreset,
+  ComputerUseButton,
+  ComputerUseConfigResponse,
+  ComputerUseConfigUpdate,
+  ComputerUseScreenshot,
+  ComputerUseSessionStatus,
+  ComputerUseSessionSummary,
+  ComputerUseStartRequest,
 } from '@/types/generated'
 
 export const audioApi = {

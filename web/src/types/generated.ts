@@ -168,6 +168,15 @@ export interface WebConfig {
 	ssl_key_path?: string;
 }
 
+export interface ComputerUseConfig {
+	enabled: boolean;
+	provider: string;
+	base_url: string;
+	model: string;
+	max_steps: number;
+	timeout_seconds: number;
+}
+
 export interface TtydConfig {
 	enabled: boolean;
 	shell: string;
@@ -227,17 +236,17 @@ export interface ExtensionsConfig {
 	frpc: FrpcConfig;
 }
 
+export enum RustDeskCodec {
+	H264 = "h264",
+	H265 = "h265",
+}
+
 export interface RustDeskConfig {
 	enabled: boolean;
 	codec: RustDeskCodec;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
-}
-
-export enum RustDeskCodec {
-	H264 = "h264",
-	H265 = "h265",
 }
 
 export enum VncEncoding {
@@ -283,6 +292,7 @@ export interface AppConfig {
 	audio: AudioConfig;
 	stream: StreamConfig;
 	web: WebConfig;
+	computer_use: ComputerUseConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
 	vnc: VncConfig;
@@ -354,6 +364,66 @@ export interface Ch9329DescriptorState {
 	product_enabled: boolean;
 	serial_enabled: boolean;
 	config_mode_available: boolean;
+}
+
+export interface ComputerUseConfigResponse {
+	enabled: boolean;
+	provider: string;
+	base_url: string;
+	model: string;
+	max_steps: number;
+	timeout_seconds: number;
+	api_key_configured: boolean;
+	api_key_source: string;
+}
+
+export interface ComputerUseConfigUpdate {
+	enabled?: boolean;
+	base_url?: string;
+	model?: string;
+	max_steps?: number;
+	timeout_seconds?: number;
+	openai_api_key?: string;
+	clear_openai_api_key?: boolean;
+}
+
+export interface ComputerUsePoint {
+	x: number;
+	y: number;
+}
+
+export interface ComputerUseScreenshot {
+	data_url: string;
+	width: number;
+	height: number;
+}
+
+export enum ComputerUseSessionStatus {
+	Idle = "idle",
+	WaitingScreenshot = "waiting_screenshot",
+	Thinking = "thinking",
+	Executing = "executing",
+	Completed = "completed",
+	Failed = "failed",
+	Stopped = "stopped",
+}
+
+export interface ComputerUseSessionSummary {
+	id?: string;
+	status: ComputerUseSessionStatus;
+	prompt?: string;
+	step: number;
+	max_steps: number;
+	last_error?: string;
+	final_message?: string;
+}
+
+export interface ComputerUseStartRequest {
+	prompt: string;
+	continue_conversation?: boolean;
+	client_id: string;
+	max_steps?: number;
+	timeout_seconds?: number;
 }
 
 export interface EasytierConfigUpdate {
@@ -737,4 +807,10 @@ export enum CanonicalKey {
 	ShiftRight = "ShiftRight",
 	AltRight = "AltRight",
 	MetaRight = "MetaRight",
+}
+
+export enum ComputerUseButton {
+	Left = "left",
+	Middle = "middle",
+	Right = "right",
 }
