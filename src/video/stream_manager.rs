@@ -37,7 +37,6 @@ use crate::events::{EventBus, SystemEvent, VideoDeviceInfo};
 use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
 use crate::video::codec_constraints::StreamCodecConstraints;
-use crate::video::device::is_csi_hdmi_bridge;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::streamer::{Streamer, StreamerState, StreamerStats};
 use crate::video::traits::VideoOutput;
@@ -438,33 +437,6 @@ impl VideoStreamManager {
         match new_mode {
             StreamMode::Mjpeg => {
                 info!("Starting MJPEG streaming");
-
-                // Auto-switch to MJPEG format if device supports it
-                if let Some(device) = self.streamer.current_device().await {
-                    let (current_format, resolution, fps) =
-                        self.streamer.current_video_config().await;
-                    let available_formats: Vec<PixelFormat> =
-                        device.formats.iter().map(|f| f.format).collect();
-
-                    // If current format is not MJPEG and device supports MJPEG, switch to it
-                    if !is_csi_hdmi_bridge(&device)
-                        && current_format != PixelFormat::Mjpeg
-                        && available_formats.contains(&PixelFormat::Mjpeg)
-                    {
-                        info!("Auto-switching to MJPEG format for MJPEG mode");
-                        let device_path = device.path.to_string_lossy().to_string();
-                        if let Err(e) = self
-                            .streamer
-                            .apply_video_config(&device_path, PixelFormat::Mjpeg, resolution, fps)
-                            .await
-                        {
-                            warn!(
-                                "Failed to auto-switch to MJPEG format: {}, keeping current format",
-                                e
-                            );
-                        }
-                    }
-                }
 
                 if let Err(e) = self.streamer.start().await {
                     error!("Failed to start MJPEG streamer: {}", e);
