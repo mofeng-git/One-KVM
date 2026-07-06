@@ -54,6 +54,7 @@ pub struct AtxDeviceInfo {
     pub backend: String,
     pub initialized: bool,
     pub power_on: bool,
+    pub hdd_status: String,
     pub error: Option<String>,
 }
 

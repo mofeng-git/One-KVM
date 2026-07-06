@@ -94,26 +94,29 @@ export enum ActiveLevel {
 	Low = "low",
 }
 
-export interface AtxKeyConfig {
-	driver: AtxDriverType;
+export interface AtxOutputBinding {
+	enabled: boolean;
 	device: string;
 	pin: number;
 	active_level: ActiveLevel;
-	baud_rate: number;
 }
 
-export interface AtxLedConfig {
+export interface AtxInputBinding {
 	enabled: boolean;
-	gpio_chip: string;
-	gpio_pin: number;
-	inverted: boolean;
+	device: string;
+	pin: number;
+	active_level: ActiveLevel;
 }
 
 export interface AtxConfig {
 	enabled: boolean;
-	power: AtxKeyConfig;
-	reset: AtxKeyConfig;
-	led: AtxLedConfig;
+	driver: AtxDriverType;
+	device: string;
+	baud_rate: number;
+	power: AtxOutputBinding;
+	reset: AtxOutputBinding;
+	led: AtxInputBinding;
+	hdd: AtxInputBinding;
 	wol_interface: string;
 }
 
@@ -287,32 +290,36 @@ export interface AppConfig {
 	redfish: RedfishConfig;
 }
 
-/** Update for a single ATX key configuration */
-export interface AtxKeyConfigUpdate {
-	driver?: AtxDriverType;
+/** Update for a single ATX output binding */
+export interface AtxOutputBindingUpdate {
+	enabled?: boolean;
 	device?: string;
-	baud_rate?: number;
 	pin?: number;
 	active_level?: ActiveLevel;
 }
 
-/** Update for LED sensing configuration */
-export interface AtxLedConfigUpdate {
+/** Update for ATX GPIO input sensing */
+export interface AtxInputBindingUpdate {
 	enabled?: boolean;
-	gpio_chip?: string;
-	gpio_pin?: number;
-	inverted?: boolean;
+	device?: string;
+	pin?: number;
+	active_level?: ActiveLevel;
 }
 
 /** ATX configuration update request */
 export interface AtxConfigUpdate {
 	enabled?: boolean;
+	driver?: AtxDriverType;
+	device?: string;
+	baud_rate?: number;
 	/** Power button configuration */
-	power?: AtxKeyConfigUpdate;
+	power?: AtxOutputBindingUpdate;
 	/** Reset button configuration */
-	reset?: AtxKeyConfigUpdate;
+	reset?: AtxOutputBindingUpdate;
 	/** LED sensing configuration */
-	led?: AtxLedConfigUpdate;
+	led?: AtxInputBindingUpdate;
+	/** HDD activity sensing configuration */
+	hdd?: AtxInputBindingUpdate;
 	/** Network interface for WOL packets (empty = auto) */
 	wol_interface?: string;
 }

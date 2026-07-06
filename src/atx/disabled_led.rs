@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
-use super::types::{AtxLedConfig, PowerStatus};
+use super::types::{AtxInputBinding, PowerStatus};
 use crate::error::Result;
 
 pub struct LedSensor {
-    config: AtxLedConfig,
+    config: AtxInputBinding,
 }
 
 impl LedSensor {
-    pub fn new(config: AtxLedConfig) -> Self {
+    pub fn new(config: AtxInputBinding) -> Self {
         Self { config }
     }
 
@@ -26,6 +26,10 @@ impl LedSensor {
 
     pub async fn read(&self) -> Result<PowerStatus> {
         Ok(PowerStatus::Unknown)
+    }
+
+    pub async fn read_active(&self) -> Result<bool> {
+        Ok(false)
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {

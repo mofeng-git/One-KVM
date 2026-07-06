@@ -549,6 +549,8 @@ export const atxApi = {
       initialized: boolean
       power_status: 'on' | 'off' | 'unknown'
       led_supported: boolean
+      hdd_status: 'active' | 'inactive' | 'unknown'
+      hdd_supported: boolean
     }>('/atx/status'),
 
   power: (action: 'short' | 'long' | 'reset') =>

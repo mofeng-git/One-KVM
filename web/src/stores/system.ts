@@ -50,6 +50,7 @@ interface AtxState {
   backend: string
   initialized: boolean
   powerOn: boolean
+  hddStatus: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
@@ -121,6 +122,7 @@ export interface AtxDeviceInfo {
   backend: string
   initialized: boolean
   power_on: boolean
+  hdd_status: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
@@ -235,6 +237,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: state.backend,
         initialized: state.initialized,
         powerOn: state.power_status === 'on',
+        hddStatus: state.hdd_status,
         error: null,
       }
       return state
@@ -376,6 +379,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: data.atx.backend,
         initialized: data.atx.initialized,
         powerOn: data.atx.power_on,
+        hddStatus: data.atx.hdd_status,
         error: data.atx.error,
       }
     } else {

@@ -47,13 +47,10 @@ fn validate_windows_atx_backends(atx: &AtxConfig) -> Result<()> {
         return Ok(());
     }
 
-    for (name, key) in [("power", &atx.power), ("reset", &atx.reset)] {
-        if !matches!(key.driver, AtxDriverType::Serial | AtxDriverType::None) {
-            return Err(AppError::BadRequest(format!(
-                "Windows ATX {} only supports serial relay or none",
-                name
-            )));
-        }
+    if !matches!(atx.driver, AtxDriverType::Serial | AtxDriverType::None) {
+        return Err(AppError::BadRequest(
+            "Windows ATX only supports serial relay or none".to_string(),
+        ));
     }
 
     Ok(())
@@ -68,13 +65,11 @@ fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<(
         return Ok(());
     }
 
-    for (name, key) in [("power", &atx.power), ("reset", &atx.reset)] {
-        if key.driver == AtxDriverType::Serial && key.device.trim() == reserved {
-            return Err(AppError::BadRequest(format!(
-                "ATX {} serial device '{}' conflicts with HID CH9329 serial device",
-                name, reserved
-            )));
-        }
+    if atx.driver == AtxDriverType::Serial && atx.device.trim() == reserved {
+        return Err(AppError::BadRequest(format!(
+            "ATX serial device '{}' conflicts with HID CH9329 serial device",
+            reserved
+        )));
     }
 
     Ok(())
@@ -87,8 +82,8 @@ mod tests {
     #[test]
     fn test_validate_serial_device_conflict_rejects_ch9329_overlap() {
         let mut atx = AtxConfig::default();
-        atx.power.driver = AtxDriverType::Serial;
-        atx.power.device = "/dev/ttyUSB0".to_string();
+        atx.driver = AtxDriverType::Serial;
+        atx.device = "/dev/ttyUSB0".to_string();
 
         let mut hid = HidConfig::default();
         hid.backend = HidBackend::Ch9329;
@@ -100,8 +95,8 @@ mod tests {
     #[test]
     fn test_validate_serial_device_conflict_allows_non_ch9329_backend() {
         let mut atx = AtxConfig::default();
-        atx.power.driver = AtxDriverType::Serial;
-        atx.power.device = "/dev/ttyUSB0".to_string();
+        atx.driver = AtxDriverType::Serial;
+        atx.device = "/dev/ttyUSB0".to_string();
 
         let mut hid = HidConfig::default();
         hid.backend = HidBackend::None;
@@ -113,8 +108,7 @@ mod tests {
     #[test]
     fn test_validate_windows_atx_backends_allows_serial() {
         let mut atx = AtxConfig::default();
-        atx.power.driver = AtxDriverType::Serial;
-        atx.reset.driver = AtxDriverType::None;
+        atx.driver = AtxDriverType::Serial;
 
         assert!(validate_windows_atx_backends(&atx).is_ok());
     }

@@ -45,6 +45,7 @@ impl AppConfig {
         if self.hid.backend != HidBackend::Otg {
             self.msd.enabled = false;
         }
+        self.atx.normalize();
     }
 
     pub fn apply_platform_defaults(&mut self) {

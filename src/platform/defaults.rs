@@ -83,34 +83,23 @@ fn apply_windows(config: &mut AppConfig) {
     }
 
     if matches!(
-        config.atx.power.driver,
+        config.atx.driver,
         AtxDriverType::Gpio | AtxDriverType::UsbRelay
     ) {
-        config.atx.power.driver = AtxDriverType::None;
-    }
-    if matches!(
-        config.atx.reset.driver,
-        AtxDriverType::Gpio | AtxDriverType::UsbRelay
-    ) {
-        config.atx.reset.driver = AtxDriverType::None;
+        config.atx.driver = AtxDriverType::None;
+        config.atx.enabled = false;
     }
     if !config.initialized
-        && config.atx.power.driver == AtxDriverType::None
-        && config.atx.power.device.is_empty()
+        && config.atx.driver == AtxDriverType::None
+        && config.atx.device.is_empty()
     {
-        config.atx.power.driver = AtxDriverType::Serial;
-        config.atx.power.device = "COM4".to_string();
+        config.atx.driver = AtxDriverType::Serial;
+        config.atx.device = "COM4".to_string();
+        config.atx.baud_rate = 9600;
+        config.atx.power.enabled = true;
         config.atx.power.pin = 1;
-        config.atx.power.baud_rate = 9600;
-    }
-    if !config.initialized
-        && config.atx.reset.driver == AtxDriverType::None
-        && config.atx.reset.device.is_empty()
-    {
-        config.atx.reset.driver = AtxDriverType::Serial;
-        config.atx.reset.device = "COM4".to_string();
+        config.atx.reset.enabled = true;
         config.atx.reset.pin = 2;
-        config.atx.reset.baud_rate = 9600;
     }
 
     config

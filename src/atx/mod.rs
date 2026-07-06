@@ -24,8 +24,8 @@ mod wol;
 pub use controller::{AtxController, AtxControllerConfig};
 pub use executor::timing;
 pub use types::{
-    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig, AtxPowerRequest,
-    AtxState, PowerStatus,
+    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxInputBinding, AtxKeyConfig,
+    AtxOutputBinding, AtxPowerRequest, AtxState, HddStatus, PowerStatus,
 };
 pub use wol::{list_wol_history, record_wol_history, send_wol};
 
@@ -120,7 +120,8 @@ mod tests {
         let _: AtxDriverType = AtxDriverType::None;
         let _: ActiveLevel = ActiveLevel::High;
         let _: AtxKeyConfig = AtxKeyConfig::default();
-        let _: AtxLedConfig = AtxLedConfig::default();
+        let _: AtxInputBinding = AtxInputBinding::default();
+        let _: AtxOutputBinding = AtxOutputBinding::default();
         let _: AtxState = AtxState::default();
         let _: AtxDevices = AtxDevices::default();
     }

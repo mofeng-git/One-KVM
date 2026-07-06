@@ -247,26 +247,27 @@ impl AppState {
     }
 
     async fn collect_atx_info(&self) -> Option<AtxDeviceInfo> {
-        const BACKEND_POWER_ONLY: &str = "power: configured, reset: none";
-        const BACKEND_RESET_ONLY: &str = "power: none, reset: configured";
-        const BACKEND_BOTH: &str = "power: configured, reset: configured";
-        const BACKEND_NONE: &str = "none";
-
         let atx_guard = self.atx.read().await;
         let atx = atx_guard.as_ref()?;
 
         let state = atx.state().await;
         Some(AtxDeviceInfo {
             available: state.available,
-            backend: match (state.power_configured, state.reset_configured) {
-                (true, true) => BACKEND_BOTH,
-                (true, false) => BACKEND_POWER_ONLY,
-                (false, true) => BACKEND_RESET_ONLY,
-                (false, false) => BACKEND_NONE,
+            backend: match state.driver {
+                crate::atx::AtxDriverType::Gpio => "gpio",
+                crate::atx::AtxDriverType::UsbRelay => "usbrelay",
+                crate::atx::AtxDriverType::Serial => "serial",
+                crate::atx::AtxDriverType::None => "none",
             }
             .to_string(),
             initialized: state.power_configured || state.reset_configured,
             power_on: state.power_status == crate::atx::PowerStatus::On,
+            hdd_status: match state.hdd_status {
+                crate::atx::HddStatus::Active => "active",
+                crate::atx::HddStatus::Inactive => "inactive",
+                crate::atx::HddStatus::Unknown => "unknown",
+            }
+            .to_string(),
             error: None,
         })
     }

@@ -88,10 +88,7 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
             atx: CapabilityInfo {
                 available: config.atx.enabled,
                 backend: if config.atx.enabled {
-                    Some(format!(
-                        "power: {:?}, reset: {:?}",
-                        config.atx.power.driver, config.atx.reset.driver
-                    ))
+                    Some(format!("{:?}", config.atx.driver))
                 } else {
                     None
                 },
