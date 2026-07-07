@@ -613,19 +613,32 @@ export const msdApi = {
       used: number
       free: number
       initialized: boolean
-    }>('/msd/drive'),
+    }>('/msd/drive', {}, { toastOnError: false }),
 
   initDrive: (sizeMb?: number) =>
-    request<{ path: string; size_mb: number }>('/msd/drive/init', {
-      method: 'POST',
-      body: JSON.stringify({ size_mb: sizeMb }),
-    }),
+    request<{
+      size: number
+      used: number
+      free: number
+      initialized: boolean
+    }>(
+      '/msd/drive/init',
+      {
+        method: 'POST',
+        body: JSON.stringify({ size_mb: sizeMb }),
+      },
+      { toastOnError: false },
+    ),
 
   deleteDrive: () =>
     request<{ success: boolean }>('/msd/drive', { method: 'DELETE' }),
 
   listDriveFiles: (path = '/') =>
-    request<DriveFile[]>(`/msd/drive/files?path=${encodeURIComponent(path)}`),
+    request<DriveFile[]>(
+      `/msd/drive/files?path=${encodeURIComponent(path)}`,
+      {},
+      { toastOnError: false },
+    ),
 
   uploadDriveFile: async (file: File, targetPath = '/', onProgress?: (progress: number) => void) => {
     const formData = new FormData()

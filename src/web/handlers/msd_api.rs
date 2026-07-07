@@ -2,7 +2,7 @@ use super::*;
 
 use crate::msd::{
     DownloadProgress, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest, ImageInfo,
-    ImageManager, MsdConnectRequest, MsdMode, MsdState, VentoyDrive,
+    ImageManager, MsdConnectRequest, MsdMode, MsdState, VentoyDrive, MIN_DRIVE_SIZE_MB,
 };
 #[cfg(unix)]
 use axum::body::Body;
@@ -14,6 +14,63 @@ use axum::http::{header, StatusCode};
 use axum::response::Response;
 #[cfg(unix)]
 use std::collections::HashMap;
+
+#[cfg(unix)]
+const MIB: u64 = 1024 * 1024;
+
+/// Return an error if the virtual drive is currently connected to the USB host.
+/// When connected, the USB host (e.g. Windows) has the filesystem mounted.
+/// Any concurrent access from the server side (via VentoyImage::open) would
+/// cause double-access corruption, manifesting as Windows error 0x80070570.
+#[cfg(unix)]
+async fn assert_drive_not_connected(state: &Arc<AppState>) -> Result<()> {
+    let msd_guard = state.msd.read().await;
+    if let Some(controller) = msd_guard.as_ref() {
+        let msd_state = controller.state().await;
+        if msd_state.connected && msd_state.mode == crate::msd::types::MsdMode::Drive {
+            return Err(AppError::BadRequest(
+                "Virtual drive is connected to the USB host; disconnect it before modifying files"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn validate_drive_init_size(size_mb: u32, available_bytes: u64) -> Result<()> {
+    let requested_bytes = size_mb as u64 * MIB;
+    if size_mb < MIN_DRIVE_SIZE_MB {
+        return Err(AppError::BadRequest(format!(
+            "Virtual drive size must be at least {} MB",
+            MIN_DRIVE_SIZE_MB
+        )));
+    }
+    if requested_bytes > available_bytes {
+        return Err(AppError::BadRequest(format!(
+            "Virtual drive size cannot exceed available space on the MSD directory filesystem (available {} MB, requested {} MB)",
+            available_bytes / MIB,
+            size_mb
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn is_unsupported_drive_filesystem(error: &str) -> bool {
+    error.contains("Filesystem error")
+        || error.contains("Image error")
+        || error.contains("Partition error")
+}
+
+#[cfg(unix)]
+fn unsupported_drive_filesystem_error(error: &str) -> AppError {
+    tracing::warn!(
+        error = %error,
+        "Virtual drive filesystem is not supported"
+    );
+    AppError::BadRequest("Unsupported drive filesystem".to_string())
+}
 
 /// MSD status response
 #[cfg(unix)]
@@ -226,11 +283,24 @@ pub async fn msd_drive_info(State(state): State<Arc<AppState>>) -> Result<Json<D
     let drive = VentoyDrive::new(drive_path);
 
     if !drive.exists() {
+        // 404: drive image file does not exist at all — truly not initialized
         return Err(AppError::NotFound("Drive not initialized".to_string()));
     }
 
-    let info = drive.info().await?;
-    Ok(Json(info))
+    match drive.info().await {
+        Ok(info) => Ok(Json(info)),
+        Err(e) => {
+            let msg = e.to_string();
+            // Detect filesystem-level failures (unrecognized format, bad partition table, etc.)
+            // These mean the drive FILE exists but was formatted to an unsupported type
+            // (e.g. the controlled machine reformatted it as NTFS/exFAT).
+            // Return 400 so the frontend can distinguish this from 404 (file missing).
+            if is_unsupported_drive_filesystem(&msg) {
+                return Err(unsupported_drive_filesystem_error(&msg));
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Initialize Ventoy drive
@@ -240,6 +310,16 @@ pub async fn msd_drive_init(
     Json(req): Json<DriveInitRequest>,
 ) -> Result<Json<DriveInfo>> {
     let config = state.config.get();
+    let msd_dir = config.msd.msd_dir_path();
+
+    let disk_space = get_disk_space(&msd_dir).map_err(|e| {
+        AppError::BadRequest(format!(
+            "Failed to read available space for the MSD directory filesystem: {}",
+            e
+        ))
+    })?;
+    validate_drive_init_size(req.size_mb, disk_space.available)?;
+
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
@@ -283,12 +363,24 @@ pub async fn msd_drive_files(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<DriveFile>>> {
+    // Block when connected: concurrent access corrupts the filesystem
+    assert_drive_not_connected(&state).await?;
+
     let config = state.config.get();
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     let dir_path = params.get("path").map(|s| s.as_str()).unwrap_or("/");
-    let files = drive.list_files(dir_path).await?;
+    let files = drive.list_files(dir_path).await.map_err(|e| {
+        // Provide a friendly message when the filesystem format is unrecognized
+        // (e.g. user formatted it as NTFS/exFAT from the controlled machine)
+        let msg = e.to_string();
+        if is_unsupported_drive_filesystem(&msg) {
+            unsupported_drive_filesystem_error(&msg)
+        } else {
+            e
+        }
+    })?;
     Ok(Json(files))
 }
 
@@ -299,6 +391,10 @@ pub async fn msd_drive_upload(
     Query(params): Query<HashMap<String, String>>,
     mut multipart: Multipart,
 ) -> Result<Json<LoginResponse>> {
+    // Block when connected: writing to image while USB host has it mounted
+    // causes filesystem corruption (Windows error 0x80070570)
+    assert_drive_not_connected(&state).await?;
+
     let config = state.config.get();
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
@@ -345,6 +441,10 @@ pub async fn msd_drive_download(
     State(state): State<Arc<AppState>>,
     AxumPath(file_path): AxumPath<String>,
 ) -> Result<Response> {
+    // Block when connected: concurrent read from server side can cause
+    // filesystem inconsistency while USB host has the image mounted
+    assert_drive_not_connected(&state).await?;
+
     let config = state.config.get();
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
@@ -380,6 +480,10 @@ pub async fn msd_drive_file_delete(
     State(state): State<Arc<AppState>>,
     AxumPath(file_path): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
+    // Block when connected: deleting from image while USB host has it mounted
+    // causes filesystem corruption
+    assert_drive_not_connected(&state).await?;
+
     let config = state.config.get();
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
@@ -398,6 +502,10 @@ pub async fn msd_drive_mkdir(
     State(state): State<Arc<AppState>>,
     AxumPath(dir_path): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
+    // Block when connected: modifying image while USB host has it mounted
+    // causes filesystem corruption
+    assert_drive_not_connected(&state).await?;
+
     let config = state.config.get();
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
@@ -408,4 +516,39 @@ pub async fn msd_drive_mkdir(
         success: true,
         message: Some(format!("Directory created: {}", dir_path)),
     }))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_drive_init_size_accepts_64mb() {
+        validate_drive_init_size(MIN_DRIVE_SIZE_MB, MIN_DRIVE_SIZE_MB as u64 * MIB).unwrap();
+    }
+
+    #[test]
+    fn validate_drive_init_size_rejects_below_64mb() {
+        let err = validate_drive_init_size(MIN_DRIVE_SIZE_MB - 1, 1024 * MIB).unwrap_err();
+        assert!(err.to_string().contains("at least 64 MB"));
+    }
+
+    #[test]
+    fn validate_drive_init_size_rejects_available_space_overflow() {
+        let err = validate_drive_init_size(65, 64 * MIB).unwrap_err();
+        assert!(err.to_string().contains("cannot exceed available space"));
+    }
+
+    #[test]
+    fn detects_unsupported_drive_filesystem_errors() {
+        assert!(is_unsupported_drive_filesystem(
+            "Internal error: Filesystem error: Invalid exFAT signature"
+        ));
+        assert!(is_unsupported_drive_filesystem(
+            "Internal error: Partition error: invalid partition table"
+        ));
+        assert!(!is_unsupported_drive_filesystem(
+            "IO error: permission denied"
+        ));
+    }
 }

@@ -14,9 +14,13 @@ use std::path::Path;
 /// FAT entry values
 const FAT_ENTRY_FREE: u32 = 0x00000000;
 const FAT_ENTRY_END_OF_CHAIN: u32 = 0xFFFFFFFF;
+const VOLUME_DIRTY_FLAG: u16 = 0x0002;
+const VOLUME_FLAGS_OFFSET: u64 = 106;
 
 /// Directory entry types
 const ENTRY_TYPE_END: u8 = 0x00;
+const ENTRY_TYPE_BITMAP: u8 = 0x81;
+const ENTRY_TYPE_UPCASE: u8 = 0x82;
 const ENTRY_TYPE_FILE: u8 = 0x85;
 const ENTRY_TYPE_STREAM: u8 = 0xC0;
 const ENTRY_TYPE_FILE_NAME: u8 = 0xC1;
@@ -137,6 +141,11 @@ pub struct ExfatFs {
     cluster_heap_offset: u32,
     cluster_count: u32,
     first_cluster_of_root: u32,
+    allocation_bitmap_first_cluster: u32,
+    allocation_bitmap_size: u64,
+    upcase_table_first_cluster: u32,
+    upcase_table_size: u64,
+    upcase_table_checksum: u32,
     // Performance caches
     /// FAT table segment cache
     fat_cache: FatCache,
@@ -182,7 +191,7 @@ impl ExfatFs {
         let sectors_per_cluster = 1u32 << sectors_per_cluster_shift;
         let cluster_size = bytes_per_sector * sectors_per_cluster;
 
-        Ok(Self {
+        let mut fs = Self {
             file,
             partition_offset,
             bytes_per_sector,
@@ -193,11 +202,151 @@ impl ExfatFs {
             cluster_heap_offset,
             cluster_count,
             first_cluster_of_root,
+            allocation_bitmap_first_cluster: 2,
+            allocation_bitmap_size: ((cluster_count + 7) / 8) as u64,
+            upcase_table_first_cluster: 0,
+            upcase_table_size: 0,
+            upcase_table_checksum: 0,
             // Initialize caches
             fat_cache: FatCache::new(),
             bitmap_cache: None,
             bitmap_dirty: false,
-        })
+        };
+        fs.discover_root_metadata_entries()?;
+        Ok(fs)
+    }
+
+    fn discover_root_metadata_entries(&mut self) -> Result<()> {
+        let mut bitmap_found = false;
+        let mut upcase_found = false;
+        let root_clusters = self.read_cluster_chain(self.first_cluster_of_root)?;
+
+        'outer: for &cluster in &root_clusters {
+            let cluster_data = self.read_cluster(cluster)?;
+            let mut i = 0;
+
+            while i + 32 <= cluster_data.len() {
+                let entry_type = cluster_data[i];
+                match entry_type {
+                    ENTRY_TYPE_END => break 'outer,
+                    ENTRY_TYPE_BITMAP => {
+                        let first_cluster =
+                            u32::from_le_bytes(cluster_data[i + 20..i + 24].try_into().unwrap());
+                        let size =
+                            u64::from_le_bytes(cluster_data[i + 24..i + 32].try_into().unwrap());
+                        if first_cluster < 2 || size == 0 {
+                            return Err(VentoyError::FilesystemError(
+                                "Invalid exFAT allocation bitmap entry".to_string(),
+                            ));
+                        }
+                        self.allocation_bitmap_first_cluster = first_cluster;
+                        self.allocation_bitmap_size = size;
+                        bitmap_found = true;
+                    }
+                    ENTRY_TYPE_UPCASE => {
+                        let checksum =
+                            u32::from_le_bytes(cluster_data[i + 4..i + 8].try_into().unwrap());
+                        let first_cluster =
+                            u32::from_le_bytes(cluster_data[i + 20..i + 24].try_into().unwrap());
+                        let size =
+                            u64::from_le_bytes(cluster_data[i + 24..i + 32].try_into().unwrap());
+                        if first_cluster < 2 || size == 0 {
+                            return Err(VentoyError::FilesystemError(
+                                "Invalid exFAT upcase table entry".to_string(),
+                            ));
+                        }
+                        self.upcase_table_first_cluster = first_cluster;
+                        self.upcase_table_size = size;
+                        self.upcase_table_checksum = checksum;
+                        upcase_found = true;
+                    }
+                    ENTRY_TYPE_FILE => {
+                        let secondary_count = cluster_data[i + 1] as usize;
+                        i += (1 + secondary_count) * 32;
+                        continue;
+                    }
+                    _ => {}
+                }
+
+                i += 32;
+            }
+        }
+
+        if !bitmap_found {
+            return Err(VentoyError::FilesystemError(
+                "exFAT allocation bitmap entry not found".to_string(),
+            ));
+        }
+        if !upcase_found {
+            return Err(VentoyError::FilesystemError(
+                "exFAT upcase table entry not found".to_string(),
+            ));
+        }
+
+        let min_bitmap_size = ((self.cluster_count + 7) / 8) as u64;
+        if self.allocation_bitmap_size < min_bitmap_size {
+            return Err(VentoyError::FilesystemError(format!(
+                "exFAT allocation bitmap too small: {} bytes, need at least {}",
+                self.allocation_bitmap_size, min_bitmap_size
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn volume_flags_offset(&self) -> u64 {
+        self.partition_offset + VOLUME_FLAGS_OFFSET
+    }
+
+    fn read_volume_flags(&mut self) -> Result<u16> {
+        let mut bytes = [0u8; 2];
+        self.file
+            .seek(SeekFrom::Start(self.volume_flags_offset()))?;
+        self.file.read_exact(&mut bytes)?;
+        Ok(u16::from_le_bytes(bytes))
+    }
+
+    fn is_volume_dirty(&mut self) -> Result<bool> {
+        Ok((self.read_volume_flags()? & VOLUME_DIRTY_FLAG) != 0)
+    }
+
+    fn set_volume_dirty(&mut self, dirty: bool) -> Result<()> {
+        let mut flags = self.read_volume_flags()?;
+        if dirty {
+            flags |= VOLUME_DIRTY_FLAG;
+        } else {
+            flags &= !VOLUME_DIRTY_FLAG;
+        }
+
+        self.file
+            .seek(SeekFrom::Start(self.volume_flags_offset()))?;
+        self.file.write_all(&flags.to_le_bytes())?;
+        self.file.flush()?;
+        Ok(())
+    }
+
+    fn begin_write_transaction(&mut self) -> Result<bool> {
+        let was_dirty = self.is_volume_dirty()?;
+        if !was_dirty {
+            self.set_volume_dirty(true)?;
+        }
+        Ok(was_dirty)
+    }
+
+    fn finish_write_transaction<T>(&mut self, was_dirty: bool, result: Result<T>) -> Result<T> {
+        match result {
+            Ok(value) => {
+                self.file.flush()?;
+                if !was_dirty {
+                    self.set_volume_dirty(false)?;
+                }
+                Ok(value)
+            }
+            Err(err) => {
+                let _ = self.file.flush();
+                Err(err)
+            }
+        }
     }
 
     // ==================== Cluster I/O Operations ====================
@@ -328,13 +477,89 @@ impl ExfatFs {
 
     // ==================== Allocation Bitmap Operations ====================
 
+    fn read_cluster_chain_bytes(&mut self, first_cluster: u32, byte_len: u64) -> Result<Vec<u8>> {
+        let chain = self.read_cluster_chain(first_cluster)?;
+        if chain.is_empty() {
+            return Err(VentoyError::FilesystemError(
+                "Empty cluster chain".to_string(),
+            ));
+        }
+
+        let capacity = byte_len.min(chain.len() as u64 * self.cluster_size as u64) as usize;
+        let mut data = Vec::with_capacity(capacity);
+        for &cluster in &chain {
+            let cluster_data = self.read_cluster(cluster)?;
+            data.extend_from_slice(&cluster_data);
+            if data.len() >= byte_len as usize {
+                data.truncate(byte_len as usize);
+                break;
+            }
+        }
+
+        if data.len() < byte_len as usize {
+            return Err(VentoyError::FilesystemError(format!(
+                "Cluster chain for {} is shorter than expected: {} < {} bytes",
+                first_cluster,
+                data.len(),
+                byte_len
+            )));
+        }
+
+        Ok(data)
+    }
+
+    fn write_cluster_chain_bytes(
+        &mut self,
+        first_cluster: u32,
+        byte_len: u64,
+        data: &[u8],
+    ) -> Result<()> {
+        if data.len() < byte_len as usize {
+            return Err(VentoyError::FilesystemError(format!(
+                "Not enough data to write cluster chain: {} < {} bytes",
+                data.len(),
+                byte_len
+            )));
+        }
+
+        let chain = self.read_cluster_chain(first_cluster)?;
+        if chain.is_empty() {
+            return Err(VentoyError::FilesystemError(
+                "Empty cluster chain".to_string(),
+            ));
+        }
+
+        let mut bytes_written = 0usize;
+        let bytes_to_write = byte_len as usize;
+        for &cluster in &chain {
+            let end = (bytes_written + self.cluster_size as usize).min(bytes_to_write);
+            if bytes_written >= end {
+                break;
+            }
+            self.write_cluster(cluster, &data[bytes_written..end])?;
+            bytes_written = end;
+        }
+
+        if bytes_written < bytes_to_write {
+            return Err(VentoyError::FilesystemError(format!(
+                "Cluster chain for {} is shorter than expected: {} < {} bytes",
+                first_cluster, bytes_written, bytes_to_write
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Read the allocation bitmap (with caching)
     fn read_bitmap(&mut self) -> Result<Vec<u8>> {
         if let Some(ref bitmap) = self.bitmap_cache {
             return Ok(bitmap.clone());
         }
 
-        let bitmap = self.read_cluster(2)?;
+        let bitmap = self.read_cluster_chain_bytes(
+            self.allocation_bitmap_first_cluster,
+            self.allocation_bitmap_size,
+        )?;
         self.bitmap_cache = Some(bitmap.clone());
         Ok(bitmap)
     }
@@ -342,7 +567,10 @@ impl ExfatFs {
     /// Get a mutable reference to the cached bitmap, loading if necessary
     fn get_bitmap_mut(&mut self) -> Result<&mut Vec<u8>> {
         if self.bitmap_cache.is_none() {
-            let bitmap = self.read_cluster(2)?;
+            let bitmap = self.read_cluster_chain_bytes(
+                self.allocation_bitmap_first_cluster,
+                self.allocation_bitmap_size,
+            )?;
             self.bitmap_cache = Some(bitmap);
         }
         Ok(self.bitmap_cache.as_mut().unwrap())
@@ -351,7 +579,11 @@ impl ExfatFs {
     /// Write the allocation bitmap (with cache management)
     #[allow(dead_code)]
     fn write_bitmap(&mut self, bitmap: &[u8]) -> Result<()> {
-        self.write_cluster(2, bitmap)?;
+        self.write_cluster_chain_bytes(
+            self.allocation_bitmap_first_cluster,
+            self.allocation_bitmap_size,
+            bitmap,
+        )?;
         self.bitmap_cache = Some(bitmap.to_vec());
         self.bitmap_dirty = false;
         Ok(())
@@ -362,7 +594,11 @@ impl ExfatFs {
     fn flush_bitmap(&mut self) -> Result<()> {
         if self.bitmap_dirty {
             if let Some(bitmap) = self.bitmap_cache.take() {
-                self.write_cluster(2, &bitmap)?;
+                self.write_cluster_chain_bytes(
+                    self.allocation_bitmap_first_cluster,
+                    self.allocation_bitmap_size,
+                    &bitmap,
+                )?;
                 self.bitmap_cache = Some(bitmap);
                 self.bitmap_dirty = false;
             }
@@ -400,10 +636,7 @@ impl ExfatFs {
         let bitmap = self.read_bitmap()?;
         let mut free_clusters = Vec::with_capacity(count);
 
-        // Start from cluster after root directory
-        // (root is at first_cluster_of_root, which varies based on cluster size)
-        let start_cluster = self.first_cluster_of_root + 1;
-        for cluster in start_cluster..self.cluster_count + 2 {
+        for cluster in 2..self.cluster_count + 2 {
             if !Self::is_cluster_allocated(&bitmap, cluster) {
                 free_clusters.push(cluster);
                 if free_clusters.len() >= count {
@@ -482,7 +715,11 @@ impl ExfatFs {
     /// Flush bitmap to disk immediately
     fn flush_bitmap_now(&mut self) -> Result<()> {
         if let Some(bitmap) = self.bitmap_cache.take() {
-            self.write_cluster(2, &bitmap)?;
+            self.write_cluster_chain_bytes(
+                self.allocation_bitmap_first_cluster,
+                self.allocation_bitmap_size,
+                &bitmap,
+            )?;
             self.bitmap_cache = Some(bitmap);
         }
         Ok(())
@@ -823,10 +1060,12 @@ impl ExfatFs {
             // Exclude the newly added cluster
             let mut cluster_data = self.read_cluster(cluster)?;
 
-            // Scan for END markers and replace them with 0xFF (invalid entry, will be skipped)
+            // Scan for END markers and replace them with inactive entries. Leaving an
+            // END marker before later directory clusters makes hosts stop early; using
+            // an in-use invalid type can make strict hosts treat the directory as bad.
             for i in (0..cluster_data.len()).step_by(32) {
                 if cluster_data[i] == ENTRY_TYPE_END {
-                    cluster_data[i] = 0xFF; // Invalid entry type
+                    cluster_data[i] = ENTRY_TYPE_DELETED_FILE;
                 }
             }
 
@@ -905,8 +1144,16 @@ impl ExfatFs {
         let empty_cluster = vec![0u8; self.cluster_size as usize];
         self.write_cluster(dir_cluster, &empty_cluster)?;
 
-        // Create directory entry in parent
-        self.create_entry_in_directory(parent_cluster, name, dir_cluster, 0, true)?;
+        // exFAT directories have allocated data. A zero-length directory stream
+        // makes Windows treat the directory as corrupt even when the cluster
+        // chain and child entries are otherwise valid.
+        self.create_entry_in_directory(
+            parent_cluster,
+            name,
+            dir_cluster,
+            self.cluster_size as u64,
+            true,
+        )?;
 
         self.file.flush()?;
         Ok(dir_cluster)
@@ -1120,46 +1367,54 @@ impl ExfatFs {
 
     /// Write a file to the filesystem (root directory, no overwrite)
     pub fn write_file(&mut self, name: &str, data: &[u8]) -> Result<()> {
-        // Validate filename
-        if name.is_empty() || name.len() > 255 {
-            return Err(VentoyError::FilesystemError(
-                "Invalid filename length".to_string(),
-            ));
-        }
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            // Validate filename
+            if name.is_empty() || name.len() > 255 {
+                return Err(VentoyError::FilesystemError(
+                    "Invalid filename length".to_string(),
+                ));
+            }
 
-        // Check if file already exists
-        if self.find_file_entry(name)?.is_some() {
-            return Err(VentoyError::FilesystemError(format!(
-                "File '{}' already exists",
-                name
-            )));
-        }
-
-        self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
-    }
-
-    /// Write a file to the filesystem with overwrite option
-    pub fn write_file_overwrite(&mut self, name: &str, data: &[u8], overwrite: bool) -> Result<()> {
-        // Validate filename
-        if name.is_empty() || name.len() > 255 {
-            return Err(VentoyError::FilesystemError(
-                "Invalid filename length".to_string(),
-            ));
-        }
-
-        // Check if file already exists
-        if self.find_file_entry(name)?.is_some() {
-            if overwrite {
-                self.delete_file(name)?;
-            } else {
+            // Check if file already exists
+            if self.find_file_entry(name)?.is_some() {
                 return Err(VentoyError::FilesystemError(format!(
                     "File '{}' already exists",
                     name
                 )));
             }
-        }
 
-        self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
+            self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
+        })();
+        self.finish_write_transaction(was_dirty, result)
+    }
+
+    /// Write a file to the filesystem with overwrite option
+    pub fn write_file_overwrite(&mut self, name: &str, data: &[u8], overwrite: bool) -> Result<()> {
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            // Validate filename
+            if name.is_empty() || name.len() > 255 {
+                return Err(VentoyError::FilesystemError(
+                    "Invalid filename length".to_string(),
+                ));
+            }
+
+            // Check if file already exists
+            if self.find_file_entry(name)?.is_some() {
+                if overwrite {
+                    self.delete_file(name)?;
+                } else {
+                    return Err(VentoyError::FilesystemError(format!(
+                        "File '{}' already exists",
+                        name
+                    )));
+                }
+            }
+
+            self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Write a file to a specific path
@@ -1174,38 +1429,42 @@ impl ExfatFs {
         create_parents: bool,
         overwrite: bool,
     ) -> Result<()> {
-        let resolved = self.resolve_path(path, create_parents)?;
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let resolved = self.resolve_path(path, create_parents)?;
 
-        // Validate filename
-        if resolved.name.is_empty() || resolved.name.len() > 255 {
-            return Err(VentoyError::FilesystemError(
-                "Invalid filename length".to_string(),
-            ));
-        }
-
-        // Handle existing file
-        if let Some(location) = resolved.location {
-            if location.is_directory {
-                return Err(VentoyError::FilesystemError(format!(
-                    "'{}' is a directory",
-                    path
-                )));
+            // Validate filename
+            if resolved.name.is_empty() || resolved.name.len() > 255 {
+                return Err(VentoyError::FilesystemError(
+                    "Invalid filename length".to_string(),
+                ));
             }
-            if overwrite {
-                // Delete existing file
-                if location.first_cluster >= 2 {
-                    self.free_cluster_chain(location.first_cluster)?;
+
+            // Handle existing file
+            if let Some(location) = resolved.location {
+                if location.is_directory {
+                    return Err(VentoyError::FilesystemError(format!(
+                        "'{}' is a directory",
+                        path
+                    )));
                 }
-                self.delete_file_entry(&location)?;
-            } else {
-                return Err(VentoyError::FilesystemError(format!(
-                    "File '{}' already exists",
-                    path
-                )));
+                if overwrite {
+                    // Delete existing file
+                    if location.first_cluster >= 2 {
+                        self.free_cluster_chain(location.first_cluster)?;
+                    }
+                    self.delete_file_entry(&location)?;
+                } else {
+                    return Err(VentoyError::FilesystemError(format!(
+                        "File '{}' already exists",
+                        path
+                    )));
+                }
             }
-        }
 
-        self.write_file_data_and_entry(resolved.parent_cluster, &resolved.name, data)
+            self.write_file_data_and_entry(resolved.parent_cluster, &resolved.name, data)
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Read file data from a location
@@ -1276,99 +1535,115 @@ impl ExfatFs {
 
     /// Delete a file from the filesystem (root directory)
     pub fn delete_file(&mut self, name: &str) -> Result<()> {
-        let location = self
-            .find_file_entry(name)?
-            .ok_or_else(|| VentoyError::FilesystemError(format!("File '{}' not found", name)))?;
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let location = self.find_file_entry(name)?.ok_or_else(|| {
+                VentoyError::FilesystemError(format!("File '{}' not found", name))
+            })?;
 
-        // Free cluster chain
-        if location.first_cluster >= 2 {
-            self.free_cluster_chain(location.first_cluster)?;
-        }
+            // Free cluster chain
+            if location.first_cluster >= 2 {
+                self.free_cluster_chain(location.first_cluster)?;
+            }
 
-        // Delete directory entry
-        self.delete_file_entry(&location)?;
+            // Delete directory entry
+            self.delete_file_entry(&location)?;
 
-        self.file.flush()?;
-        Ok(())
+            self.file.flush()?;
+            Ok(())
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Delete a file or directory at a specific path
     pub fn delete_path(&mut self, path: &str) -> Result<()> {
-        let resolved = self.resolve_path(path, false)?;
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let resolved = self.resolve_path(path, false)?;
 
-        let location = resolved
-            .location
-            .ok_or_else(|| VentoyError::FilesystemError(format!("'{}' not found", path)))?;
+            let location = resolved
+                .location
+                .ok_or_else(|| VentoyError::FilesystemError(format!("'{}' not found", path)))?;
 
-        // If it's a directory, check if it's empty
-        if location.is_directory {
-            let contents = self.list_files_in_directory(location.first_cluster, "")?;
-            if !contents.is_empty() {
-                return Err(VentoyError::FilesystemError(format!(
-                    "Directory '{}' is not empty",
-                    path
-                )));
+            // If it's a directory, check if it's empty
+            if location.is_directory {
+                let contents = self.list_files_in_directory(location.first_cluster, "")?;
+                if !contents.is_empty() {
+                    return Err(VentoyError::FilesystemError(format!(
+                        "Directory '{}' is not empty",
+                        path
+                    )));
+                }
             }
-        }
 
-        // Free cluster chain
-        if location.first_cluster >= 2 {
-            self.free_cluster_chain(location.first_cluster)?;
-        }
+            // Free cluster chain
+            if location.first_cluster >= 2 {
+                self.free_cluster_chain(location.first_cluster)?;
+            }
 
-        // Delete directory entry
-        self.delete_file_entry(&location)?;
+            // Delete directory entry
+            self.delete_file_entry(&location)?;
 
-        self.file.flush()?;
-        Ok(())
+            self.file.flush()?;
+            Ok(())
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Delete a directory and all its contents recursively
     pub fn delete_recursive(&mut self, path: &str) -> Result<()> {
-        let resolved = self.resolve_path(path, false)?;
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let resolved = self.resolve_path(path, false)?;
 
-        let location = resolved
-            .location
-            .ok_or_else(|| VentoyError::FilesystemError(format!("'{}' not found", path)))?;
+            let location = resolved
+                .location
+                .ok_or_else(|| VentoyError::FilesystemError(format!("'{}' not found", path)))?;
 
-        if location.is_directory {
-            // Get all contents and delete them first
-            let contents = self.list_files_in_directory(location.first_cluster, "")?;
-            for item in contents {
-                let item_path = if path.ends_with('/') {
-                    format!("{}{}", path, item.name)
-                } else {
-                    format!("{}/{}", path, item.name)
-                };
-                self.delete_recursive(&item_path)?;
+            if location.is_directory {
+                // Get all contents and delete them first
+                let contents = self.list_files_in_directory(location.first_cluster, "")?;
+                for item in contents {
+                    let item_path = if path.ends_with('/') {
+                        format!("{}{}", path, item.name)
+                    } else {
+                        format!("{}/{}", path, item.name)
+                    };
+                    self.delete_recursive(&item_path)?;
+                }
             }
-        }
 
-        // Now delete the item itself
-        if location.first_cluster >= 2 {
-            self.free_cluster_chain(location.first_cluster)?;
-        }
-        self.delete_file_entry(&location)?;
+            // Now delete the item itself
+            if location.first_cluster >= 2 {
+                self.free_cluster_chain(location.first_cluster)?;
+            }
+            self.delete_file_entry(&location)?;
 
-        self.file.flush()?;
-        Ok(())
+            self.file.flush()?;
+            Ok(())
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Create a directory at a specific path
     ///
     /// If create_parents is true, creates all intermediate directories (mkdir -p behavior)
     pub fn create_directory(&mut self, path: &str, create_parents: bool) -> Result<()> {
-        let resolved = self.resolve_path(path, create_parents)?;
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let resolved = self.resolve_path(path, create_parents)?;
 
-        if resolved.location.is_some() {
-            return Err(VentoyError::FilesystemError(format!(
-                "'{}' already exists",
-                path
-            )));
-        }
+            if resolved.location.is_some() {
+                return Err(VentoyError::FilesystemError(format!(
+                    "'{}' already exists",
+                    path
+                )));
+            }
 
-        self.create_directory_in(resolved.parent_cluster, &resolved.name)?;
-        Ok(())
+            self.create_directory_in(resolved.parent_cluster, &resolved.name)?;
+            Ok(())
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 }
 
@@ -1805,9 +2080,13 @@ impl ExfatFs {
         reader: &mut R,
         size: u64,
     ) -> Result<()> {
-        let mut writer = ExfatFileWriter::create(self, name, size)?;
-        Self::do_stream_write(&mut writer, reader)?;
-        writer.finish()
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let mut writer = ExfatFileWriter::create(self, name, size)?;
+            Self::do_stream_write(&mut writer, reader)?;
+            writer.finish()
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Write a file from a reader with overwrite option
@@ -1818,9 +2097,13 @@ impl ExfatFs {
         size: u64,
         overwrite: bool,
     ) -> Result<()> {
-        let mut writer = ExfatFileWriter::create_overwrite(self, name, size, overwrite)?;
-        Self::do_stream_write(&mut writer, reader)?;
-        writer.finish()
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let mut writer = ExfatFileWriter::create_overwrite(self, name, size, overwrite)?;
+            Self::do_stream_write(&mut writer, reader)?;
+            writer.finish()
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Write a file from a reader to a specific path
@@ -1835,10 +2118,14 @@ impl ExfatFs {
         create_parents: bool,
         overwrite: bool,
     ) -> Result<()> {
-        let mut writer =
-            ExfatFileWriter::create_at_path(self, path, size, create_parents, overwrite)?;
-        Self::do_stream_write(&mut writer, reader)?;
-        writer.finish()
+        let was_dirty = self.begin_write_transaction()?;
+        let result = (|| {
+            let mut writer =
+                ExfatFileWriter::create_at_path(self, path, size, create_parents, overwrite)?;
+            Self::do_stream_write(&mut writer, reader)?;
+            writer.finish()
+        })();
+        self.finish_write_transaction(was_dirty, result)
     }
 
     /// Internal: Stream write from reader to writer
@@ -1861,8 +2148,17 @@ impl ExfatFs {
 mod tests {
     use super::*;
     use crate::partition::PartitionLayout;
-    use std::io::Cursor;
+    use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use tempfile::NamedTempFile;
+
+    fn cluster_offset(
+        partition_offset: u64,
+        cluster_heap_offset: u32,
+        cluster_size: u64,
+        cluster: u32,
+    ) -> u64 {
+        partition_offset + cluster_heap_offset as u64 * 512 + (cluster - 2) as u64 * cluster_size
+    }
 
     /// Test directory extension when filling up a directory cluster
     #[test]
@@ -2051,6 +2347,168 @@ mod tests {
             fs.read_file_to_writer("large_file.bin", &mut output)?;
             assert_eq!(output, test_data);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_transactions_clear_volume_dirty_on_success() -> Result<()> {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let size = 64 * 1024 * 1024u64;
+        let layout = PartitionLayout::calculate(size).unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.set_len(size).unwrap();
+        crate::exfat::format::format_exfat(
+            &mut file,
+            layout.data_offset(),
+            layout.data_size(),
+            "TEST",
+        )
+        .unwrap();
+        drop(file);
+
+        let mut fs = ExfatFs::open(path, &layout).unwrap();
+        assert!(!fs.is_volume_dirty()?);
+
+        let data = b"uploaded from web";
+        let mut cursor = Cursor::new(data);
+        fs.write_file_from_reader_path(
+            "/uploads/test.txt",
+            &mut cursor,
+            data.len() as u64,
+            true,
+            true,
+        )?;
+        assert!(!fs.is_volume_dirty()?);
+
+        fs.delete_recursive("/uploads")?;
+        assert!(!fs.is_volume_dirty()?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_created_directory_has_allocated_data_length() -> Result<()> {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let size = 64 * 1024 * 1024u64;
+        let layout = PartitionLayout::calculate(size).unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.set_len(size).unwrap();
+        crate::exfat::format::format_exfat(
+            &mut file,
+            layout.data_offset(),
+            layout.data_size(),
+            "TEST",
+        )
+        .unwrap();
+        drop(file);
+
+        let mut fs = ExfatFs::open(path, &layout).unwrap();
+        fs.create_directory("/uploads", true)?;
+
+        let location = fs
+            .find_entry_in_directory(fs.first_cluster_of_root, "uploads")?
+            .expect("created directory entry should exist");
+
+        assert!(location.is_directory);
+        assert!(location.first_cluster >= 2);
+        assert_eq!(location.data_length, fs.cluster_size as u64);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_open_uses_bitmap_location_from_root_directory() -> Result<()> {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let size = 64 * 1024 * 1024u64;
+        let layout = PartitionLayout::calculate(size).unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.set_len(size).unwrap();
+        crate::exfat::format::format_exfat(
+            &mut file,
+            layout.data_offset(),
+            layout.data_size(),
+            "TEST",
+        )
+        .unwrap();
+
+        let mut boot_sector = [0u8; 512];
+        file.seek(SeekFrom::Start(layout.data_offset())).unwrap();
+        file.read_exact(&mut boot_sector).unwrap();
+        let fat_offset = u32::from_le_bytes(boot_sector[80..84].try_into().unwrap());
+        let cluster_heap_offset = u32::from_le_bytes(boot_sector[88..92].try_into().unwrap());
+        let first_cluster_of_root = u32::from_le_bytes(boot_sector[96..100].try_into().unwrap());
+        let cluster_size = (1u64 << boot_sector[109]) * 512;
+
+        let relocated_bitmap_cluster = first_cluster_of_root + 1;
+        let mut bitmap = vec![0u8; cluster_size as usize];
+        file.seek(SeekFrom::Start(cluster_offset(
+            layout.data_offset(),
+            cluster_heap_offset,
+            cluster_size,
+            2,
+        )))
+        .unwrap();
+        file.read_exact(&mut bitmap).unwrap();
+        let relocated_index = (relocated_bitmap_cluster - 2) as usize;
+        bitmap[relocated_index / 8] |= 1 << (relocated_index % 8);
+
+        file.seek(SeekFrom::Start(cluster_offset(
+            layout.data_offset(),
+            cluster_heap_offset,
+            cluster_size,
+            relocated_bitmap_cluster,
+        )))
+        .unwrap();
+        file.write_all(&bitmap).unwrap();
+
+        let relocated_fat_offset =
+            layout.data_offset() + fat_offset as u64 * 512 + relocated_bitmap_cluster as u64 * 4;
+        file.seek(SeekFrom::Start(relocated_fat_offset)).unwrap();
+        file.write_all(&FAT_ENTRY_END_OF_CHAIN.to_le_bytes())
+            .unwrap();
+
+        let root_offset = cluster_offset(
+            layout.data_offset(),
+            cluster_heap_offset,
+            cluster_size,
+            first_cluster_of_root,
+        );
+        file.seek(SeekFrom::Start(root_offset + 32 + 20)).unwrap();
+        file.write_all(&relocated_bitmap_cluster.to_le_bytes())
+            .unwrap();
+        file.flush().unwrap();
+        drop(file);
+
+        let mut fs = ExfatFs::open(path, &layout).unwrap();
+        assert_eq!(fs.allocation_bitmap_first_cluster, relocated_bitmap_cluster);
+        assert!(ExfatFs::is_cluster_allocated(
+            &fs.read_bitmap()?,
+            relocated_bitmap_cluster
+        ));
+
+        let data = b"uses relocated bitmap";
+        let mut cursor = Cursor::new(data);
+        fs.write_file_from_reader("relocated.txt", &mut cursor, data.len() as u64)?;
+        assert_eq!(fs.read_file("relocated.txt")?, &data[..]);
 
         Ok(())
     }
