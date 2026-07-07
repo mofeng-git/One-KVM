@@ -150,7 +150,6 @@ export interface DeviceInfoEvent {
 
 export const useSystemStore = defineStore('system', () => {
   const version = ref<string>('')
-  const buildDate = ref<string>('')
   const platform = ref<PlatformCapabilities | null>(null)
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
@@ -173,7 +172,6 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const info = await systemApi.info()
       version.value = info.version
-      buildDate.value = info.build_date
       platform.value = info.platform
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
@@ -429,7 +427,6 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     version,
-    buildDate,
     platform,
     capabilities,
     diskSpace,

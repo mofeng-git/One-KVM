@@ -548,7 +548,6 @@ export default {
     usernameDesc: 'Change the console login username',
     passwordDesc: 'Change the console login password',
     version: 'Version',
-    buildInfo: 'Build Info',
     detectDevices: 'Detect Devices',
     detecting: 'Detecting...',
     networkSettings: 'Network Settings',

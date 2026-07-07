@@ -86,7 +86,6 @@ export const systemApi = {
   info: () =>
     request<{
       version: string
-      build_date: string
       initialized: boolean
       platform: PlatformCapabilities
       capabilities: {

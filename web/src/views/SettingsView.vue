@@ -5221,7 +5221,6 @@ watch(isWindows, () => {
                     <Label>{{ t('settings.currentVersion') }}</Label>
                     <Badge variant="outline">
                       {{ updateOverview?.current_version || systemStore.version || t('common.unknown') }}
-                      ({{ systemStore.buildDate || t('common.unknown') }})
                     </Badge>
                   </div>
                   <div class="space-y-2">

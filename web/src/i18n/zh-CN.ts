@@ -547,7 +547,6 @@ export default {
     usernameDesc: '修改控制台登录用户名',
     passwordDesc: '修改控制台登录密码',
     version: '版本',
-    buildInfo: '构建信息',
     detectDevices: '探测设备',
     detecting: '探测中...',
     networkSettings: '网络设置',
