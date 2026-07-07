@@ -139,126 +139,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  android:
-    runs-on: ubuntu-22.04
-    needs: frontend
-    timeout-minutes: 240
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: web/dist
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Cache Android Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache/android
-          key: android-buildx-${{ runner.os }}-${{ hashFiles('build/cross/Dockerfile.android') }}
-          restore-keys: |
-            android-buildx-${{ runner.os }}-
-
-      - name: Build Android Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: build/cross
-          file: build/cross/Dockerfile.android
-          tags: one-kvm-android-build:ci
-          load: true
-          cache-from: type=local,src=/tmp/.buildx-cache/android
-          cache-to: type=local,dest=/tmp/.buildx-cache/android-new,mode=max
-
-      - name: Rotate Android Docker layer cache
-        run: |
-          rm -rf /tmp/.buildx-cache/android
-          mv /tmp/.buildx-cache/android-new /tmp/.buildx-cache/android
-
-      - name: Cache Android build dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            .github/android-cache/gradle
-            .github/android-cache/cargo-registry
-            .github/android-cache/cargo-git
-            .tmp/android-ffmpeg-check
-            .tmp/android-turbojpeg-src
-            .tmp/android-libyuv-src
-            .tmp/android-alsa-src
-            .tmp/android-opus-src
-            dist/android-ffmpeg-mediacodec
-            dist/android-turbojpeg
-            dist/android-libyuv
-            dist/android-alsa
-            dist/android-opus
-          key: android-deps-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties', 'android/native/Cargo.lock', 'Cargo.lock', 'scripts/build-android-*.sh') }}
-          restore-keys: |
-            android-deps-${{ runner.os }}-
-
-      - name: Prepare Android FFmpeg source
-        run: |
-          chmod +x android/gradlew
-          if [ ! -x .tmp/android-ffmpeg-check/src/ffmpeg-rockchip/configure ]; then
-            rm -rf .tmp/android-ffmpeg-check/src
-            mkdir -p .tmp/android-ffmpeg-check/src
-            wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz -O .tmp/android-ffmpeg-check/ffmpeg.tar.gz
-            tar -xzf .tmp/android-ffmpeg-check/ffmpeg.tar.gz -C .tmp/android-ffmpeg-check/src --strip-components=1
-          fi
-
-      - name: Build Android APK
-        env:
-          ONE_KVM_ANDROID_DOCKER_IMAGE: one-kvm-android-build:ci
-          ONE_KVM_ANDROID_SKIP_DOCKER_BUILD: "1"
-          ONE_KVM_ANDROID_GRADLE_CACHE_DIR: ${{ github.workspace }}/.github/android-cache/gradle
-          ONE_KVM_ANDROID_CARGO_REGISTRY_CACHE_DIR: ${{ github.workspace }}/.github/android-cache/cargo-registry
-          ONE_KVM_ANDROID_CARGO_GIT_CACHE_DIR: ${{ github.workspace }}/.github/android-cache/cargo-git
-        run: bash build/build-android.sh all
-
-      - name: Fix Android build permissions
-        if: ${{ always() }}
-        run: |
-          paths=(
-            .github/android-cache
-            .tmp/android-ffmpeg-check
-            .tmp/android-turbojpeg-src
-            .tmp/android-libyuv-src
-            .tmp/android-alsa-src
-            .tmp/android-opus-src
-            dist/android-ffmpeg-mediacodec
-            dist/android-turbojpeg
-            dist/android-libyuv
-            dist/android-alsa
-            dist/android-opus
-            target/android
-            android/.gradle
-            android/app/build
-            android/native/target
-          )
-          existing=()
-          for path in "${paths[@]}"; do
-            if [ -e "$path" ]; then
-              existing+=("$path")
-            fi
-          done
-          if [ "${#existing[@]}" -gt 0 ]; then
-            sudo chown -R "$USER:$USER" "${existing[@]}"
-          fi
-
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: one-kvm-android-apk
-          path: target/android/one-kvm_*.apk
-          if-no-files-found: error
-          retention-days: 7
-
   release:
     runs-on: ubuntu-22.04
-    needs: [deb, windows, android]
+    needs: [deb, windows]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
     timeout-minutes: 30
     permissions:
@@ -283,12 +166,6 @@ jobs:
           name: one-kvm-windows-exe
           path: release-artifacts/windows
 
-      - name: Download Android artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: one-kvm-android-apk
-          path: release-artifacts/android
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -298,4 +175,3 @@ jobs:
           files: |
             release-artifacts/deb/*.deb
             release-artifacts/windows/*.exe
-            release-artifacts/android/*.apk
