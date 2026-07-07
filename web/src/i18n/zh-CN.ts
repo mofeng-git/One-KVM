@@ -1100,8 +1100,6 @@ export default {
   },
   stats: {
     title: '连接统计',
-    webrtcMode: 'WebRTC 实时统计',
-    mjpegMode: 'MJPEG 实时统计',
     current: '当前状态',
     video: '视频',
     videoDesc: '从服务器到客户端的视频流。',
@@ -1121,7 +1119,6 @@ export default {
     fps: '帧率',
     resolution: '分辨率',
     packetsLost: '丢包数',
-    wsLatency: 'WS 延迟',
     connection: '连接信息',
     connectionType: '连接类型',
     transport: '传输协议',

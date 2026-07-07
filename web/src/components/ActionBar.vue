@@ -66,6 +66,7 @@ const props = defineProps<{
   showTerminal?: boolean
   showComputerUse?: boolean
 }>()
+const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 
 const emit = defineEmits<{
   (e: 'toggleFullscreen'): void
@@ -196,6 +197,7 @@ const RIGHT_FIXED_PX = 120
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
+    if (item.id === 'stats' && !showStats.value) return false
     if (item.id === 'terminal' && props.showTerminal === false) return false
     return true
   })
@@ -243,6 +245,12 @@ const visibleSet = computed(() => {
 const isVisible = (id: CollapsibleItem) => visibleSet.value.has(id)
 const hasOverflow = computed(() => {
   return collapsibleItems.value.some(i => !visibleSet.value.has(i.id))
+})
+const hasLeftOverflow = computed(() => {
+  return collapsibleItems.value.some(i => i.side === 'left' && !visibleSet.value.has(i.id))
+})
+const hasRightOverflow = computed(() => {
+  return collapsibleItems.value.some(i => i.side === 'right' && !visibleSet.value.has(i.id))
 })
 </script>
 
@@ -469,10 +477,10 @@ const hasOverflow = computed(() => {
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
 
-            <DropdownMenuSeparator v-if="(!isVisible('msd') || !isVisible('atx') || !isVisible('paste')) && (!isVisible('stats') || (props.showTerminal !== false && !isVisible('terminal')) || !isVisible('settings'))" />
+            <DropdownMenuSeparator v-if="hasLeftOverflow && hasRightOverflow" />
 
             <!-- Stats -->
-            <DropdownMenuItem v-if="!isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
+            <DropdownMenuItem v-if="showStats && !isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
               <BarChart3 class="h-4 w-4 mr-2" />
               {{ t('actionbar.stats') }}
             </DropdownMenuItem>

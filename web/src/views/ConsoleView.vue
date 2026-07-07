@@ -171,6 +171,7 @@ function syncMouseModeFromConfig() {
 const virtualKeyboardVisible = ref(false)
 const virtualKeyboardAttached = ref(true)
 const statsSheetOpen = ref(false)
+const showConnectionStats = computed(() => videoMode.value !== 'mjpeg')
 const virtualKeyboardConsumerEnabled = computed(() => {
   const hid = configStore.hid
   if (!hid) return true
@@ -205,6 +206,18 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   if (videoMode.value === 'mjpeg' && mjpegFrameReceived.value) return 'connected'
   if (systemStore.stream?.online) return 'connected'
   return 'disconnected'
+})
+
+function openStatsSheet() {
+  if (showConnectionStats.value) {
+    statsSheetOpen.value = true
+  }
+}
+
+watch(showConnectionStats, (canShow) => {
+  if (!canShow) {
+    statsSheetOpen.value = false
+  }
 })
 
 function getResolutionShortName(width: number, height: number): string {
@@ -2835,7 +2848,7 @@ onUnmounted(() => {
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
       @toggle-fullscreen="toggleFullscreen"
-      @toggle-stats="statsSheetOpen = true"
+      @toggle-stats="openStatsSheet"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
       @toggle-mouse-mode="handleToggleMouseMode"
       @update:video-mode="handleVideoModeChange"
@@ -3086,10 +3099,8 @@ onUnmounted(() => {
       :debug-mode="false"
     />
     <StatsSheet
+      v-if="showConnectionStats"
       v-model:open="statsSheetOpen"
-      :video-mode="videoMode"
-      :mjpeg-fps="backendFps"
-      :ws-latency="0"
       :webrtc-stats="webrtc.stats.value"
     />
     <Dialog v-if="showTerminal" v-model:open="showTerminalDialog">

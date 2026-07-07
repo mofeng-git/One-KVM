@@ -1101,8 +1101,6 @@ export default {
   },
   stats: {
     title: 'Connection Stats',
-    webrtcMode: 'WebRTC Real-time Stats',
-    mjpegMode: 'MJPEG Real-time Stats',
     current: 'Current Status',
     video: 'Video',
     videoDesc: 'Video stream from server to client.',
@@ -1122,7 +1120,6 @@ export default {
     fps: 'FPS',
     resolution: 'Resolution',
     packetsLost: 'Packets Lost',
-    wsLatency: 'WS Latency',
     connection: 'Connection Info',
     connectionType: 'Connection Type',
     transport: 'Transport',
