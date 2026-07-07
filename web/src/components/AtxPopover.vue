@@ -2,24 +2,22 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Power, RotateCcw, CircleDot, Wifi, Send } from 'lucide-vue-next'
+import { Power, RotateCcw, CircleDot, Wifi, Send, HardDrive } from 'lucide-vue-next'
 import { atxApi } from '@/api'
 import { atxConfigApi } from '@/api/config'
+
+type AtxAction = 'short' | 'long' | 'reset'
+
+const minActionFeedbackMs = 800
+const actionDurations: Record<AtxAction, number> = {
+  short: 500,
+  long: 5000,
+  reset: 500,
+}
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -34,21 +32,30 @@ const { t } = useI18n()
 const activeTab = ref('atx')
 
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
+const hddState = ref<'active' | 'inactive' | 'unknown'>('unknown')
 let powerStateTimer: number | null = null
-// Decouple action data from dialog visibility to prevent race conditions
-const pendingAction = ref<'short' | 'long' | 'reset' | null>(null)
-const confirmDialogOpen = ref(false)
+let actionTimer: number | null = null
 
 const wolMacAddress = ref('')
 const wolHistory = ref<string[]>([])
 const wolSending = ref(false)
 const wolLoadingHistory = ref(false)
+const activeAction = ref<AtxAction | null>(null)
 
-const powerStateColor = computed(() => {
+const actionBusy = computed(() => activeAction.value !== null)
+
+const powerStateIconColor = computed(() => {
   switch (powerState.value) {
-    case 'on': return 'bg-green-500'
-    case 'off': return 'bg-slate-400'
-    default: return 'bg-yellow-500'
+    case 'on': return 'text-green-600'
+    case 'off': return 'text-slate-500'
+    default: return 'text-yellow-600'
+  }
+})
+
+const powerStateTextColor = computed(() => {
+  switch (powerState.value) {
+    case 'on': return 'text-green-600'
+    default: return ''
   }
 })
 
@@ -60,39 +67,49 @@ const powerStateText = computed(() => {
   }
 })
 
-function requestAction(action: 'short' | 'long' | 'reset') {
-  pendingAction.value = action
-  confirmDialogOpen.value = true
-}
+const hddStateIconColor = computed(() => {
+  switch (hddState.value) {
+    case 'active': return 'text-green-600'
+    case 'inactive': return 'text-slate-500'
+    default: return 'text-yellow-600'
+  }
+})
 
-function handleAction() {
-  console.log('[AtxPopover] Confirming action:', pendingAction.value)
-  if (pendingAction.value === 'short') emit('powerShort')
-  else if (pendingAction.value === 'long') emit('powerLong')
-  else if (pendingAction.value === 'reset') emit('reset')
-  confirmDialogOpen.value = false
-  setTimeout(() => {
+const hddStateTextColor = computed(() => {
+  switch (hddState.value) {
+    case 'active': return 'text-green-600'
+    default: return ''
+  }
+})
+
+const hddStateText = computed(() => {
+  switch (hddState.value) {
+    case 'active': return t('atx.hddActive')
+    case 'inactive': return t('atx.hddInactive')
+    default: return t('atx.stateUnknown')
+  }
+})
+
+function handleAction(action: AtxAction) {
+  if (actionBusy.value) return
+
+  console.log('[AtxPopover] Running action:', action)
+  activeAction.value = action
+
+  if (action === 'short') emit('powerShort')
+  else if (action === 'long') emit('powerLong')
+  else emit('reset')
+
+  if (actionTimer !== null) {
+    window.clearTimeout(actionTimer)
+  }
+  actionTimer = window.setTimeout(() => {
+    activeAction.value = null
+    actionTimer = null
     refreshPowerState().catch(() => {})
-  }, 1200)
+  }, Math.max(actionDurations[action], minActionFeedbackMs))
 }
 
-const confirmTitle = computed(() => {
-  switch (pendingAction.value) {
-    case 'short': return t('atx.confirmShortTitle')
-    case 'long': return t('atx.confirmLongTitle')
-    case 'reset': return t('atx.confirmResetTitle')
-    default: return ''
-  }
-})
-
-const confirmDescription = computed(() => {
-  switch (pendingAction.value) {
-    case 'short': return t('atx.confirmShortDesc')
-    case 'long': return t('atx.confirmLongDesc')
-    case 'reset': return t('atx.confirmResetDesc')
-    default: return ''
-  }
-})
 const isValidMac = computed(() => {
   const mac = wolMacAddress.value.trim()
   const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^([0-9A-Fa-f]{12})$/
@@ -142,8 +159,10 @@ async function refreshPowerState() {
   try {
     const state = await atxApi.status()
     powerState.value = state.power_status
+    hddState.value = state.hdd_status
   } catch {
     powerState.value = 'unknown'
+    hddState.value = 'unknown'
   }
 }
 
@@ -159,6 +178,10 @@ onUnmounted(() => {
     window.clearInterval(powerStateTimer)
     powerStateTimer = null
   }
+  if (actionTimer !== null) {
+    window.clearTimeout(actionTimer)
+    actionTimer = null
+  }
 })
 
 watch(
@@ -173,70 +196,91 @@ watch(
 </script>
 
 <template>
-  <div class="p-3 space-y-3">
+  <div class="p-2.5 space-y-2.5">
     <Tabs v-model="activeTab">
-      <TabsList class="w-full grid grid-cols-2">
-        <TabsTrigger value="atx" class="text-xs">
-          <Power class="h-3.5 w-3.5 mr-1" />
+      <TabsList class="h-8 w-full grid grid-cols-2">
+        <TabsTrigger value="atx" class="h-7 text-xs">
+          <Power class="h-3 w-3 mr-1" />
           {{ t('atx.title') }}
         </TabsTrigger>
-        <TabsTrigger value="wol" class="text-xs">
-          <Wifi class="h-3.5 w-3.5 mr-1" />
+        <TabsTrigger value="wol" class="h-7 text-xs">
+          <Wifi class="h-3 w-3 mr-1" />
           WOL
         </TabsTrigger>
       </TabsList>
 
       <!-- ATX Tab -->
-      <TabsContent value="atx" class="mt-3 space-y-3">
+      <TabsContent value="atx" class="mt-2.5 space-y-2.5">
         <p class="text-xs text-muted-foreground">{{ t('atx.description') }}</p>
 
-        <!-- Power State -->
-        <div class="flex items-center justify-between p-2 rounded-md bg-muted/50">
-          <span class="text-xs text-muted-foreground">{{ t('atx.powerState') }}</span>
-          <Badge variant="outline" class="gap-1.5 text-xs">
-            <span :class="['h-2 w-2 rounded-full', powerStateColor]" />
-            {{ powerStateText }}
-          </Badge>
+        <!-- Status -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+            <Power :class="['h-4 w-4 shrink-0', powerStateIconColor]" />
+            <div class="min-w-0">
+              <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.powerState') }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', powerStateTextColor]">{{ powerStateText }}</p>
+            </div>
+          </div>
+          <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+            <HardDrive :class="['h-4 w-4 shrink-0', hddStateIconColor]" />
+            <div class="min-w-0">
+              <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.hddState') }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', hddStateTextColor]">{{ hddStateText }}</p>
+            </div>
+          </div>
         </div>
 
         <Separator />
 
         <!-- Power Actions -->
-        <div class="space-y-1.5">
+        <div class="space-y-1">
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs"
-            @click="requestAction('short')"
+            :disabled="actionBusy"
+            :class="[
+              'w-full justify-start gap-2 h-7 text-xs',
+              activeAction === 'short' ? 'bg-muted text-muted-foreground' : '',
+            ]"
+            @click="handleAction('short')"
           >
-            <Power class="h-3.5 w-3.5" />
+            <Power class="h-3 w-3" />
             {{ t('atx.shortPress') }}
           </Button>
 
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
-            @click="requestAction('long')"
+            :disabled="actionBusy"
+            :class="[
+              'w-full justify-start gap-2 h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950',
+              activeAction === 'long' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
+            ]"
+            @click="handleAction('long')"
           >
-            <CircleDot class="h-3.5 w-3.5" />
+            <CircleDot class="h-3 w-3" />
             {{ t('atx.longPress') }}
           </Button>
 
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-            @click="requestAction('reset')"
+            :disabled="actionBusy"
+            :class="[
+              'w-full justify-start gap-2 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950',
+              activeAction === 'reset' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
+            ]"
+            @click="handleAction('reset')"
           >
-            <RotateCcw class="h-3.5 w-3.5" />
+            <RotateCcw class="h-3 w-3" />
             {{ t('atx.reset') }}
           </Button>
         </div>
       </TabsContent>
 
       <!-- WOL Tab -->
-      <TabsContent value="wol" class="mt-3 space-y-3">
+      <TabsContent value="wol" class="mt-2.5 space-y-2.5">
         <p class="text-xs text-muted-foreground">
           {{ t('atx.wolDescription') }}
         </p>
@@ -287,18 +331,4 @@ watch(
       </TabsContent>
     </Tabs>
   </div>
-
-  <!-- Confirm Dialog -->
-  <AlertDialog :open="confirmDialogOpen" @update:open="confirmDialogOpen = $event">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ confirmTitle }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ confirmDescription }}</AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="handleAction">{{ t('common.confirm') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
 </template>

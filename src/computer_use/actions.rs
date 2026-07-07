@@ -29,7 +29,8 @@ impl Default for ComputerUseButton {
     }
 }
 
-#[typeshare]
+// Kept out of typeshare because these internally tagged enums are consumed by
+// manually maintained frontend types and changing serde shape would break WS/API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerUseAction {
@@ -89,7 +90,6 @@ pub struct ComputerUseScreenshot {
     pub height: u32,
 }
 
-#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum ComputerUseConversationMessage {
@@ -145,7 +145,6 @@ pub struct ComputerUseSessionSummary {
     pub final_message: Option<String>,
 }
 
-#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerUseWsClientMessage {
@@ -155,7 +154,6 @@ pub enum ComputerUseWsClientMessage {
     },
 }
 
-#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerUseWsServerMessage {
@@ -165,4 +163,44 @@ pub enum ComputerUseWsServerMessage {
     StepStarted { step: u32 },
     ActionsExecuted { actions: Vec<ComputerUseAction> },
     Error { message: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn computer_use_action_keeps_flat_tagged_json_shape() {
+        let action = ComputerUseAction::Click {
+            x: 10,
+            y: 20,
+            button: ComputerUseButton::Left,
+        };
+
+        assert_eq!(
+            serde_json::to_value(action).unwrap(),
+            json!({
+                "type": "click",
+                "x": 10,
+                "y": 20,
+                "button": "left"
+            })
+        );
+    }
+
+    #[test]
+    fn computer_use_ws_message_keeps_flat_tagged_json_shape() {
+        let message = ComputerUseWsServerMessage::ScreenshotRequested {
+            request_id: "req-1".to_string(),
+        };
+
+        assert_eq!(
+            serde_json::to_value(message).unwrap(),
+            json!({
+                "type": "screenshot_requested",
+                "request_id": "req-1"
+            })
+        );
+    }
 }

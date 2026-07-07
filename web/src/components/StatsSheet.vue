@@ -17,11 +17,6 @@ const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
-  videoMode: 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
-  // MJPEG stats
-  mjpegFps?: number
-  wsLatency?: number
-  // WebRTC stats
   webrtcStats?: WebRTCStats
 }>()
 
@@ -50,9 +45,6 @@ const bitrateHistory = ref<number[]>([])
 let lastBytesReceived = 0
 let lastPacketsLost = 0
 let lastTimestamp = 0
-
-// Is WebRTC mode
-const isWebRTC = computed(() => props.videoMode !== 'mjpeg')
 
 function formatTime(ts: number): string {
   const date = new Date(ts * 1000)
@@ -256,14 +248,13 @@ function addDataPoint() {
     timestamps.value.shift()
   }
 
-  if (isWebRTC.value && props.webrtcStats) {
+  if (props.webrtcStats) {
     const jitter = (props.webrtcStats.jitter || 0) * 1000
     jitterHistory.value.push(jitter)
 
     const rtt = (props.webrtcStats.roundTripTime || 0) * 1000
     delayHistory.value.push(rtt)
 
-    // Packet loss delta
     const currentLost = props.webrtcStats.packetsLost || 0
     const lostDelta = lastPacketsLost > 0 ? Math.max(0, currentLost - lastPacketsLost) : 0
     lastPacketsLost = currentLost
@@ -284,11 +275,10 @@ function addDataPoint() {
     lastBytesReceived = currentBytes
     lastTimestamp = currentTime
   } else {
-    // MJPEG mode
     jitterHistory.value.push(0)
-    delayHistory.value.push(props.wsLatency || 0)
+    delayHistory.value.push(0)
     packetLossHistory.value.push(0)
-    fpsHistory.value.push(props.mjpegFps || 0)
+    fpsHistory.value.push(0)
     bitrateHistory.value.push(0)
   }
 
@@ -335,7 +325,7 @@ function formatCandidateType(type: string): string {
 
 // Current stats for header display
 const currentStats = computed(() => {
-  if (isWebRTC.value && props.webrtcStats) {
+  if (props.webrtcStats) {
     const lastBitrate = bitrateHistory.value[bitrateHistory.value.length - 1]
     const bitrate = lastBitrate !== undefined ? lastBitrate : 0
     return {
@@ -356,8 +346,8 @@ const currentStats = computed(() => {
   }
   return {
     jitter: 0,
-    delay: props.wsLatency || 0,
-    fps: props.mjpegFps || 0,
+    delay: 0,
+    fps: 0,
     resolution: '-',
     bitrate: '0',
     packetsLost: 0,
@@ -422,7 +412,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
           <SheetTitle class="text-base">{{ t('stats.title') }}</SheetTitle>
           <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted-foreground">
-            {{ isWebRTC ? 'WebRTC' : 'MJPEG' }}
+            WebRTC
           </span>
         </div>
       </SheetHeader>
@@ -438,7 +428,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Network Stability (Jitter) -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.stability') }}</h4>
             </div>
@@ -462,7 +452,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Playback Delay -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.delay') }}</h4>
               <span class="text-xs text-muted-foreground">
@@ -489,7 +479,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Packet Loss -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.packetLoss') }}</h4>
               <span class="text-xs text-muted-foreground">
@@ -543,7 +533,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Additional Stats -->
-          <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800" v-if="isWebRTC">
+          <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
             <h4 class="text-sm font-medium">{{ t('stats.additional') }}</h4>
             <div class="grid grid-cols-2 gap-3">
               <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">

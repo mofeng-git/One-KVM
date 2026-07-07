@@ -11,6 +11,6 @@ pub use types::{
     DownloadProgress, DownloadStatus, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest,
     ImageInfo, MsdConnectRequest, MsdMode, MsdState,
 };
-pub use ventoy_drive::VentoyDrive;
+pub use ventoy_drive::{VentoyDrive, MIN_DRIVE_SIZE_MB};
 
 pub use crate::otg::{MsdFunction, MsdLunConfig};

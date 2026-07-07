@@ -33,6 +33,7 @@ import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
 import ComputerUseSheet from '@/components/ComputerUseSheet.vue'
+import TerminalDialog from '@/components/TerminalDialog.vue'
 import type { ComputerUseTimelineItem, NewComputerUseTimelineItem } from '@/types/computerUseTimeline'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
@@ -61,8 +62,6 @@ import {
   Sun,
   Moon,
   ChevronDown,
-  Terminal,
-  ExternalLink,
   KeyRound,
   Loader2,
 } from 'lucide-vue-next'
@@ -171,6 +170,7 @@ function syncMouseModeFromConfig() {
 const virtualKeyboardVisible = ref(false)
 const virtualKeyboardAttached = ref(true)
 const statsSheetOpen = ref(false)
+const showConnectionStats = computed(() => videoMode.value !== 'mjpeg')
 const virtualKeyboardConsumerEnabled = computed(() => {
   const hid = configStore.hid
   if (!hid) return true
@@ -205,6 +205,18 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   if (videoMode.value === 'mjpeg' && mjpegFrameReceived.value) return 'connected'
   if (systemStore.stream?.online) return 'connected'
   return 'disconnected'
+})
+
+function openStatsSheet() {
+  if (showConnectionStats.value) {
+    statsSheetOpen.value = true
+  }
+}
+
+watch(showConnectionStats, (canShow) => {
+  if (!canShow) {
+    statsSheetOpen.value = false
+  }
 })
 
 function getResolutionShortName(width: number, height: number): string {
@@ -2010,12 +2022,6 @@ function openTerminal() {
   showTerminalDialog.value = true
 }
 
-function openTerminalInNewTab() {
-  if (!showTerminal.value) return
-  if (!ttydStatus.value?.running) return
-  window.open('/api/terminal/', '_blank')
-}
-
 async function handlePowerShort() {
   try {
     await atxApi.power('short')
@@ -2835,7 +2841,7 @@ onUnmounted(() => {
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
       @toggle-fullscreen="toggleFullscreen"
-      @toggle-stats="statsSheetOpen = true"
+      @toggle-stats="openStatsSheet"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
       @toggle-mouse-mode="handleToggleMouseMode"
       @update:video-mode="handleVideoModeChange"
@@ -3086,43 +3092,11 @@ onUnmounted(() => {
       :debug-mode="false"
     />
     <StatsSheet
+      v-if="showConnectionStats"
       v-model:open="statsSheetOpen"
-      :video-mode="videoMode"
-      :mjpeg-fps="backendFps"
-      :ws-latency="0"
       :webrtc-stats="webrtc.stats.value"
     />
-    <Dialog v-if="showTerminal" v-model:open="showTerminalDialog">
-      <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
-        <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
-          <DialogTitle class="flex items-center justify-between w-full">
-            <div class="flex items-center gap-2">
-              <Terminal class="h-4 w-4 sm:h-5 sm:w-5" />
-              <span class="text-sm sm:text-base">{{ t('extensions.ttyd.title') }}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 sm:h-8 sm:w-8 mr-6 sm:mr-8"
-              @click="openTerminalInNewTab"
-              :aria-label="t('extensions.ttyd.openInNewTab')"
-              :title="t('extensions.ttyd.openInNewTab')"
-            >
-              <ExternalLink class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            </Button>
-          </DialogTitle>
-        </DialogHeader>
-        <div class="flex-1 min-h-0">
-          <iframe
-            v-if="showTerminalDialog"
-            src="/api/terminal/"
-            class="w-full h-full border-0"
-            allow="clipboard-read; clipboard-write"
-            scrolling="no"
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <TerminalDialog v-if="showTerminal" v-model:open="showTerminalDialog" />
     <Dialog v-model:open="changePasswordDialogOpen">
       <DialogContent class="w-[95vw] max-w-md">
         <DialogHeader>

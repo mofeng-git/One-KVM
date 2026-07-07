@@ -18,7 +18,6 @@ pub async fn health_check() -> Json<HealthResponse> {
 #[derive(Serialize)]
 pub struct SystemInfo {
     pub version: &'static str,
-    pub build_date: &'static str,
     pub initialized: bool,
     pub platform: PlatformCapabilities,
     pub capabilities: Capabilities,
@@ -66,7 +65,6 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
 
     Json(SystemInfo {
         version: env!("CARGO_PKG_VERSION"),
-        build_date: env!("BUILD_DATE"),
         initialized: config.initialized,
         platform: platform.clone(),
         capabilities: Capabilities {
@@ -88,10 +86,7 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
             atx: CapabilityInfo {
                 available: config.atx.enabled,
                 backend: if config.atx.enabled {
-                    Some(format!(
-                        "power: {:?}, reset: {:?}",
-                        config.atx.power.driver, config.atx.reset.driver
-                    ))
+                    Some(format!("{:?}", config.atx.driver))
                 } else {
                     None
                 },

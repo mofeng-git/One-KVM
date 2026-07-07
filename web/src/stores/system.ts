@@ -50,6 +50,7 @@ interface AtxState {
   backend: string
   initialized: boolean
   powerOn: boolean
+  hddStatus: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
@@ -121,6 +122,7 @@ export interface AtxDeviceInfo {
   backend: string
   initialized: boolean
   power_on: boolean
+  hdd_status: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
@@ -148,7 +150,6 @@ export interface DeviceInfoEvent {
 
 export const useSystemStore = defineStore('system', () => {
   const version = ref<string>('')
-  const buildDate = ref<string>('')
   const platform = ref<PlatformCapabilities | null>(null)
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
@@ -171,7 +172,6 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const info = await systemApi.info()
       version.value = info.version
-      buildDate.value = info.build_date
       platform.value = info.platform
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
@@ -235,6 +235,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: state.backend,
         initialized: state.initialized,
         powerOn: state.power_status === 'on',
+        hddStatus: state.hdd_status,
         error: null,
       }
       return state
@@ -376,6 +377,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: data.atx.backend,
         initialized: data.atx.initialized,
         powerOn: data.atx.power_on,
+        hddStatus: data.atx.hdd_status,
         error: data.atx.error,
       }
     } else {
@@ -425,7 +427,6 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     version,
-    buildDate,
     platform,
     capabilities,
     diskSpace,

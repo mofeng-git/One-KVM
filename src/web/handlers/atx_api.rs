@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::atx::{AtxState, PowerStatus};
+use crate::atx::{AtxDriverType, AtxState, HddStatus, PowerStatus};
 
 const WOL_HISTORY_DEFAULT_LIMIT: usize = 5;
 const WOL_HISTORY_MAX_LIMIT: usize = 50;
@@ -13,21 +13,21 @@ pub struct AtxStateResponse {
     pub initialized: bool,
     pub power_status: String,
     pub led_supported: bool,
+    pub hdd_status: String,
+    pub hdd_supported: bool,
 }
 
 impl From<AtxState> for AtxStateResponse {
     fn from(state: AtxState) -> Self {
         Self {
             available: state.available,
-            backend: if state.power_configured || state.reset_configured {
-                format!(
-                    "power: {}, reset: {}",
-                    if state.power_configured { "yes" } else { "no" },
-                    if state.reset_configured { "yes" } else { "no" }
-                )
-            } else {
-                "none".to_string()
-            },
+            backend: match state.driver {
+                AtxDriverType::Gpio => "gpio",
+                AtxDriverType::UsbRelay => "usbrelay",
+                AtxDriverType::Serial => "serial",
+                AtxDriverType::None => "none",
+            }
+            .to_string(),
             initialized: state.power_configured || state.reset_configured,
             power_status: match state.power_status {
                 PowerStatus::On => "on".to_string(),
@@ -35,6 +35,12 @@ impl From<AtxState> for AtxStateResponse {
                 PowerStatus::Unknown => "unknown".to_string(),
             },
             led_supported: state.led_supported,
+            hdd_status: match state.hdd_status {
+                HddStatus::Active => "active".to_string(),
+                HddStatus::Inactive => "inactive".to_string(),
+                HddStatus::Unknown => "unknown".to_string(),
+            },
+            hdd_supported: state.hdd_supported,
         }
     }
 }
@@ -54,6 +60,8 @@ pub async fn atx_status(State(state): State<Arc<AppState>>) -> Result<Json<AtxSt
             initialized: false,
             power_status: "unknown".to_string(),
             led_supported: false,
+            hdd_status: "unknown".to_string(),
+            hdd_supported: false,
         })),
     }
 }

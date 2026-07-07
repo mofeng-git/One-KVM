@@ -120,7 +120,7 @@ pub struct DriveInitRequest {
 }
 
 fn default_drive_size() -> u32 {
-    16 * 1024
+    64
 }
 
 #[derive(Debug, Clone, Deserialize)]

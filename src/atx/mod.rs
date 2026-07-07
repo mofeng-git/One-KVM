@@ -24,22 +24,17 @@ mod wol;
 pub use controller::{AtxController, AtxControllerConfig};
 pub use executor::timing;
 pub use types::{
-    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig, AtxPowerRequest,
-    AtxState, PowerStatus,
+    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxInputBinding, AtxKeyConfig,
+    AtxOutputBinding, AtxPowerRequest, AtxState, HddStatus, PowerStatus, LCUS_RELAY_MAX_CHANNEL,
 };
 pub use wol::{list_wol_history, record_wol_history, send_wol};
 
 #[cfg(any(unix, test))]
 fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {
     let upper = uevent.to_ascii_uppercase();
-    upper.contains("000016C0:000005DF")
-        || upper.contains("00005131:00002007")
-        || upper.contains("16C0:05DF")
+    upper.contains("00005131:00002007")
         || upper.contains("5131:2007")
-        || upper.contains("PRODUCT=16C0/5DF")
         || upper.contains("PRODUCT=5131/2007")
-        || upper.contains("USBRELAY")
-        || upper.contains("USB RELAY")
 }
 
 #[cfg(unix)]
@@ -94,14 +89,14 @@ mod tests {
     }
 
     #[test]
-    fn test_hidraw_uevent_detects_usb_relay_id() {
-        assert!(hidraw_uevent_is_usb_relay(
+    fn test_hidraw_uevent_rejects_non_lcus_usb_relay_id() {
+        assert!(!hidraw_uevent_is_usb_relay(
             "HID_ID=0003:000016C0:000005DF\nHID_NAME=www.dcttech.com USBRelay2\n"
         ));
     }
 
     #[test]
-    fn test_hidraw_uevent_detects_5131_usb_relay_id() {
+    fn test_hidraw_uevent_detects_lcus_hid_relay_id() {
         assert!(hidraw_uevent_is_usb_relay(
             "HID_ID=0003:00005131:00002007\n"
         ));
@@ -120,7 +115,8 @@ mod tests {
         let _: AtxDriverType = AtxDriverType::None;
         let _: ActiveLevel = ActiveLevel::High;
         let _: AtxKeyConfig = AtxKeyConfig::default();
-        let _: AtxLedConfig = AtxLedConfig::default();
+        let _: AtxInputBinding = AtxInputBinding::default();
+        let _: AtxOutputBinding = AtxOutputBinding::default();
         let _: AtxState = AtxState::default();
         let _: AtxDevices = AtxDevices::default();
     }

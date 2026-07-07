@@ -94,26 +94,29 @@ export enum ActiveLevel {
 	Low = "low",
 }
 
-export interface AtxKeyConfig {
-	driver: AtxDriverType;
+export interface AtxOutputBinding {
+	enabled: boolean;
 	device: string;
 	pin: number;
 	active_level: ActiveLevel;
-	baud_rate: number;
 }
 
-export interface AtxLedConfig {
+export interface AtxInputBinding {
 	enabled: boolean;
-	gpio_chip: string;
-	gpio_pin: number;
-	inverted: boolean;
+	device: string;
+	pin: number;
+	active_level: ActiveLevel;
 }
 
 export interface AtxConfig {
 	enabled: boolean;
-	power: AtxKeyConfig;
-	reset: AtxKeyConfig;
-	led: AtxLedConfig;
+	driver: AtxDriverType;
+	device: string;
+	baud_rate: number;
+	power: AtxOutputBinding;
+	reset: AtxOutputBinding;
+	led: AtxInputBinding;
+	hdd: AtxInputBinding;
 	wol_interface: string;
 }
 
@@ -163,6 +166,15 @@ export interface WebConfig {
 	https_enabled: boolean;
 	ssl_cert_path?: string;
 	ssl_key_path?: string;
+}
+
+export interface ComputerUseConfig {
+	enabled: boolean;
+	provider: string;
+	base_url: string;
+	model: string;
+	max_steps: number;
+	timeout_seconds: number;
 }
 
 export interface TtydConfig {
@@ -224,17 +236,17 @@ export interface ExtensionsConfig {
 	frpc: FrpcConfig;
 }
 
+export enum RustDeskCodec {
+	H264 = "h264",
+	H265 = "h265",
+}
+
 export interface RustDeskConfig {
 	enabled: boolean;
 	codec: RustDeskCodec;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
-}
-
-export enum RustDeskCodec {
-	H264 = "h264",
-	H265 = "h265",
 }
 
 export enum VncEncoding {
@@ -280,6 +292,7 @@ export interface AppConfig {
 	audio: AudioConfig;
 	stream: StreamConfig;
 	web: WebConfig;
+	computer_use: ComputerUseConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
 	vnc: VncConfig;
@@ -287,32 +300,36 @@ export interface AppConfig {
 	redfish: RedfishConfig;
 }
 
-/** Update for a single ATX key configuration */
-export interface AtxKeyConfigUpdate {
-	driver?: AtxDriverType;
+/** Update for a single ATX output binding */
+export interface AtxOutputBindingUpdate {
+	enabled?: boolean;
 	device?: string;
-	baud_rate?: number;
 	pin?: number;
 	active_level?: ActiveLevel;
 }
 
-/** Update for LED sensing configuration */
-export interface AtxLedConfigUpdate {
+/** Update for ATX GPIO input sensing */
+export interface AtxInputBindingUpdate {
 	enabled?: boolean;
-	gpio_chip?: string;
-	gpio_pin?: number;
-	inverted?: boolean;
+	device?: string;
+	pin?: number;
+	active_level?: ActiveLevel;
 }
 
 /** ATX configuration update request */
 export interface AtxConfigUpdate {
 	enabled?: boolean;
+	driver?: AtxDriverType;
+	device?: string;
+	baud_rate?: number;
 	/** Power button configuration */
-	power?: AtxKeyConfigUpdate;
+	power?: AtxOutputBindingUpdate;
 	/** Reset button configuration */
-	reset?: AtxKeyConfigUpdate;
+	reset?: AtxOutputBindingUpdate;
 	/** LED sensing configuration */
-	led?: AtxLedConfigUpdate;
+	led?: AtxInputBindingUpdate;
+	/** HDD activity sensing configuration */
+	hdd?: AtxInputBindingUpdate;
 	/** Network interface for WOL packets (empty = auto) */
 	wol_interface?: string;
 }
@@ -347,6 +364,66 @@ export interface Ch9329DescriptorState {
 	product_enabled: boolean;
 	serial_enabled: boolean;
 	config_mode_available: boolean;
+}
+
+export interface ComputerUseConfigResponse {
+	enabled: boolean;
+	provider: string;
+	base_url: string;
+	model: string;
+	max_steps: number;
+	timeout_seconds: number;
+	api_key_configured: boolean;
+	api_key_source: string;
+}
+
+export interface ComputerUseConfigUpdate {
+	enabled?: boolean;
+	base_url?: string;
+	model?: string;
+	max_steps?: number;
+	timeout_seconds?: number;
+	openai_api_key?: string;
+	clear_openai_api_key?: boolean;
+}
+
+export interface ComputerUsePoint {
+	x: number;
+	y: number;
+}
+
+export interface ComputerUseScreenshot {
+	data_url: string;
+	width: number;
+	height: number;
+}
+
+export enum ComputerUseSessionStatus {
+	Idle = "idle",
+	WaitingScreenshot = "waiting_screenshot",
+	Thinking = "thinking",
+	Executing = "executing",
+	Completed = "completed",
+	Failed = "failed",
+	Stopped = "stopped",
+}
+
+export interface ComputerUseSessionSummary {
+	id?: string;
+	status: ComputerUseSessionStatus;
+	prompt?: string;
+	step: number;
+	max_steps: number;
+	last_error?: string;
+	final_message?: string;
+}
+
+export interface ComputerUseStartRequest {
+	prompt: string;
+	continue_conversation?: boolean;
+	client_id: string;
+	max_steps?: number;
+	timeout_seconds?: number;
 }
 
 export interface EasytierConfigUpdate {
@@ -730,4 +807,10 @@ export enum CanonicalKey {
 	ShiftRight = "ShiftRight",
 	AltRight = "AltRight",
 	MetaRight = "MetaRight",
+}
+
+export enum ComputerUseButton {
+	Left = "left",
+	Middle = "middle",
+	Right = "right",
 }

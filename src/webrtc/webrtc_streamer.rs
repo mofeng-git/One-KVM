@@ -12,6 +12,7 @@ use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, StreamDeviceLostKind, SystemEvent};
 use crate::hid::HidController;
+use crate::video::capture::DEFAULT_CAPTURE_BUFFER_COUNT;
 use crate::video::codec::h264_bitstream;
 use crate::video::device::{
     enumerate_devices, select_recovery_device, VideoDevice, VideoDeviceRecoveryHint,
@@ -319,7 +320,7 @@ impl WebRtcStreamer {
                 current_capture
                     .as_ref()
                     .map(|capture| capture.buffer_count)
-                    .unwrap_or(2),
+                    .unwrap_or(DEFAULT_CAPTURE_BUFFER_COUNT),
             )
         };
 
@@ -745,7 +746,7 @@ impl WebRtcStreamer {
             });
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
-            buffer_count: 2,
+            buffer_count: DEFAULT_CAPTURE_BUFFER_COUNT,
             jpeg_quality,
             subdev_path,
             bridge_kind,

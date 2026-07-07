@@ -44,7 +44,11 @@ impl MsdLunConfig {
             cdrom: false,
             ro: read_only,
             removable: true,
-            nofua: true,
+            // nofua=false: enforce Force Unit Access so the USB host (e.g. Windows)
+            // gets proper write-completion acknowledgements when writing to the
+            // virtual .img file. nofua=true can cause write-verify failures
+            // that manifest as Windows error 0x80070570 on writable drives.
+            nofua: false,
         }
     }
 }

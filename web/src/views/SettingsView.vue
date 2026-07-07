@@ -56,6 +56,7 @@ import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import TerminalDialog from '@/components/TerminalDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -224,6 +225,7 @@ function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
   if (value === 'ext-frpc') return 'ext-remote-access'
+  if (value === 'redfish') return 'third-party-access'
   if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp') return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
@@ -242,10 +244,7 @@ async function loadSectionData(section: SettingsSectionId) {
       await loadAuthConfig()
       return
     case 'network':
-      await Promise.all([
-        loadWebServerConfig(),
-        loadRedfishConfig(),
-      ])
+      await loadWebServerConfig()
       return
     case 'video':
       await Promise.all([
@@ -277,6 +276,8 @@ async function loadSectionData(section: SettingsSectionId) {
       return
     case 'third-party-access':
       await Promise.all([
+        loadWebServerConfig(),
+        loadRedfishConfig(),
         loadRustdeskConfig(),
         loadRustdeskPassword(),
         loadRtspConfig(),
@@ -520,9 +521,12 @@ const previewAccessUrl = computed(() => {
   const host = firstAddr.includes(':') ? `[${firstAddr}]` : firstAddr
   return `${scheme}://${host}:${port}`
 })
+const redfishAccessUrl = computed(() => `${previewAccessUrl.value}/redfish/v1/`)
 
 const previewUrlCopied = ref(false)
+const redfishUrlCopied = ref(false)
 let previewUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
+let redfishUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copyPreviewUrl() {
   const ok = await clipboardCopy(previewAccessUrl.value)
@@ -536,6 +540,20 @@ async function copyPreviewUrl() {
 
 function openPreviewUrl() {
   window.open(previewAccessUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+async function copyRedfishUrl() {
+  const ok = await clipboardCopy(redfishAccessUrl.value)
+  if (!ok) return
+  redfishUrlCopied.value = true
+  if (redfishUrlCopiedTimer) clearTimeout(redfishUrlCopiedTimer)
+  redfishUrlCopiedTimer = setTimeout(() => {
+    redfishUrlCopied.value = false
+  }, 1500)
+}
+
+function openRedfishUrl() {
+  window.open(redfishAccessUrl.value, '_blank', 'noopener,noreferrer')
 }
 
 interface DeviceConfig {
@@ -1120,28 +1138,40 @@ watch(bindMode, (mode) => {
 
 const atxConfig = ref({
   enabled: false,
+  driver: 'none' as AtxDriverType,
+  device: '',
+  baud_rate: 9600,
   power: {
-    driver: 'none' as AtxDriverType,
+    enabled: false,
     device: '',
     pin: 1,
     active_level: 'high' as ActiveLevel,
-    baud_rate: 9600,
   },
   reset: {
-    driver: 'none' as AtxDriverType,
+    enabled: false,
     device: '',
     pin: 1,
     active_level: 'high' as ActiveLevel,
-    baud_rate: 9600,
   },
   led: {
     enabled: false,
-    gpio_chip: '',
-    gpio_pin: 0,
-    inverted: false,
+    device: '',
+    pin: 0,
+    active_level: 'high' as ActiveLevel,
+  },
+  hdd: {
+    enabled: false,
+    device: '',
+    pin: 0,
+    active_level: 'high' as ActiveLevel,
   },
   wol_interface: '',
 })
+
+const atxSaving = ref(false)
+const atxSaved = ref(false)
+const wolSaving = ref(false)
+const wolSaved = ref(false)
 
 const atxDevices = ref<AtxDevices>({
   gpio_chips: [],
@@ -1164,17 +1194,6 @@ const atxDriverOptions = computed(() => {
   return isWindows.value
     ? options.filter(option => ['none', 'serial'].includes(option.value))
     : options
-})
-
-const isSharedAtxSerialRelay = computed(() => {
-  const power = atxConfig.value.power
-  const reset = atxConfig.value.reset
-  return (
-    power.driver === 'serial'
-    && reset.driver === 'serial'
-    && !!power.device.trim()
-    && power.device === reset.device
-  )
 })
 
 const availableBackends = ref<EncoderBackendInfo[]>([])
@@ -1678,10 +1697,6 @@ function openTerminal() {
   showTerminalDialog.value = true
 }
 
-function openTerminalInNewTab() {
-  window.open('/api/terminal/', '_blank')
-}
-
 function getExtStatusText(status: ExtensionStatus | undefined): string {
   if (!status) return t('extensions.stopped')
   switch (status.state) {
@@ -1720,14 +1735,29 @@ async function loadAtxConfig() {
     const config = await configStore.refreshAtx()
     atxConfig.value = {
       enabled: config.enabled,
-      power: { ...config.power },
-      reset: { ...config.reset },
-      led: { ...config.led },
+      driver: config.enabled ? config.driver : 'none' as AtxDriverType,
+      device: config.device || '',
+      baud_rate: config.baud_rate || 9600,
+      power: {
+        ...config.power,
+        active_level: config.power.active_level || 'high',
+      },
+      reset: {
+        ...config.reset,
+        active_level: config.reset.active_level || 'high',
+      },
+      led: {
+        ...config.led,
+        active_level: config.led.active_level || 'high',
+      },
+      hdd: {
+        ...config.hdd,
+        active_level: config.hdd.active_level || 'high',
+      },
       wol_interface: config.wol_interface || '',
     }
     clearAtxSerialDeviceConflicts()
     normalizeAtxRelayChannels()
-    syncSharedAtxSerialBaudRate()
   } catch {
   }
 }
@@ -1739,43 +1769,64 @@ async function loadAtxDevices() {
   }
 }
 
-async function saveAtxConfig() {
-  loading.value = true
-  saved.value = false
+async function saveAtxSettings() {
+  atxSaving.value = true
+  atxSaved.value = false
   try {
     normalizeAtxRelayChannels()
-    syncSharedAtxSerialBaudRate()
+    const isGpio = atxConfig.value.driver === 'gpio'
+    const isRelay = ['usbrelay', 'serial'].includes(atxConfig.value.driver)
     await configStore.updateAtx({
-      enabled: atxConfig.value.enabled,
+      enabled: atxConfig.value.driver !== 'none',
+      driver: atxConfig.value.driver,
+      device: atxConfig.value.device || undefined,
+      baud_rate: atxConfig.value.baud_rate,
       power: {
-        driver: atxConfig.value.power.driver,
+        enabled: isGpio ? !!atxConfig.value.power.device : isRelay,
         device: atxConfig.value.power.device || undefined,
         pin: atxConfig.value.power.pin,
         active_level: atxConfig.value.power.active_level,
-        baud_rate: atxConfig.value.power.baud_rate,
       },
       reset: {
-        driver: atxConfig.value.reset.driver,
+        enabled: isGpio ? !!atxConfig.value.reset.device : isRelay,
         device: atxConfig.value.reset.device || undefined,
         pin: atxConfig.value.reset.pin,
         active_level: atxConfig.value.reset.active_level,
-        baud_rate: isSharedAtxSerialRelay.value
-          ? atxConfig.value.power.baud_rate
-          : atxConfig.value.reset.baud_rate,
       },
       led: {
-        enabled: atxConfig.value.led.enabled,
-        gpio_chip: atxConfig.value.led.gpio_chip || undefined,
-        gpio_pin: atxConfig.value.led.gpio_pin,
-        inverted: atxConfig.value.led.inverted,
+        enabled: isGpio && !!atxConfig.value.led.device,
+        device: atxConfig.value.led.device || undefined,
+        pin: atxConfig.value.led.pin,
+        active_level: atxConfig.value.led.active_level,
       },
-      wol_interface: atxConfig.value.wol_interface || undefined,
+      hdd: {
+        enabled: isGpio && !!atxConfig.value.hdd.device,
+        device: atxConfig.value.hdd.device || undefined,
+        pin: atxConfig.value.hdd.pin,
+        active_level: atxConfig.value.hdd.active_level,
+      },
     })
-    saved.value = true
-    setTimeout(() => (saved.value = false), 2000)
+    atxConfig.value.enabled = atxConfig.value.driver !== 'none'
+    atxSaved.value = true
+    setTimeout(() => (atxSaved.value = false), 2000)
   } catch {
   } finally {
-    loading.value = false
+    atxSaving.value = false
+  }
+}
+
+async function saveWolSettings() {
+  wolSaving.value = true
+  wolSaved.value = false
+  try {
+    await configStore.updateAtx({
+      wol_interface: atxConfig.value.wol_interface || undefined,
+    })
+    wolSaved.value = true
+    setTimeout(() => (wolSaved.value = false), 2000)
+  } catch {
+  } finally {
+    wolSaving.value = false
   }
 }
 
@@ -1806,24 +1857,20 @@ function clearAtxSerialDeviceConflicts() {
   const reserved = ch9329ReservedSerialDevice.value
   if (!reserved) return
 
-  if (atxConfig.value.power.driver === 'serial' && atxConfig.value.power.device === reserved) {
-    atxConfig.value.power.device = ''
+  if (atxConfig.value.driver === 'serial' && atxConfig.value.device === reserved) {
+    atxConfig.value.device = ''
   }
-  if (atxConfig.value.reset.driver === 'serial' && atxConfig.value.reset.device === reserved) {
-    atxConfig.value.reset.device = ''
-  }
-}
-
-function syncSharedAtxSerialBaudRate() {
-  if (!isSharedAtxSerialRelay.value) return
-  atxConfig.value.reset.baud_rate = atxConfig.value.power.baud_rate
 }
 
 function normalizeAtxRelayChannels() {
   for (const key of [atxConfig.value.power, atxConfig.value.reset]) {
-    if (['usbrelay', 'serial'].includes(key.driver) && key.pin < 1) {
+    if (['usbrelay', 'serial'].includes(atxConfig.value.driver) && key.pin < 1) {
       key.pin = 1
     }
+  }
+  if (atxConfig.value.driver !== 'gpio') {
+    atxConfig.value.led.enabled = false
+    atxConfig.value.hdd.enabled = false
   }
 }
 
@@ -1835,22 +1882,10 @@ watch(
 )
 
 watch(
-  () => [atxConfig.value.power.driver, atxConfig.value.reset.driver],
+  () => atxConfig.value.driver,
   () => {
     normalizeAtxRelayChannels()
-  },
-)
-
-watch(
-  () => [
-    atxConfig.value.power.driver,
-    atxConfig.value.power.device,
-    atxConfig.value.power.baud_rate,
-    atxConfig.value.reset.driver,
-    atxConfig.value.reset.device,
-  ],
-  () => {
-    syncSharedAtxSerialBaudRate()
+    clearAtxSerialDeviceConflicts()
   },
 )
 
@@ -3890,34 +3925,6 @@ watch(isWindows, () => {
                 </Button>
               </CardFooter>
             </Card>
-
-            <!-- Redfish API Card -->
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ t('settings.redfishTitle') }}</CardTitle>
-                <CardDescription>{{ t('settings.redfishDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-5">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.redfishEnabled') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
-                  </div>
-                  <Switch v-model="redfishEnabled" />
-                </div>
-              </CardContent>
-              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
-                </p>
-                <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
-                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
-                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
-                </Button>
-              </CardFooter>
-            </Card>
           </div>
 
           <!-- MSD Section -->
@@ -3958,83 +3965,40 @@ watch(isWindows, () => {
 
           <!-- ATX Section -->
           <div v-show="activeSection === 'atx'" class="space-y-6">
-            <!-- Enable ATX -->
             <Card>
-              <CardHeader class="flex flex-row items-start justify-between space-y-0">
-                <div class="space-y-1.5">
-                  <CardTitle>{{ t('settings.atxSettings') }}</CardTitle>
-                  <CardDescription>{{ t('settings.atxSettingsDesc') }}</CardDescription>
-                </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadAtxDevices">
-                  <RefreshCw class="h-4 w-4" />
-                </Button>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label for="atx-enabled">{{ t('settings.atxEnable') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.atxEnableDesc') }}</p>
-                  </div>
-                  <Switch
-                    id="atx-enabled"
-                    v-model="atxConfig.enabled"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <!-- Power Button Config -->
-            <Card v-if="atxConfig.enabled">
-              <CardHeader>
-                <CardTitle>{{ t('settings.atxPowerButton') }}</CardTitle>
-                <CardDescription>{{ t('settings.atxPowerButtonDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="space-y-2">
-                    <Label for="power-driver">{{ t('settings.atxDriver') }}</Label>
-                    <select id="power-driver" v-model="atxConfig.power.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+              <CardContent class="space-y-4 pt-6">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex min-w-0 flex-1 items-center gap-3">
+                    <Label for="atx-driver" class="shrink-0">{{ t('settings.atxDriver') }}</Label>
+                    <select id="atx-driver" v-model="atxConfig.driver" class="h-9 w-full max-w-xs px-3 rounded-md border border-input bg-background text-sm">
                       <option v-for="option in atxDriverOptions" :key="option.value" :value="option.value">
                         {{ option.label }}
                       </option>
                     </select>
                   </div>
-                  <div class="space-y-2">
-                    <Label for="power-device">{{ t('settings.atxDevice') }}</Label>
-                    <select id="power-device" v-model="atxConfig.power.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="atxConfig.power.driver === 'none'">
+                  <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" :aria-label="t('common.refresh')" @click="loadAtxDevices">
+                    <RefreshCw class="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div v-if="['usbrelay', 'serial'].includes(atxConfig.driver)" class="grid gap-4 sm:grid-cols-2">
+                  <div v-if="['usbrelay', 'serial'].includes(atxConfig.driver)" class="space-y-2">
+                    <Label for="atx-device">{{ t('settings.atxDevice') }}</Label>
+                    <select id="atx-device" v-model="atxConfig.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                       <option value="">{{ t('settings.selectDevice') }}</option>
                       <option
-                        v-for="dev in getAtxDevicesForDriver(atxConfig.power.driver)"
+                        v-for="dev in getAtxDevicesForDriver(atxConfig.driver)"
                         :key="dev"
                         :value="dev"
-                        :disabled="atxConfig.power.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
+                        :disabled="atxConfig.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
                       >
-                        {{ formatAtxDeviceLabel(atxConfig.power.driver, dev) }}
+                        {{ formatAtxDeviceLabel(atxConfig.driver, dev) }}
                       </option>
                     </select>
                   </div>
-                </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="space-y-2">
-                    <Label for="power-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.power.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
-                    <Input
-                      id="power-pin"
-                      type="number"
-                      v-model.number="atxConfig.power.pin"
-                      :min="['usbrelay', 'serial'].includes(atxConfig.power.driver) ? 1 : 0"
-                      :disabled="atxConfig.power.driver === 'none'"
-                    />
-                  </div>
-                  <div v-if="atxConfig.power.driver === 'gpio'" class="space-y-2">
-                    <Label for="power-level">{{ t('settings.atxActiveLevel') }}</Label>
-                    <select id="power-level" v-model="atxConfig.power.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                      <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                    </select>
-                  </div>
-                  <div v-if="atxConfig.power.driver === 'serial'" class="space-y-2">
-                    <Label for="power-baudrate">{{ t('settings.baudRate') }}</Label>
-                    <select id="power-baudrate" v-model.number="atxConfig.power.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                  <div v-if="atxConfig.driver === 'serial'" class="space-y-2">
+                    <Label for="atx-baudrate">{{ t('settings.baudRate') }}</Label>
+                    <select id="atx-baudrate" v-model.number="atxConfig.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                       <option :value="9600">9600</option>
                       <option :value="19200">19200</option>
                       <option :value="38400">38400</option>
@@ -4043,128 +4007,138 @@ watch(isWindows, () => {
                     </select>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
 
-            <!-- Reset Button Config -->
-            <Card v-if="atxConfig.enabled">
-              <CardHeader>
-                <CardTitle>{{ t('settings.atxResetButton') }}</CardTitle>
-                <CardDescription>{{ t('settings.atxResetButtonDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="space-y-2">
-                    <Label for="reset-driver">{{ t('settings.atxDriver') }}</Label>
-                    <select id="reset-driver" v-model="atxConfig.reset.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option v-for="option in atxDriverOptions" :key="option.value" :value="option.value">
-                        {{ option.label }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="space-y-2">
-                    <Label for="reset-device">{{ t('settings.atxDevice') }}</Label>
-                    <select id="reset-device" v-model="atxConfig.reset.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="atxConfig.reset.driver === 'none'">
-                      <option value="">{{ t('settings.selectDevice') }}</option>
-                      <option
-                        v-for="dev in getAtxDevicesForDriver(atxConfig.reset.driver)"
-                        :key="dev"
-                        :value="dev"
-                        :disabled="atxConfig.reset.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
-                      >
-                        {{ formatAtxDeviceLabel(atxConfig.reset.driver, dev) }}
-                      </option>
-                    </select>
-                  </div>
-                </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="space-y-2">
-                    <Label for="reset-pin">{{ ['usbrelay', 'serial'].includes(atxConfig.reset.driver) ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
-                    <Input
-                      id="reset-pin"
-                      type="number"
-                      v-model.number="atxConfig.reset.pin"
-                      :min="['usbrelay', 'serial'].includes(atxConfig.reset.driver) ? 1 : 0"
-                      :disabled="atxConfig.reset.driver === 'none'"
-                    />
-                  </div>
-                  <div v-if="atxConfig.reset.driver === 'gpio'" class="space-y-2">
-                    <Label for="reset-level">{{ t('settings.atxActiveLevel') }}</Label>
-                    <select id="reset-level" v-model="atxConfig.reset.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                      <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                    </select>
-                  </div>
-                  <div v-if="atxConfig.reset.driver === 'serial'" class="space-y-2">
-                    <Label for="reset-baudrate">{{ t('settings.baudRate') }}</Label>
-                    <select
-                      id="reset-baudrate"
-                      v-model.number="atxConfig.reset.baud_rate"
-                      class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                      :disabled="isSharedAtxSerialRelay"
-                    >
-                      <option :value="9600">9600</option>
-                      <option :value="19200">19200</option>
-                      <option :value="38400">38400</option>
-                      <option :value="57600">57600</option>
-                      <option :value="115200">115200</option>
-                    </select>
-                    <p v-if="isSharedAtxSerialRelay" class="text-xs text-muted-foreground">
-                      {{ t('settings.atxSharedSerialBaudHint') }}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <!-- LED Sensing Config -->
-            <Card v-if="atxConfig.enabled && !isWindows">
-              <CardHeader>
-                <CardTitle>{{ t('settings.atxLedSensing') }}</CardTitle>
-                <CardDescription>{{ t('settings.atxLedSensingDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div class="space-y-0.5">
-                    <Label for="led-enabled">{{ t('settings.atxLedEnable') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.atxLedEnableDesc') }}</p>
-                  </div>
-                  <Switch
-                    id="led-enabled"
-                    v-model="atxConfig.led.enabled"
-                  />
-                </div>
-                <template v-if="atxConfig.led.enabled">
+                <template v-if="atxConfig.driver === 'gpio'">
                   <Separator />
-                  <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="space-y-2">
-                      <Label for="led-chip">{{ t('settings.atxLedChip') }}</Label>
-                      <select id="led-chip" v-model="atxConfig.led.gpio_chip" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                        <option value="">{{ t('settings.selectDevice') }}</option>
-                        <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
-                      </select>
+                  <div class="space-y-4">
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxPowerButton') }}</Label>
+                      <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="space-y-2">
+                          <Label for="power-device">{{ t('settings.atxGpioChip') }}</Label>
+                          <select id="power-device" v-model="atxConfig.power.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                            <option value="">{{ t('settings.atxDriverNone') }}</option>
+                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
+                          </select>
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="power-pin">{{ t('settings.atxPin') }}</Label>
+                          <Input id="power-pin" type="number" v-model.number="atxConfig.power.pin" min="0" :disabled="!atxConfig.power.device" />
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="power-active-level">{{ t('settings.atxActiveLevel') }}</Label>
+                          <select id="power-active-level" v-model="atxConfig.power.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.power.device">
+                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
+                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <div class="space-y-2">
-                      <Label for="led-pin">{{ t('settings.atxLedPin') }}</Label>
-                      <Input id="led-pin" type="number" v-model.number="atxConfig.led.gpio_pin" min="0" />
+
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxResetButton') }}</Label>
+                      <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="space-y-2">
+                          <Label for="reset-device">{{ t('settings.atxGpioChip') }}</Label>
+                          <select id="reset-device" v-model="atxConfig.reset.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                            <option value="">{{ t('settings.atxDriverNone') }}</option>
+                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
+                          </select>
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="reset-pin">{{ t('settings.atxPin') }}</Label>
+                          <Input id="reset-pin" type="number" v-model.number="atxConfig.reset.pin" min="0" :disabled="!atxConfig.reset.device" />
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="reset-active-level">{{ t('settings.atxActiveLevel') }}</Label>
+                          <select id="reset-active-level" v-model="atxConfig.reset.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.reset.device">
+                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
+                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxLedSensing') }}</Label>
+                      <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="space-y-2">
+                          <Label for="led-device">{{ t('settings.atxGpioChip') }}</Label>
+                          <select id="led-device" v-model="atxConfig.led.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                            <option value="">{{ t('settings.atxDriverNone') }}</option>
+                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
+                          </select>
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="led-pin">{{ t('settings.atxPin') }}</Label>
+                          <Input id="led-pin" type="number" v-model.number="atxConfig.led.pin" min="0" :disabled="!atxConfig.led.device" />
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="led-active-level">{{ t('settings.atxActiveLevel') }}</Label>
+                          <select id="led-active-level" v-model="atxConfig.led.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.led.device">
+                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
+                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxHddSensing') }}</Label>
+                      <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="space-y-2">
+                          <Label for="hdd-device">{{ t('settings.atxGpioChip') }}</Label>
+                          <select id="hdd-device" v-model="atxConfig.hdd.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                            <option value="">{{ t('settings.atxDriverNone') }}</option>
+                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
+                          </select>
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="hdd-pin">{{ t('settings.atxPin') }}</Label>
+                          <Input id="hdd-pin" type="number" v-model.number="atxConfig.hdd.pin" min="0" :disabled="!atxConfig.hdd.device" />
+                        </div>
+                        <div class="space-y-2">
+                          <Label for="hdd-active-level">{{ t('settings.atxActiveLevel') }}</Label>
+                          <select id="hdd-active-level" v-model="atxConfig.hdd.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.hdd.device">
+                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
+                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div class="flex items-center justify-between">
-                    <div class="space-y-0.5">
-                      <Label for="led-inverted">{{ t('settings.atxLedInverted') }}</Label>
-                      <p class="text-xs text-muted-foreground">{{ t('settings.atxLedInvertedDesc') }}</p>
+                </template>
+
+                <template v-else-if="['usbrelay', 'serial'].includes(atxConfig.driver)">
+                  <Separator />
+                  <div class="space-y-4">
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxPowerButton') }}</Label>
+                      <div class="space-y-2">
+                        <Label for="power-channel">{{ t('settings.atxChannel') }}</Label>
+                        <Input id="power-channel" type="number" v-model.number="atxConfig.power.pin" min="1" />
+                      </div>
                     </div>
-                    <Switch
-                      id="led-inverted"
-                      v-model="atxConfig.led.inverted"
-                    />
+
+                    <div class="space-y-3 rounded-md border p-3">
+                      <Label>{{ t('settings.atxResetButton') }}</Label>
+                      <div class="space-y-2">
+                        <Label for="reset-channel">{{ t('settings.atxChannel') }}</Label>
+                        <Input id="reset-channel" type="number" v-model.number="atxConfig.reset.pin" min="1" />
+                      </div>
+                    </div>
                   </div>
                 </template>
               </CardContent>
             </Card>
+            <div class="flex justify-end">
+              <Button :disabled="atxSaving" @click="saveAtxSettings">
+                <Loader2 v-if="atxSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="atxSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ atxSaving ? t('actionbar.applying') : atxSaved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
 
             <!-- WOL Config -->
-            <Card v-if="atxConfig.enabled">
+            <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.atxWolSettings') }}</CardTitle>
                 <CardDescription>{{ t('settings.atxWolSettingsDesc') }}</CardDescription>
@@ -4181,11 +4155,9 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
             </Card>
-
-            <!-- Save Button -->
             <div class="flex justify-end">
-              <Button :disabled="loading" @click="saveAtxConfig">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+              <Button :disabled="wolSaving" @click="saveWolSettings">
+                <Loader2 v-if="wolSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="wolSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ wolSaving ? t('actionbar.applying') : wolSaved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -4726,7 +4698,10 @@ watch(isWindows, () => {
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
-                    <Input v-model="rtspLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="rtspStatus?.service_status === 'running'" />
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="rtspLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="rtspStatus?.service_status === 'running'" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.bindHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
@@ -4856,7 +4831,10 @@ watch(isWindows, () => {
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
-                    <Input v-model="vncLocalConfig.bind" class="sm:col-span-3" placeholder="0.0.0.0" :disabled="vncStatus?.service_status === 'running'" />
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input v-model="vncLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="vncStatus?.service_status === 'running'" />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.bindHint') }}</p>
+                    </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.port') }}</Label>
@@ -5112,6 +5090,112 @@ watch(isWindows, () => {
             </div>
           </div>
 
+          <!-- Redfish Section -->
+          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+            <!-- Auto-restart: restarting progress -->
+            <div
+              v-if="autoRestarting"
+              class="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-sm"
+            >
+              <RefreshCw class="h-4 w-4 animate-spin text-primary shrink-0" />
+              <div class="flex-1 min-w-0">
+                <p class="font-medium">{{ t('settings.autoRestarting') }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ webServerConfig.https_enabled
+                    ? t('settings.autoRestartingHttpsDesc', { sec: autoRestartCountdown })
+                    : t('settings.autoRestartingDesc') }}
+                </p>
+              </div>
+              <span v-if="webServerConfig.https_enabled && autoRestartCountdown > 0"
+                class="tabular-nums text-lg font-bold text-primary shrink-0">
+                {{ autoRestartCountdown }}
+              </span>
+            </div>
+
+            <!-- Auto-restart: HTTPS manual redirect (cert must be accepted by user) -->
+            <div
+              v-if="autoRestartManualUrl"
+              class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-4 space-y-3"
+            >
+              <div class="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                <Lock class="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p class="font-medium">{{ t('settings.httpsManualRedirectTitle') }}</p>
+                  <p class="text-xs mt-0.5 opacity-80">{{ t('settings.httpsManualRedirectDesc') }}</p>
+                </div>
+              </div>
+              <a
+                :href="autoRestartManualUrl"
+                class="flex items-center justify-center gap-2 w-full rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 transition-colors"
+              >
+                <ExternalLink class="h-4 w-4" />
+                {{ autoRestartManualUrl }}
+              </a>
+            </div>
+
+            <!-- Auto-restart: failure / timeout -->
+            <div
+              v-if="autoRestartFailed"
+              class="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+            >
+              <p class="text-destructive">{{ t('settings.autoRestartFailed') }}</p>
+              <Button variant="outline" size="sm" @click="triggerAutoRestart">
+                <RefreshCw class="h-3 w-3 mr-1" />
+                {{ t('common.retry') }}
+              </Button>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.redfishTitle') }}</CardTitle>
+                <CardDescription>{{ t('settings.redfishDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-5">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.redfishEnabled') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
+                  </div>
+                  <Switch v-model="redfishEnabled" />
+                </div>
+                <div class="rounded-md border bg-muted/40 p-3 space-y-1.5">
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.redfishEndpoint') }}</p>
+                  <div class="flex items-center gap-2">
+                    <code class="font-mono text-xs sm:text-sm break-all flex-1 min-w-0">{{ redfishAccessUrl }}</code>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.copyRedfishUrl')"
+                      :aria-label="t('settings.copyRedfishUrl')"
+                      @click="copyRedfishUrl"
+                    >
+                      <Check v-if="redfishUrlCopied" class="h-3.5 w-3.5 text-emerald-600" />
+                      <Copy v-else class="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      :title="t('settings.openRedfishEndpoint')"
+                      :aria-label="t('settings.openRedfishEndpoint')"
+                      @click="openRedfishUrl"
+                    >
+                      <ExternalLink class="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
+                  {{ t('settings.restartRequiredHint') }}
+                </p>
+                <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
+                  <RefreshCw v-if="autoRestarting || redfishSaving" class="h-4 w-4 mr-2 animate-spin" />
+                  <Save v-else class="h-4 w-4 mr-2" />
+                  {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+
           <!-- About Section -->
           <div v-show="activeSection === 'about'" class="space-y-6">
             <Card v-if="!isAndroid">
@@ -5137,7 +5221,6 @@ watch(isWindows, () => {
                     <Label>{{ t('settings.currentVersion') }}</Label>
                     <Badge variant="outline">
                       {{ updateOverview?.current_version || systemStore.version || t('common.unknown') }}
-                      ({{ systemStore.buildDate || t('common.unknown') }})
                     </Badge>
                   </div>
                   <div class="space-y-2">
@@ -5267,37 +5350,7 @@ watch(isWindows, () => {
     </div>
 
     <!-- Terminal Dialog -->
-    <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
-        <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
-          <DialogTitle class="flex items-center justify-between w-full">
-            <div class="flex items-center gap-2">
-              <Terminal class="h-4 w-4 sm:h-5 sm:w-5" />
-              <span class="text-sm sm:text-base">{{ t('extensions.ttyd.title') }}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 sm:h-8 sm:w-8 mr-6 sm:mr-8"
-              @click="openTerminalInNewTab"
-              :aria-label="t('extensions.ttyd.openInNewTab')"
-              :title="t('extensions.ttyd.openInNewTab')"
-            >
-              <ExternalLink class="h-4 w-4" />
-            </Button>
-          </DialogTitle>
-        </DialogHeader>
-        <div class="flex-1 min-h-0">
-          <iframe
-            v-if="showTerminalDialog"
-            src="/api/terminal/"
-            class="w-full h-full border-0"
-            allow="clipboard-read; clipboard-write"
-            scrolling="no"
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <TerminalDialog v-model:open="showTerminalDialog" />
 
     <!-- Restart Confirmation Dialog -->
     <Dialog v-model:open="showRestartDialog">

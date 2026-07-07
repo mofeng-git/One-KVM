@@ -7,17 +7,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tracing::{debug, info};
 
-use super::types::{AtxLedConfig, PowerStatus};
+use super::types::{ActiveLevel, AtxInputBinding, PowerStatus};
 use crate::error::{AppError, Result};
 
 pub struct LedSensor {
-    config: AtxLedConfig,
+    config: AtxInputBinding,
     handle: Mutex<Option<LineHandle>>,
     initialized: AtomicBool,
 }
 
 impl LedSensor {
-    pub fn new(config: AtxLedConfig) -> Self {
+    pub fn new(config: AtxInputBinding) -> Self {
         Self {
             config,
             handle: Mutex::new(None),
@@ -33,17 +33,14 @@ impl LedSensor {
 
         info!(
             "Initializing LED sensor on {} pin {}",
-            self.config.gpio_chip, self.config.gpio_pin
+            self.config.device, self.config.pin
         );
 
-        let mut chip = Chip::new(&self.config.gpio_chip)
+        let mut chip = Chip::new(&self.config.device)
             .map_err(|e| AppError::Internal(format!("LED GPIO chip failed: {}", e)))?;
 
-        let line = chip.get_line(self.config.gpio_pin).map_err(|e| {
-            AppError::Internal(format!(
-                "LED GPIO line {} failed: {}",
-                self.config.gpio_pin, e
-            ))
+        let line = chip.get_line(self.config.pin).map_err(|e| {
+            AppError::Internal(format!("LED GPIO line {} failed: {}", self.config.pin, e))
         })?;
 
         let handle = line
@@ -57,9 +54,11 @@ impl LedSensor {
         Ok(())
     }
 
-    pub async fn read(&self) -> Result<PowerStatus> {
+    pub async fn read_active(&self) -> Result<bool> {
         if !self.config.is_configured() || !self.initialized.load(Ordering::Relaxed) {
-            return Ok(PowerStatus::Unknown);
+            return Err(AppError::Internal(
+                "GPIO input sensor not initialized".to_string(),
+            ));
         }
 
         let guard = self.handle.lock().unwrap();
@@ -69,20 +68,29 @@ impl LedSensor {
                     .get_value()
                     .map_err(|e| AppError::Internal(format!("LED read failed: {}", e)))?;
 
-                let is_on = if self.config.inverted {
-                    value == 0
-                } else {
-                    value == 1
+                let active = match self.config.active_level {
+                    ActiveLevel::High => value == 1,
+                    ActiveLevel::Low => value == 0,
                 };
 
-                Ok(if is_on {
-                    PowerStatus::On
-                } else {
-                    PowerStatus::Off
-                })
+                Ok(active)
             }
-            None => Ok(PowerStatus::Unknown),
+            None => Err(AppError::Internal(
+                "GPIO input sensor not initialized".to_string(),
+            )),
         }
+    }
+
+    pub async fn read(&self) -> Result<PowerStatus> {
+        if !self.config.is_configured() || !self.initialized.load(Ordering::Relaxed) {
+            return Ok(PowerStatus::Unknown);
+        }
+
+        Ok(if self.read_active().await? {
+            PowerStatus::On
+        } else {
+            PowerStatus::Off
+        })
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {
@@ -105,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_led_sensor_creation() {
-        let config = AtxLedConfig::default();
+        let config = AtxInputBinding::default();
         let sensor = LedSensor::new(config);
         assert!(!sensor.config.is_configured());
         assert!(!sensor.initialized.load(Ordering::Relaxed));
@@ -113,11 +121,11 @@ mod tests {
 
     #[test]
     fn test_led_sensor_with_config() {
-        let config = AtxLedConfig {
+        let config = AtxInputBinding {
             enabled: true,
-            gpio_chip: "/dev/gpiochip0".to_string(),
-            gpio_pin: 7,
-            inverted: false,
+            device: "/dev/gpiochip0".to_string(),
+            pin: 7,
+            active_level: ActiveLevel::High,
         };
         let sensor = LedSensor::new(config);
         assert!(sensor.config.is_configured());
@@ -126,13 +134,13 @@ mod tests {
 
     #[test]
     fn test_led_sensor_inverted_config() {
-        let config = AtxLedConfig {
+        let config = AtxInputBinding {
             enabled: true,
-            gpio_chip: "/dev/gpiochip0".to_string(),
-            gpio_pin: 7,
-            inverted: true,
+            device: "/dev/gpiochip0".to_string(),
+            pin: 7,
+            active_level: ActiveLevel::Low,
         };
         let sensor = LedSensor::new(config);
-        assert!(sensor.config.inverted);
+        assert_eq!(sensor.config.active_level, ActiveLevel::Low);
     }
 }

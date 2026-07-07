@@ -453,25 +453,24 @@ impl MsdConfigUpdate {
     }
 }
 
-/// Update for a single ATX key configuration
+/// Update for a single ATX output binding
 #[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct AtxKeyConfigUpdate {
-    pub driver: Option<crate::atx::AtxDriverType>,
+pub struct AtxOutputBindingUpdate {
+    pub enabled: Option<bool>,
     pub device: Option<String>,
-    pub baud_rate: Option<u32>,
     pub pin: Option<u32>,
     pub active_level: Option<crate::atx::ActiveLevel>,
 }
 
-/// Update for LED sensing configuration
+/// Update for ATX GPIO input sensing
 #[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct AtxLedConfigUpdate {
+pub struct AtxInputBindingUpdate {
     pub enabled: Option<bool>,
-    pub gpio_chip: Option<String>,
-    pub gpio_pin: Option<u32>,
-    pub inverted: Option<bool>,
+    pub device: Option<String>,
+    pub pin: Option<u32>,
+    pub active_level: Option<crate::atx::ActiveLevel>,
 }
 
 /// ATX configuration update request
@@ -479,26 +478,46 @@ pub struct AtxLedConfigUpdate {
 #[derive(Debug, Deserialize)]
 pub struct AtxConfigUpdate {
     pub enabled: Option<bool>,
+    pub driver: Option<crate::atx::AtxDriverType>,
+    pub device: Option<String>,
+    pub baud_rate: Option<u32>,
     /// Power button configuration
-    pub power: Option<AtxKeyConfigUpdate>,
+    pub power: Option<AtxOutputBindingUpdate>,
     /// Reset button configuration
-    pub reset: Option<AtxKeyConfigUpdate>,
+    pub reset: Option<AtxOutputBindingUpdate>,
     /// LED sensing configuration
-    pub led: Option<AtxLedConfigUpdate>,
+    pub led: Option<AtxInputBindingUpdate>,
+    /// HDD activity sensing configuration
+    pub hdd: Option<AtxInputBindingUpdate>,
     /// Network interface for WOL packets (empty = auto)
     pub wol_interface: Option<String>,
 }
 
 impl AtxConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
-        // Validate power key config if present
-        if let Some(ref power) = self.power {
-            Self::validate_key_config(power, "power")?;
+        if let Some(baud_rate) = self.baud_rate {
+            if baud_rate == 0 {
+                return Err(AppError::BadRequest(
+                    "ATX baud_rate must be greater than 0".to_string(),
+                ));
+            }
         }
-        // Validate reset key config if present
-        if let Some(ref reset) = self.reset {
-            Self::validate_key_config(reset, "reset")?;
+
+        for (name, binding) in [
+            ("power", self.power.as_ref()),
+            ("reset", self.reset.as_ref()),
+        ] {
+            if let Some(binding) = binding {
+                Self::validate_output_binding_update(binding, name)?;
+            }
         }
+
+        for (name, binding) in [("led", self.led.as_ref()), ("hdd", self.hdd.as_ref())] {
+            if let Some(binding) = binding {
+                Self::validate_input_binding_update(binding, name)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -509,152 +528,143 @@ impl AtxConfigUpdate {
         let mut merged = current.clone();
         self.apply_to(&mut merged);
 
-        Self::validate_effective_key_config(&merged.power, "power")?;
-        Self::validate_effective_key_config(&merged.reset, "reset")?;
-        Self::validate_shared_serial_baud_rate(&merged)?;
+        if merged.driver == crate::atx::AtxDriverType::None {
+            if merged.enabled {
+                return Err(AppError::BadRequest(
+                    "ATX driver must not be none when ATX is enabled".to_string(),
+                ));
+            }
+            return Ok(());
+        }
+
+        merged.normalize();
+
+        if !merged.enabled {
+            return Ok(());
+        }
+
+        Self::validate_effective_config(&merged)?;
         Ok(())
     }
 
-    fn validate_shared_serial_baud_rate(config: &AtxConfig) -> crate::error::Result<()> {
-        let power = &config.power;
-        let reset = &config.reset;
-        let same_serial_device = power.driver == crate::atx::AtxDriverType::Serial
-            && reset.driver == crate::atx::AtxDriverType::Serial
-            && !power.device.trim().is_empty()
-            && power.device.trim() == reset.device.trim();
+    fn validate_device_path(device: &str, name: &str) -> crate::error::Result<()> {
+        let trimmed = device.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest(format!(
+                "{} device cannot be empty",
+                name
+            )));
+        }
 
-        if same_serial_device && power.baud_rate != reset.baud_rate {
-            return Err(AppError::BadRequest(
-                "ATX power/reset sharing the same serial relay device must use one baud_rate"
-                    .to_string(),
-            ));
+        if !cfg!(windows) && !std::path::Path::new(trimmed).exists() {
+            return Err(AppError::BadRequest(format!(
+                "{} device '{}' does not exist",
+                name, trimmed
+            )));
         }
 
         Ok(())
     }
 
-    fn validate_key_config(key: &AtxKeyConfigUpdate, name: &str) -> crate::error::Result<()> {
-        if let Some(ref device) = key.device {
-            if !device.trim().is_empty() && !cfg!(windows) && !std::path::Path::new(device).exists()
-            {
-                return Err(AppError::BadRequest(format!(
-                    "{} device '{}' does not exist",
-                    name, device
-                )));
-            }
-        }
-        if let Some(baud_rate) = key.baud_rate {
-            if baud_rate == 0 {
-                return Err(AppError::BadRequest(format!(
-                    "{} baud_rate must be greater than 0",
-                    name
-                )));
-            }
-        }
-
-        if let Some(driver) = key.driver {
-            match driver {
-                crate::atx::AtxDriverType::Serial => {
-                    if let Some(pin) = key.pin {
-                        if pin == 0 {
-                            return Err(AppError::BadRequest(format!(
-                                "{} serial channel must be 1-based (>= 1)",
-                                name
-                            )));
-                        }
-                        if pin > u8::MAX as u32 {
-                            return Err(AppError::BadRequest(format!(
-                                "{} serial channel must be <= {}",
-                                name,
-                                u8::MAX
-                            )));
-                        }
-                    }
-                }
-                crate::atx::AtxDriverType::UsbRelay => {
-                    if let Some(pin) = key.pin {
-                        if pin == 0 {
-                            return Err(AppError::BadRequest(format!(
-                                "{} USB relay channel must be 1-based (>= 1)",
-                                name
-                            )));
-                        }
-                        if pin > u8::MAX as u32 {
-                            return Err(AppError::BadRequest(format!(
-                                "{} USB relay channel must be <= {}",
-                                name,
-                                u8::MAX
-                            )));
-                        }
-                        if pin > 8 {
-                            return Err(AppError::BadRequest(format!(
-                                "{} USB HID relay channel must be <= 8",
-                                name
-                            )));
-                        }
-                    }
-                }
-                crate::atx::AtxDriverType::Gpio | crate::atx::AtxDriverType::None => {}
-            }
-        }
-        Ok(())
-    }
-
-    fn validate_effective_key_config(
-        key: &crate::atx::AtxKeyConfig,
+    fn validate_output_binding_update(
+        binding: &AtxOutputBindingUpdate,
         name: &str,
     ) -> crate::error::Result<()> {
-        match key.driver {
-            crate::atx::AtxDriverType::Serial => {
-                if key.device.trim().is_empty() {
-                    return Err(AppError::BadRequest(format!(
-                        "{} serial device cannot be empty",
-                        name
-                    )));
+        if let Some(ref device) = binding.device {
+            if !device.trim().is_empty() {
+                Self::validate_device_path(device, name)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_input_binding_update(
+        binding: &AtxInputBindingUpdate,
+        name: &str,
+    ) -> crate::error::Result<()> {
+        if let Some(ref device) = binding.device {
+            if !device.trim().is_empty() {
+                Self::validate_device_path(device, name)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_effective_config(config: &AtxConfig) -> crate::error::Result<()> {
+        match config.driver {
+            crate::atx::AtxDriverType::Gpio => {
+                for (name, binding) in [("power", &config.power), ("reset", &config.reset)] {
+                    if binding.enabled {
+                        Self::validate_device_path(&binding.device, name)?;
+                    }
                 }
-                if key.pin == 0 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} serial channel must be 1-based (>= 1)",
-                        name
-                    )));
-                }
-                if key.pin > u8::MAX as u32 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} serial channel must be <= {}",
-                        name,
-                        u8::MAX
-                    )));
-                }
-                if key.baud_rate == 0 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} baud_rate must be greater than 0",
-                        name
-                    )));
+
+                for (name, binding) in [("led", &config.led), ("hdd", &config.hdd)] {
+                    if binding.enabled {
+                        Self::validate_device_path(&binding.device, name)?;
+                    }
                 }
             }
             crate::atx::AtxDriverType::UsbRelay => {
-                if key.pin == 0 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} USB relay channel must be 1-based (>= 1)",
-                        name
-                    )));
-                }
-                if key.pin > u8::MAX as u32 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} USB relay channel must be <= {}",
-                        name,
-                        u8::MAX
-                    )));
-                }
-                if key.pin > 8 {
-                    return Err(AppError::BadRequest(format!(
-                        "{} USB HID relay channel must be <= 8",
-                        name
-                    )));
-                }
+                Self::validate_device_path(&config.device, "ATX LCUS HID relay")?;
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
             }
-            crate::atx::AtxDriverType::Gpio | crate::atx::AtxDriverType::None => {}
+            crate::atx::AtxDriverType::Serial => {
+                Self::validate_device_path(&config.device, "ATX LCUS serial relay")?;
+                if config.baud_rate == 0 {
+                    return Err(AppError::BadRequest(
+                        "ATX baud_rate must be greater than 0".to_string(),
+                    ));
+                }
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+            }
+            crate::atx::AtxDriverType::None => {}
+        };
+
+        Ok(())
+    }
+
+    fn validate_output_channel(
+        binding: &crate::atx::AtxOutputBinding,
+        name: &str,
+        min: u32,
+        max: u32,
+    ) -> crate::error::Result<()> {
+        if !binding.enabled {
+            return Ok(());
         }
+
+        if binding.pin < min || binding.pin > max {
+            return Err(AppError::BadRequest(format!(
+                "{} channel must be between {} and {}",
+                name, min, max
+            )));
+        }
+
         Ok(())
     }
 
@@ -662,50 +672,65 @@ impl AtxConfigUpdate {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
         }
+        if let Some(driver) = self.driver {
+            config.driver = driver;
+        }
+        if let Some(ref device) = self.device {
+            config.device = device.clone();
+        }
+        if let Some(baud_rate) = self.baud_rate {
+            config.baud_rate = baud_rate;
+        }
         if let Some(ref power) = self.power {
-            Self::apply_key_update(power, &mut config.power);
+            Self::apply_output_binding_update(power, &mut config.power);
         }
         if let Some(ref reset) = self.reset {
-            Self::apply_key_update(reset, &mut config.reset);
+            Self::apply_output_binding_update(reset, &mut config.reset);
         }
         if let Some(ref led) = self.led {
-            Self::apply_led_update(led, &mut config.led);
+            Self::apply_input_binding_update(led, &mut config.led);
+        }
+        if let Some(ref hdd) = self.hdd {
+            Self::apply_input_binding_update(hdd, &mut config.hdd);
         }
         if let Some(ref wol_interface) = self.wol_interface {
             config.wol_interface = wol_interface.clone();
         }
     }
 
-    fn apply_key_update(update: &AtxKeyConfigUpdate, config: &mut crate::atx::AtxKeyConfig) {
-        if let Some(driver) = update.driver {
-            config.driver = driver;
+    fn apply_output_binding_update(
+        update: &AtxOutputBindingUpdate,
+        config: &mut crate::atx::AtxOutputBinding,
+    ) {
+        if let Some(enabled) = update.enabled {
+            config.enabled = enabled;
         }
         if let Some(ref device) = update.device {
             config.device = device.clone();
         }
-        if let Some(baud_rate) = update.baud_rate {
-            config.baud_rate = baud_rate;
+        if let Some(pin) = update.pin {
+            config.pin = pin;
+        }
+        if let Some(active_level) = update.active_level {
+            config.active_level = active_level;
+        }
+    }
+
+    fn apply_input_binding_update(
+        update: &AtxInputBindingUpdate,
+        config: &mut crate::atx::AtxInputBinding,
+    ) {
+        if let Some(enabled) = update.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref device) = update.device {
+            config.device = device.clone();
         }
         if let Some(pin) = update.pin {
             config.pin = pin;
         }
-        if let Some(level) = update.active_level {
-            config.active_level = level;
-        }
-    }
-
-    fn apply_led_update(update: &AtxLedConfigUpdate, config: &mut crate::atx::AtxLedConfig) {
-        if let Some(enabled) = update.enabled {
-            config.enabled = enabled;
-        }
-        if let Some(ref chip) = update.gpio_chip {
-            config.gpio_chip = chip.clone();
-        }
-        if let Some(pin) = update.gpio_pin {
-            config.gpio_pin = pin;
-        }
-        if let Some(inverted) = update.inverted {
-            config.inverted = inverted;
+        if let Some(active_level) = update.active_level {
+            config.active_level = active_level;
         }
     }
 }
@@ -1233,77 +1258,111 @@ impl RedfishConfigUpdate {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_atx_apply_key_update_applies_baud_rate() {
-        let mut config = AtxConfig::default();
-        let update = AtxConfigUpdate {
+    fn empty_atx_update() -> AtxConfigUpdate {
+        AtxConfigUpdate {
             enabled: None,
-            power: Some(AtxKeyConfigUpdate {
-                driver: Some(crate::atx::AtxDriverType::Serial),
-                device: Some("/dev/null".to_string()),
-                baud_rate: Some(19200),
-                pin: Some(1),
-                active_level: None,
-            }),
+            driver: None,
+            device: None,
+            baud_rate: None,
+            power: None,
             reset: None,
             led: None,
+            hdd: None,
             wol_interface: None,
-        };
+        }
+    }
+
+    #[test]
+    fn test_atx_apply_update_applies_global_baud_rate() {
+        let mut config = AtxConfig::default();
+        let mut update = empty_atx_update();
+        update.driver = Some(crate::atx::AtxDriverType::Serial);
+        update.device = Some("/dev/null".to_string());
+        update.baud_rate = Some(19200);
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: Some(true),
+            device: Some("/dev/ignored".to_string()),
+            pin: Some(1),
+            active_level: None,
+        });
 
         update.apply_to(&mut config);
-        assert_eq!(config.power.baud_rate, 19200);
+        assert_eq!(config.driver, crate::atx::AtxDriverType::Serial);
+        assert_eq!(config.device, "/dev/null");
+        assert_eq!(config.baud_rate, 19200);
+        assert!(config.power.enabled);
+        assert_eq!(config.power.pin, 1);
     }
 
     #[test]
     fn test_atx_validate_with_current_rejects_serial_pin_zero() {
         let mut current = AtxConfig::default();
-        current.power.driver = crate::atx::AtxDriverType::Serial;
-        current.power.device = "/dev/null".to_string();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::Serial;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
         current.power.pin = 1;
-        current.power.baud_rate = 9600;
+        current.baud_rate = 9600;
 
-        let update = AtxConfigUpdate {
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
             enabled: None,
-            power: Some(AtxKeyConfigUpdate {
-                driver: None,
-                device: None,
-                baud_rate: None,
-                pin: Some(0),
-                active_level: None,
-            }),
-            reset: None,
-            led: None,
-            wol_interface: None,
-        };
+            device: None,
+            pin: Some(0),
+            active_level: None,
+        });
 
         assert!(update.validate_with_current(&current).is_err());
     }
 
     #[test]
-    fn test_atx_validate_with_current_rejects_shared_serial_baud_mismatch() {
+    fn test_atx_validate_with_current_rejects_lcus_serial_channel_over_8() {
         let mut current = AtxConfig::default();
-        current.power.driver = crate::atx::AtxDriverType::Serial;
-        current.power.device = "/dev/ttyUSB0".to_string();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::Serial;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
         current.power.pin = 1;
-        current.power.baud_rate = 9600;
-        current.reset.driver = crate::atx::AtxDriverType::Serial;
-        current.reset.device = "/dev/ttyUSB0".to_string();
-        current.reset.pin = 2;
-        current.reset.baud_rate = 9600;
+        current.baud_rate = 9600;
 
-        let update = AtxConfigUpdate {
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
             enabled: None,
-            power: None,
-            reset: Some(AtxKeyConfigUpdate {
-                driver: None,
-                device: None,
-                baud_rate: Some(115200),
-                pin: None,
-                active_level: None,
-            }),
-            led: None,
-            wol_interface: None,
-        };
+            device: None,
+            pin: Some(9),
+            active_level: None,
+        });
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_enabled_none_driver() {
+        let mut current = AtxConfig::default();
+        current.driver = crate::atx::AtxDriverType::None;
+
+        let mut update = empty_atx_update();
+        update.enabled = Some(true);
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_usb_relay_channel_over_8() {
+        let mut current = AtxConfig::default();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::UsbRelay;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
+        current.power.pin = 1;
+
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: None,
+            device: None,
+            pin: Some(9),
+            active_level: None,
+        });
 
         assert!(update.validate_with_current(&current).is_err());
     }
@@ -1334,5 +1393,83 @@ mod tests {
             device_password: None,
         };
         assert!(update.validate().is_err());
+    }
+
+    #[test]
+    fn ipv6_bind_vnc_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                jpeg_quality: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_vnc_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:5900", "[::1]:5900"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                jpeg_quality: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:8554", "[::1]:8554"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
     }
 }

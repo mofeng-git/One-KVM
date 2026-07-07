@@ -10,9 +10,7 @@ use crate::error::{AppError, Result};
 
 const STREAM_CHUNK_SIZE: usize = 64 * 1024;
 
-const MIN_DRIVE_SIZE_MB: u32 = 1024;
-
-const MAX_DRIVE_SIZE_MB: u32 = 128 * 1024;
+pub const MIN_DRIVE_SIZE_MB: u32 = 64;
 
 const DEFAULT_LABEL: &str = "ONE-KVM";
 
@@ -37,8 +35,20 @@ impl VentoyDrive {
         &self.path
     }
 
+    /// Returns just the raw file size without attempting to parse the filesystem.
+    /// Used as a fallback when the image has been reformatted to an unsupported
+    /// filesystem (e.g. NTFS/exFAT) that VentoyImage cannot open.
+    pub fn raw_size(&self) -> Option<u64> {
+        std::fs::metadata(&self.path).ok().map(|m| m.len())
+    }
+
     pub async fn init(&self, size_mb: u32) -> Result<DriveInfo> {
-        let size_mb = size_mb.clamp(MIN_DRIVE_SIZE_MB, MAX_DRIVE_SIZE_MB);
+        if size_mb < MIN_DRIVE_SIZE_MB {
+            return Err(AppError::BadRequest(format!(
+                "Drive size must be at least {} MB",
+                MIN_DRIVE_SIZE_MB
+            )));
+        }
         let size_str = format!("{}M", size_mb);
         let path = self.path.clone();
         let _lock = self.lock.write().await;

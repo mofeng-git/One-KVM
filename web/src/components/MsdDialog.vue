@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
 import { msdApi, type MsdImage, type DriveFile } from '@/api'
+import { ApiError } from '@/api/request'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
   Dialog,
@@ -25,8 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Slider } from '@/components/ui/slider'
 import { Separator } from '@/components/ui/separator'
 import {
   HardDrive,
@@ -45,6 +46,7 @@ import {
   Globe,
   X,
   AlertCircle,
+  Info,
 } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 
@@ -68,7 +70,8 @@ const uploadProgress = ref(0)
 const uploading = ref(false)
 
 const mountMode = ref<'cdrom' | 'flash'>('flash')
-const accessMode = ref<'readonly' | 'readwrite'>('readonly')
+// Default to readwrite for flash mode; cdrom forces readonly anyway
+const accessMode = ref<'readonly' | 'readwrite'>('readwrite')
 
 const cdromMode = computed(() => mountMode.value === 'cdrom')
 const readOnly = computed(() => accessMode.value === 'readonly')
@@ -84,6 +87,7 @@ const driveInfo = ref<{ size: number; used: number; free: number; initialized: b
 const driveInitialized = ref(false)
 const uploadingFile = ref(false)
 const fileUploadProgress = ref(0)
+const driveError = ref<string | null>(null) // filesystem error (e.g. unsupported format)
 
 const showDeleteDialog = ref(false)
 const deleteTarget = ref<{ type: 'image' | 'file'; id: string; name: string } | null>(null)
@@ -92,8 +96,42 @@ const newFolderName = ref('')
 
 const showDriveInitDialog = ref(false)
 const showDeleteDriveDialog = ref(false)
-const selectedDriveSize = ref(256) // Default 256MB
-const customDriveSize = ref<number | undefined>(undefined)
+
+const MIN_DRIVE_SIZE_MB = 64
+const DEFAULT_DRIVE_SIZE_MB = 256
+const BYTES_PER_MB = 1024 * 1024
+
+const driveSizeMB = ref(DEFAULT_DRIVE_SIZE_MB)
+const availableDriveSizeMB = computed(() => {
+  if (!systemStore.diskSpace) return null
+  return Math.floor(systemStore.diskSpace.available / BYTES_PER_MB)
+})
+const canInitializeDrive = computed(() => {
+  return availableDriveSizeMB.value !== null && availableDriveSizeMB.value >= MIN_DRIVE_SIZE_MB
+})
+const sliderMaxDriveSizeMB = computed(() => {
+  return Math.max(MIN_DRIVE_SIZE_MB, availableDriveSizeMB.value ?? MIN_DRIVE_SIZE_MB)
+})
+
+function normalizeDriveSize(value: number) {
+  const max = availableDriveSizeMB.value
+  if (max === null || max < MIN_DRIVE_SIZE_MB) return MIN_DRIVE_SIZE_MB
+  const next = Number.isFinite(value) ? Math.trunc(value) : DEFAULT_DRIVE_SIZE_MB
+  return Math.max(MIN_DRIVE_SIZE_MB, Math.min(next, max))
+}
+
+function updateDriveSizeFromSlider(value: number[] | undefined) {
+  driveSizeMB.value = normalizeDriveSize(value?.[0] ?? MIN_DRIVE_SIZE_MB)
+}
+
+const finalDriveSize = computed(() => {
+  return normalizeDriveSize(driveSizeMB.value)
+})
+
+watch(availableDriveSizeMB, () => {
+  driveSizeMB.value = finalDriveSize.value
+})
+
 const initializingDrive = ref(false)
 const deletingDrive = ref(false)
 
@@ -114,15 +152,10 @@ const TWO_POINT_TWO_GB = 2.2 * 1024 * 1024 * 1024
 
 const msdConnected = computed(() => systemStore.msd?.connected ?? false)
 const msdMode = computed(() => systemStore.msd?.mode ?? 'none')
+// Drive is currently mounted on the target machine via USB — file ops are blocked
+const driveConnectedToTarget = computed(() => msdConnected.value && msdMode.value === 'drive')
 
-const connectedImageName = computed(() => {
-  if (!msdConnected.value) return null
-  if (msdMode.value === 'drive') return t('msd.drive')
-  const imageId = systemStore.msd?.imageId
-  if (!imageId) return null
-  const image = images.value.find(i => i.id === imageId)
-  return image?.name ?? null
-})
+
 
 const operationInProgress = computed(() => {
   return connecting.value ||
@@ -155,7 +188,21 @@ watch(() => props.open, async (isOpen) => {
   }
 })
 
+watch(driveConnectedToTarget, async (isConnected, wasConnected) => {
+  if (!wasConnected || isConnected || !props.open) return
+  await refreshDriveBrowser()
+})
+
+async function refreshDiskSpace() {
+  try {
+    await systemStore.fetchSystemInfo()
+  } catch (e) {
+    console.error('Failed to refresh disk space:', e)
+  }
+}
+
 async function loadData() {
+  await refreshDiskSpace()
   await systemStore.fetchMsdState()
   await loadImages()
   await loadDriveInfo()
@@ -188,6 +235,7 @@ async function handleImageUpload(e: Event) {
       uploadProgress.value = progress
     })
     images.value.push(image)
+    await refreshDiskSpace()
   } catch (e) {
     console.error('Failed to upload image:', e)
   } finally {
@@ -255,17 +303,27 @@ function confirmDelete(type: 'image' | 'file', id: string, name: string) {
 async function executeDelete() {
   if (!deleteTarget.value || deleting.value) return
 
+  // Guard: never delete drive files while connected to target
+  if (deleteTarget.value.type === 'file' && driveConnectedToTarget.value) {
+    toast.error(t('msd.driveConnectedBlocked'))
+    showDeleteDialog.value = false
+    deleteTarget.value = null
+    return
+  }
+
   deleting.value = true
   try {
     if (deleteTarget.value.type === 'image') {
       await msdApi.deleteImage(deleteTarget.value.id)
       images.value = images.value.filter(i => i.id !== deleteTarget.value!.id)
+      await refreshDiskSpace()
     } else {
       await msdApi.deleteDriveFile(deleteTarget.value.id)
       await loadDriveFiles()
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to delete:', e)
+    toast.error(t('common.error'), { description: e?.message })
   } finally {
     showDeleteDialog.value = false
     deleteTarget.value = null
@@ -274,42 +332,57 @@ async function executeDelete() {
 }
 
 async function loadDriveInfo() {
+  driveError.value = null
   try {
     driveInfo.value = await msdApi.driveInfo()
     driveInitialized.value = true
-  } catch {
-    driveInitialized.value = false
+  } catch (e: any) {
+    if (e instanceof ApiError) {
+      if (e.status === 404) {
+        // Drive image file does not exist — truly not initialized
+        driveInitialized.value = false
+        driveInfo.value = null
+      } else {
+        // Drive file exists but unreadable (e.g. wrong filesystem format after
+        // being reformatted by the controlled machine). Show the drive tab with
+        // an error banner instead of the misleading "Initialize Drive" button.
+        driveInitialized.value = true
+        driveError.value = e.message
+        driveInfo.value = null
+      }
+    } else {
+      driveInitialized.value = false
+      driveInfo.value = null
+    }
+    console.error('Failed to load drive info:', e)
   }
 }
 
-const driveSizeOptions = computed(() => [
-  { value: 64, label: '64 MB' },
-  { value: 128, label: '128 MB' },
-  { value: 256, label: `256 MB (${t('common.recommended')})`, recommended: true },
-  { value: 512, label: '512 MB' },
-  { value: 1024, label: '1 GB' },
-  { value: 2048, label: '2 GB' },
-  { value: 4096, label: '4 GB' },
-  { value: 8192, label: '8 GB' },
-])
-
-const finalDriveSize = computed(() => {
-  return customDriveSize.value || selectedDriveSize.value
-})
-
-function initializeDrive() {
+async function initializeDrive() {
+  await refreshDiskSpace()
+  driveSizeMB.value = finalDriveSize.value
   showDriveInitDialog.value = true
 }
 
 async function createDrive() {
+  await refreshDiskSpace()
+  driveSizeMB.value = finalDriveSize.value
+  if (!canInitializeDrive.value) {
+    toast.error(t('msd.driveSpaceUnavailable'))
+    return
+  }
+
   initializingDrive.value = true
   try {
-    await msdApi.initDrive(finalDriveSize.value)
+    const sizeMb = finalDriveSize.value
+    await msdApi.initDrive(sizeMb)
     await loadDriveInfo()
     await loadDriveFiles()
+    await refreshDiskSpace()
     showDriveInitDialog.value = false
   } catch (e) {
     console.error('Failed to initialize drive:', e)
+    toast.error(t('msd.driveCreateFailed'))
   } finally {
     initializingDrive.value = false
   }
@@ -324,6 +397,7 @@ async function deleteDrive() {
     driveFiles.value = []
     currentPath.value = '/'
     showDeleteDriveDialog.value = false
+    await refreshDiskSpace()
   } catch (e) {
     console.error('Failed to delete drive:', e)
   } finally {
@@ -332,14 +406,34 @@ async function deleteDrive() {
 }
 
 async function loadDriveFiles() {
+  // Do not read image file while it is mounted on the target machine:
+  // concurrent access causes filesystem corruption (Windows error 0x80070570)
+  if (driveConnectedToTarget.value) {
+    driveFiles.value = []
+    return
+  }
   loadingDrive.value = true
+  driveError.value = null
   try {
     driveFiles.value = await msdApi.listDriveFiles(currentPath.value)
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to load drive files:', e)
+    // Surface the error — could be unsupported filesystem format
+    driveError.value = e?.message ?? String(e)
+    driveFiles.value = []
   } finally {
     loadingDrive.value = false
   }
+}
+
+async function refreshDriveBrowser() {
+  await loadDriveInfo()
+  if (driveInitialized.value) {
+    await loadDriveFiles()
+  } else {
+    driveFiles.value = []
+  }
+  await refreshDiskSpace()
 }
 
 function navigateTo(path: string) {
@@ -359,6 +453,13 @@ async function handleFileUpload(e: Event) {
   const file = input.files?.[0]
   if (!file) return
 
+  // Guard: never upload while drive is connected to target
+  if (driveConnectedToTarget.value) {
+    toast.error(t('msd.driveConnectedBlocked'))
+    input.value = ''
+    return
+  }
+
   uploadingFile.value = true
   fileUploadProgress.value = 0
 
@@ -367,8 +468,9 @@ async function handleFileUpload(e: Event) {
       fileUploadProgress.value = progress
     })
     await loadDriveFiles()
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to upload file:', e)
+    toast.error(t('msd.uploadFailed'), { description: e?.message })
   } finally {
     uploadingFile.value = false
     fileUploadProgress.value = 0
@@ -379,14 +481,23 @@ async function handleFileUpload(e: Event) {
 async function createFolder() {
   if (!newFolderName.value.trim()) return
 
+  // Guard: never create folders while drive is connected to target
+  if (driveConnectedToTarget.value) {
+    toast.error(t('msd.driveConnectedBlocked'))
+    showNewFolderDialog.value = false
+    newFolderName.value = ''
+    return
+  }
+
   try {
     const path = currentPath.value === '/'
       ? '/' + newFolderName.value
       : currentPath.value + '/' + newFolderName.value
     await msdApi.createDirectory(path)
     await loadDriveFiles()
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to create folder:', e)
+    toast.error(t('common.error'), { description: e?.message })
   } finally {
     showNewFolderDialog.value = false
     newFolderName.value = ''
@@ -494,16 +605,8 @@ onUnmounted(() => {
             </span>
             {{ msdConnected ? t('common.connected') : t('common.disconnected') }}
           </span>
-          <template v-if="msdConnected && connectedImageName">
+          <template v-if="msdConnected">
             <span class="text-muted-foreground">·</span>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <span class="truncate max-w-[180px] cursor-help">{{ connectedImageName }}</span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ connectedImageName }}</p>
-              </TooltipContent>
-            </Tooltip>
             <Badge variant="secondary" class="text-xs">{{ msdMode === 'drive' ? t('msd.drive') : t('msd.images') }}</Badge>
             <Button
               variant="outline"
@@ -712,17 +815,53 @@ onUnmounted(() => {
 
             <template v-else>
               <!-- Drive Info Card -->
-              <div class="shrink-0 p-3 rounded-lg border space-y-3" :class="msdConnected && msdMode === 'drive' ? 'border-primary bg-primary/5' : 'bg-muted/50'">
+              <div
+                class="shrink-0 p-3 rounded-lg border space-y-3"
+                :class="msdConnected && msdMode === 'drive'
+                  ? 'border-primary bg-primary/5'
+                  : driveError
+                    ? 'border-destructive/40 bg-destructive/5'
+                    : 'bg-muted/50'"
+              >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <HardDrive class="h-4 w-4 text-muted-foreground" />
                     <span class="text-sm font-medium">{{ t('msd.drive') }}</span>
-                    <Badge variant="outline" class="text-xs">
+                    <!-- Show size badge only when info is available -->
+                    <Badge v-if="driveInfo" variant="outline" class="text-xs">
                       {{ Math.round((driveInfo?.size || 0) / 1024 / 1024) }} MB
                     </Badge>
+                    <!-- Show unreadable badge when format is wrong -->
+                    <template v-else-if="driveError">
+                      <Badge variant="outline" class="text-xs border-destructive/50 text-destructive">
+                        {{ t('msd.driveUnreadable') }}
+                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <span class="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground">
+                            <Info class="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{{ t('msd.driveUnreadableTooltip') }}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </template>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <template v-if="msdConnected && msdMode === 'drive'">
+                    <!-- When drive format is unrecognized, only offer re-initialization -->
+                    <template v-if="driveError && !msdConnected">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 text-xs"
+                        :disabled="operationInProgress"
+                        @click="initializeDrive"
+                      >
+                        {{ t('msd.reinitializeDrive') }}
+                      </Button>
+                    </template>
+                    <template v-else-if="msdConnected && msdMode === 'drive'">
                       <Badge variant="default" class="text-xs h-7 px-2">
                         <span class="relative flex h-1.5 w-1.5 mr-1.5">
                           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -755,10 +894,9 @@ onUnmounted(() => {
                     </Button>
                   </div>
                 </div>
-                <!-- Storage usage bar -->
-                <div class="space-y-1.5">
+                <!-- Storage usage bar — hidden when format is unrecognized -->
+                <div v-if="driveInfo" class="space-y-1.5">
                   <Progress
-                    v-if="driveInfo"
                     :model-value="driveInfo.size > 0 ? (driveInfo.used / driveInfo.size) * 100 : 0"
                     class="h-2"
                   />
@@ -769,8 +907,10 @@ onUnmounted(() => {
                 </div>
               </div>
 
+
               <!-- File Browser -->
               <div class="flex-1 min-h-0 flex flex-col space-y-2">
+
                 <!-- Toolbar -->
                 <div class="shrink-0 flex items-center justify-between gap-2">
                   <div class="flex items-center gap-1 min-w-0 flex-1">
@@ -779,6 +919,7 @@ onUnmounted(() => {
                       variant="ghost"
                       size="icon"
                       class="h-7 w-7 shrink-0"
+                      :disabled="driveConnectedToTarget"
                       @click="navigateUp"
                     >
                       <ArrowLeft class="h-3.5 w-3.5" />
@@ -788,25 +929,63 @@ onUnmounted(() => {
                         <ChevronRight v-if="index > 0" class="h-3 w-3 text-muted-foreground mx-0.5 shrink-0" />
                         <button
                           class="hover:text-primary transition-colors truncate"
-                          :class="index === breadcrumbs.length - 1 ? 'font-medium' : 'text-muted-foreground'"
-                          @click="navigateTo(crumb.path)"
+                          :class="[
+                            index === breadcrumbs.length - 1 ? 'font-medium' : 'text-muted-foreground',
+                            driveConnectedToTarget ? 'cursor-not-allowed opacity-50' : ''
+                          ]"
+                          :disabled="driveConnectedToTarget"
+                          @click="!driveConnectedToTarget && navigateTo(crumb.path)"
                         >
                           {{ crumb.name }}
                         </button>
                       </template>
                     </nav>
                   </div>
-                  <div class="shrink-0 flex items-center gap-1 shrink-0">
-                    <label>
-                      <input type="file" class="hidden" :disabled="uploadingFile" @change="handleFileUpload" />
-                      <Button variant="ghost" size="icon" as="span" class="h-7 w-7 cursor-pointer">
-                        <Upload class="h-3.5 w-3.5" />
-                      </Button>
-                    </label>
-                    <Button variant="ghost" size="icon" class="h-7 w-7" @click="showNewFolderDialog = true">
-                      <FolderPlus class="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-7 w-7" @click="loadDriveFiles">
+                  <div class="shrink-0 flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <label>
+                          <!-- ③ Upload disabled when drive connected to target -->
+                          <input type="file" class="hidden" :disabled="uploadingFile || driveConnectedToTarget" @change="handleFileUpload" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            as="span"
+                            class="h-7 w-7"
+                            :class="driveConnectedToTarget ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'"
+                          >
+                            <Upload class="h-3.5 w-3.5" />
+                          </Button>
+                        </label>
+                      </TooltipTrigger>
+                      <TooltipContent v-if="driveConnectedToTarget">
+                        <p>{{ t('msd.driveConnectedBlocked') }}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <!-- ③ New folder disabled when drive connected to target -->
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-7 w-7"
+                          :disabled="driveConnectedToTarget"
+                          @click="showNewFolderDialog = true"
+                        >
+                          <FolderPlus class="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent v-if="driveConnectedToTarget">
+                        <p>{{ t('msd.driveConnectedBlocked') }}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      :disabled="driveConnectedToTarget"
+                      @click="loadDriveFiles"
+                    >
                       <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loadingDrive }" />
                     </Button>
                   </div>
@@ -815,8 +994,19 @@ onUnmounted(() => {
                 <Progress v-if="uploadingFile" :model-value="fileUploadProgress" class="h-1 shrink-0" />
 
                 <!-- File List -->
-                <div v-if="driveFiles.length === 0" class="shrink-0 text-center py-6 text-muted-foreground text-sm">
+                <div
+                  v-if="driveFiles.length === 0 && !driveConnectedToTarget && !driveError"
+                  class="shrink-0 text-center py-6 text-muted-foreground text-sm"
+                >
                   {{ t('msd.emptyFolder') }}
+                </div>
+
+                <!-- Connected placeholder: file list hidden while drive mounted on target -->
+                <div
+                  v-else-if="driveConnectedToTarget"
+                  class="shrink-0 text-center py-6 text-muted-foreground text-sm"
+                >
+                  {{ t('msd.driveConnectedFilesHidden') }}
                 </div>
 
                 <div v-else class="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
@@ -858,10 +1048,12 @@ onUnmounted(() => {
                         >
                           <Download class="h-3.5 w-3.5" />
                         </Button>
+                        <!-- ③ Delete disabled when drive connected to target -->
                         <Button
                           variant="ghost"
                           size="icon"
                           class="h-7 w-7 text-destructive"
+                          :disabled="driveConnectedToTarget"
                           @click="confirmDelete('file', file.path, file.name)"
                         >
                           <Trash2 class="h-3.5 w-3.5" />
@@ -929,54 +1121,55 @@ onUnmounted(() => {
         <DialogDescription>{{ t('msd.selectDriveSize') }}</DialogDescription>
       </DialogHeader>
 
-      <div class="space-y-4">
-        <!-- Preset size selection -->
-        <div class="space-y-2">
-          <Label>{{ t('msd.driveSize') }}</Label>
-          <RadioGroup v-model="selectedDriveSize">
-            <div v-for="size in driveSizeOptions" :key="size.value" class="flex items-center space-x-2">
-              <RadioGroupItem :id="`size-${size.value}`" :value="size.value" />
-              <Label :for="`size-${size.value}`" class="font-normal cursor-pointer flex-1">
-                {{ size.label }}
-              </Label>
+      <div class="space-y-6 py-4">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <Label>{{ t('msd.driveSize') }}</Label>
+            <div class="flex items-center gap-2">
+              <Input
+                v-model.number="driveSizeMB"
+                type="number"
+                :min="MIN_DRIVE_SIZE_MB"
+                :max="sliderMaxDriveSizeMB"
+                class="w-24 text-right"
+                :disabled="!canInitializeDrive || initializingDrive"
+                @blur="driveSizeMB = finalDriveSize"
+              />
+              <span class="text-sm text-muted-foreground">MB</span>
             </div>
-          </RadioGroup>
-        </div>
-
-        <!-- Custom size -->
-        <div class="space-y-2">
-          <Label for="custom-size">{{ t('msd.customSize') }}</Label>
-          <div class="flex items-center gap-2">
-            <Input
-              id="custom-size"
-              v-model.number="customDriveSize"
-              type="number"
-              :min="64"
-              :max="32768"
-              placeholder="256"
-              class="flex-1"
-            />
-            <span class="text-sm text-muted-foreground">MB</span>
           </div>
-          <p class="text-xs text-muted-foreground">
-            {{ t('msd.driveSizeHint') }}
-          </p>
-        </div>
 
-        <!-- Final size display -->
-        <div class="p-3 rounded-lg bg-muted/50">
-          <div class="flex items-center justify-between text-sm">
-            <span class="text-muted-foreground">{{ t('msd.selectedSize') }}:</span>
-            <span class="font-medium">{{ finalDriveSize }} MB</span>
+          <Slider
+            :model-value="[driveSizeMB]"
+            @update:model-value="updateDriveSizeFromSlider"
+            :min="MIN_DRIVE_SIZE_MB"
+            :max="sliderMaxDriveSizeMB"
+            :step="1"
+            :disabled="!canInitializeDrive || initializingDrive"
+            class="w-full"
+          />
+
+          <div class="flex justify-between text-xs text-muted-foreground">
+            <span>{{ MIN_DRIVE_SIZE_MB }} MB</span>
+            <span>
+              {{ availableDriveSizeMB === null ? t('msd.driveSpaceUnknown') : formatBytes((availableDriveSizeMB || 0) * BYTES_PER_MB) }}
+            </span>
           </div>
         </div>
+
+        <p v-if="availableDriveSizeMB === null" class="text-xs text-destructive">
+          {{ t('msd.driveSpaceUnknown') }}
+        </p>
+        <p v-else-if="availableDriveSizeMB < MIN_DRIVE_SIZE_MB" class="text-xs text-destructive">
+          {{ t('msd.driveSpaceTooSmall', { min: MIN_DRIVE_SIZE_MB }) }}
+        </p>
       </div>
 
       <DialogFooter>
         <Button variant="outline" @click="showDriveInitDialog = false" :disabled="initializingDrive">
           {{ t('common.cancel') }}
         </Button>
-        <Button @click="createDrive" :disabled="initializingDrive">
+        <Button @click="createDrive" :disabled="initializingDrive || !canInitializeDrive">
           <span v-if="initializingDrive">{{ t('common.creating') }}...</span>
           <span v-else>{{ t('common.create') }}</span>
         </Button>

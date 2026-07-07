@@ -15,6 +15,8 @@ ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
 ARG LIBVPX_VERSION=1.16.0
 ARG X265_VERSION=3.4
 ARG OPUS_VERSION=1.5.2
+ARG RKMPP_BRANCH=jellyfin-mpp
+ARG RKRGA_BRANCH=jellyfin-rga
 ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
 
 # Optionally use China mirrors for builds in China.
@@ -241,8 +243,8 @@ RUN github_prefix="" \
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && github_prefix="" \
     && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git clone --depth 1 "https://gitee.com/nyanmisaka/mpp.git" rkmpp \
-    && git clone --depth 1 "https://gitee.com/nyanmisaka/rga.git" rkrga \
+    && git clone --depth 1 --branch ${RKMPP_BRANCH} "${github_prefix}https://github.com/nyanmisaka/mpp.git" rkmpp \
+    && git clone --depth 1 --branch ${RKRGA_BRANCH} "${github_prefix}https://github.com/nyanmisaka/rk-mirrors.git" rkrga \
     && git init ffmpeg-rockchip \
     && cd ffmpeg-rockchip \
     && git remote add origin "${github_prefix}https://github.com/nyanmisaka/ffmpeg-rockchip.git" \

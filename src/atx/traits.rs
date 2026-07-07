@@ -3,7 +3,7 @@ use serialport::SerialPort;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use super::types::AtxKeyConfig;
+use super::types::{AtxKeyConfig, LCUS_RELAY_MAX_CHANNEL};
 use crate::error::Result;
 
 pub type SharedSerialHandle = Arc<Mutex<Box<dyn SerialPort>>>;
@@ -36,10 +36,10 @@ pub fn validate_serial_config(config: &AtxKeyConfig) -> Result<()> {
             "Serial ATX channel must be 1-based (>= 1)".to_string(),
         ));
     }
-    if config.pin > u8::MAX as u32 {
+    if config.pin > LCUS_RELAY_MAX_CHANNEL as u32 {
         return Err(crate::error::AppError::Config(format!(
-            "Serial ATX channel must be <= {}",
-            u8::MAX
+            "LCUS serial relay channel must be <= {}",
+            LCUS_RELAY_MAX_CHANNEL
         )));
     }
     if config.baud_rate == 0 {
