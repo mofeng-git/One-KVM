@@ -56,6 +56,7 @@ import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import TerminalDialog from '@/components/TerminalDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -1694,10 +1695,6 @@ function isExtRunning(status: ExtensionStatus | undefined): boolean {
 
 function openTerminal() {
   showTerminalDialog.value = true
-}
-
-function openTerminalInNewTab() {
-  window.open('/api/terminal/', '_blank')
 }
 
 function getExtStatusText(status: ExtensionStatus | undefined): string {
@@ -5354,37 +5351,7 @@ watch(isWindows, () => {
     </div>
 
     <!-- Terminal Dialog -->
-    <Dialog v-model:open="showTerminalDialog">
-      <DialogContent class="w-[98vw] sm:w-[95vw] max-w-5xl h-[90dvh] sm:h-[85dvh] max-h-[720px] p-0 flex flex-col overflow-hidden">
-        <DialogHeader class="px-3 sm:px-4 py-2 sm:py-3 border-b shrink-0">
-          <DialogTitle class="flex items-center justify-between w-full">
-            <div class="flex items-center gap-2">
-              <Terminal class="h-4 w-4 sm:h-5 sm:w-5" />
-              <span class="text-sm sm:text-base">{{ t('extensions.ttyd.title') }}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 sm:h-8 sm:w-8 mr-6 sm:mr-8"
-              @click="openTerminalInNewTab"
-              :aria-label="t('extensions.ttyd.openInNewTab')"
-              :title="t('extensions.ttyd.openInNewTab')"
-            >
-              <ExternalLink class="h-4 w-4" />
-            </Button>
-          </DialogTitle>
-        </DialogHeader>
-        <div class="flex-1 min-h-0">
-          <iframe
-            v-if="showTerminalDialog"
-            src="/api/terminal/"
-            class="w-full h-full border-0"
-            allow="clipboard-read; clipboard-write"
-            scrolling="no"
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <TerminalDialog v-model:open="showTerminalDialog" />
 
     <!-- Restart Confirmation Dialog -->
     <Dialog v-model:open="showRestartDialog">
