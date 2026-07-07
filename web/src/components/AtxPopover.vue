@@ -52,6 +52,13 @@ const powerStateIconColor = computed(() => {
   }
 })
 
+const powerStateTextColor = computed(() => {
+  switch (powerState.value) {
+    case 'on': return 'text-green-600'
+    default: return ''
+  }
+})
+
 const powerStateText = computed(() => {
   switch (powerState.value) {
     case 'on': return t('atx.stateOn')
@@ -62,9 +69,16 @@ const powerStateText = computed(() => {
 
 const hddStateIconColor = computed(() => {
   switch (hddState.value) {
-    case 'active': return 'text-sky-600'
+    case 'active': return 'text-green-600'
     case 'inactive': return 'text-slate-500'
     default: return 'text-yellow-600'
+  }
+})
+
+const hddStateTextColor = computed(() => {
+  switch (hddState.value) {
+    case 'active': return 'text-green-600'
+    default: return ''
   }
 })
 
@@ -205,14 +219,14 @@ watch(
             <Power :class="['h-4 w-4 shrink-0', powerStateIconColor]" />
             <div class="min-w-0">
               <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.powerState') }}</p>
-              <p class="mt-1 truncate text-xs font-medium leading-none">{{ powerStateText }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', powerStateTextColor]">{{ powerStateText }}</p>
             </div>
           </div>
           <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
             <HardDrive :class="['h-4 w-4 shrink-0', hddStateIconColor]" />
             <div class="min-w-0">
               <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.hddState') }}</p>
-              <p class="mt-1 truncate text-xs font-medium leading-none">{{ hddStateText }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', hddStateTextColor]">{{ hddStateText }}</p>
             </div>
           </div>
         </div>
