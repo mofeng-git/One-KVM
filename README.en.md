@@ -22,6 +22,8 @@ Goals: an open, lightweight, easy-to-use IP-KVM stack.
 - **Lightweight**: shipped as a binary with minimal moving parts for deployment.
 - **Easy to use**: no hand-edited config files required; settings are done in the web UI.
 
+For more information, see the [One-KVM Rust documentation](https://docs.one-kvm.cn/).
+
 > **One-KVM (Python)** is no longer maintained. If you still need it, see <https://github.com/mofeng-git/One-KVM/tree/python>.
 
 <div align="center">
@@ -32,7 +34,7 @@ Goals: an open, lightweight, easy-to-use IP-KVM stack.
 
 ## Features
 
-### Core
+**Core**
 
 | Area | Capabilities |
 |------|----------------|
@@ -40,10 +42,8 @@ Goals: an open, lightweight, easy-to-use IP-KVM stack.
 | Video encoding | VAAPI / QSV / RKMPP / V4L2 M2M hardware paths, with software fallback |
 | Keyboard & mouse | USB OTG HID or CH340 + CH9329 HID; absolute / relative mouse |
 | Virtual media | USB mass storage; ISO/IMG mount and Ventoy-style virtual USB |
-| ATX power | GPIO or USB relay; power and reset control |
+| ATX power | GPIO or USB relay; power control |
 | Audio | ALSA capture + Opus (HTTP / WebRTC) |
-
-The web UI supports visual configuration and Chinese/English locales. Built-ins include a web terminal (ttyd), intranet tunnel (gostc), P2P (EasyTier), RustDesk protocol (optional cross-platform remote access), and RTSP streaming.
 
 ## Installation
 
@@ -216,14 +216,21 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 
 - 爱发电用户_d3d9c
 
+- 爱发电用户_97b41
+
+- 偶然
+
+- 爱发电用户_dba45
+
+- 爱发电用户_d4f8b
+
+- 故人。
+
 - ......
 
 </details>
 
 ### Sponsors
-
-**Mirror Download Services:**
-- **[Chongqing University Open Source Software Mirror](https://mirrors.cqu.edu.cn/)** — provides mirror download services
 
 **File hosting**
 
@@ -236,3 +243,9 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 ![林枫云](https://docs.one-kvm.cn/img/36076FEFF0898A80EBD5756D28F4076C.png)
 
 林枫云 offers premium network routes, high-frequency game servers, and high-bandwidth servers in China and abroad.
+
+- **[Beta Network](https://my.beita.cc/?ref=github_onekvm)** — project server sponsorship
+
+![BTBT](https://github.com/user-attachments/assets/c442d5f5-d72f-4a07-b9f4-400a6a0c3f1e)
+
+Remote computers, consumer GPU servers, and dedicated physical machines with fully automated online delivery.
