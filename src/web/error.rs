@@ -14,6 +14,7 @@ pub struct ErrorResponse {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        let status = status_code(&self);
         let body = ErrorResponse {
             success: false,
             message: self.to_string(),
@@ -25,7 +26,49 @@ impl IntoResponse for AppError {
             "Request failed"
         );
 
-        // Always return 200 OK - success/failure is indicated by the success field
-        (StatusCode::OK, Json(body)).into_response()
+        (status, Json(body)).into_response()
+    }
+}
+
+fn status_code(error: &AppError) -> StatusCode {
+    match error {
+        AppError::AuthError(_) | AppError::Unauthorized => StatusCode::UNAUTHORIZED,
+        AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+        AppError::NotFound(_) => StatusCode::NOT_FOUND,
+        AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_client_and_availability_errors_to_http_statuses() {
+        assert_eq!(
+            status_code(&AppError::BadRequest("invalid".to_string())),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            status_code(&AppError::AuthError("invalid".to_string())),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            status_code(&AppError::NotFound("missing".to_string())),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            status_code(&AppError::ServiceUnavailable("offline".to_string())),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn maps_internal_errors_to_server_error() {
+        assert_eq!(
+            status_code(&AppError::Internal("failed".to_string())),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 }

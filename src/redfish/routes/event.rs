@@ -55,7 +55,7 @@ async fn event_service() -> Json<EventService> {
 }
 
 async fn event_service_sse(State(state): State<Arc<AppState>>) -> Response {
-    use axum::response::sse::{Event, KeepAlive, Sse};
+    use axum::response::sse::{Event, Sse};
 
     let mut device_info_rx = state.subscribe_device_info();
 
@@ -87,15 +87,25 @@ async fn event_service_sse(State(state): State<Arc<AppState>>) -> Response {
     };
 
     Sse::new(Box::pin(stream))
-        .keep_alive(
-            KeepAlive::new()
-                .interval(Duration::from_secs(30))
-                .text(":\n"),
-        )
+        .keep_alive(redfish_keep_alive())
         .into_response()
+}
+
+fn redfish_keep_alive() -> axum::response::sse::KeepAlive {
+    axum::response::sse::KeepAlive::new().interval(Duration::from_secs(30))
 }
 
 async fn event_submit_test() -> StatusCode {
     info!("Redfish: SubmitTestEvent received (no-op)");
     StatusCode::NO_CONTENT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keep_alive_configuration_does_not_panic() {
+        let _ = redfish_keep_alive();
+    }
 }

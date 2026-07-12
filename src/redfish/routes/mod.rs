@@ -194,14 +194,15 @@ pub fn create_redfish_router(state: Arc<AppState>) -> Router {
         .merge(managers::router(state.clone()))
         .merge(session::router(state.clone()))
         .merge(account::router(state.clone()))
-        .merge(event::router(state.clone()))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            redfish_auth_middleware,
-        ));
+        .merge(event::router(state.clone()));
 
     #[cfg(all(unix, not(feature = "android")))]
     let redfish_routes = redfish_routes.merge(virtual_media::router(state.clone()));
+
+    let redfish_routes = redfish_routes.layer(middleware::from_fn_with_state(
+        state.clone(),
+        redfish_auth_middleware,
+    ));
 
     Router::new()
         .route("/redfish", get(service_root_redirect))
