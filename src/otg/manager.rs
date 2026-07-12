@@ -135,8 +135,8 @@ impl OtgGadgetManager {
         Ok(device_path)
     }
 
-    pub fn add_msd(&mut self) -> Result<MsdFunction> {
-        let func = MsdFunction::new(self.msd_instance);
+    pub fn add_msd(&mut self, lun_capacity: u8) -> Result<MsdFunction> {
+        let func = MsdFunction::new(self.msd_instance, lun_capacity)?;
         let func_clone = func.clone();
         self.add_function(Box::new(func))?;
         self.msd_instance += 1;

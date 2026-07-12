@@ -70,19 +70,13 @@ async fn virtual_media_detail(
             Some(msd) => {
                 let msd_state = msd.state().await;
                 let img_name = msd_state
-                    .current_image
-                    .as_ref()
-                    .map(|i| i.name.clone())
-                    .or_else(|| {
-                        msd_state
-                            .drive_info
-                            .as_ref()
-                            .map(|_| "Virtual Drive".to_string())
-                    });
+                    .mounted_media
+                    .first()
+                    .map(|media| media.name.clone());
                 (
-                    msd_state.connected,
+                    !msd_state.mounted_media.is_empty(),
                     img_name,
-                    if msd_state.connected {
+                    if !msd_state.mounted_media.is_empty() {
                         Some("Applet".to_string())
                     } else {
                         None
@@ -153,7 +147,7 @@ async fn virtual_media_insert(
             None => return service_unavailable("MSD not available"),
         };
 
-        if msd.state().await.connected {
+        if !msd.state().await.mounted_media.is_empty() {
             return (
                 StatusCode::CONFLICT,
                 Json(RedfishError::general_error(
@@ -164,7 +158,7 @@ async fn virtual_media_insert(
         }
 
         info!("Redfish: VirtualMedia.InsertMedia image='{}'", req.image);
-        msd.connect_drive().await
+        msd.mount_drive().await
     };
 
     match result {
@@ -201,7 +195,7 @@ async fn virtual_media_eject(
             None => return service_unavailable("MSD not available"),
         };
 
-        if !msd.state().await.connected {
+        if msd.state().await.mounted_media.is_empty() {
             return (
                 StatusCode::CONFLICT,
                 Json(RedfishError::general_error("No virtual media inserted")),

@@ -8,8 +8,8 @@ use crate::computer_use::ComputerUseManager;
 use crate::config::ConfigStore;
 use crate::db::DatabasePool;
 use crate::events::{
-    AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, LedState, MsdDeviceInfo, SystemEvent,
-    TtydDeviceInfo, VideoDeviceInfo,
+    AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, LedState, MsdDeviceInfo,
+    MsdDeviceMediaInfo, SystemEvent, TtydDeviceInfo, VideoDeviceInfo,
 };
 use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
@@ -231,16 +231,33 @@ impl AppState {
 
             let state = msd.state().await;
             let error = msd.monitor().error_message().await;
+            let mounted_media = state
+                .mounted_media
+                .iter()
+                .map(|media| MsdDeviceMediaInfo {
+                    id: media.id.clone(),
+                    kind: match media.kind {
+                        crate::msd::MountedMediaKind::Drive => "drive",
+                        crate::msd::MountedMediaKind::Image => "image",
+                    }
+                    .to_string(),
+                    name: media.name.clone(),
+                    cdrom: media.cdrom,
+                    read_only: media.read_only,
+                    size: media.size,
+                })
+                .collect::<Vec<_>>();
             Some(MsdDeviceInfo {
                 available: state.available,
-                mode: match state.mode {
-                    crate::msd::MsdMode::None => "none",
-                    crate::msd::MsdMode::Image => "image",
-                    crate::msd::MsdMode::Drive => "drive",
+                disk_mode: match state.disk_mode {
+                    crate::msd::DiskMode::Single => "single",
+                    crate::msd::DiskMode::Multi => "multi",
                 }
                 .to_string(),
-                connected: state.connected,
-                image_id: state.current_image.map(|img| img.id),
+                slot_capacity: state.disk_mode.capacity(),
+                mounted_count: state.mounted_media.len() as u8,
+                mounted_media,
+                usb_reenumerating: state.usb_reenumerating,
                 error,
             })
         }

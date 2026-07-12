@@ -542,25 +542,34 @@ export interface DriveFile {
   size: number
 }
 
+export type DiskMode = 'single' | 'multi'
+export type MountedMediaKind = 'drive' | 'image'
+
+export interface MountedMedia {
+  id: string
+  kind: MountedMediaKind
+  name: string
+  cdrom: boolean
+  read_only: boolean
+  size: number
+}
+
 export const msdApi = {
   status: () =>
     request<{
       available: boolean
       state: {
-        connected: boolean
-        mode: 'none' | 'image' | 'drive'
-        current_image: {
-          id: string
-          name: string
-          size: number
-          created_at: string
-        } | null
+        disk_mode: DiskMode
+        slot_capacity: number
+        mounted_count: number
+        mounted_media: MountedMedia[]
         drive_info: {
           size: number
           used: number
           free: number
           initialized: boolean
         } | null
+        usb_reenumerating: boolean
       }
     }>('/msd/status'),
 
@@ -597,14 +606,26 @@ export const msdApi = {
   deleteImage: (id: string) =>
     request<{ success: boolean }>(`/msd/images/${id}`, { method: 'DELETE' }),
 
-  connect: (mode: 'image' | 'drive', imageId?: string, cdrom?: boolean, readOnly?: boolean) =>
-    request<{ success: boolean }>('/msd/connect', {
-      method: 'POST',
-      body: JSON.stringify({ mode, image_id: imageId, cdrom, read_only: readOnly }),
+  setDiskMode: (diskMode: DiskMode) =>
+    request<{ success: boolean }>('/msd/disk-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ disk_mode: diskMode }),
     }),
 
-  disconnect: () =>
-    request<{ success: boolean }>('/msd/disconnect', { method: 'POST' }),
+  mountImage: (id: string, cdrom: boolean, readOnly: boolean) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, {
+      method: 'POST',
+      body: JSON.stringify({ cdrom, read_only: readOnly }),
+    }),
+
+  unmountImage: (id: string) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, { method: 'DELETE' }),
+
+  mountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'POST' }),
+
+  unmountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'DELETE' }),
 
   driveInfo: () =>
     request<{

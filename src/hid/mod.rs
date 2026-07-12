@@ -234,6 +234,30 @@ impl HidController {
         Ok(())
     }
 
+    pub async fn prepare_otg_rebuild(&self) -> Result<()> {
+        if !matches!(*self.backend_type.read().await, HidBackendType::Otg) {
+            return Ok(());
+        }
+
+        info!("Preparing OTG HID backend for gadget rebuild");
+        self.backend_available.store(false, Ordering::Release);
+        self.stop_runtime_worker().await;
+
+        if let Some(backend) = self.backend.write().await.take() {
+            backend.prepare_rebuild().await?;
+        }
+
+        let current = self.runtime_state.read().await.clone();
+        let rebuilding_state = HidRuntimeState::with_error(
+            &HidBackendType::Otg,
+            &current,
+            "OTG gadget is rebuilding",
+            "rebuilding",
+        );
+        self.apply_runtime_state(rebuilding_state).await;
+        Ok(())
+    }
+
     pub async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Err(AppError::BadRequest(

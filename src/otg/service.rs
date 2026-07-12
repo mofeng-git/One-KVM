@@ -38,6 +38,7 @@ pub(crate) struct OtgDesiredState {
     pub hid_functions: Option<OtgHidFunctions>,
     pub keyboard_leds: bool,
     pub msd_enabled: bool,
+    pub msd_lun_capacity: u8,
     pub max_endpoints: u8,
 }
 
@@ -49,6 +50,7 @@ impl Default for OtgDesiredState {
             hid_functions: None,
             keyboard_leds: false,
             msd_enabled: false,
+            msd_lun_capacity: 1,
             max_endpoints: super::endpoint::DEFAULT_MAX_ENDPOINTS,
         }
     }
@@ -71,6 +73,7 @@ impl OtgDesiredState {
             hid_functions,
             keyboard_leds: hid.effective_otg_keyboard_leds(),
             msd_enabled: msd.enabled,
+            msd_lun_capacity: 1,
             max_endpoints: hid
                 .resolved_otg_endpoint_limit()
                 .unwrap_or(super::endpoint::DEFAULT_MAX_ENDPOINTS),
@@ -83,11 +86,12 @@ impl OtgDesiredState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct OtgServiceState {
     pub gadget_active: bool,
     pub hid_enabled: bool,
     pub msd_enabled: bool,
+    pub msd_lun_capacity: u8,
     pub configured_udc: Option<String>,
     pub hid_paths: Option<HidDevicePaths>,
     pub hid_functions: Option<OtgHidFunctions>,
@@ -95,6 +99,24 @@ struct OtgServiceState {
     pub max_endpoints: u8,
     pub descriptor: Option<GadgetDescriptor>,
     pub error: Option<String>,
+}
+
+impl Default for OtgServiceState {
+    fn default() -> Self {
+        Self {
+            gadget_active: false,
+            hid_enabled: false,
+            msd_enabled: false,
+            msd_lun_capacity: 1,
+            configured_udc: None,
+            hid_paths: None,
+            hid_functions: None,
+            keyboard_leds_enabled: false,
+            max_endpoints: super::endpoint::DEFAULT_MAX_ENDPOINTS,
+            descriptor: None,
+            error: None,
+        }
+    }
 }
 
 pub struct OtgService {
@@ -131,8 +153,41 @@ impl OtgService {
         self.msd_function.read().await.clone()
     }
 
+    pub async fn msd_lun_capacity(&self) -> u8 {
+        self.desired.read().await.msd_lun_capacity
+    }
+
     pub async fn apply_config(&self, hid: &HidConfig, msd: &MsdConfig) -> Result<()> {
-        let desired = OtgDesiredState::from_config(hid, msd)?;
+        let desired = self
+            .desired_from_config_preserving_runtime(hid, msd)
+            .await?;
+        self.apply_desired_state(desired).await
+    }
+
+    async fn desired_from_config_preserving_runtime(
+        &self,
+        hid: &HidConfig,
+        msd: &MsdConfig,
+    ) -> Result<OtgDesiredState> {
+        let mut desired = OtgDesiredState::from_config(hid, msd)?;
+        desired.msd_lun_capacity = self.desired.read().await.msd_lun_capacity;
+        Ok(desired)
+    }
+
+    pub async fn set_msd_lun_capacity(&self, capacity: u8) -> Result<()> {
+        if capacity != 1 && capacity != 8 {
+            return Err(AppError::BadRequest(format!(
+                "MSD LUN capacity must be 1 or 8, got {capacity}"
+            )));
+        }
+
+        let mut desired = self.desired.read().await.clone();
+        if !desired.msd_enabled {
+            return Err(AppError::Internal(
+                "MSD is not enabled in the OTG gadget".to_string(),
+            ));
+        }
+        desired.msd_lun_capacity = capacity;
         self.apply_desired_state(desired).await
     }
 
@@ -160,6 +215,7 @@ impl OtgService {
             if state.gadget_active
                 && state.hid_enabled == desired.hid_enabled()
                 && state.msd_enabled == desired.msd_enabled
+                && state.msd_lun_capacity == desired.msd_lun_capacity
                 && state.configured_udc == desired.udc
                 && state.hid_functions == desired.hid_functions
                 && state.keyboard_leds_enabled == desired.keyboard_leds
@@ -188,6 +244,7 @@ impl OtgService {
             state.gadget_active = false;
             state.hid_enabled = false;
             state.msd_enabled = false;
+            state.msd_lun_capacity = 1;
             state.configured_udc = None;
             state.hid_paths = None;
             state.hid_functions = None;
@@ -280,7 +337,7 @@ impl OtgService {
         }
 
         let msd_func = if desired.msd_enabled {
-            match manager.add_msd() {
+            match manager.add_msd(desired.msd_lun_capacity) {
                 Ok(func) => {
                     debug!("MSD function added to gadget");
                     Some(func)
@@ -323,6 +380,7 @@ impl OtgService {
             state.gadget_active = true;
             state.hid_enabled = desired.hid_enabled();
             state.msd_enabled = desired.msd_enabled;
+            state.msd_lun_capacity = desired.msd_lun_capacity;
             state.configured_udc = Some(udc);
             state.hid_paths = hid_paths;
             state.hid_functions = desired.hid_functions;
@@ -392,5 +450,33 @@ mod tests {
     fn service_new_and_availability_probe() {
         let _service = OtgService::new();
         let _ = OtgService::is_available();
+    }
+
+    #[tokio::test]
+    async fn service_starts_with_single_lun_capacity() {
+        let service = OtgService::new();
+        assert_eq!(service.desired.read().await.msd_lun_capacity, 1);
+        assert_eq!(service.state.read().await.msd_lun_capacity, 1);
+    }
+
+    #[tokio::test]
+    async fn config_updates_preserve_runtime_lun_capacity() {
+        let service = OtgService::new();
+        service.desired.write().await.msd_lun_capacity = 8;
+
+        let desired = service
+            .desired_from_config_preserving_runtime(&HidConfig::default(), &MsdConfig::default())
+            .await
+            .unwrap();
+
+        assert_eq!(desired.msd_lun_capacity, 8);
+    }
+
+    #[test]
+    fn lun_capacity_participates_in_desired_state_equality() {
+        let single = OtgDesiredState::default();
+        let mut multi = single.clone();
+        multi.msd_lun_capacity = 8;
+        assert_ne!(single, multi);
     }
 }

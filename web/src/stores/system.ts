@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type PlatformCapabilities } from '@/api'
+import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type DiskMode, type MountedMedia, type PlatformCapabilities } from '@/api'
 
 interface SystemCapabilities {
   video: { available: boolean; backend?: string; reason?: string }
@@ -56,9 +56,11 @@ interface AtxState {
 
 interface MsdState {
   available: boolean
-  connected: boolean
-  mode: 'none' | 'image' | 'drive'
-  imageId: string | null
+  diskMode: DiskMode
+  slotCapacity: number
+  mountedCount: number
+  mountedMedia: MountedMedia[]
+  usbReenumerating: boolean
   error: string | null
 }
 
@@ -111,9 +113,18 @@ export interface HidDeviceInfo {
 
 export interface MsdDeviceInfo {
   available: boolean
-  mode: string
-  connected: boolean
-  image_id: string | null
+  disk_mode: DiskMode
+  slot_capacity: number
+  mounted_count: number
+  mounted_media: Array<{
+    id: string
+    kind: 'drive' | 'image'
+    name: string
+    cdrom: boolean
+    read_only: boolean
+    size: number
+  }>
+  usb_reenumerating: boolean
   error: string | null
 }
 
@@ -250,9 +261,11 @@ export const useSystemStore = defineStore('system', () => {
       const result = await msdApi.status()
       msd.value = {
         available: result.available,
-        connected: result.state.connected,
-        mode: result.state.mode,
-        imageId: result.state.current_image?.id ?? null,
+        diskMode: result.state.disk_mode,
+        slotCapacity: result.state.slot_capacity,
+        mountedCount: result.state.mounted_count,
+        mountedMedia: result.state.mounted_media,
+        usbReenumerating: result.state.usb_reenumerating,
         error: null,
       }
       return result
@@ -361,9 +374,11 @@ export const useSystemStore = defineStore('system', () => {
     if (data.msd) {
       msd.value = {
         available: data.msd.available,
-        connected: data.msd.connected,
-        mode: data.msd.mode as 'none' | 'image' | 'drive',
-        imageId: data.msd.image_id,
+        diskMode: data.msd.disk_mode,
+        slotCapacity: data.msd.slot_capacity,
+        mountedCount: data.msd.mounted_count,
+        mountedMedia: data.msd.mounted_media,
+        usbReenumerating: data.msd.usb_reenumerating,
         error: data.msd.error,
       }
     } else {

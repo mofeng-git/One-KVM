@@ -481,17 +481,15 @@ const msdStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'
   const msd = systemStore.msd
   if (!msd?.available) return 'disconnected'
   if (msd.error) return 'error'
-  if (msd.connected) return 'connected'
+  if (msd.mountedCount > 0) return 'connected'
   return 'disconnected'
 })
 
 const msdQuickInfo = computed(() => {
   const msd = systemStore.msd
   if (!msd?.available) return ''
-  if (msd.mode === 'none') return t('statusCard.msdStandby')
-  if (msd.mode === 'image') return t('statusCard.msdImageMode')
-  if (msd.mode === 'drive') return t('statusCard.msdDriveMode')
-  return t('common.unknown')
+  if (msd.mountedCount === 0) return t('statusCard.msdStandby')
+  return `${msd.diskMode === 'single' ? t('msd.singleDiskMode') : t('msd.multiDiskMode')} · ${t('msd.mediaCount', { count: msd.mountedCount, capacity: msd.slotCapacity })}`
 })
 
 const msdErrorMessage = computed(() => {
@@ -504,7 +502,7 @@ const msdDetails = computed<StatusDetail[]>(() => {
 
   const details: StatusDetail[] = []
 
-  if (msd.mode === 'none') {
+  if (msd.mountedCount === 0) {
     details.push({
       label: t('statusCard.msdStatus'),
       value: t('statusCard.msdStandby'),
@@ -518,22 +516,22 @@ const msdDetails = computed<StatusDetail[]>(() => {
     })
   }
 
-  const modeDisplay = msd.mode === 'none'
-    ? '-'
-    : msd.mode === 'image'
-      ? t('statusCard.msdImageMode')
-      : t('statusCard.msdDriveMode')
   details.push({
     label: t('statusCard.currentMode'),
-    value: modeDisplay,
-    status: msd.mode !== 'none' ? 'ok' : undefined
+    value: msd.diskMode === 'single' ? t('msd.singleDiskMode') : t('msd.multiDiskMode'),
+    status: msd.mountedCount > 0 ? 'ok' : undefined
   })
 
-  if (msd.mode === 'image') {
-    details.push({
-      label: t('statusCard.msdCurrentImage'),
-      value: msd.imageId || t('statusCard.msdNoImage')
-    })
+  if (msd.mountedMedia.length > 0) {
+    for (const media of msd.mountedMedia) {
+      details.push({
+        label: media.kind === 'drive' ? t('statusCard.msdDriveMode') : t('statusCard.msdCurrentImage'),
+        value: media.kind === 'drive'
+          ? t('statusCard.msdDriveMode')
+          : `${media.name || media.id || t('statusCard.msdNoImage')} (${media.cdrom ? t('msd.cdrom') : t('msd.flash')})`,
+        status: 'ok'
+      })
+    }
   }
 
   return details

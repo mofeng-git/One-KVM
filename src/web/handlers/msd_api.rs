@@ -1,8 +1,10 @@
+use super::config::apply::try_apply_lock;
 use super::*;
 
 use crate::msd::{
-    DownloadProgress, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest, ImageInfo,
-    ImageManager, MsdConnectRequest, MsdMode, MsdState, VentoyDrive, MIN_DRIVE_SIZE_MB,
+    DiskModeRequest, DownloadProgress, DriveFile, DriveInfo, DriveInitRequest,
+    ImageDownloadRequest, ImageInfo, ImageManager, ImageMountRequest, MsdState, MsdStateResponse,
+    VentoyDrive, MIN_DRIVE_SIZE_MB,
 };
 #[cfg(unix)]
 use axum::body::Body;
@@ -26,8 +28,7 @@ const MIB: u64 = 1024 * 1024;
 async fn assert_drive_not_connected(state: &Arc<AppState>) -> Result<()> {
     let msd_guard = state.msd.read().await;
     if let Some(controller) = msd_guard.as_ref() {
-        let msd_state = controller.state().await;
-        if msd_state.connected && msd_state.mode == crate::msd::types::MsdMode::Drive {
+        if controller.is_drive_connected().await {
             return Err(AppError::BadRequest(
                 "Virtual drive is connected to the USB host; disconnect it before modifying files"
                     .to_string(),
@@ -77,7 +78,7 @@ fn unsupported_drive_filesystem_error(error: &str) -> AppError {
 #[derive(Serialize)]
 pub struct MsdStatus {
     pub available: bool,
-    pub state: MsdState,
+    pub state: MsdStateResponse,
 }
 
 /// Get MSD status
@@ -89,12 +90,12 @@ pub async fn msd_status(State(state): State<Arc<AppState>>) -> Result<Json<MsdSt
             let msd_state = controller.state().await;
             Ok(Json(MsdStatus {
                 available: true,
-                state: msd_state,
+                state: MsdStateResponse::from(&msd_state),
             }))
         }
         None => Ok(Json(MsdStatus {
             available: false,
-            state: MsdState::default(),
+            state: MsdStateResponse::from(&MsdState::default()),
         })),
     }
 }
@@ -164,11 +165,11 @@ pub async fn msd_image_delete(
     State(state): State<Arc<AppState>>,
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
-    let config = state.config.get();
-    let images_path = config.msd.images_dir();
-    let manager = ImageManager::new(images_path);
-
-    manager.delete(&id)?;
+    let msd_guard = state.msd.read().await;
+    let controller = msd_guard
+        .as_ref()
+        .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
+    controller.delete_image(&id).await?;
     Ok(Json(LoginResponse {
         success: true,
         message: Some("Image deleted".to_string()),
@@ -216,11 +217,81 @@ pub async fn msd_image_download_cancel(
     }))
 }
 
-/// Connect MSD (image or drive)
+/// Change MSD disk mode. This clears all mounted media and re-enumerates USB.
 #[cfg(unix)]
-pub async fn msd_connect(
+pub async fn msd_disk_mode_put(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<MsdConnectRequest>,
+    Json(req): Json<DiskModeRequest>,
+) -> Result<Json<LoginResponse>> {
+    let _otg_guard = try_apply_lock(&state.config_apply_locks.otg, "OTG")?;
+    let current_mode = {
+        let msd_guard = state.msd.read().await;
+        let controller = msd_guard
+            .as_ref()
+            .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
+        controller.state().await.disk_mode
+    };
+    if current_mode == req.disk_mode {
+        return Ok(Json(LoginResponse {
+            success: true,
+            message: Some("MSD disk mode updated".to_string()),
+        }));
+    }
+
+    let hid_is_otg = matches!(
+        state.hid.backend_type().await,
+        crate::hid::HidBackendType::Otg
+    );
+
+    if hid_is_otg {
+        state
+            .hid
+            .prepare_otg_rebuild()
+            .await
+            .map_err(|e| AppError::Config(format!("Failed to prepare OTG HID for rebuild: {e}")))?;
+    }
+
+    let switch_result = {
+        let mut msd_guard = state.msd.write().await;
+        let controller = msd_guard
+            .as_mut()
+            .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
+        controller.set_disk_mode(req.disk_mode).await
+    };
+
+    let hid_reload_result = if hid_is_otg {
+        state
+            .hid
+            .reload(crate::hid::HidBackendType::Otg)
+            .await
+            .map_err(|e| AppError::Config(format!("OTG HID reload failed: {e}")))
+    } else {
+        Ok(())
+    };
+
+    match (switch_result, hid_reload_result) {
+        (Err(switch_error), Err(hid_error)) => {
+            return Err(AppError::Internal(format!(
+                "MSD disk mode switch failed: {switch_error}; HID recovery failed: {hid_error}"
+            )));
+        }
+        (Err(switch_error), Ok(())) => return Err(switch_error),
+        (Ok(_), Err(hid_error)) => return Err(hid_error),
+        (Ok(_), Ok(())) => {}
+    }
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("MSD disk mode updated".to_string()),
+    }))
+}
+
+/// Mount an image into the next available media slot.
+#[cfg(unix)]
+pub async fn msd_image_mount(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+    Json(req): Json<ImageMountRequest>,
 ) -> Result<Json<LoginResponse>> {
     let config = state.config.get();
     let mut msd_guard = state.msd.write().await;
@@ -228,50 +299,68 @@ pub async fn msd_connect(
         .as_mut()
         .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
 
-    match req.mode {
-        MsdMode::Image => {
-            let image_id = req.image_id.ok_or_else(|| {
-                AppError::BadRequest("image_id required for image mode".to_string())
-            })?;
+    let images_path = config.msd.images_dir();
+    let manager = ImageManager::new(images_path);
+    let image = manager.get(&id)?;
 
-            // Get image info from ImageManager
-            let images_path = config.msd.images_dir();
-            let manager = ImageManager::new(images_path);
-            let image = manager.get(&image_id)?;
-
-            // Get mount options from request (defaults: cdrom=false, read_only=false)
-            let cdrom = req.cdrom.unwrap_or(false);
-            let read_only = req.read_only.unwrap_or(false);
-
-            controller.connect_image(&image, cdrom, read_only).await?;
-        }
-        MsdMode::Drive => {
-            controller.connect_drive().await?;
-        }
-        MsdMode::None => {
-            return Err(AppError::BadRequest("Invalid mode: none".to_string()));
-        }
-    }
+    controller
+        .mount_image(&image, req.cdrom, req.read_only)
+        .await?;
 
     Ok(Json(LoginResponse {
         success: true,
-        message: Some("MSD connected".to_string()),
+        message: Some("Image mounted".to_string()),
     }))
 }
 
-/// Disconnect MSD
+/// Unmount an image from whichever internal LUN currently holds it.
 #[cfg(unix)]
-pub async fn msd_disconnect(State(state): State<Arc<AppState>>) -> Result<Json<LoginResponse>> {
+pub async fn msd_image_unmount(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<LoginResponse>> {
     let mut msd_guard = state.msd.write().await;
     let controller = msd_guard
         .as_mut()
         .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
 
-    controller.disconnect().await?;
+    controller.unmount_image(&id).await?;
 
     Ok(Json(LoginResponse {
         success: true,
-        message: Some("MSD disconnected".to_string()),
+        message: Some("Image unmounted".to_string()),
+    }))
+}
+
+/// Mount the virtual USB drive into the next available media slot.
+#[cfg(unix)]
+pub async fn msd_drive_mount(State(state): State<Arc<AppState>>) -> Result<Json<LoginResponse>> {
+    let mut msd_guard = state.msd.write().await;
+    let controller = msd_guard
+        .as_mut()
+        .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
+
+    controller.mount_drive().await?;
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Virtual drive mounted".to_string()),
+    }))
+}
+
+/// Unmount the virtual USB drive.
+#[cfg(unix)]
+pub async fn msd_drive_unmount(State(state): State<Arc<AppState>>) -> Result<Json<LoginResponse>> {
+    let mut msd_guard = state.msd.write().await;
+    let controller = msd_guard
+        .as_mut()
+        .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
+
+    controller.unmount_drive().await?;
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Virtual drive unmounted".to_string()),
     }))
 }
 
@@ -335,8 +424,7 @@ pub async fn msd_drive_delete(State(state): State<Arc<AppState>>) -> Result<Json
     // Check if drive is currently connected
     let msd_guard = state.msd.write().await;
     if let Some(controller) = msd_guard.as_ref() {
-        let msd_state = controller.state().await;
-        if msd_state.connected && msd_state.mode == crate::msd::types::MsdMode::Drive {
+        if controller.is_drive_connected().await {
             return Err(AppError::BadRequest(
                 "Cannot delete drive while connected. Disconnect first.".to_string(),
             ));

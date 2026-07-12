@@ -56,13 +56,21 @@ impl MsdLunConfig {
 #[derive(Debug, Clone)]
 pub struct MsdFunction {
     name: String,
+    lun_capacity: u8,
 }
 
 impl MsdFunction {
-    pub fn new(instance: u8) -> Self {
-        Self {
-            name: format!("mass_storage.usb{}", instance),
+    pub fn new(instance: u8, lun_capacity: u8) -> Result<Self> {
+        if lun_capacity != 1 && lun_capacity != 8 {
+            return Err(AppError::BadRequest(format!(
+                "MSD LUN capacity must be 1 or 8, got {lun_capacity}"
+            )));
         }
+
+        Ok(Self {
+            name: format!("mass_storage.usb{}", instance),
+            lun_capacity,
+        })
     }
 
     fn function_path(&self, gadget_path: &Path) -> PathBuf {
@@ -71,6 +79,32 @@ impl MsdFunction {
 
     fn lun_path(&self, gadget_path: &Path, lun: u8) -> PathBuf {
         self.function_path(gadget_path).join(format!("lun.{}", lun))
+    }
+
+    fn existing_lun_paths(&self, gadget_path: &Path) -> Result<Vec<(u16, PathBuf)>> {
+        let func_path = self.function_path(gadget_path);
+        if !func_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let entries = fs::read_dir(&func_path).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to read MSD function directory {}: {}",
+                func_path.display(),
+                e
+            ))
+        })?;
+        let mut luns = entries
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let name = entry.file_name();
+                let name = name.to_str()?;
+                let lun = name.strip_prefix("lun.")?.parse::<u16>().ok()?;
+                Some((lun, entry.path()))
+            })
+            .collect::<Vec<_>>();
+        luns.sort_by_key(|(lun, _)| *lun);
+        Ok(luns)
     }
 
     pub async fn configure_lun_async(
@@ -88,11 +122,32 @@ impl MsdFunction {
             .map_err(|e| AppError::Internal(format!("Task join error: {}", e)))?
     }
 
+    fn clear_lun_unbound(&self, gadget_path: &Path, lun: u8) -> Result<()> {
+        let lun_path = self.lun_path(gadget_path, lun);
+        if !lun_path.exists() {
+            create_dir(&lun_path)?;
+        }
+        write_file(&lun_path.join("file"), "")?;
+        let _ = write_file(&lun_path.join("cdrom"), "0");
+        let _ = write_file(&lun_path.join("ro"), "0");
+        let _ = write_file(&lun_path.join("removable"), "1");
+        let _ = write_file(&lun_path.join("nofua"), "1");
+        Ok(())
+    }
+
     pub fn configure_lun(&self, gadget_path: &Path, lun: u8, config: &MsdLunConfig) -> Result<()> {
+        if lun >= self.lun_capacity {
+            return Err(AppError::BadRequest(format!(
+                "LUN {lun} is outside MSD capacity {}",
+                self.lun_capacity
+            )));
+        }
         let lun_path = self.lun_path(gadget_path, lun);
 
         if !lun_path.exists() {
-            create_dir(&lun_path)?;
+            return Err(AppError::Internal(format!(
+                "Configured MSD LUN {lun} does not exist"
+            )));
         }
 
         let read_attr = |attr: &str| -> String {
@@ -210,8 +265,18 @@ impl MsdFunction {
     }
 
     pub fn disconnect_lun(&self, gadget_path: &Path, lun: u8) -> Result<()> {
+        if lun >= self.lun_capacity {
+            return Err(AppError::BadRequest(format!(
+                "LUN {lun} is outside MSD capacity {}",
+                self.lun_capacity
+            )));
+        }
         let lun_path = self.lun_path(gadget_path, lun);
 
+        self.disconnect_lun_path(&lun_path, lun as u16)
+    }
+
+    fn disconnect_lun_path(&self, lun_path: &Path, lun: u16) -> Result<()> {
         if lun_path.exists() {
             let forced_eject_path = lun_path.join("forced_eject");
             if forced_eject_path.exists() {
@@ -226,11 +291,17 @@ impl MsdFunction {
                             "forced_eject write failed: {}, falling back to clearing file",
                             e
                         );
-                        write_file(&lun_path.join("file"), "")?;
+                        let file_path = lun_path.join("file");
+                        if file_path.exists() {
+                            write_file(&file_path, "")?;
+                        }
                     }
                 }
             } else {
-                write_file(&lun_path.join("file"), "")?;
+                let file_path = lun_path.join("file");
+                if file_path.exists() {
+                    write_file(&file_path, "")?;
+                }
             }
             info!("LUN {} disconnected", lun);
         }
@@ -275,15 +346,9 @@ impl GadgetFunction for MsdFunction {
             let _ = write_file(&stall_path, "0");
         }
 
-        let lun0_path = func_path.join("lun.0");
-        if !lun0_path.exists() {
-            create_dir(&lun0_path)?;
+        for lun in 0..self.lun_capacity {
+            self.clear_lun_unbound(gadget_path, lun)?;
         }
-
-        let _ = write_file(&lun0_path.join("cdrom"), "0");
-        let _ = write_file(&lun0_path.join("ro"), "0");
-        let _ = write_file(&lun0_path.join("removable"), "1");
-        let _ = write_file(&lun0_path.join("nofua"), "1");
 
         debug!("Created MSD function: {}", self.name());
         Ok(())
@@ -311,8 +376,25 @@ impl GadgetFunction for MsdFunction {
     fn cleanup(&self, gadget_path: &Path) -> Result<()> {
         let func_path = self.function_path(gadget_path);
 
-        for lun in 0..8 {
-            let _ = self.disconnect_lun(gadget_path, lun);
+        let lun_paths = match self.existing_lun_paths(gadget_path) {
+            Ok(luns) => luns,
+            Err(e) => {
+                warn!("Could not enumerate MSD LUN directories: {}", e);
+                Vec::new()
+            }
+        };
+        for (lun, lun_path) in lun_paths {
+            if let Err(e) = self.disconnect_lun_path(&lun_path, lun) {
+                warn!("Could not disconnect LUN {} during cleanup: {}", lun, e);
+            }
+            // lun.0 is the mass-storage function's configfs default group. It
+            // cannot be removed directly and is released with the function.
+            if lun == 0 {
+                continue;
+            }
+            if let Err(e) = remove_dir(&lun_path) {
+                warn!("Could not remove LUN {} directory: {}", lun, e);
+            }
         }
 
         if let Err(e) = remove_dir(&func_path) {
@@ -327,6 +409,7 @@ impl GadgetFunction for MsdFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_lun_config_cdrom() {
@@ -346,8 +429,86 @@ mod tests {
 
     #[test]
     fn test_msd_function_name() {
-        let msd = MsdFunction::new(0);
+        let msd = MsdFunction::new(0, 1).unwrap();
         assert_eq!(msd.name(), "mass_storage.usb0");
         assert_eq!(msd.endpoints_required(), 2);
+        assert_eq!(msd.lun_capacity, 1);
+
+        let multi = MsdFunction::new(0, 8).unwrap();
+        assert_eq!(multi.lun_capacity, 8);
+    }
+
+    #[test]
+    fn test_msd_function_rejects_invalid_capacity() {
+        assert!(MsdFunction::new(0, 0).is_err());
+        assert!(MsdFunction::new(0, 2).is_err());
+        assert!(MsdFunction::new(0, 9).is_err());
+    }
+
+    #[test]
+    fn create_uses_configured_lun_capacity() {
+        for capacity in [1, 8] {
+            let temp_dir = TempDir::new().unwrap();
+            std::fs::create_dir_all(temp_dir.path().join("functions")).unwrap();
+            let msd = MsdFunction::new(0, capacity).unwrap();
+
+            msd.create(temp_dir.path()).unwrap();
+
+            for lun in 0..capacity {
+                assert!(msd.lun_path(temp_dir.path(), lun).exists());
+            }
+            assert!(!msd.lun_path(temp_dir.path(), capacity).exists());
+        }
+    }
+
+    #[test]
+    fn configure_lun_does_not_rebind_udc() {
+        let temp_dir = TempDir::new().unwrap();
+        let lun_path = temp_dir.path().join("functions/mass_storage.usb0/lun.0");
+        std::fs::create_dir_all(&lun_path).unwrap();
+        for attr in ["file", "cdrom", "ro", "removable", "nofua"] {
+            std::fs::write(lun_path.join(attr), b"0\n").unwrap();
+        }
+        std::fs::write(temp_dir.path().join("UDC"), b"test.udc\n").unwrap();
+        let image_path = temp_dir.path().join("test.img");
+        std::fs::write(&image_path, b"image").unwrap();
+        let msd = MsdFunction::new(0, 1).unwrap();
+
+        msd.configure_lun(temp_dir.path(), 0, &MsdLunConfig::disk(image_path, false))
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(temp_dir.path().join("UDC")).unwrap(),
+            "test.udc\n"
+        );
+    }
+
+    #[test]
+    fn cleanup_removes_all_dynamic_luns_including_stale_capacity() {
+        let temp_dir = TempDir::new().unwrap();
+        let func_path = temp_dir.path().join("functions/mass_storage.usb0");
+        for lun in 1..8 {
+            std::fs::create_dir_all(func_path.join(format!("lun.{lun}"))).unwrap();
+        }
+        let msd = MsdFunction::new(0, 1).unwrap();
+
+        msd.cleanup(temp_dir.path()).unwrap();
+
+        assert!(!func_path.exists());
+    }
+
+    #[test]
+    fn cleanup_leaves_default_lun_for_configfs_function_removal() {
+        let temp_dir = TempDir::new().unwrap();
+        let func_path = temp_dir.path().join("functions/mass_storage.usb0");
+        for lun in 0..2 {
+            std::fs::create_dir_all(func_path.join(format!("lun.{lun}"))).unwrap();
+        }
+        let msd = MsdFunction::new(0, 1).unwrap();
+
+        msd.cleanup(temp_dir.path()).unwrap();
+
+        assert!(func_path.join("lun.0").exists());
+        assert!(!func_path.join("lun.1").exists());
     }
 }

@@ -2,7 +2,7 @@
 use axum::{extract::DefaultBodyLimit, routing::delete};
 use axum::{
     middleware,
-    routing::{any, get, patch, post},
+    routing::{any, get, patch, post, put},
     Router,
 };
 use std::sync::Arc;
@@ -255,10 +255,16 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             )
             .route("/msd/images/{id}", get(handlers::msd_image_get))
             .route("/msd/images/{id}", delete(handlers::msd_image_delete))
-            .route("/msd/connect", post(handlers::msd_connect))
-            .route("/msd/disconnect", post(handlers::msd_disconnect))
+            .route("/msd/disk-mode", put(handlers::msd_disk_mode_put))
+            .route("/msd/images/{id}/mount", post(handlers::msd_image_mount))
+            .route(
+                "/msd/images/{id}/mount",
+                delete(handlers::msd_image_unmount),
+            )
             .route("/msd/drive", get(handlers::msd_drive_info))
             .route("/msd/drive", delete(handlers::msd_drive_delete))
+            .route("/msd/drive/mount", post(handlers::msd_drive_mount))
+            .route("/msd/drive/mount", delete(handlers::msd_drive_unmount))
             .route("/msd/drive/init", post(handlers::msd_drive_init))
             .route("/msd/drive/files", get(handlers::msd_drive_files))
             .route(

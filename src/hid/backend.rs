@@ -83,6 +83,10 @@ pub trait HidBackend: Send + Sync {
 
     async fn reset(&self) -> Result<()>;
 
+    async fn prepare_rebuild(&self) -> Result<()> {
+        self.shutdown().await
+    }
+
     async fn shutdown(&self) -> Result<()>;
 
     fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot;
