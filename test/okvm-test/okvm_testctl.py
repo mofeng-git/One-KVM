@@ -160,6 +160,9 @@ class ApiClient:
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:
         return self.request("POST", path, json=payload or {})
 
+    def delete(self, path: str) -> Any:
+        return self.request("DELETE", path)
+
     def patch(self, path: str, payload: dict[str, Any]) -> Any:
         return self.request("PATCH", path, json=payload)
 
@@ -1780,7 +1783,7 @@ echo "$BACKUP"
             snapshot = await self.agent.command("msd_snapshot", {}, timeout=10)
             known = [d["root"] for d in snapshot.get("drives", [])]
             self.api.post("/msd/drive/init", {"size_mb": self.args.msd_size_mb})
-            self.api.post("/msd/connect", {"mode": "drive"})
+            self.api.post("/msd/drive/mount", {})
             drive = await self.agent.command("msd_wait_new", {"known": known, "timeout_ms": 60000}, timeout=70)
             root = drive.get("root")
             verify = await self.agent.command(
@@ -1794,12 +1797,12 @@ echo "$BACKUP"
                 self.reporter.metric("msd_read_mib_s", round(float(verify["read_mib_s"]), 2), "MiB/s")
             if "cached_read_mib_s" in verify:
                 self.reporter.metric("msd_cached_read_mib_s", round(float(verify["cached_read_mib_s"]), 2), "MiB/s")
-            self.api.post("/msd/disconnect", {})
+            self.api.delete("/msd/drive/mount")
             await self.agent.command("msd_wait_removed", {"root": root, "timeout_ms": 60000}, timeout=70)
             self.reporter.add("msd", "PASS", "Windows detected virtual drive and read/write verification passed", drive=drive, verify=verify)
         except Exception as exc:
             try:
-                self.api.post("/msd/disconnect", {})
+                self.api.delete("/msd/drive/mount")
             except Exception:
                 pass
             status = "SKIP" if is_msd_environment_error(str(exc)) else "FAIL"
