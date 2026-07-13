@@ -273,7 +273,10 @@ public:
       LOG_ERROR(std::string("set_quality failed, name: ") + name_);
       return false;
     }
-    util_encode::set_rate_control(c_, name_, rc_, q_);
+    if (!util_encode::set_rate_control(c_, name_, rc_, q_)) {
+      LOG_ERROR(std::string("set_rate_control failed, name: ") + name_);
+      return false;
+    }
     util_encode::set_gpu(c_->priv_data, name_, gpu_);
     util_encode::force_hw(c_->priv_data, name_);
     util_encode::set_others(c_->priv_data, name_);

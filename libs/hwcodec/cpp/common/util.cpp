@@ -368,6 +368,27 @@ struct CodecOptions {
 
 bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
                       int q) {
+  if (name.find("vaapi") != std::string::npos) {
+    // Some VAAPI drivers, including Intel iHD on Jasper Lake, expose CQP as
+    // their only compatible rate-control mode. The caller currently supplies
+    // a bitrate and RC_CBR for every encoder, so clear all bitrate-based fields
+    // before selecting VAAPI's explicit-QP mode.
+    c->bit_rate = 0;
+    c->rc_min_rate = 0;
+    c->rc_max_rate = 0;
+    c->rc_buffer_size = 0;
+    c->rc_initial_buffer_occupancy = 0;
+
+    const int qp = q > 0 ? q : 23;
+    const int ret = av_opt_set_int(c->priv_data, "qp", qp, 0);
+    if (ret < 0) {
+      LOG_ERROR(std::string("vaapi set qp failed, ret = ") +
+                av_err2str(ret));
+      return false;
+    }
+    return true;
+  }
+
   if (name.find("qsv") != std::string::npos) {
     // https://github.com/LizardByte/Sunshine/blob/3e47cd3cc8fd37a7a88be82444ff4f3c0022856b/src/video.cpp#L1635
     c->strict_std_compliance = FF_COMPLIANCE_UNOFFICIAL;
