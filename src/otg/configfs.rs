@@ -13,7 +13,11 @@ pub const DEFAULT_USB_BCD_DEVICE: u16 = 0x0100;
 pub const USB_BCD_USB: u16 = 0x0200;
 
 pub fn is_configfs_available() -> bool {
-    Path::new(CONFIGFS_PATH).exists()
+    configfs_path().exists()
+}
+
+pub fn configfs_path() -> &'static Path {
+    Path::new(CONFIGFS_PATH)
 }
 
 /// Loads `libcomposite` if needed; does not mount configfs.

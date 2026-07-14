@@ -1,7 +1,7 @@
 // This file defines the customizations to the bindgen builder used to generate the v4l2r
 // bindings.
 //
-// It is meant to be included from `lib/build.rs` and `android/build.rs`.
+// It is meant to be included from `build.rs`.
 
 #[derive(Debug)]
 /// Workaround for https://github.com/rust-lang/rust-bindgen/issues/753.

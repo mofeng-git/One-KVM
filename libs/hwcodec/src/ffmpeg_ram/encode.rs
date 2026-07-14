@@ -3,8 +3,9 @@ use crate::{
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
         ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_encode_packet,
-        ffmpeg_ram_free_encoder, ffmpeg_ram_free_packet, ffmpeg_ram_new_encoder,
-        ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo, AV_NUM_DATA_POINTERS,
+        ffmpeg_ram_encoder_last_error, ffmpeg_ram_free_encoder, ffmpeg_ram_free_packet,
+        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo,
+        AV_NUM_DATA_POINTERS,
     },
 };
 #[cfg(feature = "bytes")]
@@ -17,7 +18,7 @@ use std::{
     slice,
 };
 
-#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+#[cfg(any(windows, target_os = "linux"))]
 use crate::common::Driver;
 
 /// Timeout for encoder test in milliseconds
@@ -28,7 +29,6 @@ const PRIORITY_AMF: i32 = 2;
 const PRIORITY_RKMPP: i32 = 3;
 const PRIORITY_VAAPI: i32 = 4;
 const PRIORITY_V4L2M2M: i32 = 5;
-const PRIORITY_MEDIACODEC: i32 = 2;
 
 #[derive(Clone, Copy)]
 struct CandidateCodecSpec {
@@ -95,31 +95,11 @@ fn linux_support_v4l2m2m() -> bool {
     false
 }
 
-#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+#[cfg(any(windows, target_os = "linux"))]
 fn enumerate_candidate_codecs(ctx: &EncodeContext) -> Vec<CodecInfo> {
     use log::debug;
 
     let mut codecs = Vec::new();
-
-    if cfg!(target_os = "android") {
-        push_candidate(
-            &mut codecs,
-            CandidateCodecSpec {
-                name: "h264_mediacodec",
-                format: H264,
-                priority: PRIORITY_MEDIACODEC,
-            },
-        );
-        push_candidate(
-            &mut codecs,
-            CandidateCodecSpec {
-                name: "hevc_mediacodec",
-                format: H265,
-                priority: PRIORITY_MEDIACODEC,
-            },
-        );
-        return codecs;
-    }
 
     let contains = |_vendor: Driver, _format: DataFormat| {
         // Without VRAM feature, we can't check SDK availability.
@@ -281,13 +261,7 @@ struct ProbePolicy {
 
 impl ProbePolicy {
     fn for_codec(codec_name: &str) -> Self {
-        if codec_name.contains("mediacodec") {
-            Self {
-                max_attempts: 30,
-                request_keyframe: true,
-                accept_any_output: true,
-            }
-        } else if codec_name.contains("amf") {
+        if codec_name.contains("amf") {
             Self {
                 max_attempts: 5,
                 request_keyframe: true,
@@ -340,7 +314,8 @@ fn log_failed_probe_attempt(
         if frames.is_empty() {
             trace!(
                 "Encoder {} test produced no output on attempt {}",
-                codec_name, attempt
+                codec_name,
+                attempt
             );
         } else {
             debug!(
@@ -373,7 +348,6 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
 
     let test_ctx = EncodeContext {
         name: codec.name.clone(),
-        mc_name: codec.mc_name.clone(),
         ..ctx.clone()
     };
 
@@ -418,13 +392,13 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
                             );
                         }
                     }
-	            Err(err) => {
-	                last_err = Some(err);
-	                warn!(
-	                    "Encoder {} test attempt {} returned error: {}",
-	                    codec.name, attempt_no, err
-	                );
-	            }
+                    Err(err) => {
+                        last_err = Some(err);
+                        warn!(
+                            "Encoder {} test attempt {} returned error: {}",
+                            codec.name, attempt_no, err
+                        );
+                    }
                 }
             }
 
@@ -437,19 +411,15 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
             );
             false
         }
-	    Err(_) => {
-	        warn!("Failed to create encoder {}", codec.name);
-	        false
-	    }
-	}
+        Err(_) => {
+            warn!("Failed to create encoder {}", codec.name);
+            false
+        }
+    }
 }
 
 fn add_software_fallback(codecs: &mut Vec<CodecInfo>) {
     use log::debug;
-
-    if cfg!(target_os = "android") {
-        return;
-    }
 
     for fallback in CodecInfo::soft().into_vec() {
         if !codecs.iter().any(|codec| codec.format == fallback.format) {
@@ -465,7 +435,6 @@ fn add_software_fallback(codecs: &mut Vec<CodecInfo>) {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncodeContext {
     pub name: String,
-    pub mc_name: Option<String>,
     pub width: i32,
     pub height: i32,
     pub pixfmt: i32,
@@ -550,10 +519,8 @@ impl Encoder {
                 .unwrap_or("-1".to_owned())
                 .parse()
                 .unwrap_or(-1);
-            let mc_name = ctx.mc_name.clone().unwrap_or_default();
             let codec = ffmpeg_ram_new_encoder(
                 CString::new(ctx.name.as_str()).map_err(|_| ())?.as_ptr(),
-                CString::new(mc_name.as_str()).map_err(|_| ())?.as_ptr(),
                 ctx.width,
                 ctx.height,
                 ctx.pixfmt,
@@ -573,6 +540,10 @@ impl Encoder {
             );
 
             if codec.is_null() {
+                let message = encoder_last_error_message();
+                if !message.is_empty() {
+                    log::error!("ffmpeg_ram_new_encoder failed: {}", message);
+                }
                 return Err(());
             }
 
@@ -698,11 +669,11 @@ impl Encoder {
     pub fn available_encoders(ctx: EncodeContext, _sdk: Option<String>) -> Vec<CodecInfo> {
         use log::debug;
 
-        if !(cfg!(windows) || cfg!(target_os = "linux") || cfg!(target_os = "android")) {
+        if !(cfg!(windows) || cfg!(target_os = "linux")) {
             return vec![];
         }
         let mut res = vec![];
-        #[cfg(any(windows, target_os = "linux", target_os = "android"))]
+        #[cfg(any(windows, target_os = "linux"))]
         let codecs = enumerate_candidate_codecs(&ctx);
 
         if let Ok(yuv) = Encoder::dummy_yuv(ctx.clone()) {
@@ -733,6 +704,16 @@ impl Encoder {
         }
 
         Err(())
+    }
+}
+
+pub fn encoder_last_error_message() -> String {
+    unsafe {
+        let ptr = ffmpeg_ram_encoder_last_error();
+        if ptr.is_null() {
+            return String::new();
+        }
+        std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string()
     }
 }
 

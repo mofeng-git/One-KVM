@@ -114,6 +114,28 @@ impl MsdController {
     }
 
     pub async fn mount_image(&self, image: &ImageInfo, cdrom: bool, read_only: bool) -> Result<()> {
+        self.mount_image_in_slot(image, cdrom, read_only, None)
+            .await
+    }
+
+    pub async fn mount_image_at_lun(
+        &self,
+        image: &ImageInfo,
+        cdrom: bool,
+        read_only: bool,
+        lun: u8,
+    ) -> Result<()> {
+        self.mount_image_in_slot(image, cdrom, read_only, Some(lun))
+            .await
+    }
+
+    async fn mount_image_in_slot(
+        &self,
+        image: &ImageInfo,
+        cdrom: bool,
+        read_only: bool,
+        requested_lun: Option<u8>,
+    ) -> Result<()> {
         let _op_guard = self.operation_lock.write().await;
         let mut state = self.state.write().await;
         let previous_state = state.clone();
@@ -136,8 +158,7 @@ impl MsdController {
             return Err(AppError::BadRequest("Image is already mounted".to_string()));
         }
 
-        let lun = Self::lowest_free_lun(&state)
-            .ok_or_else(|| AppError::BadRequest("Media slots are full".to_string()))?;
+        let lun = Self::select_lun(&state, requested_lun)?;
 
         let media = MountedMedia::image(lun, image, cdrom, read_only);
         if let Err(e) = self.configure_media(&media).await {
@@ -250,6 +271,27 @@ impl MsdController {
             .find(|lun| !state.mounted_media.iter().any(|media| media.lun == *lun))
     }
 
+    fn select_lun(state: &MsdState, requested_lun: Option<u8>) -> Result<u8> {
+        let Some(lun) = requested_lun else {
+            return Self::lowest_free_lun(state)
+                .ok_or_else(|| AppError::BadRequest("Media slots are full".to_string()));
+        };
+
+        if lun >= state.disk_mode.capacity() {
+            return Err(AppError::BadRequest(format!(
+                "Media slot {} is outside the current disk mode capacity",
+                lun + 1
+            )));
+        }
+        if state.mounted_media.iter().any(|media| media.lun == lun) {
+            return Err(AppError::BadRequest(format!(
+                "Media slot {} is already occupied",
+                lun + 1
+            )));
+        }
+        Ok(lun)
+    }
+
     fn reset_mounts_for_mode(state: &mut MsdState, disk_mode: DiskMode) {
         state.disk_mode = disk_mode;
         state.mounted_media.clear();
@@ -326,14 +368,20 @@ impl MsdController {
     pub async fn unmount_image(&self, image_id: &str) -> Result<()> {
         self.unmount_media(|media| media.kind == MountedMediaKind::Image && media.id == image_id)
             .await
+            .map(|_| ())
     }
 
     pub async fn unmount_drive(&self) -> Result<()> {
         self.unmount_media(|media| media.kind == MountedMediaKind::Drive)
             .await
+            .map(|_| ())
     }
 
-    async fn unmount_media<F>(&self, predicate: F) -> Result<()>
+    pub async fn unmount_lun(&self, lun: u8) -> Result<bool> {
+        self.unmount_media(|media| media.lun == lun).await
+    }
+
+    async fn unmount_media<F>(&self, predicate: F) -> Result<bool>
     where
         F: Fn(&MountedMedia) -> bool,
     {
@@ -342,7 +390,7 @@ impl MsdController {
         let mut state = self.state.write().await;
         let Some(index) = state.mounted_media.iter().position(predicate) else {
             debug!("Requested media was not mounted, skipping unmount");
-            return Ok(());
+            return Ok(false);
         };
         let media = state.mounted_media[index].clone();
 
@@ -355,7 +403,7 @@ impl MsdController {
 
         self.mark_device_info_dirty().await;
 
-        Ok(())
+        Ok(true)
     }
 
     async fn configure_media(&self, media: &MountedMedia) -> Result<()> {
@@ -708,6 +756,29 @@ mod tests {
         }
 
         assert_eq!(MsdController::lowest_free_lun(&state), Some(2));
+    }
+
+    #[test]
+    fn explicit_lun_selection_rejects_occupied_and_out_of_range_slots() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.img");
+        std::fs::write(&image_path, b"img").unwrap();
+        let image = ImageInfo::new("test".into(), "test.img".into(), image_path, 3);
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+        state
+            .mounted_media
+            .push(MountedMedia::image(3, &image, false, true));
+
+        assert_eq!(MsdController::select_lun(&state, Some(5)).unwrap(), 5);
+        assert!(MsdController::select_lun(&state, Some(3))
+            .unwrap_err()
+            .to_string()
+            .contains("already occupied"));
+        assert!(MsdController::select_lun(&state, Some(8))
+            .unwrap_err()
+            .to_string()
+            .contains("outside"));
     }
 
     #[test]

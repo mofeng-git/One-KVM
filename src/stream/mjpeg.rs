@@ -175,9 +175,7 @@ impl MjpegStreamHandler {
             }
             #[cfg(not(feature = "desktop"))]
             {
-                warn!(
-                    "Dropping non-JPEG frame for MJPEG stream on Android; native encoder is not wired yet"
-                );
+                warn!("Dropping non-JPEG frame because this build has no JPEG encoder");
                 return;
             }
         } else {

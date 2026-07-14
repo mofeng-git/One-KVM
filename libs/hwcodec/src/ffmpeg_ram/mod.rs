@@ -9,18 +9,12 @@ use std::ffi::c_int;
 
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ram_ffi.rs"));
 
-#[cfg(all(
-    any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"),
-    not(target_os = "android")
-))]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"))]
 pub mod decode;
 
 // Provide a small stub on non-ARM builds so dependents can still compile, but decoder
 // construction will fail (since the C++ RKMPP decoder isn't built/linked).
-#[cfg(any(
-    not(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")),
-    target_os = "android"
-))]
+#[cfg(not(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")))]
 pub mod decode {
     use crate::ffmpeg::AVPixelFormat;
 
@@ -69,8 +63,6 @@ pub enum Priority {
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CodecInfo {
     pub name: String,
-    #[serde(skip)]
-    pub mc_name: Option<String>,
     pub format: DataFormat,
     pub priority: i32,
     pub hwdevice: AVHWDeviceType,
@@ -80,7 +72,6 @@ impl Default for CodecInfo {
     fn default() -> Self {
         Self {
             name: Default::default(),
-            mc_name: Default::default(),
             format: DataFormat::H264,
             priority: Default::default(),
             hwdevice: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
@@ -93,28 +84,24 @@ impl CodecInfo {
         match format {
             H264 => Some(CodecInfo {
                 name: "libx264".to_owned(),
-                mc_name: Default::default(),
                 format: H264,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,
                 priority: Priority::Soft as _,
             }),
             H265 => Some(CodecInfo {
                 name: "libx265".to_owned(),
-                mc_name: Default::default(),
                 format: H265,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,
                 priority: Priority::Soft as _,
             }),
             VP8 => Some(CodecInfo {
                 name: "libvpx".to_owned(),
-                mc_name: Default::default(),
                 format: VP8,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,
                 priority: Priority::Soft as _,
             }),
             VP9 => Some(CodecInfo {
                 name: "libvpx-vp9".to_owned(),
-                mc_name: Default::default(),
                 format: VP9,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,
                 priority: Priority::Soft as _,

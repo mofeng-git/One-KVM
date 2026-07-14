@@ -13,7 +13,7 @@ typedef void (*RamEncodePacketCallback)(void *packet, const uint8_t *data,
 typedef void (*RamDecodeCallback)(const uint8_t *data, int len, int width,
                                   int height, int pixfmt, const void *obj);
 
-void *ffmpeg_ram_new_encoder(const char *name, const char *mc_name, int width,
+void *ffmpeg_ram_new_encoder(const char *name, int width,
                              int height, int pixfmt, int align, int fps,
                              int gop, int rc, int quality, int kbs, int q,
                              int thread_count, int gpu, int *linesize,
@@ -31,6 +31,7 @@ int ffmpeg_ram_get_linesize_offset_length(int pix_fmt, int width, int height,
                                           int *length);
 int ffmpeg_ram_set_bitrate(void *encoder, int kbs);
 void ffmpeg_ram_request_keyframe(void *encoder);
+const char *ffmpeg_ram_encoder_last_error(void);
 
 void *ffmpeg_ram_new_decoder(const char *name, int width, int height,
                              int sw_pixfmt, int thread_count,

@@ -48,8 +48,6 @@ pub enum H264EncoderType {
     Rkmpp,
     /// V4L2 M2M (ARM generic) - requires hwcodec extension
     V4l2M2m,
-    /// Android MediaCodec via FFmpeg
-    MediaCodec,
     /// Software encoding (libx264/openh264)
     Software,
     /// No encoder available
@@ -66,7 +64,6 @@ impl std::fmt::Display for H264EncoderType {
             H264EncoderType::Vaapi => write!(f, "VAAPI"),
             H264EncoderType::Rkmpp => write!(f, "RKMPP"),
             H264EncoderType::V4l2M2m => write!(f, "V4L2 M2M"),
-            H264EncoderType::MediaCodec => write!(f, "MediaCodec"),
             H264EncoderType::Software => write!(f, "Software"),
             H264EncoderType::None => write!(f, "None"),
         }
@@ -83,7 +80,6 @@ impl From<EncoderBackend> for H264EncoderType {
             EncoderBackend::Vaapi => H264EncoderType::Vaapi,
             EncoderBackend::Rkmpp => H264EncoderType::Rkmpp,
             EncoderBackend::V4l2m2m => H264EncoderType::V4l2M2m,
-            EncoderBackend::MediaCodec => H264EncoderType::MediaCodec,
             EncoderBackend::Software => H264EncoderType::Software,
         }
     }
@@ -196,7 +192,6 @@ pub fn get_available_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 
     let ctx = EncodeContext {
         name: String::new(),
-        mc_name: None,
         width: width as i32,
         height: height as i32,
         pixfmt: resolve_pixel_format("yuv420p", AVPixelFormat::AV_PIX_FMT_YUV420P),
@@ -296,7 +291,6 @@ impl H264Encoder {
 
         let ctx = EncodeContext {
             name: codec_name.to_string(),
-            mc_name: None,
             width: width as i32,
             height: height as i32,
             pixfmt,

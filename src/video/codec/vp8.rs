@@ -130,7 +130,6 @@ pub fn get_available_vp8_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 
     let ctx = EncodeContext {
         name: String::new(),
-        mc_name: None,
         width: width as i32,
         height: height as i32,
         pixfmt: resolve_pixel_format("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
@@ -271,7 +270,6 @@ impl VP8Encoder {
 
         let ctx = EncodeContext {
             name: codec_name.to_string(),
-            mc_name: None,
             width: width as i32,
             height: height as i32,
             pixfmt,

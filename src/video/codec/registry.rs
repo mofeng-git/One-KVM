@@ -96,8 +96,6 @@ pub enum EncoderBackend {
     Rkmpp,
     /// V4L2 Memory-to-Memory (ARM)
     V4l2m2m,
-    /// Android MediaCodec via FFmpeg
-    MediaCodec,
     /// Software encoding (libx264, libx265, libvpx)
     Software,
 }
@@ -117,8 +115,6 @@ impl EncoderBackend {
             EncoderBackend::Rkmpp
         } else if name.contains("v4l2m2m") {
             EncoderBackend::V4l2m2m
-        } else if name.contains("mediacodec") {
-            EncoderBackend::MediaCodec
         } else {
             EncoderBackend::Software
         }
@@ -138,7 +134,6 @@ impl EncoderBackend {
             EncoderBackend::Amf => "AMF",
             EncoderBackend::Rkmpp => "RKMPP",
             EncoderBackend::V4l2m2m => "V4L2 M2M",
-            EncoderBackend::MediaCodec => "MediaCodec",
             EncoderBackend::Software => "Software",
         }
     }
@@ -153,7 +148,6 @@ impl EncoderBackend {
             "amf" => Some(EncoderBackend::Amf),
             "rkmpp" => Some(EncoderBackend::Rkmpp),
             "v4l2m2m" | "v4l2" => Some(EncoderBackend::V4l2m2m),
-            "mediacodec" | "android-mediacodec" => Some(EncoderBackend::MediaCodec),
             "software" | "cpu" => Some(EncoderBackend::Software),
             _ => None,
         }
@@ -261,8 +255,8 @@ impl EncoderRegistry {
             let codec_name = match format {
                 VideoEncoderType::H264 => "libx264",
                 VideoEncoderType::H265 => "libx265",
-                VideoEncoderType::VP8 => "libvpx",
-                VideoEncoderType::VP9 => "libvpx-vp9",
+                VideoEncoderType::VP8 => "libvpx_vp8",
+                VideoEncoderType::VP9 => "libvpx_vp9",
             };
 
             encoders.push(AvailableEncoder {
@@ -309,10 +303,9 @@ impl EncoderRegistry {
         self.encoders.clear();
         self.detection_resolution = (width, height);
 
-        // Create test context for encoder detection
+        // Create test context for encoder detection.
         let ctx = EncodeContext {
             name: String::new(),
-            mc_name: None,
             width: width as i32,
             height: height as i32,
             pixfmt: resolve_pixel_format("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
@@ -332,7 +325,6 @@ impl EncoderRegistry {
             ctx.clone(),
             Duration::from_millis(DETECT_TIMEOUT_MS),
         );
-
         info!("Found {} encoders from hwcodec", all_encoders.len());
 
         for codec_info in &all_encoders {

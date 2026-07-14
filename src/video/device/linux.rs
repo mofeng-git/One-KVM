@@ -963,19 +963,6 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
     // for a single MIPI CSI pipeline. Keep only the highest-priority node per
     // (driver, bus_info) group so users see one device instead of ~11.
     dedup_platform_subdevices(&mut devices);
-    devices.retain(|device| {
-        let hide = should_hide_android_platform_node(device);
-        if hide {
-            debug!(
-                "Hiding Android platform video node: {} ({}) {}",
-                device.name,
-                device.driver,
-                device.path.display()
-            );
-        }
-        !hide
-    });
-
     info!("Found {} video capture devices", devices.len());
     Ok(devices)
 }
@@ -1053,33 +1040,6 @@ fn dedup_platform_subdevices(devices: &mut Vec<VideoDeviceInfo>) {
         let key = (d.driver.clone(), d.bus_info.clone());
         seen.insert(key)
     });
-}
-
-fn should_hide_android_platform_node(device: &VideoDeviceInfo) -> bool {
-    if !cfg!(feature = "android") {
-        return false;
-    }
-
-    let driver = device.driver.to_ascii_lowercase();
-    let name = device.name.to_ascii_lowercase();
-    let card = device.card.to_ascii_lowercase();
-    let usb_device = driver == "uvcvideo" || device.bus_info.starts_with("usb-");
-    let known_bridge =
-        driver.contains("rkcif") || driver.contains("rk_hdmirx") || driver.contains("tc358743");
-    if usb_device || known_bridge {
-        return false;
-    }
-
-    matches!(
-        driver.as_str(),
-        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
-    ) || matches!(
-        name.as_str(),
-        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
-    ) || matches!(
-        card.as_str(),
-        "ionvideo" | "amlvideo" | "amlvideo2" | "videosync"
-    )
 }
 
 /// rkcif registers many `/dev/video*` queues; probing all in parallel can
@@ -1184,20 +1144,6 @@ fn sysfs_maybe_capture(path: &Path) -> bool {
         .unwrap_or_default()
         .to_lowercase();
     let driver = extract_uevent_value(&uevent, "driver");
-
-    if cfg!(feature = "android") {
-        let platform_skip = ["ionvideo", "amlvideo", "amlvideo2", "videosync"];
-        let driver_skip = driver
-            .as_ref()
-            .is_some_and(|driver| platform_skip.iter().any(|hint| driver == hint));
-        if driver_skip || platform_skip.iter().any(|hint| sysfs_name == *hint) {
-            debug!(
-                "Skipping Android platform video node {:?}: {}",
-                path, sysfs_name
-            );
-            return false;
-        }
-    }
 
     let mut maybe_capture = false;
     let capture_hints = [

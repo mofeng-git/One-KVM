@@ -8,21 +8,19 @@ pub mod codec_constraints;
 pub mod device;
 pub mod format;
 pub mod frame;
-#[cfg(any(feature = "android", feature = "desktop"))]
+#[cfg(feature = "desktop")]
 pub mod pipeline;
 pub mod signal;
-#[cfg(any(feature = "android", feature = "desktop"))]
+#[cfg(feature = "desktop")]
 pub mod stream_manager;
-#[cfg(any(feature = "android", feature = "desktop"))]
+#[cfg(feature = "desktop")]
 pub mod streamer;
-#[cfg(any(feature = "android", feature = "desktop"))]
+#[cfg(feature = "desktop")]
 pub mod traits;
-#[cfg(any(feature = "android", feature = "desktop"))]
+#[cfg(feature = "desktop")]
 pub mod types;
 
 pub use capture::{CaptureMeta, CaptureStream};
-#[cfg(feature = "android-mediacodec")]
-pub use codec::{AndroidH264Packet, AndroidMediaCodecH264Encoder};
 pub use codec::{H264Encoder, H264EncoderType, JpegEncoder, PixelConverter, Yuv420pBuffer};
 pub use device::{VideoDevice, VideoDeviceInfo};
 pub use format::PixelFormat;

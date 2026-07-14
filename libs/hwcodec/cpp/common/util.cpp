@@ -24,7 +24,7 @@ bool is_software_h264(const std::string &name) {
   // Exclude all hardware encoders
   static const char* hw_suffixes[] = {
     "nvenc", "amf", "qsv", "vaapi", "rkmpp",
-    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+    "v4l2m2m", "videotoolbox", "_mf"
   };
   for (const auto& suffix : hw_suffixes) {
     if (name.find(suffix) != std::string::npos) return false;
@@ -37,7 +37,7 @@ bool is_software_hevc(const std::string &name) {
   if (name != "hevc" && name != "libx265") return false;
   static const char* hw_suffixes[] = {
     "nvenc", "amf", "qsv", "vaapi", "rkmpp",
-    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+    "v4l2m2m", "videotoolbox", "_mf"
   };
   for (const auto& suffix : hw_suffixes) {
     if (name.find(suffix) != std::string::npos) return false;
@@ -100,13 +100,8 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->color_primaries = AVCOL_PRI_SMPTE170M;
   c->color_trc = AVCOL_TRC_SMPTE170M;
 
-  // WebRTC SDP advertises constrained baseline. Keep most hardware and software
-  // encoders on the same browser-friendly H264 profile. Android MediaCodec is
-  // deliberately excluded because older vendor OMX encoders can reject explicit
-  // profile/level combinations during configure().
-  if (name.find("mediacodec") != std::string::npos) {
-    return;
-  }
+  // WebRTC SDP advertises constrained baseline. Keep hardware and software
+  // encoders on the same browser-friendly H264 profile.
   if (name.find("h264") != std::string::npos) {
     c->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
   } else if (name.find("hevc") != std::string::npos) {
@@ -310,9 +305,6 @@ bool set_quality(void *priv_data, const std::string &name, int quality) {
       break;
     }
   }
-  // Do not force MediaCodec level here. Some Android TV vendor encoders,
-  // including older Amlogic OMX implementations, reject explicit level values
-  // even when they support the requested resolution and bitrate.
   // libx264 software encoder presets
   if (is_software_h264(name)) {
     const char* preset = nullptr;
@@ -367,7 +359,7 @@ struct CodecOptions {
 };
 
 bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
-                      int q) {
+                      int /*q*/) {
   if (name.find("qsv") != std::string::npos) {
     // https://github.com/LizardByte/Sunshine/blob/3e47cd3cc8fd37a7a88be82444ff4f3c0022856b/src/video.cpp#L1635
     c->strict_std_compliance = FF_COMPLIANCE_UNOFFICIAL;
@@ -375,9 +367,6 @@ bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
   std::vector<CodecOptions> codecs = {
       {"nvenc", "rc", {{RC_CBR, "cbr"}, {RC_VBR, "vbr"}}},
       {"amf", "rc", {{RC_CBR, "cbr"}, {RC_VBR, "vbr_latency"}}},
-      {"mediacodec",
-       "bitrate_mode",
-       {{RC_CBR, "cbr"}, {RC_VBR, "vbr"}, {RC_CQ, "cq"}}},
       // {"videotoolbox", "constant_bit_rate", {{RC_CBR, "1"}}},
     };
 
@@ -391,13 +380,6 @@ bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
           LOG_ERROR(codec.codec_name + " set opt " + codec.option_name + " " +
                     it->second + " failed, ret = " + av_err2str(ret));
           return false;
-        }
-        if (name.find("mediacodec") != std::string::npos) {
-          if (rc == RC_CQ) {
-            if (q >= 0 && q <= 51) {
-              c->global_quality = q;
-            }
-          }
         }
       }
       break;
@@ -444,13 +426,6 @@ bool set_others(void *priv_data, const std::string &name) {
     // ff_eAVScenarioInfo_DisplayRemoting = 1
     if ((ret = av_opt_set_int(priv_data, "scenario", 1, 0)) < 0) {
       LOG_ERROR(std::string("mediafoundation set scenario failed, ret = ") +
-                av_err2str(ret));
-      return false;
-    }
-  }
-  if (name.find("mediacodec") != std::string::npos) {
-    if ((ret = av_opt_set_int(priv_data, "ndk_codec", 1, 0)) < 0) {
-      LOG_ERROR(std::string("mediacodec set ndk_codec failed, ret = ") +
                 av_err2str(ret));
       return false;
     }

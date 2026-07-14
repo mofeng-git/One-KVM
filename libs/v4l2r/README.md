@@ -17,7 +17,3 @@ parts are intentionally removed here so this dependency stays scoped to capture.
 
 `cargo build` generates V4L2 bindings from the vendored Linux UAPI headers in
 `include/`.
-
-For Android targets, the build script uses the Android NDK sysroot. Set one of
-`ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, `NDK_HOME`, `ANDROID_HOME`, or
-`ANDROID_SDK_ROOT` if the NDK cannot be found automatically.

@@ -11,6 +11,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include "common.h"
 
@@ -20,6 +21,13 @@ extern "C" {
 #ifdef _WIN32
 #include "win.h"
 #endif
+
+static thread_local std::string g_encoder_last_error;
+
+static void set_encoder_last_error(const std::string &message) {
+  g_encoder_last_error = message;
+  LOG_ERROR(message);
+}
 
 static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
                                    int *offset, int *length) {
@@ -122,7 +130,6 @@ public:
   AVFrame *frame_ = NULL;
   AVPacket *pkt_ = NULL;
   std::string name_;
-  std::string mc_name_; // for mediacodec
 
   int width_ = 0;
   int height_ = 0;
@@ -145,14 +152,12 @@ public:
   AVPixelFormat hw_pixfmt_ = AV_PIX_FMT_NONE;
   AVBufferRef *hw_device_ctx_ = NULL;
   AVFrame *hw_frame_ = NULL;
-  AVFrame *borrowed_frame_ = NULL;
 
-  FFmpegRamEncoder(const char *name, const char *mc_name, int width, int height,
+  FFmpegRamEncoder(const char *name, int width, int height,
                    int pixfmt, int align, int fps, int gop, int rc, int quality,
                    int kbs, int q, int thread_count, int gpu,
                    RamEncodeCallback callback) {
     name_ = name;
-    mc_name_ = mc_name ? mc_name : "";
     width_ = width;
     height_ = height;
     pixfmt_ = (AVPixelFormat)pixfmt;
@@ -184,12 +189,13 @@ public:
   }
 
   bool init(int *linesize, int *offset, int *length) {
+    g_encoder_last_error.clear();
     const AVCodec *codec = NULL;
 
     int ret;
 
     if (!(codec = avcodec_find_encoder_by_name(name_.c_str()))) {
-      LOG_ERROR(std::string("Codec ") + name_ + " not found");
+      set_encoder_last_error(std::string("Codec ") + name_ + " not found");
       return false;
     }
 
@@ -252,12 +258,6 @@ public:
       LOG_ERROR(std::string("Could not allocate video packet"));
       return false;
     }
-    borrowed_frame_ = av_frame_alloc();
-    if (!borrowed_frame_) {
-      LOG_ERROR(std::string("Could not allocate borrowed video frame"));
-      return false;
-    }
-
     /* resolution must be a multiple of two */
     c_->width = width_;
     c_->height = height_;
@@ -277,19 +277,9 @@ public:
     util_encode::set_gpu(c_->priv_data, name_, gpu_);
     util_encode::force_hw(c_->priv_data, name_);
     util_encode::set_others(c_->priv_data, name_);
-    if (name_.find("mediacodec") != std::string::npos) {
-      if (mc_name_.length() > 0) {
-        LOG_INFO(std::string("mediacodec codec_name: ") + mc_name_);
-        if ((ret = av_opt_set(c_->priv_data, "codec_name", mc_name_.c_str(),
-                              0)) < 0) {
-          LOG_ERROR(std::string("mediacodec codec_name failed, ret = ") + av_err2str(ret));
-        }
-      }
-    }
-
     if ((ret = avcodec_open2(c_, codec, NULL)) < 0) {
-      LOG_ERROR(std::string("avcodec_open2 failed, ret = ") + av_err2str(ret) +
-                ", name: " + name_);
+      set_encoder_last_error(std::string("avcodec_open2 failed, ret = ") +
+                             av_err2str(ret) + ", name: " + name_);
       return false;
     }
 
@@ -306,14 +296,6 @@ public:
 
   int encode(const uint8_t *data, int length, const void *obj, uint64_t ms) {
     int ret;
-
-    if (can_borrow_input(length)) {
-      AVFrame *borrowed = wrap_borrowed_frame(data, length);
-      if (!borrowed) {
-        return -1;
-      }
-      return do_encode(borrowed, obj, ms);
-    }
 
     if ((ret = av_frame_make_writable(frame_)) != 0) {
       LOG_ERROR(std::string("av_frame_make_writable failed, ret = ") + av_err2str(ret));
@@ -350,8 +332,6 @@ public:
       av_frame_free(&frame_);
     if (hw_frame_)
       av_frame_free(&hw_frame_);
-    if (borrowed_frame_)
-      av_frame_free(&borrowed_frame_);
     if (hw_device_ctx_)
       av_buffer_unref(&hw_device_ctx_);
     if (c_)
@@ -610,65 +590,6 @@ private:
     return 0;
   }
 
-  bool can_borrow_input(int data_length) const {
-    if (hw_device_type_ != AV_HWDEVICE_TYPE_NONE) {
-      return false;
-    }
-    if (name_.find("mediacodec") == std::string::npos) {
-      return false;
-    }
-    switch (pixfmt_) {
-    case AV_PIX_FMT_NV12:
-    case AV_PIX_FMT_NV21:
-      return data_length >= width_ * height_ * 3 / 2;
-    case AV_PIX_FMT_YUV420P:
-      return data_length >= width_ * height_ * 3 / 2;
-    default:
-      return false;
-    }
-  }
-
-  AVFrame *wrap_borrowed_frame(const uint8_t *data, int data_length) {
-    if (!borrowed_frame_) {
-      return NULL;
-    }
-    av_frame_unref(borrowed_frame_);
-    borrowed_frame_->format = pixfmt_;
-    borrowed_frame_->width = width_;
-    borrowed_frame_->height = height_;
-
-    const int y_size = width_ * height_;
-    const int uv_size = y_size / 4;
-    switch (pixfmt_) {
-    case AV_PIX_FMT_NV12:
-    case AV_PIX_FMT_NV21:
-      if (data_length < y_size + y_size / 2) {
-        LOG_ERROR("wrap_borrowed_frame: NV12/NV21 data length error");
-        return NULL;
-      }
-      borrowed_frame_->data[0] = const_cast<uint8_t *>(data);
-      borrowed_frame_->data[1] = const_cast<uint8_t *>(data + y_size);
-      borrowed_frame_->linesize[0] = width_;
-      borrowed_frame_->linesize[1] = width_;
-      break;
-    case AV_PIX_FMT_YUV420P:
-      if (data_length < y_size + uv_size * 2) {
-        LOG_ERROR("wrap_borrowed_frame: YUV420P data length error");
-        return NULL;
-      }
-      borrowed_frame_->data[0] = const_cast<uint8_t *>(data);
-      borrowed_frame_->data[1] = const_cast<uint8_t *>(data + y_size);
-      borrowed_frame_->data[2] = const_cast<uint8_t *>(data + y_size + uv_size);
-      borrowed_frame_->linesize[0] = width_;
-      borrowed_frame_->linesize[1] = width_ / 2;
-      borrowed_frame_->linesize[2] = width_ / 2;
-      break;
-    default:
-      return NULL;
-    }
-    return borrowed_frame_;
-  }
-
   int bytes_per_pixel(int pix_fmt) {
     switch (pix_fmt) {
     case AV_PIX_FMT_YUYV422:
@@ -687,14 +608,14 @@ private:
 } // namespace
 
 extern "C" FFmpegRamEncoder *
-ffmpeg_ram_new_encoder(const char *name, const char *mc_name, int width,
+ffmpeg_ram_new_encoder(const char *name, int width,
                        int height, int pixfmt, int align, int fps, int gop,
                        int rc, int quality, int kbs, int q, int thread_count,
                        int gpu, int *linesize, int *offset, int *length,
                        RamEncodeCallback callback) {
   FFmpegRamEncoder *encoder = NULL;
   try {
-    encoder = new FFmpegRamEncoder(name, mc_name, width, height, pixfmt, align,
+    encoder = new FFmpegRamEncoder(name, width, height, pixfmt, align,
                                    fps, gop, rc, quality, kbs, q, thread_count,
                                    gpu, callback);
     if (encoder) {
@@ -771,4 +692,8 @@ extern "C" void ffmpeg_ram_request_keyframe(FFmpegRamEncoder *encoder) {
   } catch (const std::exception &e) {
     LOG_ERROR(std::string("ffmpeg_ram_request_keyframe failed, ") + std::string(e.what()));
   }
+}
+
+extern "C" const char *ffmpeg_ram_encoder_last_error(void) {
+  return g_encoder_last_error.c_str();
 }

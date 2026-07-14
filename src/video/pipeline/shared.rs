@@ -61,10 +61,7 @@ use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 
-#[cfg(all(
-    any(target_arch = "aarch64", target_arch = "arm"),
-    not(target_os = "android")
-))]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
 /// Encoded video frame for distribution
@@ -484,15 +481,9 @@ impl SharedVideoPipeline {
     fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
         match cmd {
             PipelineCmd::SetBitrate { bitrate_kbps, gop } => {
-                #[cfg(any(
-                    not(any(target_arch = "aarch64", target_arch = "arm")),
-                    target_os = "android"
-                ))]
+                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
                 let _ = gop;
-                #[cfg(all(
-                    any(target_arch = "aarch64", target_arch = "arm"),
-                    not(target_os = "android")
-                ))]
+                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
@@ -659,7 +650,7 @@ impl SharedVideoPipeline {
             *guard = Some(cmd_tx);
         }
 
-        // Encoder loop uses a dedicated OS thread because FFmpeg/MediaCodec work is synchronous.
+        // Encoder loop uses a dedicated OS thread because FFmpeg work is synchronous.
         {
             let pipeline = pipeline.clone();
             let latest_frame = latest_frame.clone();
@@ -1289,10 +1280,7 @@ impl SharedVideoPipeline {
             current_ts_us.saturating_sub(start_ts_us) / 1000
         };
 
-        #[cfg(all(
-            any(target_arch = "aarch64", target_arch = "arm"),
-            not(target_os = "android")
-        ))]
+        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if state.ffmpeg_hw_enabled {
             if input_format != PixelFormat::Mjpeg {
                 return Err(AppError::VideoError(

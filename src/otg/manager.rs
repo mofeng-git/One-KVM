@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
 use super::configfs::{
-    create_dir, create_symlink, find_udc, is_configfs_available, remove_dir, remove_file,
-    write_file, CONFIGFS_PATH, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
+    configfs_path, create_dir, create_symlink, find_udc, is_configfs_available, remove_dir,
+    remove_file, write_file, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
     DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
 };
 use super::endpoint::{EndpointAllocator, DEFAULT_MAX_ENDPOINTS};
@@ -65,7 +65,7 @@ impl OtgGadgetManager {
         max_endpoints: u8,
         descriptor: GadgetDescriptor,
     ) -> Self {
-        let gadget_path = PathBuf::from(CONFIGFS_PATH).join(gadget_name);
+        let gadget_path = configfs_path().join(gadget_name);
         let config_path = gadget_path.join("configs/c.1");
 
         Self {
@@ -166,9 +166,10 @@ impl OtgGadgetManager {
         debug!("Setting up OTG USB Gadget: {}", self.gadget_name);
 
         if !Self::is_available() {
-            return Err(AppError::Internal(
-                "ConfigFS not available. Is it mounted at /sys/kernel/config?".to_string(),
-            ));
+            return Err(AppError::Internal(format!(
+                "ConfigFS not available at {}",
+                configfs_path().display()
+            )));
         }
 
         if self.gadget_exists() {

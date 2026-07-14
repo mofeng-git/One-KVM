@@ -286,7 +286,10 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
         );
     }
 
-    let gadget_root = std::path::Path::new("/sys/kernel/config/usb_gadget");
+    let gadget_root = crate::otg::configfs::configfs_path();
+    let configfs_mount = gadget_root
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("/sys/kernel/config"));
     let configfs_mounted = std::fs::read_to_string("/proc/mounts")
         .ok()
         .map(|mounts| {
@@ -295,7 +298,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                 let _src = parts.next();
                 let mount_point = parts.next();
                 let fs_type = parts.next();
-                mount_point == Some("/sys/kernel/config") && fs_type == Some("configfs")
+                mount_point == configfs_mount.to_str() && fs_type == Some("configfs")
             })
         })
         .unwrap_or(false);
@@ -310,7 +313,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             OtgSelfCheckLevel::Info,
             "Check configfs mount status",
             None::<String>,
-            Some("/sys/kernel/config"),
+            Some(configfs_mount.display().to_string()),
         );
     } else {
         gadget_config_ok = false;
@@ -320,8 +323,11 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             false,
             OtgSelfCheckLevel::Error,
             "Check configfs mount status",
-            Some("Try: mount -t configfs none /sys/kernel/config"),
-            Some("/sys/kernel/config"),
+            Some(format!(
+                "Try: mount -t configfs none {}",
+                configfs_mount.display()
+            )),
+            Some(configfs_mount.display().to_string()),
         );
     }
 
@@ -331,9 +337,9 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             "usb_gadget_dir_exists",
             true,
             OtgSelfCheckLevel::Info,
-            "Check /sys/kernel/config/usb_gadget access",
+            format!("Check {} access", gadget_root.display()),
             None::<String>,
-            Some("/sys/kernel/config/usb_gadget"),
+            Some(gadget_root.display().to_string()),
         );
     } else {
         gadget_config_ok = false;
@@ -342,9 +348,9 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             "usb_gadget_dir_exists",
             false,
             OtgSelfCheckLevel::Error,
-            "Check /sys/kernel/config/usb_gadget access",
+            format!("Check {} access", gadget_root.display()),
             Some("Ensure configfs and USB gadget support are enabled"),
-            Some("/sys/kernel/config/usb_gadget"),
+            Some(gadget_root.display().to_string()),
         );
     }
 
@@ -426,7 +432,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             OtgSelfCheckLevel::Info,
             "Check for other gadget services",
             None::<String>,
-            Some("/sys/kernel/config/usb_gadget"),
+            Some(gadget_root.display().to_string()),
         );
     } else {
         push_otg_check(
@@ -436,7 +442,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             OtgSelfCheckLevel::Warn,
             "Check for other gadget services",
             Some("Potential UDC contention with one-kvm; check other OTG services"),
-            Some("/sys/kernel/config/usb_gadget"),
+            Some(gadget_root.display().to_string()),
         );
     }
 
@@ -621,7 +627,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                     OtgSelfCheckLevel::Info,
                     "Check UDC binding conflicts",
                     None::<String>,
-                    Some("/sys/kernel/config/usb_gadget/*/UDC"),
+                    Some(format!("{}/*/UDC", gadget_root.display())),
                 );
             } else {
                 push_otg_check(
@@ -631,7 +637,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                     OtgSelfCheckLevel::Error,
                     "Check UDC binding conflicts",
                     Some("Stop other OTG services or switch one-kvm to an idle UDC"),
-                    Some("/sys/kernel/config/usb_gadget/*/UDC"),
+                    Some(format!("{}/*/UDC", gadget_root.display())),
                 );
             }
         }

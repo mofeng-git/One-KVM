@@ -45,8 +45,6 @@ pub enum H265EncoderType {
     Rkmpp,
     /// V4L2 M2M (ARM generic)
     V4l2M2m,
-    /// Android MediaCodec via FFmpeg
-    MediaCodec,
     /// Software encoder (libx265)
     Software,
     /// No encoder available
@@ -63,7 +61,6 @@ impl std::fmt::Display for H265EncoderType {
             H265EncoderType::Vaapi => write!(f, "VAAPI"),
             H265EncoderType::Rkmpp => write!(f, "RKMPP"),
             H265EncoderType::V4l2M2m => write!(f, "V4L2 M2M"),
-            H265EncoderType::MediaCodec => write!(f, "MediaCodec"),
             H265EncoderType::Software => write!(f, "Software"),
             H265EncoderType::None => write!(f, "None"),
         }
@@ -79,7 +76,6 @@ impl From<EncoderBackend> for H265EncoderType {
             EncoderBackend::Vaapi => H265EncoderType::Vaapi,
             EncoderBackend::Rkmpp => H265EncoderType::Rkmpp,
             EncoderBackend::V4l2m2m => H265EncoderType::V4l2M2m,
-            EncoderBackend::MediaCodec => H265EncoderType::MediaCodec,
             EncoderBackend::Software => H265EncoderType::Software,
         }
     }
@@ -199,7 +195,6 @@ pub fn get_available_h265_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
 
     let ctx = EncodeContext {
         name: String::new(),
-        mc_name: None,
         width: width as i32,
         height: height as i32,
         pixfmt: resolve_pixel_format("nv12", AVPixelFormat::AV_PIX_FMT_NV12),
@@ -373,7 +368,6 @@ impl H265Encoder {
 
         let ctx = EncodeContext {
             name: codec_name.to_string(),
-            mc_name: None,
             width: width as i32,
             height: height as i32,
             pixfmt,

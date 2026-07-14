@@ -114,7 +114,7 @@ impl Drop for Decoder {
     }
 }
 
-fn last_error_message() -> String {
+pub fn last_error_message() -> String {
     unsafe {
         let ptr = ffmpeg_ram_last_error();
         if ptr.is_null() {

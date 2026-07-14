@@ -65,7 +65,12 @@ struct CliArgs {
     address: Option<String>,
 
     /// HTTP port (overrides database config)
-    #[arg(short = 'p', long, value_name = "PORT")]
+    #[arg(
+        short = 'p',
+        long = "port",
+        visible_alias = "http-port",
+        value_name = "PORT"
+    )]
     http_port: Option<u16>,
 
     /// HTTPS port (overrides database config)
@@ -84,7 +89,7 @@ struct CliArgs {
     #[arg(long, value_name = "FILE", requires = "ssl_cert")]
     ssl_key: Option<PathBuf>,
 
-    /// Data directory path (default: /etc/one-kvm, or the executable directory on Windows)
+    /// Data directory path
     #[arg(short = 'd', long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
@@ -668,9 +673,11 @@ async fn main() -> anyhow::Result<()> {
         let mut shutdown_rx = shutdown_tx.subscribe();
         async move {
             tokio::select! {
-                result = tokio::signal::ctrl_c() => {
-                    result.expect("Failed to install CTRL+C handler");
-                    tracing::info!("Shutdown signal received");
+                result = shutdown_signal() => {
+                    if let Err(e) = result {
+                        tracing::error!("Failed while waiting for shutdown signal: {}", e);
+                    }
+                    tracing::info!("SIGINT or SIGTERM received");
                     ShutdownAction::Exit
                 }
                 request = shutdown_rx.recv() => {
@@ -792,6 +799,24 @@ fn get_data_dir() -> PathBuf {
 
     #[cfg(not(windows))]
     PathBuf::from("/etc/one-kvm")
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() -> anyhow::Result<()> {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    let mut terminate = signal(SignalKind::terminate())?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result?,
+        _ = terminate.recv() => {},
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() -> anyhow::Result<()> {
+    tokio::signal::ctrl_c().await?;
+    Ok(())
 }
 
 async fn open_database_pool(data_dir: &Path) -> anyhow::Result<DatabasePool> {
@@ -1205,6 +1230,11 @@ async fn cleanup(state: &Arc<AppState>) {
         if let Err(e) = msd.shutdown().await {
             tracing::warn!("Failed to shutdown MSD: {}", e);
         }
+    }
+
+    #[cfg(unix)]
+    if let Err(e) = state.otg_service.shutdown().await {
+        tracing::warn!("Failed to shutdown OTG: {}", e);
     }
 
     if let Some(atx) = state.atx.write().await.as_mut() {
