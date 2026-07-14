@@ -273,7 +273,10 @@ public:
       LOG_ERROR(std::string("set_quality failed, name: ") + name_);
       return false;
     }
-    util_encode::set_rate_control(c_, name_, rc_, q_);
+    if (!util_encode::set_rate_control(c_, name_, rc_, q_)) {
+      LOG_ERROR(std::string("set_rate_control failed, name: ") + name_);
+      return false;
+    }
     util_encode::set_gpu(c_->priv_data, name_, gpu_);
     util_encode::force_hw(c_->priv_data, name_);
     util_encode::set_others(c_->priv_data, name_);
@@ -615,11 +618,38 @@ ffmpeg_ram_new_encoder(const char *name, int width,
                        RamEncodeCallback callback) {
   FFmpegRamEncoder *encoder = NULL;
   try {
-    encoder = new FFmpegRamEncoder(name, width, height, pixfmt, align,
-                                   fps, gop, rc, quality, kbs, q, thread_count,
-                                   gpu, callback);
+    auto try_create = [&](int attempt_rc, int attempt_kbs) {
+      FFmpegRamEncoder *candidate = new FFmpegRamEncoder(
+          name, width, height, pixfmt, align, fps, gop, attempt_rc, quality,
+          attempt_kbs, q, thread_count, gpu, callback);
+      if (candidate && candidate->init(linesize, offset, length)) {
+        return candidate;
+      }
+
+      if (candidate) {
+        candidate->free_encoder();
+        delete candidate;
+      }
+      return static_cast<FFmpegRamEncoder *>(NULL);
+    };
+
+    // Preserve the existing VAAPI path first. With a target bitrate and no
+    // explicit QP, FFmpeg negotiates a supported bitrate-based mode such as
+    // AVBR, VBR or CBR with the driver.
+    encoder = try_create(rc, kbs);
     if (encoder) {
-      if (encoder->init(linesize, offset, length)) {
+      return encoder;
+    }
+
+    // Retry only VAAPI with a fresh context in explicit-QP mode. This avoids
+    // changing rate control on hardware which already supports CBR/VBR while
+    // allowing CQP-only drivers to pass probing and normal encoder creation.
+    if (name && std::string(name).find("vaapi") != std::string::npos &&
+        rc != RC_CQ) {
+      LOG_WARN(std::string("VAAPI bitrate-based rate control failed for ") +
+               name + ", retrying with CQP");
+      encoder = try_create(RC_CQ, 0);
+      if (encoder) {
         return encoder;
       }
     }
