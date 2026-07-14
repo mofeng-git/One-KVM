@@ -259,7 +259,6 @@ export interface VncConfig {
 	bind: string;
 	port: number;
 	encoding: VncEncoding;
-	jpeg_quality: number;
 	allow_one_client: boolean;
 }
 
@@ -639,7 +638,6 @@ export interface VncConfigResponse {
 	bind: string;
 	port: number;
 	encoding: VncEncoding;
-	jpeg_quality: number;
 	allow_one_client: boolean;
 	has_password: boolean;
 }
@@ -649,7 +647,6 @@ export interface VncConfigUpdate {
 	bind?: string;
 	port?: number;
 	encoding?: VncEncoding;
-	jpeg_quality?: number;
 	allow_one_client?: boolean;
 	password?: string;
 }

@@ -1084,7 +1084,6 @@ export default {
       encodingTightJpeg: 'Tight JPEG',
       encodingH264: 'H.264',
       encodingHint: 'VNC 运行时会锁定编码；H.265 锁定时 VNC 无法启动，MJPEG 锁定时 RTSP 与 RustDesk 无法启动。',
-      jpegQuality: 'JPEG 质量',
       allowOneClient: '仅允许单客户端',
       password: '密码',
       passwordPlaceholder: '留空表示不修改',

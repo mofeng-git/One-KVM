@@ -1085,7 +1085,6 @@ export default {
       encodingTightJpeg: 'Tight JPEG',
       encodingH264: 'H.264',
       encodingHint: 'VNC locks output while running. VNC cannot start under an H.265 lock; MJPEG blocks RTSP and RustDesk.',
-      jpegQuality: 'JPEG Quality',
       allowOneClient: 'Allow One Client Only',
       password: 'Password',
       passwordPlaceholder: 'Leave empty to keep current',

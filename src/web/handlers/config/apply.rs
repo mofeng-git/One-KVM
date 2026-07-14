@@ -556,7 +556,6 @@ pub async fn apply_vnc_config(
             || old_config.port != new_config.port
             || old_config.encoding != new_config.encoding
             || old_config.password != new_config.password
-            || old_config.jpeg_quality != new_config.jpeg_quality
             || old_config.allow_one_client != new_config.allow_one_client;
 
         if vnc_guard.is_none() {

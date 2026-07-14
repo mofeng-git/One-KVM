@@ -424,7 +424,6 @@ const vncLocalConfig = ref<VncConfigUpdate & { password?: string }>({
   bind: '0.0.0.0',
   port: 5900,
   encoding: 'tight_jpeg',
-  jpeg_quality: 80,
   allow_one_client: true,
   password: '',
 })
@@ -2496,7 +2495,6 @@ function applyVncStatus(status: VncStatusResponse) {
     bind: status.config.bind,
     port: status.config.port,
     encoding: status.config.encoding,
-    jpeg_quality: status.config.jpeg_quality,
     allow_one_client: status.config.allow_one_client,
     password: '',
   }
@@ -2519,7 +2517,6 @@ function vncUpdatePayload(enabled = !!vncLocalConfig.value.enabled): VncConfigUp
     bind: vncLocalConfig.value.bind?.trim() || '0.0.0.0',
     port: Number(vncLocalConfig.value.port) || 5900,
     encoding: vncLocalConfig.value.encoding || 'tight_jpeg',
-    jpeg_quality: Number(vncLocalConfig.value.jpeg_quality) || 80,
     allow_one_client: !!vncLocalConfig.value.allow_one_client,
   }
   const password = (vncLocalConfig.value.password || '').trim()
@@ -4843,10 +4840,6 @@ watch(isWindows, () => {
                       </select>
                       <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.encodingHint') }}</p>
                     </div>
-                  </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.vnc.jpegQuality') }}</Label>
-                    <Input v-model.number="vncLocalConfig.jpeg_quality" class="sm:col-span-3" type="number" min="10" max="100" :disabled="vncStatus?.service_status === 'running' || vncLocalConfig.encoding !== 'tight_jpeg'" />
                   </div>
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.vnc.allowOneClient') }}</Label>

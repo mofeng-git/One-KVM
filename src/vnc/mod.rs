@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -21,7 +21,19 @@ use crate::utils::{bind_socket_addr, bind_tcp_listener};
 use crate::video::codec::{BitratePreset, VideoCodecType};
 use crate::video::stream_manager::VideoStreamManager;
 
-use self::rfb::{RfbClient, RfbFrame, RfbInputEvent};
+use self::rfb::{FrameSendOutcome, RfbClient, RfbFrame, RfbInputEvent};
+
+struct ActiveClientGuard(Arc<AtomicUsize>);
+
+impl Drop for ActiveClientGuard {
+    fn drop(&mut self) {
+        let _ = self
+            .0
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                Some(count.saturating_sub(1))
+            });
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VncServiceStatus {
@@ -145,7 +157,15 @@ impl VncService {
                         match result {
                             Ok((stream, peer)) => {
                                 let cfg = config_ref.read().await.clone();
-                                if cfg.allow_one_client && active_clients.load(Ordering::Relaxed) > 0 {
+                                let reserved = if cfg.allow_one_client {
+                                    active_clients
+                                        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+                                        .is_ok()
+                                } else {
+                                    active_clients.fetch_add(1, Ordering::AcqRel);
+                                    true
+                                };
+                                if !reserved {
                                     warn!("Rejecting VNC client {} because another client is active", peer);
                                     drop(stream);
                                     continue;
@@ -154,9 +174,8 @@ impl VncService {
                                 let hid = hid.clone();
                                 let active = active_clients.clone();
                                 let handle = tokio::spawn(async move {
-                                    active.fetch_add(1, Ordering::Relaxed);
+                                    let _active_guard = ActiveClientGuard(active);
                                     let result = handle_client(stream, peer, cfg, vm, hid).await;
-                                    active.fetch_sub(1, Ordering::Relaxed);
                                     if let Err(err) = result {
                                         warn!("VNC client {} ended: {}", peer, err);
                                     }
@@ -234,23 +253,80 @@ async fn handle_client(
     let (width, height) = initial_frame_size(&config, &video_manager).await;
     client.set_size(width, height);
     client.handshake().await?;
+    tracing::debug!("VNC client {} ClientInit shared={}", peer, client.shared());
     let (_, _, mut frame_rx) = subscribe_frames(&config, &video_manager).await?;
+    let mut latest_frame = frame_rx.borrow().clone();
+    let mut latest_size = latest_frame.as_ref().map(RfbFrame::size);
     let mut shutdown = client.shutdown_receiver();
 
     loop {
         tokio::select! {
+            biased;
             result = client.read_input_event() => {
                 match result? {
-                    RfbInputEvent::Ignored => {}
                     RfbInputEvent::Disconnected => break,
-                    event => handle_input_event(event, &hid, width, height).await?,
+                    RfbInputEvent::Key(key) => {
+                        if let Some(event) = client.key_event_to_hid(key) {
+                            hid.send_keyboard(event).await?;
+                        }
+                    }
+                    RfbInputEvent::Pointer(pointer) => {
+                        let (width, height) = client.framebuffer_size();
+                        for event in rfb::pointer_event_to_hid(pointer, width, height) {
+                            hid.send_mouse(event).await?;
+                        }
+                    }
+                    RfbInputEvent::SetEncodings { encoding_enabled, resumed } => {
+                        if !encoding_enabled {
+                            tracing::debug!("VNC client {} paused the configured encoding", peer);
+                        }
+                        if resumed && config.encoding == VncEncoding::H264 {
+                            request_vnc_keyframe(&video_manager, "encoding resume").await;
+                        }
+                    }
+                    RfbInputEvent::FramebufferUpdateRequest(request) => {
+                        if !request.incremental && config.encoding == VncEncoding::H264 {
+                            request_vnc_keyframe(&video_manager, "non-incremental refresh").await;
+                        }
+                    }
+                    RfbInputEvent::SetPixelFormat(format) => {
+                        tracing::debug!(
+                            "VNC client {} selected {} bpp true-colour={}",
+                            peer,
+                            format.bits_per_pixel,
+                            format.true_colour
+                        );
+                    }
+                    RfbInputEvent::UnsupportedClientCutText => {
+                        tracing::debug!("Ignoring unsupported VNC ClientCutText from {}", peer);
+                    }
                 }
             }
-            maybe_frame = frame_rx.recv() => {
-                let Some(frame) = maybe_frame else { break };
-                client.send_frame(frame).await?;
+            changed = frame_rx.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                latest_frame = frame_rx.borrow_and_update().clone();
+                let new_size = latest_frame.as_ref().map(RfbFrame::size);
+                if config.encoding == VncEncoding::H264
+                    && latest_size.is_some()
+                    && new_size != latest_size
+                {
+                    request_vnc_keyframe(&video_manager, "source resolution change").await;
+                }
+                latest_size = new_size;
             }
             _ = shutdown.recv() => break,
+        }
+
+        if client.has_pending_request()
+            && latest_frame.is_some()
+            && !client.has_complete_buffered_input()?
+            && send_latest_frame(&mut client, latest_frame.as_ref()).await?
+                == FrameSendOutcome::DesktopSizeSent
+            && config.encoding == VncEncoding::H264
+        {
+            request_vnc_keyframe(&video_manager, "framebuffer resize").await;
         }
     }
     Ok(())
@@ -276,8 +352,7 @@ async fn initial_frame_size(
 async fn subscribe_frames(
     config: &VncConfig,
     video_manager: &Arc<VideoStreamManager>,
-) -> Result<(u16, u16, tokio::sync::mpsc::Receiver<RfbFrame>)> {
-    let (tx, rx) = tokio::sync::mpsc::channel(4);
+) -> Result<(u16, u16, watch::Receiver<Option<RfbFrame>>)> {
     match config.encoding {
         VncEncoding::TightJpeg => {
             let handler = video_manager.mjpeg_handler();
@@ -289,6 +364,15 @@ async fn subscribe_frames(
                 .as_ref()
                 .map(|f| (f.width() as u16, f.height() as u16))
                 .unwrap_or((800, 600));
+            let initial = current
+                .filter(|frame| frame.online && frame.is_valid_jpeg())
+                .map(|frame| RfbFrame::Jpeg {
+                    data: frame.data_bytes(),
+                    width: frame.width() as u16,
+                    height: frame.height() as u16,
+                    sequence: frame.sequence,
+                });
+            let (tx, rx) = watch::channel(initial);
             let mut notify = handler.subscribe();
             tokio::spawn(async move {
                 let _guard = guard;
@@ -302,19 +386,22 @@ async fn subscribe_frames(
                     if !frame.online || !frame.is_valid_jpeg() {
                         continue;
                     }
-                    let _ = tx
-                        .send(RfbFrame::Jpeg {
-                            data: frame.data_bytes(),
-                            width: frame.width() as u16,
-                            height: frame.height() as u16,
-                        })
-                        .await;
+                    if tx.receiver_count() == 0 {
+                        break;
+                    }
+                    tx.send_replace(Some(RfbFrame::Jpeg {
+                        data: frame.data_bytes(),
+                        width: frame.width() as u16,
+                        height: frame.height() as u16,
+                        sequence: frame.sequence,
+                    }));
                     handler.record_frame_sent(&client_id);
                 }
             });
             Ok((width, height, rx))
         }
         VncEncoding::H264 => {
+            let (tx, rx) = watch::channel(None);
             video_manager.set_video_codec(VideoCodecType::H264).await?;
             let mut frames = video_manager
                 .subscribe_encoded_frames()
@@ -329,22 +416,28 @@ async fn subscribe_frames(
                 .unwrap_or(crate::video::format::Resolution::HD720);
             let width = geometry.width as u16;
             let height = geometry.height as u16;
-            if let Err(err) = video_manager.request_keyframe().await {
-                warn!("Failed to request VNC H264 keyframe: {}", err);
-            }
+            request_vnc_keyframe(video_manager, "initial frame").await;
+            let geometry_manager = video_manager.clone();
             tokio::spawn(async move {
                 while let Some(frame) = frames.recv().await {
                     if frame.codec != crate::video::codec::registry::VideoEncoderType::H264 {
                         continue;
                     }
-                    let _ = tx
-                        .send(RfbFrame::H264 {
-                            data: Bytes::copy_from_slice(&frame.data),
-                            width,
-                            height,
-                            key: frame.is_keyframe,
-                        })
-                        .await;
+                    if tx.receiver_count() == 0 {
+                        break;
+                    }
+                    let geometry = geometry_manager
+                        .get_encoding_config()
+                        .await
+                        .map(|cfg| cfg.resolution)
+                        .unwrap_or(crate::video::format::Resolution::HD720);
+                    tx.send_replace(Some(RfbFrame::H264 {
+                        data: Bytes::copy_from_slice(&frame.data),
+                        width: geometry.width as u16,
+                        height: geometry.height as u16,
+                        key: frame.is_keyframe,
+                        sequence: frame.sequence,
+                    }));
                 }
             });
             Ok((width, height, rx))
@@ -352,25 +445,21 @@ async fn subscribe_frames(
     }
 }
 
-async fn handle_input_event(
-    event: RfbInputEvent,
-    hid: &Arc<HidController>,
-    width: u16,
-    height: u16,
-) -> Result<()> {
-    match event {
-        RfbInputEvent::Key(key) => {
-            if let Some(event) = rfb::key_event_to_hid(key) {
-                hid.send_keyboard(event).await?;
-            }
-        }
-        RfbInputEvent::Pointer(pointer) => {
-            for event in rfb::pointer_event_to_hid(pointer, width, height) {
-                hid.send_mouse(event).await?;
-            }
-        }
-        RfbInputEvent::Clipboard(_) => {}
-        RfbInputEvent::Ignored | RfbInputEvent::Disconnected => {}
+async fn send_latest_frame(
+    client: &mut RfbClient,
+    frame: Option<&RfbFrame>,
+) -> Result<FrameSendOutcome> {
+    match frame {
+        Some(frame) => client.send_frame(frame).await,
+        None => Ok(FrameSendOutcome::NotSent),
     }
-    Ok(())
+}
+
+async fn request_vnc_keyframe(video_manager: &VideoStreamManager, reason: &str) {
+    if let Err(err) = video_manager.request_keyframe().await {
+        warn!(
+            "Failed to request VNC H264 keyframe for {}: {}",
+            reason, err
+        );
+    }
 }

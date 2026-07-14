@@ -941,7 +941,6 @@ pub struct VncConfigResponse {
     pub bind: String,
     pub port: u16,
     pub encoding: VncEncoding,
-    pub jpeg_quality: u8,
     pub allow_one_client: bool,
     pub has_password: bool,
 }
@@ -953,7 +952,6 @@ impl From<&VncConfig> for VncConfigResponse {
             bind: config.bind.clone(),
             port: config.port,
             encoding: config.encoding.clone(),
-            jpeg_quality: config.jpeg_quality,
             allow_one_client: config.allow_one_client,
             has_password: config.password.as_deref().is_some_and(|p| !p.is_empty()),
         }
@@ -985,7 +983,6 @@ pub struct VncConfigUpdate {
     pub bind: Option<String>,
     pub port: Option<u16>,
     pub encoding: Option<VncEncoding>,
-    pub jpeg_quality: Option<u8>,
     pub allow_one_client: Option<bool>,
     pub password: Option<String>,
 }
@@ -1000,13 +997,6 @@ impl VncConfigUpdate {
         if let Some(ref bind) = self.bind {
             if bind.parse::<std::net::IpAddr>().is_err() {
                 return Err(AppError::BadRequest("VNC bind must be a valid IP".into()));
-            }
-        }
-        if let Some(quality) = self.jpeg_quality {
-            if !(10..=100).contains(&quality) {
-                return Err(AppError::BadRequest(
-                    "VNC JPEG quality must be 10-100".into(),
-                ));
             }
         }
         if let Some(ref password) = self.password {
@@ -1038,9 +1028,6 @@ impl VncConfigUpdate {
         }
         if let Some(ref encoding) = self.encoding {
             config.encoding = encoding.clone();
-        }
-        if let Some(quality) = self.jpeg_quality {
-            config.jpeg_quality = quality;
         }
         if let Some(allow_one_client) = self.allow_one_client {
             config.allow_one_client = allow_one_client;
@@ -1403,7 +1390,6 @@ mod tests {
                 bind: Some(bind.to_string()),
                 port: Some(5900),
                 encoding: None,
-                jpeg_quality: None,
                 allow_one_client: None,
                 password: None,
             };
@@ -1422,7 +1408,6 @@ mod tests {
                 bind: Some(bind.to_string()),
                 port: Some(5900),
                 encoding: None,
-                jpeg_quality: None,
                 allow_one_client: None,
                 password: None,
             };
@@ -1471,5 +1456,28 @@ mod tests {
                 "bind address should fail: {bind}"
             );
         }
+    }
+
+    #[test]
+    fn legacy_vnc_jpeg_quality_is_ignored_and_not_returned() {
+        let config: VncConfig = serde_json::from_value(serde_json::json!({
+            "enabled": false,
+            "bind": "0.0.0.0",
+            "port": 5900,
+            "encoding": "tight_jpeg",
+            "jpeg_quality": 37,
+            "allow_one_client": true
+        }))
+        .expect("legacy VNC config should deserialize");
+        let update: VncConfigUpdate = serde_json::from_value(serde_json::json!({
+            "jpeg_quality": 37,
+            "allow_one_client": false
+        }))
+        .expect("legacy VNC update should deserialize");
+        assert_eq!(update.allow_one_client, Some(false));
+
+        let response = serde_json::to_value(VncConfigResponse::from(&config))
+            .expect("VNC response should serialize");
+        assert!(response.get("jpeg_quality").is_none());
     }
 }
