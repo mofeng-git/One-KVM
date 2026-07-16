@@ -2884,8 +2884,9 @@ onUnmounted(() => {
             v-show="videoMode === 'mjpeg'"
             ref="videoRef"
             :src="mjpegUrl"
-            class="w-full h-full object-contain"
+            class="w-full h-full object-contain pointer-events-none select-none"
             :alt="t('console.videoAlt')"
+            draggable="false"
             @load="handleVideoLoad"
             @error="handleVideoError"
           />
