@@ -1,11 +1,12 @@
+#[cfg(feature = "bytes")]
+use crate::ffmpeg_ram::{ffmpeg_ram_encode_packet, ffmpeg_ram_free_packet};
 use crate::{
     common::DataFormat::{self, *},
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
-        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_encode_packet,
-        ffmpeg_ram_encoder_last_error, ffmpeg_ram_free_encoder, ffmpeg_ram_free_packet,
-        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo,
-        AV_NUM_DATA_POINTERS,
+        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_encoder_last_error,
+        ffmpeg_ram_free_encoder, ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe,
+        ffmpeg_ram_set_bitrate, CodecInfo, AV_NUM_DATA_POINTERS,
     },
 };
 #[cfg(feature = "bytes")]

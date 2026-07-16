@@ -10,7 +10,7 @@ license = "GPL-2.0"
 clap = { version = "4", features = ["derive"] }
 
 # Error handling
-thiserror = "1"
+thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"

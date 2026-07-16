@@ -8,8 +8,8 @@
 pub struct Fix753;
 
 impl bindgen::callbacks::ParseCallbacks for Fix753 {
-    fn item_name(&self, original_item_name: &str) -> Option<String> {
-        Some(original_item_name.trim_start_matches("Fix753_").to_owned())
+    fn item_name(&self, item_info: bindgen::callbacks::ItemInfo<'_>) -> Option<String> {
+        Some(item_info.name.trim_start_matches("Fix753_").to_owned())
     }
 }
 

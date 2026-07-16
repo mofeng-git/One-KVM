@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -552,7 +553,12 @@ async fn compute_file_sha256(path: &Path) -> Result<String> {
         hasher.update(&buffer[..bytes_read]);
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    let digest = hasher.finalize();
+    let mut checksum = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut checksum, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(checksum)
 }
 
 fn normalize_sha256(input: &str) -> Option<String> {
@@ -577,4 +583,21 @@ fn current_target_triple() -> Result<String> {
         }
     };
     Ok(triple.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_file_sha256;
+
+    #[tokio::test]
+    async fn file_sha256_is_lowercase_hex() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("payload");
+        tokio::fs::write(&path, b"one-kvm").await.unwrap();
+
+        assert_eq!(
+            compute_file_sha256(&path).await.unwrap(),
+            "f62202e0a47f1ebb56427006019524c680f15d769d70479b9dbc35f550e86e5e"
+        );
+    }
 }

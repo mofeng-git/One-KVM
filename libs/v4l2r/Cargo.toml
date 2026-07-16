@@ -49,7 +49,7 @@ version = "0.1.6"
 version = "0.4.14"
 
 [dependencies.nix]
-version = "0.28"
+version = "0.31"
 features = [
     "ioctl",
     "mman",
@@ -59,7 +59,7 @@ features = [
 ]
 
 [dependencies.thiserror]
-version = "1.0"
+version = "2"
 
 [build-dependencies.bindgen]
-version = "0.70.1"
+version = "0.72"

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use bytes::{Bytes, BytesMut};
-use des::cipher::{BlockEncrypt, KeyInit};
+use des::cipher::{Block, BlockCipherEncrypt, KeyInit};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
@@ -703,7 +703,10 @@ fn encrypt_vnc_challenge(challenge: &[u8; 16], password: &str) -> Result<[u8; 16
         .map_err(|_| AppError::BadRequest("Invalid VNC DES key".to_string()))?;
     let mut out = *challenge;
     for chunk in out.chunks_exact_mut(8) {
-        cipher.encrypt_block(chunk.into());
+        let block: &mut Block<des::Des> = chunk
+            .try_into()
+            .expect("VNC challenge chunks are exactly one DES block");
+        cipher.encrypt_block(block);
     }
     Ok(out)
 }

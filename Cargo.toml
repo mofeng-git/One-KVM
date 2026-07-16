@@ -73,7 +73,7 @@ desktop = [
 ]
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"], optional = true }
 tokio-util = { version = "0.7", features = ["rt"], optional = true }
 
 # Web framework
@@ -82,7 +82,7 @@ axum-extra = { version = "0.12", features = ["cookie"], optional = true }
 tower-http = { version = "0.6", features = ["cors", "trace", "set-header"], optional = true }
 
 # Database - Use bundled SQLite for static linking
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"], optional = true }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite-bundled"], optional = true }
 
 # Serialization
 serde = { version = "1", features = ["derive"], optional = true }
@@ -91,7 +91,6 @@ toml_edit = { version = "0.25", optional = true }
 
 # Logging
 tracing = { version = "0.1", optional = true }
-tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "tracing-log"], optional = true }
 
 # Error handling
@@ -100,7 +99,7 @@ anyhow = { version = "1", optional = true }
 
 # Authentication
 argon2 = { version = "0.5", optional = true }
-rand = { version = "0.9", optional = true }
+rand = { version = "0.10", optional = true }
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"], optional = true }
@@ -109,7 +108,7 @@ tempfile = { version = "3", optional = true }
 
 # HTTP client (for URL downloads)
 # Use rustls by default, but allow native-tls for systems with older GLIBC
-reqwest = { version = "0.13", features = ["stream", "rustls", "json"], default-features = false, optional = true }
+reqwest = { version = "0.13", features = ["stream", "rustls-no-provider", "json"], default-features = false, optional = true }
 urlencoding = { version = "2", optional = true }
 
 # Static file embedding
@@ -117,9 +116,9 @@ rust-embed = { version = "8", features = ["compression", "debug-embed"], optiona
 mime_guess = { version = "2", optional = true }
 
 # TLS/HTTPS
-rustls = { version = "0.23", features = ["ring"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 rcgen = { version = "0.14", optional = true }
-axum-server = { version = "0.8", features = ["tls-rustls"], optional = true }
+axum-server = { version = "0.8", features = ["tls-rustls-no-provider"], optional = true }
 
 # CLI argument parsing
 clap = { version = "4", features = ["derive"], optional = true }
@@ -139,15 +138,15 @@ async-stream = { version = "0.3", optional = true }
 futures = { version = "0.3", optional = true }
 
 # WebSocket client (for ttyd proxy)
-tokio-tungstenite = { version = "0.28", optional = true }
+tokio-tungstenite = { version = "0.29", optional = true }
 
 # High-performance synchronization
 parking_lot = { version = "0.12", optional = true }
 arc-swap = { version = "1.8", optional = true }
 
 # WebRTC
-webrtc = { version = "0.14", optional = true }
-rtp = { version = "0.14", optional = true }
+webrtc = { version = "0.17", optional = true }
+rtp = { version = "0.17", optional = true }
 rtsp-types = { version = "0.1", optional = true }
 sdp-types = { version = "0.1", optional = true }
 
@@ -162,8 +161,8 @@ ventoy-img = { path = "libs/ventoy-img-rs", optional = true }
 # RustDesk protocol support
 protobuf = { version = "3.7", features = ["with-bytes"], optional = true }
 sodiumoxide = { version = "0.2", optional = true }
-des = { version = "0.8", optional = true }
-sha2 = { version = "0.10", optional = true }
+des = { version = "0.9", optional = true }
+sha2 = { version = "0.11", optional = true }
 # TypeScript type generation
 typeshare = { version = "1.0", optional = true }
 
@@ -177,7 +176,7 @@ audiopus = { version = "0.2", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Utilities
-nix = { version = "0.30", default-features = false, features = ["fs", "socket", "net", "hostname", "poll"], optional = true }
+nix = { version = "0.31", default-features = false, features = ["fs", "socket", "net", "hostname", "poll"], optional = true }
 
 # Video capture (V4L2)
 v4l2r = { path = "libs/v4l2r", optional = true }
@@ -189,7 +188,7 @@ alsa = { version = "0.11", optional = true }
 gpio-cdev = { version = "0.6", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-cpal = { version = "0.17", default-features = false, optional = true }
+cpal = { version = "0.18", default-features = false, optional = true }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
@@ -198,9 +197,6 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ], optional = true }
-
-[dev-dependencies]
-tempfile = "3"
 
 [build-dependencies]
 protobuf-codegen = "3.7"

@@ -220,7 +220,7 @@ fn run_capture(
     let stream = match sample_format {
         SampleFormat::F32 => build_stream::<f32>(
             &device,
-            &stream_config,
+            stream_config,
             input_channels,
             input_rate,
             tx.clone(),
@@ -229,7 +229,7 @@ fn run_capture(
         ),
         SampleFormat::I16 => build_stream::<i16>(
             &device,
-            &stream_config,
+            stream_config,
             input_channels,
             input_rate,
             tx.clone(),
@@ -238,7 +238,7 @@ fn run_capture(
         ),
         SampleFormat::U16 => build_stream::<u16>(
             &device,
-            &stream_config,
+            stream_config,
             input_channels,
             input_rate,
             tx.clone(),
@@ -361,7 +361,7 @@ fn select_input_config(
 
 fn build_stream<T>(
     device: &cpal::Device,
-    config: &StreamConfig,
+    config: StreamConfig,
     input_channels: u32,
     input_rate: u32,
     tx: mpsc::SyncSender<Vec<i16>>,
