@@ -7,6 +7,10 @@ mod auth;
 mod hid;
 #[cfg(unix)]
 mod msd;
+#[cfg(unix)]
+mod otg;
+#[cfg(unix)]
+mod otg_network;
 mod redfish;
 mod rtsp;
 mod rustdesk;
@@ -21,6 +25,10 @@ pub use auth::{get_auth_config, update_auth_config};
 pub use hid::{get_hid_config, update_hid_config};
 #[cfg(unix)]
 pub use msd::{get_msd_config, update_msd_config};
+#[cfg(unix)]
+pub use otg::update_otg_config;
+#[cfg(unix)]
+pub use otg_network::{get_otg_network_config, get_otg_network_status, update_otg_network_config};
 pub use redfish::{get_redfish_config, update_redfish_config};
 pub use rtsp::{
     get_rtsp_config, get_rtsp_status, start_rtsp_service, stop_rtsp_service, update_rtsp_config,

@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   authApi,
   configApi,
+  otgNetworkApi,
   hidApi,
   streamApi,
   atxConfigApi,
@@ -42,11 +43,12 @@ import type {
   AtxDriverType,
   ActiveLevel,
   AtxDevices,
-  OtgEndpointBudget,
   OtgHidProfile,
   OtgHidFunctions,
   Ch9329DescriptorConfig,
   Ch9329DescriptorState,
+  NetworkInterfaceInfo,
+  OtgNetworkStatus,
 } from '@/types/generated'
 import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
@@ -94,7 +96,6 @@ import {
   EyeOff,
   Save,
   Check,
-  HardDrive,
   Power,
   Server,
   Menu,
@@ -125,19 +126,18 @@ const authStore = useAuthStore()
 const featureVisibility = useFeatureVisibility()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
-const msdAvailable = computed(() => systemStore.platform?.msd.available ?? systemStore.capabilities?.msd.available ?? false)
 
 const activeSection = ref<SettingsSectionId>('appearance')
 const mobileMenuOpen = ref(false)
 const loading = ref(false)
 const saved = ref(false)
+const saveError = ref('')
 const SETTINGS_SECTION_IDS = [
   'appearance',
   'account',
   'network',
   'video',
   'hid',
-  'msd',
   'atx',
   'environment',
   'ext-ttyd',
@@ -150,19 +150,19 @@ const SETTINGS_SECTION_ID_SET = new Set<string>(SETTINGS_SECTION_IDS)
 
 const navGroups = computed(() => [
   {
-    title: t('settings.system'),
+    title: t('settings.software'),
     items: [
       { id: 'appearance', label: t('settings.appearance'), icon: Sun },
       { id: 'account', label: t('settings.account'), icon: User },
       { id: 'network', label: t('settings.network'), icon: Globe },
+      { id: 'about', label: t('settings.about'), icon: Info },
     ]
   },
   {
-    title: t('settings.hardware'),
+    title: t('settings.system'),
     items: [
-      { id: 'video', label: t('settings.video'), icon: Monitor, status: config.value.video_device ? t('settings.configured') : null },
-      { id: 'hid', label: t('settings.hid'), icon: Keyboard, status: config.value.hid_backend.toUpperCase() },
-      ...(msdAvailable.value ? [{ id: 'msd', label: t('settings.msd'), icon: HardDrive }] : []),
+      { id: 'video', label: t('settings.video'), icon: Monitor },
+      { id: 'hid', label: t('settings.hid'), icon: Keyboard },
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
     ]
@@ -173,12 +173,6 @@ const navGroups = computed(() => [
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
       { id: 'third-party-access', label: t('extensions.thirdPartyAccess.title'), icon: ScreenShare },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
-    ]
-  },
-  {
-    title: t('settings.other'),
-    items: [
-      { id: 'about', label: t('settings.about'), icon: Info },
     ]
   }
 ])
@@ -225,6 +219,7 @@ function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (value === 'access-control') return 'account'
   if (value === 'ext-frpc') return 'ext-remote-access'
   if (value === 'redfish') return 'third-party-access'
+  if (value === 'msd') return 'hid'
   if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp') return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
@@ -253,7 +248,6 @@ async function loadSectionData(section: SettingsSectionId) {
       ])
       return
     case 'hid':
-    case 'msd':
       await Promise.all([
         loadConfig(),
         loadDevices(),
@@ -591,7 +585,6 @@ const config = ref({
   hid_serial_baudrate: 9600,
   hid_otg_udc: '',
   hid_otg_profile: 'custom' as OtgHidProfile,
-  hid_otg_endpoint_budget: 'six' as OtgEndpointBudget,
   hid_otg_functions: {
     keyboard: true,
     mouse_relative: true,
@@ -602,12 +595,29 @@ const config = ref({
   hid_ch9329_hybrid_mouse: false,
   msd_enabled: false,
   msd_dir: '',
+  otg_network_enabled: false,
+  otg_network_driver: 'ncm' as 'ncm' | 'ecm' | 'rndis',
+  otg_network_interface: '',
   encoder_backend: 'auto',
   stun_server: '',
   turn_server: '',
   turn_username: '',
   turn_password: '',
 })
+
+const otgNetworkInterfaces = ref<NetworkInterfaceInfo[]>([])
+const otgNetworkInterfacesLoaded = ref(false)
+const otgNetworkStatus = ref<OtgNetworkStatus | null>(null)
+
+function syncOtgNetworkInterface() {
+  const firstInterface = otgNetworkInterfaces.value[0]?.name || ''
+  const selectedInterfaceExists = otgNetworkInterfaces.value.some(
+    item => item.name === config.value.otg_network_interface,
+  )
+  if (!selectedInterfaceExists) {
+    config.value.otg_network_interface = firstInterface
+  }
+}
 
 type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
 type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
@@ -909,77 +919,11 @@ function usbSpeedLabel(speed?: string): string {
   return map[speed] || `${speed} Mbps`
 }
 
-function defaultOtgEndpointBudgetForUdc(udc?: string): OtgEndpointBudget {
-  return /musb/i.test(udc || '') ? 'five' as OtgEndpointBudget : 'six' as OtgEndpointBudget
-}
-
-function normalizeOtgEndpointBudget(budget: OtgEndpointBudget | undefined, udc?: string): OtgEndpointBudget {
-  if (!budget || budget === 'auto') {
-    return defaultOtgEndpointBudgetForUdc(udc)
-  }
-  return budget
-}
-
-function endpointLimitForBudget(budget: OtgEndpointBudget): number | null {
-  if (budget === 'unlimited') return null
-  return budget === 'five' ? 5 : 6
-}
-
 const effectiveOtgFunctions = computed(() => ({ ...config.value.hid_otg_functions }))
-
-const otgEndpointLimit = computed(() =>
-  endpointLimitForBudget(config.value.hid_otg_endpoint_budget)
-)
-
-const otgRequiredEndpoints = computed(() => {
-  if (config.value.hid_backend !== 'otg') return 0
-  const functions = effectiveOtgFunctions.value
-  let endpoints = 0
-  if (functions.keyboard) {
-    endpoints += 1
-    if (config.value.hid_otg_keyboard_leds) endpoints += 1
-  }
-  if (functions.mouse_relative) endpoints += 1
-  if (functions.mouse_absolute) endpoints += 1
-  if (functions.consumer) endpoints += 1
-  if (config.value.msd_enabled) endpoints += 2
-  return endpoints
-})
-
-const isOtgEndpointBudgetValid = computed(() => {
-  if (config.value.hid_backend !== 'otg') return true
-  const limit = otgEndpointLimit.value
-  return limit === null || otgRequiredEndpoints.value <= limit
-})
-
-const otgEndpointUsageText = computed(() => {
-  const limit = otgEndpointLimit.value
-  if (limit === null) {
-    return t('settings.otgEndpointUsageUnlimited', { used: otgRequiredEndpoints.value })
-  }
-  return t('settings.otgEndpointUsage', { used: otgRequiredEndpoints.value, limit })
-})
-
-const showOtgEndpointBudgetHint = computed(() =>
-  config.value.hid_backend === 'otg'
-)
 
 const isKeyboardLedToggleDisabled = computed(() =>
   config.value.hid_backend !== 'otg' || !effectiveOtgFunctions.value.keyboard
 )
-
-function describeEndpointBudget(budget: OtgEndpointBudget): string {
-  switch (budget) {
-    case 'five':
-      return '5'
-    case 'six':
-      return '6'
-    case 'unlimited':
-      return t('settings.otgEndpointBudgetUnlimited')
-    default:
-      return '6'
-  }
-}
 
 const isHidFunctionSelectionValid = computed(() => {
   if (config.value.hid_backend !== 'otg') return true
@@ -1117,15 +1061,8 @@ const isCh9329DescriptorDirty = computed(() => {
 
 const isHidSettingsValid = computed(() =>
   isHidFunctionSelectionValid.value
-  && isOtgEndpointBudgetValid.value
   && isCh9329DescriptorValid.value
 )
-
-watch(() => config.value.msd_enabled, (enabled) => {
-  if (!enabled && activeSection.value === 'msd') {
-    activeSection.value = 'hid'
-  }
-})
 
 watch(bindMode, (mode) => {
   if (mode === 'custom' && bindAddressList.value.length === 0) {
@@ -1200,8 +1137,6 @@ const selectedBackendFormats = computed(() => {
   const backend = availableBackends.value.find(b => b.id === config.value.encoder_backend)
   return backend?.supported_formats || []
 })
-
-const isCh9329Backend = computed(() => config.value.hid_backend === 'ch9329')
 
 const selectedDevice = computed(() => {
   return devices.value.video.find(d => d.path === config.value.video_device)
@@ -1408,6 +1343,7 @@ async function changePassword() {
 async function saveConfig() {
   loading.value = true
   saved.value = false
+  saveError.value = ''
 
   try {
     if (activeSection.value === 'video') {
@@ -1436,6 +1372,7 @@ async function saveConfig() {
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
         ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
+        otg_udc: config.value.hid_otg_udc,
       }
       if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
         hidUpdate.ch9329_descriptor = {
@@ -1455,22 +1392,23 @@ async function saveConfig() {
           serial_number: otgSerialNumber.value || undefined,
         }
         hidUpdate.otg_profile = 'custom'
-        hidUpdate.otg_endpoint_budget = config.value.hid_otg_endpoint_budget
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      await configStore.updateHid(hidUpdate)
-      if (config.value.hid_backend === 'otg') {
-        await configStore.updateMsd({ enabled: config.value.msd_enabled })
-      } else {
-        await configStore.updateMsd({ enabled: false })
-      }
-    }
-
-    if (activeSection.value === 'msd') {
-      await configStore.updateMsd({
-        msd_dir: config.value.msd_dir || undefined,
+      const otgEnabled = config.value.hid_backend === 'otg'
+      const response = await configStore.updateOtg({
+        hid: hidUpdate,
+        msd: {
+          enabled: otgEnabled && config.value.msd_enabled,
+          msd_dir: config.value.msd_dir || undefined,
+        },
+        network: {
+          enabled: otgEnabled && config.value.otg_network_enabled,
+          driver_mode: config.value.otg_network_driver as any,
+          bridge_interface: config.value.otg_network_interface,
+        },
       })
+      otgNetworkStatus.value = response.status
     }
 
     if (activeSection.value !== 'hid') {
@@ -1478,7 +1416,12 @@ async function saveConfig() {
     }
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
-  } catch {
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : t('api.operationFailedDesc')
+    if (activeSection.value === 'hid') {
+      await loadConfig().catch(() => undefined)
+      otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
+    }
   } finally {
     loading.value = false
   }
@@ -1486,11 +1429,18 @@ async function saveConfig() {
 
 async function loadConfig() {
   try {
-    const [video, stream, hid, msd] = await Promise.all([
+    const [video, stream, hid, msd, otgNetwork] = await Promise.all([
       configStore.refreshVideo(),
       configStore.refreshStream(),
       configStore.refreshHid(),
       configStore.refreshMsd(),
+      otgNetworkApi.get().catch(() => ({
+        enabled: false,
+        driver_mode: 'ncm' as const,
+        bridge_interface: '',
+        host_mac: '',
+        device_mac: '',
+      })),
     ])
 
     config.value = {
@@ -1504,7 +1454,6 @@ async function loadConfig() {
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
       hid_otg_udc: hid.otg_udc || '',
       hid_otg_profile: 'custom' as OtgHidProfile,
-      hid_otg_endpoint_budget: normalizeOtgEndpointBudget(hid.otg_endpoint_budget, hid.otg_udc || ''),
       hid_otg_functions: {
         keyboard: hid.otg_functions?.keyboard ?? true,
         mouse_relative: hid.otg_functions?.mouse_relative ?? true,
@@ -1515,11 +1464,17 @@ async function loadConfig() {
       hid_ch9329_hybrid_mouse: hid.ch9329_hybrid_mouse ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
+      otg_network_enabled: otgNetwork.enabled,
+      otg_network_driver: otgNetwork.driver_mode,
+      otg_network_interface: otgNetwork.bridge_interface,
       encoder_backend: stream.encoder || 'auto',
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: stream.turn_password || '',
+    }
+    if (otgNetworkInterfacesLoaded.value) {
+      syncOtgNetworkInterface()
     }
 
     if (hid.otg_descriptor) {
@@ -1539,14 +1494,21 @@ async function loadConfig() {
     } else {
       clearCh9329DescriptorState()
     }
-
+    otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
   } catch {
   }
 }
 
 async function loadDevices() {
   try {
-    devices.value = await configApi.listDevices()
+    const [deviceConfig, networkInterfaces] = await Promise.all([
+      configApi.listDevices(),
+      otgNetworkApi.interfaces().catch(() => []),
+    ])
+    devices.value = deviceConfig
+    otgNetworkInterfaces.value = networkInterfaces
+    otgNetworkInterfacesLoaded.value = true
+    syncOtgNetworkInterface()
   } catch {
   }
 }
@@ -2701,7 +2663,6 @@ watch(isWindows, () => {
                   >
                     <component :is="item.icon" class="h-4 w-4" />
                     <span>{{ item.label }}</span>
-                    <Badge v-if="item.status" variant="outline" :class="['ml-auto text-xs', activeSection === item.id ? 'border-primary-foreground/50 text-primary-foreground' : '']">{{ item.status }}</Badge>
                   </button>
                 </div>
               </nav>
@@ -2738,7 +2699,6 @@ watch(isWindows, () => {
               >
                 <component :is="item.icon" class="h-4 w-4 shrink-0" />
                 <span class="truncate">{{ item.label }}</span>
-                <Badge v-if="item.status" variant="outline" :class="['ml-auto text-[10px] px-1.5 py-0 h-4', activeSection === item.id ? 'border-primary-foreground/50 text-primary-foreground' : '']">{{ item.status }}</Badge>
               </button>
             </div>
           </nav>
@@ -3080,24 +3040,16 @@ watch(isWindows, () => {
                     <option :value="115200">115200</option>
                   </select>
                 </div>
+                <div v-if="config.hid_backend === 'otg'" class="space-y-2">
+                  <Label for="otg-udc">{{ t('settings.otgUdc') }}</Label>
+                  <select id="otg-udc" v-model="config.hid_otg_udc" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                    <option value="">{{ t('settings.autoRecommended') }}</option>
+                    <option v-for="udc in devices.udc" :key="udc.name" :value="udc.name">{{ udc.name }}</option>
+                  </select>
+                  <p class="text-xs text-muted-foreground">{{ t('settings.otgUdcDesc') }}</p>
+                </div>
 
                 <template v-if="config.hid_backend === 'ch9329'">
-                  <Separator class="my-4" />
-                  <div class="space-y-4">
-                    <div>
-                      <h4 class="text-sm font-medium">{{ t('settings.ch9329Options') }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ t('settings.ch9329OptionsDesc') }}</p>
-                    </div>
-                    <div class="space-y-3 rounded-md border border-border/60 p-3">
-                      <div class="flex items-center justify-between gap-4">
-                        <div>
-                          <Label>{{ t('settings.ch9329HybridMouse') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
-                        </div>
-                        <Switch v-model="config.hid_ch9329_hybrid_mouse" />
-                      </div>
-                    </div>
-                  </div>
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
@@ -3182,88 +3134,26 @@ watch(isWindows, () => {
                       {{ t('settings.ch9329DescriptorWarning') }}
                     </p>
                   </div>
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.ch9329Options') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.ch9329OptionsDesc') }}</p>
+                    </div>
+                    <div class="space-y-3 rounded-md border border-border/60 p-3">
+                      <div class="flex items-center justify-between gap-4">
+                        <div>
+                          <Label>{{ t('settings.ch9329HybridMouse') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_ch9329_hybrid_mouse" />
+                      </div>
+                    </div>
+                  </div>
                 </template>
 
                 <!-- OTG Descriptor Settings -->
                 <template v-if="config.hid_backend === 'otg'">
-                  <Separator class="my-4" />
-                  <div class="space-y-4">
-                    <div>
-                      <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ t('settings.otgHidProfileDesc') }}</p>
-                    </div>
-                    <div class="space-y-2">
-                      <Label for="otg-endpoint-budget">{{ t('settings.otgEndpointBudget') }}</Label>
-                      <select id="otg-endpoint-budget" v-model="config.hid_otg_endpoint_budget" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                        <option value="five">5</option>
-                        <option value="six">6</option>
-                        <option value="unlimited">{{ t('settings.otgEndpointBudgetUnlimited') }}</option>
-                      </select>
-                      <p class="text-xs text-muted-foreground">{{ otgEndpointUsageText }}</p>
-                    </div>
-                    <div class="space-y-3">
-                      <div class="space-y-3 rounded-md border border-border/60 p-3">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.hid_otg_functions.mouse_relative" />
-                        </div>
-                        <Separator />
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.hid_otg_functions.mouse_absolute" />
-                        </div>
-                      </div>
-                      <div class="space-y-3 rounded-md border border-border/60 p-3">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.hid_otg_functions.keyboard" />
-                        </div>
-                        <Separator />
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.hid_otg_functions.consumer" />
-                        </div>
-                        <Separator />
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.hid_otg_keyboard_leds" :disabled="isKeyboardLedToggleDisabled" />
-                        </div>
-                      </div>
-                      <div class="space-y-3 rounded-md border border-border/60 p-3">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionMsd') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
-                          </div>
-                          <Switch v-model="config.msd_enabled" />
-                        </div>
-                      </div>
-                    </div>
-                    <p class="text-xs text-amber-600 dark:text-amber-400">
-                      {{ t('settings.otgProfileWarning') }}
-                    </p>
-                    <p v-if="showOtgEndpointBudgetHint" class="text-xs text-muted-foreground">
-                      {{ t('settings.otgEndpointBudgetHint') }}
-                    </p>
-                    <p v-if="!isOtgEndpointBudgetValid" class="text-xs text-amber-600 dark:text-amber-400">
-                      {{ t('settings.otgEndpointExceeded', { used: otgRequiredEndpoints, limit: describeEndpointBudget(config.hid_otg_endpoint_budget) }) }}
-                    </p>
-                  </div>
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
@@ -3323,7 +3213,118 @@ watch(isWindows, () => {
                       {{ t('settings.descriptorWarning') }}
                     </p>
                   </div>
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.otgHidProfileDesc') }}</p>
+                    </div>
+                    <div class="space-y-3">
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.mouse_relative" />
+                        </div>
+                        <Separator />
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.mouse_absolute" />
+                        </div>
+                      </div>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.keyboard" />
+                        </div>
+                        <Separator />
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_functions.consumer" />
+                        </div>
+                        <Separator />
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.hid_otg_keyboard_leds" :disabled="isKeyboardLedToggleDisabled" />
+                        </div>
+                      </div>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgFunctionMsd') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.msd_enabled" />
+                        </div>
+                        <template v-if="config.msd_enabled">
+                          <Separator />
+                          <div class="space-y-2">
+                            <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
+                            <Input id="msd-dir" v-model="config.msd_dir" placeholder="/etc/one-kvm/msd" />
+                            <p class="text-xs text-muted-foreground">{{ t('settings.msdDirDesc') }}</p>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.msdDirHint') }}</p>
+                          </div>
+                        </template>
+                      </div>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.otgNetwork') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.otgNetworkDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.otg_network_enabled" />
+                        </div>
+                        <template v-if="config.otg_network_enabled">
+                          <Separator />
+                          <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-2">
+                              <Label for="otg-network-driver">{{ t('settings.otgNetworkDriver') }}</Label>
+                              <select id="otg-network-driver" v-model="config.otg_network_driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
+                                <option value="ncm">NCM</option>
+                                <option value="ecm">ECM</option>
+                                <option value="rndis">RNDIS / Windows</option>
+                              </select>
+                            </div>
+                            <div class="space-y-2">
+                              <Label for="otg-network-interface">{{ t('settings.otgNetworkInterface') }}</Label>
+                              <select id="otg-network-interface" v-model="config.otg_network_interface" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="otgNetworkInterfaces.length === 0">
+                                <option v-if="otgNetworkInterfaces.length === 0" value="">{{ t('settings.otgNetworkNone') }}</option>
+                                <option
+                                  v-for="item in otgNetworkInterfaces"
+                                  :key="item.name"
+                                  :value="item.name"
+                                >
+                                  {{ item.name }} · {{ item.interface_type }}
+                                </option>
+                              </select>
+                            </div>
+                          </div>
+                        </template>
+                        <p v-if="otgNetworkStatus?.health === 'degraded'" class="text-xs text-destructive">
+                          {{ t('settings.otgRuntimeDegraded') }}: {{ otgNetworkStatus.error || t('common.error') }}
+                        </p>
+                      </div>
+                    </div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.otgProfileWarning') }}
+                    </p>
+                  </div>
                 </template>
+
               </CardContent>
             </Card>
 
@@ -3915,42 +3916,6 @@ watch(isWindows, () => {
                   {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
                 </Button>
               </CardFooter>
-            </Card>
-          </div>
-
-          <!-- MSD Section -->
-          <div v-show="activeSection === 'msd' && config.msd_enabled" class="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ t('settings.msdSettings') }}</CardTitle>
-                <CardDescription>{{ t('settings.msdDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div v-if="isCh9329Backend" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  <p class="font-medium">{{ t('settings.msdCh9329Warning') }}</p>
-                  <p class="text-xs text-amber-900/80">{{ t('settings.msdCh9329WarningDesc') }}</p>
-                </div>
-                <div class="space-y-4">
-                  <div class="space-y-2">
-                    <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
-                    <Input id="msd-dir" v-model="config.msd_dir" placeholder="/etc/one-kvm/msd" :disabled="isCh9329Backend" />
-                    <p class="text-xs text-muted-foreground">{{ t('settings.msdDirDesc') }}</p>
-                  </div>
-                  <p class="text-xs text-muted-foreground">{{ t('settings.msdDirHint') }}</p>
-                </div>
-                <Separator />
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-sm font-medium">{{ t('settings.msdStatus') }}</p>
-                    <p class="text-xs text-muted-foreground">
-                      {{ config.msd_enabled ? t('settings.willBeEnabledAfterSave') : t('settings.disabled') }}
-                    </p>
-                  </div>
-                  <Badge :variant="config.msd_enabled ? 'default' : 'secondary'">
-                    {{ config.msd_enabled ? t('common.enabled') : t('common.disabled') }}
-                  </Badge>
-                </div>
-              </CardContent>
             </Card>
           </div>
 
@@ -5311,7 +5276,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="['video', 'hid', 'msd'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div v-if="['video', 'hid'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
@@ -5325,6 +5290,7 @@ watch(isWindows, () => {
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
               </p>
+              <p v-if="saveError" class="text-xs text-destructive">{{ saveError }}</p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
               <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
                 <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}

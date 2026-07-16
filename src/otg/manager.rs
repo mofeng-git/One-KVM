@@ -7,10 +7,11 @@ use super::configfs::{
     remove_file, write_file, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
     DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
 };
-use super::endpoint::{EndpointAllocator, DEFAULT_MAX_ENDPOINTS};
 use super::function::GadgetFunction;
 use super::hid::HidFunction;
 use super::msd::MsdFunction;
+use super::network::NetworkFunction;
+use crate::config::OtgNetworkConfig;
 use crate::error::{AppError, Result};
 
 const REBIND_DELAY_MS: u64 = 300;
@@ -43,9 +44,9 @@ pub struct OtgGadgetManager {
     gadget_path: PathBuf,
     config_path: PathBuf,
     descriptor: GadgetDescriptor,
-    endpoint_allocator: EndpointAllocator,
     hid_instance: u8,
     msd_instance: u8,
+    network_instance: u8,
     functions: Vec<Box<dyn GadgetFunction>>,
     bound_udc: Option<String>,
     created_by_us: bool,
@@ -53,18 +54,14 @@ pub struct OtgGadgetManager {
 
 impl OtgGadgetManager {
     pub fn new() -> Self {
-        Self::with_config(DEFAULT_GADGET_NAME, DEFAULT_MAX_ENDPOINTS)
+        Self::with_config(DEFAULT_GADGET_NAME)
     }
 
-    pub fn with_config(gadget_name: &str, max_endpoints: u8) -> Self {
-        Self::with_descriptor(gadget_name, max_endpoints, GadgetDescriptor::default())
+    pub fn with_config(gadget_name: &str) -> Self {
+        Self::with_descriptor(gadget_name, GadgetDescriptor::default())
     }
 
-    pub fn with_descriptor(
-        gadget_name: &str,
-        max_endpoints: u8,
-        descriptor: GadgetDescriptor,
-    ) -> Self {
+    pub fn with_descriptor(gadget_name: &str, descriptor: GadgetDescriptor) -> Self {
         let gadget_path = configfs_path().join(gadget_name);
         let config_path = gadget_path.join("configs/c.1");
 
@@ -73,9 +70,9 @@ impl OtgGadgetManager {
             gadget_path,
             config_path,
             descriptor,
-            endpoint_allocator: EndpointAllocator::new(max_endpoints),
             hid_instance: 0,
             msd_instance: 0,
+            network_instance: 0,
             functions: Vec::with_capacity(4),
             bound_udc: None,
             created_by_us: false,
@@ -143,22 +140,16 @@ impl OtgGadgetManager {
         Ok(func_clone)
     }
 
+    pub fn add_network(&mut self, config: &OtgNetworkConfig) -> Result<NetworkFunction> {
+        let func = NetworkFunction::new(self.network_instance, config)?;
+        let func_clone = func.clone();
+        self.add_function(Box::new(func))?;
+        self.network_instance += 1;
+        Ok(func_clone)
+    }
+
     fn add_function(&mut self, func: Box<dyn GadgetFunction>) -> Result<()> {
-        let endpoints = func.endpoints_required();
-
-        if !self.endpoint_allocator.can_allocate(endpoints) {
-            return Err(AppError::Internal(format!(
-                "Not enough endpoints for function {}: need {}, available {}",
-                func.name(),
-                endpoints,
-                self.endpoint_allocator.available()
-            )));
-        }
-
-        self.endpoint_allocator.allocate(endpoints)?;
-
         self.functions.push(func);
-
         Ok(())
     }
 
@@ -224,30 +215,51 @@ impl OtgGadgetManager {
 
     pub fn cleanup(&mut self) -> Result<()> {
         if !self.gadget_exists() {
+            self.created_by_us = false;
             return Ok(());
         }
 
         info!("Cleaning up OTG USB Gadget: {}", self.gadget_name);
+        let mut errors = Vec::new();
 
-        let _ = self.unbind();
+        if let Err(error) = self.unbind() {
+            errors.push(format!("unbind failed: {error}"));
+        }
 
         for func in self.functions.iter().rev() {
-            let _ = func.unlink(&self.config_path);
+            if let Err(error) = func.unlink(&self.config_path) {
+                errors.push(format!("unlink {} failed: {error}", func.name()));
+            }
         }
 
         let config_strings = self.config_path.join("strings/0x409");
-        let _ = remove_dir(&config_strings);
-        let _ = remove_dir(&self.config_path);
+        if let Err(error) = remove_dir(&config_strings) {
+            errors.push(error.to_string());
+        }
+        if let Err(error) = remove_dir(&self.config_path) {
+            errors.push(error.to_string());
+        }
 
         for func in self.functions.iter().rev() {
-            let _ = func.cleanup(&self.gadget_path);
+            if let Err(error) = func.cleanup(&self.gadget_path) {
+                errors.push(format!("cleanup {} failed: {error}", func.name()));
+            }
         }
 
         let gadget_strings = self.gadget_path.join("strings/0x409");
-        let _ = remove_dir(&gadget_strings);
+        if let Err(error) = remove_dir(&gadget_strings) {
+            errors.push(error.to_string());
+        }
 
-        if let Err(e) = remove_dir(&self.gadget_path) {
-            warn!("Could not remove gadget directory: {}", e);
+        if let Err(error) = remove_dir(&self.gadget_path) {
+            errors.push(error.to_string());
+        }
+
+        if !errors.is_empty() {
+            return Err(AppError::Config(format!(
+                "OTG gadget cleanup incomplete: {}",
+                errors.join("; ")
+            )));
         }
 
         self.created_by_us = false;
@@ -313,12 +325,21 @@ impl OtgGadgetManager {
     }
 
     fn configuration_label(&self) -> &'static str {
-        if self
+        let has_msd = self
             .functions
             .iter()
-            .any(|func| func.name().starts_with("mass_storage."))
-        {
+            .any(|func| func.name().starts_with("mass_storage."));
+        let has_network = self.functions.iter().any(|func| {
+            ["ncm.", "ecm.", "rndis."]
+                .iter()
+                .any(|prefix| func.name().starts_with(prefix))
+        });
+        if has_msd && has_network {
+            "Config 1: HID + MSD + NET"
+        } else if has_msd {
             "Config 1: HID + MSD"
+        } else if has_network {
+            "Config 1: HID + NET"
         } else {
             "Config 1: HID"
         }
@@ -428,14 +449,12 @@ mod tests {
     }
 
     #[test]
-    fn test_endpoint_tracking() {
-        let mut manager = OtgGadgetManager::with_config("test", 8);
+    fn test_function_selection_is_not_prevalidated() {
+        let mut manager = OtgGadgetManager::with_config("test");
 
-        let _ = manager.add_keyboard(false);
-        assert_eq!(manager.endpoint_allocator.used(), 1);
-
-        let _ = manager.add_mouse_relative();
-        let _ = manager.add_mouse_absolute();
-        assert_eq!(manager.endpoint_allocator.used(), 3);
+        assert!(manager.add_keyboard(false).is_ok());
+        assert!(manager.add_mouse_relative().is_ok());
+        assert!(manager.add_mouse_absolute().is_ok());
+        assert_eq!(manager.functions.len(), 3);
     }
 }

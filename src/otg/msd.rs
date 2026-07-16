@@ -333,10 +333,6 @@ impl GadgetFunction for MsdFunction {
         &self.name
     }
 
-    fn endpoints_required(&self) -> u8 {
-        2
-    }
-
     fn create(&self, gadget_path: &Path) -> Result<()> {
         let func_path = self.function_path(gadget_path);
         create_dir(&func_path)?;
@@ -375,17 +371,18 @@ impl GadgetFunction for MsdFunction {
 
     fn cleanup(&self, gadget_path: &Path) -> Result<()> {
         let func_path = self.function_path(gadget_path);
+        let mut errors = Vec::new();
 
         let lun_paths = match self.existing_lun_paths(gadget_path) {
             Ok(luns) => luns,
             Err(e) => {
-                warn!("Could not enumerate MSD LUN directories: {}", e);
+                errors.push(format!("could not enumerate MSD LUN directories: {e}"));
                 Vec::new()
             }
         };
         for (lun, lun_path) in lun_paths {
             if let Err(e) = self.disconnect_lun_path(&lun_path, lun) {
-                warn!("Could not disconnect LUN {} during cleanup: {}", lun, e);
+                errors.push(format!("could not disconnect LUN {lun}: {e}"));
             }
             // lun.0 is the mass-storage function's configfs default group. It
             // cannot be removed directly and is released with the function.
@@ -393,12 +390,19 @@ impl GadgetFunction for MsdFunction {
                 continue;
             }
             if let Err(e) = remove_dir(&lun_path) {
-                warn!("Could not remove LUN {} directory: {}", lun, e);
+                errors.push(format!("could not remove LUN {lun} directory: {e}"));
             }
         }
 
         if let Err(e) = remove_dir(&func_path) {
-            warn!("Could not remove MSD function directory: {}", e);
+            errors.push(format!("could not remove MSD function directory: {e}"));
+        }
+
+        if !errors.is_empty() {
+            return Err(AppError::Config(format!(
+                "MSD cleanup incomplete: {}",
+                errors.join("; ")
+            )));
         }
 
         debug!("Cleaned up MSD function {}", self.name());
@@ -431,7 +435,6 @@ mod tests {
     fn test_msd_function_name() {
         let msd = MsdFunction::new(0, 1).unwrap();
         assert_eq!(msd.name(), "mass_storage.usb0");
-        assert_eq!(msd.endpoints_required(), 2);
         assert_eq!(msd.lun_capacity, 1);
 
         let multi = MsdFunction::new(0, 8).unwrap();
@@ -498,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_leaves_default_lun_for_configfs_function_removal() {
+    fn cleanup_reports_when_non_configfs_cannot_release_default_lun() {
         let temp_dir = TempDir::new().unwrap();
         let func_path = temp_dir.path().join("functions/mass_storage.usb0");
         for lun in 0..2 {
@@ -506,8 +509,9 @@ mod tests {
         }
         let msd = MsdFunction::new(0, 1).unwrap();
 
-        msd.cleanup(temp_dir.path()).unwrap();
+        let error = msd.cleanup(temp_dir.path()).unwrap_err();
 
+        assert!(error.to_string().contains("MSD cleanup incomplete"));
         assert!(func_path.join("lun.0").exists());
         assert!(!func_path.join("lun.1").exists());
     }

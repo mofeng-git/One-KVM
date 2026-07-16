@@ -8,6 +8,7 @@ mod atx;
 mod common;
 mod computer_use;
 mod hid;
+mod otg_network;
 mod stream;
 mod web;
 
@@ -15,6 +16,7 @@ pub use atx::*;
 pub use common::*;
 pub use computer_use::*;
 pub use hid::*;
+pub use otg_network::*;
 pub use stream::*;
 pub use web::*;
 
@@ -27,6 +29,7 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     pub video: VideoConfig,
     pub hid: HidConfig,
+    pub otg_network: OtgNetworkConfig,
     pub msd: MsdConfig,
     pub atx: AtxConfig,
     pub audio: AudioConfig,
@@ -44,6 +47,7 @@ impl AppConfig {
     pub fn enforce_invariants(&mut self) {
         if self.hid.backend != HidBackend::Otg {
             self.msd.enabled = false;
+            self.otg_network.enabled = false;
         }
         self.atx.normalize();
     }

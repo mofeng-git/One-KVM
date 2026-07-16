@@ -123,7 +123,6 @@ export const systemApi = {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
-    hid_otg_endpoint_budget?: string
     hid_otg_keyboard_leds?: boolean
     msd_enabled?: boolean
     encoder_backend?: string
@@ -804,6 +803,8 @@ export {
   streamConfigApi,
   hidConfigApi,
   msdConfigApi,
+  otgConfigApi,
+  otgNetworkApi,
   atxConfigApi,
   audioConfigApi,
   extensionsApi,

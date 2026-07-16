@@ -246,6 +246,19 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
             .route("/config/msd", get(handlers::config::get_msd_config))
             .route("/config/msd", patch(handlers::config::update_msd_config))
+            .route("/config/otg", patch(handlers::config::update_otg_config))
+            .route(
+                "/config/otg-network",
+                get(handlers::config::get_otg_network_config),
+            )
+            .route(
+                "/config/otg-network",
+                patch(handlers::config::update_otg_network_config),
+            )
+            .route(
+                "/otg/network/status",
+                get(handlers::config::get_otg_network_status),
+            )
             .route("/msd/status", get(handlers::msd_status))
             .route("/msd/images", get(handlers::msd_images_list))
             .route("/msd/images/download", post(handlers::msd_image_download))
@@ -277,6 +290,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             )
             .route("/msd/drive/mkdir/{*path}", post(handlers::msd_drive_mkdir))
             .route("/devices/usb", get(handlers::devices::list_usb_devices))
+            .route(
+                "/devices/network",
+                get(handlers::devices::list_network_interfaces),
+            )
             .route(
                 "/devices/usb/reset",
                 post(handlers::devices::reset_usb_device),

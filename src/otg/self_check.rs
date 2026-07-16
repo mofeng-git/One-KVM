@@ -150,6 +150,7 @@ fn detect_libcomposite_available(gadget_root: &std::path::Path) -> bool {
 /// OTG self-check status for troubleshooting USB gadget issues
 pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
     let hid_backend_is_otg = matches!(config.hid.backend, crate::config::HidBackend::Otg);
+    let gadget_expected = hid_backend_is_otg || config.msd.enabled || config.otg_network.enabled;
     let mut checks = Vec::new();
 
     let build_response = |checks: Vec<OtgSelfCheckItem>,
@@ -408,13 +409,13 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             &mut checks,
             "one_kvm_gadget_exists",
             false,
-            if hid_backend_is_otg {
+            if gadget_expected {
                 OtgSelfCheckLevel::Error
             } else {
                 OtgSelfCheckLevel::Warn
             },
             "Check one-kvm gadget presence",
-            Some("Enable OTG HID or MSD to let one-kvm gadget be created automatically"),
+            Some("Enable OTG HID, MSD, or USB Ethernet to create the one-kvm gadget"),
             Some(one_kvm_path.display().to_string()),
         );
     }
@@ -484,6 +485,15 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             .filter(|name| name.starts_with("hid.usb"))
             .cloned()
             .collect::<Vec<_>>();
+        let network_functions = function_names
+            .iter()
+            .filter(|name| {
+                name.starts_with("ncm.usb")
+                    || name.starts_with("ecm.usb")
+                    || name.starts_with("rndis.usb")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         if hid_functions.is_empty() {
             push_otg_check(
                 &mut checks,
@@ -508,6 +518,103 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                 None::<String>,
                 Some(functions_path.display().to_string()),
             );
+        }
+
+        if config.otg_network.enabled {
+            let network_function_ok = network_functions.len() == 1;
+            push_otg_check(
+                &mut checks,
+                "network_function_present",
+                network_function_ok,
+                if network_function_ok {
+                    OtgSelfCheckLevel::Info
+                } else {
+                    OtgSelfCheckLevel::Error
+                },
+                "Check USB Ethernet function creation",
+                Some("The configured NCM/ECM/RNDIS function must exist exactly once"),
+                Some(functions_path.display().to_string()),
+            );
+
+            if let Some(function_name) = network_functions.first() {
+                let ifname_path = functions_path.join(function_name).join("ifname");
+                let ifname = read_trimmed(&ifname_path).unwrap_or_default();
+                let netdev_ok = !ifname.is_empty()
+                    && !ifname.contains('%')
+                    && std::path::Path::new("/sys/class/net")
+                        .join(&ifname)
+                        .exists();
+                push_otg_check(
+                    &mut checks,
+                    "network_netdev_present",
+                    netdev_ok,
+                    if netdev_ok {
+                        OtgSelfCheckLevel::Info
+                    } else {
+                        OtgSelfCheckLevel::Error
+                    },
+                    "Check USB Ethernet network device",
+                    Some("Read the function ifname and verify the matching /sys/class/net entry"),
+                    Some(ifname_path.display().to_string()),
+                );
+
+                if netdev_ok {
+                    let master_path = std::path::Path::new("/sys/class/net")
+                        .join(&ifname)
+                        .join("master");
+                    let bridge_ok = std::fs::canonicalize(&master_path)
+                        .ok()
+                        .and_then(|path| {
+                            path.file_name()
+                                .map(|name| name.to_string_lossy().to_string())
+                        })
+                        .is_some_and(|name| {
+                            name == "okvm-br0" || name == config.otg_network.bridge_interface
+                        });
+                    push_otg_check(
+                        &mut checks,
+                        "network_bridge_port",
+                        bridge_ok,
+                        if bridge_ok {
+                            OtgSelfCheckLevel::Info
+                        } else {
+                            OtgSelfCheckLevel::Error
+                        },
+                        "Check USB Ethernet bridge membership",
+                        Some("The USB network interface must be a port of the selected bridge"),
+                        Some(master_path.display().to_string()),
+                    );
+                }
+
+                if function_name.starts_with("rndis.") {
+                    let os_desc = one_kvm_path.join("os_desc/c.1");
+                    let os_desc_ok = os_desc.exists()
+                        && read_trimmed(&one_kvm_path.join("os_desc/use")).as_deref() == Some("1")
+                        && read_trimmed(&one_kvm_path.join("os_desc/qw_sign")).as_deref()
+                            == Some("MSFT100")
+                        && read_trimmed(
+                            &functions_path
+                                .join(function_name)
+                                .join("os_desc/interface.rndis/compatible_id"),
+                        )
+                        .is_some_and(|value| value.starts_with("RNDIS"));
+                    push_otg_check(
+                        &mut checks,
+                        "rndis_os_descriptor",
+                        os_desc_ok,
+                        if os_desc_ok {
+                            OtgSelfCheckLevel::Info
+                        } else {
+                            OtgSelfCheckLevel::Error
+                        },
+                        "Check RNDIS Microsoft OS descriptor",
+                        Some(
+                            "RNDIS requires the OS descriptor configuration link and compatible ID",
+                        ),
+                        Some(os_desc.display().to_string()),
+                    );
+                }
+            }
         }
 
         let config_path = one_kvm_path.join("configs/c.1");

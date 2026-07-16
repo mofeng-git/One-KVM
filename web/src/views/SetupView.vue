@@ -78,7 +78,6 @@ const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
 const hidOtgProfile = ref('full_no_consumer')
 const otgMsdEnabled = ref(true)
-const otgEndpointBudget = ref<'five' | 'six' | 'unlimited'>('six')
 const otgKeyboardLeds = ref(true)
 
 const ttydEnabled = ref(false)
@@ -203,46 +202,11 @@ const availableFps = computed(() => {
   return resolution?.fps || []
 })
 
-function defaultOtgEndpointBudgetForUdc(udc?: string): 'five' | 'six' {
-  return /musb/i.test(udc || '') ? 'five' : 'six'
-}
-
-function endpointLimitForBudget(budget: 'five' | 'six' | 'unlimited'): number | null {
-  if (budget === 'unlimited') return null
-  return budget === 'five' ? 5 : 6
-}
-
-const otgRequiredEndpoints = computed(() => {
-  if (hidBackend.value !== 'otg') return 0
-  const functions = {
-    keyboard: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_keyboard',
-    mouseRelative: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_mouse_relative',
-    mouseAbsolute: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer',
-    consumer: hidOtgProfile.value === 'full',
-  }
-  let endpoints = 0
-  if (functions.keyboard) {
-    endpoints += 1
-    if (otgKeyboardLeds.value) endpoints += 1
-  }
-  if (functions.mouseRelative) endpoints += 1
-  if (functions.mouseAbsolute) endpoints += 1
-  if (functions.consumer) endpoints += 1
-  if (otgMsdEnabled.value) endpoints += 2
-  return endpoints
-})
-
-const isOtgEndpointBudgetValid = computed(() => {
-  const limit = endpointLimitForBudget(otgEndpointBudget.value)
-  return limit === null || otgRequiredEndpoints.value <= limit
-})
-
 function applyOtgDefaults() {
   if (hidBackend.value !== 'otg') return
 
-  otgEndpointBudget.value = defaultOtgEndpointBudgetForUdc(otgUdc.value)
   hidOtgProfile.value = 'full_no_consumer'
-  otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
+  otgKeyboardLeds.value = true
 }
 
 const baudRates = [9600, 19200, 38400, 57600, 115200]
@@ -477,13 +441,6 @@ function validateStep3(): boolean {
     error.value = t('setup.selectUdc')
     return false
   }
-  if (hidBackend.value === 'otg' && !isOtgEndpointBudgetValid.value) {
-    error.value = t('settings.otgEndpointExceeded', {
-      used: otgRequiredEndpoints.value,
-      limit: otgEndpointBudget.value === 'unlimited' ? t('settings.otgEndpointBudgetUnlimited') : otgEndpointBudget.value === 'five' ? '5' : '6',
-    })
-    return false
-  }
   return true
 }
 
@@ -543,7 +500,6 @@ async function handleSetup() {
   if (hidBackend.value === 'otg' && otgUdc.value) {
     setupData.hid_otg_udc = otgUdc.value
     setupData.hid_otg_profile = hidOtgProfile.value
-    setupData.hid_otg_endpoint_budget = otgEndpointBudget.value
     setupData.hid_otg_keyboard_leds = otgKeyboardLeds.value
     setupData.msd_enabled = otgMsdEnabled.value
   }

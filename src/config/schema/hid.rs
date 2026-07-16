@@ -82,29 +82,6 @@ pub enum OtgHidProfile {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-#[derive(Default)]
-pub enum OtgEndpointBudget {
-    #[default]
-    Auto,
-    Five,
-    Six,
-    Unlimited,
-}
-
-impl OtgEndpointBudget {
-    pub fn endpoint_limit_raw(&self) -> Option<u8> {
-        match self {
-            Self::Five => Some(5),
-            Self::Six => Some(6),
-            Self::Unlimited => None,
-            Self::Auto => None,
-        }
-    }
-}
-
-#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct OtgHidFunctions {
@@ -154,26 +131,6 @@ impl OtgHidFunctions {
     pub fn is_empty(&self) -> bool {
         !self.keyboard && !self.mouse_relative && !self.mouse_absolute && !self.consumer
     }
-
-    pub fn endpoint_cost(&self, keyboard_leds: bool) -> u8 {
-        let mut endpoints = 0;
-        if self.keyboard {
-            endpoints += 1;
-            if keyboard_leds {
-                endpoints += 1;
-            }
-        }
-        if self.mouse_relative {
-            endpoints += 1;
-        }
-        if self.mouse_absolute {
-            endpoints += 1;
-        }
-        if self.consumer {
-            endpoints += 1;
-        }
-        endpoints
-    }
 }
 
 impl Default for OtgHidFunctions {
@@ -216,8 +173,6 @@ pub struct HidConfig {
     #[serde(default)]
     pub otg_profile: OtgHidProfile,
     #[serde(default)]
-    pub otg_endpoint_budget: OtgEndpointBudget,
-    #[serde(default)]
     pub otg_functions: OtgHidFunctions,
     #[serde(default)]
     pub otg_keyboard_leds: bool,
@@ -237,7 +192,6 @@ impl Default for HidConfig {
             otg_udc: None,
             otg_descriptor: OtgDescriptorConfig::default(),
             otg_profile: OtgHidProfile::default(),
-            otg_endpoint_budget: OtgEndpointBudget::default(),
             otg_functions: OtgHidFunctions::default(),
             otg_keyboard_leds: false,
             ch9329_port: "/dev/ttyUSB0".to_string(),
@@ -262,16 +216,7 @@ impl HidConfig {
         self.effective_otg_functions()
     }
 
-    pub fn effective_otg_required_endpoints(&self, msd_enabled: bool) -> u8 {
-        let functions = self.effective_otg_functions();
-        let mut endpoints = functions.endpoint_cost(self.effective_otg_keyboard_leds());
-        if msd_enabled {
-            endpoints += 2;
-        }
-        endpoints
-    }
-
-    pub fn validate_otg_endpoint_budget(&self, msd_enabled: bool) -> crate::error::Result<()> {
+    pub fn validate_otg_functions(&self) -> crate::error::Result<()> {
         if self.backend != HidBackend::Otg {
             return Ok(());
         }
@@ -281,17 +226,6 @@ impl HidConfig {
             return Err(crate::error::AppError::BadRequest(
                 "OTG HID functions cannot be empty".to_string(),
             ));
-        }
-
-        let resolved_limit = self.resolved_otg_endpoint_limit();
-        let required = self.effective_otg_required_endpoints(msd_enabled);
-        if let Some(limit) = resolved_limit {
-            if required > limit {
-                return Err(crate::error::AppError::BadRequest(format!(
-                    "OTG selection requires {} endpoints, but the configured limit is {}",
-                    required, limit
-                )));
-            }
         }
 
         Ok(())
@@ -316,31 +250,5 @@ impl HidConfig {
                     None
                 }
             })
-    }
-
-    #[inline]
-    pub fn resolved_otg_endpoint_limit(&self) -> Option<u8> {
-        if self.backend != HidBackend::Otg {
-            return None;
-        }
-        match self.otg_endpoint_budget {
-            OtgEndpointBudget::Five => Some(5),
-            OtgEndpointBudget::Six => Some(6),
-            OtgEndpointBudget::Unlimited => None,
-            OtgEndpointBudget::Auto => {
-                #[cfg(unix)]
-                let udc = self.resolved_otg_udc().unwrap_or_default();
-                #[cfg(unix)]
-                if crate::otg::configfs::is_low_endpoint_udc(&udc) {
-                    Some(5)
-                } else {
-                    Some(6)
-                }
-                #[cfg(not(unix))]
-                {
-                    Some(6)
-                }
-            }
-        }
     }
 }

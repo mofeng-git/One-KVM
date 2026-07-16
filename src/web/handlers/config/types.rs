@@ -353,10 +353,18 @@ pub struct HidConfigUpdate {
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub otg_profile: Option<OtgHidProfile>,
-    pub otg_endpoint_budget: Option<OtgEndpointBudget>,
     pub otg_functions: Option<OtgHidFunctionsUpdate>,
     pub otg_keyboard_leds: Option<bool>,
     pub mouse_absolute: Option<bool>,
+}
+
+#[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize, Default)]
+pub struct OtgConfigUpdate {
+    pub hid: Option<HidConfigUpdate>,
+    pub msd: Option<MsdConfigUpdate>,
+    pub network: Option<OtgNetworkConfigUpdate>,
 }
 
 impl HidConfigUpdate {
@@ -403,9 +411,6 @@ impl HidConfigUpdate {
         if let Some(profile) = self.otg_profile.clone() {
             config.otg_profile = profile;
         }
-        if let Some(budget) = self.otg_endpoint_budget {
-            config.otg_endpoint_budget = budget;
-        }
         if let Some(ref functions) = self.otg_functions {
             functions.apply_to(&mut config.otg_functions);
         }
@@ -414,6 +419,38 @@ impl HidConfigUpdate {
         }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;
+        }
+    }
+}
+
+#[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize)]
+pub struct OtgNetworkConfigUpdate {
+    pub enabled: Option<bool>,
+    pub driver_mode: Option<OtgNetworkDriverMode>,
+    pub bridge_interface: Option<String>,
+    pub host_mac: Option<String>,
+    pub device_mac: Option<String>,
+}
+
+#[cfg(unix)]
+impl OtgNetworkConfigUpdate {
+    pub fn apply_to(&self, config: &mut OtgNetworkConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(driver_mode) = self.driver_mode {
+            config.driver_mode = driver_mode;
+        }
+        if let Some(ref interface) = self.bridge_interface {
+            config.bridge_interface = interface.trim().to_string();
+        }
+        if let Some(ref mac) = self.host_mac {
+            config.host_mac = mac.trim().to_ascii_lowercase();
+        }
+        if let Some(ref mac) = self.device_mac {
+            config.device_mac = mac.trim().to_ascii_lowercase();
         }
     }
 }

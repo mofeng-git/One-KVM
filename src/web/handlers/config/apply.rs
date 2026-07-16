@@ -47,21 +47,24 @@ fn hid_otg_config_changed(old_config: &HidConfig, new_config: &HidConfig) -> boo
         || old_config.otg_descriptor != new_config.otg_descriptor
         || old_config.constrained_otg_functions() != new_config.constrained_otg_functions()
         || old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds()
-        || old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit()
 }
 
-async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
+async fn reconcile_otg_config(
+    state: &Arc<AppState>,
+    hid: &HidConfig,
+    msd: &MsdConfig,
+    network: &OtgNetworkConfig,
+) -> Result<()> {
     #[cfg(not(unix))]
     {
-        let _ = state;
+        let _ = (state, hid, msd, network);
         Ok(())
     }
     #[cfg(unix)]
     {
-        let config = state.config.get();
         state
             .otg_service
-            .apply_config(&config.hid, &config.msd)
+            .apply_config(hid, msd, network)
             .await
             .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
     }
@@ -167,11 +170,11 @@ pub async fn apply_hid_config(
     state: &Arc<AppState>,
     old_config: &HidConfig,
     new_config: &HidConfig,
+    msd_config: &MsdConfig,
+    network_config: &OtgNetworkConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_config = state.config.get();
-    let current_msd_enabled = current_config.msd.enabled && new_config.backend == HidBackend::Otg;
-    new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
+    new_config.validate_otg_functions()?;
 
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
     let old_hid_functions = old_config.constrained_otg_functions();
@@ -179,8 +182,6 @@ pub async fn apply_hid_config(
     let hid_functions_changed = old_hid_functions != new_hid_functions;
     let keyboard_leds_changed =
         old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
-    let endpoint_budget_changed =
-        old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit();
     let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
 
     if old_config.backend == new_config.backend
@@ -191,7 +192,6 @@ pub async fn apply_hid_config(
         && !descriptor_changed
         && !hid_functions_changed
         && !keyboard_leds_changed
-        && !endpoint_budget_changed
         && !options.force
     {
         tracing::info!("HID config unchanged, skipping reload");
@@ -214,7 +214,7 @@ pub async fn apply_hid_config(
     }
 
     if otg_config_changed {
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, new_config, msd_config, network_config).await?;
     }
 
     if !transitioning_away_from_otg {
@@ -238,14 +238,12 @@ pub async fn apply_msd_config(
     state: &Arc<AppState>,
     old_config: &MsdConfig,
     new_config: &MsdConfig,
+    hid_config: &HidConfig,
+    network_config: &OtgNetworkConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_config = state.config.get();
-    let hid_backend_is_otg = current_config.hid.backend == HidBackend::Otg;
+    let hid_backend_is_otg = hid_config.backend == HidBackend::Otg;
     let effective_new_msd_enabled = new_config.enabled && hid_backend_is_otg;
-    current_config
-        .hid
-        .validate_otg_endpoint_budget(effective_new_msd_enabled)?;
 
     tracing::info!("MSD config sent, checking if reload needed...");
     tracing::debug!("Old MSD config: {:?}", old_config);
@@ -284,13 +282,13 @@ pub async fn apply_msd_config(
     if new_msd_enabled {
         tracing::info!("(Re)initializing MSD...");
 
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
 
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
-            if let Err(e) = msd.shutdown().await {
-                tracing::warn!("MSD shutdown failed: {}", e);
-            }
+            msd.shutdown()
+                .await
+                .map_err(|e| AppError::Config(format!("MSD shutdown failed: {e}")))?;
         }
         *msd_guard = None;
         drop(msd_guard);
@@ -311,18 +309,17 @@ pub async fn apply_msd_config(
 
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
-            if let Err(e) = msd.shutdown().await {
-                tracing::warn!("MSD shutdown failed: {}", e);
-            }
+            msd.shutdown()
+                .await
+                .map_err(|e| AppError::Config(format!("MSD shutdown failed: {e}")))?;
         }
         *msd_guard = None;
         tracing::info!("MSD shutdown complete");
 
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
     }
 
-    let current_config = state.config.get();
-    if current_config.hid.backend == HidBackend::Otg
+    if hid_config.backend == HidBackend::Otg
         && (options.force || old_msd_enabled != new_msd_enabled)
     {
         state
@@ -333,6 +330,55 @@ pub async fn apply_msd_config(
     }
 
     Ok(())
+}
+
+#[cfg(unix)]
+pub async fn apply_otg_config(
+    state: &Arc<AppState>,
+    old_config: &AppConfig,
+    new_config: &AppConfig,
+) -> Result<()> {
+    let transitioning_away_from_otg =
+        old_config.hid.backend == HidBackend::Otg && new_config.hid.backend != HidBackend::Otg;
+
+    if transitioning_away_from_otg {
+        apply_hid_config(
+            state,
+            &old_config.hid,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+            ConfigApplyOptions::default(),
+        )
+        .await?;
+    } else {
+        reconcile_otg_config(
+            state,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+        )
+        .await?;
+        apply_hid_config(
+            state,
+            &old_config.hid,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+            ConfigApplyOptions::default(),
+        )
+        .await?;
+    }
+
+    apply_msd_config(
+        state,
+        &old_config.msd,
+        &new_config.msd,
+        &new_config.hid,
+        &new_config.otg_network,
+        ConfigApplyOptions::default(),
+    )
+    .await
 }
 
 pub async fn apply_atx_config(

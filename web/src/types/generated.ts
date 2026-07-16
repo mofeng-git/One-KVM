@@ -40,13 +40,6 @@ export enum OtgHidProfile {
 	Custom = "custom",
 }
 
-export enum OtgEndpointBudget {
-	Auto = "auto",
-	Five = "five",
-	Six = "six",
-	Unlimited = "unlimited",
-}
-
 export interface OtgHidFunctions {
 	keyboard: boolean;
 	mouse_relative: boolean;
@@ -67,7 +60,6 @@ export interface HidConfig {
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfig;
 	otg_profile?: OtgHidProfile;
-	otg_endpoint_budget?: OtgEndpointBudget;
 	otg_functions?: OtgHidFunctions;
 	otg_keyboard_leds?: boolean;
 	ch9329_port: string;
@@ -75,6 +67,22 @@ export interface HidConfig {
 	ch9329_hybrid_mouse?: boolean;
 	ch9329_descriptor?: Ch9329DescriptorConfig;
 	mouse_absolute: boolean;
+}
+
+export enum OtgNetworkDriverMode {
+	Ncm = "ncm",
+	Ecm = "ecm",
+	Rndis = "rndis",
+}
+
+export interface OtgNetworkConfig {
+	enabled: boolean;
+	driver_mode: OtgNetworkDriverMode;
+	/** Empty means select the connected NetworkManager Ethernet interface. */
+	bridge_interface: string;
+	/** Empty values are resolved from the machine identity at runtime. */
+	host_mac: string;
+	device_mac: string;
 }
 
 export interface MsdConfig {
@@ -286,6 +294,7 @@ export interface AppConfig {
 	auth: AuthConfig;
 	video: VideoConfig;
 	hid: HidConfig;
+	otg_network: OtgNetworkConfig;
 	msd: MsdConfig;
 	atx: AtxConfig;
 	audio: AudioConfig;
@@ -537,7 +546,6 @@ export interface HidConfigUpdate {
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
 	otg_profile?: OtgHidProfile;
-	otg_endpoint_budget?: OtgEndpointBudget;
 	otg_functions?: OtgHidFunctionsUpdate;
 	otg_keyboard_leds?: boolean;
 	mouse_absolute?: boolean;
@@ -546,6 +554,49 @@ export interface HidConfigUpdate {
 export interface MsdConfigUpdate {
 	enabled?: boolean;
 	msd_dir?: string;
+}
+
+export interface NetworkInterfaceInfo {
+	name: string;
+	interface_type: string;
+	state: string;
+	connection: string;
+	addresses: string[];
+	has_default_route: boolean;
+	bridge_supported: boolean;
+	reason?: string;
+}
+
+export enum OtgRuntimeHealth {
+	Healthy = "healthy",
+	Applying = "applying",
+	Degraded = "degraded",
+}
+
+export interface OtgNetworkStatus {
+	health: OtgRuntimeHealth;
+	error?: string;
+}
+
+export interface OtgConfigResponse {
+	hid: HidConfig;
+	msd: MsdConfig;
+	network: OtgNetworkConfig;
+	status: OtgNetworkStatus;
+}
+
+export interface OtgNetworkConfigUpdate {
+	enabled?: boolean;
+	driver_mode?: OtgNetworkDriverMode;
+	bridge_interface?: string;
+	host_mac?: string;
+	device_mac?: string;
+}
+
+export interface OtgConfigUpdate {
+	hid?: HidConfigUpdate;
+	msd?: MsdConfigUpdate;
+	network?: OtgNetworkConfigUpdate;
 }
 
 export interface RtspConfigResponse {

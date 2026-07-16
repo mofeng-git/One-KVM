@@ -304,7 +304,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("OTG Service created");
 
     #[cfg(unix)]
-    if let Err(e) = otg_service.apply_config(&config.hid, &config.msd).await {
+    if let Err(e) = otg_service
+        .apply_config(&config.hid, &config.msd, &config.otg_network)
+        .await
+    {
         tracing::warn!("Failed to apply OTG config: {}", e);
     }
 

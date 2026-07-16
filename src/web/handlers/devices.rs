@@ -18,6 +18,12 @@ pub async fn list_usb_devices() -> Json<Vec<usb_reset::UsbDeviceInfo>> {
 }
 
 #[cfg(unix)]
+pub async fn list_network_interfaces() -> Result<Json<Vec<crate::otg::bridge::NetworkInterfaceInfo>>>
+{
+    crate::otg::bridge::list_network_interfaces().map(Json)
+}
+
+#[cfg(unix)]
 #[derive(Deserialize)]
 pub struct UsbResetRequest {
     pub bus_num: u32,

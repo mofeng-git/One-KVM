@@ -10,6 +10,12 @@ import type {
   HidConfigUpdate,
   MsdConfig,
   MsdConfigUpdate,
+  NetworkInterfaceInfo,
+  OtgNetworkConfig,
+  OtgNetworkConfigUpdate,
+  OtgNetworkStatus,
+  OtgConfigUpdate,
+  OtgConfigResponse,
   AtxConfig,
   AtxConfigUpdate,
   AtxDevices,
@@ -81,6 +87,28 @@ export const msdConfigApi = {
 
   update: (config: MsdConfigUpdate) =>
     request<MsdConfig>('/config/msd', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+}
+
+export const otgNetworkApi = {
+  get: () => request<OtgNetworkConfig>('/config/otg-network'),
+
+  update: (config: OtgNetworkConfigUpdate) =>
+    request<OtgNetworkConfig>('/config/otg-network', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  status: () => request<OtgNetworkStatus>('/otg/network/status'),
+
+  interfaces: () => request<NetworkInterfaceInfo[]>('/devices/network'),
+}
+
+export const otgConfigApi = {
+  update: (config: OtgConfigUpdate) =>
+    request<OtgConfigResponse>('/config/otg', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
