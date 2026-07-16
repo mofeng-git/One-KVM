@@ -58,6 +58,7 @@ const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
 const showMsd = computed(() => {
   return !!systemStore.msd?.available && !isCh9329Backend.value
 })
+const showAtx = computed(() => systemStore.atx?.available === true)
 
 const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
@@ -65,8 +66,10 @@ const props = defineProps<{
   ttydRunning?: boolean
   showTerminal?: boolean
   showComputerUse?: boolean
+  showPasteText?: boolean
 }>()
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
+const showPasteText = computed(() => props.showPasteText !== false)
 
 const emit = defineEmits<{
   (e: 'toggleFullscreen'): void
@@ -108,11 +111,13 @@ const openFromOverflow = (setter: () => void) => {
 }
 
 const openMobileAtx = () => openFromOverflow(() => {
+  if (!showAtx.value) return
   mobileAtxOpen.value = true
   mobileAtxOpenTime.value = Date.now()
 })
 
 const openMobilePaste = () => openFromOverflow(() => {
+  if (!showPasteText.value) return
   mobilePasteOpen.value = true
   mobilePasteOpenTime.value = Date.now()
 })
@@ -192,11 +197,27 @@ watch(locale, () => {
   measureButtonWidths()
 })
 
+watch(showAtx, (visible) => {
+  if (!visible) {
+    atxOpen.value = false
+    mobileAtxOpen.value = false
+  }
+})
+
+watch(showPasteText, (visible) => {
+  if (!visible) {
+    pasteOpen.value = false
+    mobilePasteOpen.value = false
+  }
+})
+
 const RIGHT_FIXED_PX = 120
 
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
+    if (item.id === 'atx' && !showAtx.value) return false
+    if (item.id === 'paste' && !showPasteText.value) return false
     if (item.id === 'stats' && !showStats.value) return false
     if (item.id === 'terminal' && props.showTerminal === false) return false
     return true
@@ -294,7 +315,7 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- ATX Power Control - Adaptive -->
-        <div v-if="isVisible('atx')">
+        <div v-if="showAtx && isVisible('atx')">
           <Popover v-model:open="atxOpen">
             <PopoverTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
@@ -315,7 +336,7 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- Paste Text - Adaptive -->
-        <div v-if="isVisible('paste')">
+        <div v-if="showPasteText && isVisible('paste')">
           <Popover v-model:open="pasteOpen">
             <PopoverTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
@@ -466,13 +487,13 @@ const hasRightOverflow = computed(() => {
             </DropdownMenuItem>
 
             <!-- ATX -->
-            <DropdownMenuItem v-if="!isVisible('atx')" @click="openMobileAtx">
+            <DropdownMenuItem v-if="showAtx && !isVisible('atx')" @click="openMobileAtx">
               <Power class="h-4 w-4 mr-2" />
               {{ t('actionbar.power') }}
             </DropdownMenuItem>
 
             <!-- Paste -->
-            <DropdownMenuItem v-if="!isVisible('paste')" @click="openMobilePaste">
+            <DropdownMenuItem v-if="showPasteText && !isVisible('paste')" @click="openMobilePaste">
               <ClipboardPaste class="h-4 w-4 mr-2" />
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
@@ -511,7 +532,7 @@ const hasRightOverflow = computed(() => {
 
   <!-- Mobile ATX Sheet — used when ATX is opened from the overflow menu.
        A Sheet avoids the Popover anchor-positioning issues on mobile. -->
-  <Sheet v-model:open="mobileAtxOpen">
+  <Sheet v-if="showAtx" v-model:open="mobileAtxOpen">
     <SheetContent
       side="bottom"
       class="max-h-[90dvh] overflow-y-auto"
@@ -532,7 +553,7 @@ const hasRightOverflow = computed(() => {
   </Sheet>
 
   <!-- Mobile Paste Sheet — used when Paste is opened from the overflow menu. -->
-  <Sheet v-model:open="mobilePasteOpen">
+  <Sheet v-if="showPasteText" v-model:open="mobilePasteOpen">
     <SheetContent
       side="bottom"
       class="max-h-[90dvh] overflow-y-auto"

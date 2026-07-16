@@ -715,6 +715,7 @@ export default {
     featureVisibility: 'Feature Visibility',
     featureVisibilityDesc: 'Control which feature entry points are shown on the console page',
     computerUseAgent: 'Computer Use Agent',
+    pasteText: 'Paste Text',
     videoSettings: 'Video Capture',
     videoSettingsDesc: 'Configure capture device format, resolution and frame rate',
     videoDevice: 'Video Device',

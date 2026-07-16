@@ -190,6 +190,7 @@ const featureVisibility = useFeatureVisibility()
 const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
 const showComputerUse = computed(() => featureVisibility.value.computerUse)
+const showPasteText = computed(() => featureVisibility.value.pasteText)
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
@@ -2838,6 +2839,7 @@ onUnmounted(() => {
       :ttyd-running="ttydStatus?.running"
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
+      :show-paste-text="showPasteText"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="openStatsSheet"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"

@@ -714,6 +714,7 @@ export default {
     featureVisibility: '功能展示',
     featureVisibilityDesc: '控制控制台页面显示的功能入口',
     computerUseAgent: 'Computer Use Agent',
+    pasteText: '粘贴文本',
     videoSettings: '视频采集',
     videoSettingsDesc: '配置视频采集设备的格式、分辨率与帧率',
     videoDevice: '视频设备',

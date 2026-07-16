@@ -117,6 +117,7 @@ import {
   Loader2,
   AlertTriangle,
   Bot,
+  ClipboardPaste,
   TimerReset,
 } from 'lucide-vue-next'
 
@@ -2850,6 +2851,13 @@ watch(isWindows, () => {
                     <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
                   </Label>
                   <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-paste-text" class="flex min-w-0 items-center gap-2 font-normal">
+                    <ClipboardPaste class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('settings.pasteText') }}</span>
+                  </Label>
+                  <Switch id="feature-paste-text" v-model="featureVisibility.pasteText" />
                 </div>
               </CardContent>
             </Card>
