@@ -813,6 +813,7 @@ export {
   rtspConfigApi,
   vncConfigApi,
   webConfigApi,
+  watchdogConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,

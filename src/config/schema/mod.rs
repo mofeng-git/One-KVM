@@ -10,6 +10,7 @@ mod computer_use;
 mod hid;
 mod otg_network;
 mod stream;
+mod watchdog;
 mod web;
 
 pub use atx::*;
@@ -18,6 +19,7 @@ pub use computer_use::*;
 pub use hid::*;
 pub use otg_network::*;
 pub use stream::*;
+pub use watchdog::*;
 pub use web::*;
 
 #[typeshare]
@@ -41,6 +43,7 @@ pub struct AppConfig {
     pub vnc: VncConfig,
     pub rtsp: RtspConfig,
     pub redfish: RedfishConfig,
+    pub watchdog: WatchdogConfig,
 }
 
 impl AppConfig {
@@ -55,5 +58,20 @@ impl AppConfig {
     pub fn apply_platform_defaults(&mut self) {
         crate::platform::defaults::apply(self);
         self.enforce_invariants();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_watchdog_config_defaults_to_disabled() {
+        let value = serde_json::to_value(AppConfig::default()).unwrap();
+        let mut object = value.as_object().unwrap().clone();
+        object.remove("watchdog");
+
+        let config: AppConfig = serde_json::from_value(object.into()).unwrap();
+        assert!(!config.watchdog.enabled);
     }
 }

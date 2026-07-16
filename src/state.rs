@@ -22,6 +22,7 @@ use crate::rustdesk::RustDeskService;
 use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
 use crate::vnc::VncService;
+use crate::watchdog::WatchdogController;
 use crate::webrtc::WebRtcStreamer;
 
 #[derive(Clone)]
@@ -34,6 +35,7 @@ pub struct ConfigApplyLocks {
     pub rustdesk: Arc<Mutex<()>>,
     pub vnc: Arc<Mutex<()>>,
     pub rtsp: Arc<Mutex<()>>,
+    pub watchdog: Arc<Mutex<()>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +55,7 @@ impl ConfigApplyLocks {
             rustdesk: Arc::new(Mutex::new(())),
             vnc: Arc::new(Mutex::new(())),
             rtsp: Arc::new(Mutex::new(())),
+            watchdog: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -80,6 +83,7 @@ pub struct AppState {
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
     pub update: Arc<UpdateService>,
+    pub watchdog: Arc<WatchdogController>,
     pub shutdown_tx: broadcast::Sender<ShutdownAction>,
     pub revoked_sessions: Arc<RwLock<VecDeque<String>>>,
     pub config_apply_locks: ConfigApplyLocks,
@@ -134,6 +138,7 @@ impl AppState {
             events,
             device_info_tx,
             update,
+            watchdog: Arc::new(WatchdogController::new()),
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
             config_apply_locks: ConfigApplyLocks::new(),

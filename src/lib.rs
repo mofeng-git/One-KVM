@@ -52,6 +52,8 @@ pub mod video;
 #[cfg(feature = "desktop")]
 pub mod vnc;
 #[cfg(feature = "desktop")]
+pub mod watchdog;
+#[cfg(feature = "desktop")]
 pub mod web;
 #[cfg(feature = "desktop")]
 pub mod webrtc;

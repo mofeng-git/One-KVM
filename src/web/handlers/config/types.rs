@@ -11,6 +11,21 @@ use typeshare::typeshare;
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct WatchdogConfigUpdate {
+    pub enabled: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+pub struct WatchdogConfigResponse {
+    pub enabled: bool,
+    pub supported: bool,
+    pub running: bool,
+    pub reason: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct AuthConfigUpdate {
     pub single_user_allow_multiple_sessions: Option<bool>,
 }

@@ -154,4 +154,24 @@ mod tests {
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
     }
+
+    #[tokio::test]
+    async fn failed_watchdog_persistence_does_not_update_cache() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = DatabasePool::new(&db_path).await.unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool()).unwrap();
+        store.load().await.unwrap();
+
+        sqlx::query("DROP TABLE config")
+            .execute(&db.clone_pool())
+            .await
+            .unwrap();
+        assert!(store
+            .update(|config| config.watchdog.enabled = true)
+            .await
+            .is_err());
+        assert!(!store.get().watchdog.enabled);
+    }
 }

@@ -34,12 +34,24 @@ import type {
   FrpcConfigUpdate,
   WebConfigResponse,
   WebConfigUpdate,
+  WatchdogConfigResponse,
+  WatchdogConfigUpdate,
 } from '@/types/generated'
 
 import { request } from './request'
 
 export const configApi = {
   getAll: () => request<AppConfig>('/config'),
+}
+
+export const watchdogConfigApi = {
+  get: () => request<WatchdogConfigResponse>('/config/watchdog', {}, { toastOnError: false }),
+
+  update: (config: WatchdogConfigUpdate) =>
+    request<WatchdogConfigResponse>('/config/watchdog', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }, { toastOnError: false }),
 }
 
 export const authConfigApi = {

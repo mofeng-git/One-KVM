@@ -289,6 +289,10 @@ export interface RedfishConfig {
 	enabled: boolean;
 }
 
+export interface WatchdogConfig {
+	enabled: boolean;
+}
+
 export interface AppConfig {
 	initialized: boolean;
 	auth: AuthConfig;
@@ -306,6 +310,7 @@ export interface AppConfig {
 	vnc: VncConfig;
 	rtsp: RtspConfig;
 	redfish: RedfishConfig;
+	watchdog: WatchdogConfig;
 }
 
 /** Update for a single ATX output binding */
@@ -706,6 +711,17 @@ export interface VncStatusResponse {
 	config: VncConfigResponse;
 	service_status: string;
 	connection_count: number;
+}
+
+export interface WatchdogConfigResponse {
+	enabled: boolean;
+	supported: boolean;
+	running: boolean;
+	reason?: string;
+}
+
+export interface WatchdogConfigUpdate {
+	enabled: boolean;
 }
 
 /**

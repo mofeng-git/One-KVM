@@ -170,6 +170,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
+        .route(
+            "/config/watchdog",
+            get(handlers::config::get_watchdog_config),
+        )
+        .route(
+            "/config/watchdog",
+            patch(handlers::config::update_watchdog_config),
+        )
         .route("/config/computer-use", get(handlers::computer_use_config))
         .route(
             "/config/computer-use",

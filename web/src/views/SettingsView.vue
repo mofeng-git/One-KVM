@@ -22,6 +22,7 @@ import {
   updateApi,
   usbApi,
   vncConfigApi,
+  watchdogConfigApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type RustDeskConfigResponse,
@@ -49,6 +50,7 @@ import type {
   Ch9329DescriptorState,
   NetworkInterfaceInfo,
   OtgNetworkStatus,
+  WatchdogConfigResponse,
 } from '@/types/generated'
 import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
@@ -115,6 +117,7 @@ import {
   Loader2,
   AlertTriangle,
   Bot,
+  TimerReset,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -140,6 +143,7 @@ const SETTINGS_SECTION_IDS = [
   'hid',
   'atx',
   'environment',
+  'other',
   'ext-ttyd',
   'third-party-access',
   'ext-remote-access',
@@ -165,6 +169,7 @@ const navGroups = computed(() => [
       { id: 'hid', label: t('settings.hid'), icon: Keyboard },
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
+      { id: 'other', label: t('settings.other'), icon: TimerReset },
     ]
   },
   {
@@ -263,6 +268,9 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'environment':
       await fetchUsbDevices()
       return
+    case 'other':
+      await loadWatchdogConfig()
+      return
     case 'ext-ttyd':
     case 'ext-remote-access':
       await loadExtensions()
@@ -307,6 +315,77 @@ const authConfig = ref<AuthConfig>({
   totp_secret: undefined,
 })
 const authConfigLoading = ref(false)
+
+const watchdogStatus = ref<WatchdogConfigResponse | null>(null)
+const watchdogLoading = ref(false)
+const watchdogError = ref('')
+
+const watchdogStatusKey = computed(() => {
+  const status = watchdogStatus.value
+  if (!status) return 'closed'
+  if (!status.supported) return status.enabled ? 'error' : 'unsupported'
+  if (status.running) return 'running'
+  if (status.enabled) return 'error'
+  return 'closed'
+})
+
+const watchdogDisplayReason = computed(() => {
+  const reason = watchdogStatus.value?.reason
+  if (!reason) return ''
+  if (reason.includes('No hardware watchdog device found')) return t('settings.watchdog.unsupportedReason')
+  if (reason.includes('discover')) return t('settings.watchdog.discoveryFailed')
+  if (reason.includes('open a hardware watchdog')) return t('settings.watchdog.openFailed')
+  if (reason.includes('keepalive')) return t('settings.watchdog.feedFailed')
+  if (reason.includes('safely disabled') || reason.includes('nowayout')) return t('settings.watchdog.disableFailed')
+  return t('settings.watchdog.abnormalReason')
+})
+
+function watchdogRequestError(error: unknown, action: 'enable' | 'disable'): string {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('No hardware watchdog device found')) return t('settings.watchdog.unsupportedReason')
+  if (message.includes('cannot be safely disabled') || message.includes('nowayout')) {
+    return t('settings.watchdog.disableFailed')
+  }
+  return t(action === 'enable' ? 'settings.watchdog.enableFailed' : 'settings.watchdog.toggleFailed')
+}
+
+const watchdogStatusClass = computed(() => {
+  switch (watchdogStatusKey.value) {
+    case 'running': return 'bg-green-500'
+    case 'error': return 'bg-red-500'
+    default: return 'bg-gray-400'
+  }
+})
+
+async function loadWatchdogConfig() {
+  watchdogLoading.value = true
+  watchdogError.value = ''
+  try {
+    watchdogStatus.value = await watchdogConfigApi.get()
+  } catch (error) {
+    watchdogError.value = error instanceof Error ? error.message : t('settings.watchdog.loadFailed')
+  } finally {
+    watchdogLoading.value = false
+  }
+}
+
+async function updateWatchdog(enabled: boolean) {
+  if (!watchdogStatus.value || watchdogLoading.value) return
+  watchdogLoading.value = true
+  watchdogError.value = ''
+  try {
+    watchdogStatus.value = await watchdogConfigApi.update({ enabled })
+  } catch (error) {
+    watchdogError.value = watchdogRequestError(error, enabled ? 'enable' : 'disable')
+    try {
+      watchdogStatus.value = await watchdogConfigApi.get()
+    } catch {
+      // Preserve the last confirmed state when status refresh also fails.
+    }
+  } finally {
+    watchdogLoading.value = false
+  }
+}
 
 const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
@@ -3602,6 +3681,46 @@ watch(isWindows, () => {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+          <div v-show="activeSection === 'other'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-start justify-between gap-4">
+                  <div class="min-w-0 space-y-1">
+                    <CardTitle>{{ t('settings.watchdog.title') }}</CardTitle>
+                    <CardDescription>{{ t('settings.watchdog.description') }}</CardDescription>
+                  </div>
+                  <Switch
+                    :aria-label="t('settings.watchdog.title')"
+                    :model-value="watchdogStatus?.enabled ?? false"
+                    :disabled="watchdogLoading || !watchdogStatus || (!watchdogStatus.supported && !watchdogStatus.enabled)"
+                    @update:model-value="updateWatchdog"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center gap-2 text-sm">
+                  <Loader2 v-if="watchdogLoading" class="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span v-else class="h-2.5 w-2.5 rounded-full" :class="watchdogStatusClass" />
+                  <span class="font-medium">
+                    {{ watchdogLoading
+                      ? t('common.loading')
+                      : t(`settings.watchdog.status.${watchdogStatusKey}`) }}
+                  </span>
+                </div>
+                <p
+                  v-if="watchdogError || watchdogDisplayReason"
+                  class="text-sm"
+                  :class="watchdogStatusKey === 'error' || watchdogError ? 'text-destructive' : 'text-muted-foreground'"
+                >
+                  {{ watchdogError || watchdogDisplayReason }}
+                </p>
+                <div class="flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-200">
+                  <AlertTriangle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <p>{{ t('settings.watchdog.safety') }}</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
           <div v-show="activeSection === 'network'" class="space-y-6">
 

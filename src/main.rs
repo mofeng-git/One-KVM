@@ -591,6 +591,17 @@ async fn main() -> anyhow::Result<()> {
         data_dir.clone(),
     );
 
+    if config.watchdog.enabled {
+        if let Err(error) = state.watchdog.enable().await {
+            tracing::error!(
+                "Configured hardware watchdog failed to start; web service will continue: {}",
+                error
+            );
+        } else {
+            tracing::info!("Hardware watchdog started");
+        }
+    }
+
     extensions.set_event_bus(events.clone()).await;
 
     if let Some(ref service) = rustdesk {
@@ -1248,5 +1259,12 @@ async fn cleanup(state: &Arc<AppState>) {
 
     if let Err(e) = state.audio.shutdown().await {
         tracing::warn!("Failed to shutdown audio: {}", e);
+    }
+
+    if let Err(error) = state.watchdog.disable().await {
+        tracing::error!(
+            "CRITICAL: failed to disable hardware watchdog during shutdown: {}",
+            error
+        );
     }
 }
