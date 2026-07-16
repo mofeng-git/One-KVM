@@ -13,6 +13,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Monitor, Video, Usb, AlertCircle, CheckCircle, Loader2, Volume2, HardDrive } from 'lucide-vue-next'
 
@@ -50,15 +51,15 @@ onMounted(() => {
 const statusColor = computed(() => {
   switch (props.status) {
     case 'connected':
-      return 'bg-green-500'
+      return 'bg-success'
     case 'connecting':
-      return 'bg-yellow-500 animate-pulse'
+      return 'bg-warning animate-pulse'
     case 'disconnected':
-      return 'bg-slate-400'
+      return 'bg-muted-foreground'
     case 'error':
-      return 'bg-red-500'
+      return 'bg-destructive'
     default:
-      return 'bg-slate-400'
+      return 'bg-muted-foreground'
   }
 })
 
@@ -127,15 +128,14 @@ const statusBadgeText = computed(() => {
   <HoverCard v-if="!prefersPopover" :open-delay="200" :close-delay="100">
     <HoverCardTrigger as-child>
       <!-- New layout: vertical with title on top, status+quickInfo on bottom -->
-      <button
+      <Button
         type="button"
+        variant="outline"
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'h-auto flex-col items-start gap-0.5 text-left',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
-          'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
-          'border-slate-200 dark:border-slate-700',
-          status === 'error' && 'border-red-300 dark:border-red-800'
+          status === 'error' && 'border-destructive/50'
         )"
       >
         <template v-if="compact">
@@ -156,7 +156,7 @@ const statusBadgeText = computed(() => {
             </span>
           </div>
         </template>
-      </button>
+      </Button>
     </HoverCardTrigger>
 
     <HoverCardContent class="w-80" :align="hoverAlign">
@@ -164,10 +164,10 @@ const statusBadgeText = computed(() => {
         <!-- Header -->
         <div class="flex items-center gap-3">
           <div :class="cn(
-            'p-2 rounded-lg',
-            status === 'connected' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-            status === 'error' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
-            'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+            'rounded-md p-2',
+            status === 'connected' ? 'bg-success/10 text-success' :
+            status === 'error' ? 'bg-destructive/10 text-destructive' :
+            'bg-muted text-muted-foreground'
           )">
             <component :is="StatusIcon" class="h-5 w-5" />
           </div>
@@ -179,14 +179,14 @@ const statusBadgeText = computed(() => {
                 :is="statusIcon"
                 :class="cn(
                   'h-3.5 w-3.5',
-                  status === 'connected' ? 'text-green-500' :
-                  status === 'connecting' ? 'text-yellow-500 animate-spin' :
-                  status === 'error' ? 'text-red-500' :
-                  'text-slate-400'
+                  status === 'connected' ? 'text-success' :
+                  status === 'connecting' ? 'text-warning animate-spin' :
+                  status === 'error' ? 'text-destructive' :
+                  'text-muted-foreground'
                 )"
               />
               <Badge
-                :variant="status === 'connected' ? 'default' : status === 'error' ? 'destructive' : 'secondary'"
+                :variant="status === 'connected' ? 'success' : status === 'connecting' ? 'warning' : status === 'error' ? 'destructive' : 'secondary'"
                 class="text-[10px] px-1.5 py-0"
               >
                 {{ statusBadgeText }}
@@ -198,24 +198,14 @@ const statusBadgeText = computed(() => {
         <!-- Details -->
         <div v-if="details && details.length > 0" class="space-y-2">
           <Separator />
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <div
               v-for="(detail, index) in details"
               :key="index"
-              class="flex items-start justify-between gap-3 text-xs"
+              class="flex items-baseline justify-between gap-3 py-0.5 text-xs"
             >
-              <span class="text-muted-foreground shrink-0">{{ detail.label }}</span>
-              <span
-                :class="cn(
-                  'font-medium text-right break-words min-w-0',
-                  detail.status === 'ok' ? 'text-green-600 dark:text-green-400' :
-                  detail.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                  detail.status === 'error' ? 'text-red-600 dark:text-red-400' :
-                  'text-foreground'
-                )"
-              >
-                {{ detail.value }}
-              </span>
+              <span class="shrink-0 text-muted-foreground">{{ detail.label }}</span>
+              <span :class="cn('min-w-0 text-right text-xs font-medium', detail.status === 'ok' ? 'text-success' : detail.status === 'warning' ? 'text-warning' : detail.status === 'error' ? 'text-destructive' : 'text-foreground')">{{ detail.value }}</span>
             </div>
           </div>
         </div>
@@ -226,15 +216,14 @@ const statusBadgeText = computed(() => {
   <Popover v-else>
     <PopoverTrigger as-child>
       <!-- New layout: vertical with title on top, status+quickInfo on bottom -->
-      <button
+      <Button
         type="button"
+        variant="outline"
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'flex flex-col gap-0.5 rounded-md border cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'h-auto flex-col items-start gap-0.5 text-left',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
-          'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700',
-          'border-slate-200 dark:border-slate-700',
-          status === 'error' && 'border-red-300 dark:border-red-800'
+          status === 'error' && 'border-destructive/50'
         )"
       >
         <template v-if="compact">
@@ -255,7 +244,7 @@ const statusBadgeText = computed(() => {
             </span>
           </div>
         </template>
-      </button>
+      </Button>
     </PopoverTrigger>
 
     <PopoverContent class="w-[min(320px,90vw)]" :align="hoverAlign">
@@ -263,10 +252,10 @@ const statusBadgeText = computed(() => {
         <!-- Header -->
         <div class="flex items-center gap-3">
           <div :class="cn(
-            'p-2 rounded-lg',
-            status === 'connected' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-            status === 'error' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
-            'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+            'rounded-md p-2',
+            status === 'connected' ? 'bg-success/10 text-success' :
+            status === 'error' ? 'bg-destructive/10 text-destructive' :
+            'bg-muted text-muted-foreground'
           )">
             <component :is="StatusIcon" class="h-5 w-5" />
           </div>
@@ -278,14 +267,14 @@ const statusBadgeText = computed(() => {
                 :is="statusIcon"
                 :class="cn(
                   'h-3.5 w-3.5',
-                  status === 'connected' ? 'text-green-500' :
-                  status === 'connecting' ? 'text-yellow-500 animate-spin' :
-                  status === 'error' ? 'text-red-500' :
-                  'text-slate-400'
+                  status === 'connected' ? 'text-success' :
+                  status === 'connecting' ? 'text-warning animate-spin' :
+                  status === 'error' ? 'text-destructive' :
+                  'text-muted-foreground'
                 )"
               />
               <Badge
-                :variant="status === 'connected' ? 'default' : status === 'error' ? 'destructive' : 'secondary'"
+                :variant="status === 'connected' ? 'success' : status === 'connecting' ? 'warning' : status === 'error' ? 'destructive' : 'secondary'"
                 class="text-[10px] px-1.5 py-0"
               >
                 {{ statusBadgeText }}
@@ -297,24 +286,14 @@ const statusBadgeText = computed(() => {
         <!-- Details -->
         <div v-if="details && details.length > 0" class="space-y-2">
           <Separator />
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <div
               v-for="(detail, index) in details"
               :key="index"
-              class="flex items-start justify-between gap-3 text-xs"
+              class="flex items-baseline justify-between gap-3 py-0.5 text-xs"
             >
-              <span class="text-muted-foreground shrink-0">{{ detail.label }}</span>
-              <span
-                :class="cn(
-                  'font-medium text-right break-words min-w-0',
-                  detail.status === 'ok' ? 'text-green-600 dark:text-green-400' :
-                  detail.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                  detail.status === 'error' ? 'text-red-600 dark:text-red-400' :
-                  'text-foreground'
-                )"
-              >
-                {{ detail.value }}
-              </span>
+              <span class="shrink-0 text-muted-foreground">{{ detail.label }}</span>
+              <span :class="cn('min-w-0 text-right text-xs font-medium', detail.status === 'ok' ? 'text-success' : detail.status === 'warning' ? 'text-warning' : detail.status === 'error' ? 'text-destructive' : 'text-foreground')">{{ detail.value }}</span>
             </div>
           </div>
         </div>

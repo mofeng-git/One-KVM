@@ -1,6 +1,6 @@
 {
   "$schema": "https://shadcn-vue.com/schema.json",
-  "style": "new-york",
+  "style": "new-york-v4",
   "typescript": true,
   "tailwind": {
     "config": "tailwind.config.js",

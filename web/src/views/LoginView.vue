@@ -5,12 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
-import { Lock, Eye, EyeOff, User, CircleHelp } from 'lucide-vue-next'
+import { AlertCircle, Lock, Eye, EyeOff, User, CircleHelp } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -73,9 +74,10 @@ async function handleLogin() {
       </CardHeader>
 
       <CardContent>
-        <form class="space-y-4" @submit.prevent="handleLogin">
-          <div class="space-y-2">
-            <Label for="username">{{ t('auth.username') }}</Label>
+        <form @submit.prevent="handleLogin">
+          <FieldGroup>
+          <Field>
+            <FieldLabel for="username">{{ t('auth.username') }}</FieldLabel>
             <div class="relative">
               <User class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -87,10 +89,30 @@ async function handleLogin() {
                 class="pl-10"
               />
             </div>
-          </div>
+          </Field>
 
-          <div class="space-y-2">
-            <Label for="password">{{ t('auth.password') }}</Label>
+          <Field>
+            <div class="flex items-center justify-between gap-2">
+              <FieldLabel for="password">{{ t('auth.password') }}</FieldLabel>
+              <Popover>
+                <PopoverTrigger as-child>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    class="h-auto gap-1 p-0 text-xs text-muted-foreground"
+                  >
+                    {{ t('auth.forgotPassword') }}
+                    <CircleHelp class="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent class="w-80 p-3" align="end">
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('auth.forgotPasswordHint') }}
+                  </p>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div class="relative">
               <Lock class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -101,43 +123,31 @@ async function handleLogin() {
                 :placeholder="t('auth.password')"
                 class="pl-10 pr-10"
               />
-              <button
+              <Button
                 type="button"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                variant="ghost"
+                size="icon-sm"
+                class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                 :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                 @click="showPassword = !showPassword"
               >
                 <Eye v-if="!showPassword" class="w-4 h-4" />
                 <EyeOff v-else class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
-          </div>
+          </Field>
 
-          <p v-if="error" class="text-center text-sm text-destructive">{{ error }}</p>
+          <Alert v-if="error" variant="destructive">
+            <AlertCircle />
+            <AlertDescription>{{ error }}</AlertDescription>
+          </Alert>
 
           <Button type="submit" class="w-full" :disabled="loading">
             <span v-if="loading">{{ t('common.loading') }}</span>
             <span v-else>{{ t('auth.login') }}</span>
           </Button>
 
-          <div class="text-right">
-            <Popover>
-              <PopoverTrigger as-child>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {{ t('auth.forgotPassword') }}
-                  <CircleHelp class="h-3.5 w-3.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent class="w-80 p-3" align="end">
-                <p class="text-xs text-muted-foreground">
-                  {{ t('auth.forgotPasswordHint') }}
-                </p>
-              </PopoverContent>
-            </Popover>
-          </div>
+          </FieldGroup>
         </form>
       </CardContent>
     </Card>

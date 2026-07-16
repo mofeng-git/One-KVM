@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const props = defineProps<{
   open: boolean
@@ -192,28 +192,10 @@ onMounted(loadConfig)
 
       <Tabs v-model="activeTab" class="flex min-h-0 flex-1 flex-col">
         <div class="px-3 py-2">
-          <div class="grid grid-cols-2 rounded-md bg-muted p-1">
-            <button
-              type="button"
-              :class="[
-                'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors',
-                activeTab === 'chat' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              ]"
-              @click="activeTab = 'chat'"
-            >
-              对话
-            </button>
-            <button
-              type="button"
-              :class="[
-                'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors',
-                activeTab === 'settings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              ]"
-              @click="activeTab = 'settings'"
-            >
-              设置
-            </button>
-          </div>
+          <TabsList class="grid w-full grid-cols-2">
+            <TabsTrigger value="chat">对话</TabsTrigger>
+            <TabsTrigger value="settings">设置</TabsTrigger>
+          </TabsList>
         </div>
 
         <TabsContent value="chat" class="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
@@ -248,7 +230,7 @@ onMounted(loadConfig)
                 </div>
               </div>
 
-              <div v-else-if="item.type === 'actions_executed'" class="rounded-md border bg-emerald-50 p-2 text-emerald-950 dark:bg-emerald-950/20 dark:text-emerald-100">
+              <div v-else-if="item.type === 'actions_executed'" class="rounded-md border border-success/35 bg-success/10 p-2 text-success">
                 <div class="mb-2 text-xs font-medium">已执行</div>
                 <div class="space-y-1">
                   <div v-for="(action, index) in item.actions" :key="index" class="rounded-sm bg-background/60 px-2 py-1.5 text-xs">

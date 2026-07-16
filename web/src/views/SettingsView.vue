@@ -56,6 +56,7 @@ import { FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { formatFpsLabel, toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
+import { useTheme } from '@/composables/useTheme'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
@@ -68,7 +69,27 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -100,7 +121,6 @@ import {
   Check,
   Power,
   Server,
-  Menu,
   Lock,
   User,
   RefreshCw,
@@ -118,7 +138,7 @@ import {
   AlertTriangle,
   Bot,
   ClipboardPaste,
-  TimerReset,
+  Wrench,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -128,11 +148,11 @@ const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
 const featureVisibility = useFeatureVisibility()
+const { theme, setTheme } = useTheme()
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
 
 const activeSection = ref<SettingsSectionId>('appearance')
-const mobileMenuOpen = ref(false)
 const loading = ref(false)
 const saved = ref(false)
 const saveError = ref('')
@@ -170,7 +190,7 @@ const navGroups = computed(() => [
       { id: 'hid', label: t('settings.hid'), icon: Keyboard },
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
-      { id: 'other', label: t('settings.other'), icon: TimerReset },
+      { id: 'other', label: t('settings.other'), icon: Wrench },
     ]
   },
   {
@@ -216,7 +236,6 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
 function selectSection(id: string) {
   if (!isSettingsSectionId(id)) return
   activeSection.value = id
-  mobileMenuOpen.value = false
   void loadSectionData(id)
 }
 
@@ -267,10 +286,12 @@ async function loadSectionData(section: SettingsSectionId) {
       ])
       return
     case 'environment':
-      await fetchUsbDevices()
       return
     case 'other':
-      await loadWatchdogConfig()
+      await Promise.all([
+        loadWatchdogConfig(),
+        fetchUsbDevices(),
+      ])
       return
     case 'ext-ttyd':
     case 'ext-remote-access':
@@ -294,8 +315,6 @@ async function loadSectionData(section: SettingsSectionId) {
       return
   }
 }
-
-const theme = ref<'light' | 'dark' | 'system'>('system')
 
 const usernameInput = ref('')
 const usernamePassword = ref('')
@@ -352,9 +371,9 @@ function watchdogRequestError(error: unknown, action: 'enable' | 'disable'): str
 
 const watchdogStatusClass = computed(() => {
   switch (watchdogStatusKey.value) {
-    case 'running': return 'bg-green-500'
-    case 'error': return 'bg-red-500'
-    default: return 'bg-gray-400'
+    case 'running': return 'bg-success'
+    case 'error': return 'bg-destructive'
+    default: return 'bg-muted-foreground'
   }
 })
 
@@ -595,9 +614,7 @@ const previewAccessUrl = computed(() => {
 const redfishAccessUrl = computed(() => `${previewAccessUrl.value}/redfish/v1/`)
 
 const previewUrlCopied = ref(false)
-const redfishUrlCopied = ref(false)
 let previewUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
-let redfishUrlCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copyPreviewUrl() {
   const ok = await clipboardCopy(previewAccessUrl.value)
@@ -611,20 +628,6 @@ async function copyPreviewUrl() {
 
 function openPreviewUrl() {
   window.open(previewAccessUrl.value, '_blank', 'noopener,noreferrer')
-}
-
-async function copyRedfishUrl() {
-  const ok = await clipboardCopy(redfishAccessUrl.value)
-  if (!ok) return
-  redfishUrlCopied.value = true
-  if (redfishUrlCopiedTimer) clearTimeout(redfishUrlCopiedTimer)
-  redfishUrlCopiedTimer = setTimeout(() => {
-    redfishUrlCopied.value = false
-  }, 1500)
-}
-
-function openRedfishUrl() {
-  window.open(redfishAccessUrl.value, '_blank', 'noopener,noreferrer')
 }
 
 interface DeviceConfig {
@@ -801,9 +804,9 @@ const otgCheckGroups = computed<OtgCheckGroup[]>(() => {
 })
 
 function otgCheckLevelClass(level: OtgSelfCheckLevel): string {
-  if (level === 'error') return 'bg-red-500'
-  if (level === 'warn') return 'bg-amber-500'
-  return 'bg-blue-500'
+  if (level === 'error') return 'bg-destructive'
+  if (level === 'warn') return 'bg-warning'
+  return 'bg-info'
 }
 
 function otgCheckStatusText(level: OtgSelfCheckLevel): string {
@@ -813,9 +816,9 @@ function otgCheckStatusText(level: OtgSelfCheckLevel): string {
 }
 
 function otgGroupStatusClass(status: OtgCheckGroupStatus): string {
-  if (status === 'error') return 'bg-red-500'
-  if (status === 'warn') return 'bg-amber-500'
-  if (status === 'ok') return 'bg-emerald-500'
+  if (status === 'error') return 'bg-destructive'
+  if (status === 'warn') return 'bg-warning'
+  if (status === 'ok') return 'bg-success'
   return 'bg-muted-foreground/40'
 }
 
@@ -922,7 +925,7 @@ function videoEncoderCodecLabel(codecId: string, codecName: string): string {
 }
 
 function videoEncoderCellClass(ok: boolean | undefined): string {
-  return ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+  return ok ? 'text-success' : 'text-destructive'
 }
 
 function videoEncoderCellSymbol(ok: boolean | undefined): string {
@@ -1344,18 +1347,6 @@ const hasDeviceNetworkAddresses = computed(() => {
   return (systemStore.deviceInfo?.network_addresses.length ?? 0) > 0
 })
 
-function setTheme(newTheme: 'light' | 'dark' | 'system') {
-  theme.value = newTheme
-  localStorage.setItem('theme', newTheme)
-
-  if (newTheme === 'system') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.classList.toggle('dark', prefersDark)
-  } else {
-    document.documentElement.classList.toggle('dark', newTheme === 'dark')
-  }
-}
-
 async function changeUsername() {
   usernameError.value = ''
   usernameSaved.value = false
@@ -1747,12 +1738,12 @@ function getExtStatusText(status: ExtensionStatus | undefined): string {
 }
 
 function getExtStatusClass(status: ExtensionStatus | undefined): string {
-  if (!status) return 'bg-gray-400'
+  if (!status) return 'bg-muted-foreground'
   switch (status.state) {
-    case 'unavailable': return 'bg-gray-400'
-    case 'stopped': return 'bg-gray-400'
-    case 'running': return 'bg-green-500'
-    default: return 'bg-gray-400'
+    case 'unavailable': return 'bg-muted-foreground'
+    case 'stopped': return 'bg-muted-foreground'
+    case 'running': return 'bg-success'
+    default: return 'bg-muted-foreground'
   }
 }
 
@@ -2443,15 +2434,15 @@ function getRustdeskStatusClass(status: string | null | undefined): string {
   switch (status) {
     case 'running':
     case 'registered':
-    case 'connected': return 'bg-green-500'
+    case 'connected': return 'bg-success'
     case 'starting':
-    case 'connecting': return 'bg-yellow-500'
+    case 'connecting': return 'bg-warning'
     case 'stopped':
     case 'not_initialized':
-    case 'disconnected': return 'bg-gray-400'
+    case 'disconnected': return 'bg-muted-foreground'
     default:
-      if (status?.startsWith('error:')) return 'bg-red-500'
-      return 'bg-gray-400'
+      if (status?.startsWith('error:')) return 'bg-destructive'
+      return 'bg-muted-foreground'
   }
 }
 
@@ -2621,12 +2612,12 @@ function getVncServiceStatusText(status: string | undefined): string {
 
 function getVncStatusClass(status: string | undefined): string {
   switch (status) {
-    case 'running': return 'bg-green-500'
-    case 'starting': return 'bg-yellow-500'
-    case 'stopped': return 'bg-gray-400'
+    case 'running': return 'bg-success'
+    case 'starting': return 'bg-warning'
+    case 'stopped': return 'bg-muted-foreground'
     default:
-      if (status?.startsWith('error:')) return 'bg-red-500'
-      return 'bg-gray-400'
+      if (status?.startsWith('error:')) return 'bg-destructive'
+      return 'bg-muted-foreground'
   }
 }
 
@@ -2644,21 +2635,16 @@ function getRtspServiceStatusText(status: string | undefined): string {
 
 function getRtspStatusClass(status: string | undefined): string {
   switch (status) {
-    case 'running': return 'bg-green-500'
-    case 'starting': return 'bg-yellow-500'
-    case 'stopped': return 'bg-gray-400'
+    case 'running': return 'bg-success'
+    case 'starting': return 'bg-warning'
+    case 'stopped': return 'bg-muted-foreground'
     default:
-      if (status?.startsWith('error:')) return 'bg-red-500'
-      return 'bg-gray-400'
+      if (status?.startsWith('error:')) return 'bg-destructive'
+      return 'bg-muted-foreground'
   }
 }
 
 onMounted(async () => {
-  const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null
-  if (storedTheme) {
-    theme.value = storedTheme
-  }
-
   const initialSection = normalizeSettingsSection(route.query.tab)
   if (initialSection) {
     activeSection.value = initialSection
@@ -2713,81 +2699,42 @@ watch(isWindows, () => {
 
 <template>
   <AppLayout>
-    <div class="flex h-full overflow-hidden">
+    <SidebarProvider class="h-full min-h-0 overflow-hidden">
+      <Sidebar class="top-10 h-[calc(100dvh-2.5rem)] sm:top-14 sm:h-[calc(100dvh-3.5rem)]" collapsible="offcanvas">
+        <SidebarHeader class="gap-1 px-6 pt-6 pb-3 text-foreground md:pt-10">
+          <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
+          <p class="text-xs text-muted-foreground">{{ t('settings.sidebarSubtitle') }}</p>
+        </SidebarHeader>
+        <SidebarContent class="px-3 pb-6 md:pb-10">
+          <SidebarGroup v-for="group in navGroups" :key="group.title" class="px-0 py-2">
+            <SidebarGroupLabel class="uppercase">{{ group.title }}</SidebarGroupLabel>
+            <SidebarMenu>
+              <SidebarMenuItem v-for="item in group.items" :key="item.id">
+                <SidebarMenuButton
+                  :is-active="activeSection === item.id"
+                  :tooltip="item.label"
+                  class="h-10 px-3 text-foreground"
+                  @click="selectSection(item.id)"
+                >
+                  <component :is="item.icon" />
+                  <span>{{ item.label }}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+
+      <SidebarInset class="min-w-0 overflow-y-auto">
       <!-- Mobile Header -->
-      <div class="lg:hidden fixed top-11 sm:top-14 left-0 right-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <Sheet v-model:open="mobileMenuOpen">
-          <SheetTrigger as-child>
-            <Button variant="ghost" size="icon" class="mr-1.5 sm:mr-2 h-8 w-8 sm:h-9 sm:w-9">
-              <Menu class="h-4 w-4" />
-              <span class="sr-only">{{ t('common.menu') }}</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" class="w-72 p-0 overflow-y-auto">
-            <div class="min-h-full p-4 sm:p-6">
-              <h2 class="text-lg font-semibold mb-4">{{ t('settings.title') }}</h2>
-              <nav class="space-y-6">
-                <div v-for="group in navGroups" :key="group.title" class="space-y-1">
-                  <h3 class="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{{ group.title }}</h3>
-                  <button
-                    type="button"
-                    v-for="item in group.items"
-                    :key="item.id"
-                    @click="selectSection(item.id)"
-                    :class="[
-                      'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors',
-                      activeSection === item.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    ]"
-                  >
-                    <component :is="item.icon" class="h-4 w-4" />
-                    <span>{{ item.label }}</span>
-                  </button>
-                </div>
-              </nav>
-            </div>
-          </SheetContent>
-        </Sheet>
+      <div class="md:hidden sticky top-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <SidebarTrigger class="mr-1.5 h-8 w-8 sm:mr-2 sm:h-9 sm:w-9" />
         <div class="flex items-center gap-2 min-w-0">
           <component :is="sectionMeta.icon" class="h-4 w-4 text-muted-foreground shrink-0" />
           <h1 class="text-sm sm:text-base font-semibold truncate">{{ sectionMeta.title }}</h1>
         </div>
       </div>
-
-      <!-- Desktop Sidebar -->
-      <aside class="hidden lg:block w-64 shrink-0 border-r bg-muted/30 overflow-hidden">
-        <div class="h-full p-6 space-y-6 overflow-y-auto">
-          <div class="space-y-1">
-            <h1 class="text-xl font-semibold tracking-tight">{{ t('settings.title') }}</h1>
-            <p class="text-xs text-muted-foreground">{{ t('settings.sidebarSubtitle') }}</p>
-          </div>
-          <nav class="space-y-5">
-            <div v-for="group in navGroups" :key="group.title" class="space-y-1">
-              <h3 class="px-3 text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1.5">{{ group.title }}</h3>
-              <button
-                type="button"
-                v-for="item in group.items"
-                :key="item.id"
-                @click="selectSection(item.id)"
-                :class="[
-                  'w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors',
-                  activeSection === item.id
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-foreground/80 hover:text-foreground hover:bg-muted'
-                ]"
-              >
-                <component :is="item.icon" class="h-4 w-4 shrink-0" />
-                <span class="truncate">{{ item.label }}</span>
-              </button>
-            </div>
-          </nav>
-        </div>
-      </aside>
-
-      <!-- Main Content -->
-      <main class="flex-1 overflow-y-auto">
-        <div class="mx-auto w-full max-w-3xl px-3 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-10 pb-10 space-y-6">
+        <div class="mx-auto w-full max-w-3xl px-3 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-10 space-y-6">
 
           <!-- Section Header -->
           <header class="space-y-1.5 pb-2 border-b">
@@ -2880,7 +2827,7 @@ watch(isWindows, () => {
                   <Input id="account-username-password" v-model="usernamePassword" type="password" autocomplete="current-password" />
                 </div>
                 <p v-if="usernameError" class="text-xs text-destructive">{{ usernameError }}</p>
-                <p v-else-if="usernameSaved" class="text-xs text-emerald-600 flex items-center gap-1.5"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
+                <p v-else-if="usernameSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button @click="changeUsername" :disabled="usernameSaving">
@@ -2910,7 +2857,7 @@ watch(isWindows, () => {
                   <Input id="account-confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" />
                 </div>
                 <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
-                <p v-else-if="passwordSaved" class="text-xs text-emerald-600 flex items-center gap-1.5"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
+                <p v-else-if="passwordSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button @click="changePassword" :disabled="passwordSaving">
@@ -2928,10 +2875,7 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.allowMultipleSessions') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.allowMultipleSessionsDesc') }}</p>
-                  </div>
+                  <Label>{{ t('settings.allowMultipleSessions') }}</Label>
                   <Switch
                     v-model="authConfig.single_user_allow_multiple_sessions"
                     :disabled="authConfigLoading"
@@ -2964,38 +2908,38 @@ watch(isWindows, () => {
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
-                  <select id="video-device" v-model="config.video_device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="">{{ t('settings.selectDevice') }}</option>
-                    <option v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ formatVideoDeviceLabel(dev) }}</option>
-                  </select>
+                  <NativeSelect id="video-device" v-model="config.video_device" class="w-full">
+                    <NativeSelectOption value="">{{ t('settings.selectDevice') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{ formatVideoDeviceLabel(dev) }}</NativeSelectOption>
+                  </NativeSelect>
                 </div>
                 <div class="space-y-2">
                   <Label for="video-format">{{ t('settings.videoFormat') }}</Label>
-                  <select id="video-format" v-model="config.video_format" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_device">
-                    <option value="">{{ t('settings.selectFormat') }}</option>
-                    <option
+                  <NativeSelect id="video-format" v-model="config.video_format" class="w-full" :disabled="!config.video_device">
+                    <NativeSelectOption value="">{{ t('settings.selectFormat') }}</NativeSelectOption>
+                    <NativeSelectOption
                       v-for="fmt in availableFormatOptions"
                       :key="fmt.format"
                       :value="fmt.format"
                       :disabled="fmt.disabled"
                     >
                       {{ fmt.format }} - {{ fmt.description }}{{ fmt.disabled ? t('common.notSupportedYet') : '' }}
-                    </option>
-                  </select>
+                    </NativeSelectOption>
+                  </NativeSelect>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="video-resolution">{{ t('settings.resolution') }}</Label>
-                    <select id="video-resolution" :value="`${config.video_width}x${config.video_height}`" @change="e => { const parts = (e.target as HTMLSelectElement).value.split('x').map(Number); if (parts[0] && parts[1]) { config.video_width = parts[0]; config.video_height = parts[1]; } }" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_format">
-                      <option v-for="res in availableResolutions" :key="`${res.width}x${res.height}`" :value="`${res.width}x${res.height}`">{{ res.width }}x{{ res.height }}</option>
-                    </select>
+                    <NativeSelect id="video-resolution" :model-value="`${config.video_width}x${config.video_height}`" class="w-full" :disabled="!config.video_format" @update:model-value="value => { const parts = String(value).split('x').map(Number); if (parts[0] && parts[1]) { config.video_width = parts[0]; config.video_height = parts[1]; } }">
+                      <NativeSelectOption v-for="res in availableResolutions" :key="`${res.width}x${res.height}`" :value="`${res.width}x${res.height}`">{{ res.width }}x{{ res.height }}</NativeSelectOption>
+                    </NativeSelect>
                   </div>
                   <div class="space-y-2">
                     <Label for="video-fps">{{ t('settings.frameRate') }}</Label>
-                    <select id="video-fps" v-model.number="config.video_fps" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_format">
-                      <option v-for="fps in availableFps" :key="fps" :value="fps">{{ formatFpsLabel(fps) }}</option>
-                      <option v-if="!availableFps.includes(config.video_fps)" :value="config.video_fps">{{ formatFpsLabel(config.video_fps) }}</option>
-                    </select>
+                    <NativeSelect id="video-fps" :model-value="config.video_fps" class="w-full" :disabled="!config.video_format" @update:model-value="value => config.video_fps = Number(value)">
+                      <NativeSelectOption v-for="fps in availableFps" :key="fps" :value="fps">{{ formatFpsLabel(fps) }}</NativeSelectOption>
+                      <NativeSelectOption v-if="!availableFps.includes(config.video_fps)" :value="config.video_fps">{{ formatFpsLabel(config.video_fps) }}</NativeSelectOption>
+                    </NativeSelect>
                   </div>
                 </div>
               </CardContent>
@@ -3010,10 +2954,13 @@ watch(isWindows, () => {
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="encoder-backend">{{ t('settings.backend') }}</Label>
-                  <select id="encoder-backend" v-model="config.encoder_backend" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="auto">{{ t('settings.autoRecommended') }}</option>
-                    <option v-for="backend in availableBackends" :key="backend.id" :value="backend.id">{{ backend.name }} {{ backend.is_hardware ? `(${t('settings.hardware')})` : `(${t('settings.software')})` }}</option>
-                  </select>
+                  <Select v-model="config.encoder_backend">
+                    <SelectTrigger id="encoder-backend" class="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">{{ t('settings.autoRecommended') }}</SelectItem>
+                      <SelectItem v-for="backend in availableBackends" :key="backend.id" :value="backend.id">{{ backend.name }} {{ backend.is_hardware ? `(${t('settings.hardware')})` : `(${t('settings.software')})` }}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div v-if="config.encoder_backend !== 'auto' && selectedBackendFormats.length > 0" class="space-y-2">
                   <Label>{{ t('settings.supportedFormats') }}</Label>
@@ -3021,7 +2968,6 @@ watch(isWindows, () => {
                     <Badge v-for="format in selectedBackendFormats" :key="format" variant="outline">{{ format.toUpperCase() }}</Badge>
                   </div>
                 </div>
-                <p class="text-xs text-muted-foreground">{{ t('settings.encoderHint') }}</p>
               </CardContent>
             </Card>
 
@@ -3039,7 +2985,6 @@ watch(isWindows, () => {
                     v-model="config.stun_server"
                     :placeholder="t('settings.stunServerPlaceholder')"
                   />
-                  <p class="text-xs text-muted-foreground">{{ t('settings.stunServerHint') }}</p>
                 </div>
                 <Separator />
                 <div class="space-y-2">
@@ -3049,7 +2994,6 @@ watch(isWindows, () => {
                     v-model="config.turn_server"
                     :placeholder="t('settings.turnServerPlaceholder')"
                   />
-                  <p class="text-xs text-muted-foreground">{{ t('settings.turnServerHint') }}</p>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
@@ -3070,21 +3014,20 @@ watch(isWindows, () => {
                         autocomplete="off"
                         :disabled="!config.stun_server && !config.turn_server"
                       />
-                      <button
+                      <Button
                         type="button"
-                        class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        variant="ghost"
+                        size="icon-sm"
+                        class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                         :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                         @click="showPasswords = !showPasswords"
                       >
                         <Eye v-if="!showPasswords" class="h-4 w-4" />
                         <EyeOff v-else class="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
-                <p class="text-xs text-muted-foreground">{{ t('settings.turnCredentialsHint') }}</p>
-                <Separator />
-                <p class="text-xs text-muted-foreground">{{ t('settings.iceConfigNote') }}</p>
               </CardContent>
             </Card>
           </div>
@@ -3104,36 +3047,37 @@ watch(isWindows, () => {
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="hid-backend">{{ t('settings.hidBackend') }}</Label>
-                  <select id="hid-backend" v-model="config.hid_backend" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="ch9329">CH9329 (Serial)</option>
-                    <option value="otg">USB OTG</option>
-                    <option value="none">{{ t('common.disabled') }}</option>
-                  </select>
+                  <Select v-model="config.hid_backend">
+                    <SelectTrigger id="hid-backend" class="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ch9329">CH9329 (Serial)</SelectItem>
+                      <SelectItem value="otg">USB OTG</SelectItem>
+                      <SelectItem value="none">{{ t('common.disabled') }}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
                   <Label for="serial-device">{{ t('settings.serialDevice') }}</Label>
-                  <select id="serial-device" v-model="config.hid_serial_device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="">{{ t('settings.selectDevice') }}</option>
-                    <option v-for="dev in devices.serial" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</option>
-                  </select>
+                  <NativeSelect id="serial-device" v-model="config.hid_serial_device" class="w-full">
+                    <NativeSelectOption value="">{{ t('settings.selectDevice') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="dev in devices.serial" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</NativeSelectOption>
+                  </NativeSelect>
                 </div>
                 <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
                   <Label for="serial-baudrate">{{ t('settings.baudRate') }}</Label>
-                  <select id="serial-baudrate" v-model.number="config.hid_serial_baudrate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option :value="9600">9600</option>
-                    <option :value="19200">19200</option>
-                    <option :value="38400">38400</option>
-                    <option :value="57600">57600</option>
-                    <option :value="115200">115200</option>
-                  </select>
+                  <Select :model-value="config.hid_serial_baudrate" @update:model-value="value => config.hid_serial_baudrate = Number(value)">
+                    <SelectTrigger id="serial-baudrate" class="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="baud in [9600, 19200, 38400, 57600, 115200]" :key="baud" :value="baud">{{ baud }}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div v-if="config.hid_backend === 'otg'" class="space-y-2">
                   <Label for="otg-udc">{{ t('settings.otgUdc') }}</Label>
-                  <select id="otg-udc" v-model="config.hid_otg_udc" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="">{{ t('settings.autoRecommended') }}</option>
-                    <option v-for="udc in devices.udc" :key="udc.name" :value="udc.name">{{ udc.name }}</option>
-                  </select>
-                  <p class="text-xs text-muted-foreground">{{ t('settings.otgUdcDesc') }}</p>
+                  <NativeSelect id="otg-udc" v-model="config.hid_otg_udc" class="w-full">
+                    <NativeSelectOption value="">{{ t('settings.autoRecommended') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="udc in devices.udc" :key="udc.name" :value="udc.name">{{ udc.name }}</NativeSelectOption>
+                  </NativeSelect>
                 </div>
 
                 <template v-if="config.hid_backend === 'ch9329'">
@@ -3214,10 +3158,10 @@ watch(isWindows, () => {
                     <p v-if="!ch9329DescriptorLoading && !ch9329DescriptorLoaded && !ch9329DescriptorError" class="text-xs text-muted-foreground">
                       {{ t('settings.ch9329DescriptorReadRequired') }}
                     </p>
-                    <p v-if="!isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400">
+                    <p v-if="!isCh9329DescriptorValid" class="text-xs text-warning">
                       {{ t('settings.ch9329StringLengthWarning') }}
                     </p>
-                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                    <p class="text-sm text-warning">
                       {{ t('settings.ch9329DescriptorWarning') }}
                     </p>
                   </div>
@@ -3245,7 +3189,6 @@ watch(isWindows, () => {
                   <div class="space-y-4">
                     <div>
                       <h4 class="text-sm font-medium">{{ t('settings.otgDescriptor') }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ t('settings.otgDescriptorDesc') }}</p>
                     </div>
                     <div class="grid gap-4 sm:grid-cols-2">
                       <div class="space-y-2">
@@ -3296,7 +3239,7 @@ watch(isWindows, () => {
                         maxlength="126"
                       />
                     </div>
-                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                    <p class="text-sm text-warning">
                       {{ t('settings.descriptorWarning') }}
                     </p>
                   </div>
@@ -3304,14 +3247,12 @@ watch(isWindows, () => {
                   <div class="space-y-4">
                     <div>
                       <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ t('settings.otgHidProfileDesc') }}</p>
                     </div>
                     <div class="space-y-3">
                       <div class="space-y-3 rounded-md border border-border/60 p-3">
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseRelativeDesc') }}</p>
                           </div>
                           <Switch v-model="config.hid_otg_functions.mouse_relative" />
                         </div>
@@ -3319,7 +3260,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMouseAbsoluteDesc') }}</p>
                           </div>
                           <Switch v-model="config.hid_otg_functions.mouse_absolute" />
                         </div>
@@ -3336,7 +3276,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionConsumerDesc') }}</p>
                           </div>
                           <Switch v-model="config.hid_otg_functions.consumer" />
                         </div>
@@ -3344,7 +3283,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgKeyboardLedsDesc') }}</p>
                           </div>
                           <Switch v-model="config.hid_otg_keyboard_leds" :disabled="isKeyboardLedToggleDisabled" />
                         </div>
@@ -3353,7 +3291,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionMsd') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionMsdDesc') }}</p>
                           </div>
                           <Switch v-model="config.msd_enabled" />
                         </div>
@@ -3362,8 +3299,6 @@ watch(isWindows, () => {
                           <div class="space-y-2">
                             <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
                             <Input id="msd-dir" v-model="config.msd_dir" placeholder="/etc/one-kvm/msd" />
-                            <p class="text-xs text-muted-foreground">{{ t('settings.msdDirDesc') }}</p>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.msdDirHint') }}</p>
                           </div>
                         </template>
                       </div>
@@ -3371,7 +3306,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgNetwork') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgNetworkDesc') }}</p>
                           </div>
                           <Switch v-model="config.otg_network_enabled" />
                         </div>
@@ -3380,24 +3314,27 @@ watch(isWindows, () => {
                           <div class="grid gap-4 sm:grid-cols-2">
                             <div class="space-y-2">
                               <Label for="otg-network-driver">{{ t('settings.otgNetworkDriver') }}</Label>
-                              <select id="otg-network-driver" v-model="config.otg_network_driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                                <option value="ncm">NCM</option>
-                                <option value="ecm">ECM</option>
-                                <option value="rndis">RNDIS / Windows</option>
-                              </select>
+                              <Select v-model="config.otg_network_driver">
+                                <SelectTrigger id="otg-network-driver" class="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ncm">NCM</SelectItem>
+                                  <SelectItem value="ecm">ECM</SelectItem>
+                                  <SelectItem value="rndis">RNDIS / Windows</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div class="space-y-2">
                               <Label for="otg-network-interface">{{ t('settings.otgNetworkInterface') }}</Label>
-                              <select id="otg-network-interface" v-model="config.otg_network_interface" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="otgNetworkInterfaces.length === 0">
-                                <option v-if="otgNetworkInterfaces.length === 0" value="">{{ t('settings.otgNetworkNone') }}</option>
-                                <option
+                              <NativeSelect id="otg-network-interface" v-model="config.otg_network_interface" class="w-full" :disabled="otgNetworkInterfaces.length === 0">
+                                <NativeSelectOption v-if="otgNetworkInterfaces.length === 0" value="">{{ t('settings.otgNetworkNone') }}</NativeSelectOption>
+                                <NativeSelectOption
                                   v-for="item in otgNetworkInterfaces"
                                   :key="item.name"
                                   :value="item.name"
                                 >
                                   {{ item.name }} · {{ item.interface_type }}
-                                </option>
-                              </select>
+                                </NativeSelectOption>
+                              </NativeSelect>
                             </div>
                           </div>
                         </template>
@@ -3406,7 +3343,7 @@ watch(isWindows, () => {
                         </p>
                       </div>
                     </div>
-                    <p class="text-xs text-amber-600 dark:text-amber-400">
+                    <p class="text-xs text-warning">
                       {{ t('settings.otgProfileWarning') }}
                     </p>
                   </div>
@@ -3419,6 +3356,42 @@ watch(isWindows, () => {
 
           <!-- Environment Section -->
           <div v-show="activeSection === 'environment'" class="space-y-4 max-w-3xl">
+            <Card v-if="systemStore.deviceInfo">
+              <CardHeader>
+                <CardTitle>{{ t('settings.deviceInfo') }}</CardTitle>
+                <CardDescription>{{ t('settings.deviceInfoDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center py-2 border-b gap-2">
+                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.hostname') }}</span>
+                    <span class="text-sm font-medium truncate">{{ systemStore.deviceInfo.hostname }}</span>
+                  </div>
+                  <div class="flex justify-between items-center py-2 border-b gap-2">
+                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.cpuModel') }}</span>
+                    <span class="text-sm font-medium truncate max-w-[60%] text-right">{{ systemStore.deviceInfo.cpu_model }}</span>
+                  </div>
+                  <div v-if="hasDeviceCpuUsage" class="flex justify-between items-center py-2 border-b">
+                    <span class="text-sm text-muted-foreground">{{ t('settings.cpuUsage') }}</span>
+                    <span class="text-sm font-medium">{{ systemStore.deviceInfo.cpu_usage.toFixed(1) }}%</span>
+                  </div>
+                  <div v-if="hasDeviceMemoryUsage" class="flex justify-between items-center py-2 border-b">
+                    <span class="text-sm text-muted-foreground">{{ t('settings.memoryUsage') }}</span>
+                    <span class="text-sm font-medium">{{ formatBytes(systemStore.deviceInfo.memory_used) }} / {{ formatBytes(systemStore.deviceInfo.memory_total) }}</span>
+                  </div>
+                  <div v-if="hasDeviceNetworkAddresses" class="py-2">
+                    <span class="text-sm text-muted-foreground">{{ t('settings.networkAddresses') }}</span>
+                    <div class="mt-2 space-y-1">
+                      <div v-for="addr in systemStore.deviceInfo.network_addresses" :key="addr.interface" class="flex justify-between items-center text-sm">
+                        <span class="text-muted-foreground">{{ addr.interface }}</span>
+                        <code class="font-mono bg-muted px-2 py-0.5 rounded">{{ addr.ip }}</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
@@ -3440,7 +3413,7 @@ watch(isWindows, () => {
                 </Button>
               </CardHeader>
               <CardContent class="space-y-3">
-                <p v-if="otgSelfCheckError" class="text-xs text-red-600 dark:text-red-400">
+                <p v-if="otgSelfCheckError" class="text-xs text-destructive">
                   {{ otgSelfCheckError }}
                 </p>
 
@@ -3535,7 +3508,7 @@ watch(isWindows, () => {
                 </Button>
               </CardHeader>
               <CardContent class="space-y-3">
-                <p v-if="videoEncoderSelfCheckError" class="text-xs text-red-600 dark:text-red-400">
+                <p v-if="videoEncoderSelfCheckError" class="text-xs text-destructive">
                   {{ videoEncoderSelfCheckError }}
                 </p>
 
@@ -3545,28 +3518,28 @@ watch(isWindows, () => {
                   </div>
 
                   <div class="rounded-md border bg-card">
-                    <table class="w-full table-fixed text-sm">
-                      <thead>
-                        <tr>
-                          <th class="px-2 py-3 text-left font-medium w-[18%]">{{ t('settings.encoderSelfCheck.resolution') }}</th>
-                          <th
+                    <Table class="table-fixed">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead class="w-[18%] px-2">{{ t('settings.encoderSelfCheck.resolution') }}</TableHead>
+                          <TableHead
                             v-for="codec in videoEncoderSelfCheckResult.codecs"
                             :key="codec.id"
-                            class="px-2 py-3 text-center font-medium w-[20.5%]"
+                            class="w-[20.5%] px-2 text-center"
                           >
                             {{ videoEncoderCodecLabel(codec.id, codec.name) }}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow
                           v-for="row in videoEncoderSelfCheckResult.rows"
                           :key="row.resolution_id"
                         >
-                          <td class="px-2 py-3 align-middle">
+                          <TableCell class="px-2 py-3 align-middle">
                             <div class="font-medium">{{ row.resolution_label }}</div>
-                          </td>
-                          <td
+                          </TableCell>
+                          <TableCell
                             v-for="codec in videoEncoderSelfCheckResult.codecs"
                             :key="`${row.resolution_id}-${codec.id}`"
                             class="px-2 py-3 align-middle"
@@ -3582,10 +3555,10 @@ watch(isWindows, () => {
                                 {{ videoEncoderCellTime(videoEncoderCell(row, codec.id)) }}
                               </div>
                             </div>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
                   </div>
                 </template>
                 <p v-else-if="videoEncoderSelfCheckLoading" class="text-xs text-muted-foreground">
@@ -3594,102 +3567,8 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader class="flex flex-row items-start justify-between space-y-0">
-                <div class="space-y-1.5">
-                  <CardTitle>{{ t('settings.usbDevices.title') }}</CardTitle>
-                  <CardDescription>{{ t('settings.usbDevices.desc') }}</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  :disabled="usbDevicesLoading"
-                  @click="fetchUsbDevices()"
-                >
-                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
-                  {{ t('settings.usbDevices.refresh') }}
-                </Button>
-              </CardHeader>
-              <CardContent class="space-y-3">
-                <p v-if="usbDevicesError" class="text-xs text-red-600 dark:text-red-400">
-                  {{ usbDevicesError }}
-                </p>
-
-                <template v-if="usbDevices.length > 0">
-                  <div class="rounded-md border overflow-x-auto">
-                    <table class="w-full text-sm min-w-[540px]">
-                      <thead>
-                        <tr class="border-b bg-muted/40">
-                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colDevice') }}</th>
-                          <th class="px-3 py-2 text-left font-medium">VID:PID</th>
-                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colSpeed') }}</th>
-                          <th class="px-3 py-2 text-left font-medium">{{ t('settings.usbDevices.colVideo') }}</th>
-                          <th class="px-3 py-2 text-right font-medium">{{ t('settings.usbDevices.colAction') }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="dev in usbDevices"
-                          :key="`${dev.bus_num}-${dev.dev_num}`"
-                          class="border-b last:border-b-0 hover:bg-muted/20"
-                        >
-                          <td class="px-3 py-2">
-                            <div class="font-medium truncate max-w-[180px]" :title="dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}`">{{ dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}` }}</div>
-                          </td>
-                          <td class="px-3 py-2 font-mono text-xs">{{ dev.id_vendor }}:{{ dev.id_product }}</td>
-                          <td class="px-3 py-2 text-xs">{{ usbSpeedLabel(dev.speed) }}</td>
-                          <td class="px-3 py-2 text-xs">
-                            <code v-if="dev.video_device">{{ dev.video_device }}</code>
-                            <span v-else class="text-muted-foreground">-</span>
-                          </td>
-                          <td class="px-3 py-2 text-right">
-                            <Button
-                              v-if="dev.authorized != null"
-                              variant="outline"
-                              size="sm"
-                              class="h-7 text-xs bg-black text-white border-black hover:bg-black/90 hover:text-white dark:bg-white dark:text-black dark:border-white dark:hover:bg-white/90 dark:hover:text-black"
-                              :disabled="usbResetLoading"
-                              @click="usbResetTarget = dev"
-                            >
-                              {{ t('settings.usbDevices.reset') }}
-                            </Button>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </template>
-                <p v-else-if="usbDevicesLoading" class="text-xs text-muted-foreground">
-                  {{ t('common.loading') }}
-                </p>
-                <p v-else class="text-xs text-muted-foreground">
-                  {{ t('settings.usbDevices.noDevices') }}
-                </p>
-              </CardContent>
-            </Card>
-
-            <!-- USB Reset Confirmation Dialog -->
-            <AlertDialog :open="usbResetTarget != null">
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{{ t('settings.usbDevices.resetConfirmTitle') }}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {{ t('settings.usbDevices.resetConfirmDesc', { device: usbResetTarget?.product || `${usbResetTarget?.id_vendor}:${usbResetTarget?.id_product}` }) }}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel @click="usbResetTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
-                  <AlertDialogAction
-                    :disabled="usbResetLoading"
-                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    @click="confirmUsbReset()"
-                  >
-                    {{ t('settings.usbDevices.resetAction') }}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
+
           <div v-show="activeSection === 'other'" class="space-y-6">
             <Card>
               <CardHeader>
@@ -3723,12 +3602,104 @@ watch(isWindows, () => {
                 >
                   {{ watchdogError || watchdogDisplayReason }}
                 </p>
-                <div class="flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-200">
-                  <AlertTriangle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <p>{{ t('settings.watchdog.safety') }}</p>
-                </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader class="flex flex-row items-start justify-between space-y-0">
+                <div class="space-y-1.5">
+                  <CardTitle>{{ t('settings.usbDevices.title') }}</CardTitle>
+                  <CardDescription>{{ t('settings.usbDevices.desc') }}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="usbDevicesLoading"
+                  @click="fetchUsbDevices()"
+                >
+                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
+                  {{ t('settings.usbDevices.refresh') }}
+                </Button>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p v-if="usbDevicesError" class="text-xs text-destructive">
+                  {{ usbDevicesError }}
+                </p>
+
+                <template v-if="usbDevices.length > 0">
+                  <div class="rounded-md border overflow-hidden">
+                    <Table class="min-w-[540px]">
+                      <TableHeader>
+                        <TableRow class="bg-muted/40 hover:bg-muted/40">
+                          <TableHead>{{ t('settings.usbDevices.colDevice') }}</TableHead>
+                          <TableHead>VID:PID</TableHead>
+                          <TableHead>{{ t('settings.usbDevices.colSpeed') }}</TableHead>
+                          <TableHead>{{ t('settings.usbDevices.colVideo') }}</TableHead>
+                          <TableHead class="text-right">{{ t('settings.usbDevices.colAction') }}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow
+                          v-for="dev in usbDevices"
+                          :key="`${dev.bus_num}-${dev.dev_num}`"
+                        >
+                          <TableCell>
+                            <div class="font-medium truncate max-w-[180px]" :title="dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}`">{{ dev.product || dev.manufacturer || `${dev.id_vendor}:${dev.id_product}` }}</div>
+                          </TableCell>
+                          <TableCell class="font-mono text-xs">{{ dev.id_vendor }}:{{ dev.id_product }}</TableCell>
+                          <TableCell class="text-xs">{{ usbSpeedLabel(dev.speed) }}</TableCell>
+                          <TableCell class="text-xs">
+                            <code v-if="dev.video_device">{{ dev.video_device }}</code>
+                            <span v-else class="text-muted-foreground">-</span>
+                          </TableCell>
+                          <TableCell class="text-right">
+                            <Button
+                              v-if="dev.authorized != null"
+                              variant="outline"
+                              size="sm"
+                              class="h-7 text-xs"
+                              :disabled="usbResetLoading"
+                              @click="usbResetTarget = dev"
+                            >
+                              {{ t('settings.usbDevices.reset') }}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </template>
+                <Skeleton v-else-if="usbDevicesLoading" class="h-24 w-full" />
+                <Empty v-else class="py-6">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><Monitor /></EmptyMedia>
+                    <EmptyDescription>{{ t('settings.usbDevices.noDevices') }}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              </CardContent>
+            </Card>
+
+            <!-- USB Reset Confirmation Dialog -->
+            <AlertDialog :open="usbResetTarget != null">
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{{ t('settings.usbDevices.resetConfirmTitle') }}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {{ t('settings.usbDevices.resetConfirmDesc', { device: usbResetTarget?.product || `${usbResetTarget?.id_vendor}:${usbResetTarget?.id_product}` }) }}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel @click="usbResetTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
+                  <AlertDialogAction
+                    :disabled="usbResetLoading"
+                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    @click="confirmUsbReset()"
+                  >
+                    {{ t('settings.usbDevices.resetAction') }}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <div v-show="activeSection === 'network'" class="space-y-6">
 
@@ -3753,37 +3724,26 @@ watch(isWindows, () => {
             </div>
 
             <!-- Auto-restart: HTTPS manual redirect (cert must be accepted by user) -->
-            <div
-              v-if="autoRestartManualUrl"
-              class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-4 space-y-3"
-            >
-              <div class="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
-                <Lock class="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  <p class="font-medium">{{ t('settings.httpsManualRedirectTitle') }}</p>
-                  <p class="text-xs mt-0.5 opacity-80">{{ t('settings.httpsManualRedirectDesc') }}</p>
-                </div>
-              </div>
-              <a
-                :href="autoRestartManualUrl"
-                class="flex items-center justify-center gap-2 w-full rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 transition-colors"
-              >
-                <ExternalLink class="h-4 w-4" />
-                {{ autoRestartManualUrl }}
-              </a>
-            </div>
+            <Alert v-if="autoRestartManualUrl" variant="warning">
+              <Lock />
+              <AlertTitle>{{ t('settings.httpsManualRedirectTitle') }}</AlertTitle>
+              <AlertDescription>{{ t('settings.httpsManualRedirectDesc') }}</AlertDescription>
+              <Button as-child class="col-start-2 mt-2 w-full bg-warning text-warning-foreground hover:bg-warning/90">
+                <a :href="autoRestartManualUrl"><ExternalLink />{{ autoRestartManualUrl }}</a>
+              </Button>
+            </Alert>
 
             <!-- Auto-restart: failure / timeout -->
-            <div
-              v-if="autoRestartFailed"
-              class="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
-            >
-              <p class="text-destructive">{{ t('settings.autoRestartFailed') }}</p>
-              <Button variant="outline" size="sm" @click="triggerAutoRestart">
+            <Alert v-if="autoRestartFailed" variant="destructive">
+              <AlertTriangle />
+              <AlertDescription class="flex items-center justify-between gap-3">
+              <span>{{ t('settings.autoRestartFailed') }}</span>
+              <Button variant="outline" size="sm" class="text-foreground" @click="triggerAutoRestart">
                 <RefreshCw class="h-3 w-3 mr-1" />
                 {{ t('common.retry') }}
               </Button>
-            </div>
+              </AlertDescription>
+            </Alert>
 
             <!-- Port Configuration Card -->
             <Card>
@@ -3794,10 +3754,7 @@ watch(isWindows, () => {
               <CardContent class="space-y-5">
                 <!-- HTTPS toggle -->
                 <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.httpsEnabled') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.httpsEnabledDesc') }}</p>
-                  </div>
+                  <Label>{{ t('settings.httpsEnabled') }}</Label>
                   <Switch v-model="webServerConfig.https_enabled" />
                 </div>
 
@@ -3844,8 +3801,6 @@ watch(isWindows, () => {
                     />
                   </div>
                 </div>
-                <p class="text-xs text-muted-foreground -mt-2">{{ t('settings.portReservedHint') }}</p>
-
                 <!-- Preview URL -->
                 <div class="rounded-md border bg-muted/40 p-3 space-y-1.5">
                   <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.previewUrl') }}</p>
@@ -3857,7 +3812,7 @@ watch(isWindows, () => {
                       :aria-label="t('settings.copyUrl')"
                       @click="copyPreviewUrl"
                     >
-                      <Check v-if="previewUrlCopied" class="h-3.5 w-3.5 text-emerald-600" />
+                      <Check v-if="previewUrlCopied" class="h-3.5 w-3.5 text-success" />
                       <Copy v-else class="h-3.5 w-3.5" />
                     </Button>
                     <Button
@@ -3872,9 +3827,9 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
+                <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveWebServerConfig" :disabled="webServerLoading || autoRestarting">
                   <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
@@ -3898,7 +3853,6 @@ watch(isWindows, () => {
                       <RadioGroupItem value="all" id="bind-all" class="mt-0.5" />
                       <div class="flex-1">
                         <Label for="bind-all" class="cursor-pointer">{{ t('settings.bindModeAll') }}</Label>
-                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeAllDesc') }}</p>
                       </div>
                     </div>
                     <div v-if="bindMode === 'all'" class="ml-7 flex items-center justify-between rounded-md border border-dashed px-3 py-2">
@@ -3915,7 +3869,6 @@ watch(isWindows, () => {
                       <RadioGroupItem value="loopback" id="bind-loopback" class="mt-0.5" />
                       <div class="flex-1">
                         <Label for="bind-loopback" class="cursor-pointer">{{ t('settings.bindModeLocal') }}</Label>
-                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeLocalDesc') }}</p>
                       </div>
                     </div>
                     <div v-if="bindMode === 'loopback'" class="ml-7 flex items-center justify-between rounded-md border border-dashed px-3 py-2">
@@ -3932,7 +3885,6 @@ watch(isWindows, () => {
                       <RadioGroupItem value="custom" id="bind-custom" class="mt-0.5" />
                       <div class="flex-1">
                         <Label for="bind-custom" class="cursor-pointer">{{ t('settings.bindModeCustom') }}</Label>
-                        <p class="text-xs text-muted-foreground mt-0.5">{{ t('settings.bindModeCustomDesc') }}</p>
                       </div>
                     </div>
                     <div v-if="bindMode === 'custom'" class="ml-7 space-y-2">
@@ -3958,9 +3910,9 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
+                <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError || autoRestarting">
                   <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
@@ -3983,14 +3935,10 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <!-- Active custom cert notice -->
-                <div
-                  v-if="webServerConfig.has_custom_cert"
-                  class="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3 py-2"
-                >
-                  <div class="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-                    <Check class="h-4 w-4 shrink-0" />
-                    {{ t('settings.sslCertActive') }}
-                  </div>
+                <Alert v-if="webServerConfig.has_custom_cert" variant="success">
+                  <Check />
+                  <AlertDescription class="flex items-center justify-between gap-3">
+                    <span>{{ t('settings.sslCertActive') }}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -4002,7 +3950,8 @@ watch(isWindows, () => {
                     <Trash2 v-else class="h-3 w-3 mr-1" />
                     {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertClear') }}
                   </Button>
-                </div>
+                  </AlertDescription>
+                </Alert>
 
                 <!-- Certificate textarea -->
                 <div class="space-y-2">
@@ -4030,9 +3979,9 @@ watch(isWindows, () => {
 
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
+                <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button
                   :disabled="certSaving || autoRestarting || !sslCertPem.trim() || !sslKeyPem.trim()"
@@ -4049,15 +3998,19 @@ watch(isWindows, () => {
           <!-- ATX Section -->
           <div v-show="activeSection === 'atx'" class="space-y-6">
             <Card>
-              <CardContent class="space-y-4 pt-6">
+              <CardHeader>
+                <CardTitle>{{ t('settings.atxPowerManagement') }}</CardTitle>
+              </CardHeader>
+              <CardContent class="space-y-4">
                 <div class="flex items-center justify-between gap-3">
                   <div class="flex min-w-0 flex-1 items-center gap-3">
                     <Label for="atx-driver" class="shrink-0">{{ t('settings.atxDriver') }}</Label>
-                    <select id="atx-driver" v-model="atxConfig.driver" class="h-9 w-full max-w-xs px-3 rounded-md border border-input bg-background text-sm">
-                      <option v-for="option in atxDriverOptions" :key="option.value" :value="option.value">
-                        {{ option.label }}
-                      </option>
-                    </select>
+                    <Select v-model="atxConfig.driver">
+                      <SelectTrigger id="atx-driver" class="w-full max-w-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in atxDriverOptions" :key="option.value" :value="option.value">{{ option.label }}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" :aria-label="t('common.refresh')" @click="loadAtxDevices">
                     <RefreshCw class="h-4 w-4" />
@@ -4067,27 +4020,26 @@ watch(isWindows, () => {
                 <div v-if="['usbrelay', 'serial'].includes(atxConfig.driver)" class="grid gap-4 sm:grid-cols-2">
                   <div v-if="['usbrelay', 'serial'].includes(atxConfig.driver)" class="space-y-2">
                     <Label for="atx-device">{{ t('settings.atxDevice') }}</Label>
-                    <select id="atx-device" v-model="atxConfig.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="">{{ t('settings.selectDevice') }}</option>
-                      <option
+                    <NativeSelect id="atx-device" v-model="atxConfig.device" class="w-full">
+                      <NativeSelectOption value="">{{ t('settings.selectDevice') }}</NativeSelectOption>
+                      <NativeSelectOption
                         v-for="dev in getAtxDevicesForDriver(atxConfig.driver)"
                         :key="dev"
                         :value="dev"
                         :disabled="atxConfig.driver === 'serial' && isAtxSerialDeviceReserved(dev)"
                       >
                         {{ formatAtxDeviceLabel(atxConfig.driver, dev) }}
-                      </option>
-                    </select>
+                      </NativeSelectOption>
+                    </NativeSelect>
                   </div>
                   <div v-if="atxConfig.driver === 'serial'" class="space-y-2">
                     <Label for="atx-baudrate">{{ t('settings.baudRate') }}</Label>
-                    <select id="atx-baudrate" v-model.number="atxConfig.baud_rate" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                      <option :value="9600">9600</option>
-                      <option :value="19200">19200</option>
-                      <option :value="38400">38400</option>
-                      <option :value="57600">57600</option>
-                      <option :value="115200">115200</option>
-                    </select>
+                    <Select :model-value="atxConfig.baud_rate" @update:model-value="value => atxConfig.baud_rate = Number(value)">
+                      <SelectTrigger id="atx-baudrate" class="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="baud in [9600, 19200, 38400, 57600, 115200]" :key="baud" :value="baud">{{ baud }}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -4099,10 +4051,10 @@ watch(isWindows, () => {
                       <div class="grid gap-3 sm:grid-cols-3">
                         <div class="space-y-2">
                           <Label for="power-device">{{ t('settings.atxGpioChip') }}</Label>
-                          <select id="power-device" v-model="atxConfig.power.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                            <option value="">{{ t('settings.atxDriverNone') }}</option>
-                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
-                          </select>
+                          <NativeSelect id="power-device" v-model="atxConfig.power.device" class="w-full">
+                            <NativeSelectOption value="">{{ t('settings.atxDriverNone') }}</NativeSelectOption>
+                            <NativeSelectOption v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div class="space-y-2">
                           <Label for="power-pin">{{ t('settings.atxPin') }}</Label>
@@ -4110,10 +4062,10 @@ watch(isWindows, () => {
                         </div>
                         <div class="space-y-2">
                           <Label for="power-active-level">{{ t('settings.atxActiveLevel') }}</Label>
-                          <select id="power-active-level" v-model="atxConfig.power.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.power.device">
-                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                          </select>
+                          <Select v-model="atxConfig.power.active_level" :disabled="!atxConfig.power.device">
+                            <SelectTrigger id="power-active-level" class="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="high">{{ t('settings.atxLevelHigh') }}</SelectItem><SelectItem value="low">{{ t('settings.atxLevelLow') }}</SelectItem></SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -4123,10 +4075,10 @@ watch(isWindows, () => {
                       <div class="grid gap-3 sm:grid-cols-3">
                         <div class="space-y-2">
                           <Label for="reset-device">{{ t('settings.atxGpioChip') }}</Label>
-                          <select id="reset-device" v-model="atxConfig.reset.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                            <option value="">{{ t('settings.atxDriverNone') }}</option>
-                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
-                          </select>
+                          <NativeSelect id="reset-device" v-model="atxConfig.reset.device" class="w-full">
+                            <NativeSelectOption value="">{{ t('settings.atxDriverNone') }}</NativeSelectOption>
+                            <NativeSelectOption v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div class="space-y-2">
                           <Label for="reset-pin">{{ t('settings.atxPin') }}</Label>
@@ -4134,10 +4086,10 @@ watch(isWindows, () => {
                         </div>
                         <div class="space-y-2">
                           <Label for="reset-active-level">{{ t('settings.atxActiveLevel') }}</Label>
-                          <select id="reset-active-level" v-model="atxConfig.reset.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.reset.device">
-                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                          </select>
+                          <Select v-model="atxConfig.reset.active_level" :disabled="!atxConfig.reset.device">
+                            <SelectTrigger id="reset-active-level" class="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="high">{{ t('settings.atxLevelHigh') }}</SelectItem><SelectItem value="low">{{ t('settings.atxLevelLow') }}</SelectItem></SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -4147,10 +4099,10 @@ watch(isWindows, () => {
                       <div class="grid gap-3 sm:grid-cols-3">
                         <div class="space-y-2">
                           <Label for="led-device">{{ t('settings.atxGpioChip') }}</Label>
-                          <select id="led-device" v-model="atxConfig.led.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                            <option value="">{{ t('settings.atxDriverNone') }}</option>
-                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
-                          </select>
+                          <NativeSelect id="led-device" v-model="atxConfig.led.device" class="w-full">
+                            <NativeSelectOption value="">{{ t('settings.atxDriverNone') }}</NativeSelectOption>
+                            <NativeSelectOption v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div class="space-y-2">
                           <Label for="led-pin">{{ t('settings.atxPin') }}</Label>
@@ -4158,10 +4110,10 @@ watch(isWindows, () => {
                         </div>
                         <div class="space-y-2">
                           <Label for="led-active-level">{{ t('settings.atxActiveLevel') }}</Label>
-                          <select id="led-active-level" v-model="atxConfig.led.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.led.device">
-                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                          </select>
+                          <Select v-model="atxConfig.led.active_level" :disabled="!atxConfig.led.device">
+                            <SelectTrigger id="led-active-level" class="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="high">{{ t('settings.atxLevelHigh') }}</SelectItem><SelectItem value="low">{{ t('settings.atxLevelLow') }}</SelectItem></SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -4171,10 +4123,10 @@ watch(isWindows, () => {
                       <div class="grid gap-3 sm:grid-cols-3">
                         <div class="space-y-2">
                           <Label for="hdd-device">{{ t('settings.atxGpioChip') }}</Label>
-                          <select id="hdd-device" v-model="atxConfig.hdd.device" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                            <option value="">{{ t('settings.atxDriverNone') }}</option>
-                            <option v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</option>
-                          </select>
+                          <NativeSelect id="hdd-device" v-model="atxConfig.hdd.device" class="w-full">
+                            <NativeSelectOption value="">{{ t('settings.atxDriverNone') }}</NativeSelectOption>
+                            <NativeSelectOption v-for="dev in atxDevices.gpio_chips" :key="dev" :value="dev">{{ dev }}</NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div class="space-y-2">
                           <Label for="hdd-pin">{{ t('settings.atxPin') }}</Label>
@@ -4182,10 +4134,10 @@ watch(isWindows, () => {
                         </div>
                         <div class="space-y-2">
                           <Label for="hdd-active-level">{{ t('settings.atxActiveLevel') }}</Label>
-                          <select id="hdd-active-level" v-model="atxConfig.hdd.active_level" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!atxConfig.hdd.device">
-                            <option value="high">{{ t('settings.atxLevelHigh') }}</option>
-                            <option value="low">{{ t('settings.atxLevelLow') }}</option>
-                          </select>
+                          <Select v-model="atxConfig.hdd.active_level" :disabled="!atxConfig.hdd.device">
+                            <SelectTrigger id="hdd-active-level" class="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="high">{{ t('settings.atxLevelHigh') }}</SelectItem><SelectItem value="low">{{ t('settings.atxLevelLow') }}</SelectItem></SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -4213,12 +4165,12 @@ watch(isWindows, () => {
                   </div>
                 </template>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button :disabled="atxSaving" @click="saveAtxSettings">
+                  <Loader2 v-if="atxSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="atxSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ atxSaving ? t('actionbar.applying') : atxSaved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <div class="flex justify-end">
-              <Button :disabled="atxSaving" @click="saveAtxSettings">
-                <Loader2 v-if="atxSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="atxSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ atxSaving ? t('actionbar.applying') : atxSaved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
 
             <!-- WOL Config -->
             <Card>
@@ -4234,15 +4186,14 @@ watch(isWindows, () => {
                     v-model="atxConfig.wol_interface"
                     :placeholder="t('settings.atxWolInterfacePlaceholder')"
                   />
-                  <p class="text-xs text-muted-foreground">{{ t('settings.atxWolInterfaceHint') }}</p>
                 </div>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button :disabled="wolSaving" @click="saveWolSettings">
+                  <Loader2 v-if="wolSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="wolSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ wolSaving ? t('actionbar.applying') : wolSaved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <div class="flex justify-end">
-              <Button :disabled="wolSaving" @click="saveWolSettings">
-                <Loader2 v-if="wolSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="wolSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ wolSaving ? t('actionbar.applying') : wolSaved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- ttyd Section -->
@@ -4315,27 +4266,25 @@ watch(isWindows, () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button type="button" @click="showLogs.ttyd = !showLogs.ttyd; if (showLogs.ttyd) refreshExtensionLogs('ttyd')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />
-                      {{ t('extensions.viewLogs') }}
-                    </button>
-                    <div v-if="showLogs.ttyd" class="space-y-2">
+                    <Collapsible v-model:open="showLogs.ttyd" @update:open="open => open && refreshExtensionLogs('ttyd')">
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.ttyd || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('ttyd')">
                         <RefreshCw class="h-3 w-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </template>
               </CardContent>
+              <CardFooter v-if="extensions?.ttyd?.available" class="border-t pt-4 justify-end">
+                <Button :disabled="loading || isExtRunning(extensions?.ttyd?.status)" @click="saveExtensionConfig('ttyd')">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <!-- Save button -->
-            <div v-if="extensions?.ttyd?.available" class="flex justify-end">
-              <Button :disabled="loading || isExtRunning(extensions?.ttyd?.status)" @click="saveExtensionConfig('ttyd')">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- Remote Access Section -->
@@ -4415,27 +4364,25 @@ watch(isWindows, () => {
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button type="button" @click="showLogs.gostc = !showLogs.gostc; if (showLogs.gostc) refreshExtensionLogs('gostc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />
-                      {{ t('extensions.viewLogs') }}
-                    </button>
-                    <div v-if="showLogs.gostc" class="space-y-2">
+                    <Collapsible v-model:open="showLogs.gostc" @update:open="open => open && refreshExtensionLogs('gostc')">
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.gostc || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('gostc')">
                         <RefreshCw class="h-3 w-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </template>
               </CardContent>
+              <CardFooter v-if="extensions?.gostc?.available" class="border-t pt-4 justify-end">
+                <Button :disabled="loading || isExtRunning(extensions?.gostc?.status)" @click="saveExtensionConfig('gostc')">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <!-- Save button -->
-            <div v-if="extensions?.gostc?.available" class="flex justify-end">
-              <Button :disabled="loading || isExtRunning(extensions?.gostc?.status)" @click="saveExtensionConfig('gostc')">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
 
             <Card>
               <CardHeader>
@@ -4519,33 +4466,30 @@ watch(isWindows, () => {
                       <Label class="sm:text-right">{{ t('extensions.easytier.virtualIp') }}</Label>
                       <div class="sm:col-span-3 space-y-1">
                         <Input v-model="extConfig.easytier.virtual_ip" placeholder="10.0.0.1/24" :disabled="isExtRunning(extensions?.easytier?.status)" />
-                        <p class="text-xs text-muted-foreground">{{ t('extensions.easytier.virtualIpHint') }}</p>
                       </div>
                     </div>
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <button type="button" @click="showLogs.easytier = !showLogs.easytier; if (showLogs.easytier) refreshExtensionLogs('easytier')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />
-                      {{ t('extensions.viewLogs') }}
-                    </button>
-                    <div v-if="showLogs.easytier" class="space-y-2">
+                    <Collapsible v-model:open="showLogs.easytier" @update:open="open => open && refreshExtensionLogs('easytier')">
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.easytier || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('easytier')">
                         <RefreshCw class="h-3 w-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </template>
               </CardContent>
+              <CardFooter v-if="extensions?.easytier?.available" class="border-t pt-4 justify-end">
+                <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <!-- Save button -->
-            <div v-if="extensions?.easytier?.available" class="flex justify-end">
-              <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
             <!-- FRPC -->
             <Card>
               <CardHeader>
@@ -4597,30 +4541,24 @@ watch(isWindows, () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.frpc.enabled" :disabled="isExtRunning(extensions?.frpc?.status)" />
                     </div>
-                    <div class="grid grid-cols-2 rounded-md bg-muted p-1">
-                      <button
+                    <ButtonGroup class="grid w-full grid-cols-2">
+                      <Button
                         type="button"
-                        :class="[
-                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                          frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                        ]"
+                        :variant="frpcQuickMode ? 'default' : 'outline'"
                         :disabled="isExtRunning(extensions?.frpc?.status)"
                         @click="extConfig.frpc.config_mode = FrpcConfigMode.Quick"
                       >
                         {{ t('extensions.frpc.quickConfig') }}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        :class="[
-                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                          !frpcQuickMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                        ]"
+                        :variant="!frpcQuickMode ? 'default' : 'outline'"
                         :disabled="isExtRunning(extensions?.frpc?.status)"
                         @click="extConfig.frpc.config_mode = FrpcConfigMode.Full"
                       >
                         {{ t('extensions.frpc.fullConfig') }}
-                      </button>
-                    </div>
+                      </Button>
+                    </ButtonGroup>
                     <template v-if="frpcQuickMode">
                       <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                         <Label class="sm:text-right">{{ t('extensions.frpc.proxyType') }}</Label>
@@ -4703,26 +4641,25 @@ watch(isWindows, () => {
                     </div>
                   </div>
                   <div class="space-y-2">
-                    <button type="button" @click="showLogs.frpc = !showLogs.frpc; if (showLogs.frpc) refreshExtensionLogs('frpc')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-                      <ChevronRight :class="['h-4 w-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />
-                      {{ t('extensions.viewLogs') }}
-                    </button>
-                    <div v-if="showLogs.frpc" class="space-y-2">
+                    <Collapsible v-model:open="showLogs.frpc" @update:open="open => open && refreshExtensionLogs('frpc')">
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.frpc || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('frpc')">
                         <RefreshCw class="h-3 w-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </template>
               </CardContent>
+              <CardFooter v-if="extensions?.frpc?.available" class="border-t pt-4 justify-end">
+                <Button :disabled="loading || isExtRunning(extensions?.frpc?.status)" @click="saveExtensionConfig('frpc')">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <div v-if="extensions?.frpc?.available" class="flex justify-end">
-              <Button :disabled="loading || isExtRunning(extensions?.frpc?.status)" @click="saveExtensionConfig('frpc')">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- RTSP Section -->
@@ -4783,7 +4720,6 @@ watch(isWindows, () => {
                     <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input v-model="rtspLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="rtspStatus?.service_status === 'running'" />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.bindHint') }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
@@ -4794,17 +4730,15 @@ watch(isWindows, () => {
                     <Label class="sm:text-right">{{ t('extensions.rtsp.path') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input v-model="rtspLocalConfig.path" :placeholder="t('extensions.rtsp.pathPlaceholder')" :disabled="rtspStatus?.service_status === 'running'" />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.pathHint') }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.codec') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <select v-model="rtspLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="rtspStatus?.service_status === 'running'">
-                        <option value="h264">H.264</option>
-                        <option value="h265">H.265</option>
-                      </select>
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rtsp.codecHint') }}</p>
+                      <Select v-model="rtspLocalConfig.codec" :disabled="rtspStatus?.service_status === 'running'">
+                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="h264">H.264</SelectItem><SelectItem value="h265">H.265</SelectItem></SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div class="flex items-center justify-between">
@@ -4825,33 +4759,33 @@ watch(isWindows, () => {
                           :placeholder="t('extensions.rtsp.passwordPlaceholder')"
                           :disabled="rtspStatus?.service_status === 'running'"
                         />
-                        <button
+                        <Button
                           type="button"
-                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          variant="ghost"
+                          size="icon-sm"
+                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
                           <Eye v-if="!showPasswords" class="h-4 w-4" />
                           <EyeOff v-else class="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <Separator />
-
-                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
-                  <p class="text-sm font-medium">{{ t('extensions.rtsp.urlPreview') }}</p>
-                  <code class="font-mono text-sm break-all">{{ rtspStreamUrl }}</code>
-                </div>
               </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  <span class="shrink-0 font-medium">{{ t('extensions.rtsp.urlPreview') }}</span>
+                  <code class="truncate font-mono">{{ rtspStreamUrl }}</code>
+                </div>
+                <Button class="shrink-0" :disabled="loading || rtspLoading || rtspStatus?.service_status === 'running'" @click="saveRtspConfig">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <div class="flex justify-end">
-              <Button :disabled="loading || rtspLoading || rtspStatus?.service_status === 'running'" @click="saveRtspConfig">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- VNC Section -->
@@ -4916,7 +4850,6 @@ watch(isWindows, () => {
                     <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input v-model="vncLocalConfig.bind" placeholder="0.0.0.0 / ::" :disabled="vncStatus?.service_status === 'running'" />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.bindHint') }}</p>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
@@ -4926,11 +4859,10 @@ watch(isWindows, () => {
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.encoding') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <select v-model="vncLocalConfig.encoding" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="vncStatus?.service_status === 'running'">
-                        <option value="tight_jpeg">{{ t('extensions.vnc.encodingTightJpeg') }}</option>
-                        <option value="h264">{{ t('extensions.vnc.encodingH264') }}</option>
-                      </select>
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.vnc.encodingHint') }}</p>
+                      <Select v-model="vncLocalConfig.encoding" :disabled="vncStatus?.service_status === 'running'">
+                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="tight_jpeg">{{ t('extensions.vnc.encodingTightJpeg') }}</SelectItem><SelectItem value="h264">{{ t('extensions.vnc.encodingH264') }}</SelectItem></SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div class="flex items-center justify-between">
@@ -4949,34 +4881,33 @@ watch(isWindows, () => {
                           :placeholder="vncStatus?.config.has_password ? t('extensions.vnc.passwordPlaceholder') : t('extensions.vnc.passwordRequiredPlaceholder')"
                           :disabled="vncStatus?.service_status === 'running'"
                         />
-                        <button
+                        <Button
                           type="button"
-                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          variant="ghost"
+                          size="icon-sm"
+                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
                           <Eye v-if="!showPasswords" class="h-4 w-4" />
                           <EyeOff v-else class="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
-                      <p v-if="vncStatus?.config.has_password" class="text-xs text-muted-foreground">{{ t('extensions.vnc.passwordSaved') }}</p>
                     </div>
                   </div>
                 </div>
 
-                <Separator />
-
-                <div class="rounded-md border p-3 bg-muted/20 space-y-1">
-                  <p class="text-sm font-medium">{{ t('extensions.vnc.urlPreview') }}</p>
-                  <code class="font-mono text-sm break-all">{{ vncStreamUrl }}</code>
-                </div>
               </CardContent>
+              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
+                <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  <span class="shrink-0 font-medium">{{ t('extensions.vnc.urlPreview') }}</span>
+                  <code class="truncate font-mono">{{ vncStreamUrl }}</code>
+                </div>
+                <Button class="shrink-0" :disabled="loading || vncLoading || vncStatus?.service_status === 'running'" @click="saveVncConfig">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <div class="flex justify-end">
-              <Button :disabled="loading || vncLoading || vncStatus?.service_status === 'running'" @click="saveVncConfig">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- RustDesk Section -->
@@ -5043,11 +4974,10 @@ watch(isWindows, () => {
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
-                      <select v-model="rustdeskLocalConfig.codec" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="rustdeskStatus?.service_status === 'running'">
-                        <option value="h264">H.264</option>
-                        <option value="h265">H.265</option>
-                      </select>
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.codecHint') }}</p>
+                      <Select v-model="rustdeskLocalConfig.codec" :disabled="rustdeskStatus?.service_status === 'running'">
+                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="h264">H.264</SelectItem><SelectItem value="h265">H.265</SelectItem></SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
@@ -5084,15 +5014,17 @@ watch(isWindows, () => {
                           spellcheck="false"
                           class="font-mono"
                         />
-                        <button
+                        <Button
                           type="button"
-                          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          variant="ghost"
+                          size="icon-sm"
+                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
                           <Eye v-if="!showPasswords" class="h-4 w-4" />
                           <EyeOff v-else class="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -5116,7 +5048,7 @@ watch(isWindows, () => {
                         @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
                         :disabled="!rustdeskConfig?.device_id"
                       >
-                        <Check v-if="rustdeskCopied === 'id'" class="h-4 w-4 text-green-500" />
+                        <Check v-if="rustdeskCopied === 'id'" class="h-4 w-4 text-success" />
                         <Copy v-else class="h-4 w-4" />
                       </Button>
                       <Button variant="outline" size="sm" @click="regenerateRustdeskId" :disabled="rustdeskLoading">
@@ -5139,7 +5071,7 @@ watch(isWindows, () => {
                         @click="copyToClipboard(rustdeskPassword?.device_password || '', 'password')"
                         :disabled="!rustdeskPassword?.device_password"
                       >
-                        <Check v-if="rustdeskCopied === 'password'" class="h-4 w-4 text-green-500" />
+                        <Check v-if="rustdeskCopied === 'password'" class="h-4 w-4 text-success" />
                         <Copy v-else class="h-4 w-4" />
                       </Button>
                       <Button variant="outline" size="sm" @click="regenerateRustdeskPassword" :disabled="rustdeskLoading">
@@ -5160,13 +5092,12 @@ watch(isWindows, () => {
                   </div>
                 </div>
               </CardContent>
+              <CardFooter class="border-t pt-4 justify-end">
+                <Button :disabled="loading || rustdeskStatus?.service_status === 'running'" @click="saveRustdeskConfig">
+                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                </Button>
+              </CardFooter>
             </Card>
-            <!-- Save button -->
-            <div class="flex justify-end">
-              <Button :disabled="loading || rustdeskStatus?.service_status === 'running'" @click="saveRustdeskConfig">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
-              </Button>
-            </div>
           </div>
 
           <!-- Redfish Section -->
@@ -5192,37 +5123,26 @@ watch(isWindows, () => {
             </div>
 
             <!-- Auto-restart: HTTPS manual redirect (cert must be accepted by user) -->
-            <div
-              v-if="autoRestartManualUrl"
-              class="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-4 space-y-3"
-            >
-              <div class="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
-                <Lock class="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  <p class="font-medium">{{ t('settings.httpsManualRedirectTitle') }}</p>
-                  <p class="text-xs mt-0.5 opacity-80">{{ t('settings.httpsManualRedirectDesc') }}</p>
-                </div>
-              </div>
-              <a
-                :href="autoRestartManualUrl"
-                class="flex items-center justify-center gap-2 w-full rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 transition-colors"
-              >
-                <ExternalLink class="h-4 w-4" />
-                {{ autoRestartManualUrl }}
-              </a>
-            </div>
+            <Alert v-if="autoRestartManualUrl" variant="warning">
+              <Lock />
+              <AlertTitle>{{ t('settings.httpsManualRedirectTitle') }}</AlertTitle>
+              <AlertDescription>{{ t('settings.httpsManualRedirectDesc') }}</AlertDescription>
+              <Button as-child class="col-start-2 mt-2 w-full bg-warning text-warning-foreground hover:bg-warning/90">
+                <a :href="autoRestartManualUrl"><ExternalLink />{{ autoRestartManualUrl }}</a>
+              </Button>
+            </Alert>
 
             <!-- Auto-restart: failure / timeout -->
-            <div
-              v-if="autoRestartFailed"
-              class="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
-            >
-              <p class="text-destructive">{{ t('settings.autoRestartFailed') }}</p>
-              <Button variant="outline" size="sm" @click="triggerAutoRestart">
+            <Alert v-if="autoRestartFailed" variant="destructive">
+              <AlertTriangle />
+              <AlertDescription class="flex items-center justify-between gap-3">
+              <span>{{ t('settings.autoRestartFailed') }}</span>
+              <Button variant="outline" size="sm" class="text-foreground" @click="triggerAutoRestart">
                 <RefreshCw class="h-3 w-3 mr-1" />
                 {{ t('common.retry') }}
               </Button>
-            </div>
+              </AlertDescription>
+            </Alert>
 
             <Card>
               <CardHeader>
@@ -5231,40 +5151,18 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent class="space-y-5">
                 <div class="flex items-start justify-between gap-4">
-                  <div class="space-y-0.5">
-                    <Label>{{ t('settings.redfishEnabled') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.redfishEnabledDesc') }}</p>
-                  </div>
+                  <Label>{{ t('settings.redfishEnabled') }}</Label>
                   <Switch v-model="redfishEnabled" />
                 </div>
                 <div class="rounded-md border bg-muted/40 p-3 space-y-1.5">
                   <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{{ t('settings.redfishEndpoint') }}</p>
-                  <div class="flex items-center gap-2">
-                    <code class="font-mono text-xs sm:text-sm break-all flex-1 min-w-0">{{ redfishAccessUrl }}</code>
-                    <Button
-                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
-                      :title="t('settings.copyRedfishUrl')"
-                      :aria-label="t('settings.copyRedfishUrl')"
-                      @click="copyRedfishUrl"
-                    >
-                      <Check v-if="redfishUrlCopied" class="h-3.5 w-3.5 text-emerald-600" />
-                      <Copy v-else class="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
-                      :title="t('settings.openRedfishEndpoint')"
-                      :aria-label="t('settings.openRedfishEndpoint')"
-                      @click="openRedfishUrl"
-                    >
-                      <ExternalLink class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  <code class="block font-mono text-xs sm:text-sm break-all">{{ redfishAccessUrl }}</code>
                 </div>
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <p class="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                  {{ t('settings.restartRequiredHint') }}
+                <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
                   <RefreshCw v-if="autoRestarting || redfishSaving" class="h-4 w-4 mr-2 animate-spin" />
@@ -5310,10 +5208,10 @@ watch(isWindows, () => {
 
                 <div class="space-y-2">
                   <Label>{{ t('settings.updateChannel') }}</Label>
-                  <select v-model="updateChannel" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="updateRunning">
-                    <option value="stable">Stable</option>
-                    <option value="beta">Beta</option>
-                  </select>
+                  <Select v-model="updateChannel" :disabled="updateRunning">
+                    <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="stable">Stable</SelectItem><SelectItem value="beta">Beta</SelectItem></SelectContent>
+                  </Select>
                 </div>
 
                 <div class="space-y-2">
@@ -5362,58 +5260,21 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <!-- Device Info Card -->
-            <Card v-if="systemStore.deviceInfo">
-              <CardHeader>
-                <CardTitle>{{ t('settings.deviceInfo') }}</CardTitle>
-                <CardDescription>{{ t('settings.deviceInfoDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div class="space-y-3">
-                  <div class="flex justify-between items-center py-2 border-b gap-2">
-                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.hostname') }}</span>
-                    <span class="text-sm font-medium truncate">{{ systemStore.deviceInfo.hostname }}</span>
-                  </div>
-                  <div class="flex justify-between items-center py-2 border-b gap-2">
-                    <span class="text-sm text-muted-foreground shrink-0">{{ t('settings.cpuModel') }}</span>
-                    <span class="text-sm font-medium truncate max-w-[60%] text-right">{{ systemStore.deviceInfo.cpu_model }}</span>
-                  </div>
-                  <div v-if="hasDeviceCpuUsage" class="flex justify-between items-center py-2 border-b">
-                    <span class="text-sm text-muted-foreground">{{ t('settings.cpuUsage') }}</span>
-                    <span class="text-sm font-medium">{{ systemStore.deviceInfo.cpu_usage.toFixed(1) }}%</span>
-                  </div>
-                  <div v-if="hasDeviceMemoryUsage" class="flex justify-between items-center py-2 border-b">
-                    <span class="text-sm text-muted-foreground">{{ t('settings.memoryUsage') }}</span>
-                    <span class="text-sm font-medium">{{ formatBytes(systemStore.deviceInfo.memory_used) }} / {{ formatBytes(systemStore.deviceInfo.memory_total) }}</span>
-                  </div>
-                  <div v-if="hasDeviceNetworkAddresses" class="py-2">
-                    <span class="text-sm text-muted-foreground">{{ t('settings.networkAddresses') }}</span>
-                    <div class="mt-2 space-y-1">
-                      <div v-for="addr in systemStore.deviceInfo.network_addresses" :key="addr.interface" class="flex justify-between items-center text-sm">
-                        <span class="text-muted-foreground">{{ addr.interface }}</span>
-                        <code class="font-mono bg-muted px-2 py-0.5 rounded">{{ addr.ip }}</code>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <p class="text-xs text-muted-foreground text-center">@2025-2026 SilentWind</p>
           </div>
 
           <!-- Save Button (sticky) -->
           <div v-if="['video', 'hid'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
-              <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+              <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
               </p>
-              <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+              <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329StringLengthWarning') }}</span>
               </p>
-              <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0">
+              <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
               </p>
@@ -5426,8 +5287,8 @@ watch(isWindows, () => {
           </div>
 
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
 
     <!-- Terminal Dialog -->
     <TerminalDialog v-model:open="showTerminalDialog" />

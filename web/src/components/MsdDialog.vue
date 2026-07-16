@@ -29,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Slider } from '@/components/ui/slider'
 import { Separator } from '@/components/ui/separator'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   HardDrive,
   Upload,
@@ -151,9 +153,9 @@ const downloadProgress = ref<{
 } | null>(null)
 
 const TWO_POINT_TWO_GB = 2.2 * 1024 * 1024 * 1024
-const tabTriggerClass = 'h-9 rounded-md border border-transparent bg-transparent text-center text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
-const segmentedGroupClass = 'grid w-full grid-cols-2 items-center gap-1 rounded-md bg-muted p-1'
-const segmentedItemClass = 'h-8 w-full justify-center rounded-md border border-transparent bg-transparent px-3 text-center text-xs text-muted-foreground shadow-none hover:bg-background/60 hover:text-foreground data-[state=on]:border-border data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
+const tabTriggerClass = 'h-9 rounded-md border-0 bg-transparent text-center text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
+const segmentedGroupClass = 'grid w-full grid-cols-2 items-center gap-1 rounded-md border border-border bg-muted p-1'
+const segmentedItemClass = 'h-8 w-full justify-center rounded-md border-0 bg-transparent px-3 text-center text-xs text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=on]:border-0 data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:hover:bg-background'
 
 const diskMode = computed(() => systemStore.msd?.diskMode ?? 'single')
 const slotCapacity = computed(() => systemStore.msd?.slotCapacity ?? 1)
@@ -684,10 +686,10 @@ onUnmounted(() => {
         </DialogTitle>
         <DialogDescription as="div" class="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span :class="msdConnected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'" class="flex items-center gap-1.5">
+            <span :class="msdConnected ? 'text-success' : 'text-muted-foreground'" class="flex items-center gap-1.5">
               <span class="relative flex h-2 w-2">
-                <span v-if="msdConnected" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span :class="msdConnected ? 'bg-green-500' : 'bg-muted-foreground'" class="relative inline-flex rounded-full h-2 w-2"></span>
+                <span v-if="msdConnected" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
+                <span :class="msdConnected ? 'bg-success' : 'bg-muted-foreground'" class="relative inline-flex h-2 w-2 rounded-full"></span>
               </span>
               {{ msdConnected ? t('common.connected') : t('common.disconnected') }}
             </span>
@@ -696,11 +698,11 @@ onUnmounted(() => {
             <Badge
               v-if="mediaSlotsFull"
               variant="outline"
-              class="h-6 rounded-md border-amber-500/40 bg-amber-500/10 px-2 text-xs text-amber-700 dark:text-amber-400"
+              class="h-6 border-warning/40 bg-warning/10 px-2 text-xs text-warning"
             >
               {{ t('msd.mediaSlotsFull') }}
             </Badge>
-            <span v-if="usbReenumerating" class="text-xs text-amber-600 dark:text-amber-400">
+            <span v-if="usbReenumerating" class="text-xs text-warning">
               {{ t('msd.reenumerating') }}
             </span>
           </span>
@@ -722,6 +724,7 @@ onUnmounted(() => {
               :model-value="diskMode"
               type="single"
               size="sm"
+              :spacing="1"
               :class="[segmentedGroupClass, 'min-w-0 flex-1 sm:w-[200px] sm:flex-none']"
               :disabled="operationInProgress"
               @update:model-value="changeDiskMode"
@@ -783,9 +786,13 @@ onUnmounted(() => {
               </div>
               <Progress v-if="uploading" :model-value="uploadProgress" class="h-1 shrink-0" />
 
-              <div v-if="images.length === 0" class="shrink-0 text-center py-6 text-muted-foreground text-sm">
-                {{ t('msd.noImages') }}
-              </div>
+              <Skeleton v-if="loadingImages" class="h-24 w-full" />
+              <Empty v-else-if="images.length === 0" class="shrink-0 py-6">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon"><HardDrive /></EmptyMedia>
+                  <EmptyDescription>{{ t('msd.noImages') }}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
 
               <div v-else class="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                 <div class="space-y-2">
@@ -818,7 +825,7 @@ onUnmounted(() => {
                               <TooltipTrigger as-child>
                                 <Badge
                                   variant="outline"
-                                  class="text-[10px] h-4 px-1.5 border-amber-500/50 text-amber-600 dark:text-amber-400 cursor-help"
+                                  class="h-4 cursor-help border-warning/50 px-1.5 text-[10px] text-warning"
                                 >
                                   <AlertCircle class="h-2.5 w-2.5 mr-0.5" />
                                   {{ t('msd.largeFileWarning') }}
@@ -1017,8 +1024,10 @@ onUnmounted(() => {
                     <nav class="flex items-center text-xs min-w-0 overflow-hidden">
                       <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
                         <ChevronRight v-if="index > 0" class="h-3 w-3 text-muted-foreground mx-0.5 shrink-0" />
-                        <button
-                          class="hover:text-primary transition-colors truncate"
+                        <Button
+                          variant="link"
+                          size="sm"
+                          class="h-auto min-w-0 truncate p-0 font-normal"
                           :class="[
                             index === breadcrumbs.length - 1 ? 'font-medium' : 'text-muted-foreground',
                             driveConnectedToTarget ? 'cursor-not-allowed opacity-50' : ''
@@ -1027,7 +1036,7 @@ onUnmounted(() => {
                           @click="!driveConnectedToTarget && navigateTo(crumb.path)"
                         >
                           {{ crumb.name }}
-                        </button>
+                        </Button>
                       </template>
                     </nav>
                   </div>
@@ -1084,12 +1093,13 @@ onUnmounted(() => {
                 <Progress v-if="uploadingFile" :model-value="fileUploadProgress" class="h-1 shrink-0" />
 
                 <!-- File List -->
-                <div
-                  v-if="driveFiles.length === 0 && !driveConnectedToTarget && !driveError"
-                  class="shrink-0 text-center py-6 text-muted-foreground text-sm"
-                >
-                  {{ t('msd.emptyFolder') }}
-                </div>
+                <Skeleton v-if="loadingDrive" class="h-24 w-full" />
+                <Empty v-else-if="driveFiles.length === 0 && !driveConnectedToTarget && !driveError" class="shrink-0 py-6">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><Folder /></EmptyMedia>
+                    <EmptyDescription>{{ t('msd.emptyFolder') }}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
 
                 <!-- Connected placeholder: file list hidden while drive mounted on target -->
                 <div
@@ -1110,7 +1120,7 @@ onUnmounted(() => {
                         class="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                         @click="file.is_dir && navigateTo(file.path)"
                       >
-                        <Folder v-if="file.is_dir" class="h-4 w-4 text-blue-500 shrink-0" />
+                        <Folder v-if="file.is_dir" class="h-4 w-4 shrink-0 text-info" />
                         <File v-else class="h-4 w-4 text-muted-foreground shrink-0" />
                         <div class="min-w-0">
                           <Tooltip>
@@ -1284,6 +1294,7 @@ onUnmounted(() => {
             :model-value="mountMode"
             type="single"
             size="sm"
+            :spacing="1"
             :class="segmentedGroupClass"
             @update:model-value="updateMountMode"
           >
@@ -1298,6 +1309,7 @@ onUnmounted(() => {
             :model-value="accessMode"
             type="single"
             size="sm"
+            :spacing="1"
             :class="segmentedGroupClass"
             @update:model-value="updateAccessMode"
           >
@@ -1386,7 +1398,7 @@ onUnmounted(() => {
               / {{ formatBytes(downloadProgress.total_bytes) }}
             </span>
           </div>
-          <div v-if="downloadProgress.status === 'completed'" class="text-xs text-green-600">
+          <div v-if="downloadProgress.status === 'completed'" class="text-xs text-success">
             {{ t('msd.downloadComplete') }}
           </div>
           <div v-else-if="downloadProgress.status.startsWith('failed')" class="text-xs text-destructive">

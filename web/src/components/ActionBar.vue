@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import {
   PopoverContent,
   PopoverTrigger,
@@ -276,10 +277,10 @@ const hasRightOverflow = computed(() => {
 </script>
 
 <template>
-  <div class="w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="w-full border-b bg-background">
     <div ref="barRef" class="flex items-center px-2 sm:px-4 py-1 sm:py-1.5">
       <!-- Left side buttons -->
-      <div class="left-buttons flex items-center gap-0.5 sm:gap-1.5 flex-1 min-w-0 overflow-hidden">
+      <ButtonGroup class="left-buttons flex-1 min-w-0 overflow-hidden">
         <!-- Video Config - Always visible -->
         <VideoConfigPopover
           v-model:open="videoPopoverOpen"
@@ -349,10 +350,10 @@ const hasRightOverflow = computed(() => {
             </PopoverContent>
           </Popover>
         </div>
-      </div>
+      </ButtonGroup>
 
       <!-- Right side buttons -->
-      <div class="flex items-center gap-0.5 sm:gap-1.5 shrink-0 ml-1 sm:ml-2">
+      <ButtonGroup class="shrink-0 ml-1 sm:ml-2">
         <!-- Connection Stats - Adaptive -->
         <div v-if="isVisible('stats')">
           <TooltipProvider>
@@ -393,25 +394,6 @@ const hasRightOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
-        <!-- Settings - Adaptive -->
-        <div v-if="isVisible('settings')">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
-                  <Settings class="h-4 w-4" />
-                  <span v-if="visibleSet.get('settings') === 'label'">{{ t('actionbar.settings') }}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ t('actionbar.settingsTip') }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div v-if="isVisible('stats') || isVisible('terminal') || isVisible('settings')" class="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-
         <!-- Computer Use - Optional -->
         <TooltipProvider v-if="props.showComputerUse !== false">
           <Tooltip>
@@ -431,6 +413,29 @@ const hasRightOverflow = computed(() => {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        <!-- Settings - Adaptive -->
+        <div v-if="isVisible('settings')">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
+                  <Settings class="h-4 w-4" />
+                  <span v-if="visibleSet.get('settings') === 'label'">{{ t('actionbar.settings') }}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ t('actionbar.settingsTip') }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        <div
+          v-if="isVisible('settings')"
+          aria-hidden="true"
+          class="mr-4 h-5 w-px shrink-0 -translate-x-px self-center bg-border"
+        />
 
         <!-- Virtual Keyboard - Always visible -->
         <TooltipProvider>
@@ -523,7 +528,7 @@ const hasRightOverflow = computed(() => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </ButtonGroup>
     </div>
   </div>
 

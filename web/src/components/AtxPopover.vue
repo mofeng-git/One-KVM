@@ -46,15 +46,15 @@ const actionBusy = computed(() => activeAction.value !== null)
 
 const powerStateIconColor = computed(() => {
   switch (powerState.value) {
-    case 'on': return 'text-green-600'
-    case 'off': return 'text-slate-500'
-    default: return 'text-yellow-600'
+    case 'on': return 'text-success'
+    case 'off': return 'text-muted-foreground'
+    default: return 'text-warning'
   }
 })
 
 const powerStateTextColor = computed(() => {
   switch (powerState.value) {
-    case 'on': return 'text-green-600'
+    case 'on': return 'text-success'
     default: return ''
   }
 })
@@ -69,15 +69,15 @@ const powerStateText = computed(() => {
 
 const hddStateIconColor = computed(() => {
   switch (hddState.value) {
-    case 'active': return 'text-green-600'
-    case 'inactive': return 'text-slate-500'
-    default: return 'text-yellow-600'
+    case 'active': return 'text-success'
+    case 'inactive': return 'text-muted-foreground'
+    default: return 'text-warning'
   }
 })
 
 const hddStateTextColor = computed(() => {
   switch (hddState.value) {
-    case 'active': return 'text-green-600'
+    case 'active': return 'text-success'
     default: return ''
   }
 })
@@ -254,7 +254,7 @@ watch(
             size="sm"
             :disabled="actionBusy"
             :class="[
-              'w-full justify-start gap-2 h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950',
+              'h-7 w-full justify-start gap-2 text-xs text-warning hover:bg-warning/10 hover:text-warning',
               activeAction === 'long' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
             ]"
             @click="handleAction('long')"
@@ -268,7 +268,7 @@ watch(
             size="sm"
             :disabled="actionBusy"
             :class="[
-              'w-full justify-start gap-2 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950',
+              'h-7 w-full justify-start gap-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive',
               activeAction === 'reset' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
             ]"
             @click="handleAction('reset')"
@@ -318,14 +318,16 @@ watch(
           <Separator />
           <Label class="text-xs text-muted-foreground">{{ t('atx.recentMac') }}</Label>
           <div class="space-y-1">
-            <button
+            <Button
               v-for="mac in wolHistory"
               :key="mac"
-              class="w-full text-left px-2 py-1.5 rounded text-xs font-mono hover:bg-muted transition-colors"
+              variant="ghost"
+              size="sm"
+              class="w-full justify-start font-mono text-xs"
               @click="selectFromHistory(mac)"
             >
               {{ mac }}
-            </button>
+            </Button>
           </div>
         </div>
       </TabsContent>

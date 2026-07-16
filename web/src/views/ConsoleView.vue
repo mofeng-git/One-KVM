@@ -12,6 +12,7 @@ import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
+import { useTheme } from '@/composables/useTheme'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi } from '@/api'
 import type { ComputerUseScreenshot, ComputerUseSession } from '@/api'
@@ -187,12 +188,11 @@ const changingPassword = ref(false)
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
 const featureVisibility = useFeatureVisibility()
+const { isDark, toggleTheme } = useTheme()
 const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
 const showComputerUse = computed(() => featureVisibility.value.computerUse)
 const showPasteText = computed(() => featureVisibility.value.pasteText)
-
-const isDark = ref(document.documentElement.classList.contains('dark'))
 
 const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
   if (wsNetworkError.value) return 'connecting'
@@ -1973,12 +1973,6 @@ async function toggleFullscreen() {
   }
 }
 
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
-
 async function logout() {
   await authStore.logout()
   router.push('/login')
@@ -2657,12 +2651,6 @@ onMounted(async () => {
     syncMouseModeFromConfig()
   })
 
-  const storedTheme = localStorage.getItem('theme')
-  if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    isDark.value = true
-    document.documentElement.classList.add('dark')
-  }
-
   try {
     const modeResp = await streamApi.getMode()
     const serverMode = normalizeServerMode(modeResp?.mode)
@@ -2720,7 +2708,7 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen h-dvh flex flex-col bg-background">
-    <header class="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <header class="shrink-0 border-b bg-background">
       <div class="px-2 sm:px-4">
         <div class="h-10 sm:h-14 flex items-center justify-between">
           <div class="flex items-center gap-2 sm:gap-6">
@@ -2790,7 +2778,7 @@ onUnmounted(() => {
                 hover-align="end"
               />
             </div>
-            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block mx-1" />
+            <div class="mx-1 hidden h-6 w-px bg-border md:block" />
             <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
               <Sun v-if="isDark" class="h-4 w-4" />
               <Moon v-else class="h-4 w-4" />

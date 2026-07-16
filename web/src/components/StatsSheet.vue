@@ -10,6 +10,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
+import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
+import { Card } from '@/components/ui/card'
 import type { WebRTCStats } from '@/composables/useWebRTC'
 import { formatFpsValue } from '@/lib/fps'
 
@@ -405,26 +408,25 @@ onUnmounted(() => {
   <Sheet :open="props.open" @update:open="emit('update:open', $event)">
     <SheetContent
       side="right"
-      class="w-[90vw] max-w-[440px] p-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+      class="w-[90vw] max-w-[440px] border-l bg-background p-0"
     >
       <!-- Header -->
-      <SheetHeader class="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+      <SheetHeader class="border-b px-6 py-3">
         <div class="flex items-center gap-2">
           <SheetTitle class="text-base">{{ t('stats.title') }}</SheetTitle>
-          <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted-foreground">
-            WebRTC
-          </span>
+          <Badge variant="secondary">WebRTC</Badge>
         </div>
       </SheetHeader>
 
       <ScrollArea class="h-[calc(100dvh-60px)]">
         <div class="px-6 py-4 space-y-6">
-          <!-- Video Section Header -->
-          <div>
+          <!-- Video Information -->
+          <div class="space-y-3">
             <h3 class="text-sm font-medium">{{ t('stats.video') }}</h3>
-            <p class="text-xs text-muted-foreground mt-0.5">
-              {{ t('stats.videoDesc') }}
-            </p>
+            <div class="grid grid-cols-2 gap-3">
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.resolution') }}</ItemDescription><ItemTitle>{{ currentStats.resolution }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.bitrate') }}</ItemDescription><ItemTitle>{{ currentStats.bitrate }} Mbps</ItemTitle></ItemContent></Item>
+            </div>
           </div>
 
           <!-- Network Stability (Jitter) -->
@@ -432,13 +434,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.stability') }}</h4>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.stabilityDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="stabilityChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'stability'"
@@ -446,9 +445,9 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- Playback Delay -->
@@ -459,13 +458,10 @@ onUnmounted(() => {
                 {{ currentStats.delay }} ms
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.delayDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="delayChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'delay'"
@@ -473,9 +469,9 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- Packet Loss -->
@@ -486,13 +482,10 @@ onUnmounted(() => {
                 {{ currentStats.packetsLost }} {{ t('stats.total') }}
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.packetLossDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="packetLossChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'packetLoss'"
@@ -500,9 +493,9 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- FPS -->
@@ -513,13 +506,10 @@ onUnmounted(() => {
                 {{ formatFpsValue(currentStats.fps) }} fps
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.frameRateDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="fpsChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'fps'"
@@ -527,52 +517,27 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
-          <!-- Additional Stats -->
-          <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
-            <h4 class="text-sm font-medium">{{ t('stats.additional') }}</h4>
+          <!-- Connection Information -->
+          <div class="space-y-3 border-t pt-2">
+            <h4 class="text-sm font-medium">{{ t('stats.connection') }}</h4>
             <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.resolution') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.resolution }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.bitrate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.bitrate }} Mbps</p>
-              </div>
-            </div>
-
-            <!-- Connection Info -->
-            <h4 class="text-sm font-medium pt-2">{{ t('stats.connection') }}</h4>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.connectionType') }}</p>
-                <p class="text-sm font-medium mt-1 flex items-center gap-1.5">
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.connectionType') }}</ItemDescription><ItemTitle class="flex items-center gap-1.5">
                   <span
                     :class="[
                       'inline-block w-2 h-2 rounded-full',
-                      currentStats.isRelay ? 'bg-amber-500' : 'bg-green-500'
+                      currentStats.isRelay ? 'bg-warning' : 'bg-success'
                     ]"
                   />
                   {{ currentStats.isRelay ? t('stats.relay') : t('stats.p2p') }}
-                </p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.transport') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.transport }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.localCandidate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.localType }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.remoteCandidate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.remoteType }}</p>
-              </div>
+                </ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.transport') }}</ItemDescription><ItemTitle>{{ currentStats.transport }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.localCandidate') }}</ItemDescription><ItemTitle>{{ currentStats.localType }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.remoteCandidate') }}</ItemDescription><ItemTitle>{{ currentStats.remoteType }}</ItemTitle></ItemContent></Item>
             </div>
           </div>
         </div>

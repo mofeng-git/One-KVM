@@ -6,6 +6,7 @@ import { useSystemStore } from '@/stores/system'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
+import { useTheme } from '@/composables/useTheme'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,12 +24,7 @@ const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
-
-function toggleTheme() {
-  const isDark = document.documentElement.classList.contains('dark')
-  document.documentElement.classList.toggle('dark', !isDark)
-  localStorage.setItem('theme', isDark ? 'light' : 'dark')
-}
+const { toggleTheme } = useTheme()
 
 async function handleLogout() {
   await authStore.logout()
@@ -40,11 +36,12 @@ async function handleLogout() {
   <div class="h-screen h-dvh flex flex-col bg-background overflow-hidden">
     <!-- Header -->
     <header class="shrink-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex h-11 sm:h-14 items-center px-3 sm:px-4 max-w-full">
+      <div class="flex h-10 sm:h-14 items-center px-2 sm:px-4 max-w-full">
         <!-- Logo -->
-        <RouterLink to="/" class="flex items-center gap-1.5 sm:gap-2 font-semibold">
-          <BrandMark size="sm" />
-          <span class="hidden sm:inline">One-KVM</span>
+        <RouterLink to="/" class="flex items-center gap-1.5 sm:gap-2">
+          <BrandMark size="md" class="hidden sm:block" />
+          <BrandMark size="sm" class="sm:hidden" />
+          <span class="font-bold text-sm sm:text-lg">One-KVM</span>
         </RouterLink>
 
         <!-- Right Side -->
