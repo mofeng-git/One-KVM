@@ -148,6 +148,34 @@ const isPointerLocked = ref(false)
 
 const localCrosshairPos = ref<{ x: number; y: number } | null>(null)
 
+interface TouchPointerState {
+  pointerId: number
+  mode: 'absolute' | 'relative'
+  startX: number
+  startY: number
+  lastX: number
+  lastY: number
+  maxDistanceSquared: number
+  longPressTimer: ReturnType<typeof setTimeout> | null
+  leftButtonDown: boolean
+  doubleTapCandidate: boolean
+}
+
+interface PendingTouchTap {
+  mode: 'absolute' | 'relative'
+  x: number
+  y: number
+  timestamp: number
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+const TOUCH_TAP_MOVE_THRESHOLD_PX = 8
+const TOUCH_LONG_PRESS_MS = 450
+const TOUCH_DOUBLE_TAP_MS = 300
+const TOUCH_DOUBLE_TAP_DISTANCE_PX = 24
+let touchPointer: TouchPointerState | null = null
+let pendingTouchTap: PendingTouchTap | null = null
+
 const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
 let mouseMoveSendIntervalMs = DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
 let mouseFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -164,6 +192,7 @@ function syncMouseModeFromConfig() {
   if (typeof mouseAbsolute !== 'boolean') return
   const nextMode: 'absolute' | 'relative' = mouseAbsolute ? 'absolute' : 'relative'
   if (mouseMode.value !== nextMode) {
+    resetTouchInput()
     mouseMode.value = nextMode
   }
 }
@@ -2231,13 +2260,7 @@ function updateLocalCrosshairFromEvent(e: MouseEvent) {
   if (rect.width <= 0 || rect.height <= 0) return
 
   if (mouseMode.value === 'relative' && isPointerLocked.value) {
-    const cur = localCrosshairPos.value
-    const nx = cur ? cur.x + e.movementX : rect.width / 2
-    const ny = cur ? cur.y + e.movementY : rect.height / 2
-    localCrosshairPos.value = {
-      x: Math.max(0, Math.min(rect.width, nx)),
-      y: Math.max(0, Math.min(rect.height, ny)),
-    }
+    updateLocalCrosshairByDelta(e.movementX, e.movementY)
     return
   }
 
@@ -2247,10 +2270,281 @@ function updateLocalCrosshairFromEvent(e: MouseEvent) {
   }
 }
 
+function updateLocalCrosshairByDelta(dx: number, dy: number) {
+  if (!cursorVisible.value) {
+    localCrosshairPos.value = null
+    return
+  }
+
+  const container = videoContainerRef.value
+  if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
+
+  const current = localCrosshairPos.value ?? { x: rect.width / 2, y: rect.height / 2 }
+  localCrosshairPos.value = {
+    x: Math.max(0, Math.min(rect.width, current.x + dx)),
+    y: Math.max(0, Math.min(rect.height, current.y + dy)),
+  }
+}
+
 function handleMouseLeaveVideo() {
   if (!isPointerLocked.value) {
     localCrosshairPos.value = null
   }
+}
+
+function sendTouchClick(button: 'left' | 'right') {
+  flushPendingMouseMovesImmediately()
+  sendMouseEvent({ type: 'down', button })
+  sendMouseEvent({ type: 'up', button })
+}
+
+function clearPendingTouchTap(commitRelativeClick = false) {
+  const tap = pendingTouchTap
+  pendingTouchTap = null
+
+  if (!tap) return
+  if (tap.timer !== null) {
+    clearTimeout(tap.timer)
+  }
+  if (commitRelativeClick && tap.mode === 'relative') {
+    sendTouchClick('left')
+  }
+}
+
+function schedulePendingTouchTap(mode: 'absolute' | 'relative', x: number, y: number) {
+  const tap: PendingTouchTap = {
+    mode,
+    x,
+    y,
+    timestamp: Date.now(),
+    timer: null,
+  }
+  tap.timer = setTimeout(() => {
+    if (pendingTouchTap === tap) {
+      clearPendingTouchTap(true)
+    }
+  }, TOUCH_DOUBLE_TAP_MS)
+  pendingTouchTap = tap
+}
+
+function clearTouchPointer() {
+  const activePointer = touchPointer
+  touchPointer = null
+
+  if (!activePointer) return
+  if (activePointer.longPressTimer !== null) {
+    clearTimeout(activePointer.longPressTimer)
+  }
+
+  const container = videoContainerRef.value
+  if (container) {
+    try {
+      if (container.hasPointerCapture(activePointer.pointerId)) {
+        container.releasePointerCapture(activePointer.pointerId)
+      }
+    } catch {
+      // Pointer capture may already have been released by the browser.
+    }
+  }
+
+  if (activePointer.leftButtonDown) {
+    flushPendingMouseMovesImmediately()
+    sendMouseEvent({ type: 'up', button: 'left' })
+  }
+}
+
+function resetTouchInput() {
+  clearTouchPointer()
+  clearPendingTouchTap(false)
+}
+
+function sendAbsoluteTouchPosition(e: PointerEvent, immediate = false) {
+  const absolutePosition = getAbsoluteMousePosition(e)
+  if (!absolutePosition) return
+
+  mousePosition.value = absolutePosition
+  updateLocalCrosshairFromEvent(e)
+
+  if (immediate) {
+    sendMouseEvent({ type: 'move_abs', ...absolutePosition })
+    pendingMouseMove = null
+    return
+  }
+
+  pendingMouseMove = { type: 'move_abs', ...absolutePosition }
+  requestMouseMoveFlush()
+}
+
+function handleTouchPointerDown(e: PointerEvent) {
+  if (e.pointerType !== 'touch') return
+
+  e.preventDefault()
+
+  const container = videoContainerRef.value
+  if (!container || touchPointer !== null) return
+
+  if (document.activeElement !== container) {
+    container.focus()
+  }
+
+  const previousTap = pendingTouchTap
+  const now = Date.now()
+  const doubleTapDistanceX = previousTap ? e.clientX - previousTap.x : 0
+  const doubleTapDistanceY = previousTap ? e.clientY - previousTap.y : 0
+  const doubleTapCandidate = !!previousTap
+    && previousTap.mode === mouseMode.value
+    && now - previousTap.timestamp <= TOUCH_DOUBLE_TAP_MS
+    && doubleTapDistanceX * doubleTapDistanceX + doubleTapDistanceY * doubleTapDistanceY
+      <= TOUCH_DOUBLE_TAP_DISTANCE_PX ** 2
+
+  clearPendingTouchTap(!doubleTapCandidate)
+
+  const activePointer: TouchPointerState = {
+    pointerId: e.pointerId,
+    mode: mouseMode.value,
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    maxDistanceSquared: 0,
+    longPressTimer: null,
+    leftButtonDown: false,
+    doubleTapCandidate,
+  }
+  touchPointer = activePointer
+
+  if (activePointer.mode === 'absolute') {
+    sendAbsoluteTouchPosition(e, true)
+  }
+
+  activePointer.longPressTimer = setTimeout(() => {
+    if (
+      touchPointer !== activePointer
+      || mouseMode.value !== activePointer.mode
+      || activePointer.maxDistanceSquared > TOUCH_TAP_MOVE_THRESHOLD_PX ** 2
+    ) return
+
+    if (activePointer.doubleTapCandidate) {
+      activePointer.doubleTapCandidate = false
+      if (activePointer.mode === 'relative') {
+        sendTouchClick('left')
+      }
+    }
+    flushPendingMouseMovesImmediately()
+    activePointer.leftButtonDown = true
+    sendMouseEvent({ type: 'down', button: 'left' })
+  }, TOUCH_LONG_PRESS_MS)
+
+  try {
+    container.setPointerCapture(e.pointerId)
+  } catch {
+    // The gesture can still be handled while it remains inside the video area.
+  }
+}
+
+function handleTouchPointerMove(e: PointerEvent) {
+  const activePointer = touchPointer
+  if (
+    e.pointerType !== 'touch'
+    || !activePointer
+    || activePointer.pointerId !== e.pointerId
+    || mouseMode.value !== activePointer.mode
+  ) return
+
+  e.preventDefault()
+
+  const distanceX = e.clientX - activePointer.startX
+  const distanceY = e.clientY - activePointer.startY
+  const previousMaxDistanceSquared = activePointer.maxDistanceSquared
+  activePointer.maxDistanceSquared = Math.max(
+    activePointer.maxDistanceSquared,
+    distanceX * distanceX + distanceY * distanceY,
+  )
+
+  if (
+    previousMaxDistanceSquared <= TOUCH_TAP_MOVE_THRESHOLD_PX ** 2
+    && activePointer.maxDistanceSquared > TOUCH_TAP_MOVE_THRESHOLD_PX ** 2
+  ) {
+    if (activePointer.longPressTimer !== null) {
+      clearTimeout(activePointer.longPressTimer)
+      activePointer.longPressTimer = null
+    }
+    if (activePointer.doubleTapCandidate) {
+      activePointer.doubleTapCandidate = false
+      if (activePointer.mode === 'relative') {
+        sendTouchClick('left')
+      }
+    }
+  }
+
+  if (activePointer.mode === 'absolute') {
+    sendAbsoluteTouchPosition(e)
+    return
+  }
+
+  // Keep sub-pixel movement as a remainder instead of losing it on every event.
+  const dx = Math.trunc(e.clientX - activePointer.lastX)
+  const dy = Math.trunc(e.clientY - activePointer.lastY)
+  if (dx === 0 && dy === 0) return
+
+  activePointer.lastX += dx
+  activePointer.lastY += dy
+  accumulatedDelta.x += dx
+  accumulatedDelta.y += dy
+  mousePosition.value = {
+    x: mousePosition.value.x + dx,
+    y: mousePosition.value.y + dy,
+  }
+  updateLocalCrosshairByDelta(dx, dy)
+  requestMouseMoveFlush()
+}
+
+function registerTouchTap(activePointer: TouchPointerState) {
+  if (activePointer.doubleTapCandidate) {
+    sendTouchClick('right')
+    return
+  }
+
+  schedulePendingTouchTap(activePointer.mode, activePointer.startX, activePointer.startY)
+}
+
+function finishTouchPointer(e: PointerEvent, allowTap: boolean) {
+  const activePointer = touchPointer
+  if (e.pointerType !== 'touch' || !activePointer || activePointer.pointerId !== e.pointerId) return
+
+  e.preventDefault()
+
+  if (allowTap && mouseMode.value === activePointer.mode) {
+    handleTouchPointerMove(e)
+  }
+
+  const isTap = allowTap
+    && mouseMode.value === activePointer.mode
+    && !activePointer.leftButtonDown
+    && activePointer.maxDistanceSquared <= TOUCH_TAP_MOVE_THRESHOLD_PX ** 2
+  const wasDragging = activePointer.leftButtonDown
+
+  if (!allowTap && activePointer.doubleTapCandidate && activePointer.mode === 'relative') {
+    activePointer.doubleTapCandidate = false
+    sendTouchClick('left')
+  }
+
+  clearTouchPointer()
+
+  if (!wasDragging && isTap) {
+    registerTouchTap(activePointer)
+  }
+}
+
+function handleTouchPointerUp(e: PointerEvent) {
+  finishTouchPointer(e, true)
+}
+
+function handleTouchPointerCancel(e: PointerEvent) {
+  finishTouchPointer(e, false)
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -2358,6 +2652,21 @@ function requestMouseMoveFlush() {
   }
 
   scheduleMouseMoveFlush()
+}
+
+function flushPendingMouseMovesImmediately() {
+  if (mouseFlushTimer !== null) {
+    clearTimeout(mouseFlushTimer)
+    mouseFlushTimer = null
+  }
+
+  let sent = false
+  while (flushMouseMoveOnce()) {
+    sent = true
+  }
+  if (sent) {
+    lastMouseMoveSendTime = Date.now()
+  }
 }
 
 const pressedMouseButton = ref<'left' | 'right' | 'middle' | null>(null)
@@ -2469,6 +2778,7 @@ function handleFullscreenChange() {
 }
 
 function handleBlur() {
+  resetTouchInput()
   pressedKeys.value = []
   activeModifierMask.value = 0
   if (pressedMouseButton.value !== null) {
@@ -2609,6 +2919,8 @@ function handleVirtualKeyUp(key: CanonicalKey) {
 }
 
 function handleToggleMouseMode() {
+  resetTouchInput()
+
   if (mouseMode.value === 'relative' && isPointerLocked.value) {
     exitPointerLock()
   }
@@ -2855,13 +3167,17 @@ onUnmounted(() => {
         >
         <div
           ref="videoContainerRef"
-          class="relative bg-black overflow-hidden flex items-center justify-center"
+          class="relative bg-black overflow-hidden flex items-center justify-center touch-none"
           :style="videoContainerStyle"
           :class="{
             'cursor-none': true,
           }"
           tabindex="0"
           @mouseleave="handleMouseLeaveVideo"
+          @pointerdown="handleTouchPointerDown"
+          @pointermove="handleTouchPointerMove"
+          @pointerup="handleTouchPointerUp"
+          @pointercancel="handleTouchPointerCancel"
           @mousemove="handleMouseMove"
           @mousedown="handleMouseDown"
           @mouseup="handleMouseUp"
