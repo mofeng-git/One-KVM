@@ -150,6 +150,33 @@ impl AppState {
         &self.data_dir
     }
 
+    pub async fn runtime_third_party_config(&self) -> crate::config::AppConfig {
+        let mut config = self.config.get().as_ref().clone();
+
+        config.rustdesk.enabled = self
+            .rustdesk
+            .read()
+            .await
+            .as_ref()
+            .is_some_and(|service| service.is_listening());
+        config.vnc.enabled = match self.vnc.read().await.as_ref() {
+            Some(service) => matches!(
+                service.status().await,
+                crate::vnc::VncServiceStatus::Starting | crate::vnc::VncServiceStatus::Running
+            ),
+            None => false,
+        };
+        config.rtsp.enabled = match self.rtsp.read().await.as_ref() {
+            Some(service) => matches!(
+                service.status().await,
+                crate::rtsp::RtspServiceStatus::Starting | crate::rtsp::RtspServiceStatus::Running
+            ),
+            None => false,
+        };
+
+        config
+    }
+
     pub fn subscribe_device_info(&self) -> watch::Receiver<Option<SystemEvent>> {
         self.device_info_tx.subscribe()
     }

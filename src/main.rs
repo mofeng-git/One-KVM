@@ -643,8 +643,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     {
-        let runtime_config = state.config.get();
+        let runtime_config = state.runtime_third_party_config().await;
         let constraints = StreamCodecConstraints::from_config(&runtime_config);
+        state
+            .stream_manager
+            .set_runtime_codec_constraints(constraints.clone())
+            .await;
         match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
             Ok(result) if result.changed => {
                 if let Some(message) = result.message {

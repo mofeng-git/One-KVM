@@ -2376,7 +2376,7 @@ async function startRustdesk() {
 
   rustdeskLoading.value = true
   try {
-    await configStore.updateRustdesk(rustdeskUpdatePayload(true))
+    await configStore.updateRustdesk(rustdeskUpdatePayload())
     const status = await rustdeskConfigApi.start()
     applyRustdeskStatus(status)
   } catch {
@@ -2501,7 +2501,7 @@ async function saveRtspConfig() {
 async function startRtsp() {
   rtspLoading.value = true
   try {
-    await configStore.updateRtsp(rtspUpdatePayload(true))
+    await configStore.updateRtsp(rtspUpdatePayload())
     const status = await rtspConfigApi.start()
     applyRtspStatus(status)
   } catch {
@@ -2578,7 +2578,7 @@ async function startVnc() {
 
   vncLoading.value = true
   try {
-    await configStore.updateVnc(vncUpdatePayload(true))
+    await configStore.updateVnc(vncUpdatePayload())
     const status = await vncConfigApi.start()
     applyVncStatus(status)
   } catch {
@@ -4714,7 +4714,7 @@ watch(isWindows, () => {
                 <div class="grid gap-4">
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rtspLocalConfig.enabled" :disabled="rtspStatus?.service_status === 'running'" />
+                    <Switch v-model="rtspLocalConfig.enabled" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
@@ -4781,7 +4781,7 @@ watch(isWindows, () => {
                   <span class="shrink-0 font-medium">{{ t('extensions.rtsp.urlPreview') }}</span>
                   <code class="truncate font-mono">{{ rtspStreamUrl }}</code>
                 </div>
-                <Button class="shrink-0" :disabled="loading || rtspLoading || rtspStatus?.service_status === 'running'" @click="saveRtspConfig">
+                <Button class="shrink-0" :disabled="loading || rtspLoading" @click="saveRtspConfig">
                   <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
@@ -4844,7 +4844,7 @@ watch(isWindows, () => {
                 <div class="grid gap-4">
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="vncLocalConfig.enabled" :disabled="vncStatus?.service_status === 'running'" />
+                    <Switch v-model="vncLocalConfig.enabled" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
@@ -4903,7 +4903,7 @@ watch(isWindows, () => {
                   <span class="shrink-0 font-medium">{{ t('extensions.vnc.urlPreview') }}</span>
                   <code class="truncate font-mono">{{ vncStreamUrl }}</code>
                 </div>
-                <Button class="shrink-0" :disabled="loading || vncLoading || vncStatus?.service_status === 'running'" @click="saveVncConfig">
+                <Button class="shrink-0" :disabled="loading || vncLoading" @click="saveVncConfig">
                   <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
@@ -4969,7 +4969,7 @@ watch(isWindows, () => {
                 <div class="grid gap-4">
                   <div class="flex items-center justify-between">
                     <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rustdeskLocalConfig.enabled" :disabled="rustdeskStatus?.service_status === 'running'" />
+                    <Switch v-model="rustdeskLocalConfig.enabled" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
@@ -5093,7 +5093,7 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
-                <Button :disabled="loading || rustdeskStatus?.service_status === 'running'" @click="saveRustdeskConfig">
+                <Button :disabled="loading || rustdeskLoading" @click="saveRustdeskConfig">
                   <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>

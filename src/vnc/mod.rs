@@ -121,20 +121,36 @@ impl VncService {
             return Err(err);
         }
 
-        let bind_addr = bind_socket_addr(&config.bind, config.port)
-            .map_err(|e| AppError::BadRequest(format!("Invalid VNC bind address: {}", e)))?;
-        let listener = bind_tcp_listener(bind_addr).map_err(|e| {
-            AppError::Io(std::io::Error::new(
-                e.kind(),
-                format!("VNC bind failed: {}", e),
-            ))
-        })?;
-        let listener = TcpListener::from_std(listener).map_err(|e| {
-            AppError::Io(std::io::Error::new(
-                e.kind(),
-                format!("VNC listener setup failed: {}", e),
-            ))
-        })?;
+        let bind_addr = match bind_socket_addr(&config.bind, config.port) {
+            Ok(addr) => addr,
+            Err(err) => {
+                let error = AppError::BadRequest(format!("Invalid VNC bind address: {}", err));
+                *self.status.write().await = VncServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
+        let listener = match bind_tcp_listener(bind_addr) {
+            Ok(listener) => listener,
+            Err(err) => {
+                let error = AppError::Io(std::io::Error::new(
+                    err.kind(),
+                    format!("VNC bind failed: {}", err),
+                ));
+                *self.status.write().await = VncServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
+        let listener = match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(err) => {
+                let error = AppError::Io(std::io::Error::new(
+                    err.kind(),
+                    format!("VNC listener setup failed: {}", err),
+                ));
+                *self.status.write().await = VncServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
 
         let config_ref = self.config.clone();
         let video_manager = self.video_manager.clone();

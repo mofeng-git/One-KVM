@@ -32,6 +32,7 @@ use self::protocol::{make_local_addr, make_relay_response, make_request_relay};
 use self::rendezvous::{AddrMangle, RendezvousMediator, RendezvousStatus};
 
 const RELAY_CONNECT_TIMEOUT_MS: u64 = 10_000;
+const SERVICE_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServiceStatus {
@@ -121,6 +122,10 @@ impl RustDeskService {
         self.connection_manager.connection_count()
     }
 
+    pub fn is_listening(&self) -> bool {
+        self.tcp_listener_handle.read().is_some()
+    }
+
     pub async fn start(&self) -> anyhow::Result<()> {
         let config = self.config.read().clone();
 
@@ -169,7 +174,13 @@ impl RustDeskService {
 
         *self.rendezvous.write() = Some(mediator.clone());
 
-        let (tcp_handles, listen_port) = self.start_tcp_listener_with_port().await?;
+        let (tcp_handles, listen_port) = match self.start_tcp_listener_with_port().await {
+            Ok(result) => result,
+            Err(err) => {
+                *self.status.write() = ServiceStatus::Error(err.to_string());
+                return Err(err);
+            }
+        };
         *self.tcp_listener_handle.write() = Some(tcp_handles);
 
         mediator.set_listen_port(listen_port);
@@ -383,13 +394,15 @@ impl RustDeskService {
             mediator.stop();
         }
 
-        if let Some(handle) = self.rendezvous_handle.write().take() {
-            handle.abort();
+        let rendezvous_handle = self.rendezvous_handle.write().take();
+        if let Some(handle) = rendezvous_handle {
+            wait_for_service_task(handle, "rendezvous").await;
         }
 
-        if let Some(handles) = self.tcp_listener_handle.write().take() {
+        let tcp_listener_handles = self.tcp_listener_handle.write().take();
+        if let Some(handles) = tcp_listener_handles {
             for handle in handles {
-                handle.abort();
+                wait_for_service_task(handle, "TCP listener").await;
             }
         }
 
@@ -451,6 +464,19 @@ impl RustDeskService {
     #[deprecated(note = "Use save_credentials instead")]
     pub fn save_keypair(&self) {
         let _ = self.save_credentials();
+    }
+}
+
+async fn wait_for_service_task(mut handle: JoinHandle<()>, task_name: &str) {
+    match tokio::time::timeout(SERVICE_SHUTDOWN_TIMEOUT, &mut handle).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) if err.is_cancelled() => {}
+        Ok(Err(err)) => warn!("RustDesk {} task ended with error: {}", task_name, err),
+        Err(_) => {
+            warn!("Timed out waiting for RustDesk {} task to stop", task_name);
+            handle.abort();
+            let _ = handle.await;
+        }
     }
 }
 

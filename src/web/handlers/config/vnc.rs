@@ -30,7 +30,7 @@ async fn persist_and_apply(
         state,
         &old_config,
         &stored_config,
-        ConfigApplyOptions::forced(),
+        ConfigApplyOptions::preserving_service_state(),
     )
     .await?;
     Ok(stored_config)
@@ -76,13 +76,20 @@ pub async fn start_vnc_service(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<VncStatusResponse>> {
     let _apply_guard = try_apply_lock(&state.config_apply_locks.vnc, "vnc")?;
-    let current_config = state.config.get().vnc.clone();
-    let mut start_config = current_config.clone();
+    let stored_config = state.config.get().vnc.clone();
+    let runtime_config = state.runtime_third_party_config().await.vnc;
+    let mut start_config = stored_config.clone();
     start_config.enabled = true;
     if start_config.password.as_deref().unwrap_or("").is_empty() {
-        start_config.password = current_config.password.clone();
+        start_config.password = stored_config.password.clone();
     }
-    let stored_config = persist_and_apply(&state, current_config, start_config).await?;
+    apply_vnc_config(
+        &state,
+        &runtime_config,
+        &start_config,
+        ConfigApplyOptions::runtime_only(),
+    )
+    .await?;
     let (status, connection_count) = current_status(&state).await;
 
     Ok(Json(VncStatusResponse::new(
@@ -96,11 +103,17 @@ pub async fn stop_vnc_service(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<VncStatusResponse>> {
     let _apply_guard = try_apply_lock(&state.config_apply_locks.vnc, "vnc")?;
-    let current_config = state.config.get().vnc.clone();
-    let mut stop_config = current_config.clone();
+    let stored_config = state.config.get().vnc.clone();
+    let runtime_config = state.runtime_third_party_config().await.vnc;
+    let mut stop_config = stored_config.clone();
     stop_config.enabled = false;
-
-    let stored_config = persist_and_apply(&state, current_config, stop_config).await?;
+    apply_vnc_config(
+        &state,
+        &runtime_config,
+        &stop_config,
+        ConfigApplyOptions::runtime_only(),
+    )
+    .await?;
 
     Ok(Json(VncStatusResponse::new(
         &stored_config,

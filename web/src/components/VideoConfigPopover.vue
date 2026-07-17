@@ -74,18 +74,9 @@ const loadingCodecs = ref(false)
 const backends = ref<EncoderBackendInfo[]>([])
 const constraints = ref<StreamConstraintsResponse | null>(null)
 const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
-const isRtspEnabled = computed(() => {
-  if (typeof configStore.rtspStatus?.config?.enabled === 'boolean') {
-    return configStore.rtspStatus.config.enabled
-  }
-  return !!configStore.rtspConfig?.enabled
-})
-const isRustdeskEnabled = computed(() => {
-  if (typeof configStore.rustdeskStatus?.config?.enabled === 'boolean') {
-    return configStore.rustdeskStatus.config.enabled
-  }
-  return !!configStore.rustdeskConfig?.enabled
-})
+const isServiceActive = (status: string | undefined) => status === 'starting' || status === 'running'
+const isRtspEnabled = computed(() => isServiceActive(configStore.rtspStatus?.service_status))
+const isRustdeskEnabled = computed(() => isServiceActive(configStore.rustdeskStatus?.service_status))
 const isRtspCodecLocked = computed(() => isRtspEnabled.value)
 const isRustdeskWebrtcLocked = computed(() => !isRtspEnabled.value && isRustdeskEnabled.value)
 const codecLockSources = computed(() => {
