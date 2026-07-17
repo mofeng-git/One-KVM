@@ -2,6 +2,7 @@ use crate::ioctl::ioctl_and_convert;
 use crate::ioctl::IoctlConvertError;
 use crate::ioctl::IoctlConvertResult;
 use crate::ioctl::UncheckedV4l2Buffer;
+use crate::memory::MemoryType;
 use crate::QueueType;
 
 use std::convert::TryFrom;
@@ -51,12 +52,13 @@ pub type DqBufError<CE> = IoctlConvertError<DqBufIoctlError, CE>;
 pub type DqBufResult<O, CE> = IoctlConvertResult<O, DqBufIoctlError, CE>;
 
 /// Safe wrapper around the `VIDIOC_DQBUF` ioctl.
-pub fn dqbuf<O>(fd: &impl AsRawFd, queue: QueueType) -> DqBufResult<O, O::Error>
+pub fn dqbuf<O>(fd: &impl AsRawFd, queue: QueueType, memory: MemoryType) -> DqBufResult<O, O::Error>
 where
     O: TryFrom<UncheckedV4l2Buffer>,
     O::Error: std::fmt::Debug,
 {
     let mut v4l2_buf = UncheckedV4l2Buffer::new_for_querybuf(queue, None);
+    v4l2_buf.0.memory = memory as u32;
 
     ioctl_and_convert(
         unsafe { ioctl::vidioc_dqbuf(fd.as_raw_fd(), v4l2_buf.as_mut()) }
