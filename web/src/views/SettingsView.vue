@@ -62,6 +62,7 @@ import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
+import TotpSettingsCard from '@/components/TotpSettingsCard.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -331,8 +332,6 @@ const showPasswords = ref(false)
 const authConfig = ref<AuthConfig>({
   session_timeout_secs: 3600 * 24,
   single_user_allow_multiple_sessions: false,
-  totp_enabled: false,
-  totp_secret: undefined,
 })
 const authConfigLoading = ref(false)
 
@@ -2867,6 +2866,8 @@ watch(isWindows, () => {
                 </Button>
               </CardFooter>
             </Card>
+
+            <TotpSettingsCard />
 
             <Card>
               <CardHeader>

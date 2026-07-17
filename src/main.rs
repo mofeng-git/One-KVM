@@ -14,7 +14,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use one_kvm::atx::AtxController;
 use one_kvm::audio::{AudioController, AudioControllerConfig, AudioQuality};
-use one_kvm::auth::{SessionStore, UserStore};
+use one_kvm::auth::{SessionStore, TwoFactorService, UserStore};
 use one_kvm::computer_use::ComputerUseManager;
 use one_kvm::config::{self, AppConfig, ConfigStore};
 use one_kvm::db::DatabasePool;
@@ -118,6 +118,8 @@ struct UserCommand {
 enum UserAction {
     /// Set password for the single local user (interactive terminal prompt)
     SetPassword,
+    /// Disable TOTP for the single local user
+    DisableTotp,
 }
 
 #[tokio::main]
@@ -188,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
     let session_store = SessionStore::new(config.auth.session_timeout_secs as i64);
 
     let user_store = UserStore::new(db.clone_pool());
+    let two_factor = TwoFactorService::new(db.clone_pool());
 
     let (shutdown_tx, _) = broadcast::channel::<ShutdownAction>(1);
 
@@ -571,6 +574,7 @@ async fn main() -> anyhow::Result<()> {
         config_store.clone(),
         session_store,
         user_store,
+        two_factor,
         #[cfg(unix)]
         otg_service,
         stream_manager,
@@ -893,10 +897,13 @@ async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Resu
     tokio::fs::create_dir_all(&data_dir).await?;
     let db = open_database_pool(&data_dir).await?;
     let users = UserStore::new(db.clone_pool());
+    let two_factor = TwoFactorService::new(db.clone_pool());
     let sessions = SessionStore::new(0);
 
     match command {
-        CliCommand::User(user) => run_user_action(user.action, &users, &sessions).await,
+        CliCommand::User(user) => {
+            run_user_action(user.action, &users, &sessions, &two_factor).await
+        }
     }
 }
 
@@ -962,10 +969,24 @@ async fn run_user_action(
     action: UserAction,
     users: &UserStore,
     sessions: &SessionStore,
+    two_factor: &TwoFactorService,
 ) -> anyhow::Result<()> {
     match action {
         UserAction::SetPassword => set_user_password(users, sessions).await,
+        UserAction::DisableTotp => disable_user_totp(users, two_factor).await,
     }
+}
+
+async fn disable_user_totp(users: &UserStore, two_factor: &TwoFactorService) -> anyhow::Result<()> {
+    let user = users.single_user().await?.ok_or_else(|| {
+        anyhow::anyhow!("No local user exists yet; complete setup in the web UI first.")
+    })?;
+    if two_factor.disable_without_code(&user.id).await? {
+        println!("TOTP disabled for user '{}'.", user.username);
+    } else {
+        println!("TOTP is already disabled for user '{}'.", user.username);
+    }
+    Ok(())
 }
 
 async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow::Result<()> {

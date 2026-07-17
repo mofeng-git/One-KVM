@@ -38,6 +38,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let public_routes = Router::new()
         .route("/health", get(handlers::health_check))
         .route("/auth/login", post(handlers::login))
+        .route("/auth/login/totp", post(handlers::login_totp))
         .route("/setup", get(handlers::setup_status))
         .route("/setup/init", post(handlers::setup_init));
 
@@ -48,6 +49,16 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/auth/check", get(handlers::auth_check))
         .route("/auth/password", post(handlers::change_password))
         .route("/auth/username", post(handlers::change_username))
+        .route("/auth/totp", get(handlers::totp_status))
+        .route(
+            "/auth/totp/enrollment",
+            post(handlers::begin_totp_enrollment),
+        )
+        .route(
+            "/auth/totp/enrollment/confirm",
+            post(handlers::confirm_totp_enrollment),
+        )
+        .route("/auth/totp/disable", post(handlers::disable_totp))
         .route("/devices", get(handlers::list_devices))
         // WebSocket endpoint for real-time events
         .route("/ws", any(ws_handler))

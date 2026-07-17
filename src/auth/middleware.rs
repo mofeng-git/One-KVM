@@ -79,7 +79,7 @@ fn unauthorized_response(message: &str) -> Response {
 fn is_public_endpoint(path: &str) -> bool {
     matches!(
         path,
-        "/" | "/auth/login" | "/health" | "/setup" | "/setup/init"
+        "/" | "/auth/login" | "/auth/login/totp" | "/health" | "/setup" | "/setup/init"
     ) || path.starts_with("/assets/")
         || path.starts_with("/static/")
         || path.ends_with(".js")

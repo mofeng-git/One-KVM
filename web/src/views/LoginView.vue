@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
-import { AlertCircle, Lock, Eye, EyeOff, User, CircleHelp } from 'lucide-vue-next'
+import { AlertCircle, ArrowLeft, KeyRound, Lock, Eye, EyeOff, User, CircleHelp } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -23,6 +23,9 @@ function localizedLoginError(raw: string | null): string {
   if (!raw) return t('auth.loginFailed')
   if (raw.includes('Invalid username or password')) return t('auth.invalidPassword')
   if (raw.includes('System not initialized')) return t('auth.systemNotInitialized')
+  if (raw.includes('Invalid TOTP code')) return t('auth.invalidTotpCode')
+  if (raw.includes('challenge expired')) return t('auth.totpChallengeExpired')
+  if (raw.includes('Too many attempts')) return t('auth.totpRateLimited')
   return raw
 }
 
@@ -31,6 +34,14 @@ const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
+const step = ref<'password' | 'totp'>('password')
+const challengeId = ref('')
+const challengeExpiresAt = ref(0)
+const totpCode = ref('')
+
+function focusTotpInput() {
+  document.querySelector<HTMLInputElement>('#totp-code')?.focus()
+}
 
 async function handleLogin() {
   if (!username.value) {
@@ -45,16 +56,66 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
 
-  const success = await authStore.login(username.value, password.value)
+  const result = await authStore.beginLogin(username.value, password.value)
 
-  if (success) {
+  if (result?.next === 'authenticated') {
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
+  } else if (result?.next === 'totp' && result.challenge_id && result.expires_at_unix_ms) {
+    password.value = ''
+    challengeId.value = result.challenge_id
+    challengeExpiresAt.value = result.expires_at_unix_ms
+    step.value = 'totp'
+    await nextTick()
+    focusTotpInput()
   } else {
     error.value = localizedLoginError(authStore.error)
   }
 
   loading.value = false
+}
+
+function normalizeTotpCode() {
+  totpCode.value = totpCode.value.replace(/\D/g, '').slice(0, 6)
+}
+
+async function handleTotpLogin() {
+  normalizeTotpCode()
+  if (Date.now() >= challengeExpiresAt.value) {
+    error.value = t('auth.totpChallengeExpired')
+    returnToPassword(true)
+    return
+  }
+  if (totpCode.value.length !== 6) {
+    error.value = t('auth.enterTotpCode')
+    return
+  }
+  loading.value = true
+  error.value = ''
+  const success = await authStore.completeTotpLogin(challengeId.value, totpCode.value)
+  if (success) {
+    const redirect = route.query.redirect as string
+    router.push(redirect || '/')
+  } else {
+    error.value = localizedLoginError(authStore.error)
+    if (authStore.error?.includes('challenge expired') || authStore.error?.includes('Too many attempts')) {
+      returnToPassword(true)
+    } else {
+      totpCode.value = ''
+      await nextTick()
+      focusTotpInput()
+    }
+  }
+  loading.value = false
+}
+
+function returnToPassword(keepError = false) {
+  step.value = 'password'
+  challengeId.value = ''
+  challengeExpiresAt.value = 0
+  totpCode.value = ''
+  authStore.cancelPendingLogin()
+  if (!keepError) error.value = ''
 }
 </script>
 
@@ -70,11 +131,11 @@ async function handleLogin() {
           <BrandMark size="xl" />
         </div>
         <CardTitle class="text-xl sm:text-2xl">One-KVM</CardTitle>
-        <CardDescription>{{ t('auth.login') }}</CardDescription>
+        <CardDescription>{{ step === 'password' ? t('auth.login') : t('auth.totpPrompt') }}</CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form @submit.prevent="handleLogin">
+        <form v-if="step === 'password'" @submit.prevent="handleLogin">
           <FieldGroup>
           <Field>
             <FieldLabel for="username">{{ t('auth.username') }}</FieldLabel>
@@ -147,6 +208,41 @@ async function handleLogin() {
             <span v-else>{{ t('auth.login') }}</span>
           </Button>
 
+          </FieldGroup>
+        </form>
+        <form v-else @submit.prevent="handleTotpLogin">
+          <FieldGroup>
+            <Field>
+              <FieldLabel for="totp-code">{{ t('auth.totpCode') }}</FieldLabel>
+              <div class="relative">
+                <KeyRound class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="totp-code"
+                  v-model="totpCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="6"
+                  class="pl-10 font-mono text-lg"
+                  :placeholder="t('auth.totpCodePlaceholder')"
+                  @input="normalizeTotpCode"
+                />
+              </div>
+            </Field>
+
+            <Alert v-if="error" variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+
+            <Button type="submit" class="w-full" :disabled="loading">
+              <span v-if="loading">{{ t('common.loading') }}</span>
+              <span v-else>{{ t('auth.verifyAndLogin') }}</span>
+            </Button>
+            <Button type="button" variant="ghost" class="w-full" :disabled="loading" @click="returnToPassword()">
+              <ArrowLeft class="h-4 w-4" />
+              {{ t('auth.backToPassword') }}
+            </Button>
           </FieldGroup>
         </form>
       </CardContent>

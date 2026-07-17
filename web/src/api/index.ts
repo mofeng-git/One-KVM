@@ -15,11 +15,21 @@ const API_BASE = '/api'
 
 export const authApi = {
   login: (username: string, password: string) =>
-    request<{ success: boolean; message?: string }>(
+    request<AuthLoginResponse>(
       '/auth/login',
       {
         method: 'POST',
         body: JSON.stringify({ username, password }),
+      },
+      { toastOnError: false },
+    ),
+
+  loginTotp: (challengeId: string, code: string) =>
+    request<AuthLoginResponse>(
+      '/auth/login/totp',
+      {
+        method: 'POST',
+        body: JSON.stringify({ challenge_id: challengeId, code }),
       },
       { toastOnError: false },
     ),
@@ -41,6 +51,46 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, current_password: currentPassword }),
     }),
+
+  totpStatus: () =>
+    request<TotpStatusResponse>('/auth/totp'),
+
+  beginTotpEnrollment: (currentPassword: string) =>
+    request<TotpEnrollmentResponse>('/auth/totp/enrollment', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword }),
+    }, { toastOnError: false }),
+
+  confirmTotpEnrollment: (enrollmentId: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/enrollment/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ enrollment_id: enrollmentId, code }),
+    }, { toastOnError: false }),
+
+  disableTotp: (currentPassword: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, code }),
+    }, { toastOnError: false }),
+}
+
+export interface AuthLoginResponse {
+  next: 'authenticated' | 'totp'
+  challenge_id?: string
+  expires_at_unix_ms?: number
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean
+  server_time_unix_ms: number
+}
+
+export interface TotpEnrollmentResponse {
+  enrollment_id: string
+  secret: string
+  otpauth_uri: string
+  expires_at_unix_ms: number
+  server_time_unix_ms: number
 }
 
 export interface NetworkAddress {

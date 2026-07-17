@@ -5,8 +5,6 @@
 export interface AuthConfig {
 	session_timeout_secs: number;
 	single_user_allow_multiple_sessions: boolean;
-	totp_enabled: boolean;
-	totp_secret?: string;
 }
 
 export interface VideoConfig {

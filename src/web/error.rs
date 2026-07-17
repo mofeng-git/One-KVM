@@ -34,6 +34,8 @@ fn status_code(error: &AppError) -> StatusCode {
     match error {
         AppError::AuthError(_) | AppError::Unauthorized => StatusCode::UNAUTHORIZED,
         AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+        AppError::Conflict(_) => StatusCode::CONFLICT,
+        AppError::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
         AppError::NotFound(_) => StatusCode::NOT_FOUND,
         AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
@@ -61,6 +63,14 @@ mod tests {
         assert_eq!(
             status_code(&AppError::ServiceUnavailable("offline".to_string())),
             StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            status_code(&AppError::Conflict("exists".to_string())),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            status_code(&AppError::RateLimited("limited".to_string())),
+            StatusCode::TOO_MANY_REQUESTS
         );
     }
 

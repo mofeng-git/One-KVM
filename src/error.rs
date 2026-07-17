@@ -14,6 +14,12 @@ pub enum AppError {
     #[error("Bad request: {0}")]
     BadRequest(String),
 
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
+    #[error("Too many attempts: {0}")]
+    RateLimited(String),
+
     #[error("Persistence error: {0}")]
     Persistence(String),
 

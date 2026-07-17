@@ -54,8 +54,6 @@ use crate::config::AppConfig;
 use crate::state::AppState;
 
 fn sanitize_config_for_api(config: &mut AppConfig) {
-    config.auth.totp_secret = None;
-
     config.stream.turn_password = None;
     config.computer_use.api_key = None;
 

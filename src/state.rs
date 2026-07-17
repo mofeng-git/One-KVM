@@ -3,7 +3,7 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 
 use crate::atx::AtxController;
 use crate::audio::AudioController;
-use crate::auth::{SessionStore, UserStore};
+use crate::auth::{SessionStore, TwoFactorService, UserStore};
 use crate::computer_use::ComputerUseManager;
 use crate::config::ConfigStore;
 use crate::db::DatabasePool;
@@ -66,6 +66,7 @@ pub struct AppState {
     pub config: ConfigStore,
     pub sessions: SessionStore,
     pub users: UserStore,
+    pub two_factor: TwoFactorService,
     #[cfg(unix)]
     pub otg_service: Arc<OtgService>,
     pub stream_manager: Arc<VideoStreamManager>,
@@ -97,6 +98,7 @@ impl AppState {
         config: ConfigStore,
         sessions: SessionStore,
         users: UserStore,
+        two_factor: TwoFactorService,
         #[cfg(unix)] otg_service: Arc<OtgService>,
         stream_manager: Arc<VideoStreamManager>,
         webrtc: Arc<WebRtcStreamer>,
@@ -121,6 +123,7 @@ impl AppState {
             config,
             sessions,
             users,
+            two_factor,
             #[cfg(unix)]
             otg_service,
             stream_manager,
