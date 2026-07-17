@@ -7,6 +7,7 @@
 use crate::error::{Result, VentoyError};
 use crate::exfat::unicode;
 use crate::partition::PartitionLayout;
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -16,6 +17,8 @@ const FAT_ENTRY_FREE: u32 = 0x00000000;
 const FAT_ENTRY_END_OF_CHAIN: u32 = 0xFFFFFFFF;
 const VOLUME_DIRTY_FLAG: u16 = 0x0002;
 const VOLUME_FLAGS_OFFSET: u64 = 106;
+const NO_FAT_CHAIN_FLAG: u8 = 0x02;
+const MAX_DIRECTORY_SIZE: u64 = 256 * 1024 * 1024;
 
 /// Directory entry types
 const ENTRY_TYPE_END: u8 = 0x00;
@@ -114,13 +117,43 @@ struct FileEntryLocation {
     secondary_count: u8,
     /// Whether this is a directory
     is_directory: bool,
+    /// Whether the allocation is contiguous and its FAT entries must be ignored
+    no_fat_chain: bool,
+}
+
+/// A directory allocation. The root directory has no containing file entry.
+#[derive(Debug, Clone)]
+struct DirectoryLocation {
+    entry: Option<FileEntryLocation>,
+    first_cluster: u32,
+}
+
+impl DirectoryLocation {
+    fn root(first_cluster: u32) -> Self {
+        Self {
+            entry: None,
+            first_cluster,
+        }
+    }
+
+    fn from_entry(entry: FileEntryLocation) -> Result<Self> {
+        if !entry.is_directory {
+            return Err(VentoyError::FilesystemError(
+                "Entry is not a directory".to_string(),
+            ));
+        }
+        Ok(Self {
+            first_cluster: entry.first_cluster,
+            entry: Some(entry),
+        })
+    }
 }
 
 /// Result of resolving a path
 #[derive(Debug, Clone)]
 struct ResolvedPath {
-    /// The parent directory cluster (where the file/dir entry resides)
-    parent_cluster: u32,
+    /// The parent directory containing the target entry
+    parent: DirectoryLocation,
     /// The name of the target file/directory
     name: String,
     /// The location if the target exists
@@ -187,9 +220,41 @@ impl ExfatFs {
         let bytes_per_sector_shift = boot_sector[108];
         let sectors_per_cluster_shift = boot_sector[109];
 
-        let bytes_per_sector = 1u32 << bytes_per_sector_shift;
-        let sectors_per_cluster = 1u32 << sectors_per_cluster_shift;
-        let cluster_size = bytes_per_sector * sectors_per_cluster;
+        if !(9..=12).contains(&bytes_per_sector_shift)
+            || u16::from(bytes_per_sector_shift) + u16::from(sectors_per_cluster_shift) > 25
+            || cluster_count == 0
+        {
+            return Err(VentoyError::FilesystemError(
+                "Invalid exFAT boot-sector geometry".to_string(),
+            ));
+        }
+
+        let bytes_per_sector =
+            1u32.checked_shl(bytes_per_sector_shift.into())
+                .ok_or_else(|| {
+                    VentoyError::FilesystemError("Invalid bytes-per-sector shift".to_string())
+                })?;
+        let sectors_per_cluster = 1u32
+            .checked_shl(sectors_per_cluster_shift.into())
+            .ok_or_else(|| {
+                VentoyError::FilesystemError("Invalid sectors-per-cluster shift".to_string())
+            })?;
+        let cluster_size = bytes_per_sector
+            .checked_mul(sectors_per_cluster)
+            .ok_or_else(|| VentoyError::FilesystemError("Cluster size overflow".to_string()))?;
+
+        let fat_bytes = u64::from(fat_length) * u64::from(bytes_per_sector);
+        let required_fat_bytes = (u64::from(cluster_count) + 2) * 4;
+        let heap_end_sector = u64::from(cluster_heap_offset)
+            .checked_add(u64::from(cluster_count) * u64::from(sectors_per_cluster))
+            .ok_or_else(|| {
+                VentoyError::FilesystemError("Cluster heap geometry overflow".to_string())
+            })?;
+        if fat_bytes < required_fat_bytes || heap_end_sector > layout.data_size_sectors {
+            return Err(VentoyError::FilesystemError(
+                "Invalid exFAT FAT or cluster-heap geometry".to_string(),
+            ));
+        }
 
         let mut fs = Self {
             file,
@@ -219,7 +284,8 @@ impl ExfatFs {
     fn discover_root_metadata_entries(&mut self) -> Result<()> {
         let mut bitmap_found = false;
         let mut upcase_found = false;
-        let root_clusters = self.read_cluster_chain(self.first_cluster_of_root)?;
+        let root = DirectoryLocation::root(self.first_cluster_of_root);
+        let root_clusters = self.directory_clusters(&root)?;
 
         'outer: for &cluster in &root_clusters {
             let cluster_data = self.read_cluster(cluster)?;
@@ -288,6 +354,13 @@ impl ExfatFs {
             return Err(VentoyError::FilesystemError(format!(
                 "exFAT allocation bitmap too small: {} bytes, need at least {}",
                 self.allocation_bitmap_size, min_bitmap_size
+            )));
+        }
+        let max_bitmap_size = min_bitmap_size + self.cluster_size as u64 - 1;
+        if self.allocation_bitmap_size > max_bitmap_size {
+            return Err(VentoyError::FilesystemError(format!(
+                "exFAT allocation bitmap is unreasonably large: {} bytes",
+                self.allocation_bitmap_size
             )));
         }
 
@@ -456,23 +529,146 @@ impl ExfatFs {
         Ok(())
     }
 
-    /// Read the entire cluster chain starting from a cluster
-    fn read_cluster_chain(&mut self, first_cluster: u32) -> Result<Vec<u32>> {
+    fn max_cluster(&self) -> u32 {
+        self.cluster_count + 1
+    }
+
+    fn validate_cluster(&self, cluster: u32) -> Result<()> {
+        if cluster < 2 || cluster > self.max_cluster() {
+            return Err(VentoyError::FilesystemError(format!(
+                "Cluster {} is outside the cluster heap (2..={})",
+                cluster,
+                self.max_cluster()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Read a FAT chain with an explicit upper bound and cycle detection.
+    fn read_cluster_chain_limited(
+        &mut self,
+        first_cluster: u32,
+        max_clusters: usize,
+    ) -> Result<Vec<u32>> {
+        if max_clusters == 0 {
+            return Err(VentoyError::FilesystemError(
+                "Cluster chain limit must be greater than zero".to_string(),
+            ));
+        }
+        self.validate_cluster(first_cluster)?;
+
         let mut chain = Vec::new();
+        chain.try_reserve(max_clusters.min(1024)).map_err(|_| {
+            VentoyError::FilesystemError("Unable to reserve cluster chain memory".to_string())
+        })?;
+        let mut visited = HashSet::new();
         let mut current = first_cluster;
 
-        while current >= 2 && current < 0xFFFFFFF8 {
+        loop {
+            self.validate_cluster(current)?;
+            if !visited.insert(current) {
+                return Err(VentoyError::FilesystemError(format!(
+                    "FAT chain contains a cycle at cluster {}",
+                    current
+                )));
+            }
+            if chain.len() >= max_clusters {
+                return Err(VentoyError::FilesystemError(format!(
+                    "FAT chain exceeds the {} cluster limit",
+                    max_clusters
+                )));
+            }
+
             chain.push(current);
-            current = self.read_fat_entry(current)?;
-            // Safety limit to prevent infinite loops
-            if chain.len() > self.cluster_count as usize {
+            let next = self.read_fat_entry(current)?;
+            if next == FAT_ENTRY_END_OF_CHAIN {
+                return Ok(chain);
+            }
+            if next == FAT_ENTRY_FREE || next == 0xFFFFFFF7 || next >= 0xFFFFFFF8 {
+                return Err(VentoyError::FilesystemError(format!(
+                    "Invalid FAT entry {:#010X} after cluster {}",
+                    next, current
+                )));
+            }
+            current = next;
+        }
+    }
+
+    /// Read the entire cluster chain starting from a cluster.
+    fn read_cluster_chain(&mut self, first_cluster: u32) -> Result<Vec<u32>> {
+        self.read_cluster_chain_limited(first_cluster, self.cluster_count as usize)
+    }
+
+    fn clusters_for_allocation(&mut self, location: &FileEntryLocation) -> Result<Vec<u32>> {
+        if location.data_length == 0 {
+            if location.first_cluster != 0 || location.no_fat_chain {
                 return Err(VentoyError::FilesystemError(
-                    "FAT chain too long, possible corruption".to_string(),
+                    "Zero-length allocation has invalid cluster metadata".to_string(),
                 ));
             }
+            return Ok(Vec::new());
         }
 
+        self.validate_cluster(location.first_cluster)?;
+        let cluster_size = self.cluster_size as u64;
+        let cluster_count_u64 = location.data_length.div_ceil(cluster_size);
+        let cluster_count = usize::try_from(cluster_count_u64).map_err(|_| {
+            VentoyError::FilesystemError("Allocation cluster count is too large".to_string())
+        })?;
+
+        if location.no_fat_chain {
+            let last_cluster = u64::from(location.first_cluster)
+                .checked_add(cluster_count_u64 - 1)
+                .ok_or_else(|| {
+                    VentoyError::FilesystemError(
+                        "Contiguous allocation cluster range overflow".to_string(),
+                    )
+                })?;
+            if last_cluster > u64::from(self.max_cluster()) {
+                return Err(VentoyError::FilesystemError(format!(
+                    "Contiguous allocation ends outside the cluster heap at {}",
+                    last_cluster
+                )));
+            }
+
+            let mut clusters = Vec::new();
+            clusters.try_reserve_exact(cluster_count).map_err(|_| {
+                VentoyError::FilesystemError(
+                    "Unable to reserve contiguous allocation metadata".to_string(),
+                )
+            })?;
+            clusters.extend(
+                location.first_cluster
+                    ..=u32::try_from(last_cluster).expect("validated cluster range"),
+            );
+            return Ok(clusters);
+        }
+
+        let chain = self.read_cluster_chain_limited(location.first_cluster, cluster_count)?;
+        if chain.len() != cluster_count {
+            return Err(VentoyError::FilesystemError(format!(
+                "FAT chain has {} clusters, allocation needs {}",
+                chain.len(),
+                cluster_count
+            )));
+        }
         Ok(chain)
+    }
+
+    fn directory_clusters(&mut self, directory: &DirectoryLocation) -> Result<Vec<u32>> {
+        let max_clusters = MAX_DIRECTORY_SIZE.div_ceil(self.cluster_size as u64) as usize;
+        match directory.entry.as_ref() {
+            Some(entry) if entry.no_fat_chain => {
+                if entry.data_length > MAX_DIRECTORY_SIZE {
+                    return Err(VentoyError::FilesystemError(format!(
+                        "Directory allocation exceeds the {} byte limit",
+                        MAX_DIRECTORY_SIZE
+                    )));
+                }
+                self.clusters_for_allocation(entry)
+            }
+            _ => self.read_cluster_chain_limited(directory.first_cluster, max_clusters),
+        }
     }
 
     // ==================== Allocation Bitmap Operations ====================
@@ -690,14 +886,15 @@ impl ExfatFs {
         Ok(first_cluster)
     }
 
-    /// Free a cluster chain
-    fn free_cluster_chain(&mut self, first_cluster: u32) -> Result<()> {
-        let chain = self.read_cluster_chain(first_cluster)?;
+    fn free_clusters(&mut self, clusters: &[u32], clear_fat: bool) -> Result<()> {
+        if clusters.is_empty() {
+            return Ok(());
+        }
 
         // Update bitmap using cache
         {
             let bitmap = self.get_bitmap_mut()?;
-            for &cluster in &chain {
+            for &cluster in clusters {
                 Self::set_cluster_allocated(bitmap, cluster, false);
             }
         }
@@ -705,11 +902,24 @@ impl ExfatFs {
         self.flush_bitmap_now()?;
 
         // Clear FAT entries and update cache
-        for &cluster in &chain {
-            self.write_fat_entry(cluster, FAT_ENTRY_FREE)?;
+        if clear_fat {
+            for &cluster in clusters {
+                self.write_fat_entry(cluster, FAT_ENTRY_FREE)?;
+            }
         }
 
         Ok(())
+    }
+
+    fn free_allocation(&mut self, location: &FileEntryLocation) -> Result<()> {
+        let clusters = self.clusters_for_allocation(location)?;
+        self.free_clusters(&clusters, !location.no_fat_chain)
+    }
+
+    fn free_directory_allocation(&mut self, location: &FileEntryLocation) -> Result<()> {
+        let directory = DirectoryLocation::from_entry(location.clone())?;
+        let clusters = self.directory_clusters(&directory)?;
+        self.free_clusters(&clusters, !location.no_fat_chain)
     }
 
     /// Flush bitmap to disk immediately
@@ -723,29 +933,6 @@ impl ExfatFs {
             self.bitmap_cache = Some(bitmap);
         }
         Ok(())
-    }
-
-    /// Extend a cluster chain by appending one new cluster
-    ///
-    /// Returns the cluster number of the newly allocated cluster
-    fn extend_cluster_chain(&mut self, first_cluster: u32) -> Result<u32> {
-        // Find the last cluster in the chain
-        let chain = self.read_cluster_chain(first_cluster)?;
-        let last_cluster = *chain
-            .last()
-            .ok_or_else(|| VentoyError::FilesystemError("Empty cluster chain".to_string()))?;
-
-        // Allocate one new cluster
-        let new_cluster = self.allocate_clusters(1)?;
-
-        // Link the last cluster to the new cluster
-        self.write_fat_entry(last_cluster, new_cluster)?;
-
-        // Initialize the new cluster with zeros
-        let empty_cluster = vec![0u8; self.cluster_size as usize];
-        self.write_cluster(new_cluster, &empty_cluster)?;
-
-        Ok(new_cluster)
     }
 
     // ==================== Directory Entry Operations ====================
@@ -812,11 +999,8 @@ impl ExfatFs {
         // 2. Stream Extension Entry (0xC0)
         let mut stream_entry = [0u8; 32];
         stream_entry[0] = ENTRY_TYPE_STREAM;
-        stream_entry[1] = 0x03; // GeneralSecondaryFlags: AllocationPossible | NoFatChain (for contiguous)
-                                // For non-contiguous files, use 0x01
-        if size > 0 {
-            stream_entry[1] = 0x01; // AllocationPossible, use FAT chain
-        }
+        // AllocationPossible. Files created here always use FAT chains when allocated.
+        stream_entry[1] = 0x01;
         stream_entry[3] = name_utf16.len() as u8; // NameLength
         let name_hash = Self::calculate_name_hash(name);
         stream_entry[4..6].copy_from_slice(&name_hash.to_le_bytes());
@@ -853,16 +1037,18 @@ impl ExfatFs {
         entries
     }
 
-    /// Find a file entry in a specific directory cluster
+    fn root_directory(&self) -> DirectoryLocation {
+        DirectoryLocation::root(self.first_cluster_of_root)
+    }
+
+    /// Find a file entry in a specific directory
     fn find_entry_in_directory(
         &mut self,
-        dir_cluster: u32,
+        directory: &DirectoryLocation,
         name: &str,
     ) -> Result<Option<FileEntryLocation>> {
         let target_name_lower = name.to_lowercase();
-
-        // Read all clusters in the directory chain
-        let dir_clusters = self.read_cluster_chain(dir_cluster)?;
+        let dir_clusters = self.directory_clusters(directory)?;
 
         for &cluster in &dir_clusters {
             let cluster_data = self.read_cluster(cluster)?;
@@ -883,6 +1069,7 @@ impl ExfatFs {
                     let mut file_name = String::new();
                     let mut first_cluster = 0u32;
                     let mut data_length = 0u64;
+                    let mut no_fat_chain = false;
 
                     // Parse secondary entries
                     for j in 1..=secondary_count {
@@ -893,6 +1080,8 @@ impl ExfatFs {
 
                         let sec_type = cluster_data[entry_offset];
                         if sec_type == ENTRY_TYPE_STREAM {
+                            no_fat_chain =
+                                (cluster_data[entry_offset + 1] & NO_FAT_CHAIN_FLAG) != 0;
                             first_cluster = u32::from_le_bytes(
                                 cluster_data[entry_offset + 20..entry_offset + 24]
                                     .try_into()
@@ -926,6 +1115,7 @@ impl ExfatFs {
                             data_length,
                             secondary_count: secondary_count as u8,
                             is_directory,
+                            no_fat_chain,
                         }));
                     }
 
@@ -941,7 +1131,8 @@ impl ExfatFs {
 
     /// Find a file entry in the root directory (backward compatible)
     fn find_file_entry(&mut self, name: &str) -> Result<Option<FileEntryLocation>> {
-        self.find_entry_in_directory(self.first_cluster_of_root, name)
+        let root = self.root_directory();
+        self.find_entry_in_directory(&root, name)
     }
 
     /// Resolve a path to its parent directory cluster and target name
@@ -955,12 +1146,11 @@ impl ExfatFs {
             return Err(VentoyError::FilesystemError("Empty path".to_string()));
         }
 
-        // Start from root
-        let mut current_cluster = self.first_cluster_of_root;
+        let mut current = self.root_directory();
 
         // Navigate through all but the last component (which is the target)
         for (idx, &component) in components.iter().take(components.len() - 1).enumerate() {
-            match self.find_entry_in_directory(current_cluster, component)? {
+            match self.find_entry_in_directory(&current, component)? {
                 Some(entry) => {
                     if !entry.is_directory {
                         return Err(VentoyError::FilesystemError(format!(
@@ -968,13 +1158,11 @@ impl ExfatFs {
                             component
                         )));
                     }
-                    current_cluster = entry.first_cluster;
+                    current = DirectoryLocation::from_entry(entry)?;
                 }
                 None => {
                     if create_parents {
-                        // Create the intermediate directory
-                        let new_cluster = self.create_directory_in(current_cluster, component)?;
-                        current_cluster = new_cluster;
+                        current = self.create_directory_in(&mut current, component)?;
                     } else {
                         let partial_path = components[..=idx].join("/");
                         return Err(VentoyError::FilesystemError(format!(
@@ -987,13 +1175,104 @@ impl ExfatFs {
         }
 
         let target_name = components.last().unwrap().to_string();
-        let location = self.find_entry_in_directory(current_cluster, &target_name)?;
+        let location = self.find_entry_in_directory(&current, &target_name)?;
 
         Ok(ResolvedPath {
-            parent_cluster: current_cluster,
+            parent: current,
             name: target_name,
             location,
         })
+    }
+
+    fn update_entry_allocation(
+        &mut self,
+        location: &mut FileEntryLocation,
+        no_fat_chain: bool,
+        data_length: u64,
+    ) -> Result<()> {
+        let mut cluster_data = self.read_cluster(location.directory_cluster)?;
+        let set_start = location.entry_offset as usize;
+        let entry_count = 1 + location.secondary_count as usize;
+        let set_end = set_start
+            .checked_add(entry_count * 32)
+            .ok_or_else(|| VentoyError::FilesystemError("Directory entry overflow".to_string()))?;
+        if set_end > cluster_data.len() {
+            return Err(VentoyError::FilesystemError(
+                "Directory entry set crosses an unsupported cluster boundary".to_string(),
+            ));
+        }
+
+        let stream_offset = (1..entry_count)
+            .map(|index| set_start + index * 32)
+            .find(|&offset| cluster_data[offset] == ENTRY_TYPE_STREAM)
+            .ok_or_else(|| {
+                VentoyError::FilesystemError("Stream extension entry not found".to_string())
+            })?;
+
+        if no_fat_chain {
+            cluster_data[stream_offset + 1] |= NO_FAT_CHAIN_FLAG;
+        } else {
+            cluster_data[stream_offset + 1] &= !NO_FAT_CHAIN_FLAG;
+        }
+        cluster_data[stream_offset + 8..stream_offset + 16]
+            .copy_from_slice(&data_length.to_le_bytes());
+        cluster_data[stream_offset + 24..stream_offset + 32]
+            .copy_from_slice(&data_length.to_le_bytes());
+
+        let entries: Vec<[u8; 32]> = cluster_data[set_start..set_end]
+            .chunks_exact(32)
+            .map(|entry| entry.try_into().expect("32-byte directory entry"))
+            .collect();
+        let checksum = Self::calculate_entry_set_checksum(&entries);
+        cluster_data[set_start + 2..set_start + 4].copy_from_slice(&checksum.to_le_bytes());
+        self.write_cluster(location.directory_cluster, &cluster_data)?;
+
+        location.no_fat_chain = no_fat_chain;
+        location.data_length = data_length;
+        Ok(())
+    }
+
+    fn extend_directory(&mut self, directory: &mut DirectoryLocation) -> Result<u32> {
+        let existing = self.directory_clusters(directory)?;
+        let last_cluster = *existing.last().ok_or_else(|| {
+            VentoyError::FilesystemError("Empty directory allocation".to_string())
+        })?;
+        let new_length = if directory.entry.is_some() {
+            let length = (existing.len() as u64 + 1)
+                .checked_mul(self.cluster_size as u64)
+                .ok_or_else(|| {
+                    VentoyError::FilesystemError("Directory size overflow".to_string())
+                })?;
+            if length > MAX_DIRECTORY_SIZE {
+                return Err(VentoyError::FilesystemError(format!(
+                    "Directory exceeds the {} byte limit",
+                    MAX_DIRECTORY_SIZE
+                )));
+            }
+            Some(length)
+        } else {
+            None
+        };
+        let new_cluster = self.allocate_clusters(1)?;
+
+        if directory
+            .entry
+            .as_ref()
+            .is_some_and(|entry| entry.no_fat_chain)
+        {
+            for pair in existing.windows(2) {
+                self.write_fat_entry(pair[0], pair[1])?;
+            }
+        }
+        self.write_fat_entry(last_cluster, new_cluster)?;
+
+        if let (Some(entry), Some(new_length)) = (directory.entry.as_mut(), new_length) {
+            self.update_entry_allocation(entry, false, new_length)?;
+        }
+
+        let empty_cluster = vec![0u8; self.cluster_size as usize];
+        self.write_cluster(new_cluster, &empty_cluster)?;
+        Ok(new_cluster)
     }
 
     /// Find a free slot in a directory for new entries
@@ -1004,10 +1283,10 @@ impl ExfatFs {
     /// automatically extend the directory by allocating a new cluster.
     fn find_free_slot_in_directory(
         &mut self,
-        dir_cluster: u32,
+        directory: &mut DirectoryLocation,
         entries_needed: usize,
     ) -> Result<(u32, u32)> {
-        let dir_clusters = self.read_cluster_chain(dir_cluster)?;
+        let dir_clusters = self.directory_clusters(directory)?;
 
         for &cluster in &dir_clusters {
             let cluster_data = self.read_cluster(cluster)?;
@@ -1050,14 +1329,12 @@ impl ExfatFs {
         }
 
         // No space found in existing clusters - extend the directory
-        let new_cluster = self.extend_cluster_chain(dir_cluster)?;
+        let new_cluster = self.extend_directory(directory)?;
 
         // Clear any END markers in previous clusters
         // This is critical: when we extend a directory, we need to clear any END markers
         // that may exist in previous clusters, otherwise list_files will stop prematurely
-        let dir_clusters_before = self.read_cluster_chain(dir_cluster)?;
-        for &cluster in &dir_clusters_before[..dir_clusters_before.len() - 1] {
-            // Exclude the newly added cluster
+        for &cluster in &dir_clusters {
             let mut cluster_data = self.read_cluster(cluster)?;
 
             // Scan for END markers and replace them with inactive entries. Leaving an
@@ -1079,15 +1356,15 @@ impl ExfatFs {
     /// Find a free slot in the root directory for new entries (backward compatible)
     #[allow(dead_code)]
     fn find_free_directory_slot(&mut self, entries_needed: usize) -> Result<u32> {
-        let (_, offset) =
-            self.find_free_slot_in_directory(self.first_cluster_of_root, entries_needed)?;
+        let mut root = self.root_directory();
+        let (_, offset) = self.find_free_slot_in_directory(&mut root, entries_needed)?;
         Ok(offset)
     }
 
     /// Create an entry in a specific directory
     fn create_entry_in_directory(
         &mut self,
-        dir_cluster: u32,
+        directory: &mut DirectoryLocation,
         name: &str,
         first_cluster: u32,
         size: u64,
@@ -1095,7 +1372,7 @@ impl ExfatFs {
     ) -> Result<()> {
         let entries = Self::create_file_entries(name, first_cluster, size, is_dir);
         let (slot_cluster, slot_offset) =
-            self.find_free_slot_in_directory(dir_cluster, entries.len())?;
+            self.find_free_slot_in_directory(directory, entries.len())?;
 
         let mut cluster_data = self.read_cluster(slot_cluster)?;
 
@@ -1112,13 +1389,18 @@ impl ExfatFs {
     /// Create a file entry in the root directory (backward compatible)
     #[allow(dead_code)]
     fn create_file_entry(&mut self, name: &str, first_cluster: u32, size: u64) -> Result<()> {
-        self.create_entry_in_directory(self.first_cluster_of_root, name, first_cluster, size, false)
+        let mut root = self.root_directory();
+        self.create_entry_in_directory(&mut root, name, first_cluster, size, false)
     }
 
     /// Create a directory in a specific parent directory
     ///
-    /// Returns the cluster number of the new directory
-    fn create_directory_in(&mut self, parent_cluster: u32, name: &str) -> Result<u32> {
+    /// Returns the allocation descriptor of the new directory.
+    fn create_directory_in(
+        &mut self,
+        parent: &mut DirectoryLocation,
+        name: &str,
+    ) -> Result<DirectoryLocation> {
         // Validate name
         if name.is_empty() || name.len() > 255 {
             return Err(VentoyError::FilesystemError(
@@ -1127,10 +1409,7 @@ impl ExfatFs {
         }
 
         // Check if already exists
-        if self
-            .find_entry_in_directory(parent_cluster, name)?
-            .is_some()
-        {
+        if self.find_entry_in_directory(parent, name)?.is_some() {
             return Err(VentoyError::FilesystemError(format!(
                 "Entry '{}' already exists",
                 name
@@ -1147,16 +1426,13 @@ impl ExfatFs {
         // exFAT directories have allocated data. A zero-length directory stream
         // makes Windows treat the directory as corrupt even when the cluster
         // chain and child entries are otherwise valid.
-        self.create_entry_in_directory(
-            parent_cluster,
-            name,
-            dir_cluster,
-            self.cluster_size as u64,
-            true,
-        )?;
+        self.create_entry_in_directory(parent, name, dir_cluster, self.cluster_size as u64, true)?;
 
         self.file.flush()?;
-        Ok(dir_cluster)
+        let entry = self.find_entry_in_directory(parent, name)?.ok_or_else(|| {
+            VentoyError::FilesystemError("Created directory not found".to_string())
+        })?;
+        DirectoryLocation::from_entry(entry)
     }
 
     /// Delete a file entry (mark as deleted)
@@ -1186,19 +1462,14 @@ impl ExfatFs {
 
     // ==================== Public File Operations ====================
 
-    /// List files in a specific directory cluster
+    /// List files in a specific directory allocation.
     fn list_files_in_directory(
         &mut self,
-        dir_cluster: u32,
+        directory: &DirectoryLocation,
         current_path: &str,
     ) -> Result<Vec<FileInfo>> {
-        let dir_clusters = self.read_cluster_chain(dir_cluster)?;
-
-        // Pre-allocate Vec based on estimated entries
-        // Each directory entry is 32 bytes, and a file typically uses 3+ entries (file, stream, name)
-        // So estimate ~96 bytes per file on average
-        let estimated_entries = dir_clusters.len() * (self.cluster_size as usize / 96) + 1;
-        let mut files = Vec::with_capacity(estimated_entries);
+        let dir_clusters = self.directory_clusters(directory)?;
+        let mut files = Vec::new();
 
         for (cluster_idx, &cluster) in dir_clusters.iter().enumerate() {
             let cluster_data = self.read_cluster(cluster)?;
@@ -1279,7 +1550,8 @@ impl ExfatFs {
 
     /// List files in root directory
     pub fn list_files(&mut self) -> Result<Vec<FileInfo>> {
-        self.list_files_in_directory(self.first_cluster_of_root, "")
+        let root = self.root_directory();
+        self.list_files_in_directory(&root, "")
     }
 
     /// List files in a specific directory path
@@ -1290,9 +1562,10 @@ impl ExfatFs {
 
         let resolved = self.resolve_path(path, false)?;
         match resolved.location {
-            Some(loc) if loc.is_directory => {
-                self.list_files_in_directory(loc.first_cluster, path.trim_matches('/'))
-            }
+            Some(loc) if loc.is_directory => self.list_files_in_directory(
+                &DirectoryLocation::from_entry(loc)?,
+                path.trim_matches('/'),
+            ),
             Some(_) => Err(VentoyError::FilesystemError(format!(
                 "'{}' is not a directory",
                 path
@@ -1307,15 +1580,15 @@ impl ExfatFs {
     /// List all files recursively
     pub fn list_files_recursive(&mut self) -> Result<Vec<FileInfo>> {
         let mut all_files = Vec::new();
-        let mut dirs_to_visit = vec![(self.first_cluster_of_root, String::new())];
+        let mut dirs_to_visit = vec![(self.root_directory(), String::new())];
 
-        while let Some((dir_cluster, current_path)) = dirs_to_visit.pop() {
-            let files = self.list_files_in_directory(dir_cluster, &current_path)?;
+        while let Some((directory, current_path)) = dirs_to_visit.pop() {
+            let files = self.list_files_in_directory(&directory, &current_path)?;
             for file in files {
                 if file.is_directory {
-                    // Get the directory's first cluster
-                    if let Some(loc) = self.find_entry_in_directory(dir_cluster, &file.name)? {
-                        dirs_to_visit.push((loc.first_cluster, file.path.clone()));
+                    if let Some(loc) = self.find_entry_in_directory(&directory, &file.name)? {
+                        dirs_to_visit
+                            .push((DirectoryLocation::from_entry(loc)?, file.path.clone()));
                     }
                 }
                 all_files.push(file);
@@ -1328,7 +1601,7 @@ impl ExfatFs {
     /// Write file data to allocated clusters and create directory entry
     fn write_file_data_and_entry(
         &mut self,
-        dir_cluster: u32,
+        directory: &mut DirectoryLocation,
         name: &str,
         data: &[u8],
     ) -> Result<()> {
@@ -1359,7 +1632,7 @@ impl ExfatFs {
         };
 
         // Create directory entry
-        self.create_entry_in_directory(dir_cluster, name, first_cluster, data.len() as u64, false)?;
+        self.create_entry_in_directory(directory, name, first_cluster, data.len() as u64, false)?;
 
         self.file.flush()?;
         Ok(())
@@ -1384,7 +1657,8 @@ impl ExfatFs {
                 )));
             }
 
-            self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
+            let mut root = self.root_directory();
+            self.write_file_data_and_entry(&mut root, name, data)
         })();
         self.finish_write_transaction(was_dirty, result)
     }
@@ -1412,7 +1686,8 @@ impl ExfatFs {
                 }
             }
 
-            self.write_file_data_and_entry(self.first_cluster_of_root, name, data)
+            let mut root = self.root_directory();
+            self.write_file_data_and_entry(&mut root, name, data)
         })();
         self.finish_write_transaction(was_dirty, result)
     }
@@ -1431,7 +1706,7 @@ impl ExfatFs {
     ) -> Result<()> {
         let was_dirty = self.begin_write_transaction()?;
         let result = (|| {
-            let resolved = self.resolve_path(path, create_parents)?;
+            let mut resolved = self.resolve_path(path, create_parents)?;
 
             // Validate filename
             if resolved.name.is_empty() || resolved.name.len() > 255 {
@@ -1451,7 +1726,7 @@ impl ExfatFs {
                 if overwrite {
                     // Delete existing file
                     if location.first_cluster >= 2 {
-                        self.free_cluster_chain(location.first_cluster)?;
+                        self.free_allocation(&location)?;
                     }
                     self.delete_file_entry(&location)?;
                 } else {
@@ -1462,7 +1737,7 @@ impl ExfatFs {
                 }
             }
 
-            self.write_file_data_and_entry(resolved.parent_cluster, &resolved.name, data)
+            self.write_file_data_and_entry(&mut resolved.parent, &resolved.name, data)
         })();
         self.finish_write_transaction(was_dirty, result)
     }
@@ -1473,12 +1748,18 @@ impl ExfatFs {
             return Ok(Vec::new());
         }
 
-        let chain = self.read_cluster_chain(location.first_cluster)?;
-        let mut data = Vec::with_capacity(location.data_length as usize);
+        let chain = self.clusters_for_allocation(location)?;
+        let data_length = usize::try_from(location.data_length).map_err(|_| {
+            VentoyError::FilesystemError("File is too large to read into memory".to_string())
+        })?;
+        let mut data = Vec::new();
+        data.try_reserve_exact(data_length).map_err(|_| {
+            VentoyError::FilesystemError("File is too large to read into memory".to_string())
+        })?;
 
         for &cluster in &chain {
             let cluster_data = self.read_cluster(cluster)?;
-            let remaining = location.data_length as usize - data.len();
+            let remaining = data_length - data.len();
             let chunk_size = remaining.min(self.cluster_size as usize);
             data.extend_from_slice(&cluster_data[..chunk_size]);
         }
@@ -1541,10 +1822,7 @@ impl ExfatFs {
                 VentoyError::FilesystemError(format!("File '{}' not found", name))
             })?;
 
-            // Free cluster chain
-            if location.first_cluster >= 2 {
-                self.free_cluster_chain(location.first_cluster)?;
-            }
+            self.free_allocation(&location)?;
 
             // Delete directory entry
             self.delete_file_entry(&location)?;
@@ -1567,7 +1845,8 @@ impl ExfatFs {
 
             // If it's a directory, check if it's empty
             if location.is_directory {
-                let contents = self.list_files_in_directory(location.first_cluster, "")?;
+                let directory = DirectoryLocation::from_entry(location.clone())?;
+                let contents = self.list_files_in_directory(&directory, "")?;
                 if !contents.is_empty() {
                     return Err(VentoyError::FilesystemError(format!(
                         "Directory '{}' is not empty",
@@ -1576,9 +1855,10 @@ impl ExfatFs {
                 }
             }
 
-            // Free cluster chain
-            if location.first_cluster >= 2 {
-                self.free_cluster_chain(location.first_cluster)?;
+            if location.is_directory {
+                self.free_directory_allocation(&location)?;
+            } else {
+                self.free_allocation(&location)?;
             }
 
             // Delete directory entry
@@ -1602,7 +1882,8 @@ impl ExfatFs {
 
             if location.is_directory {
                 // Get all contents and delete them first
-                let contents = self.list_files_in_directory(location.first_cluster, "")?;
+                let directory = DirectoryLocation::from_entry(location.clone())?;
+                let contents = self.list_files_in_directory(&directory, "")?;
                 for item in contents {
                     let item_path = if path.ends_with('/') {
                         format!("{}{}", path, item.name)
@@ -1613,9 +1894,10 @@ impl ExfatFs {
                 }
             }
 
-            // Now delete the item itself
-            if location.first_cluster >= 2 {
-                self.free_cluster_chain(location.first_cluster)?;
+            if location.is_directory {
+                self.free_directory_allocation(&location)?;
+            } else {
+                self.free_allocation(&location)?;
             }
             self.delete_file_entry(&location)?;
 
@@ -1631,7 +1913,7 @@ impl ExfatFs {
     pub fn create_directory(&mut self, path: &str, create_parents: bool) -> Result<()> {
         let was_dirty = self.begin_write_transaction()?;
         let result = (|| {
-            let resolved = self.resolve_path(path, create_parents)?;
+            let mut resolved = self.resolve_path(path, create_parents)?;
 
             if resolved.location.is_some() {
                 return Err(VentoyError::FilesystemError(format!(
@@ -1640,7 +1922,7 @@ impl ExfatFs {
                 )));
             }
 
-            self.create_directory_in(resolved.parent_cluster, &resolved.name)?;
+            self.create_directory_in(&mut resolved.parent, &resolved.name)?;
             Ok(())
         })();
         self.finish_write_transaction(was_dirty, result)
@@ -1653,7 +1935,7 @@ impl ExfatFs {
 pub struct ExfatFileWriter<'a> {
     fs: &'a mut ExfatFs,
     name: String,
-    dir_cluster: u32,
+    directory: DirectoryLocation,
     total_size: u64,
     allocated_clusters: Vec<u32>,
     current_cluster_index: usize,
@@ -1666,8 +1948,8 @@ impl<'a> ExfatFileWriter<'a> {
     ///
     /// The total_size must be known in advance to allocate clusters.
     pub fn create(fs: &'a mut ExfatFs, name: &str, total_size: u64) -> Result<Self> {
-        let root_cluster = fs.first_cluster_of_root;
-        Self::create_in_directory(fs, root_cluster, name, total_size, false)
+        let root = fs.root_directory();
+        Self::create_in_directory(fs, root, name, total_size, false)
     }
 
     /// Create a new file writer with overwrite option
@@ -1677,8 +1959,8 @@ impl<'a> ExfatFileWriter<'a> {
         total_size: u64,
         overwrite: bool,
     ) -> Result<Self> {
-        let root_cluster = fs.first_cluster_of_root;
-        Self::create_in_directory(fs, root_cluster, name, total_size, overwrite)
+        let root = fs.root_directory();
+        Self::create_in_directory(fs, root, name, total_size, overwrite)
     }
 
     /// Create a file writer for a specific path
@@ -1703,10 +1985,7 @@ impl<'a> ExfatFileWriter<'a> {
                 )));
             }
             if overwrite {
-                // Delete existing file
-                if location.first_cluster >= 2 {
-                    fs.free_cluster_chain(location.first_cluster)?;
-                }
+                fs.free_allocation(&location)?;
                 fs.delete_file_entry(&location)?;
             } else {
                 return Err(VentoyError::FilesystemError(format!(
@@ -1716,19 +1995,13 @@ impl<'a> ExfatFileWriter<'a> {
             }
         }
 
-        Self::create_in_directory(
-            fs,
-            resolved.parent_cluster,
-            &resolved.name,
-            total_size,
-            false,
-        )
+        Self::create_in_directory(fs, resolved.parent, &resolved.name, total_size, false)
     }
 
     /// Internal: Create a file writer in a specific directory
     fn create_in_directory(
         fs: &'a mut ExfatFs,
-        dir_cluster: u32,
+        directory: DirectoryLocation,
         name: &str,
         total_size: u64,
         overwrite: bool,
@@ -1741,12 +2014,9 @@ impl<'a> ExfatFileWriter<'a> {
         }
 
         // Check if file already exists
-        if let Some(location) = fs.find_entry_in_directory(dir_cluster, name)? {
+        if let Some(location) = fs.find_entry_in_directory(&directory, name)? {
             if overwrite {
-                // Delete existing file
-                if location.first_cluster >= 2 {
-                    fs.free_cluster_chain(location.first_cluster)?;
-                }
+                fs.free_allocation(&location)?;
                 fs.delete_file_entry(&location)?;
             } else {
                 return Err(VentoyError::FilesystemError(format!(
@@ -1775,7 +2045,7 @@ impl<'a> ExfatFileWriter<'a> {
         Ok(Self {
             fs,
             name: name.to_string(),
-            dir_cluster,
+            directory,
             total_size,
             allocated_clusters,
             current_cluster_index: 0,
@@ -1821,7 +2091,7 @@ impl<'a> ExfatFileWriter<'a> {
     /// Finish writing and create the directory entry
     ///
     /// This must be called after all data has been written.
-    pub fn finish(self) -> Result<()> {
+    pub fn finish(mut self) -> Result<()> {
         // Write any remaining data in buffer
         if !self.cluster_buffer.is_empty()
             && self.current_cluster_index < self.allocated_clusters.len()
@@ -1838,7 +2108,7 @@ impl<'a> ExfatFileWriter<'a> {
         };
 
         self.fs.create_entry_in_directory(
-            self.dir_cluster,
+            &mut self.directory,
             &self.name,
             first_cluster,
             self.total_size,
@@ -1908,11 +2178,7 @@ impl<'a> ExfatFileReader<'a> {
 
     /// Internal: Create reader from file entry location
     fn from_location(fs: &'a mut ExfatFs, location: &FileEntryLocation) -> Result<Self> {
-        let cluster_chain = if location.first_cluster >= 2 && location.data_length > 0 {
-            fs.read_cluster_chain(location.first_cluster)?
-        } else {
-            Vec::new()
-        };
+        let cluster_chain = fs.clusters_for_allocation(location)?;
 
         Ok(Self {
             fs,
@@ -2158,6 +2424,190 @@ mod tests {
         cluster: u32,
     ) -> u64 {
         partition_offset + cluster_heap_offset as u64 * 512 + (cluster - 2) as u64 * cluster_size
+    }
+
+    fn format_test_image(size: u64) -> (NamedTempFile, PartitionLayout) {
+        let temp_file = NamedTempFile::new().unwrap();
+        let layout = PartitionLayout::calculate(size).unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(temp_file.path())
+            .unwrap();
+        file.set_len(size).unwrap();
+        crate::exfat::format::format_exfat(
+            &mut file,
+            layout.data_offset(),
+            layout.data_size(),
+            "TEST",
+        )
+        .unwrap();
+        (temp_file, layout)
+    }
+
+    #[test]
+    fn test_no_fat_chain_directory_ignores_large_stale_fat_chain() -> Result<()> {
+        const IMAGE_SIZE: u64 = 256 * 1024 * 1024 * 1024;
+        const STALE_CHAIN_CLUSTERS: usize = 131_074;
+
+        let (temp_file, layout) = format_test_image(IMAGE_SIZE);
+        let path = temp_file.path();
+        let mut fs = ExfatFs::open(path, &layout)?;
+        fs.create_directory("/external", true)?;
+
+        let root = fs.root_directory();
+        let mut external = fs
+            .find_entry_in_directory(&root, "external")?
+            .expect("external directory");
+        assert_eq!(fs.cluster_size, 128 * 1024);
+        fs.update_entry_allocation(&mut external, true, fs.cluster_size as u64)?;
+        let first_cluster = external.first_cluster;
+        drop(fs);
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)?;
+        let mut boot_sector = [0u8; 512];
+        file.seek(SeekFrom::Start(layout.data_offset()))?;
+        file.read_exact(&mut boot_sector)?;
+        let fat_offset = u32::from_le_bytes(boot_sector[80..84].try_into().unwrap());
+        let mut stale_fat = Vec::with_capacity(STALE_CHAIN_CLUSTERS * 4);
+        for index in 0..STALE_CHAIN_CLUSTERS {
+            let next = if index + 1 == STALE_CHAIN_CLUSTERS {
+                FAT_ENTRY_END_OF_CHAIN
+            } else {
+                first_cluster + index as u32 + 1
+            };
+            stale_fat.extend_from_slice(&next.to_le_bytes());
+        }
+        file.seek(SeekFrom::Start(
+            layout.data_offset() + fat_offset as u64 * 512 + first_cluster as u64 * 4,
+        ))?;
+        file.write_all(&stale_fat)?;
+        file.flush()?;
+        drop(file);
+
+        let mut fs = ExfatFs::open(path, &layout)?;
+        let files = fs.list_files_at("/external")?;
+        assert!(files.is_empty());
+
+        // The old reservation formula requested exactly 11,450,624,704 bytes on 64-bit.
+        if std::mem::size_of::<FileInfo>() == 64 {
+            let old_reservation = (STALE_CHAIN_CLUSTERS * (fs.cluster_size as usize / 96) + 1) * 64;
+            assert_eq!(old_reservation, 11_450_624_704);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_fat_chain_file_reads_and_frees_contiguous_allocation() -> Result<()> {
+        let (temp_file, layout) = format_test_image(64 * 1024 * 1024);
+        let mut fs = ExfatFs::open(temp_file.path(), &layout)?;
+        let data = vec![0x5A; fs.cluster_size as usize * 3 - 17];
+        fs.write_file("contiguous.bin", &data)?;
+
+        let mut location = fs
+            .find_file_entry("contiguous.bin")?
+            .expect("contiguous file");
+        let original_clusters = fs.read_cluster_chain(location.first_cluster)?;
+        assert_eq!(original_clusters.len(), 3);
+        assert!(original_clusters
+            .windows(2)
+            .all(|pair| pair[1] == pair[0] + 1));
+
+        let stale_first = fs.allocate_clusters(2)?;
+        fs.update_entry_allocation(&mut location, true, data.len() as u64)?;
+        fs.write_fat_entry(location.first_cluster, stale_first)?;
+
+        assert_eq!(fs.read_file("contiguous.bin")?, data);
+        fs.delete_file("contiguous.bin")?;
+
+        let bitmap = fs.read_bitmap()?;
+        assert!(original_clusters
+            .iter()
+            .all(|&cluster| !ExfatFs::is_cluster_allocated(&bitmap, cluster)));
+        assert!(ExfatFs::is_cluster_allocated(&bitmap, stale_first));
+        assert_eq!(fs.read_fat_entry(location.first_cluster)?, stale_first);
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_fat_chain_directory_supports_management_and_recursive_delete() -> Result<()> {
+        let (temp_file, layout) = format_test_image(64 * 1024 * 1024);
+        let mut fs = ExfatFs::open(temp_file.path(), &layout)?;
+        fs.create_directory("/external", true)?;
+        fs.write_file_path("/external/first.txt", b"first", false, false)?;
+
+        let root = fs.root_directory();
+        let mut external = fs
+            .find_entry_in_directory(&root, "external")?
+            .expect("external directory");
+        let stale_first = fs.allocate_clusters(2)?;
+        fs.update_entry_allocation(&mut external, true, fs.cluster_size as u64)?;
+        fs.write_fat_entry(external.first_cluster, stale_first)?;
+
+        assert_eq!(fs.list_files_at("/external")?.len(), 1);
+        fs.write_file_path("/external/second.txt", b"second", false, false)?;
+        let recursive = fs.list_files_recursive()?;
+        assert!(recursive
+            .iter()
+            .any(|file| file.path == "external/first.txt"));
+        assert!(recursive
+            .iter()
+            .any(|file| file.path == "external/second.txt"));
+
+        let directory_cluster = external.first_cluster;
+        fs.delete_recursive("/external")?;
+        let bitmap = fs.read_bitmap()?;
+        assert!(!ExfatFs::is_cluster_allocated(&bitmap, directory_cluster));
+        assert!(ExfatFs::is_cluster_allocated(&bitmap, stale_first));
+        Ok(())
+    }
+
+    #[test]
+    fn test_full_no_fat_chain_directory_converts_to_fat_chain() -> Result<()> {
+        let (temp_file, layout) = format_test_image(64 * 1024 * 1024);
+        let path = temp_file.path();
+        let mut fs = ExfatFs::open(path, &layout)?;
+        fs.create_directory("/external", true)?;
+
+        let root = fs.root_directory();
+        let mut external = fs
+            .find_entry_in_directory(&root, "external")?
+            .expect("external directory");
+        fs.update_entry_allocation(&mut external, true, fs.cluster_size as u64)?;
+
+        for index in 0..43 {
+            fs.write_file_path(&format!("/external/f{index}.txt"), &[], false, false)?;
+        }
+
+        let root = fs.root_directory();
+        let external = fs
+            .find_entry_in_directory(&root, "external")?
+            .expect("external directory");
+        assert!(!external.no_fat_chain);
+        assert_eq!(external.data_length, fs.cluster_size as u64 * 2);
+        let directory = DirectoryLocation::from_entry(external)?;
+        assert_eq!(fs.directory_clusters(&directory)?.len(), 2);
+        drop(fs);
+
+        let mut reopened = ExfatFs::open(path, &layout)?;
+        assert_eq!(reopened.list_files_at("/external")?.len(), 43);
+        Ok(())
+    }
+
+    #[test]
+    fn test_fat_chain_cycle_is_rejected() -> Result<()> {
+        let (temp_file, layout) = format_test_image(64 * 1024 * 1024);
+        let mut fs = ExfatFs::open(temp_file.path(), &layout)?;
+        let first = fs.allocate_clusters(2)?;
+        let second = fs.read_fat_entry(first)?;
+        fs.write_fat_entry(second, first)?;
+
+        let error = fs.read_cluster_chain(first).unwrap_err();
+        assert!(error.to_string().contains("cycle"));
+        Ok(())
     }
 
     /// Test directory extension when filling up a directory cluster
@@ -2418,8 +2868,9 @@ mod tests {
         let mut fs = ExfatFs::open(path, &layout).unwrap();
         fs.create_directory("/uploads", true)?;
 
+        let root = fs.root_directory();
         let location = fs
-            .find_entry_in_directory(fs.first_cluster_of_root, "uploads")?
+            .find_entry_in_directory(&root, "uploads")?
             .expect("created directory entry should exist");
 
         assert!(location.is_directory);
