@@ -86,6 +86,21 @@ fn generate_bindings(cpp_dir: &Path) {
 }
 
 fn link_libyuv() {
+    println!("cargo:rerun-if-env-changed=ONE_KVM_LIBS_PATH");
+    println!("cargo:rerun-if-env-changed=LIBYUV_STATIC");
+
+    // An explicit library root must take precedence over host discovery.
+    if env::var("ONE_KVM_LIBS_PATH")
+        .ok()
+        .is_some_and(|path| !path.trim().is_empty())
+    {
+        if link_system() {
+            return;
+        }
+
+        panic!("libyuv not found under ONE_KVM_LIBS_PATH");
+    }
+
     // Try vcpkg first
     if let Some(vcpkg_installed) = vcpkg_installed_root() {
         if link_vcpkg(vcpkg_installed) {
@@ -232,17 +247,21 @@ fn link_system() -> bool {
     // Build custom library paths based on target architecture:
     // 1. Check ONE_KVM_LIBS_PATH environment variable (explicit override)
     // 2. Fall back to architecture-based detection
-    let custom_lib_path = if let Ok(path) = env::var("ONE_KVM_LIBS_PATH") {
-        format!("{}/lib", path)
-    } else {
-        match target_arch.as_str() {
-            "x86_64" => "/usr/local/lib",
-            "aarch64" => "/usr/aarch64-linux-gnu/lib",
-            "arm" => "/usr/arm-linux-gnueabihf/lib",
-            _ => "",
-        }
-        .to_string()
-    };
+    let explicit_lib_root = env::var("ONE_KVM_LIBS_PATH")
+        .ok()
+        .filter(|path| !path.trim().is_empty());
+    let custom_lib_path = explicit_lib_root
+        .as_ref()
+        .map(|path| format!("{}/lib", path))
+        .unwrap_or_else(|| {
+            match target_arch.as_str() {
+                "x86_64" => "/usr/local/lib",
+                "aarch64" => "/usr/aarch64-linux-gnu/lib",
+                "arm" => "/usr/arm-linux-gnueabihf/lib",
+                _ => "",
+            }
+            .to_string()
+        });
 
     // Try common system library paths (custom paths first)
     let mut lib_paths: Vec<String> = Vec::new();
@@ -252,20 +271,22 @@ fn link_system() -> bool {
         lib_paths.push(custom_lib_path);
     }
 
-    // Then standard paths
-    lib_paths.extend(
-        [
-            "/usr/local/lib", // Custom builds
-            "/usr/local/lib64",
-            "/usr/lib",
-            "/usr/lib64",
-            "/usr/lib/x86_64-linux-gnu",    // Debian/Ubuntu x86_64
-            "/usr/lib/aarch64-linux-gnu",   // Debian/Ubuntu ARM64
-            "/usr/lib/arm-linux-gnueabihf", // Debian/Ubuntu ARMv7
-        ]
-        .iter()
-        .map(|s| s.to_string()),
-    );
+    // An explicit root is strict: do not silently fall back to host libraries.
+    if explicit_lib_root.is_none() {
+        lib_paths.extend(
+            [
+                "/usr/local/lib", // Custom builds
+                "/usr/local/lib64",
+                "/usr/lib",
+                "/usr/lib64",
+                "/usr/lib/x86_64-linux-gnu",    // Debian/Ubuntu x86_64
+                "/usr/lib/aarch64-linux-gnu",   // Debian/Ubuntu ARM64
+                "/usr/lib/arm-linux-gnueabihf", // Debian/Ubuntu ARMv7
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+    }
 
     for path in &lib_paths {
         let lib_path = Path::new(path);
