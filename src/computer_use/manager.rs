@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
-use serde_json::Value;
 use tokio::sync::{broadcast, oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -43,7 +42,7 @@ struct ManagerState {
 struct ScreenshotWaiter {
     request_id: String,
     client_id: String,
-    tx: oneshot::Sender<ComputerUseScreenshot>,
+    tx: oneshot::Sender<Result<ComputerUseScreenshot>>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,24 +73,16 @@ impl ComputerUseManager {
 
     pub fn config_response(&self) -> ComputerUseConfigResponse {
         let config = self.config.get();
-        let key_env = std::env::var("OPENAI_API_KEY")
-            .ok()
-            .filter(|key| !key.is_empty());
+        let key_env = cua_api_key_env();
         let key_db = config
             .computer_use
-            .openai_api_key
+            .api_key
             .as_ref()
             .filter(|key| !key.is_empty());
         ComputerUseConfigResponse {
             enabled: config.computer_use.enabled,
-            provider: config.computer_use.provider.clone(),
-            base_url: std::env::var("ONE_KVM_OPENAI_BASE_URL")
-                .ok()
-                .filter(|url| !url.trim().is_empty())
-                .unwrap_or_else(|| config.computer_use.base_url.clone()),
+            base_url: cua_base_url_env().unwrap_or_else(|| config.computer_use.base_url.clone()),
             model: config.computer_use.model.clone(),
-            max_steps: config.computer_use.max_steps,
-            timeout_seconds: config.computer_use.timeout_seconds,
             api_key_configured: key_env.is_some() || key_db.is_some(),
             api_key_source: if key_env.is_some() {
                 "env".to_string()
@@ -107,7 +98,6 @@ impl ComputerUseManager {
         &self,
         req: ComputerUseConfigUpdate,
     ) -> Result<ComputerUseConfigResponse> {
-        validate_limits(req.max_steps, req.timeout_seconds)?;
         if let Some(base_url) = req
             .base_url
             .as_ref()
@@ -131,17 +121,11 @@ impl ComputerUseManager {
                 {
                     config.computer_use.base_url = base_url.trim().to_string();
                 }
-                if let Some(max_steps) = req.max_steps {
-                    config.computer_use.max_steps = max_steps;
+                if req.clear_api_key.unwrap_or(false) {
+                    config.computer_use.api_key = None;
                 }
-                if let Some(timeout_seconds) = req.timeout_seconds {
-                    config.computer_use.timeout_seconds = timeout_seconds;
-                }
-                if req.clear_openai_api_key.unwrap_or(false) {
-                    config.computer_use.openai_api_key = None;
-                }
-                if let Some(key) = req.openai_api_key.as_ref() {
-                    config.computer_use.openai_api_key = if key.trim().is_empty() {
+                if let Some(key) = req.api_key.as_ref() {
+                    config.computer_use.api_key = if key.trim().is_empty() {
                         None
                     } else {
                         Some(key.trim().to_string())
@@ -169,7 +153,6 @@ impl ComputerUseManager {
         if req.prompt.trim().is_empty() {
             return Err(AppError::BadRequest("Task prompt is required".to_string()));
         }
-        validate_limits(req.max_steps, req.timeout_seconds)?;
         let client_id = req.client_id.trim();
         if client_id.is_empty() {
             return Err(AppError::BadRequest(
@@ -184,15 +167,12 @@ impl ComputerUseManager {
             ));
         }
 
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .ok()
-            .filter(|key| !key.is_empty())
-            .or(config.openai_api_key.clone())
-            .ok_or_else(|| AppError::BadRequest("OpenAI API key is not configured".to_string()))?;
-        let base_url = std::env::var("ONE_KVM_OPENAI_BASE_URL")
-            .ok()
-            .filter(|url| !url.trim().is_empty())
-            .unwrap_or_else(|| config.base_url.clone());
+        let api_key = cua_api_key_env()
+            .or(config.api_key.clone())
+            .ok_or_else(|| {
+                AppError::BadRequest("Computer Use API key is not configured".to_string())
+            })?;
+        let base_url = cua_base_url_env().unwrap_or_else(|| config.base_url.clone());
         validate_endpoint_url(&base_url)?;
 
         let mut state = self.state.lock().await;
@@ -225,10 +205,9 @@ impl ComputerUseManager {
         let session_id = Uuid::new_v4().to_string();
         state.session = ComputerUseSessionSummary {
             id: Some(session_id),
-            status: ComputerUseSessionStatus::WaitingScreenshot,
+            status: ComputerUseSessionStatus::Thinking,
             prompt: Some(req.prompt.trim().to_string()),
             step: 0,
-            max_steps: req.max_steps.unwrap_or(config.max_steps),
             last_error: None,
             final_message: None,
         };
@@ -240,9 +219,6 @@ impl ComputerUseManager {
         self.publish_session().await;
         let manager = self.clone();
         let prompt = req.prompt.trim().to_string();
-        let max_steps = summary.max_steps;
-        let timeout =
-            Duration::from_secs(req.timeout_seconds.unwrap_or(config.timeout_seconds) as u64);
         let model = config.model.clone();
         let handle = tokio::spawn(async move {
             manager
@@ -253,8 +229,6 @@ impl ComputerUseManager {
                     model,
                     conversation,
                     client_id,
-                    max_steps,
-                    timeout,
                     cancel_rx,
                     stop_rx,
                 )
@@ -304,8 +278,28 @@ impl ComputerUseManager {
             state.screenshot_waiter = Some(waiter);
             return Ok(());
         }
-        let _ = waiter.tx.send(screenshot);
+        let _ = waiter.tx.send(Ok(screenshot));
         Ok(())
+    }
+
+    async fn submit_screenshot_error(&self, client_id: &str, request_id: String, message: String) {
+        let mut state = self.state.lock().await;
+        let Some(waiter) = state.screenshot_waiter.take() else {
+            return;
+        };
+        if waiter.request_id != request_id || waiter.client_id != client_id {
+            state.screenshot_waiter = Some(waiter);
+            return;
+        }
+        let message: String = message.chars().take(300).collect();
+        let _ = waiter.tx.send(Err(AppError::ServiceUnavailable(format!(
+            "Screenshot capture failed: {}",
+            if message.trim().is_empty() {
+                "client did not provide an error"
+            } else {
+                message.trim()
+            }
+        ))));
     }
 
     pub async fn handle_socket(self: Arc<Self>, socket: WebSocket, client_id: Option<String>) {
@@ -352,10 +346,14 @@ impl ComputerUseManager {
                 msg = receiver.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
-                            if let Ok(ComputerUseWsClientMessage::ScreenshotResult { request_id, screenshot }) =
-                                serde_json::from_str::<ComputerUseWsClientMessage>(&text)
-                            {
-                                let _ = self.submit_screenshot(&client_id, request_id, screenshot).await;
+                            match serde_json::from_str::<ComputerUseWsClientMessage>(&text) {
+                                Ok(ComputerUseWsClientMessage::ScreenshotResult { request_id, screenshot }) => {
+                                    let _ = self.submit_screenshot(&client_id, request_id, screenshot).await;
+                                }
+                                Ok(ComputerUseWsClientMessage::ScreenshotError { request_id, message }) => {
+                                    self.submit_screenshot_error(&client_id, request_id, message).await;
+                                }
+                                Err(_) => {}
                             }
                         }
                         Some(Ok(Message::Close(_))) | None => break,
@@ -375,21 +373,99 @@ impl ComputerUseManager {
         model: String,
         conversation: Vec<ComputerUseConversationMessage>,
         client_id: String,
-        max_steps: u32,
-        timeout: Duration,
         cancel_rx: watch::Receiver<bool>,
         mut stop_rx: oneshot::Receiver<()>,
     ) {
         let provider = OpenAiComputerProvider::new(api_key, base_url, model);
-        let started_at = Instant::now();
-        let mut previous_response_id: Option<String> = None;
-        let mut previous_call_id: Option<String> = None;
-        let mut safety_checks: Vec<Value> = Vec::new();
+        let mut latest_screenshot: Option<ComputerUseScreenshot> = None;
+        let mut action_history: Vec<String> = Vec::new();
+        let mut step = 0_u32;
 
-        for step in 1..=max_steps {
-            if started_at.elapsed() > timeout {
-                self.fail("Computer use task timed out").await;
+        loop {
+            step = step.saturating_add(1);
+            self.set_status(ComputerUseSessionStatus::Thinking, step, None)
+                .await;
+            let response = tokio::select! {
+                _ = &mut stop_rx => {
+                    let _ = self.event_tx.send(ComputerUseWsServerMessage::ReasoningCompleted {
+                        failed: true,
+                    });
+                    self.set_stopped().await;
+                    return;
+                }
+                response = provider.next_actions(
+                    &prompt,
+                    &conversation,
+                    &action_history,
+                    latest_screenshot.as_ref(),
+                    |delta| {
+                        let _ = self.event_tx.send(ComputerUseWsServerMessage::ReasoningDelta {
+                            delta: delta.to_string(),
+                        });
+                    },
+                ) => response,
+            };
+
+            let response = match response {
+                Ok(response) => {
+                    let _ = self
+                        .event_tx
+                        .send(ComputerUseWsServerMessage::ReasoningCompleted { failed: false });
+                    response
+                }
+                Err(err) => {
+                    let _ = self
+                        .event_tx
+                        .send(ComputerUseWsServerMessage::ReasoningCompleted { failed: true });
+                    self.fail(&err.to_string()).await;
+                    return;
+                }
+            };
+
+            if *cancel_rx.borrow() {
+                self.set_stopped().await;
                 return;
+            }
+
+            if response.done {
+                self.complete(response.message).await;
+                return;
+            }
+
+            let executable = &response.actions[..response.actions.len().saturating_sub(1)];
+            action_history.push(format!(
+                "Step {step}: {}",
+                serde_json::to_string(&response.actions).unwrap_or_else(|_| "[]".to_string())
+            ));
+            if !executable.is_empty() {
+                let Some(screenshot) = latest_screenshot.as_ref() else {
+                    self.fail("Computer Use protocol error: actions require a screenshot")
+                        .await;
+                    return;
+                };
+                self.set_status(ComputerUseSessionStatus::Executing, step, None)
+                    .await;
+                if let Err(err) = self
+                    .execute_actions(
+                        executable,
+                        screenshot.width,
+                        screenshot.height,
+                        cancel_rx.clone(),
+                    )
+                    .await
+                {
+                    if *cancel_rx.borrow() {
+                        self.set_stopped().await;
+                    } else {
+                        self.fail(&err.to_string()).await;
+                    }
+                    return;
+                }
+                let _ = self
+                    .event_tx
+                    .send(ComputerUseWsServerMessage::ActionsExecuted {
+                        actions: executable.to_vec(),
+                    });
             }
 
             self.set_status(ComputerUseSessionStatus::WaitingScreenshot, step, None)
@@ -401,7 +477,6 @@ impl ComputerUseManager {
                 }
                 screenshot = self.request_screenshot(&client_id) => screenshot,
             };
-
             let screenshot = match screenshot {
                 Ok(screenshot) => screenshot,
                 Err(err) => {
@@ -414,67 +489,8 @@ impl ComputerUseManager {
                 .send(ComputerUseWsServerMessage::ScreenshotCaptured {
                     screenshot: screenshot.clone(),
                 });
-
-            self.set_status(ComputerUseSessionStatus::Thinking, step, None)
-                .await;
-            let response = tokio::select! {
-                _ = &mut stop_rx => {
-                    self.set_stopped().await;
-                    return;
-                }
-                response = provider.next_actions(
-                    &prompt,
-                    &conversation,
-                    &screenshot,
-                    previous_response_id.as_deref(),
-                    previous_call_id.as_deref(),
-                    safety_checks.clone(),
-                ) => response,
-            };
-
-            let response = match response {
-                Ok(response) => response,
-                Err(err) => {
-                    self.fail(&err.to_string()).await;
-                    return;
-                }
-            };
-            previous_response_id = response.response_id;
-            previous_call_id = response.call_id;
-            safety_checks = response.safety_checks;
-
-            if response.actions.is_empty() {
-                self.complete(response.final_message).await;
-                return;
-            }
-
-            self.set_status(ComputerUseSessionStatus::Executing, step, None)
-                .await;
-            if let Err(err) = self
-                .execute_actions(
-                    &response.actions,
-                    screenshot.width,
-                    screenshot.height,
-                    cancel_rx.clone(),
-                )
-                .await
-            {
-                if *cancel_rx.borrow() {
-                    self.set_stopped().await;
-                } else {
-                    self.fail(&err.to_string()).await;
-                }
-                return;
-            }
-            let _ = self
-                .event_tx
-                .send(ComputerUseWsServerMessage::ActionsExecuted {
-                    actions: response.actions,
-                });
+            latest_screenshot = Some(screenshot);
         }
-
-        self.complete(Some("Reached the maximum number of steps.".to_string()))
-            .await;
     }
 
     async fn request_screenshot(&self, client_id: &str) -> Result<ComputerUseScreenshot> {
@@ -492,14 +508,15 @@ impl ComputerUseManager {
             request_id,
             client_id: client_id.to_string(),
         });
-        tokio::time::timeout(SCREENSHOT_TIMEOUT, rx)
+        let reply = tokio::time::timeout(SCREENSHOT_TIMEOUT, rx)
             .await
             .map_err(|_| {
                 AppError::ServiceUnavailable("Timed out waiting for screenshot".to_string())
             })?
             .map_err(|_| {
                 AppError::ServiceUnavailable("Screenshot request was cancelled".to_string())
-            })
+            })?;
+        reply
     }
 
     async fn execute_actions(
@@ -742,34 +759,37 @@ fn stopped_error() -> AppError {
     AppError::BadRequest(STOPPED_MESSAGE.to_string())
 }
 
-fn validate_limits(max_steps: Option<u32>, timeout_seconds: Option<u32>) -> Result<()> {
-    if let Some(max_steps) = max_steps {
-        if !(1..=100).contains(&max_steps) {
-            return Err(AppError::BadRequest(
-                "max_steps must be between 1 and 100".to_string(),
-            ));
-        }
-    }
-    if let Some(timeout_seconds) = timeout_seconds {
-        if !(30..=3600).contains(&timeout_seconds) {
-            return Err(AppError::BadRequest(
-                "timeout_seconds must be between 30 and 3600".to_string(),
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn empty_session() -> ComputerUseSessionSummary {
     ComputerUseSessionSummary {
         id: None,
         status: ComputerUseSessionStatus::Idle,
         prompt: None,
         step: 0,
-        max_steps: 0,
         last_error: None,
         final_message: None,
     }
+}
+
+fn cua_api_key_env() -> Option<String> {
+    std::env::var("ONE_KVM_CUA_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+        .or_else(|| {
+            std::env::var("OPENAI_API_KEY")
+                .ok()
+                .filter(|key| !key.trim().is_empty())
+        })
+}
+
+fn cua_base_url_env() -> Option<String> {
+    std::env::var("ONE_KVM_CUA_BASE_URL")
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .or_else(|| {
+            std::env::var("ONE_KVM_OPENAI_BASE_URL")
+                .ok()
+                .filter(|url| !url.trim().is_empty())
+        })
 }
 
 fn validate_endpoint_url(url: &str) -> Result<()> {

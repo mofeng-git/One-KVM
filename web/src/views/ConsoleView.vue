@@ -791,9 +791,35 @@ function handleComputerUseMessage(message: ComputerUseServerMessage) {
     case 'actions_executed':
       pushComputerUseTimeline({ type: 'actions_executed', actions: message.actions })
       break
+    case 'step_started':
+      pushComputerUseTimeline({ type: 'reasoning', text: '', completed: false, failed: false })
+      break
+    case 'reasoning_delta': {
+      const last = computerUseTimeline.value[computerUseTimeline.value.length - 1]
+      if (last?.type === 'reasoning' && !last.completed) {
+        last.text += message.delta
+      } else {
+        pushComputerUseTimeline({ type: 'reasoning', text: message.delta, completed: false, failed: false })
+      }
+      break
+    }
+    case 'reasoning_completed': {
+      for (let index = computerUseTimeline.value.length - 1; index >= 0; index -= 1) {
+        const item = computerUseTimeline.value[index]
+        if (item?.type !== 'reasoning' || item.completed) continue
+        if (!message.failed && !item.text) {
+          computerUseTimeline.value.splice(index, 1)
+        } else {
+          item.completed = true
+          item.failed = message.failed
+        }
+        break
+      }
+      break
+    }
     case 'error':
       pushComputerUseTimeline({ type: 'error', text: message.message })
-      toast.error('Computer Use failed', { description: message.message })
+      toast.error(t('computerUse.errors.taskFailed'), { description: message.message })
       break
   }
 }
@@ -833,8 +859,8 @@ async function startComputerUse(prompt: string) {
     })
     computerUseConversationStarted.value = true
   } catch (err: any) {
-    pushComputerUseTimeline({ type: 'error', text: err?.message ?? 'Computer Use start failed' })
-    toast.error('Computer Use start failed', { description: err?.message })
+    pushComputerUseTimeline({ type: 'error', text: err?.message ?? t('computerUse.errors.startFailed') })
+    toast.error(t('computerUse.errors.startFailed'), { description: err?.message })
   }
 }
 
@@ -842,7 +868,7 @@ async function stopComputerUse() {
   try {
     computerUseSession.value = await computerUseApi.stop()
   } catch (err: any) {
-    toast.error('Computer Use stop failed', { description: err?.message })
+    toast.error(t('computerUse.errors.stopFailed'), { description: err?.message })
   }
 }
 

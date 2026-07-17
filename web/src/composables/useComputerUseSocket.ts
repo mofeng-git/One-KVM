@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { buildWsUrl } from '@/types/websocket'
 import { generateUUID } from '@/lib/utils'
 import type { ComputerUseScreenshot, ComputerUseSession, ComputerUseAction } from '@/api'
@@ -8,6 +9,8 @@ export type ComputerUseServerMessage =
   | { type: 'screenshot_requested'; request_id: string }
   | { type: 'screenshot_captured'; screenshot: ComputerUseScreenshot }
   | { type: 'step_started'; step: number }
+  | { type: 'reasoning_delta'; delta: string }
+  | { type: 'reasoning_completed'; failed: boolean }
   | { type: 'actions_executed'; actions: ComputerUseAction[] }
   | { type: 'error'; message: string }
 
@@ -15,6 +18,7 @@ export function useComputerUseSocket(options: {
   onMessage: (message: ComputerUseServerMessage) => void
   onScreenshotRequested: (requestId: string) => Promise<ComputerUseScreenshot | null>
 }) {
+  const { t } = useI18n()
   const connected = ref(false)
   const error = ref<string | null>(null)
   const clientId = generateUUID()
@@ -29,7 +33,7 @@ export function useComputerUseSocket(options: {
 
     connectPromise = new Promise((resolve, reject) => {
       if (!ws) {
-        reject(new Error('Computer use WebSocket failed'))
+        reject(new Error(t('computerUse.connection.socketFailed')))
         return
       }
 
@@ -41,7 +45,7 @@ export function useComputerUseSocket(options: {
       }
 
       ws.onerror = () => {
-        error.value = 'Computer use WebSocket failed'
+        error.value = t('computerUse.connection.socketFailed')
         connectPromise = null
         reject(new Error(error.value))
       }
@@ -57,17 +61,28 @@ export function useComputerUseSocket(options: {
         const message = JSON.parse(event.data) as ComputerUseServerMessage
         options.onMessage(message)
         if (message.type === 'screenshot_requested') {
-          const screenshot = await options.onScreenshotRequested(message.request_id)
-          if (screenshot && ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'screenshot_result',
-              request_id: message.request_id,
-              screenshot,
-            }))
+          try {
+            const screenshot = await options.onScreenshotRequested(message.request_id)
+            if (!screenshot) throw new Error(t('computerUse.errors.captureUnavailable'))
+            if (ws?.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'screenshot_result',
+                request_id: message.request_id,
+                screenshot,
+              }))
+            }
+          } catch (err) {
+            if (ws?.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'screenshot_error',
+                request_id: message.request_id,
+                message: err instanceof Error ? err.message : t('computerUse.errors.screenshotFailed'),
+              }))
+            }
           }
         }
       } catch (err) {
-        console.error('[ComputerUse] Failed to handle WS message:', err)
+        console.error(`[ComputerUse] ${t('computerUse.connection.messageFailed')}:`, err)
       }
     }
 

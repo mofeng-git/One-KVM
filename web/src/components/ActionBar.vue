@@ -409,7 +409,7 @@ const hasRightOverflow = computed(() => {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Computer Use</p>
+              <p>{{ t('computerUse.title') }}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

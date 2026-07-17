@@ -178,11 +178,8 @@ export interface WebConfig {
 
 export interface ComputerUseConfig {
 	enabled: boolean;
-	provider: string;
 	base_url: string;
 	model: string;
-	max_steps: number;
-	timeout_seconds: number;
 }
 
 export interface TtydConfig {
@@ -381,11 +378,8 @@ export interface Ch9329DescriptorState {
 
 export interface ComputerUseConfigResponse {
 	enabled: boolean;
-	provider: string;
 	base_url: string;
 	model: string;
-	max_steps: number;
-	timeout_seconds: number;
 	api_key_configured: boolean;
 	api_key_source: string;
 }
@@ -394,10 +388,8 @@ export interface ComputerUseConfigUpdate {
 	enabled?: boolean;
 	base_url?: string;
 	model?: string;
-	max_steps?: number;
-	timeout_seconds?: number;
-	openai_api_key?: string;
-	clear_openai_api_key?: boolean;
+	api_key?: string;
+	clear_api_key?: boolean;
 }
 
 export interface ComputerUsePoint {
@@ -426,7 +418,6 @@ export interface ComputerUseSessionSummary {
 	status: ComputerUseSessionStatus;
 	prompt?: string;
 	step: number;
-	max_steps: number;
 	last_error?: string;
 	final_message?: string;
 }
@@ -435,8 +426,6 @@ export interface ComputerUseStartRequest {
 	prompt: string;
 	continue_conversation?: boolean;
 	client_id: string;
-	max_steps?: number;
-	timeout_seconds?: number;
 }
 
 export interface EasytierConfigUpdate {
