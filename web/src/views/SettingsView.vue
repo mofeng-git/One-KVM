@@ -2712,7 +2712,7 @@ watch(isWindows, () => {
                 <SidebarMenuButton
                   :is-active="activeSection === item.id"
                   :tooltip="item.label"
-                  class="h-10 px-3 text-foreground"
+                  class="h-10 px-3 text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
                   @click="selectSection(item.id)"
                 >
                   <component :is="item.icon" />
@@ -3269,7 +3269,6 @@ watch(isWindows, () => {
                         <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
-                            <p class="text-xs text-muted-foreground">{{ t('settings.otgFunctionKeyboardDesc') }}</p>
                           </div>
                           <Switch v-model="config.hid_otg_functions.keyboard" />
                         </div>

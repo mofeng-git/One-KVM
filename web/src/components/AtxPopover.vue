@@ -30,6 +30,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const activeTab = ref('atx')
+const tabTriggerClass = 'h-9 rounded-md border-0 bg-transparent text-center text-xs text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
 
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
 const hddState = ref<'active' | 'inactive' | 'unknown'>('unknown')
@@ -198,12 +199,18 @@ watch(
 <template>
   <div class="p-2.5 space-y-2.5">
     <Tabs v-model="activeTab">
-      <TabsList class="h-8 w-full grid grid-cols-2">
-        <TabsTrigger value="atx" class="h-7 text-xs">
+      <TabsList class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1">
+        <TabsTrigger
+          value="atx"
+          :class="tabTriggerClass"
+        >
           <Power class="h-3 w-3 mr-1" />
           {{ t('atx.title') }}
         </TabsTrigger>
-        <TabsTrigger value="wol" class="h-7 text-xs">
+        <TabsTrigger
+          value="wol"
+          :class="tabTriggerClass"
+        >
           <Wifi class="h-3 w-3 mr-1" />
           WOL
         </TabsTrigger>
@@ -211,8 +218,6 @@ watch(
 
       <!-- ATX Tab -->
       <TabsContent value="atx" class="mt-2.5 space-y-2.5">
-        <p class="text-xs text-muted-foreground">{{ t('atx.description') }}</p>
-
         <!-- Status -->
         <div class="grid grid-cols-2 gap-2">
           <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
@@ -281,10 +286,6 @@ watch(
 
       <!-- WOL Tab -->
       <TabsContent value="wol" class="mt-2.5 space-y-2.5">
-        <p class="text-xs text-muted-foreground">
-          {{ t('atx.wolDescription') }}
-        </p>
-
         <div class="space-y-2">
           <Label for="mac-address" class="text-xs">{{ t('atx.macAddress') }}</Label>
           <div class="flex gap-2">

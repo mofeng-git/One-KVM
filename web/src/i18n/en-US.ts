@@ -176,7 +176,6 @@ export default {
   },
   atx: {
     title: 'Power Control',
-    description: 'Control remote host power state',
     powerState: 'Power State',
     hddState: 'HDD Activity',
     stateOn: 'On',
@@ -188,7 +187,6 @@ export default {
     longPress: 'Power (Long/Force Off)',
     reset: 'Reset',
     wol: 'Wake-on-LAN',
-    wolDescription: 'Send Wake-on-LAN magic packet to power on a remote machine.',
     macAddress: 'MAC Address',
     invalidMac: 'Invalid MAC address format',
     recentMac: 'Recent',
@@ -640,7 +638,6 @@ export default {
     ch9329StringLengthWarning: 'CH9329 strings are limited to 23 bytes',
     otgHidProfile: 'OTG Functions',
     otgFunctionKeyboard: 'Standard Keyboard',
-    otgFunctionKeyboardDesc: 'Standard HID keyboard device',
     otgKeyboardLeds: 'Keyboard LED Status',
     otgFunctionMouseRelative: 'Relative Positioning Mouse',
     otgFunctionMouseAbsolute: 'Absolute Positioning Mouse',

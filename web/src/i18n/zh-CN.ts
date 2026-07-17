@@ -176,7 +176,6 @@ export default {
   },
   atx: {
     title: '电源控制',
-    description: '控制远程主机的电源状态',
     powerState: '电源状态',
     hddState: '硬盘活动',
     stateOn: '已开机',
@@ -188,7 +187,6 @@ export default {
     longPress: '长按电源 (强制关机)',
     reset: '重启',
     wol: '网络唤醒',
-    wolDescription: '发送 Wake-on-LAN 魔术包以远程开机。',
     macAddress: 'MAC 地址',
     invalidMac: 'MAC 地址格式无效',
     recentMac: '最近使用',
@@ -639,7 +637,6 @@ export default {
     ch9329StringLengthWarning: 'CH9329 字符串最长为 23 字节',
     otgHidProfile: 'OTG 功能',
     otgFunctionKeyboard: '标准键盘',
-    otgFunctionKeyboardDesc: '标准 HID 键盘设备',
     otgKeyboardLeds: '键盘状态灯',
     otgFunctionMouseRelative: '相对定位鼠标',
     otgFunctionMouseAbsolute: '绝对定位鼠标',
