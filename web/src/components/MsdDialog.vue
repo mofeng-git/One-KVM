@@ -469,7 +469,16 @@ async function createDrive() {
     showDriveInitDialog.value = false
   } catch (e) {
     console.error('Failed to initialize drive:', e)
-    toast.error(t('msd.driveCreateFailed'))
+    let description: string | undefined
+    if (e instanceof ApiError) {
+      const message = e.message
+      if (message.includes('does not support a virtual drive file')) description = t('msd.driveFileTooLarge')
+      else if (message.includes('does not have enough free space')) description = t('msd.driveSpaceUnavailable')
+      else if (message.includes('filesystem is read-only')) description = t('msd.driveReadOnly')
+      else if (message.includes('permission to write')) description = t('msd.drivePermissionDenied')
+      else description = message
+    }
+    toast.error(t('msd.driveCreateFailed'), { description })
   } finally {
     initializingDrive.value = false
   }

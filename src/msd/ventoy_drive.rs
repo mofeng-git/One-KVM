@@ -56,7 +56,7 @@ impl VentoyDrive {
         info!("Creating {} MB Ventoy drive at {}", size_mb, path.display());
 
         let info = tokio::task::spawn_blocking(move || {
-            VentoyImage::create(&path, &size_str, DEFAULT_LABEL).map_err(ventoy_to_app_error)?;
+            VentoyImage::create(&path, &size_str, DEFAULT_LABEL).map_err(drive_init_error)?;
 
             let metadata = std::fs::metadata(&path)
                 .map_err(|e| AppError::Internal(format!("Failed to read drive metadata: {}", e)))?;
@@ -354,6 +354,30 @@ fn ventoy_to_app_error(err: VentoyError) -> AppError {
     }
 }
 
+fn drive_init_error(err: VentoyError) -> AppError {
+    let VentoyError::Io(error) = err else {
+        return ventoy_to_app_error(err);
+    };
+
+    #[cfg(unix)]
+    match error.raw_os_error() {
+        Some(libc::EFBIG) => AppError::BadRequest(
+            "MSD directory filesystem does not support a virtual drive file of this size".into(),
+        ),
+        Some(libc::ENOSPC) => AppError::BadRequest(
+            "MSD directory does not have enough free space for the virtual drive".into(),
+        ),
+        Some(libc::EROFS) => AppError::BadRequest("MSD directory filesystem is read-only".into()),
+        Some(libc::EACCES | libc::EPERM) => AppError::BadRequest(
+            "One-KVM does not have permission to write to the MSD directory".into(),
+        ),
+        _ => AppError::Io(error),
+    }
+
+    #[cfg(not(unix))]
+    AppError::Io(error)
+}
+
 fn ventoy_file_to_drive_file(info: VentoyFileInfo, parent_path: &str) -> DriveFile {
     let full_path = if parent_path.is_empty() || parent_path == "/" {
         format!("/{}", info.name)
@@ -436,11 +460,25 @@ impl Drop for ChannelWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppError;
     use std::process::Command;
     use std::sync::OnceLock;
     use tempfile::TempDir;
 
     static RESOURCE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../ventoy-img-rs/resources");
+
+    #[test]
+    fn classifies_drive_creation_io_errors() {
+        for (errno, expected) in [
+            (libc::EFBIG, "does not support"),
+            (libc::ENOSPC, "enough free space"),
+            (libc::EROFS, "read-only"),
+            (libc::EACCES, "permission"),
+        ] {
+            let error = drive_init_error(VentoyError::Io(std::io::Error::from_raw_os_error(errno)));
+            assert!(matches!(error, AppError::BadRequest(message) if message.contains(expected)));
+        }
+    }
 
     fn init_ventoy_resources() -> bool {
         static INIT: OnceLock<bool> = OnceLock::new();

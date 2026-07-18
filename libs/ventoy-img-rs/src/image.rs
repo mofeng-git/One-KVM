@@ -28,8 +28,15 @@ impl VentoyImage {
             path.display()
         );
 
-        // Create sparse file
-        let mut file = File::create(path)?;
+        // Build beside the destination so a failed create cannot leave a partial image.
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let mut temp = tempfile::Builder::new()
+            .prefix(".ventoy-")
+            .tempfile_in(parent)?;
+        let mut file = temp.as_file_mut();
         file.set_len(size)?;
 
         // Write boot code
@@ -64,6 +71,8 @@ impl VentoyImage {
         format_exfat(&mut file, layout.data_offset(), layout.data_size(), label)?;
 
         file.flush()?;
+        temp.persist(path)
+            .map_err(|error| VentoyError::Io(error.error))?;
 
         println!("[INFO] Ventoy IMG created successfully!");
 
@@ -272,5 +281,22 @@ impl VentoyImage {
     /// Get image path
     pub fn path(&self) -> &Path {
         &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_create_does_not_publish_partial_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ventoy.img");
+
+        let error = VentoyImage::create(&path, "64M", "TEST").err().unwrap();
+
+        assert!(matches!(error, VentoyError::ResourceNotFound(_)));
+        assert!(!path.exists());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 }
