@@ -594,8 +594,8 @@ watch(
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
-        <Monitor class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      <Button variant="ghost" size="sm" class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
+        <Monitor class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
@@ -612,7 +612,7 @@ watch(
           <!-- Mode Selection -->
           <div class="space-y-2">
             <div class="flex items-center gap-1">
-              <Label class="text-xs">{{ t('actionbar.videoMode') }}</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoMode') }}</Label>
               <HelpTooltip :content="t('actionbar.videoModeHint')" icon-size="sm" side="right" />
             </div>
             <Select
@@ -620,7 +620,7 @@ watch(
               @update:model-value="handleVideoModeChange"
               :disabled="loadingCodecs || availableCodecs.length === 0 || isRtspCodecLocked"
             >
-              <SelectTrigger class="h-8 w-full text-xs">
+              <SelectTrigger size="sm" class="w-full text-xs">
                 <div v-if="selectedCodecInfo" class="flex items-center gap-1.5 truncate">
                   <span class="truncate">{{ selectedCodecInfo.name }}</span>
                   <span
@@ -673,7 +673,7 @@ watch(
           <!-- Bitrate Preset - Only shown for WebRTC modes -->
           <div v-if="props.videoMode !== 'mjpeg'" class="space-y-2">
             <div class="flex items-center gap-1">
-              <Label class="text-xs">{{ t('actionbar.bitratePreset') }}</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('actionbar.bitratePreset') }}</Label>
               <HelpTooltip :content="t('help.videoBitratePreset')" icon-size="sm" />
             </div>
             <div class="grid grid-cols-3 gap-1.5">
@@ -687,7 +687,7 @@ watch(
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Speed')"
               >
-                <Zap class="h-3.5 w-3.5" />
+                <Zap class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateSpeed') }}</span>
               </Button>
               <Button
@@ -700,7 +700,7 @@ watch(
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Balanced')"
               >
-                <Scale class="h-3.5 w-3.5" />
+                <Scale class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateBalanced') }}</span>
               </Button>
               <Button
@@ -713,7 +713,7 @@ watch(
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Quality')"
               >
-                <Image class="h-3.5 w-3.5" />
+                <Image class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateQuality') }}</span>
               </Button>
             </div>
@@ -733,23 +733,22 @@ watch(
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.deviceSettings') }}</h5>
             <Button
               variant="ghost"
-              size="icon"
-              class="h-6 w-6"
+              size="icon-xs"
               :disabled="loadingDevices"
               @click="loadDevices"
             >
-              <RefreshCw :class="['h-3.5 w-3.5', loadingDevices && 'animate-spin']" />
+              <RefreshCw :class="['size-3.5', loadingDevices && 'animate-spin']" />
             </Button>
           </div>
 
           <!-- Device Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoDevice') }}</Label>
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoDevice') }}</Label>
             <NativeSelect
               :model-value="selectedDevice"
               @update:model-value="handleDeviceChange"
               :disabled="loadingDevices || devices.length === 0"
-              class="h-8 w-full text-xs"
+              size="sm" class="w-full text-xs"
             >
                 <NativeSelectOption value="">{{ loadingDevices ? t('common.loading') : t('actionbar.selectDevice') }}</NativeSelectOption>
                 <NativeSelectOption
@@ -765,13 +764,13 @@ watch(
 
           <!-- Format Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoFormat') }}</Label>
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoFormat') }}</Label>
             <Select
               :model-value="selectedFormat"
               @update:model-value="handleFormatChange"
               :disabled="!selectedDevice || availableFormats.length === 0"
             >
-              <SelectTrigger class="h-8 w-full text-xs">
+              <SelectTrigger size="sm" class="w-full text-xs">
                 <div v-if="selectedFormatInfo" class="flex min-w-0 items-center gap-1.5">
                   <span class="truncate">{{ selectedFormatInfo.description }}</span>
                   <span
@@ -825,12 +824,12 @@ watch(
 
           <!-- Resolution Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoResolution') }}</Label>
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoResolution') }}</Label>
             <NativeSelect
               :model-value="selectedResolution"
               @update:model-value="handleResolutionChange"
               :disabled="!selectedFormat || availableResolutions.length === 0"
-              class="h-8 w-full text-xs"
+              size="sm" class="w-full text-xs"
             >
                 <NativeSelectOption value="">{{ t('actionbar.selectResolution') }}</NativeSelectOption>
                 <NativeSelectOption
@@ -846,12 +845,12 @@ watch(
 
           <!-- FPS Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoFps') }}</Label>
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoFps') }}</Label>
             <NativeSelect
               :model-value="String(selectedFps)"
               @update:model-value="handleFpsChange"
               :disabled="!selectedResolution || availableFps.length === 0"
-              class="h-8 w-full text-xs"
+              size="sm" class="w-full text-xs"
             >
                 <NativeSelectOption value="">{{ t('actionbar.selectFps') }}</NativeSelectOption>
                 <NativeSelectOption
@@ -871,7 +870,7 @@ watch(
             :disabled="applying || !selectedDevice || !selectedFormat"
             @click="applyVideoConfig"
           >
-            <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            <Loader2 v-if="applying" class="size-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
           </div>

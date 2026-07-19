@@ -120,27 +120,27 @@ function returnToPassword(keepError = false) {
 </script>
 
 <template>
-  <div class="min-h-screen min-h-dvh flex items-center justify-center bg-background p-4">
+  <div class="min-h-screen min-h-dvh flex items-center justify-center dot-grid-bg p-4">
     <Card class="relative w-full max-w-sm">
       <div class="absolute top-4 right-4">
         <LanguageToggleButton />
       </div>
 
-      <CardHeader class="space-y-2 pt-10 text-center sm:pt-12">
+      <CardHeader class="space-y-2 pt-8 text-center">
         <div class="mx-auto flex justify-center">
-          <BrandMark size="xl" />
+          <BrandMark size="lg" />
         </div>
-        <CardTitle class="text-xl sm:text-2xl">One-KVM</CardTitle>
+        <CardTitle class="text-xl">One-KVM</CardTitle>
         <CardDescription>{{ step === 'password' ? t('auth.login') : t('auth.totpPrompt') }}</CardDescription>
       </CardHeader>
 
       <CardContent>
         <form v-if="step === 'password'" @submit.prevent="handleLogin">
-          <FieldGroup>
+          <FieldGroup class="gap-5">
           <Field>
             <FieldLabel for="username">{{ t('auth.username') }}</FieldLabel>
             <div class="relative">
-              <User class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <User class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="username"
                 v-model="username"
@@ -164,7 +164,7 @@ function returnToPassword(keepError = false) {
                     class="h-auto gap-1 p-0 text-xs text-muted-foreground"
                   >
                     {{ t('auth.forgotPassword') }}
-                    <CircleHelp class="h-3.5 w-3.5" />
+                    <CircleHelp class="size-3.5" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent class="w-80 p-3" align="end">
@@ -175,7 +175,7 @@ function returnToPassword(keepError = false) {
               </Popover>
             </div>
             <div class="relative">
-              <Lock class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Lock class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="password"
                 v-model="password"
@@ -211,11 +211,11 @@ function returnToPassword(keepError = false) {
           </FieldGroup>
         </form>
         <form v-else @submit.prevent="handleTotpLogin">
-          <FieldGroup>
+          <FieldGroup class="gap-5">
             <Field>
               <FieldLabel for="totp-code">{{ t('auth.totpCode') }}</FieldLabel>
               <div class="relative">
-                <KeyRound class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <KeyRound class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="totp-code"
                   v-model="totpCode"
@@ -240,7 +240,7 @@ function returnToPassword(keepError = false) {
               <span v-else>{{ t('auth.verifyAndLogin') }}</span>
             </Button>
             <Button type="button" variant="ghost" class="w-full" :disabled="loading" @click="returnToPassword()">
-              <ArrowLeft class="h-4 w-4" />
+              <ArrowLeft class="size-4" />
               {{ t('auth.backToPassword') }}
             </Button>
           </FieldGroup>

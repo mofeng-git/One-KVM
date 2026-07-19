@@ -18,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { computerUseApi, type ComputerUseAction, type ComputerUseConfig, type ComputerUseSession } from '@/api'
+import { ApiError } from '@/api/request'
 import type { ComputerUseTimelineItem } from '@/types/computerUseTimeline'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -107,6 +108,8 @@ async function loadConfig() {
   try {
     config.value = await computerUseApi.config()
   } catch (err) {
+    // Auth failures are handled globally (redirect to login); don't toast over it.
+    if (err instanceof ApiError && err.status === 401) return
     toast.error(t('computerUse.errors.configLoadFailed'), {
       description: err instanceof Error ? err.message : undefined,
     })
@@ -217,15 +220,15 @@ onMounted(loadConfig)
   >
     <div class="flex h-full min-h-0 flex-col">
       <header class="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <Bot class="h-5 w-5 shrink-0" />
+        <Bot class="size-5 shrink-0" />
         <div class="min-w-0 flex-1">
           <div class="truncate text-sm font-semibold">{{ t('computerUse.title') }}</div>
           <div
             class="flex min-w-0 items-center gap-1 text-[11px]"
             :class="connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'"
           >
-            <Wifi v-if="connected" class="h-3 w-3 shrink-0" />
-            <WifiOff v-else class="h-3 w-3 shrink-0" />
+            <Wifi v-if="connected" class="size-3 shrink-0" />
+            <WifiOff v-else class="size-3 shrink-0" />
             <span class="truncate">
               {{ connected ? t('computerUse.connection.connected') : (wsError || t('computerUse.connection.disconnected')) }}
             </span>
@@ -235,39 +238,39 @@ onMounted(loadConfig)
         <Button
           variant="ghost"
           size="icon"
-          class="h-8 w-8"
+          class="size-8"
           :title="t('computerUse.buttons.settings')"
           :aria-label="t('computerUse.buttons.settings')"
           @click="settingsOpen = true"
         >
-          <Settings class="h-4 w-4" />
+          <Settings class="size-4" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          class="h-8 w-8"
+          class="size-8"
           :title="t('computerUse.buttons.clear')"
           :aria-label="t('computerUse.buttons.clear')"
           :disabled="isRunning || timeline.length === 0"
           @click="emit('clear')"
         >
-          <Trash2 class="h-4 w-4" />
+          <Trash2 class="size-4" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          class="h-8 w-8"
+          class="size-8"
           :title="t('computerUse.buttons.close')"
           :aria-label="t('computerUse.buttons.close')"
           @click="emit('update:open', false)"
         >
-          <X class="h-4 w-4" />
+          <X class="size-4" />
         </Button>
       </header>
 
       <div ref="messagesRef" class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div v-if="timeline.length === 0" class="flex h-full items-center justify-center text-muted-foreground/45">
-          <Bot class="h-10 w-10" />
+          <Bot class="size-10" />
         </div>
 
         <div v-else class="space-y-5">
@@ -288,9 +291,9 @@ onMounted(loadConfig)
                 class="flex w-full items-center gap-1.5 py-1 text-left font-medium hover:text-foreground"
                 @click="toggleReasoning(item)"
               >
-                <ChevronDown v-if="reasoningOpen(item)" class="h-3.5 w-3.5 shrink-0" />
-                <ChevronRight v-else class="h-3.5 w-3.5 shrink-0" />
-                <BrainCircuit class="h-3.5 w-3.5 shrink-0" />
+                <ChevronDown v-if="reasoningOpen(item)" class="size-3.5 shrink-0" />
+                <ChevronRight v-else class="size-3.5 shrink-0" />
+                <BrainCircuit class="size-3.5 shrink-0" />
                 <span>
                   {{ item.failed
                     ? t('computerUse.reasoning.failed')
@@ -308,7 +311,7 @@ onMounted(loadConfig)
             <div v-else-if="item.type === 'screenshot'" class="overflow-hidden rounded-md border bg-card">
               <div class="flex items-center justify-between border-b px-2.5 py-1.5 text-[11px] text-muted-foreground">
                 <span class="inline-flex items-center gap-1.5">
-                  <Image class="h-3.5 w-3.5" />{{ t('computerUse.trace.screenshot') }}
+                  <Image class="size-3.5" />{{ t('computerUse.trace.screenshot') }}
                 </span>
                 <span>{{ item.screenshot.width }}x{{ item.screenshot.height }}</span>
               </div>
@@ -363,24 +366,24 @@ onMounted(loadConfig)
           <Button
             v-if="!isRunning"
             size="icon"
-            class="absolute bottom-2 right-2 h-8 w-8"
+            class="absolute bottom-2 right-2 size-8"
             :title="t('computerUse.buttons.send')"
             :aria-label="t('computerUse.buttons.send')"
             :disabled="!canStart || starting"
             @click="start"
           >
-            <SendHorizontal class="h-4 w-4" />
+            <SendHorizontal class="size-4" />
           </Button>
           <Button
             v-else
             size="icon"
             variant="destructive"
-            class="absolute bottom-2 right-2 h-8 w-8"
+            class="absolute bottom-2 right-2 size-8"
             :title="t('computerUse.buttons.stop')"
             :aria-label="t('computerUse.buttons.stop')"
             @click="emit('stop')"
           >
-            <Square class="h-3.5 w-3.5 fill-current" />
+            <Square class="size-3.5 fill-current" />
           </Button>
         </div>
         <p v-if="config && !config.api_key_configured" class="mt-2 text-xs text-muted-foreground">
@@ -422,7 +425,7 @@ onMounted(loadConfig)
 
           <div class="space-y-1.5">
             <Label for="cua-key" class="flex items-center gap-1.5">
-              <KeyRound class="h-3.5 w-3.5" />
+              <KeyRound class="size-3.5" />
               {{ t('computerUse.settings.apiKey') }}
             </Label>
             <Input

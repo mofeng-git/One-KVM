@@ -232,9 +232,9 @@ watch(() => props.open, (isOpen) => {
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
-        <MousePointer v-if="mouseMode === 'absolute'" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-        <Move v-else class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      <Button variant="ghost" size="sm" class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
+        <MousePointer v-if="mouseMode === 'absolute'" class="size-3.5 sm:size-4" />
+        <Move v-else class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
@@ -261,7 +261,7 @@ watch(() => props.open, (isOpen) => {
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
               >
-                <MousePointer class="h-3.5 w-3.5 mr-1" />
+                <MousePointer class="size-3.5 mr-1" />
                 {{ t('actionbar.absolute') }}
               </Button>
               <Button
@@ -270,7 +270,7 @@ watch(() => props.open, (isOpen) => {
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
               >
-                <Move class="h-3.5 w-3.5 mr-1" />
+                <Move class="size-3.5 mr-1" />
                 {{ t('actionbar.relative') }}
               </Button>
             </div>
@@ -314,12 +314,11 @@ watch(() => props.open, (isOpen) => {
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.hidDeviceSettings') }}</h5>
             <Button
               variant="ghost"
-              size="icon"
-              class="h-6 w-6"
+              size="icon-xs"
               :disabled="loadingDevices"
               @click="loadDevices"
             >
-              <RefreshCw :class="['h-3.5 w-3.5', loadingDevices && 'animate-spin']" />
+              <RefreshCw :class="['size-3.5', loadingDevices && 'animate-spin']" />
             </Button>
           </div>
 
@@ -330,7 +329,7 @@ watch(() => props.open, (isOpen) => {
               :model-value="hidBackend"
               @update:model-value="handleBackendChange"
             >
-              <SelectTrigger class="h-8 w-full text-xs">
+              <SelectTrigger size="sm" class="w-full text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +347,7 @@ watch(() => props.open, (isOpen) => {
               :model-value="devicePath"
               @update:model-value="handleDevicePathChange"
               :disabled="availableDevicePaths.length === 0"
-              class="h-8 w-full text-xs"
+              size="sm" class="w-full text-xs"
             >
                 <NativeSelectOption value="">{{ t('actionbar.selectDevice') }}</NativeSelectOption>
                 <NativeSelectOption
@@ -369,7 +368,7 @@ watch(() => props.open, (isOpen) => {
               :model-value="String(baudrate)"
               @update:model-value="handleBaudrateChange"
             >
-              <SelectTrigger class="h-8 text-xs">
+              <SelectTrigger size="sm" class="text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -388,7 +387,7 @@ watch(() => props.open, (isOpen) => {
             :disabled="applying"
             @click="applyHidConfig"
           >
-            <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            <Loader2 v-if="applying" class="size-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
           </div>

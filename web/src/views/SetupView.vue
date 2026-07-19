@@ -535,18 +535,18 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
+  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center dot-grid-bg px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
         <LanguageToggleButton />
       </div>
 
-      <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
+      <CardHeader class="text-center space-y-2 pt-8">
         <div class="mx-auto flex justify-center">
-          <BrandMark size="xl" />
+          <BrandMark size="lg" />
         </div>
-        <CardTitle class="text-xl sm:text-2xl">{{ t('setup.welcome') }}</CardTitle>
+        <CardTitle class="text-xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>
       </CardHeader>
 
@@ -807,7 +807,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   {{ t('setup.advancedEncoder') }} ({{ t('common.optional') }})
                 </span>
                 <ChevronRight
-                  class="h-4 w-4 transition-transform duration-200"
+                  class="size-4 transition-transform duration-200"
                   :class="{ 'rotate-90': showAdvancedEncoder }"
                 />
               </Button>

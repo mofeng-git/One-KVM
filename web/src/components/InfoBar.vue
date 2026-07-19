@@ -48,13 +48,13 @@ const keysDisplay = computed(() => {
       <div class="flex items-center justify-between text-xs px-2 py-0.5">
         <div v-if="keyboardLedEnabled" class="flex items-center gap-1">
           <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="h-1.5 w-1.5 rounded-full" :class="capsLock ? 'bg-success' : 'bg-warning'" />C
+            <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-success' : 'bg-warning'" />C
           </Badge>
           <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="h-1.5 w-1.5 rounded-full" :class="numLock ? 'bg-success' : 'bg-warning'" />N
+            <span class="size-1.5 rounded-full" :class="numLock ? 'bg-success' : 'bg-warning'" />N
           </Badge>
           <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="h-1.5 w-1.5 rounded-full" :class="scrollLock ? 'bg-success' : 'bg-warning'" />S
+            <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-success' : 'bg-warning'" />S
           </Badge>
         </div>
         <div v-else class="text-[10px] text-muted-foreground/60">
@@ -87,15 +87,15 @@ const keysDisplay = computed(() => {
           <Separator orientation="vertical" class="h-5" />
           <template v-if="keyboardLedEnabled">
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="h-1.5 w-1.5 rounded-full" :class="capsLock ? 'bg-success' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-success' : 'bg-warning'" />
               {{ t('infobar.caps') }}
             </Badge>
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="h-1.5 w-1.5 rounded-full" :class="numLock ? 'bg-success' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="numLock ? 'bg-success' : 'bg-warning'" />
               {{ t('infobar.num') }}
             </Badge>
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="h-1.5 w-1.5 rounded-full" :class="scrollLock ? 'bg-success' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-success' : 'bg-warning'" />
               {{ t('infobar.scroll') }}
             </Badge>
           </template>

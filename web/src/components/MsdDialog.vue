@@ -153,8 +153,8 @@ const downloadProgress = ref<{
 } | null>(null)
 
 const TWO_POINT_TWO_GB = 2.2 * 1024 * 1024 * 1024
-const tabTriggerClass = 'h-9 rounded-md border-0 bg-transparent text-center text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
-const segmentedGroupClass = 'grid w-full grid-cols-2 items-center gap-1 rounded-md border border-border bg-muted p-1'
+const tabTriggerClass = 'h-8 rounded-md border-0 bg-transparent text-center text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
+const segmentedGroupClass = 'grid w-full grid-cols-2 items-center gap-1 rounded-md border border-border bg-muted p-0.5'
 const segmentedItemClass = 'h-8 w-full justify-center rounded-md border-0 bg-transparent px-3 text-center text-xs text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=on]:border-0 data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:hover:bg-background'
 
 const diskMode = computed(() => systemStore.msd?.diskMode ?? 'single')
@@ -688,17 +688,17 @@ onUnmounted(() => {
   <TooltipProvider>
     <Dialog :open="open" @update:open="emit('update:open', $event)">
       <DialogContent class="max-h-[90vh] overflow-hidden p-0 sm:max-w-[760px] flex flex-col">
-      <DialogHeader class="px-6 pt-6 shrink-0">
+      <DialogHeader class="px-5 pt-4 shrink-0">
         <DialogTitle class="flex items-center gap-2">
-          <HardDrive class="h-5 w-5" />
+          <HardDrive class="size-5" />
           {{ t('msd.title') }}
         </DialogTitle>
         <DialogDescription as="div" class="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span :class="msdConnected ? 'text-success' : 'text-muted-foreground'" class="flex items-center gap-1.5">
-              <span class="relative flex h-2 w-2">
+              <span class="relative flex size-2">
                 <span v-if="msdConnected" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
-                <span :class="msdConnected ? 'bg-success' : 'bg-muted-foreground'" class="relative inline-flex h-2 w-2 rounded-full"></span>
+                <span :class="msdConnected ? 'bg-success' : 'bg-muted-foreground'" class="relative inline-flex size-2 rounded-full"></span>
               </span>
               {{ msdConnected ? t('common.connected') : t('common.disconnected') }}
             </span>
@@ -720,8 +720,8 @@ onUnmounted(() => {
               <span class="font-medium text-foreground">{{ t('msd.diskMode') }}</span>
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <span class="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
-                    <Info class="h-3.5 w-3.5" />
+                  <span class="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground">
+                    <Info class="size-3.5" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -747,15 +747,15 @@ onUnmounted(() => {
 
       <Separator class="shrink-0" />
 
-      <div class="flex-1 min-h-0 flex flex-col px-6 pb-6 pt-4">
+      <div class="flex-1 min-h-0 flex flex-col px-5 pb-4 pt-3">
         <Tabs v-model="activeTab" class="flex-1 flex flex-col min-h-0">
-          <TabsList class="grid h-auto w-full shrink-0 grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1">
+          <TabsList class="grid h-auto w-full shrink-0 grid-cols-2 gap-1 rounded-md border border-border bg-muted p-0.5">
           <TabsTrigger value="images" :class="tabTriggerClass">
-            <Disc class="h-4 w-4 mr-1.5" />
+            <Disc class="size-4 mr-1.5" />
             {{ t('msd.images') }}
           </TabsTrigger>
           <TabsTrigger value="drive" :class="tabTriggerClass">
-            <HardDrive class="h-4 w-4 mr-1.5" />
+            <HardDrive class="size-4 mr-1.5" />
             {{ t('msd.drive') }}
           </TabsTrigger>
         </TabsList>
@@ -775,7 +775,7 @@ onUnmounted(() => {
                       @change="handleImageUpload"
                     />
                     <Button variant="outline" size="sm" as="span" class="h-8 cursor-pointer px-2.5 text-xs">
-                      <Upload class="mr-1.5 h-3.5 w-3.5" />
+                      <Upload class="mr-1.5 size-3.5" />
                       {{ t('msd.uploadImage') }}
                     </Button>
                   </label>
@@ -785,11 +785,11 @@ onUnmounted(() => {
                     class="h-8 px-2.5 text-xs"
                     @click="showUrlDialog = true"
                   >
-                    <Globe class="mr-1.5 h-3.5 w-3.5" />
+                    <Globe class="mr-1.5 size-3.5" />
                     {{ t('msd.downloadFromUrl') }}
                   </Button>
-                  <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadImages">
-                    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loadingImages }" />
+                  <Button variant="ghost" size="icon-sm" @click="loadImages">
+                    <RefreshCw class="size-3.5" :class="{ 'animate-spin': loadingImages }" />
                   </Button>
                 </div>
               </div>
@@ -817,8 +817,8 @@ onUnmounted(() => {
                   >
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div class="flex min-w-0 flex-1 items-start gap-2">
-                        <span v-if="mountedImage(image.id)" class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                        <Disc v-else class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span v-if="mountedImage(image.id)" class="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
+                        <Disc v-else class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                         <div class="w-0 flex-1">
                           <Tooltip>
                             <TooltipTrigger as-child>
@@ -836,7 +836,7 @@ onUnmounted(() => {
                                   variant="outline"
                                   class="h-4 cursor-help border-warning/50 px-1.5 text-[10px] text-warning"
                                 >
-                                  <AlertCircle class="h-2.5 w-2.5 mr-0.5" />
+                                  <AlertCircle class="size-2.5 mr-0.5" />
                                   {{ t('msd.largeFileWarning') }}
                                 </Badge>
                               </TooltipTrigger>
@@ -856,7 +856,7 @@ onUnmounted(() => {
                             :disabled="operationInProgress"
                             @click="unmountImageById(image.id)"
                           >
-                            <Unlink class="h-3.5 w-3.5 mr-1" />
+                            <Unlink class="size-3.5 mr-1" />
                             {{ t('msd.disconnect') }}
                           </Button>
                         </template>
@@ -868,7 +868,7 @@ onUnmounted(() => {
                             :disabled="operationInProgress || mediaSlotsFull"
                             @click="connectImage(image)"
                           >
-                            <Link v-if="!connecting" class="h-3.5 w-3.5 mr-1" />
+                            <Link v-if="!connecting" class="size-3.5 mr-1" />
                             <span v-if="connecting">{{ t('common.connecting') }}...</span>
                             <span v-else>{{ t('msd.connect') }}</span>
                           </Button>
@@ -876,11 +876,11 @@ onUnmounted(() => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          class="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           :disabled="operationInProgress || !!mountedImage(image.id)"
                           @click="confirmDelete('image', image.id, image.name)"
                         >
-                          <Trash2 class="h-3.5 w-3.5" />
+                          <Trash2 class="size-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -900,7 +900,7 @@ onUnmounted(() => {
           <TabsContent value="drive" class="m-0 flex min-h-0 flex-1 flex-col space-y-4 pt-3">
             <template v-if="!driveInitialized">
               <div class="shrink-0 text-center py-8 space-y-4">
-                <HardDrive class="h-10 w-10 mx-auto text-muted-foreground" />
+                <HardDrive class="size-10 mx-auto text-muted-foreground" />
                 <p class="text-sm text-muted-foreground">{{ t('msd.driveNotInitialized') }}</p>
                 <Button size="sm" @click="initializeDrive">
                   {{ t('msd.initializeDrive') }}
@@ -920,7 +920,7 @@ onUnmounted(() => {
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <HardDrive class="h-4 w-4 text-muted-foreground" />
+                    <HardDrive class="size-4 text-muted-foreground" />
                     <span class="text-sm font-medium">{{ t('msd.drive') }}</span>
                     <!-- Show size badge only when info is available -->
                     <Badge v-if="driveInfo" variant="outline" class="text-xs">
@@ -933,8 +933,8 @@ onUnmounted(() => {
                       </Badge>
                       <Tooltip>
                         <TooltipTrigger as-child>
-                          <span class="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground">
-                            <Info class="h-3.5 w-3.5" />
+                          <span class="inline-flex size-4 items-center justify-center text-muted-foreground hover:text-foreground">
+                            <Info class="size-3.5" />
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -958,9 +958,9 @@ onUnmounted(() => {
                     </template>
                     <template v-else-if="driveConnectedToTarget">
                       <Badge variant="default" class="h-8 px-2 text-xs">
-                        <span class="relative flex h-1.5 w-1.5 mr-1.5">
+                        <span class="relative flex size-1.5 mr-1.5">
                           <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-foreground opacity-75"></span>
-                          <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary-foreground"></span>
+                          <span class="relative inline-flex size-1.5 rounded-full bg-primary-foreground"></span>
                         </span>
                         {{ t('common.connected') }}
                       </Badge>
@@ -972,7 +972,7 @@ onUnmounted(() => {
                         :disabled="operationInProgress"
                         @click="unmountMedia(driveMedia)"
                       >
-                        <Unlink class="h-3.5 w-3.5 mr-1" />
+                        <Unlink class="size-3.5 mr-1" />
                         {{ t('msd.disconnect') }}
                       </Button>
                     </template>
@@ -984,7 +984,7 @@ onUnmounted(() => {
                         :disabled="operationInProgress || mediaSlotsFull || !!driveError"
                         @click="connectDrive"
                       >
-                        <Link v-if="!connecting" class="h-3.5 w-3.5 mr-1" />
+                        <Link v-if="!connecting" class="size-3.5 mr-1" />
                         <span v-if="connecting">{{ t('common.connecting') }}...</span>
                         <span v-else>{{ t('msd.connect') }}</span>
                       </Button>
@@ -992,11 +992,11 @@ onUnmounted(() => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      class="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       :disabled="operationInProgress || driveConnectedToTarget"
                       @click="showDeleteDriveDialog = true"
                     >
-                      <Trash2 class="h-3.5 w-3.5" />
+                      <Trash2 class="size-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -1024,15 +1024,15 @@ onUnmounted(() => {
                       v-if="currentPath !== '/'"
                       variant="ghost"
                       size="icon"
-                      class="h-8 w-8 shrink-0"
+                      class="size-8 shrink-0"
                       :disabled="driveConnectedToTarget"
                       @click="navigateUp"
                     >
-                      <ArrowLeft class="h-3.5 w-3.5" />
+                      <ArrowLeft class="size-3.5" />
                     </Button>
                     <nav class="flex items-center text-xs min-w-0 overflow-hidden">
                       <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
-                        <ChevronRight v-if="index > 0" class="h-3 w-3 text-muted-foreground mx-0.5 shrink-0" />
+                        <ChevronRight v-if="index > 0" class="size-3 text-muted-foreground mx-0.5 shrink-0" />
                         <Button
                           variant="link"
                           size="sm"
@@ -1059,10 +1059,10 @@ onUnmounted(() => {
                             variant="ghost"
                             size="icon"
                             as="span"
-                            class="h-8 w-8"
+                            class="size-8"
                             :class="driveConnectedToTarget ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'"
                           >
-                            <Upload class="h-3.5 w-3.5" />
+                            <Upload class="size-3.5" />
                           </Button>
                         </label>
                       </TooltipTrigger>
@@ -1076,11 +1076,11 @@ onUnmounted(() => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          class="h-8 w-8"
+                          class="size-8"
                           :disabled="driveConnectedToTarget"
                           @click="showNewFolderDialog = true"
                         >
-                          <FolderPlus class="h-3.5 w-3.5" />
+                          <FolderPlus class="size-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent v-if="driveConnectedToTarget">
@@ -1090,11 +1090,11 @@ onUnmounted(() => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      class="h-8 w-8"
+                      class="size-8"
                       :disabled="driveConnectedToTarget"
                       @click="loadDriveFiles"
                     >
-                      <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': loadingDrive }" />
+                      <RefreshCw class="size-3.5" :class="{ 'animate-spin': loadingDrive }" />
                     </Button>
                   </div>
                 </div>
@@ -1129,8 +1129,8 @@ onUnmounted(() => {
                         class="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                         @click="file.is_dir && navigateTo(file.path)"
                       >
-                        <Folder v-if="file.is_dir" class="h-4 w-4 shrink-0 text-info" />
-                        <File v-else class="h-4 w-4 text-muted-foreground shrink-0" />
+                        <Folder v-if="file.is_dir" class="size-4 shrink-0 text-info" />
+                        <File v-else class="size-4 text-muted-foreground shrink-0" />
                         <div class="min-w-0">
                           <Tooltip>
                             <TooltipTrigger as-child>
@@ -1150,22 +1150,22 @@ onUnmounted(() => {
                           v-if="!file.is_dir"
                           variant="ghost"
                           size="icon"
-                          class="h-8 w-8"
+                          class="size-8"
                           as="a"
                           :href="msdApi.downloadDriveFile(file.path)"
                           download
                         >
-                          <Download class="h-3.5 w-3.5" />
+                          <Download class="size-3.5" />
                         </Button>
                         <!-- ③ Delete disabled when drive connected to target -->
                         <Button
                           variant="ghost"
                           size="icon"
-                          class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          class="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           :disabled="driveConnectedToTarget"
                           @click="confirmDelete('file', file.path, file.name)"
                         >
-                          <Trash2 class="h-3.5 w-3.5" />
+                          <Trash2 class="size-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -1339,7 +1339,7 @@ onUnmounted(() => {
           {{ t('common.cancel') }}
         </Button>
         <Button @click="confirmImageMount" :disabled="connecting || mediaSlotsFull">
-          <Link v-if="!connecting" class="h-4 w-4 mr-1" />
+          <Link v-if="!connecting" class="size-4 mr-1" />
           <span v-if="connecting">{{ t('common.connecting') }}...</span>
           <span v-else>{{ t('msd.connect') }}</span>
         </Button>
@@ -1366,7 +1366,7 @@ onUnmounted(() => {
     <DialogContent>
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
-          <Globe class="h-5 w-5" />
+          <Globe class="size-5" />
           {{ t('msd.downloadFromUrl') }}
         </DialogTitle>
         <DialogDescription>{{ t('msd.downloadFromUrlDesc') }}</DialogDescription>
@@ -1425,11 +1425,11 @@ onUnmounted(() => {
           :disabled="!downloadUrl.trim()"
           @click="startUrlDownload"
         >
-          <Download class="h-4 w-4 mr-1" />
+          <Download class="size-4 mr-1" />
           {{ t('msd.download') }}
         </Button>
         <Button v-else variant="destructive" @click="cancelUrlDownload">
-          <X class="h-4 w-4 mr-1" />
+          <X class="size-4 mr-1" />
           {{ t('common.cancel') }}
         </Button>
       </DialogFooter>

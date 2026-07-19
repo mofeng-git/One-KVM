@@ -205,7 +205,7 @@ function handleKeydown(e: KeyboardEvent) {
 
     <!-- Warning for untypable characters -->
     <Alert v-if="hasUntypableChars && !isPasting" variant="warning">
-      <AlertCircle class="h-4 w-4 shrink-0 mt-0.5" />
+      <AlertCircle class="size-4 shrink-0 mt-0.5" />
       <AlertTitle>{{ t('paste.untypableWarning') }}</AlertTitle>
       <AlertDescription>
           {{ t('paste.untypableChars', { chars: textAnalysis?.untypableChars.slice(0, 5).map(c => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : c).join(', ') }) }}
@@ -234,7 +234,7 @@ function handleKeydown(e: KeyboardEvent) {
           {{ t('common.cancel') }}
         </Button>
         <Button v-else variant="ghost" size="sm" @click="cancelPaste">
-          <Square class="h-3 w-3 mr-1.5 fill-current" />
+          <Square class="size-3 mr-1.5 fill-current" />
           {{ t('paste.stop') }}
         </Button>
         <Button
@@ -242,7 +242,7 @@ function handleKeydown(e: KeyboardEvent) {
           :disabled="!text.trim() || isPasting"
           @click="handlePaste"
         >
-          <CornerDownLeft class="h-4 w-4 mr-1.5" />
+          <CornerDownLeft class="size-4 mr-1.5" />
           {{ t('paste.confirm') }}
         </Button>
       </div>

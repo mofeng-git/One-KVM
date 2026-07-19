@@ -141,7 +141,7 @@ const statusBadgeText = computed(() => {
         <template v-if="compact">
           <!-- Compact: single row with dot + abbreviated title -->
           <div class="flex items-center gap-1">
-            <span :class="cn('h-1.5 w-1.5 rounded-full shrink-0', statusColor)" />
+            <span :class="cn('size-1.5 rounded-full shrink-0', statusColor)" />
             <span class="text-[10px] text-muted-foreground leading-tight truncate">{{ title }}</span>
           </div>
         </template>
@@ -150,7 +150,7 @@ const statusBadgeText = computed(() => {
           <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
           <!-- Bottom: Status dot + Quick info -->
           <div class="flex items-center gap-1.5">
-            <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
+            <span :class="cn('size-2 rounded-full shrink-0', statusColor)" />
             <span class="text-[11px] text-muted-foreground leading-tight truncate">
               {{ quickInfo || subtitle || statusText }}
             </span>
@@ -169,7 +169,7 @@ const statusBadgeText = computed(() => {
             status === 'error' ? 'bg-destructive/10 text-destructive' :
             'bg-muted text-muted-foreground'
           )">
-            <component :is="StatusIcon" class="h-5 w-5" />
+            <component :is="StatusIcon" class="size-5" />
           </div>
           <div class="flex-1 min-w-0">
             <h4 class="font-semibold text-sm">{{ title }}</h4>
@@ -178,7 +178,7 @@ const statusBadgeText = computed(() => {
                 v-if="statusIcon"
                 :is="statusIcon"
                 :class="cn(
-                  'h-3.5 w-3.5',
+                  'size-3.5',
                   status === 'connected' ? 'text-success' :
                   status === 'connecting' ? 'text-warning animate-spin' :
                   status === 'error' ? 'text-destructive' :
@@ -229,7 +229,7 @@ const statusBadgeText = computed(() => {
         <template v-if="compact">
           <!-- Compact: single row with dot + abbreviated title -->
           <div class="flex items-center gap-1">
-            <span :class="cn('h-1.5 w-1.5 rounded-full shrink-0', statusColor)" />
+            <span :class="cn('size-1.5 rounded-full shrink-0', statusColor)" />
             <span class="text-[10px] text-muted-foreground leading-tight truncate">{{ title }}</span>
           </div>
         </template>
@@ -238,7 +238,7 @@ const statusBadgeText = computed(() => {
           <span class="font-medium text-foreground text-xs truncate">{{ title }}</span>
           <!-- Bottom: Status dot + Quick info -->
           <div class="flex items-center gap-1.5">
-            <span :class="cn('h-2 w-2 rounded-full shrink-0', statusColor)" />
+            <span :class="cn('size-2 rounded-full shrink-0', statusColor)" />
             <span class="text-[11px] text-muted-foreground leading-tight truncate">
               {{ quickInfo || subtitle || statusText }}
             </span>
@@ -257,7 +257,7 @@ const statusBadgeText = computed(() => {
             status === 'error' ? 'bg-destructive/10 text-destructive' :
             'bg-muted text-muted-foreground'
           )">
-            <component :is="StatusIcon" class="h-5 w-5" />
+            <component :is="StatusIcon" class="size-5" />
           </div>
           <div class="flex-1 min-w-0">
             <h4 class="font-semibold text-sm">{{ title }}</h4>
@@ -266,7 +266,7 @@ const statusBadgeText = computed(() => {
                 v-if="statusIcon"
                 :is="statusIcon"
                 :class="cn(
-                  'h-3.5 w-3.5',
+                  'size-3.5',
                   status === 'connected' ? 'text-success' :
                   status === 'connecting' ? 'text-warning animate-spin' :
                   status === 'error' ? 'text-destructive' :

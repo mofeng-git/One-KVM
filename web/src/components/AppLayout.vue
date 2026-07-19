@@ -52,9 +52,9 @@ async function handleLogout() {
           </span>
 
           <!-- Theme Toggle -->
-          <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
-            <Sun class="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon class="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <Button variant="ghost" size="icon-sm" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
+            <Sun class="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon class="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span class="sr-only">{{ t('common.toggleTheme') }}</span>
           </Button>
 
@@ -64,21 +64,21 @@ async function handleLogout() {
           <!-- Mobile Menu -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child class="md:hidden">
-              <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.menu')">
-                <Menu class="h-4 w-4" />
+              <Button variant="ghost" size="icon-sm" :aria-label="t('common.menu')">
+                <Menu class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem @click="handleLogout">
-                <LogOut class="h-4 w-4 mr-2" />
+                <LogOut class="size-4 mr-2" />
                 {{ t('nav.logout') }}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <!-- Logout Button (Desktop) -->
-          <Button variant="ghost" size="icon" class="hidden md:flex h-8 w-8" :aria-label="t('nav.logout')" @click="handleLogout">
-            <LogOut class="h-4 w-4" />
+          <Button variant="ghost" size="icon-sm" class="hidden md:flex" :aria-label="t('nav.logout')" @click="handleLogout">
+            <LogOut class="size-4" />
             <span class="sr-only">{{ t('nav.logout') }}</span>
           </Button>
         </div>

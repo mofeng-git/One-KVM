@@ -25,9 +25,9 @@ defineProps<{
           variant="ghost"
           size="icon-xs"
           class="text-muted-foreground/60 hover:text-muted-foreground"
-          :class="iconSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'"
+          :class="iconSize === 'sm' ? 'size-3.5' : 'size-4'"
         >
-          <HelpCircle :class="iconSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'" />
+          <HelpCircle :class="iconSize === 'sm' ? 'size-3.5' : 'size-4'" />
         </Button>
       </TooltipTrigger>
       <TooltipContent

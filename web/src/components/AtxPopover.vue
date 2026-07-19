@@ -30,7 +30,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const activeTab = ref('atx')
-const tabTriggerClass = 'h-9 rounded-md border-0 bg-transparent text-center text-xs text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
+const tabTriggerClass = 'h-8 rounded-md border-0 bg-transparent text-center text-xs text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
 
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
 const hddState = ref<'active' | 'inactive' | 'unknown'>('unknown')
@@ -199,19 +199,19 @@ watch(
 <template>
   <div class="p-2.5 space-y-2.5">
     <Tabs v-model="activeTab">
-      <TabsList class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1">
+      <TabsList class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-0.5">
         <TabsTrigger
           value="atx"
           :class="tabTriggerClass"
         >
-          <Power class="h-3 w-3 mr-1" />
+          <Power class="size-3 mr-1" />
           {{ t('atx.title') }}
         </TabsTrigger>
         <TabsTrigger
           value="wol"
           :class="tabTriggerClass"
         >
-          <Wifi class="h-3 w-3 mr-1" />
+          <Wifi class="size-3 mr-1" />
           WOL
         </TabsTrigger>
       </TabsList>
@@ -221,14 +221,14 @@ watch(
         <!-- Status -->
         <div class="grid grid-cols-2 gap-2">
           <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
-            <Power :class="['h-4 w-4 shrink-0', powerStateIconColor]" />
+            <Power :class="['size-4 shrink-0', powerStateIconColor]" />
             <div class="min-w-0">
               <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.powerState') }}</p>
               <p :class="['mt-1 truncate text-xs font-medium leading-none', powerStateTextColor]">{{ powerStateText }}</p>
             </div>
           </div>
           <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
-            <HardDrive :class="['h-4 w-4 shrink-0', hddStateIconColor]" />
+            <HardDrive :class="['size-4 shrink-0', hddStateIconColor]" />
             <div class="min-w-0">
               <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.hddState') }}</p>
               <p :class="['mt-1 truncate text-xs font-medium leading-none', hddStateTextColor]">{{ hddStateText }}</p>
@@ -245,12 +245,12 @@ watch(
             size="sm"
             :disabled="actionBusy"
             :class="[
-              'w-full justify-start gap-2 h-7 text-xs',
+              'w-full justify-start gap-2 h-8 text-xs',
               activeAction === 'short' ? 'bg-muted text-muted-foreground' : '',
             ]"
             @click="handleAction('short')"
           >
-            <Power class="h-3 w-3" />
+            <Power class="size-3" />
             {{ t('atx.shortPress') }}
           </Button>
 
@@ -259,12 +259,12 @@ watch(
             size="sm"
             :disabled="actionBusy"
             :class="[
-              'h-7 w-full justify-start gap-2 text-xs text-warning hover:bg-warning/10 hover:text-warning',
+              'h-8 w-full justify-start gap-2 text-xs text-warning hover:bg-warning/10 hover:text-warning',
               activeAction === 'long' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
             ]"
             @click="handleAction('long')"
           >
-            <CircleDot class="h-3 w-3" />
+            <CircleDot class="size-3" />
             {{ t('atx.longPress') }}
           </Button>
 
@@ -273,12 +273,12 @@ watch(
             size="sm"
             :disabled="actionBusy"
             :class="[
-              'h-7 w-full justify-start gap-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive',
+              'h-8 w-full justify-start gap-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive',
               activeAction === 'reset' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
             ]"
             @click="handleAction('reset')"
           >
-            <RotateCcw class="h-3 w-3" />
+            <RotateCcw class="size-3" />
             {{ t('atx.reset') }}
           </Button>
         </div>
@@ -302,7 +302,7 @@ watch(
               :disabled="!isValidMac || wolSending"
               @click="sendWol"
             >
-              <Send class="h-3.5 w-3.5" />
+              <Send class="size-3.5" />
             </Button>
           </div>
           <p v-if="wolMacAddress && !isValidMac" class="text-xs text-destructive">

@@ -249,11 +249,11 @@ onUnmounted(() => {
     </CardContent>
     <CardFooter class="border-t pt-4 justify-end">
       <Button v-if="!enabled" :disabled="statusLoading" @click="enrollmentOpen = true">
-        <ShieldCheck class="h-4 w-4" />
+        <ShieldCheck class="size-4" />
         {{ t('settings.totp.enable') }}
       </Button>
       <Button v-else variant="destructive" :disabled="statusLoading" @click="disableOpen = true">
-        <ShieldOff class="h-4 w-4" />
+        <ShieldOff class="size-4" />
         {{ t('settings.totp.disable') }}
       </Button>
     </CardFooter>
@@ -283,7 +283,7 @@ onUnmounted(() => {
         <div class="space-y-2">
           <Label for="totp-enrollment-code">{{ t('auth.totpCode') }}</Label>
           <div class="relative">
-            <KeyRound class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <KeyRound class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input id="totp-enrollment-code" v-model="enrollmentCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="pl-10 font-mono" @input="enrollmentCode = normalizeCode(enrollmentCode)" />
           </div>
         </div>
@@ -296,11 +296,11 @@ onUnmounted(() => {
       <DialogFooter>
         <Button variant="outline" :disabled="enrollmentLoading" @click="enrollmentOpen = false">{{ t('common.cancel') }}</Button>
         <Button v-if="enrollmentStep === 'password'" :disabled="enrollmentLoading" @click="beginEnrollment">
-          <Loader2 v-if="enrollmentLoading" class="h-4 w-4 animate-spin" />
+          <Loader2 v-if="enrollmentLoading" class="size-4 animate-spin" />
           {{ t('common.next') }}
         </Button>
         <Button v-else :disabled="enrollmentLoading" @click="confirmEnrollment">
-          <Loader2 v-if="enrollmentLoading" class="h-4 w-4 animate-spin" />
+          <Loader2 v-if="enrollmentLoading" class="size-4 animate-spin" />
           {{ t('common.confirm') }}
         </Button>
       </DialogFooter>
@@ -329,7 +329,7 @@ onUnmounted(() => {
       <DialogFooter>
         <Button variant="outline" :disabled="disableLoading" @click="disableOpen = false">{{ t('common.cancel') }}</Button>
         <Button variant="destructive" :disabled="disableLoading" @click="disableTotp">
-          <Loader2 v-if="disableLoading" class="h-4 w-4 animate-spin" />
+          <Loader2 v-if="disableLoading" class="size-4 animate-spin" />
           {{ t('settings.totp.disable') }}
         </Button>
       </DialogFooter>

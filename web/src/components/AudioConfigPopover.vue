@@ -142,8 +142,8 @@ watch(() => props.open, (isOpen) => {
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
-        <Volume2 class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      <Button variant="ghost" size="sm" class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
+        <Volume2 class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ t('actionbar.audioConfig') }}</span>
       </Button>
     </PopoverTrigger>
@@ -166,7 +166,7 @@ watch(() => props.open, (isOpen) => {
               <span class="text-xs font-mono">{{ Math.round(localVolume[0] ?? 0) }}%</span>
             </div>
             <div class="flex items-center gap-2">
-              <Volume2 class="h-3.5 w-3.5 text-muted-foreground opacity-50" />
+              <Volume2 class="size-3.5 text-muted-foreground opacity-50" />
               <Slider
                 :model-value="localVolume"
                 @update:model-value="handleVolumeChange"
@@ -176,7 +176,7 @@ watch(() => props.open, (isOpen) => {
                 :disabled="!systemStore.audio?.streaming"
                 class="flex-1"
               />
-              <Volume2 class="h-3.5 w-3.5 text-muted-foreground" />
+              <Volume2 class="size-3.5 text-muted-foreground" />
             </div>
           </div>
         </div>
@@ -191,12 +191,11 @@ watch(() => props.open, (isOpen) => {
               </h5>
               <Button
                 variant="ghost"
-                size="icon"
-                class="h-6 w-6"
+                size="icon-xs"
                 :disabled="loadingDevices"
                 @click="loadDevices"
               >
-                <RefreshCw :class="['h-3.5 w-3.5', loadingDevices && 'animate-spin']" />
+                <RefreshCw :class="['size-3.5', loadingDevices && 'animate-spin']" />
               </Button>
             </div>
 
@@ -230,7 +229,7 @@ watch(() => props.open, (isOpen) => {
                 :model-value="selectedDevice"
                 @update:model-value="(v) => selectedDevice = v as string"
                 :disabled="loadingDevices || devices.length === 0"
-                class="h-8 w-full text-xs"
+                size="sm" class="w-full text-xs"
               >
                   <NativeSelectOption value="">{{ t('actionbar.selectAudioDevice') }}</NativeSelectOption>
                   <NativeSelectOption
@@ -281,7 +280,7 @@ watch(() => props.open, (isOpen) => {
               :disabled="applying"
               @click="applyConfig"
             >
-              <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              <Loader2 v-if="applying" class="size-3.5 mr-1.5 animate-spin" />
               <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
             </Button>
           </div>

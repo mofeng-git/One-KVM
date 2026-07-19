@@ -70,23 +70,22 @@ function hideFrameScrollbars(event: Event) {
       <DialogHeader class="px-3 sm:px-4 py-1 border-b shrink-0">
         <DialogTitle class="flex h-8 items-center justify-between w-full">
           <div class="flex items-center gap-2 min-w-0">
-            <Terminal class="h-4 w-4 shrink-0" />
+            <Terminal class="size-4 shrink-0" />
             <span class="truncate text-sm font-semibold">{{ t('extensions.ttyd.title') }}</span>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <Button
               variant="ghost"
-              size="icon"
-              class="h-7 w-7"
+              size="icon-sm"
               @click="openTerminalInNewTab"
               :aria-label="t('extensions.ttyd.openInNewTab')"
               :title="t('extensions.ttyd.openInNewTab')"
             >
-              <ExternalLink class="h-3.5 w-3.5" />
+              <ExternalLink class="size-3.5" />
             </Button>
             <DialogClose as-child>
-              <Button variant="ghost" size="icon" class="h-7 w-7">
-                <X class="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon-sm">
+                <X class="size-3.5" />
                 <span class="sr-only">Close</span>
               </Button>
             </DialogClose>

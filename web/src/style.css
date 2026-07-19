@@ -155,3 +155,30 @@ body {
 #app {
   min-height: 100vh;
 }
+
+@layer components {
+  /* Shared dotted backdrop: console video area, login & setup pages */
+  .dot-grid-bg {
+    background-color: var(--muted);
+    background-image: radial-gradient(circle, color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+/* Settings page density: compact cards.
+   Unlayered on purpose — must outrank Tailwind's @layer utilities (py-6/px-6/gap-6). */
+.settings-dense [data-slot="card"] {
+  gap: 1rem;
+  padding-block: 1rem;
+}
+.settings-dense [data-slot="card-header"],
+.settings-dense [data-slot="card-content"],
+.settings-dense [data-slot="card-footer"] {
+  padding-inline: 1rem;
+}
+.settings-dense [data-slot="card-header"].border-b {
+  padding-bottom: 1rem;
+}
+.settings-dense [data-slot="card-footer"].border-t {
+  padding-top: 1rem;
+}

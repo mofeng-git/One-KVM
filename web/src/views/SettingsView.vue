@@ -2700,19 +2700,19 @@ watch(isWindows, () => {
   <AppLayout>
     <SidebarProvider class="h-full min-h-0 overflow-hidden">
       <Sidebar class="top-10 h-[calc(100dvh-2.5rem)] sm:top-14 sm:h-[calc(100dvh-3.5rem)]" collapsible="offcanvas">
-        <SidebarHeader class="gap-1 px-6 pt-6 pb-3 text-foreground md:pt-10">
+        <SidebarHeader class="gap-1 px-6 pt-4 pb-2 text-foreground md:pt-6">
           <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
           <p class="text-xs text-muted-foreground">{{ t('settings.sidebarSubtitle') }}</p>
         </SidebarHeader>
         <SidebarContent class="px-3 pb-6 md:pb-10">
-          <SidebarGroup v-for="group in navGroups" :key="group.title" class="px-0 py-2">
+          <SidebarGroup v-for="group in navGroups" :key="group.title" class="px-0 py-1">
             <SidebarGroupLabel class="uppercase">{{ group.title }}</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in group.items" :key="item.id">
                 <SidebarMenuButton
                   :is-active="activeSection === item.id"
                   :tooltip="item.label"
-                  class="h-10 px-3 text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
+                  class="h-8 px-3 text-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
                   @click="selectSection(item.id)"
                 >
                   <component :is="item.icon" />
@@ -2727,19 +2727,19 @@ watch(isWindows, () => {
       <SidebarInset class="min-w-0 overflow-y-auto">
       <!-- Mobile Header -->
       <div class="md:hidden sticky top-0 z-20 flex items-center px-3 sm:px-4 py-2 sm:py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <SidebarTrigger class="mr-1.5 h-8 w-8 sm:mr-2 sm:h-9 sm:w-9" />
+        <SidebarTrigger class="mr-1.5 size-8 sm:mr-2 sm:size-9" />
         <div class="flex items-center gap-2 min-w-0">
-          <component :is="sectionMeta.icon" class="h-4 w-4 text-muted-foreground shrink-0" />
+          <component :is="sectionMeta.icon" class="size-4 text-muted-foreground shrink-0" />
           <h1 class="text-sm sm:text-base font-semibold truncate">{{ sectionMeta.title }}</h1>
         </div>
       </div>
-        <div class="mx-auto w-full max-w-3xl px-3 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-10 space-y-6">
+        <div class="mx-auto w-full max-w-4xl px-3 sm:px-6 lg:px-8 pt-6 pb-10 space-y-4 settings-dense">
 
           <!-- Section Header -->
           <header class="space-y-1.5 pb-2 border-b">
             <div class="flex items-center gap-2.5">
-              <component :is="sectionMeta.icon" class="h-5 w-5 text-muted-foreground" />
-              <h1 class="text-xl sm:text-2xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+              <component :is="sectionMeta.icon" class="size-5 text-muted-foreground" />
+              <h1 class="text-xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
             </div>
             <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
               {{ sectionMeta.description }}
@@ -2747,7 +2747,7 @@ watch(isWindows, () => {
           </header>
 
           <!-- Appearance Section -->
-          <div v-show="activeSection === 'appearance'" class="space-y-6">
+          <div v-show="activeSection === 'appearance'" class="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.theme') }}</CardTitle>
@@ -2756,13 +2756,13 @@ watch(isWindows, () => {
               <CardContent>
                 <div class="grid grid-cols-3 gap-2 sm:max-w-md">
                   <Button :variant="theme === 'light' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('light')">
-                    <Sun class="h-4 w-4 mr-1.5" />{{ t('settings.lightMode') }}
+                    <Sun class="size-4 mr-1.5" />{{ t('settings.lightMode') }}
                   </Button>
                   <Button :variant="theme === 'dark' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('dark')">
-                    <Moon class="h-4 w-4 mr-1.5" />{{ t('settings.darkMode') }}
+                    <Moon class="size-4 mr-1.5" />{{ t('settings.darkMode') }}
                   </Button>
                   <Button :variant="theme === 'system' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('system')">
-                    <Monitor class="h-4 w-4 mr-1.5" />{{ t('settings.systemMode') }}
+                    <Monitor class="size-4 mr-1.5" />{{ t('settings.systemMode') }}
                   </Button>
                 </div>
               </CardContent>
@@ -2786,21 +2786,21 @@ watch(isWindows, () => {
               <CardContent class="space-y-1">
                 <div class="flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-web-terminal" class="flex min-w-0 items-center gap-2 font-normal">
-                    <Terminal class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Terminal class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ t('actionbar.webTerminal') }}</span>
                   </Label>
                   <Switch id="feature-web-terminal" v-model="featureVisibility.webTerminal" />
                 </div>
                 <div class="flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-computer-use" class="flex min-w-0 items-center gap-2 font-normal">
-                    <Bot class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Bot class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
                   </Label>
                   <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
                 </div>
                 <div class="flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-paste-text" class="flex min-w-0 items-center gap-2 font-normal">
-                    <ClipboardPaste class="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <ClipboardPaste class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ t('settings.pasteText') }}</span>
                   </Label>
                   <Switch id="feature-paste-text" v-model="featureVisibility.pasteText" />
@@ -2810,7 +2810,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Account Section -->
-          <div v-show="activeSection === 'account'" class="space-y-6">
+          <div v-show="activeSection === 'account'" class="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.username') }}</CardTitle>
@@ -2826,12 +2826,12 @@ watch(isWindows, () => {
                   <Input id="account-username-password" v-model="usernamePassword" type="password" autocomplete="current-password" />
                 </div>
                 <p v-if="usernameError" class="text-xs text-destructive">{{ usernameError }}</p>
-                <p v-else-if="usernameSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
+                <p v-else-if="usernameSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="size-3.5" />{{ t('common.success') }}</p>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button @click="changeUsername" :disabled="usernameSaving">
-                  <Loader2 v-if="usernameSaving" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <Loader2 v-if="usernameSaving" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ t('common.save') }}
                 </Button>
               </CardFooter>
@@ -2856,12 +2856,12 @@ watch(isWindows, () => {
                   <Input id="account-confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" />
                 </div>
                 <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
-                <p v-else-if="passwordSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="h-3.5 w-3.5" />{{ t('common.success') }}</p>
+                <p v-else-if="passwordSaved" class="flex items-center gap-1.5 text-xs text-success"><Check class="size-3.5" />{{ t('common.success') }}</p>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button @click="changePassword" :disabled="passwordSaving">
-                  <Loader2 v-if="passwordSaving" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <Loader2 v-if="passwordSaving" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ t('common.save') }}
                 </Button>
               </CardFooter>
@@ -2885,8 +2885,8 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button @click="saveAuthConfig" :disabled="authConfigLoading">
-                  <Loader2 v-if="authConfigLoading" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <Loader2 v-if="authConfigLoading" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ t('common.save') }}
                 </Button>
               </CardFooter>
@@ -2894,7 +2894,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Video Section -->
-          <div v-show="activeSection === 'video'" class="space-y-6">
+          <div v-show="activeSection === 'video'" class="space-y-4">
             <!-- Video Device Settings -->
             <Card>
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
@@ -2902,8 +2902,8 @@ watch(isWindows, () => {
                   <CardTitle>{{ t('settings.videoSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.videoSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
-                  <RefreshCw class="h-4 w-4" />
+                <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadDevices">
+                  <RefreshCw class="size-4" />
                 </Button>
               </CardHeader>
               <CardContent class="space-y-4">
@@ -3023,8 +3023,8 @@ watch(isWindows, () => {
                         :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                         @click="showPasswords = !showPasswords"
                       >
-                        <Eye v-if="!showPasswords" class="h-4 w-4" />
-                        <EyeOff v-else class="h-4 w-4" />
+                        <Eye v-if="!showPasswords" class="size-4" />
+                        <EyeOff v-else class="size-4" />
                       </Button>
                     </div>
                   </div>
@@ -3034,15 +3034,15 @@ watch(isWindows, () => {
           </div>
 
           <!-- HID Section -->
-          <div v-show="activeSection === 'hid'" class="space-y-6">
+          <div v-show="activeSection === 'hid'" class="space-y-4">
             <Card>
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
                   <CardTitle>{{ t('settings.hidSettings') }}</CardTitle>
                   <CardDescription>{{ t('settings.hidSettingsDesc') }}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadDevices">
-                  <RefreshCw class="h-4 w-4" />
+                <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadDevices">
+                  <RefreshCw class="size-4" />
                 </Button>
               </CardHeader>
               <CardContent class="space-y-4">
@@ -3090,13 +3090,13 @@ watch(isWindows, () => {
                           <h4 class="text-sm font-medium">{{ t('settings.ch9329Descriptor') }}</h4>
                           <p class="text-sm text-muted-foreground">{{ t('settings.ch9329DescriptorDesc') }}</p>
                         </div>
-                        <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" :aria-label="t('common.refresh')" :disabled="ch9329DescriptorLoading" @click="loadCh9329Descriptor">
-                          <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': ch9329DescriptorLoading }" />
+                        <Button variant="ghost" size="icon-sm" class="shrink-0" :aria-label="t('common.refresh')" :disabled="ch9329DescriptorLoading" @click="loadCh9329Descriptor">
+                          <RefreshCw class="size-4" :class="{ 'animate-spin': ch9329DescriptorLoading }" />
                         </Button>
                       </div>
                     </div>
                     <p v-if="ch9329DescriptorLoading" class="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 class="h-4 w-4 animate-spin" />
+                      <Loader2 class="size-4 animate-spin" />
                       {{ t('settings.ch9329DescriptorLoading') }}
                     </p>
                     <p v-else-if="ch9329DescriptorError" class="text-sm text-destructive">
@@ -3355,7 +3355,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Environment Section -->
-          <div v-show="activeSection === 'environment'" class="space-y-4 max-w-3xl">
+          <div v-show="activeSection === 'environment'" class="space-y-4">
             <Card v-if="systemStore.deviceInfo">
               <CardHeader>
                 <CardTitle>{{ t('settings.deviceInfo') }}</CardTitle>
@@ -3408,7 +3408,7 @@ watch(isWindows, () => {
                   ]"
                   @click="onRunOtgSelfCheckClick"
                 >
-                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': otgSelfCheckLoading }" />
+                  <RefreshCw class="size-4 mr-2" :class="{ 'animate-spin': otgSelfCheckLoading }" />
                   {{ t('settings.otgSelfCheck.run') }}
                 </Button>
               </CardHeader>
@@ -3445,7 +3445,7 @@ watch(isWindows, () => {
                     >
                       <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/40">
                         <div class="flex items-center gap-2 min-w-0">
-                          <span class="inline-block h-2 w-2 rounded-full shrink-0" :class="otgGroupStatusClass(group.status)" />
+                          <span class="inline-block size-2 rounded-full shrink-0" :class="otgGroupStatusClass(group.status)" />
                           <span class="text-sm font-medium truncate leading-6">{{ t(group.titleKey) }}</span>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
@@ -3461,7 +3461,7 @@ watch(isWindows, () => {
                           class="px-4 py-3 border-b last:border-b-0"
                         >
                           <div class="flex items-start gap-2">
-                            <span class="inline-block h-2 w-2 rounded-full mt-1.5 shrink-0" :class="otgCheckLevelClass(item.level)" />
+                            <span class="inline-block size-2 rounded-full mt-1.5 shrink-0" :class="otgCheckLevelClass(item.level)" />
                             <div class="min-w-0 space-y-1">
                               <div class="flex items-center gap-2">
                                 <p class="text-sm leading-5">{{ otgCheckMessage(item) }}</p>
@@ -3503,7 +3503,7 @@ watch(isWindows, () => {
                   ]"
                   @click="onRunVideoEncoderSelfCheckClick"
                 >
-                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': videoEncoderSelfCheckLoading }" />
+                  <RefreshCw class="size-4 mr-2" :class="{ 'animate-spin': videoEncoderSelfCheckLoading }" />
                   {{ t('settings.encoderSelfCheck.run') }}
                 </Button>
               </CardHeader>
@@ -3569,7 +3569,7 @@ watch(isWindows, () => {
 
           </div>
 
-          <div v-show="activeSection === 'other'" class="space-y-6">
+          <div v-show="activeSection === 'other'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-start justify-between gap-4">
@@ -3587,8 +3587,8 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="flex items-center gap-2 text-sm">
-                  <Loader2 v-if="watchdogLoading" class="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span v-else class="h-2.5 w-2.5 rounded-full" :class="watchdogStatusClass" />
+                  <Loader2 v-if="watchdogLoading" class="size-4 animate-spin text-muted-foreground" />
+                  <span v-else class="size-2.5 rounded-full" :class="watchdogStatusClass" />
                   <span class="font-medium">
                     {{ watchdogLoading
                       ? t('common.loading')
@@ -3617,7 +3617,7 @@ watch(isWindows, () => {
                   :disabled="usbDevicesLoading"
                   @click="fetchUsbDevices()"
                 >
-                  <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
+                  <RefreshCw class="size-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
                   {{ t('settings.usbDevices.refresh') }}
                 </Button>
               </CardHeader>
@@ -3657,7 +3657,7 @@ watch(isWindows, () => {
                               v-if="dev.authorized != null"
                               variant="outline"
                               size="sm"
-                              class="h-7 text-xs"
+                              class="text-xs"
                               :disabled="usbResetLoading"
                               @click="usbResetTarget = dev"
                             >
@@ -3701,14 +3701,14 @@ watch(isWindows, () => {
               </AlertDialogContent>
             </AlertDialog>
           </div>
-          <div v-show="activeSection === 'network'" class="space-y-6">
+          <div v-show="activeSection === 'network'" class="space-y-4">
 
             <!-- Auto-restart: restarting progress -->
             <div
               v-if="autoRestarting"
               class="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-sm"
             >
-              <RefreshCw class="h-4 w-4 animate-spin text-primary shrink-0" />
+              <RefreshCw class="size-4 animate-spin text-primary shrink-0" />
               <div class="flex-1 min-w-0">
                 <p class="font-medium">{{ t('settings.autoRestarting') }}</p>
                 <p class="text-xs text-muted-foreground">
@@ -3739,7 +3739,7 @@ watch(isWindows, () => {
               <AlertDescription class="flex items-center justify-between gap-3">
               <span>{{ t('settings.autoRestartFailed') }}</span>
               <Button variant="outline" size="sm" class="text-foreground" @click="triggerAutoRestart">
-                <RefreshCw class="h-3 w-3 mr-1" />
+                <RefreshCw class="size-3 mr-1" />
                 {{ t('common.retry') }}
               </Button>
               </AlertDescription>
@@ -3807,33 +3807,33 @@ watch(isWindows, () => {
                   <div class="flex items-center gap-2">
                     <code class="font-mono text-xs sm:text-sm break-all flex-1 min-w-0">{{ previewAccessUrl }}</code>
                     <Button
-                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      variant="ghost" size="icon-sm" class="shrink-0"
                       :title="t('settings.copyUrl')"
                       :aria-label="t('settings.copyUrl')"
                       @click="copyPreviewUrl"
                     >
-                      <Check v-if="previewUrlCopied" class="h-3.5 w-3.5 text-success" />
-                      <Copy v-else class="h-3.5 w-3.5" />
+                      <Check v-if="previewUrlCopied" class="size-3.5 text-success" />
+                      <Copy v-else class="size-3.5" />
                     </Button>
                     <Button
-                      variant="ghost" size="icon" class="h-7 w-7 shrink-0"
+                      variant="ghost" size="icon-sm" class="shrink-0"
                       :title="t('settings.openInBrowser')"
                       :aria-label="t('settings.openInBrowser')"
                       @click="openPreviewUrl"
                     >
-                      <ExternalLink class="h-3.5 w-3.5" />
+                      <ExternalLink class="size-3.5" />
                     </Button>
                   </div>
                 </div>
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
                 <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <AlertTriangle class="size-3.5 shrink-0 text-warning" />
                   <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveWebServerConfig" :disabled="webServerLoading || autoRestarting">
-                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <RefreshCw v-if="autoRestarting" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
                 </Button>
               </CardFooter>
@@ -3891,11 +3891,11 @@ watch(isWindows, () => {
                       <div v-for="(_, i) in bindAddressList" :key="`bind-${i}`" class="flex gap-2">
                         <Input v-model="bindAddressList[i]" placeholder="192.168.1.10" />
                         <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeBindAddress(i)">
-                          <Trash2 class="h-4 w-4" />
+                          <Trash2 class="size-4" />
                         </Button>
                       </div>
                       <Button variant="outline" size="sm" @click="addBindAddress">
-                        <Plus class="h-4 w-4 mr-1" />
+                        <Plus class="size-4 mr-1" />
                         {{ t('settings.addBindAddress') }}
                       </Button>
                       <p v-if="bindAddressError" class="text-xs text-destructive">{{ bindAddressError }}</p>
@@ -3911,12 +3911,12 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
                 <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <AlertTriangle class="size-3.5 shrink-0 text-warning" />
                   <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveWebServerConfig" :disabled="webServerLoading || !!bindAddressError || autoRestarting">
-                  <RefreshCw v-if="autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <RefreshCw v-if="autoRestarting" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
                 </Button>
               </CardFooter>
@@ -3942,12 +3942,12 @@ watch(isWindows, () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    class="text-destructive hover:text-destructive h-7 text-xs"
+                    class="text-destructive hover:text-destructive text-xs"
                     :disabled="certClearing || autoRestarting"
                     @click="clearCertificate"
                   >
-                    <RefreshCw v-if="certClearing || autoRestarting" class="h-3 w-3 mr-1 animate-spin" />
-                    <Trash2 v-else class="h-3 w-3 mr-1" />
+                    <RefreshCw v-if="certClearing || autoRestarting" class="size-3 mr-1 animate-spin" />
+                    <Trash2 v-else class="size-3 mr-1" />
                     {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertClear') }}
                   </Button>
                   </AlertDescription>
@@ -3980,15 +3980,15 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
                 <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <AlertTriangle class="size-3.5 shrink-0 text-warning" />
                   <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button
                   :disabled="certSaving || autoRestarting || !sslCertPem.trim() || !sslKeyPem.trim()"
                   @click="saveCertificate"
                 >
-                  <RefreshCw v-if="certSaving || autoRestarting" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <RefreshCw v-if="certSaving || autoRestarting" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ autoRestarting ? t('settings.restarting') : t('settings.sslCertSave') }}
                 </Button>
               </CardFooter>
@@ -3996,7 +3996,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- ATX Section -->
-          <div v-show="activeSection === 'atx'" class="space-y-6">
+          <div v-show="activeSection === 'atx'" class="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('settings.atxPowerManagement') }}</CardTitle>
@@ -4012,8 +4012,8 @@ watch(isWindows, () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" :aria-label="t('common.refresh')" @click="loadAtxDevices">
-                    <RefreshCw class="h-4 w-4" />
+                  <Button variant="ghost" size="icon-sm" class="shrink-0" :aria-label="t('common.refresh')" @click="loadAtxDevices">
+                    <RefreshCw class="size-4" />
                   </Button>
                 </div>
 
@@ -4167,7 +4167,7 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button :disabled="atxSaving" @click="saveAtxSettings">
-                  <Loader2 v-if="atxSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="atxSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ atxSaving ? t('actionbar.applying') : atxSaved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="atxSaving" class="size-4 mr-2 animate-spin" /><Check v-else-if="atxSaved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ atxSaving ? t('actionbar.applying') : atxSaved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
@@ -4190,14 +4190,14 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button :disabled="wolSaving" @click="saveWolSettings">
-                  <Loader2 v-if="wolSaving" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="wolSaved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ wolSaving ? t('actionbar.applying') : wolSaved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="wolSaving" class="size-4 mr-2 animate-spin" /><Check v-else-if="wolSaved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ wolSaving ? t('actionbar.applying') : wolSaved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- ttyd Section -->
-          <div v-show="activeSection === 'ext-ttyd'" class="space-y-6">
+          <div v-show="activeSection === 'ext-ttyd'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4228,7 +4228,7 @@ watch(isWindows, () => {
                         variant="default"
                         @click="openTerminal"
                       >
-                        <Terminal class="h-4 w-4 mr-1" />
+                        <Terminal class="size-4 mr-1" />
                         {{ t('extensions.ttyd.open') }}
                       </Button>
                       <Button
@@ -4237,7 +4237,7 @@ watch(isWindows, () => {
                         @click="startExtension('ttyd')"
                         :disabled="extensionsLoading"
                       >
-                        <Play class="h-4 w-4 mr-1" />
+                        <Play class="size-4 mr-1" />
                         {{ t('extensions.start') }}
                       </Button>
                       <Button
@@ -4247,7 +4247,7 @@ watch(isWindows, () => {
                         @click="stopExtension('ttyd')"
                         :disabled="extensionsLoading"
                       >
-                        <Square class="h-4 w-4 mr-1" />
+                        <Square class="size-4 mr-1" />
                         {{ t('extensions.stop') }}
                       </Button>
                     </div>
@@ -4267,11 +4267,11 @@ watch(isWindows, () => {
                   <!-- Logs -->
                   <div class="space-y-2">
                     <Collapsible v-model:open="showLogs.ttyd" @update:open="open => open && refreshExtensionLogs('ttyd')">
-                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.ttyd ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
                       <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.ttyd || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('ttyd')">
-                        <RefreshCw class="h-3 w-3 mr-1" />
+                        <RefreshCw class="size-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
                       </CollapsibleContent>
@@ -4281,14 +4281,14 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter v-if="extensions?.ttyd?.available" class="border-t pt-4 justify-end">
                 <Button :disabled="loading || isExtRunning(extensions?.ttyd?.status)" @click="saveExtensionConfig('ttyd')">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- Remote Access Section -->
-          <div v-show="activeSection === 'ext-remote-access'" class="space-y-6">
+          <div v-show="activeSection === 'ext-remote-access'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4319,7 +4319,7 @@ watch(isWindows, () => {
                         @click="startExtension('gostc')"
                         :disabled="extensionsLoading || !!gostcValidationMessage"
                       >
-                        <Play class="h-4 w-4 mr-1" />
+                        <Play class="size-4 mr-1" />
                         {{ t('extensions.start') }}
                       </Button>
                       <Button
@@ -4329,7 +4329,7 @@ watch(isWindows, () => {
                         @click="stopExtension('gostc')"
                         :disabled="extensionsLoading"
                       >
-                        <Square class="h-4 w-4 mr-1" />
+                        <Square class="size-4 mr-1" />
                         {{ t('extensions.stop') }}
                       </Button>
                     </div>
@@ -4365,11 +4365,11 @@ watch(isWindows, () => {
                   <!-- Logs -->
                   <div class="space-y-2">
                     <Collapsible v-model:open="showLogs.gostc" @update:open="open => open && refreshExtensionLogs('gostc')">
-                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
                       <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.gostc || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('gostc')">
-                        <RefreshCw class="h-3 w-3 mr-1" />
+                        <RefreshCw class="size-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
                       </CollapsibleContent>
@@ -4379,7 +4379,7 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter v-if="extensions?.gostc?.available" class="border-t pt-4 justify-end">
                 <Button :disabled="loading || isExtRunning(extensions?.gostc?.status)" @click="saveExtensionConfig('gostc')">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
@@ -4414,7 +4414,7 @@ watch(isWindows, () => {
                         @click="startExtension('easytier')"
                         :disabled="extensionsLoading || !!easytierValidationMessage"
                       >
-                        <Play class="h-4 w-4 mr-1" />
+                        <Play class="size-4 mr-1" />
                         {{ t('extensions.start') }}
                       </Button>
                       <Button
@@ -4424,7 +4424,7 @@ watch(isWindows, () => {
                         @click="stopExtension('easytier')"
                         :disabled="extensionsLoading"
                       >
-                        <Square class="h-4 w-4 mr-1" />
+                        <Square class="size-4 mr-1" />
                         {{ t('extensions.stop') }}
                       </Button>
                     </div>
@@ -4453,11 +4453,11 @@ watch(isWindows, () => {
                         <div v-for="(_, i) in extConfig.easytier.peer_urls" :key="i" class="flex gap-2">
                           <Input v-model="extConfig.easytier.peer_urls[i]" placeholder="tcp://1.2.3.4:11010" :disabled="isExtRunning(extensions?.easytier?.status)" />
                           <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
-                            <Trash2 class="h-4 w-4" />
+                            <Trash2 class="size-4" />
                           </Button>
                         </div>
                         <Button variant="outline" size="sm" @click="addEasytierPeer" :disabled="isExtRunning(extensions?.easytier?.status)">
-                          <Plus class="h-4 w-4 mr-1" />
+                          <Plus class="size-4 mr-1" />
                           {{ t('extensions.easytier.addPeer') }}
                         </Button>
                       </div>
@@ -4472,11 +4472,11 @@ watch(isWindows, () => {
                   <!-- Logs -->
                   <div class="space-y-2">
                     <Collapsible v-model:open="showLogs.easytier" @update:open="open => open && refreshExtensionLogs('easytier')">
-                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.easytier ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
                       <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.easytier || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('easytier')">
-                        <RefreshCw class="h-3 w-3 mr-1" />
+                        <RefreshCw class="size-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
                       </CollapsibleContent>
@@ -4486,7 +4486,7 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter v-if="extensions?.easytier?.available" class="border-t pt-4 justify-end">
                 <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
@@ -4520,7 +4520,7 @@ watch(isWindows, () => {
                         @click="startExtension('frpc')"
                         :disabled="extensionsLoading || !!frpcValidationMessage"
                       >
-                        <Play class="h-4 w-4 mr-1" />
+                        <Play class="size-4 mr-1" />
                         {{ t('extensions.start') }}
                       </Button>
                       <Button
@@ -4530,7 +4530,7 @@ watch(isWindows, () => {
                         @click="stopExtension('frpc')"
                         :disabled="extensionsLoading"
                       >
-                        <Square class="h-4 w-4 mr-1" />
+                        <Square class="size-4 mr-1" />
                         {{ t('extensions.stop') }}
                       </Button>
                     </div>
@@ -4642,11 +4642,11 @@ watch(isWindows, () => {
                   </div>
                   <div class="space-y-2">
                     <Collapsible v-model:open="showLogs.frpc" @update:open="open => open && refreshExtensionLogs('frpc')">
-                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['h-4 w-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.frpc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
                       <CollapsibleContent class="space-y-2 pt-2">
                       <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.frpc || []).join('\n') || t('extensions.noLogs') }}</pre>
                       <Button variant="ghost" size="sm" @click="refreshExtensionLogs('frpc')">
-                        <RefreshCw class="h-3 w-3 mr-1" />
+                        <RefreshCw class="size-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
                       </CollapsibleContent>
@@ -4656,14 +4656,14 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter v-if="extensions?.frpc?.available" class="border-t pt-4 justify-end">
                 <Button :disabled="loading || isExtRunning(extensions?.frpc?.status)" @click="saveExtensionConfig('frpc')">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- RTSP Section -->
-          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4675,8 +4675,8 @@ watch(isWindows, () => {
                     <Badge :variant="rtspStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getRtspServiceStatusText(rtspStatus?.service_status) }}
                     </Badge>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRtspConfig" :disabled="rtspLoading">
-                      <RefreshCw :class="['h-4 w-4', rtspLoading ? 'animate-spin' : '']" />
+                    <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadRtspConfig" :disabled="rtspLoading">
+                      <RefreshCw :class="['size-4', rtspLoading ? 'animate-spin' : '']" />
                     </Button>
                   </div>
                 </div>
@@ -4694,7 +4694,7 @@ watch(isWindows, () => {
                       @click="startRtsp"
                       :disabled="rtspLoading || rtspStatus?.service_status === 'starting'"
                     >
-                      <Play class="h-4 w-4 mr-1" />
+                      <Play class="size-4 mr-1" />
                       {{ t('extensions.start') }}
                     </Button>
                     <Button
@@ -4704,7 +4704,7 @@ watch(isWindows, () => {
                       @click="stopRtsp"
                       :disabled="rtspLoading"
                     >
-                      <Square class="h-4 w-4 mr-1" />
+                      <Square class="size-4 mr-1" />
                       {{ t('extensions.stop') }}
                     </Button>
                   </div>
@@ -4767,8 +4767,8 @@ watch(isWindows, () => {
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
-                          <Eye v-if="!showPasswords" class="h-4 w-4" />
-                          <EyeOff v-else class="h-4 w-4" />
+                          <Eye v-if="!showPasswords" class="size-4" />
+                          <EyeOff v-else class="size-4" />
                         </Button>
                       </div>
                     </div>
@@ -4782,14 +4782,14 @@ watch(isWindows, () => {
                   <code class="truncate font-mono">{{ rtspStreamUrl }}</code>
                 </div>
                 <Button class="shrink-0" :disabled="loading || rtspLoading" @click="saveRtspConfig">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- VNC Section -->
-          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4801,8 +4801,8 @@ watch(isWindows, () => {
                     <Badge :variant="vncStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getVncServiceStatusText(vncStatus?.service_status) }}
                     </Badge>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadVncConfig" :disabled="vncLoading">
-                      <RefreshCw :class="['h-4 w-4', vncLoading ? 'animate-spin' : '']" />
+                    <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadVncConfig" :disabled="vncLoading">
+                      <RefreshCw :class="['size-4', vncLoading ? 'animate-spin' : '']" />
                     </Button>
                   </div>
                 </div>
@@ -4824,7 +4824,7 @@ watch(isWindows, () => {
                       @click="startVnc"
                       :disabled="vncLoading || vncStatus?.service_status === 'starting'"
                     >
-                      <Play class="h-4 w-4 mr-1" />
+                      <Play class="size-4 mr-1" />
                       {{ t('extensions.start') }}
                     </Button>
                     <Button
@@ -4834,7 +4834,7 @@ watch(isWindows, () => {
                       @click="stopVnc"
                       :disabled="vncLoading"
                     >
-                      <Square class="h-4 w-4 mr-1" />
+                      <Square class="size-4 mr-1" />
                       {{ t('extensions.stop') }}
                     </Button>
                   </div>
@@ -4889,8 +4889,8 @@ watch(isWindows, () => {
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
-                          <Eye v-if="!showPasswords" class="h-4 w-4" />
-                          <EyeOff v-else class="h-4 w-4" />
+                          <Eye v-if="!showPasswords" class="size-4" />
+                          <EyeOff v-else class="size-4" />
                         </Button>
                       </div>
                     </div>
@@ -4904,14 +4904,14 @@ watch(isWindows, () => {
                   <code class="truncate font-mono">{{ vncStreamUrl }}</code>
                 </div>
                 <Button class="shrink-0" :disabled="loading || vncLoading" @click="saveVncConfig">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- RustDesk Section -->
-          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-4">
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
@@ -4923,8 +4923,8 @@ watch(isWindows, () => {
                     <Badge :variant="rustdeskStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}
                     </Badge>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.refresh')" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
-                      <RefreshCw :class="['h-4 w-4', rustdeskLoading ? 'animate-spin' : '']" />
+                    <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
+                      <RefreshCw :class="['size-4', rustdeskLoading ? 'animate-spin' : '']" />
                     </Button>
                   </div>
                 </div>
@@ -4948,7 +4948,7 @@ watch(isWindows, () => {
                       @click="startRustdesk"
                       :disabled="rustdeskLoading"
                     >
-                      <Play class="h-4 w-4 mr-1" />
+                      <Play class="size-4 mr-1" />
                       {{ t('extensions.start') }}
                     </Button>
                     <Button
@@ -4958,7 +4958,7 @@ watch(isWindows, () => {
                       @click="stopRustdesk"
                       :disabled="rustdeskLoading"
                     >
-                      <Square class="h-4 w-4 mr-1" />
+                      <Square class="size-4 mr-1" />
                       {{ t('extensions.stop') }}
                     </Button>
                   </div>
@@ -5022,8 +5022,8 @@ watch(isWindows, () => {
                           :aria-label="showPasswords ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                           @click="showPasswords = !showPasswords"
                         >
-                          <Eye v-if="!showPasswords" class="h-4 w-4" />
-                          <EyeOff v-else class="h-4 w-4" />
+                          <Eye v-if="!showPasswords" class="size-4" />
+                          <EyeOff v-else class="size-4" />
                         </Button>
                       </div>
                     </div>
@@ -5043,16 +5043,16 @@ watch(isWindows, () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="h-8 w-8"
+                        class="size-8"
                         :aria-label="t('extensions.rustdesk.copyId')"
                         @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
                         :disabled="!rustdeskConfig?.device_id"
                       >
-                        <Check v-if="rustdeskCopied === 'id'" class="h-4 w-4 text-success" />
-                        <Copy v-else class="h-4 w-4" />
+                        <Check v-if="rustdeskCopied === 'id'" class="size-4 text-success" />
+                        <Copy v-else class="size-4" />
                       </Button>
                       <Button variant="outline" size="sm" @click="regenerateRustdeskId" :disabled="rustdeskLoading">
-                        <RefreshCw class="h-4 w-4 mr-1" />
+                        <RefreshCw class="size-4 mr-1" />
                         {{ t('extensions.rustdesk.regenerateId') }}
                       </Button>
                     </div>
@@ -5066,16 +5066,16 @@ watch(isWindows, () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="h-8 w-8"
+                        class="size-8"
                         :aria-label="t('extensions.rustdesk.copyPassword')"
                         @click="copyToClipboard(rustdeskPassword?.device_password || '', 'password')"
                         :disabled="!rustdeskPassword?.device_password"
                       >
-                        <Check v-if="rustdeskCopied === 'password'" class="h-4 w-4 text-success" />
-                        <Copy v-else class="h-4 w-4" />
+                        <Check v-if="rustdeskCopied === 'password'" class="size-4 text-success" />
+                        <Copy v-else class="size-4" />
                       </Button>
                       <Button variant="outline" size="sm" @click="regenerateRustdeskPassword" :disabled="rustdeskLoading">
-                        <RefreshCw class="h-4 w-4 mr-1" />
+                        <RefreshCw class="size-4 mr-1" />
                         {{ t('extensions.rustdesk.regeneratePassword') }}
                       </Button>
                     </div>
@@ -5094,20 +5094,20 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
                 <Button :disabled="loading || rustdeskLoading" @click="saveRustdeskConfig">
-                  <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                  <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>
             </Card>
           </div>
 
           <!-- Redfish Section -->
-          <div v-show="activeSection === 'third-party-access'" class="space-y-6">
+          <div v-show="activeSection === 'third-party-access'" class="space-y-4">
             <!-- Auto-restart: restarting progress -->
             <div
               v-if="autoRestarting"
               class="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-sm"
             >
-              <RefreshCw class="h-4 w-4 animate-spin text-primary shrink-0" />
+              <RefreshCw class="size-4 animate-spin text-primary shrink-0" />
               <div class="flex-1 min-w-0">
                 <p class="font-medium">{{ t('settings.autoRestarting') }}</p>
                 <p class="text-xs text-muted-foreground">
@@ -5138,7 +5138,7 @@ watch(isWindows, () => {
               <AlertDescription class="flex items-center justify-between gap-3">
               <span>{{ t('settings.autoRestartFailed') }}</span>
               <Button variant="outline" size="sm" class="text-foreground" @click="triggerAutoRestart">
-                <RefreshCw class="h-3 w-3 mr-1" />
+                <RefreshCw class="size-3 mr-1" />
                 {{ t('common.retry') }}
               </Button>
               </AlertDescription>
@@ -5161,12 +5161,12 @@ watch(isWindows, () => {
               </CardContent>
               <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
                 <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" />
+                  <AlertTriangle class="size-3.5 shrink-0 text-warning" />
                   <span class="truncate">{{ t('settings.restartRequiredHint') }}</span>
                 </p>
                 <Button @click="saveRedfishConfig" :disabled="redfishSaving || autoRestarting">
-                  <RefreshCw v-if="autoRestarting || redfishSaving" class="h-4 w-4 mr-2 animate-spin" />
-                  <Save v-else class="h-4 w-4 mr-2" />
+                  <RefreshCw v-if="autoRestarting || redfishSaving" class="size-4 mr-2 animate-spin" />
+                  <Save v-else class="size-4 mr-2" />
                   {{ autoRestarting ? t('settings.restarting') : t('common.save') }}
                 </Button>
               </CardFooter>
@@ -5174,7 +5174,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- About Section -->
-          <div v-show="activeSection === 'about'" class="space-y-6">
+          <div v-show="activeSection === 'about'" class="space-y-4">
             <Card>
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
@@ -5184,12 +5184,12 @@ watch(isWindows, () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-8 w-8"
+                  class="size-8"
                   :aria-label="t('common.refresh')"
                   :disabled="updateRunning || updateLoading"
                   @click="loadUpdateOverview"
                 >
-                  <RefreshCw :class="['h-4 w-4', (updateLoading || updateRunning) ? 'animate-spin' : '']" />
+                  <RefreshCw :class="['size-4', (updateLoading || updateRunning) ? 'animate-spin' : '']" />
                 </Button>
               </CardHeader>
               <CardContent class="space-y-4">
@@ -5253,7 +5253,7 @@ watch(isWindows, () => {
                     :disabled="updateRunning || !updateOverview?.upgrade_available"
                     @click="startOnlineUpgrade"
                   >
-                    <RefreshCw class="h-4 w-4 mr-2" :class="updateRunning ? 'animate-spin' : ''" />
+                    <RefreshCw class="size-4 mr-2" :class="updateRunning ? 'animate-spin' : ''" />
                     {{ t('settings.startUpgrade') }}
                   </Button>
                 </div>
@@ -5267,21 +5267,21 @@ watch(isWindows, () => {
           <div v-if="['video', 'hid'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
-                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
               </p>
               <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
-                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329StringLengthWarning') }}</span>
               </p>
               <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
-                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
               </p>
               <p v-if="saveError" class="text-xs text-destructive">{{ saveError }}</p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
               <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
-                <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" /><Check v-else-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>
           </div>
@@ -5307,7 +5307,7 @@ watch(isWindows, () => {
             {{ t('common.later') }}
           </Button>
           <Button @click="restartServer" :disabled="restarting">
-            <RefreshCw v-if="restarting" class="h-4 w-4 mr-2 animate-spin" />
+            <RefreshCw v-if="restarting" class="size-4 mr-2 animate-spin" />
             {{ restarting ? t('settings.restarting') : t('common.restartNow') }}
           </Button>
         </DialogFooter>

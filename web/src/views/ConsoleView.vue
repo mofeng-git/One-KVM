@@ -3117,22 +3117,22 @@ onUnmounted(() => {
               />
             </div>
             <div class="mx-1 hidden h-6 w-px bg-border md:block" />
-            <Button variant="ghost" size="icon" class="h-8 w-8 hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
-              <Sun v-if="isDark" class="h-4 w-4" />
-              <Moon v-else class="h-4 w-4" />
+            <Button variant="ghost" size="icon-sm" class="hidden md:flex" :aria-label="t('common.toggleTheme')" @click="toggleTheme">
+              <Sun v-if="isDark" class="size-4" />
+              <Moon v-else class="size-4" />
             </Button>
-            <LanguageToggleButton class="h-8 w-8 hidden md:flex" />
+            <LanguageToggleButton class="size-8 hidden md:flex" />
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 h-7 sm:h-9 px-2 sm:px-3">
+                <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 px-2 sm:px-3">
                   <span class="text-xs max-w-[60px] sm:max-w-[100px] truncate">{{ authStore.user || 'admin' }}</span>
-                  <ChevronDown class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <ChevronDown class="size-3 sm:size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem class="md:hidden" @click="toggleTheme">
-                  <Sun v-if="isDark" class="h-4 w-4 mr-2" />
-                  <Moon v-else class="h-4 w-4 mr-2" />
+                  <Sun v-if="isDark" class="size-4 mr-2" />
+                  <Moon v-else class="size-4 mr-2" />
                   {{ isDark ? t('settings.lightMode') : t('settings.darkMode') }}
                 </DropdownMenuItem>
                 <DropdownMenuItem as-child class="md:hidden p-0">
@@ -3145,12 +3145,12 @@ onUnmounted(() => {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator class="md:hidden" />
                 <DropdownMenuItem @click="changePasswordDialogOpen = true">
-                  <KeyRound class="h-4 w-4 mr-2" />
+                  <KeyRound class="size-4 mr-2" />
                   {{ t('auth.changePassword') }}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem @click="logout">
-                  <LogOut class="h-4 w-4 mr-2" />
+                  <LogOut class="size-4 mr-2" />
                   {{ t('auth.logout') }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -3179,13 +3179,7 @@ onUnmounted(() => {
       @open-computer-use="openComputerUse"
     />
     <div class="flex-1 overflow-hidden relative">
-      <div
-        class="absolute inset-0 bg-slate-100/80 dark:bg-slate-800/40 opacity-80"
-        style="
-          background-image: radial-gradient(circle, rgb(148 163 184 / 0.4) 1px, transparent 1px);
-          background-size: 20px 20px;
-        "
-      />
+      <div class="absolute inset-0 dot-grid-bg" />
       <div class="relative flex h-full w-full min-w-0 items-stretch gap-3 p-1 sm:p-4">
         <div
           class="flex min-w-0 flex-1 items-center justify-center transition-all duration-300"
@@ -3293,7 +3287,7 @@ onUnmounted(() => {
                 <div class="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-pulse" style="top: 50%; animation-duration: 1.5s;" />
               </div>
 
-              <Spinner class="h-10 w-10 sm:h-16 sm:w-16 text-white mb-2 sm:mb-4" />
+              <Spinner class="size-10 sm:size-16 text-white mb-2 sm:mb-4" />
               <p class="text-white/90 text-sm sm:text-lg font-medium text-center px-4 flex items-baseline justify-center gap-2 flex-wrap">
                 <span>{{ webrtcLoadingMessage }}</span>
                 <span
@@ -3339,7 +3333,7 @@ onUnmounted(() => {
               }"
             >
               <MonitorOff
-                class="h-10 w-10 sm:h-16 sm:w-16"
+                class="size-10 sm:size-16"
                 :class="{
                   'text-slate-200': signalOverlayInfo.tone === 'info',
                   'text-red-300': signalOverlayInfo.tone === 'error',
@@ -3368,7 +3362,7 @@ onUnmounted(() => {
               v-if="videoError && !videoLoading"
               class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-white gap-4 transition-opacity duration-300 p-4"
             >
-              <MonitorOff class="h-10 w-10 sm:h-16 sm:w-16 text-slate-400" />
+              <MonitorOff class="size-10 sm:size-16 text-slate-400" />
               <div class="text-center max-w-md px-2">
                 <p class="font-medium text-sm sm:text-lg mb-1 sm:mb-2">{{ t('console.connectionFailed') }}</p>
                 <p class="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">{{ t('console.connectionFailedDesc') }}</p>
@@ -3379,7 +3373,7 @@ onUnmounted(() => {
               </div>
               <div class="flex gap-2">
                 <Button variant="secondary" size="sm" @click="reloadPage">
-                  <RefreshCw class="h-4 w-4 mr-2" />
+                  <RefreshCw class="size-4 mr-2" />
                   {{ t('console.reconnect') }}
                 </Button>
               </div>
@@ -3470,7 +3464,7 @@ onUnmounted(() => {
             {{ t('common.cancel') }}
           </Button>
           <Button @click="handleChangePassword" :disabled="changingPassword">
-            <Loader2 v-if="changingPassword" class="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 v-if="changingPassword" class="size-4 mr-2 animate-spin" />
             {{ t('common.confirm') }}
           </Button>
         </DialogFooter>

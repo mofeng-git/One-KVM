@@ -13,17 +13,17 @@ const props = withDefaults(
 const dim = computed(() => {
   switch (props.size) {
     case 'xs':
-      return 'h-4 w-4'
+      return 'size-4'
     case 'sm':
-      return 'h-5 w-5'
+      return 'size-5'
     case 'md':
-      return 'h-6 w-6'
+      return 'size-6'
     case 'lg':
-      return 'h-10 w-10'
+      return 'size-10'
     case 'xl':
-      return 'h-14 w-14'
+      return 'size-14'
     default:
-      return 'h-6 w-6'
+      return 'size-6'
   }
 })
 </script>
