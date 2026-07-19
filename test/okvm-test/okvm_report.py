@@ -61,7 +61,7 @@ REPORT_HIDDEN_RESULTS = {
 }
 
 CATEGORY_RULES = (
-    ("初始化与环境", ("target_", "setup_", "login", "network_", "target_inventory", "stream_codecs", "windows_agent", "ventoy_resources", "msd_restart")),
+    ("初始化与环境", ("target_", "setup_", "login", "network_", "target_inventory", "stream_codecs", "windows_agent", "ventoy_resources")),
     ("视频性能", ("video_", "config_video_")),
     ("HDMI 画面与颜色", ("hdmi_", "config_video_hdmi_probe")),
     ("HID / MSD / ATX", ("hid_", "msd", "atx_")),
@@ -71,12 +71,10 @@ DISPLAY_NAMES = {
     "target_reset": "目标机重置",
     "setup_init": "初始化账号",
     "login": "登录",
-    "login_after_restart": "重启后登录",
     "network_latency": "网络延迟",
     "target_inventory": "目标机设备清单",
     "hid_msd_config": "HID/MSD 配置",
     "ventoy_resources": "Ventoy 资源",
-    "msd_restart": "MSD 启用后重启",
     "video_input_select": "视频输入选择",
     "windows_agent": "Windows 配套程序连接",
     "config_video_hdmi_probe": "HDMI 采集配置",
@@ -564,14 +562,12 @@ def summarize_result(result: CheckResult, metrics: list[Metric]) -> str:
         return "数据库已备份，服务已重启"
     if name == "setup_init":
         return "初始化检查完成"
-    if name in {"login", "login_after_restart"}:
+    if name == "login":
         return "认证成功"
     if name == "hid_msd_config":
         return "已按设备能力配置 HID/MSD"
     if name == "ventoy_resources":
         return "Ventoy 资源检查完成"
-    if name == "msd_restart":
-        return "服务重启完成"
     if name == "video_input_select":
         cases = data.get("cases") or []
         return "，".join(f"{c.get('fmt')} {c.get('width')}x{c.get('height')}@{c.get('fps')}" for c in cases if isinstance(c, dict))

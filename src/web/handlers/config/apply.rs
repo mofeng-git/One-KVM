@@ -317,7 +317,8 @@ pub async fn apply_msd_config(
 
         let msd =
             crate::msd::MsdController::new(state.otg_service.clone(), new_config.msd_dir_path());
-        msd.init()
+        let ventoy_resource_dir = state.data_dir().join("ventoy");
+        msd.init(&ventoy_resource_dir)
             .await
             .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
 

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -47,8 +47,20 @@ impl MsdController {
         }
     }
 
-    pub async fn init(&self) -> Result<()> {
+    pub async fn init(&self, ventoy_resource_dir: &Path) -> Result<()> {
         info!("Initializing MSD controller");
+
+        match ventoy_img::init_resources(ventoy_resource_dir) {
+            Ok(()) => info!(
+                "Ventoy resources ready from {}",
+                ventoy_resource_dir.display()
+            ),
+            Err(e) => warn!(
+                "Failed to initialize Ventoy resources from {}: {}. Ventoy drive creation will be unavailable, but regular ISO/IMG MSD remains available",
+                ventoy_resource_dir.display(),
+                e
+            ),
+        }
 
         if let Err(e) = std::fs::create_dir_all(&self.images_path) {
             warn!("Failed to create images directory: {}", e);

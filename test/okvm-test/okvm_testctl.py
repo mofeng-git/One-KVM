@@ -507,6 +507,11 @@ echo "$BACKUP"
                 },
             )
             self.selected_hid_backend = "otg"
+            if not self.args.no_ventoy_sync:
+                try:
+                    self.sync_ventoy_resources()
+                except Exception as exc:
+                    self.reporter.add("ventoy_resources", "WARN", f"failed to sync Ventoy resources: {exc}")
             try:
                 self.api.patch("/config/msd", {"enabled": True})
             except Exception as exc:
@@ -514,16 +519,6 @@ echo "$BACKUP"
                     self.reporter.add("hid_msd_config", "WARN", f"configured OTG HID but failed to enable MSD: {exc}", udc=udc_name)
                     return
             self.reporter.add("hid_msd_config", "PASS", "configured OTG HID and enabled MSD", udc=udc_name)
-            if not self.args.no_ventoy_sync:
-                try:
-                    self.sync_ventoy_resources()
-                except Exception as exc:
-                    self.reporter.add("ventoy_resources", "WARN", f"failed to sync Ventoy resources: {exc}")
-            if not self.args.no_msd_restart_after_enable:
-                try:
-                    self.restart_target_service("msd_restart", "restarted One-KVM after enabling MSD")
-                except Exception as exc:
-                    self.reporter.add("msd_restart", "WARN", f"failed to restart after enabling MSD: {exc}")
             return
         if serial:
             port = serial[0]["path"]
@@ -555,17 +550,6 @@ echo "$BACKUP"
                 or (isinstance(state, dict) and state.get("available"))
             )
         )
-
-    def restart_target_service(self, check_name: str, detail: str) -> None:
-        if not self.ssh_password and self.args.ssh_password_prompt:
-            self.ssh_password = getpass.getpass(f"SSH password for {self.args.ssh_user}@{self.args.target}: ")
-        ssh = SSHRunner(self.args.target, self.args.ssh_user, self.ssh_password, self.args.ssh_port)
-        code, out, err = ssh.run("systemctl restart one-kvm || service one-kvm restart", timeout=90)
-        if code != 0:
-            raise RuntimeError(err or out or "service restart command failed")
-        self.api.wait_health(timeout=self.args.health_timeout)
-        self.authenticate("login_after_restart", "authenticated after One-KVM restart")
-        self.reporter.add(check_name, "PASS", detail)
 
     def sync_ventoy_resources(self) -> None:
         source_dir = Path(self.args.ventoy_resources_dir) if self.args.ventoy_resources_dir else default_ventoy_resources_dir()
@@ -2277,7 +2261,6 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--msd-probe-bytes", type=int, default=1024 * 1024)
     run.add_argument("--ventoy-resources-dir", default=None, help="local Ventoy resource directory; defaults to repo libs/ventoy-img-rs/resources")
     run.add_argument("--no-ventoy-sync", action="store_true", help="do not copy Ventoy resources to the target before MSD testing")
-    run.add_argument("--no-msd-restart-after-enable", action="store_true", help="do not restart One-KVM after enabling MSD")
     run.add_argument("--strict-performance", action="store_true", help="fail video results below the expected FPS threshold; default only requires fps > 0")
     run.add_argument("--no-color", action="store_true", help="disable colored terminal output")
     run.add_argument("--no-screenshots", action="store_true", help="skip Playwright webpage screenshots")

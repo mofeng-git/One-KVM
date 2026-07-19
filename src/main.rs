@@ -335,24 +335,8 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(unix)]
     let msd = if config.msd.enabled {
         let ventoy_resource_dir = data_dir.join("ventoy");
-        if ventoy_resource_dir.exists() {
-            if let Err(e) = ventoy_img::init_resources(&ventoy_resource_dir) {
-                tracing::warn!("Failed to initialize Ventoy resources: {}", e);
-            } else {
-                tracing::info!(
-                    "Ventoy resources initialized from {}",
-                    ventoy_resource_dir.display()
-                );
-            }
-        } else {
-            tracing::warn!(
-                "Ventoy resource directory not found: {}",
-                ventoy_resource_dir.display()
-            );
-        }
-
         let controller = MsdController::new(otg_service.clone(), config.msd.msd_dir_path());
-        if let Err(e) = controller.init().await {
+        if let Err(e) = controller.init(&ventoy_resource_dir).await {
             tracing::warn!("Failed to initialize MSD controller: {}", e);
             None
         } else {
