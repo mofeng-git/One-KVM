@@ -80,3 +80,30 @@ fn decode_basic_auth(encoded: &str) -> Option<(String, String)> {
     }
     Some((username, password))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_service_discovery_and_session_creation_are_public() {
+        assert!(is_redfish_public_endpoint("/v1/", &Method::GET));
+        assert!(is_redfish_public_endpoint(
+            "/v1/$metadata",
+            &Method::GET
+        ));
+        assert!(is_redfish_public_endpoint(
+            "/v1/SessionService/Sessions",
+            &Method::POST
+        ));
+
+        assert!(!is_redfish_public_endpoint(
+            "/v1/Managers/1/VirtualMedia",
+            &Method::GET
+        ));
+        assert!(!is_redfish_public_endpoint(
+            "/v1/Managers/1/VirtualMedia/1/Actions/VirtualMedia.EjectMedia",
+            &Method::POST
+        ));
+    }
+}

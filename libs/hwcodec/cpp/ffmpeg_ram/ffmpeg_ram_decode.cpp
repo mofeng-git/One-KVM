@@ -1,4 +1,4 @@
-// Minimal FFmpeg RAM MJPEG decoder (RKMPP only) -> NV12 in CPU memory.
+// FFmpeg RAM decoder with optional RKMPP hardware-frame support.
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -54,9 +54,11 @@ public:
     thread_count_ = thread_count > 0 ? thread_count : 1;
     callback_ = callback;
 
+#ifdef ONE_KVM_FFMPEG_RKMPP
     if (name_.find("rkmpp") != std::string::npos) {
       hw_device_type_ = AV_HWDEVICE_TYPE_RKMPP;
     }
+#endif
   }
 
   ~FFmpegRamDecoder() {}
@@ -135,13 +137,6 @@ public:
       }
       c_->hw_frames_ctx = av_buffer_ref(frames_ref);
       av_buffer_unref(&frames_ref);
-    }
-
-    if (name_.find("mediacodec") != std::string::npos && c_->priv_data) {
-      if ((ret = av_opt_set_int(c_->priv_data, "ndk_codec", 1, 0)) < 0) {
-        LOG_WARN(std::string("mediacodec decoder ndk_codec option failed, ret = ") +
-                 av_err2str(ret));
-      }
     }
 
     if ((ret = avcodec_open2(c_, codec, NULL)) < 0) {

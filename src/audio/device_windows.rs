@@ -130,11 +130,11 @@ fn device_labels(device: &cpal::Device) -> DeviceLabels {
             let formatted = desc.to_string();
             let display = desc
                 .extended()
-                .first()
-                .cloned()
+                .next()
+                .map(str::to_owned)
                 .unwrap_or_else(|| formatted.clone());
             let mut parts = vec![formatted, desc.name().to_string(), display.clone()];
-            parts.extend(desc.extended().iter().cloned());
+            parts.extend(desc.extended().map(str::to_owned));
 
             DeviceLabels {
                 display,

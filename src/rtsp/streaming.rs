@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use rand::Rng;
+use rand::RngExt;
 use rtp::packet::Packet;
 use rtp::packetizer::Payloader;
 use rtsp_types as rtsp;

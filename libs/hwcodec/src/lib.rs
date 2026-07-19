@@ -2,10 +2,7 @@
 pub mod capture;
 pub mod common;
 pub mod ffmpeg;
-#[cfg(all(
-    any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"),
-    not(target_os = "android")
-))]
+#[cfg(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"))]
 pub mod ffmpeg_hw;
 pub mod ffmpeg_ram;
 

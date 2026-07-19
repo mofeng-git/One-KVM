@@ -100,6 +100,8 @@ pub struct VideoStreamManager {
     events: RwLock<Option<Arc<EventBus>>>,
     /// Configuration store
     config_store: RwLock<Option<ConfigStore>>,
+    /// Codec constraints derived from services that are actually running.
+    runtime_codec_constraints: RwLock<Option<StreamCodecConstraints>>,
     /// Mode switching lock to prevent concurrent switch requests
     switching: AtomicBool,
     /// Current mode switch transaction ID (set while switching=true)
@@ -118,6 +120,7 @@ impl VideoStreamManager {
             webrtc_streamer,
             events: RwLock::new(None),
             config_store: RwLock::new(None),
+            runtime_codec_constraints: RwLock::new(None),
             switching: AtomicBool::new(false),
             transition_id: RwLock::new(None),
         })
@@ -144,8 +147,16 @@ impl VideoStreamManager {
         *self.config_store.write().await = Some(config);
     }
 
-    /// Get current stream codec constraints derived from global configuration.
+    pub async fn set_runtime_codec_constraints(&self, constraints: StreamCodecConstraints) {
+        *self.runtime_codec_constraints.write().await = Some(constraints);
+    }
+
+    /// Get current stream codec constraints derived from running services.
     pub async fn codec_constraints(&self) -> StreamCodecConstraints {
+        if let Some(constraints) = self.runtime_codec_constraints.read().await.as_ref() {
+            return constraints.clone();
+        }
+
         if let Some(ref config_store) = *self.config_store.read().await {
             let config = config_store.get();
             StreamCodecConstraints::from_config(&config)

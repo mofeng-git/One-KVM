@@ -13,7 +13,11 @@ pub const DEFAULT_USB_BCD_DEVICE: u16 = 0x0100;
 pub const USB_BCD_USB: u16 = 0x0200;
 
 pub fn is_configfs_available() -> bool {
-    Path::new(CONFIGFS_PATH).exists()
+    configfs_path().exists()
+}
+
+pub fn configfs_path() -> &'static Path {
+    Path::new(CONFIGFS_PATH)
 }
 
 /// Loads `libcomposite` if needed; does not mount configfs.
@@ -69,11 +73,6 @@ fn collect_dir_names(path: &Path, devices: &mut Vec<String>) {
             }
         }
     }
-}
-
-pub fn is_low_endpoint_udc(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    name.contains("musb") || name.contains("musb-hdrc")
 }
 
 /// Sysfs/configfs: one write syscall with final buffer (incl. newline when needed).

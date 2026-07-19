@@ -42,10 +42,22 @@ pub struct HidDeviceInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MsdDeviceInfo {
     pub available: bool,
-    pub mode: String,
-    pub connected: bool,
-    pub image_id: Option<String>,
+    pub disk_mode: String,
+    pub slot_capacity: u8,
+    pub mounted_count: u8,
+    pub mounted_media: Vec<MsdDeviceMediaInfo>,
+    pub usb_reenumerating: bool,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MsdDeviceMediaInfo {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub cdrom: bool,
+    pub read_only: bool,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

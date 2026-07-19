@@ -3,6 +3,7 @@ import type { ComputerUseAction, ComputerUseScreenshot } from '@/api'
 export type ComputerUseTimelineItem =
   | { id: string; type: 'user'; text: string }
   | { id: string; type: 'assistant'; text: string }
+  | { id: string; type: 'reasoning'; text: string; completed: boolean; failed: boolean }
   | { id: string; type: 'screenshot'; screenshot: ComputerUseScreenshot }
   | { id: string; type: 'actions_executed'; actions: ComputerUseAction[] }
   | { id: string; type: 'error'; text: string }

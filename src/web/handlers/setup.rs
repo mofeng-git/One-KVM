@@ -35,7 +35,6 @@ pub struct SetupRequest {
     pub hid_ch9329_baudrate: Option<u32>,
     pub hid_otg_udc: Option<String>,
     pub hid_otg_profile: Option<String>,
-    pub hid_otg_endpoint_budget: Option<crate::config::OtgEndpointBudget>,
     pub hid_otg_keyboard_leds: Option<bool>,
     pub msd_enabled: Option<bool>,
     // Extension settings
@@ -123,9 +122,6 @@ pub async fn setup_init(
                     config.hid.otg_profile = parsed;
                 }
             }
-            if let Some(budget) = req.hid_otg_endpoint_budget {
-                config.hid.otg_endpoint_budget = budget;
-            }
             if let Some(enabled) = req.hid_otg_keyboard_leds {
                 config.hid.otg_keyboard_leds = enabled;
             }
@@ -151,7 +147,7 @@ pub async fn setup_init(
     {
         if let Err(e) = state
             .otg_service
-            .apply_config(&new_config.hid, &new_config.msd)
+            .apply_config(&new_config.hid, &new_config.msd, &new_config.otg_network)
             .await
         {
             tracing::warn!("Failed to apply OTG config during setup: {}", e);

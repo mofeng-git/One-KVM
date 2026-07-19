@@ -1088,17 +1088,17 @@ pub fn bgr24_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Res
 
     #[cfg(not(windows))]
     {
-    let y_size = w * h;
-    call_yuv!(RGB24ToNV12(
-        src.as_ptr(),
-        width * 3,
-        dst.as_mut_ptr(),
-        width,
-        dst[y_size..].as_mut_ptr(),
-        width,
-        width,
-        height,
-    ))
+        let y_size = w * h;
+        call_yuv!(RGB24ToNV12(
+            src.as_ptr(),
+            width * 3,
+            dst.as_mut_ptr(),
+            width,
+            dst[y_size..].as_mut_ptr(),
+            width,
+            width,
+            height,
+        ))
     }
 }
 
@@ -1390,5 +1390,16 @@ mod tests {
         converter.set_resolution(8, 8);
         assert_eq!(converter.dimensions(), (8, 8));
         assert_eq!(converter.nv12_buffer().len(), nv12_size(8, 8));
+    }
+
+    #[test]
+    fn test_bgr24_to_nv12() {
+        let src = [0u8; 2 * 2 * 3];
+        let mut dst = [0xffu8; 2 * 2 * 3 / 2];
+
+        bgr24_to_nv12(&src, &mut dst, 2, 2).unwrap();
+
+        assert_eq!(&dst[..4], &[16, 16, 16, 16]);
+        assert_eq!(&dst[4..], &[128, 128]);
     }
 }

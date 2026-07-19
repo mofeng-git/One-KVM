@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import {
   PopoverContent,
   PopoverTrigger,
@@ -58,6 +59,7 @@ const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
 const showMsd = computed(() => {
   return !!systemStore.msd?.available && !isCh9329Backend.value
 })
+const showAtx = computed(() => systemStore.atx?.available === true)
 
 const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
@@ -65,8 +67,10 @@ const props = defineProps<{
   ttydRunning?: boolean
   showTerminal?: boolean
   showComputerUse?: boolean
+  showPasteText?: boolean
 }>()
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
+const showPasteText = computed(() => props.showPasteText !== false)
 
 const emit = defineEmits<{
   (e: 'toggleFullscreen'): void
@@ -108,11 +112,13 @@ const openFromOverflow = (setter: () => void) => {
 }
 
 const openMobileAtx = () => openFromOverflow(() => {
+  if (!showAtx.value) return
   mobileAtxOpen.value = true
   mobileAtxOpenTime.value = Date.now()
 })
 
 const openMobilePaste = () => openFromOverflow(() => {
+  if (!showPasteText.value) return
   mobilePasteOpen.value = true
   mobilePasteOpenTime.value = Date.now()
 })
@@ -192,11 +198,27 @@ watch(locale, () => {
   measureButtonWidths()
 })
 
+watch(showAtx, (visible) => {
+  if (!visible) {
+    atxOpen.value = false
+    mobileAtxOpen.value = false
+  }
+})
+
+watch(showPasteText, (visible) => {
+  if (!visible) {
+    pasteOpen.value = false
+    mobilePasteOpen.value = false
+  }
+})
+
 const RIGHT_FIXED_PX = 120
 
 const collapsibleItems = computed(() => {
   const items = ITEM_SPECS.slice(3).filter(item => {
     if (item.id === 'msd' && !showMsd.value) return false
+    if (item.id === 'atx' && !showAtx.value) return false
+    if (item.id === 'paste' && !showPasteText.value) return false
     if (item.id === 'stats' && !showStats.value) return false
     if (item.id === 'terminal' && props.showTerminal === false) return false
     return true
@@ -255,10 +277,10 @@ const hasRightOverflow = computed(() => {
 </script>
 
 <template>
-  <div class="w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="w-full border-b bg-background">
     <div ref="barRef" class="flex items-center px-2 sm:px-4 py-1 sm:py-1.5">
       <!-- Left side buttons -->
-      <div class="left-buttons flex items-center gap-0.5 sm:gap-1.5 flex-1 min-w-0 overflow-hidden">
+      <ButtonGroup class="left-buttons flex-1 min-w-0 overflow-hidden">
         <!-- Video Config - Always visible -->
         <VideoConfigPopover
           v-model:open="videoPopoverOpen"
@@ -282,7 +304,7 @@ const hasRightOverflow = computed(() => {
             <Tooltip>
               <TooltipTrigger as-child>
                 <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="msdDialogOpen = true">
-                  <HardDrive class="h-4 w-4" />
+                  <HardDrive class="size-4" />
                   <span v-if="visibleSet.get('msd') === 'label'">{{ t('actionbar.virtualMedia') }}</span>
                 </Button>
               </TooltipTrigger>
@@ -294,11 +316,11 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- ATX Power Control - Adaptive -->
-        <div v-if="isVisible('atx')">
+        <div v-if="showAtx && isVisible('atx')">
           <Popover v-model:open="atxOpen">
             <PopoverTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-                <Power class="h-4 w-4" />
+                <Power class="size-4" />
                 <span v-if="visibleSet.get('atx') === 'label'">{{ t('actionbar.power') }}</span>
               </Button>
             </PopoverTrigger>
@@ -315,11 +337,11 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- Paste Text - Adaptive -->
-        <div v-if="isVisible('paste')">
+        <div v-if="showPasteText && isVisible('paste')">
           <Popover v-model:open="pasteOpen">
             <PopoverTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-                <ClipboardPaste class="h-4 w-4" />
+                <ClipboardPaste class="size-4" />
                 <span v-if="visibleSet.get('paste') === 'label'">{{ t('actionbar.paste') }}</span>
               </Button>
             </PopoverTrigger>
@@ -328,17 +350,17 @@ const hasRightOverflow = computed(() => {
             </PopoverContent>
           </Popover>
         </div>
-      </div>
+      </ButtonGroup>
 
       <!-- Right side buttons -->
-      <div class="flex items-center gap-0.5 sm:gap-1.5 shrink-0 ml-1 sm:ml-2">
+      <ButtonGroup class="shrink-0 ml-1 sm:ml-2">
         <!-- Connection Stats - Adaptive -->
         <div v-if="isVisible('stats')">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
                 <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="emit('toggleStats')">
-                  <BarChart3 class="h-4 w-4" />
+                  <BarChart3 class="size-4" />
                   <span v-if="visibleSet.get('stats') === 'label'">{{ t('actionbar.stats') }}</span>
                 </Button>
               </TooltipTrigger>
@@ -361,7 +383,7 @@ const hasRightOverflow = computed(() => {
                   :disabled="!props.ttydRunning"
                   @click="emit('openTerminal')"
                 >
-                  <Terminal class="h-4 w-4" />
+                  <Terminal class="size-4" />
                   <span v-if="visibleSet.get('terminal') === 'label'">{{ t('actionbar.webTerminal') }}</span>
                 </Button>
               </TooltipTrigger>
@@ -372,13 +394,33 @@ const hasRightOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
+        <!-- Computer Use - Optional -->
+        <TooltipProvider v-if="props.showComputerUse !== false">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+                @click="emit('openComputerUse')"
+              >
+                <Bot class="size-3.5 sm:size-4" />
+                <span class="hidden xl:inline">AI</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{{ t('computerUse.title') }}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         <!-- Settings - Adaptive -->
         <div v-if="isVisible('settings')">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
                 <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
-                  <Settings class="h-4 w-4" />
+                  <Settings class="size-4" />
                   <span v-if="visibleSet.get('settings') === 'label'">{{ t('actionbar.settings') }}</span>
                 </Button>
               </TooltipTrigger>
@@ -389,27 +431,11 @@ const hasRightOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
-        <div v-if="isVisible('stats') || isVisible('terminal') || isVisible('settings')" class="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-
-        <!-- Computer Use - Optional -->
-        <TooltipProvider v-if="props.showComputerUse !== false">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
-                @click="emit('openComputerUse')"
-              >
-                <Bot class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                <span class="hidden xl:inline">AI</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Computer Use</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div
+          v-if="isVisible('settings')"
+          aria-hidden="true"
+          class="mr-4 h-5 w-px shrink-0 -translate-x-px self-center bg-border"
+        />
 
         <!-- Virtual Keyboard - Always visible -->
         <TooltipProvider>
@@ -418,10 +444,10 @@ const hasRightOverflow = computed(() => {
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+                class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
                 @click="emit('toggleVirtualKeyboard')"
               >
-                <Keyboard class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <Keyboard class="size-3.5 sm:size-4" />
                 <span class="hidden xl:inline">{{ t('actionbar.keyboard') }}</span>
               </Button>
             </TooltipTrigger>
@@ -438,10 +464,10 @@ const hasRightOverflow = computed(() => {
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-7 w-7 sm:h-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+                class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
                 @click="emit('toggleFullscreen')"
               >
-                <Maximize class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <Maximize class="size-3.5 sm:size-4" />
                 <span class="hidden xl:inline">{{ t('actionbar.fullscreen') }}</span>
               </Button>
             </TooltipTrigger>
@@ -454,26 +480,26 @@ const hasRightOverflow = computed(() => {
         <!-- Overflow Menu - Only show if there are overflowed items -->
         <DropdownMenu v-if="hasOverflow" v-model:open="overflowMenuOpen">
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="h-7 w-7 sm:h-8 sm:w-8 p-0">
-              <MoreHorizontal class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Button variant="ghost" size="sm" class="size-8 p-0">
+              <MoreHorizontal class="size-3.5 sm:size-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-48">
             <!-- MSD -->
             <DropdownMenuItem v-if="showMsd && !isVisible('msd')" @click="openFromOverflow(() => msdDialogOpen = true)">
-              <HardDrive class="h-4 w-4 mr-2" />
+              <HardDrive class="size-4 mr-2" />
               {{ t('actionbar.virtualMedia') }}
             </DropdownMenuItem>
 
             <!-- ATX -->
-            <DropdownMenuItem v-if="!isVisible('atx')" @click="openMobileAtx">
-              <Power class="h-4 w-4 mr-2" />
+            <DropdownMenuItem v-if="showAtx && !isVisible('atx')" @click="openMobileAtx">
+              <Power class="size-4 mr-2" />
               {{ t('actionbar.power') }}
             </DropdownMenuItem>
 
             <!-- Paste -->
-            <DropdownMenuItem v-if="!isVisible('paste')" @click="openMobilePaste">
-              <ClipboardPaste class="h-4 w-4 mr-2" />
+            <DropdownMenuItem v-if="showPasteText && !isVisible('paste')" @click="openMobilePaste">
+              <ClipboardPaste class="size-4 mr-2" />
               {{ t('actionbar.paste') }}
             </DropdownMenuItem>
 
@@ -481,7 +507,7 @@ const hasRightOverflow = computed(() => {
 
             <!-- Stats -->
             <DropdownMenuItem v-if="showStats && !isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
-              <BarChart3 class="h-4 w-4 mr-2" />
+              <BarChart3 class="size-4 mr-2" />
               {{ t('actionbar.stats') }}
             </DropdownMenuItem>
 
@@ -491,18 +517,18 @@ const hasRightOverflow = computed(() => {
               :disabled="!props.ttydRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >
-              <Terminal class="h-4 w-4 mr-2" />
+              <Terminal class="size-4 mr-2" />
               {{ t('actionbar.webTerminal') }}
             </DropdownMenuItem>
 
             <!-- Settings -->
             <DropdownMenuItem v-if="!isVisible('settings')" @click="openFromOverflow(() => router.push('/settings'))">
-              <Settings class="h-4 w-4 mr-2" />
+              <Settings class="size-4 mr-2" />
               {{ t('actionbar.settings') }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </ButtonGroup>
     </div>
   </div>
 
@@ -511,7 +537,7 @@ const hasRightOverflow = computed(() => {
 
   <!-- Mobile ATX Sheet — used when ATX is opened from the overflow menu.
        A Sheet avoids the Popover anchor-positioning issues on mobile. -->
-  <Sheet v-model:open="mobileAtxOpen">
+  <Sheet v-if="showAtx" v-model:open="mobileAtxOpen">
     <SheetContent
       side="bottom"
       class="max-h-[90dvh] overflow-y-auto"
@@ -532,7 +558,7 @@ const hasRightOverflow = computed(() => {
   </Sheet>
 
   <!-- Mobile Paste Sheet — used when Paste is opened from the overflow menu. -->
-  <Sheet v-model:open="mobilePasteOpen">
+  <Sheet v-if="showPasteText" v-model:open="mobilePasteOpen">
     <SheetContent
       side="bottom"
       class="max-h-[90dvh] overflow-y-auto"
@@ -551,30 +577,30 @@ const hasRightOverflow = computed(() => {
   <div ref="measureRef" aria-hidden="true" class="fixed pointer-events-none" style="visibility: hidden; top: -9999px; left: -9999px; white-space: nowrap;">
     <div class="flex items-center gap-0.5 sm:gap-1.5 px-2 sm:px-4 py-1 sm:py-1.5">
       <!-- MSD -->
-      <Button data-measure="msd-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="msd-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" />{{ t('actionbar.virtualMedia') }}</Button>
+      <Button data-measure="msd-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="msd-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" />{{ t('actionbar.virtualMedia') }}</Button>
       <!-- ATX -->
-      <Button data-measure="atx-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Power class="h-4 w-4" /></Button>
-      <Button data-measure="atx-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Power class="h-4 w-4" />{{ t('actionbar.power') }}</Button>
+      <Button data-measure="atx-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Power class="size-4" /></Button>
+      <Button data-measure="atx-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Power class="size-4" />{{ t('actionbar.power') }}</Button>
       <!-- Paste -->
-      <Button data-measure="paste-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><ClipboardPaste class="h-4 w-4" /></Button>
-      <Button data-measure="paste-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><ClipboardPaste class="h-4 w-4" />{{ t('actionbar.paste') }}</Button>
+      <Button data-measure="paste-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><ClipboardPaste class="size-4" /></Button>
+      <Button data-measure="paste-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><ClipboardPaste class="size-4" />{{ t('actionbar.paste') }}</Button>
       <!-- Stats -->
-      <Button data-measure="stats-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="h-4 w-4" /></Button>
-      <Button data-measure="stats-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="h-4 w-4" />{{ t('actionbar.stats') }}</Button>
+      <Button data-measure="stats-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="size-4" /></Button>
+      <Button data-measure="stats-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><BarChart3 class="size-4" />{{ t('actionbar.stats') }}</Button>
       <!-- Web Terminal -->
-      <Button data-measure="terminal-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="h-4 w-4" /></Button>
-      <Button data-measure="terminal-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="h-4 w-4" />{{ t('actionbar.webTerminal') }}</Button>
+      <Button data-measure="terminal-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="size-4" /></Button>
+      <Button data-measure="terminal-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="size-4" />{{ t('actionbar.webTerminal') }}</Button>
       <!-- Settings -->
-      <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="h-4 w-4" /></Button>
-      <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="h-4 w-4" />{{ t('actionbar.settings') }}</Button>
+      <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" /></Button>
+      <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" />{{ t('actionbar.settings') }}</Button>
       <!-- Always-visible items (for measuring their actual width) -->
-      <Button data-measure="video-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="video-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="audio-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="audio-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="hid-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
-      <Button data-measure="hid-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="h-4 w-4" /></Button>
+      <Button data-measure="video-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="video-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="audio-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="audio-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="hid-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="hid-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
     </div>
   </div>
 </template>

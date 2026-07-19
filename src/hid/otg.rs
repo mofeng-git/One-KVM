@@ -903,6 +903,19 @@ impl HidBackend for OtgBackend {
         Ok(())
     }
 
+    async fn prepare_rebuild(&self) -> Result<()> {
+        self.stop_runtime_worker();
+        *self.keyboard_dev.lock() = None;
+        *self.mouse_rel_dev.lock() = None;
+        *self.mouse_abs_dev.lock() = None;
+        *self.consumer_dev.lock() = None;
+        self.initialized.store(false, Ordering::Relaxed);
+        self.online.store(false, Ordering::Relaxed);
+        self.notify_runtime_changed();
+        info!("OTG backend prepared for gadget rebuild");
+        Ok(())
+    }
+
     async fn shutdown(&self) -> Result<()> {
         self.stop_runtime_worker();
 
@@ -957,6 +970,7 @@ impl Drop for OtgBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Seek, SeekFrom, Write};
 
     #[test]
     fn test_led_state() {
@@ -972,5 +986,23 @@ mod tests {
     fn test_report_sizes() {
         let kb_report = KeyboardReport::default();
         assert_eq!(kb_report.to_bytes().len(), 8);
+    }
+
+    #[tokio::test]
+    async fn prepare_rebuild_closes_devices_without_writing_reset_reports() {
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(b"sentinel").unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+
+        let backend = OtgBackend::from_handles(HidDevicePaths::default()).unwrap();
+        *backend.keyboard_dev.lock() = Some(file);
+        backend.initialized.store(true, Ordering::Relaxed);
+        backend.online.store(true, Ordering::Relaxed);
+
+        backend.prepare_rebuild().await.unwrap();
+
+        assert!(backend.keyboard_dev.lock().is_none());
+        assert!(!backend.initialized.load(Ordering::Relaxed));
+        assert!(!backend.online.load(Ordering::Relaxed));
     }
 }

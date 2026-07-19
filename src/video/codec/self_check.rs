@@ -2,8 +2,6 @@ use serde::Serialize;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "android-mediacodec")]
-use super::AndroidMediaCodecH264Encoder;
 use super::{
     EncoderRegistry, H264Config, H264Encoder, H265Config, H265Encoder, VP8Config, VP8Encoder,
     VP9Config, VP9Encoder, VideoEncoderType,
@@ -237,32 +235,6 @@ fn run_smoke_test(
 }
 
 fn run_h264_smoke_test(resolution: Resolution, codec_name_ffmpeg: &str) -> Result<()> {
-    #[cfg(feature = "android-mediacodec")]
-    if codec_name_ffmpeg == "h264_mediacodec" {
-        let mut encoder = AndroidMediaCodecH264Encoder::new(
-            resolution,
-            PixelFormat::Nv12,
-            30,
-            bitrate_kbps_for_resolution(resolution),
-        )?;
-        encoder.request_keyframe();
-        let frame = build_nv12_test_frame(
-            resolution,
-            PixelFormat::Nv12.frame_size(resolution).unwrap_or(0),
-        );
-
-        for sequence in 0..SELF_CHECK_FRAME_ATTEMPTS {
-            let frames = encoder.encode_raw(&frame, pts_ms(sequence))?;
-            if frames.iter().any(|frame| !frame.data.is_empty()) {
-                return Ok(());
-            }
-        }
-
-        return Err(AppError::VideoError(
-            "Encoder produced no output after multiple frames".to_string(),
-        ));
-    }
-
     let mut encoder = H264Encoder::with_codec(
         H264Config::low_latency(resolution, bitrate_kbps_for_resolution(resolution)),
         codec_name_ffmpeg,

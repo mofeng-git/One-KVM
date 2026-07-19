@@ -12,11 +12,26 @@ pub struct LoginResponse {
     pub message: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct AuthLoginResponse {
+    pub next: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub challenge_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at_unix_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct TotpLoginRequest {
+    pub challenge_id: String,
+    pub code: String,
+}
+
 pub async fn login(
     State(state): State<Arc<AppState>>,
     cookies: CookieJar,
     Json(req): Json<LoginRequest>,
-) -> Result<(CookieJar, Json<LoginResponse>)> {
+) -> Result<(CookieJar, Json<AuthLoginResponse>)> {
     let config = state.config.get();
 
     // Check if system is initialized
@@ -31,15 +46,43 @@ pub async fn login(
         .await?
         .ok_or_else(|| AppError::AuthError("Invalid username or password".to_string()))?;
 
-    if !config.auth.single_user_allow_multiple_sessions {
-        // Kick existing sessions before creating a new one.
-        let revoked_ids = state.sessions.list_ids().await?;
-        state.sessions.delete_all().await?;
-        state.remember_revoked_sessions(revoked_ids).await;
+    if let Some(challenge) = state.two_factor.begin_login(&user.id).await? {
+        return Ok((
+            cookies,
+            Json(AuthLoginResponse {
+                next: "totp",
+                challenge_id: Some(challenge.id),
+                expires_at_unix_ms: Some(challenge.expires_at_unix_ms),
+            }),
+        ));
     }
 
-    // Create session
-    let session = state.sessions.create(&user.id).await?;
+    create_authenticated_session(&state, cookies, &user.id).await
+}
+
+pub async fn login_totp(
+    State(state): State<Arc<AppState>>,
+    cookies: CookieJar,
+    Json(req): Json<TotpLoginRequest>,
+) -> Result<(CookieJar, Json<AuthLoginResponse>)> {
+    let user_id = state
+        .two_factor
+        .complete_login(&req.challenge_id, &req.code)
+        .await?;
+    create_authenticated_session(&state, cookies, &user_id).await
+}
+
+async fn create_authenticated_session(
+    state: &Arc<AppState>,
+    cookies: CookieJar,
+    user_id: &str,
+) -> Result<(CookieJar, Json<AuthLoginResponse>)> {
+    let config = state.config.get();
+    let (session, revoked_ids) = state
+        .sessions
+        .create_for_login(user_id, config.auth.single_user_allow_multiple_sessions)
+        .await?;
+    state.remember_revoked_sessions(revoked_ids).await;
 
     // Set session cookie
     let cookie = Cookie::build((SESSION_COOKIE, session.id))
@@ -53,9 +96,10 @@ pub async fn login(
 
     Ok((
         cookies.add(cookie),
-        Json(LoginResponse {
-            success: true,
-            message: None,
+        Json(AuthLoginResponse {
+            next: "authenticated",
+            challenge_id: None,
+            expires_at_unix_ms: None,
         }),
     ))
 }

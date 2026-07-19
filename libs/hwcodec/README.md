@@ -41,18 +41,6 @@ Based on the information above, there are several optimizations and changes made
 * remove hevc_vaapi because of possible poor quality
 * amf: not tested, https://github.com/GPUOpen-LibrariesAndSDKs/AMF/issues/378
 
-### MacOS
-
-| FFmpeg ram encode   | FFmpeg ram decode   |
-| ------------------  | ------------------  |
-| h265 only           | Y                   |
-
-### Android
-
-| FFmpeg ram encode   |
-| ------------------  |
-| Y                   |
-
 ## System requirements
 
 * intel
@@ -76,4 +64,3 @@ Based on the information above, there are several optimizations and changes made
   https://docs.nvidia.com/video-technologies/video-codec-sdk/11.1/read-me/index.html
 
   https://developer.nvidia.com/video-encode-and-decode-gpu-support-matrix-new?ncid=em-prod-816193
-

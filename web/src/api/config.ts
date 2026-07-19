@@ -10,6 +10,12 @@ import type {
   HidConfigUpdate,
   MsdConfig,
   MsdConfigUpdate,
+  NetworkInterfaceInfo,
+  OtgNetworkConfig,
+  OtgNetworkConfigUpdate,
+  OtgNetworkStatus,
+  OtgConfigUpdate,
+  OtgConfigResponse,
   AtxConfig,
   AtxConfigUpdate,
   AtxDevices,
@@ -28,12 +34,24 @@ import type {
   FrpcConfigUpdate,
   WebConfigResponse,
   WebConfigUpdate,
+  WatchdogConfigResponse,
+  WatchdogConfigUpdate,
 } from '@/types/generated'
 
 import { request } from './request'
 
 export const configApi = {
   getAll: () => request<AppConfig>('/config'),
+}
+
+export const watchdogConfigApi = {
+  get: () => request<WatchdogConfigResponse>('/config/watchdog', {}, { toastOnError: false }),
+
+  update: (config: WatchdogConfigUpdate) =>
+    request<WatchdogConfigResponse>('/config/watchdog', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }, { toastOnError: false }),
 }
 
 export const authConfigApi = {
@@ -81,6 +99,28 @@ export const msdConfigApi = {
 
   update: (config: MsdConfigUpdate) =>
     request<MsdConfig>('/config/msd', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+}
+
+export const otgNetworkApi = {
+  get: () => request<OtgNetworkConfig>('/config/otg-network'),
+
+  update: (config: OtgNetworkConfigUpdate) =>
+    request<OtgNetworkConfig>('/config/otg-network', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  status: () => request<OtgNetworkStatus>('/otg/network/status'),
+
+  interfaces: () => request<NetworkInterfaceInfo[]>('/devices/network'),
+}
+
+export const otgConfigApi = {
+  update: (config: OtgConfigUpdate) =>
+    request<OtgConfigResponse>('/config/otg', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),

@@ -159,7 +159,7 @@ MSD 测试依赖 OTG。流程如下：
 2. 如果资源缺失，默认从 `libs/ventoy-img-rs/resources` 解压并通过 SSH/SFTP 同步到目标机。
 3. 启用 MSD 后重启 `one-kvm`，确保 Ventoy 资源在服务进程中初始化。
 4. 通过 `/api/msd/drive/init` 创建小型虚拟盘。
-5. 通过 `/api/msd/connect {"mode":"drive"}` 连接到 Windows。
+5. 通过 `/api/msd/drive/mount` 连接到 Windows。
 6. Windows agent 等待新盘符出现。
 7. Windows agent 写入测试文件、同步到虚拟盘、优先用未缓存读取读回并校验 SHA-256，同时输出简单写入/读取速度。若 Windows/驱动不支持未缓存读取，会退回缓存读取并在报告中标为“仅校验”，不作为真实读盘速度。
 8. 控制端断开 MSD，Windows agent 确认盘符消失。

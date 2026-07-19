@@ -14,7 +14,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use one_kvm::atx::AtxController;
 use one_kvm::audio::{AudioController, AudioControllerConfig, AudioQuality};
-use one_kvm::auth::{SessionStore, UserStore};
+use one_kvm::auth::{SessionStore, TwoFactorService, UserStore};
 use one_kvm::computer_use::ComputerUseManager;
 use one_kvm::config::{self, AppConfig, ConfigStore};
 use one_kvm::db::DatabasePool;
@@ -65,7 +65,12 @@ struct CliArgs {
     address: Option<String>,
 
     /// HTTP port (overrides database config)
-    #[arg(short = 'p', long, value_name = "PORT")]
+    #[arg(
+        short = 'p',
+        long = "port",
+        visible_alias = "http-port",
+        value_name = "PORT"
+    )]
     http_port: Option<u16>,
 
     /// HTTPS port (overrides database config)
@@ -84,7 +89,7 @@ struct CliArgs {
     #[arg(long, value_name = "FILE", requires = "ssl_cert")]
     ssl_key: Option<PathBuf>,
 
-    /// Data directory path (default: /etc/one-kvm, or the executable directory on Windows)
+    /// Data directory path
     #[arg(short = 'd', long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
@@ -113,6 +118,8 @@ struct UserCommand {
 enum UserAction {
     /// Set password for the single local user (interactive terminal prompt)
     SetPassword,
+    /// Disable TOTP for the single local user
+    DisableTotp,
 }
 
 #[tokio::main]
@@ -183,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
     let session_store = SessionStore::new(config.auth.session_timeout_secs as i64);
 
     let user_store = UserStore::new(db.clone_pool());
+    let two_factor = TwoFactorService::new(db.clone_pool());
 
     let (shutdown_tx, _) = broadcast::channel::<ShutdownAction>(1);
 
@@ -299,7 +307,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("OTG Service created");
 
     #[cfg(unix)]
-    if let Err(e) = otg_service.apply_config(&config.hid, &config.msd).await {
+    if let Err(e) = otg_service
+        .apply_config(&config.hid, &config.msd, &config.otg_network)
+        .await
+    {
         tracing::warn!("Failed to apply OTG config: {}", e);
     }
 
@@ -324,24 +335,8 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(unix)]
     let msd = if config.msd.enabled {
         let ventoy_resource_dir = data_dir.join("ventoy");
-        if ventoy_resource_dir.exists() {
-            if let Err(e) = ventoy_img::init_resources(&ventoy_resource_dir) {
-                tracing::warn!("Failed to initialize Ventoy resources: {}", e);
-            } else {
-                tracing::info!(
-                    "Ventoy resources initialized from {}",
-                    ventoy_resource_dir.display()
-                );
-            }
-        } else {
-            tracing::warn!(
-                "Ventoy resource directory not found: {}",
-                ventoy_resource_dir.display()
-            );
-        }
-
         let controller = MsdController::new(otg_service.clone(), config.msd.msd_dir_path());
-        if let Err(e) = controller.init().await {
+        if let Err(e) = controller.init(&ventoy_resource_dir).await {
             tracing::warn!("Failed to initialize MSD controller: {}", e);
             None
         } else {
@@ -563,6 +558,7 @@ async fn main() -> anyhow::Result<()> {
         config_store.clone(),
         session_store,
         user_store,
+        two_factor,
         #[cfg(unix)]
         otg_service,
         stream_manager,
@@ -582,6 +578,17 @@ async fn main() -> anyhow::Result<()> {
         shutdown_tx.clone(),
         data_dir.clone(),
     );
+
+    if config.watchdog.enabled {
+        if let Err(error) = state.watchdog.enable().await {
+            tracing::error!(
+                "Configured hardware watchdog failed to start; web service will continue: {}",
+                error
+            );
+        } else {
+            tracing::info!("Hardware watchdog started");
+        }
+    }
 
     extensions.set_event_bus(events.clone()).await;
 
@@ -624,8 +631,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     {
-        let runtime_config = state.config.get();
+        let runtime_config = state.runtime_third_party_config().await;
         let constraints = StreamCodecConstraints::from_config(&runtime_config);
+        state
+            .stream_manager
+            .set_runtime_codec_constraints(constraints.clone())
+            .await;
         match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
             Ok(result) if result.changed => {
                 if let Some(message) = result.message {
@@ -668,9 +679,11 @@ async fn main() -> anyhow::Result<()> {
         let mut shutdown_rx = shutdown_tx.subscribe();
         async move {
             tokio::select! {
-                result = tokio::signal::ctrl_c() => {
-                    result.expect("Failed to install CTRL+C handler");
-                    tracing::info!("Shutdown signal received");
+                result = shutdown_signal() => {
+                    if let Err(e) = result {
+                        tracing::error!("Failed while waiting for shutdown signal: {}", e);
+                    }
+                    tracing::info!("SIGINT or SIGTERM received");
                     ShutdownAction::Exit
                 }
                 request = shutdown_rx.recv() => {
@@ -794,6 +807,24 @@ fn get_data_dir() -> PathBuf {
     PathBuf::from("/etc/one-kvm")
 }
 
+#[cfg(unix)]
+async fn shutdown_signal() -> anyhow::Result<()> {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    let mut terminate = signal(SignalKind::terminate())?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result?,
+        _ = terminate.recv() => {},
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() -> anyhow::Result<()> {
+    tokio::signal::ctrl_c().await?;
+    Ok(())
+}
+
 async fn open_database_pool(data_dir: &Path) -> anyhow::Result<DatabasePool> {
     let db_path = data_dir.join("one-kvm.db");
     let db = DatabasePool::new(&db_path).await?;
@@ -850,10 +881,13 @@ async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Resu
     tokio::fs::create_dir_all(&data_dir).await?;
     let db = open_database_pool(&data_dir).await?;
     let users = UserStore::new(db.clone_pool());
+    let two_factor = TwoFactorService::new(db.clone_pool());
     let sessions = SessionStore::new(0);
 
     match command {
-        CliCommand::User(user) => run_user_action(user.action, &users, &sessions).await,
+        CliCommand::User(user) => {
+            run_user_action(user.action, &users, &sessions, &two_factor).await
+        }
     }
 }
 
@@ -919,10 +953,24 @@ async fn run_user_action(
     action: UserAction,
     users: &UserStore,
     sessions: &SessionStore,
+    two_factor: &TwoFactorService,
 ) -> anyhow::Result<()> {
     match action {
         UserAction::SetPassword => set_user_password(users, sessions).await,
+        UserAction::DisableTotp => disable_user_totp(users, two_factor).await,
     }
+}
+
+async fn disable_user_totp(users: &UserStore, two_factor: &TwoFactorService) -> anyhow::Result<()> {
+    let user = users.single_user().await?.ok_or_else(|| {
+        anyhow::anyhow!("No local user exists yet; complete setup in the web UI first.")
+    })?;
+    if two_factor.disable_without_code(&user.id).await? {
+        println!("TOTP disabled for user '{}'.", user.username);
+    } else {
+        println!("TOTP is already disabled for user '{}'.", user.username);
+    }
+    Ok(())
 }
 
 async fn set_user_password(users: &UserStore, sessions: &SessionStore) -> anyhow::Result<()> {
@@ -1207,6 +1255,11 @@ async fn cleanup(state: &Arc<AppState>) {
         }
     }
 
+    #[cfg(unix)]
+    if let Err(e) = state.otg_service.shutdown().await {
+        tracing::warn!("Failed to shutdown OTG: {}", e);
+    }
+
     if let Some(atx) = state.atx.write().await.as_mut() {
         if let Err(e) = atx.shutdown().await {
             tracing::warn!("Failed to shutdown ATX: {}", e);
@@ -1215,5 +1268,12 @@ async fn cleanup(state: &Arc<AppState>) {
 
     if let Err(e) = state.audio.shutdown().await {
         tracing::warn!("Failed to shutdown audio: {}", e);
+    }
+
+    if let Err(error) = state.watchdog.disable().await {
+        tracing::error!(
+            "CRITICAL: failed to disable hardware watchdog during shutdown: {}",
+            error
+        );
     }
 }

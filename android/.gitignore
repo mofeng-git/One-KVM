@@ -1,7 +1,0 @@
-.gradle/
-.kotlin/
-build/
-local.properties
-app/build/
-app/src/main/jniLibs/
-native/target/

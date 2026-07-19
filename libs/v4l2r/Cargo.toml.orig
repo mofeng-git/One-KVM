@@ -18,11 +18,11 @@ arch64 = []
 arch32 = []
 
 [dependencies]
-nix = { version = "0.28", features = ["ioctl", "mman", "poll", "fs", "event"] }
+nix = { version = "0.31", features = ["ioctl", "mman", "poll", "fs", "event"] }
 bitflags = "2.4"
-thiserror = "1.0"
+thiserror = "2"
 log = "0.4.14"
 enumn = "0.1.6"
 
 [build-dependencies]
-bindgen = "0.70.1"
+bindgen = "0.72"

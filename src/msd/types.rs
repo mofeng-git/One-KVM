@@ -2,13 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::OffsetDateTime;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum MsdMode {
+pub enum DiskMode {
     #[default]
-    None,
-    Image,
-    Drive,
+    Single,
+    Multi,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,23 +49,109 @@ impl ImageInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MsdState {
     pub available: bool,
-    pub mode: MsdMode,
-    pub connected: bool,
-    pub current_image: Option<ImageInfo>,
+    pub disk_mode: DiskMode,
+    pub mounted_media: Vec<MountedMedia>,
     pub drive_info: Option<DriveInfo>,
+    pub usb_reenumerating: bool,
 }
 
 impl Default for MsdState {
     fn default() -> Self {
         Self {
             available: false,
-            mode: MsdMode::None,
-            connected: false,
-            current_image: None,
+            disk_mode: DiskMode::Single,
+            mounted_media: Vec::new(),
             drive_info: None,
+            usb_reenumerating: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MsdStateResponse {
+    pub available: bool,
+    pub disk_mode: DiskMode,
+    pub slot_capacity: u8,
+    pub mounted_count: u8,
+    pub mounted_media: Vec<MountedMedia>,
+    pub drive_info: Option<DriveInfo>,
+    pub usb_reenumerating: bool,
+}
+
+impl From<&MsdState> for MsdStateResponse {
+    fn from(state: &MsdState) -> Self {
+        Self {
+            available: state.available,
+            disk_mode: state.disk_mode,
+            slot_capacity: state.disk_mode.capacity(),
+            mounted_count: state.mounted_media.len() as u8,
+            mounted_media: state.mounted_media.clone(),
+            drive_info: state.drive_info.clone(),
+            usb_reenumerating: state.usb_reenumerating,
+        }
+    }
+}
+
+pub const SINGLE_DISK_MSD_LUNS: u8 = 1;
+pub const MULTI_DISK_MSD_LUNS: u8 = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MountedMediaKind {
+    Drive,
+    Image,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountedMedia {
+    pub id: String,
+    pub kind: MountedMediaKind,
+    pub name: String,
+    pub cdrom: bool,
+    pub read_only: bool,
+    pub size: u64,
+    #[serde(skip)]
+    pub lun: u8,
+    #[serde(skip)]
+    pub path: PathBuf,
+}
+
+impl MountedMedia {
+    pub fn image(lun: u8, image: &ImageInfo, cdrom: bool, read_only: bool) -> Self {
+        Self {
+            id: image.id.clone(),
+            lun,
+            kind: MountedMediaKind::Image,
+            name: image.name.clone(),
+            cdrom,
+            read_only: cdrom || read_only,
+            size: image.size,
+            path: image.path.clone(),
+        }
+    }
+
+    pub fn drive(lun: u8, info: &DriveInfo) -> Self {
+        Self {
+            id: "drive".to_string(),
+            lun,
+            kind: MountedMediaKind::Drive,
+            name: "Virtual USB".to_string(),
+            cdrom: false,
+            read_only: false,
+            size: info.size,
+            path: info.path.clone(),
+        }
+    }
+}
+
+impl DiskMode {
+    pub fn capacity(self) -> u8 {
+        match self {
+            DiskMode::Single => SINGLE_DISK_MSD_LUNS,
+            DiskMode::Multi => MULTI_DISK_MSD_LUNS,
         }
     }
 }
@@ -104,13 +189,16 @@ pub struct DriveFile {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct MsdConnectRequest {
-    pub mode: MsdMode,
-    pub image_id: Option<String>,
+pub struct DiskModeRequest {
+    pub disk_mode: DiskMode,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImageMountRequest {
     #[serde(default)]
-    pub cdrom: Option<bool>,
+    pub cdrom: bool,
     #[serde(default)]
-    pub read_only: Option<bool>,
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -163,5 +251,20 @@ mod tests {
             1024 * 1024 * 1024 * 2,
         );
         assert!(info.size_display().contains("GB"));
+    }
+
+    #[test]
+    fn default_state_serializes_single_disk_mode() {
+        assert_eq!(DiskMode::default(), DiskMode::Single);
+
+        let state = MsdState::default();
+        assert_eq!(state.disk_mode, DiskMode::Single);
+
+        let json = serde_json::to_value(MsdStateResponse::from(&state)).unwrap();
+        assert_eq!(json["disk_mode"], "single");
+        assert_eq!(json["slot_capacity"], 1);
+        assert!(json.get("mode").is_none());
+        assert!(json.get("current_image").is_none());
+        assert!(json.get("slots").is_none());
     }
 }

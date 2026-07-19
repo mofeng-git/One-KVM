@@ -11,6 +11,21 @@ use typeshare::typeshare;
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct WatchdogConfigUpdate {
+    pub enabled: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+pub struct WatchdogConfigResponse {
+    pub enabled: bool,
+    pub supported: bool,
+    pub running: bool,
+    pub reason: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct AuthConfigUpdate {
     pub single_user_allow_multiple_sessions: Option<bool>,
 }
@@ -353,10 +368,18 @@ pub struct HidConfigUpdate {
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub otg_profile: Option<OtgHidProfile>,
-    pub otg_endpoint_budget: Option<OtgEndpointBudget>,
     pub otg_functions: Option<OtgHidFunctionsUpdate>,
     pub otg_keyboard_leds: Option<bool>,
     pub mouse_absolute: Option<bool>,
+}
+
+#[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize, Default)]
+pub struct OtgConfigUpdate {
+    pub hid: Option<HidConfigUpdate>,
+    pub msd: Option<MsdConfigUpdate>,
+    pub network: Option<OtgNetworkConfigUpdate>,
 }
 
 impl HidConfigUpdate {
@@ -403,9 +426,6 @@ impl HidConfigUpdate {
         if let Some(profile) = self.otg_profile.clone() {
             config.otg_profile = profile;
         }
-        if let Some(budget) = self.otg_endpoint_budget {
-            config.otg_endpoint_budget = budget;
-        }
         if let Some(ref functions) = self.otg_functions {
             functions.apply_to(&mut config.otg_functions);
         }
@@ -414,6 +434,38 @@ impl HidConfigUpdate {
         }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;
+        }
+    }
+}
+
+#[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize)]
+pub struct OtgNetworkConfigUpdate {
+    pub enabled: Option<bool>,
+    pub driver_mode: Option<OtgNetworkDriverMode>,
+    pub bridge_interface: Option<String>,
+    pub host_mac: Option<String>,
+    pub device_mac: Option<String>,
+}
+
+#[cfg(unix)]
+impl OtgNetworkConfigUpdate {
+    pub fn apply_to(&self, config: &mut OtgNetworkConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(driver_mode) = self.driver_mode {
+            config.driver_mode = driver_mode;
+        }
+        if let Some(ref interface) = self.bridge_interface {
+            config.bridge_interface = interface.trim().to_string();
+        }
+        if let Some(ref mac) = self.host_mac {
+            config.host_mac = mac.trim().to_ascii_lowercase();
+        }
+        if let Some(ref mac) = self.device_mac {
+            config.device_mac = mac.trim().to_ascii_lowercase();
         }
     }
 }
@@ -941,7 +993,6 @@ pub struct VncConfigResponse {
     pub bind: String,
     pub port: u16,
     pub encoding: VncEncoding,
-    pub jpeg_quality: u8,
     pub allow_one_client: bool,
     pub has_password: bool,
 }
@@ -953,7 +1004,6 @@ impl From<&VncConfig> for VncConfigResponse {
             bind: config.bind.clone(),
             port: config.port,
             encoding: config.encoding.clone(),
-            jpeg_quality: config.jpeg_quality,
             allow_one_client: config.allow_one_client,
             has_password: config.password.as_deref().is_some_and(|p| !p.is_empty()),
         }
@@ -985,7 +1035,6 @@ pub struct VncConfigUpdate {
     pub bind: Option<String>,
     pub port: Option<u16>,
     pub encoding: Option<VncEncoding>,
-    pub jpeg_quality: Option<u8>,
     pub allow_one_client: Option<bool>,
     pub password: Option<String>,
 }
@@ -1000,13 +1049,6 @@ impl VncConfigUpdate {
         if let Some(ref bind) = self.bind {
             if bind.parse::<std::net::IpAddr>().is_err() {
                 return Err(AppError::BadRequest("VNC bind must be a valid IP".into()));
-            }
-        }
-        if let Some(quality) = self.jpeg_quality {
-            if !(10..=100).contains(&quality) {
-                return Err(AppError::BadRequest(
-                    "VNC JPEG quality must be 10-100".into(),
-                ));
             }
         }
         if let Some(ref password) = self.password {
@@ -1038,9 +1080,6 @@ impl VncConfigUpdate {
         }
         if let Some(ref encoding) = self.encoding {
             config.encoding = encoding.clone();
-        }
-        if let Some(quality) = self.jpeg_quality {
-            config.jpeg_quality = quality;
         }
         if let Some(allow_one_client) = self.allow_one_client {
             config.allow_one_client = allow_one_client;
@@ -1403,7 +1442,6 @@ mod tests {
                 bind: Some(bind.to_string()),
                 port: Some(5900),
                 encoding: None,
-                jpeg_quality: None,
                 allow_one_client: None,
                 password: None,
             };
@@ -1422,7 +1460,6 @@ mod tests {
                 bind: Some(bind.to_string()),
                 port: Some(5900),
                 encoding: None,
-                jpeg_quality: None,
                 allow_one_client: None,
                 password: None,
             };
@@ -1471,5 +1508,28 @@ mod tests {
                 "bind address should fail: {bind}"
             );
         }
+    }
+
+    #[test]
+    fn legacy_vnc_jpeg_quality_is_ignored_and_not_returned() {
+        let config: VncConfig = serde_json::from_value(serde_json::json!({
+            "enabled": false,
+            "bind": "0.0.0.0",
+            "port": 5900,
+            "encoding": "tight_jpeg",
+            "jpeg_quality": 37,
+            "allow_one_client": true
+        }))
+        .expect("legacy VNC config should deserialize");
+        let update: VncConfigUpdate = serde_json::from_value(serde_json::json!({
+            "jpeg_quality": 37,
+            "allow_one_client": false
+        }))
+        .expect("legacy VNC update should deserialize");
+        assert_eq!(update.allow_one_client, Some(false));
+
+        let response = serde_json::to_value(VncConfigResponse::from(&config))
+            .expect("VNC response should serialize");
+        assert!(response.get("jpeg_quality").is_none());
     }
 }

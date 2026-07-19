@@ -376,7 +376,7 @@ impl CaptureStream {
     pub fn next_into(&mut self, dst: &mut Vec<u8>) -> io::Result<CaptureMeta> {
         self.wait_ready()?;
 
-        let dqbuf: V4l2Buffer = ioctl::dqbuf(&self.fd, self.queue)
+        let dqbuf: V4l2Buffer = ioctl::dqbuf(&self.fd, self.queue, MemoryType::Mmap)
             .map_err(|e| io::Error::other(format!("dqbuf failed: {}", e)))?;
         let index = dqbuf.as_v4l2_buffer().index as usize;
         let sequence = dqbuf.as_v4l2_buffer().sequence as u64;

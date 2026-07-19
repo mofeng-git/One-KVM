@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { CornerDownLeft, Square, AlertCircle } from 'lucide-vue-next'
 import { charToKey, analyzeText } from '@/lib/charToHid'
 import { hidApi } from '@/api'
@@ -203,16 +204,14 @@ function handleKeydown(e: KeyboardEvent) {
     </div>
 
     <!-- Warning for untypable characters -->
-    <div v-if="hasUntypableChars && !isPasting" class="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
-      <AlertCircle class="h-4 w-4 shrink-0 mt-0.5" />
-      <div class="text-xs">
-        <p class="font-medium">{{ t('paste.untypableWarning') }}</p>
-        <p class="text-muted-foreground mt-0.5">
+    <Alert v-if="hasUntypableChars && !isPasting" variant="warning">
+      <AlertCircle class="size-4 shrink-0 mt-0.5" />
+      <AlertTitle>{{ t('paste.untypableWarning') }}</AlertTitle>
+      <AlertDescription>
           {{ t('paste.untypableChars', { chars: textAnalysis?.untypableChars.slice(0, 5).map(c => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : c).join(', ') }) }}
           <span v-if="textAnalysis && textAnalysis.untypableChars.length > 5">...</span>
-        </p>
-      </div>
-    </div>
+      </AlertDescription>
+    </Alert>
 
     <!-- Progress indicator during paste -->
     <div v-if="isPasting" class="space-y-2">
@@ -235,7 +234,7 @@ function handleKeydown(e: KeyboardEvent) {
           {{ t('common.cancel') }}
         </Button>
         <Button v-else variant="ghost" size="sm" @click="cancelPaste">
-          <Square class="h-3 w-3 mr-1.5 fill-current" />
+          <Square class="size-3 mr-1.5 fill-current" />
           {{ t('paste.stop') }}
         </Button>
         <Button
@@ -243,7 +242,7 @@ function handleKeydown(e: KeyboardEvent) {
           :disabled="!text.trim() || isPasting"
           @click="handlePaste"
         >
-          <CornerDownLeft class="h-4 w-4 mr-1.5" />
+          <CornerDownLeft class="size-4 mr-1.5" />
           {{ t('paste.confirm') }}
         </Button>
       </div>

@@ -7,11 +7,8 @@ use crate::state::AppState;
 
 use super::types::AuthConfigUpdate;
 
-/// Get auth configuration (sensitive fields are cleared)
 pub async fn get_auth_config(State(state): State<Arc<AppState>>) -> Json<AuthConfig> {
-    let mut auth = state.config.get().auth.clone();
-    auth.totp_secret = None;
-    Json(auth)
+    Json(state.config.get().auth.clone())
 }
 
 pub async fn update_auth_config(
@@ -26,7 +23,5 @@ pub async fn update_auth_config(
         })
         .await?;
 
-    let mut auth = state.config.get().auth.clone();
-    auth.totp_secret = None;
-    Ok(Json(auth))
+    Ok(Json(state.config.get().auth.clone()))
 }

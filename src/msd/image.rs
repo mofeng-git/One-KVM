@@ -393,10 +393,6 @@ impl ImageManager {
 
         self.get_by_name(&final_filename)
     }
-
-    pub fn images_path(&self) -> &PathBuf {
-        &self.images_path
-    }
 }
 
 fn stable_image_id_from_filename(name: &str) -> String {

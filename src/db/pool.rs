@@ -30,6 +30,7 @@ impl DatabasePool {
     pub async fn init_schema(&self) -> Result<()> {
         self.create_config_table().await?;
         self.create_users_table().await?;
+        self.create_user_totp_credentials_table().await?;
         self.create_api_tokens_table().await?;
         self.create_wol_history_table().await?;
         Ok(())
@@ -78,6 +79,22 @@ impl DatabasePool {
                 expires_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 last_used TEXT
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn create_user_totp_credentials_table(&self) -> Result<()> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS user_totp_credentials (
+                user_id TEXT PRIMARY KEY,
+                secret TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             "#,
         )

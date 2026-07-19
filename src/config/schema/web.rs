@@ -7,8 +7,6 @@ use typeshare::typeshare;
 pub struct AuthConfig {
     pub session_timeout_secs: u32,
     pub single_user_allow_multiple_sessions: bool,
-    pub totp_enabled: bool,
-    pub totp_secret: Option<String>,
 }
 
 impl Default for AuthConfig {
@@ -16,8 +14,6 @@ impl Default for AuthConfig {
         Self {
             session_timeout_secs: 3600 * 24,
             single_user_allow_multiple_sessions: false,
-            totp_enabled: false,
-            totp_secret: None,
         }
     }
 }

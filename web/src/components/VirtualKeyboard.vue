@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Keyboard from 'simple-keyboard'
 import 'simple-keyboard/build/css/index.css'
 import { hidApi } from '@/api'
+import { Button } from '@/components/ui/button'
 import { CanonicalKey } from '@/types/generated'
 import {
   keys,
@@ -608,39 +609,43 @@ onUnmounted(() => {
         @touchstart="startDrag"
       >
         <div class="vkb-header-left">
-          <button class="vkb-btn" @click="toggleAttached">
+          <Button variant="ghost" size="sm" class="vkb-btn" @click="toggleAttached">
             {{ isAttached ? t('virtualKeyboard.detach') : t('virtualKeyboard.attach') }}
-          </button>
+          </Button>
           <div class="vkb-os-selector">
-            <button
+            <Button
               v-for="os in (['windows', 'mac', 'android'] as KeyboardOsType[])"
               :key="os"
               class="vkb-os-btn"
+              variant="ghost"
+              size="sm"
               :class="{ 'vkb-os-btn--active': selectedOs === os }"
               @click.stop="switchOsLayout(os)"
             >
               {{ os === 'windows' ? 'Win' : os === 'mac' ? 'Mac' : 'Android' }}
-            </button>
+            </Button>
           </div>
         </div>
         <span class="vkb-title">{{ t('virtualKeyboard.title') }}</span>
-        <button class="vkb-btn" @click="close">
+        <Button variant="ghost" size="sm" class="vkb-btn" @click="close">
           {{ t('virtualKeyboard.hide') }}
-        </button>
+        </Button>
       </div>
 
       <!-- Keyboard body -->
       <div class="vkb-body">
         <!-- Media keys row -->
         <div v-if="props.consumerEnabled !== false" class="vkb-media-row">
-          <button
+          <Button
             v-for="key in mediaKeys"
             :key="key"
             class="vkb-media-btn"
+            variant="outline"
+            size="sm"
             @click="onMediaKeyPress(key)"
           >
             {{ mediaKeyLabels[key] || key }}
-          </button>
+          </Button>
         </div>
         <div class="vkb-keyboards">
           <div :id="`${keyboardId}-main`" class="kb-main-container"></div>
@@ -660,12 +665,12 @@ onUnmounted(() => {
 
 .vkb .simple-keyboard .hg-button {
   height: 36px;
-  border-radius: 6px;
-  background: var(--keyboard-button-bg, white);
-  color: var(--keyboard-button-color, #1f2937);
-  border: 1px solid var(--keyboard-button-border, #e5e7eb);
+  border-radius: var(--radius-md);
+  background: var(--keyboard-button-bg);
+  color: var(--keyboard-button-color);
+  border: 1px solid var(--keyboard-button-border);
   border-bottom-width: 2px;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  box-shadow: 0 1px 2px 0 color-mix(in oklch, var(--foreground) 5%, transparent);
   font-size: 12px;
   font-weight: 500;
   padding: 0 6px;
@@ -678,12 +683,12 @@ onUnmounted(() => {
 }
 
 .vkb .simple-keyboard .hg-button:hover {
-  background: var(--keyboard-button-hover-bg, #f3f4f6);
+  background: var(--keyboard-button-hover-bg);
 }
 
 .vkb .simple-keyboard .hg-button:active {
-  background: #3b82f6;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   border-bottom-width: 1px;
   margin-top: 1px;
 }
@@ -706,10 +711,10 @@ onUnmounted(() => {
 
 /* Pressed keys */
 .vkb .simple-keyboard .hg-button.down-key {
-  background: #3b82f6;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-weight: 600;
-  border-color: #2563eb;
+  border-color: var(--primary);
 }
 
 /* Space bar */
@@ -843,17 +848,17 @@ onUnmounted(() => {
 :root.dark .hg-theme-default .hg-button,
 html.dark .hg-theme-default .hg-button,
 .dark .hg-theme-default .hg-button {
-  background: #374151 !important;
-  color: #f9fafb !important;
-  border-color: #4b5563 !important;
-  border-bottom-color: #4b5563 !important;
+  background: var(--keyboard-button-bg) !important;
+  color: var(--keyboard-button-color) !important;
+  border-color: var(--keyboard-button-border) !important;
+  border-bottom-color: var(--keyboard-button-border) !important;
   box-shadow: none !important;
 }
 
 :root.dark .hg-theme-default .hg-button:hover,
 html.dark .hg-theme-default .hg-button:hover,
 .dark .hg-theme-default .hg-button:hover {
-  background: #4b5563 !important;
+  background: var(--keyboard-button-hover-bg) !important;
 }
 
 :root.dark .hg-theme-default .hg-button:active,
@@ -862,17 +867,17 @@ html.dark .hg-theme-default .hg-button:active,
 :root.dark .hg-theme-default .hg-button.hg-activeButton,
 html.dark .hg-theme-default .hg-button.hg-activeButton,
 .dark .hg-theme-default .hg-button.hg-activeButton {
-  background: #3b82f6 !important;
-  color: white !important;
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
 }
 
 :root.dark .hg-theme-default .hg-button.down-key,
 html.dark .hg-theme-default .hg-button.down-key,
 .dark .hg-theme-default .hg-button.down-key {
-  background: #3b82f6 !important;
-  color: white !important;
-  border-color: #2563eb !important;
-  border-bottom-color: #2563eb !important;
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-color: var(--primary) !important;
+  border-bottom-color: var(--primary) !important;
 }
 </style>
 
@@ -880,13 +885,13 @@ html.dark .hg-theme-default .hg-button.down-key,
 .vkb {
   z-index: 100;
   user-select: none;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--background);
+  border: 1px solid var(--border);
 }
 
 :global(.dark .vkb) {
-  background: #1f2937;
-  border-color: #374151;
+  background: var(--background);
+  border-color: var(--border);
 }
 
 .vkb--attached {
@@ -904,8 +909,8 @@ html.dark .hg-theme-default .hg-button.down-key,
   min-width: 1200px;
   max-width: 1600px;
   width: auto;
-  border-radius: 8px;
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px color-mix(in oklch, var(--foreground) 25%, transparent);
 }
 
 .vkb--dragging {
@@ -918,20 +923,20 @@ html.dark .hg-theme-default .hg-button.down-key,
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
   min-height: 28px;
   position: relative;
 }
 
 :global(.dark .vkb-header) {
-  background: #111827;
-  border-color: #374151;
+  background: var(--muted);
+  border-color: var(--border);
 }
 
 .vkb--floating .vkb-header {
   cursor: move;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .vkb-header-left {
@@ -946,84 +951,84 @@ html.dark .hg-theme-default .hg-button.down-key,
   transform: translateX(-50%);
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--foreground);
 }
 
 :global(.dark .vkb-title) {
-  color: #d1d5db;
+  color: var(--foreground);
 }
 
 .vkb-btn {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #374151;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1.4;
 }
 
 .vkb-btn:hover {
-  background: #f3f4f6;
+  background: var(--accent);
 }
 
 :global(.dark .vkb-btn) {
-  color: #d1d5db;
-  background: #374151;
-  border-color: #4b5563;
+  color: var(--foreground);
+  background: var(--background);
+  border-color: var(--border);
 }
 
 :global(.dark .vkb-btn:hover) {
-  background: #4b5563;
+  background: var(--accent);
 }
 
 /* OS selector */
 .vkb-os-selector {
   display: flex;
   gap: 2px;
-  background: #e5e7eb;
-  border-radius: 4px;
+  background: var(--muted);
+  border-radius: var(--radius-sm);
   padding: 2px;
 }
 
 :global(.dark .vkb-os-selector) {
-  background: #374151;
+  background: var(--muted);
 }
 
 .vkb-os-btn {
   padding: 2px 8px;
   font-size: 10px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--muted-foreground);
   background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .vkb-os-btn:hover {
-  color: #374151;
+  color: var(--foreground);
 }
 
 .vkb-os-btn--active {
-  background: white;
-  color: #374151;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 
 :global(.dark .vkb-os-btn) {
-  color: #9ca3af;
+  color: var(--muted-foreground);
 }
 
 :global(.dark .vkb-os-btn:hover) {
-  color: #d1d5db;
+  color: var(--foreground);
 }
 
 :global(.dark .vkb-os-btn--active) {
-  background: #4b5563;
-  color: #f9fafb;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /* Keyboard body */
@@ -1032,15 +1037,15 @@ html.dark .hg-theme-default .hg-button.down-key,
   flex-direction: column;
   padding: 8px;
   gap: 8px;
-  background: #f3f4f6;
+  background: color-mix(in oklch, var(--muted) 65%, var(--background));
 }
 
 :global(.dark .vkb-body) {
-  background: #111827;
+  background: color-mix(in oklch, var(--muted) 65%, var(--background));
 }
 
 .vkb--floating .vkb-body {
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 /* Media keys row */
@@ -1049,40 +1054,40 @@ html.dark .hg-theme-default .hg-button.down-key,
   gap: 4px;
   justify-content: center;
   padding-bottom: 4px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
 }
 
 :global(.dark .vkb-media-row) {
-  border-color: #374151;
+  border-color: var(--border);
 }
 
 .vkb-media-btn {
   padding: 4px 12px;
   font-size: 16px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   cursor: pointer;
   min-width: 40px;
 }
 
 .vkb-media-btn:hover {
-  background: #f3f4f6;
+  background: var(--accent);
 }
 
 .vkb-media-btn:active {
-  background: #3b82f6;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 :global(.dark .vkb-media-btn) {
-  background: #374151;
-  border-color: #4b5563;
-  color: #f9fafb;
+  background: var(--background);
+  border-color: var(--border);
+  color: var(--foreground);
 }
 
 :global(.dark .vkb-media-btn:hover) {
-  background: #4b5563;
+  background: var(--accent);
 }
 
 /* Keyboards container */

@@ -1,7 +1,7 @@
 [Unit]
 Description=One-KVM IP-KVM Service
 Documentation=https://github.com/mofeng-git/One-KVM
-After=network.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]

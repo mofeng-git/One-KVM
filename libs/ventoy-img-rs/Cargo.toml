@@ -10,9 +10,7 @@ license = "GPL-2.0"
 clap = { version = "4", features = ["derive"] }
 
 # Error handling
-thiserror = "1"
-
-[dev-dependencies]
+thiserror = "2"
 tempfile = "3"
 
 [profile.release]

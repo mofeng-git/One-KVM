@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import 'vue-sonner/style.css'
 import '@/sonner-overrides.css'
-import { computed, KeepAlive, onMounted, watch } from 'vue'
+import { computed, KeepAlive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { Toaster } from '@/components/ui/sonner'
+import { useTheme } from '@/composables/useTheme'
 
 const { t } = useI18n()
 
@@ -22,17 +23,9 @@ const toasterToastOptions = computed(() => ({
 const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
-
-function initTheme() {
-  const stored = localStorage.getItem('theme')
-  if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark')
-  }
-}
+const { isDark } = useTheme()
 
 onMounted(async () => {
-  initTheme()
-
   try {
     await authStore.checkSetupStatus()
     if (authStore.needsSetup) {
@@ -50,16 +43,6 @@ onMounted(async () => {
   } catch {
   }
 })
-
-watch(
-  () => window.matchMedia('(prefers-color-scheme: dark)').matches,
-  (dark) => {
-    const stored = localStorage.getItem('theme')
-    if (!stored) {
-      document.documentElement.classList.toggle('dark', dark)
-    }
-  }
-)
 </script>
 
 <template>
@@ -75,7 +58,7 @@ watch(
     expand
     position="top-center"
     close-button-position="top-right"
-    theme="system"
+    :theme="isDark ? 'dark' : 'light'"
     :duration="4000"
     :gap="14"
     :offset="{ top: '1rem', right: '1rem', left: '1rem', bottom: '1rem' }"

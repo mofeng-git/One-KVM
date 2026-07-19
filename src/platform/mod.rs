@@ -1,9 +1,5 @@
 //! Platform selection and capability reporting.
 
-#[cfg(feature = "android")]
-pub mod android;
-#[cfg(feature = "android")]
-pub mod android_bionic;
 pub mod capabilities;
 pub mod defaults;
 #[cfg(target_os = "linux")]

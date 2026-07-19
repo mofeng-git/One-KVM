@@ -25,6 +25,9 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import { Switch } from '@/components/ui/switch'
+import { Stepper, StepperItem, StepperSeparator, StepperTitle, StepperTrigger } from '@/components/ui/stepper'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import {
   Eye,
   EyeOff,
@@ -37,6 +40,7 @@ import {
   HelpCircle,
   Puzzle,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -78,7 +82,6 @@ const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
 const hidOtgProfile = ref('full_no_consumer')
 const otgMsdEnabled = ref(true)
-const otgEndpointBudget = ref<'five' | 'six' | 'unlimited'>('six')
 const otgKeyboardLeds = ref(true)
 
 const ttydEnabled = ref(false)
@@ -158,7 +161,7 @@ const passwordStrengthText = computed(() => {
 })
 
 const passwordStrengthColor = computed(() => {
-  const colors = ['bg-muted', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500']
+  const colors = ['bg-muted', 'bg-destructive', 'bg-warning', 'bg-warning', 'bg-success']
   return colors[passwordStrength.value] || colors[0]
 })
 
@@ -203,46 +206,11 @@ const availableFps = computed(() => {
   return resolution?.fps || []
 })
 
-function defaultOtgEndpointBudgetForUdc(udc?: string): 'five' | 'six' {
-  return /musb/i.test(udc || '') ? 'five' : 'six'
-}
-
-function endpointLimitForBudget(budget: 'five' | 'six' | 'unlimited'): number | null {
-  if (budget === 'unlimited') return null
-  return budget === 'five' ? 5 : 6
-}
-
-const otgRequiredEndpoints = computed(() => {
-  if (hidBackend.value !== 'otg') return 0
-  const functions = {
-    keyboard: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_keyboard',
-    mouseRelative: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer' || hidOtgProfile.value === 'legacy_mouse_relative',
-    mouseAbsolute: hidOtgProfile.value === 'full' || hidOtgProfile.value === 'full_no_consumer',
-    consumer: hidOtgProfile.value === 'full',
-  }
-  let endpoints = 0
-  if (functions.keyboard) {
-    endpoints += 1
-    if (otgKeyboardLeds.value) endpoints += 1
-  }
-  if (functions.mouseRelative) endpoints += 1
-  if (functions.mouseAbsolute) endpoints += 1
-  if (functions.consumer) endpoints += 1
-  if (otgMsdEnabled.value) endpoints += 2
-  return endpoints
-})
-
-const isOtgEndpointBudgetValid = computed(() => {
-  const limit = endpointLimitForBudget(otgEndpointBudget.value)
-  return limit === null || otgRequiredEndpoints.value <= limit
-})
-
 function applyOtgDefaults() {
   if (hidBackend.value !== 'otg') return
 
-  otgEndpointBudget.value = defaultOtgEndpointBudgetForUdc(otgUdc.value)
   hidOtgProfile.value = 'full_no_consumer'
-  otgKeyboardLeds.value = otgEndpointBudget.value !== 'five'
+  otgKeyboardLeds.value = true
 }
 
 const baudRates = [9600, 19200, 38400, 57600, 115200]
@@ -477,13 +445,6 @@ function validateStep3(): boolean {
     error.value = t('setup.selectUdc')
     return false
   }
-  if (hidBackend.value === 'otg' && !isOtgEndpointBudgetValid.value) {
-    error.value = t('settings.otgEndpointExceeded', {
-      used: otgRequiredEndpoints.value,
-      limit: otgEndpointBudget.value === 'unlimited' ? t('settings.otgEndpointBudgetUnlimited') : otgEndpointBudget.value === 'five' ? '5' : '6',
-    })
-    return false
-  }
   return true
 }
 
@@ -543,7 +504,6 @@ async function handleSetup() {
   if (hidBackend.value === 'otg' && otgUdc.value) {
     setupData.hid_otg_udc = otgUdc.value
     setupData.hid_otg_profile = hidOtgProfile.value
-    setupData.hid_otg_endpoint_budget = otgEndpointBudget.value
     setupData.hid_otg_keyboard_leds = otgKeyboardLeds.value
     setupData.msd_enabled = otgMsdEnabled.value
   }
@@ -575,18 +535,18 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
+  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center dot-grid-bg px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
         <LanguageToggleButton />
       </div>
 
-      <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
+      <CardHeader class="text-center space-y-2 pt-8">
         <div class="mx-auto flex justify-center">
-          <BrandMark size="xl" />
+          <BrandMark size="lg" />
         </div>
-        <CardTitle class="text-xl sm:text-2xl">{{ t('setup.welcome') }}</CardTitle>
+        <CardTitle class="text-xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>
       </CardHeader>
 
@@ -596,37 +556,36 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
           {{ t('setup.progress', { current: step, total: totalSteps }) }}
         </p>
 
-        <!-- Step Indicator with Labels -->
-        <div class="flex items-center justify-center gap-1.5 sm:gap-2 mb-5 sm:mb-6">
-          <template v-for="i in totalSteps" :key="i">
-            <div class="flex flex-col items-center gap-1">
-              <div
-                class="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 transition-all duration-300"
-                :class="
-                  step > i
-                    ? 'bg-primary border-primary text-primary-foreground scale-100'
-                    : step === i
-                      ? 'border-primary text-primary scale-110'
-                      : 'border-muted text-muted-foreground scale-100'
-                "
-              >
-                <Check v-if="step > i" class="w-4 h-4 sm:w-5 sm:h-5" />
-                <component :is="stepIcons[i - 1]" v-else class="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <span
-                class="text-[10px] sm:text-xs transition-colors duration-300 max-w-14 sm:max-w-16 text-center leading-tight"
-                :class="step >= i ? 'text-foreground font-medium' : 'text-muted-foreground'"
-              >
-                {{ stepLabels[i - 1] }}
-              </span>
-            </div>
-            <div
+        <Stepper :model-value="step" class="mb-5 flex w-full items-start gap-1 sm:mb-6 sm:gap-2">
+          <StepperItem
+            v-for="i in totalSteps"
+            :key="i"
+            v-slot="{ state }"
+            :step="i"
+            class="relative flex w-full flex-col items-center justify-center"
+          >
+            <StepperSeparator
               v-if="i < totalSteps"
-              class="w-5 sm:w-8 h-0.5 transition-colors duration-300 mb-5 sm:mb-6"
-              :class="step > i ? 'bg-primary' : 'bg-muted'"
+              class="absolute left-[calc(50%+18px)] right-[calc(-50%+8px)] top-5 h-0.5 rounded-full group-data-[state=completed]:bg-primary"
             />
-          </template>
-        </div>
+            <StepperTrigger as-child>
+              <Button
+                type="button"
+                size="icon"
+                :variant="state === 'completed' || state === 'active' ? 'default' : 'outline'"
+                class="z-10 size-9 shrink-0 rounded-full disabled:opacity-100 sm:size-10"
+                :class="state === 'active' && 'ring-2 ring-ring ring-offset-2 ring-offset-background'"
+                disabled
+              >
+                <Check v-if="state === 'completed'" class="size-4 sm:size-5" />
+                <component :is="stepIcons[i - 1]" v-else class="size-4 sm:size-5" />
+              </Button>
+            </StepperTrigger>
+            <StepperTitle class="mt-1 max-w-14 whitespace-normal text-center text-[10px] leading-tight sm:max-w-16 sm:text-xs" :class="state === 'active' ? 'text-foreground' : 'text-muted-foreground'">
+              {{ stepLabels[i - 1] }}
+            </StepperTitle>
+          </StepperItem>
+        </Stepper>
 
         <!-- Step Content with Animation -->
         <Transition :name="slideDirection === 'forward' ? 'slide-forward' : 'slide-backward'" mode="out-in">
@@ -673,15 +632,17 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   @blur="validatePassword"
                   @input="passwordTouched && validatePassword()"
                 />
-                <button
+                <Button
                   type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                   :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                   @click="showPassword = !showPassword"
                 >
                   <Eye v-if="!showPassword" class="w-4 h-4" />
                   <EyeOff v-else class="w-4 h-4" />
-                </button>
+                </Button>
               </div>
               <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
 
@@ -728,92 +689,79 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="videoDevice">{{ t('setup.videoDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
+                    <Button type="button" variant="ghost" size="icon-xs" class="text-muted-foreground" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
-                    </button>
+                    </Button>
                   </HoverCardTrigger>
                   <HoverCardContent class="w-64 text-sm">
                     {{ t('setup.videoDeviceHelp') }}
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select v-model="videoDevice">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('setup.selectVideoDevice')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="dev in devices.video" :key="dev.path" :value="dev.path">
+              <NativeSelect v-model="videoDevice" class="w-full">
+                  <NativeSelectOption value="">{{ t('setup.selectVideoDevice') }}</NativeSelectOption>
+                  <NativeSelectOption v-for="dev in devices.video" :key="dev.path" :value="dev.path">
                     {{ formatVideoDeviceLabel(dev) }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  </NativeSelectOption>
+              </NativeSelect>
             </div>
 
-            <div v-if="videoDevice && !selectedDeviceHasSignal" class="flex items-center gap-3 p-3 rounded-lg border border-orange-500/30 bg-orange-500/5 text-sm text-orange-600 dark:text-orange-400">
+            <Alert v-if="videoDevice && !selectedDeviceHasSignal" variant="warning">
+              <AlertTriangle />
+              <AlertDescription class="flex items-center gap-3">
               <p class="flex-1">{{ t('setup.noSignalDetected') }}</p>
               <Button variant="outline" size="sm" :disabled="refreshingDevices" @click="refreshDeviceList">
                 <RefreshCw class="w-4 h-4 mr-1" :class="{ 'animate-spin': refreshingDevices }" />
                 {{ t('setup.refreshDevices') }}
               </Button>
-            </div>
+              </AlertDescription>
+            </Alert>
 
             <div v-if="videoDevice" class="space-y-2">
               <div class="flex items-center gap-2">
                 <Label for="videoFormat">{{ t('setup.videoFormat') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
+                    <Button type="button" variant="ghost" size="icon-xs" class="text-muted-foreground" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
-                    </button>
+                    </Button>
                   </HoverCardTrigger>
                   <HoverCardContent class="w-64 text-sm">
                     {{ t('setup.videoFormatHelp') }}
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select v-model="videoFormat">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('setup.selectFormat')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">
+              <NativeSelect v-model="videoFormat" class="w-full">
+                  <NativeSelectOption value="">{{ t('setup.selectFormat') }}</NativeSelectOption>
+                  <NativeSelectOption v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">
                     {{ fmt.format }} - {{ fmt.description }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  </NativeSelectOption>
+              </NativeSelect>
             </div>
 
             <div v-if="videoFormat" class="grid grid-cols-2 gap-4">
               <div class="space-y-2">
                 <Label for="videoResolution">{{ t('setup.resolution') }}</Label>
-                <Select v-model="videoResolution">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectResolution')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
+                <NativeSelect v-model="videoResolution" class="w-full">
+                    <NativeSelectOption value="">{{ t('setup.selectResolution') }}</NativeSelectOption>
+                    <NativeSelectOption
                       v-for="res in availableResolutions"
                       :key="`${res.width}x${res.height}`"
                       :value="`${res.width}x${res.height}`"
                     >
                       {{ res.width }}x{{ res.height }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </NativeSelectOption>
+                </NativeSelect>
               </div>
 
               <div class="space-y-2">
                 <Label for="videoFps">{{ t('setup.fps') }}</Label>
-                <Select v-model="videoFps">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectFps')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="fps in availableFps" :key="fps" :value="fps">
+                <NativeSelect :model-value="videoFps" class="w-full" @update:model-value="value => videoFps = value === '' ? null : Number(value)">
+                    <NativeSelectOption value="">{{ t('setup.selectFps') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="fps in availableFps" :key="fps" :value="fps">
                       {{ formatFpsLabel(fps) }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </NativeSelectOption>
+                </NativeSelect>
               </div>
             </div>
 
@@ -827,27 +775,20 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="audioDevice">{{ t('setup.audioDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors" :aria-label="t('common.info')">
+                    <Button type="button" variant="ghost" size="icon-xs" class="text-muted-foreground" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
-                    </button>
+                    </Button>
                   </HoverCardTrigger>
                   <HoverCardContent class="w-64 text-sm">
                     {{ t('setup.audioDeviceHelp') }}
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select v-model="audioDevice" :disabled="!audioEnabled">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('setup.selectAudioDevice')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{{ t('setup.noAudio') }}</SelectItem>
-                  <SelectItem v-for="dev in devices.audio" :key="dev.name" :value="dev.name">
-                    {{ dev.description }}
-                    <span v-if="dev.is_hdmi" class="text-xs text-muted-foreground ml-1">(HDMI)</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <NativeSelect v-model="audioDevice" class="w-full" :disabled="!audioEnabled">
+                  <NativeSelectOption value="">{{ t('setup.selectAudioDevice') }}</NativeSelectOption>
+                  <NativeSelectOption value="__none__">{{ t('setup.noAudio') }}</NativeSelectOption>
+                  <NativeSelectOption v-for="dev in devices.audio" :key="dev.name" :value="dev.name">{{ dev.description }}{{ dev.is_hdmi ? ' (HDMI)' : '' }}</NativeSelectOption>
+              </NativeSelect>
               <p v-if="!devices.audio.length" class="text-xs text-muted-foreground">
                 {{ t('setup.noAudioDevices') }}
               </p>
@@ -855,9 +796,10 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
             <!-- Advanced: Encoder Backend (Collapsible) -->
             <div class="mt-4 border rounded-lg">
-              <button
+              <Button
                 type="button"
-                class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                variant="ghost"
+                class="h-auto w-full justify-between rounded-lg p-3 text-left"
                 :aria-label="t('setup.advancedEncoder')"
                 @click="showAdvancedEncoder = !showAdvancedEncoder"
               >
@@ -865,10 +807,10 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   {{ t('setup.advancedEncoder') }} ({{ t('common.optional') }})
                 </span>
                 <ChevronRight
-                  class="h-4 w-4 transition-transform duration-200"
+                  class="size-4 transition-transform duration-200"
                   :class="{ 'rotate-90': showAdvancedEncoder }"
                 />
-              </button>
+              </Button>
               <div v-if="showAdvancedEncoder" class="px-3 pb-3 space-y-3">
                 <p class="text-xs text-muted-foreground">
                   {{ t('setup.encoderHint') }}
@@ -917,16 +859,12 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
               <div class="space-y-2">
                 <Label for="ch9329Port">{{ t('setup.serialPort') }}</Label>
-                <Select v-model="ch9329Port">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectSerialPort')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="port in devices.serial" :key="port.path" :value="port.path">
+                <NativeSelect v-model="ch9329Port" class="w-full">
+                    <NativeSelectOption value="">{{ t('setup.selectSerialPort') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="port in devices.serial" :key="port.path" :value="port.path">
                       {{ port.name }} ({{ port.path }})
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </NativeSelectOption>
+                </NativeSelect>
                 <p v-if="!devices.serial.length" class="text-xs text-muted-foreground">
                   {{ t('setup.noSerialDevices') }}
                 </p>
@@ -934,7 +872,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
               <div class="space-y-2">
                 <Label for="ch9329Baudrate">{{ t('setup.baudRate') }}</Label>
-                <Select v-model="ch9329Baudrate">
+                <Select :model-value="ch9329Baudrate" @update:model-value="value => ch9329Baudrate = Number(value)">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -956,16 +894,12 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
               <div class="space-y-2">
                 <Label for="otgUdc">{{ t('setup.udc') }}</Label>
-                <Select v-model="otgUdc">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectUdc')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="udc in devices.udc" :key="udc.name" :value="udc.name">
+                <NativeSelect v-model="otgUdc" class="w-full">
+                    <NativeSelectOption value="">{{ t('setup.selectUdc') }}</NativeSelectOption>
+                    <NativeSelectOption v-for="udc in devices.udc" :key="udc.name" :value="udc.name">
                       {{ udc.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </NativeSelectOption>
+                </NativeSelect>
                 <p v-if="!devices.udc.length" class="text-xs text-muted-foreground">
                   {{ t('setup.noUdcDevices') }}
                 </p>
@@ -1004,7 +938,10 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
         <!-- Error Message -->
         <Transition name="fade">
-          <p v-if="error" class="text-sm text-destructive text-center">{{ error }}</p>
+          <Alert v-if="error" variant="destructive">
+            <AlertTriangle />
+            <AlertDescription>{{ error }}</AlertDescription>
+          </Alert>
         </Transition>
 
         <!-- Navigation Buttons -->

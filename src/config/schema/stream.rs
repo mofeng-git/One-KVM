@@ -41,7 +41,6 @@ pub struct VncConfig {
     pub bind: String,
     pub port: u16,
     pub encoding: VncEncoding,
-    pub jpeg_quality: u8,
     pub allow_one_client: bool,
     #[typeshare(skip)]
     pub password: Option<String>,
@@ -54,7 +53,6 @@ impl Default for VncConfig {
             bind: "0.0.0.0".to_string(),
             port: 5900,
             encoding: VncEncoding::TightJpeg,
-            jpeg_quality: 80,
             allow_one_client: true,
             password: None,
         }

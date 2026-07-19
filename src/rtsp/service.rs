@@ -2,9 +2,11 @@ use rtsp_types as rtsp;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::task::JoinHandle;
 
 use crate::config::RtspConfig;
 use crate::error::{AppError, Result};
@@ -24,6 +26,8 @@ use super::streaming::{stream_video_interleaved, RTSP_BUF_SIZE};
 use super::types::RtspConnectionState;
 
 pub use super::types::RtspServiceStatus;
+
+const RTSP_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct RtspService {
     config: Arc<RwLock<RtspConfig>>,
@@ -74,18 +78,37 @@ impl RtspService {
             tracing::debug!("Failed to request keyframe on RTSP start: {}", err);
         }
 
-        let bind_addr = bind_socket_addr(&config.bind, config.port)
-            .map_err(|e| AppError::BadRequest(format!("Invalid RTSP bind address: {}", e)))?;
+        let bind_addr = match bind_socket_addr(&config.bind, config.port) {
+            Ok(addr) => addr,
+            Err(err) => {
+                let error = AppError::BadRequest(format!("Invalid RTSP bind address: {}", err));
+                *self.status.write().await = RtspServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
 
-        let listener = bind_tcp_listener(bind_addr).map_err(|e| {
-            AppError::Io(io::Error::new(e.kind(), format!("RTSP bind failed: {}", e)))
-        })?;
-        let listener = TcpListener::from_std(listener).map_err(|e| {
-            AppError::Io(io::Error::new(
-                e.kind(),
-                format!("RTSP listener setup failed: {}", e),
-            ))
-        })?;
+        let listener = match bind_tcp_listener(bind_addr) {
+            Ok(listener) => listener,
+            Err(err) => {
+                let error = AppError::Io(io::Error::new(
+                    err.kind(),
+                    format!("RTSP bind failed: {}", err),
+                ));
+                *self.status.write().await = RtspServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
+        let listener = match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(err) => {
+                let error = AppError::Io(io::Error::new(
+                    err.kind(),
+                    format!("RTSP listener setup failed: {}", err),
+                ));
+                *self.status.write().await = RtspServiceStatus::Error(error.to_string());
+                return Err(error);
+            }
+        };
 
         let service_config = self.config.clone();
         let video_manager = self.video_manager.clone();
@@ -138,7 +161,7 @@ impl RtspService {
     pub async fn stop(&self) -> Result<()> {
         let _ = self.shutdown_tx.send(());
         if let Some(handle) = self.server_handle.lock().await.take() {
-            handle.abort();
+            wait_for_server_stop(handle).await;
         }
 
         let mut client_handles = self.client_handles.lock().await;
@@ -167,6 +190,42 @@ impl RtspService {
 
     pub async fn status(&self) -> RtspServiceStatus {
         self.status.read().await.clone()
+    }
+}
+
+async fn wait_for_server_stop(mut handle: JoinHandle<()>) {
+    match tokio::time::timeout(RTSP_SHUTDOWN_TIMEOUT, &mut handle).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) if err.is_cancelled() => {}
+        Ok(Err(err)) => tracing::warn!("RTSP server task ended with error: {}", err),
+        Err(_) => {
+            tracing::warn!("Timed out waiting for RTSP server task to stop");
+            handle.abort();
+            let _ = handle.await;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn waiting_for_server_stop_releases_listener() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test listener");
+        let bind_addr = listener.local_addr().expect("read test listener address");
+        let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
+        let handle = tokio::spawn(async move {
+            let _listener = listener;
+            let _ = shutdown_rx.recv().await;
+        });
+
+        shutdown_tx.send(()).expect("send shutdown signal");
+        wait_for_server_stop(handle).await;
+
+        std::net::TcpListener::bind(bind_addr).expect("rebind released listener address");
     }
 }
 

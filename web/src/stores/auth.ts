@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authApi, systemApi } from '@/api'
+import { authApi, systemApi, type AuthLoginResponse } from '@/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<string | null>(null)
@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
   const needsSetup = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  let pendingUsername: string | null = null
 
   const isLoggedIn = computed(() => isAuthenticated.value && user.value !== null)
 
@@ -41,26 +42,60 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(username: string, password: string) {
+  async function beginLogin(username: string, password: string): Promise<AuthLoginResponse | null> {
     loading.value = true
     error.value = null
 
     try {
       const result = await authApi.login(username, password)
-      if (result.success) {
+      if (result.next === 'authenticated') {
         isAuthenticated.value = true
         user.value = username
-        return true
+        pendingUsername = null
       } else {
-        error.value = result.message || 'Login failed'
+        isAuthenticated.value = false
+        user.value = null
+        pendingUsername = username
+      }
+      return result
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Login failed'
+      pendingUsername = null
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function completeTotpLogin(challengeId: string, code: string) {
+    loading.value = true
+    error.value = null
+    try {
+      const result = await authApi.loginTotp(challengeId, code)
+      if (result.next !== 'authenticated') {
+        error.value = 'Login failed'
         return false
       }
+      isAuthenticated.value = true
+      user.value = pendingUsername
+      pendingUsername = null
+      return true
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Login failed'
       return false
     } finally {
       loading.value = false
     }
+  }
+
+  async function login(username: string, password: string) {
+    const result = await beginLogin(username, password)
+    return result?.next === 'authenticated'
+  }
+
+  function cancelPendingLogin() {
+    pendingUsername = null
+    error.value = null
   }
 
   async function logout() {
@@ -85,7 +120,6 @@ export const useAuthStore = defineStore('auth', () => {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
-    hid_otg_endpoint_budget?: string
     hid_otg_keyboard_leds?: boolean
     msd_enabled?: boolean
     encoder_backend?: string
@@ -124,6 +158,9 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     checkSetupStatus,
     checkAuth,
+    beginLogin,
+    completeTotpLogin,
+    cancelPendingLogin,
     login,
     logout,
     setup,

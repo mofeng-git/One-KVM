@@ -104,19 +104,14 @@ pub struct ComputerUseStartRequest {
     #[serde(default)]
     pub continue_conversation: bool,
     pub client_id: String,
-    pub max_steps: Option<u32>,
-    pub timeout_seconds: Option<u32>,
 }
 
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputerUseConfigResponse {
     pub enabled: bool,
-    pub provider: String,
     pub base_url: String,
     pub model: String,
-    pub max_steps: u32,
-    pub timeout_seconds: u32,
     pub api_key_configured: bool,
     pub api_key_source: String,
 }
@@ -127,10 +122,10 @@ pub struct ComputerUseConfigUpdate {
     pub enabled: Option<bool>,
     pub base_url: Option<String>,
     pub model: Option<String>,
-    pub max_steps: Option<u32>,
-    pub timeout_seconds: Option<u32>,
-    pub openai_api_key: Option<String>,
-    pub clear_openai_api_key: Option<bool>,
+    #[serde(alias = "openai_api_key")]
+    pub api_key: Option<String>,
+    #[serde(alias = "clear_openai_api_key")]
+    pub clear_api_key: Option<bool>,
 }
 
 #[typeshare]
@@ -140,7 +135,6 @@ pub struct ComputerUseSessionSummary {
     pub status: ComputerUseSessionStatus,
     pub prompt: Option<String>,
     pub step: u32,
-    pub max_steps: u32,
     pub last_error: Option<String>,
     pub final_message: Option<String>,
 }
@@ -152,6 +146,10 @@ pub enum ComputerUseWsClientMessage {
         request_id: String,
         screenshot: ComputerUseScreenshot,
     },
+    ScreenshotError {
+        request_id: String,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,6 +159,8 @@ pub enum ComputerUseWsServerMessage {
     ScreenshotRequested { request_id: String },
     ScreenshotCaptured { screenshot: ComputerUseScreenshot },
     StepStarted { step: u32 },
+    ReasoningDelta { delta: String },
+    ReasoningCompleted { failed: bool },
     ActionsExecuted { actions: Vec<ComputerUseAction> },
     Error { message: String },
 }
@@ -202,5 +202,17 @@ mod tests {
                 "request_id": "req-1"
             })
         );
+    }
+
+    #[test]
+    fn config_update_accepts_legacy_api_key_names() {
+        let update: ComputerUseConfigUpdate = serde_json::from_value(json!({
+            "openai_api_key": "legacy-key",
+            "clear_openai_api_key": true
+        }))
+        .unwrap();
+
+        assert_eq!(update.api_key.as_deref(), Some("legacy-key"));
+        assert_eq!(update.clear_api_key, Some(true));
     }
 }

@@ -14,11 +14,33 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ConfigApplyOptions {
     pub force: bool,
+    pub preserve_service_state: bool,
+    pub runtime_only: bool,
 }
 
 impl ConfigApplyOptions {
     pub const fn forced() -> Self {
-        Self { force: true }
+        Self {
+            force: true,
+            preserve_service_state: false,
+            runtime_only: false,
+        }
+    }
+
+    pub const fn preserving_service_state() -> Self {
+        Self {
+            force: false,
+            preserve_service_state: true,
+            runtime_only: false,
+        }
+    }
+
+    pub const fn runtime_only() -> Self {
+        Self {
+            force: false,
+            preserve_service_state: false,
+            runtime_only: true,
+        }
     }
 }
 
@@ -47,21 +69,24 @@ fn hid_otg_config_changed(old_config: &HidConfig, new_config: &HidConfig) -> boo
         || old_config.otg_descriptor != new_config.otg_descriptor
         || old_config.constrained_otg_functions() != new_config.constrained_otg_functions()
         || old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds()
-        || old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit()
 }
 
-async fn reconcile_otg_from_store(state: &Arc<AppState>) -> Result<()> {
+async fn reconcile_otg_config(
+    state: &Arc<AppState>,
+    hid: &HidConfig,
+    msd: &MsdConfig,
+    network: &OtgNetworkConfig,
+) -> Result<()> {
     #[cfg(not(unix))]
     {
-        let _ = state;
+        let _ = (state, hid, msd, network);
         Ok(())
     }
     #[cfg(unix)]
     {
-        let config = state.config.get();
         state
             .otg_service
-            .apply_config(&config.hid, &config.msd)
+            .apply_config(hid, msd, network)
             .await
             .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
     }
@@ -167,11 +192,11 @@ pub async fn apply_hid_config(
     state: &Arc<AppState>,
     old_config: &HidConfig,
     new_config: &HidConfig,
+    msd_config: &MsdConfig,
+    network_config: &OtgNetworkConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_config = state.config.get();
-    let current_msd_enabled = current_config.msd.enabled && new_config.backend == HidBackend::Otg;
-    new_config.validate_otg_endpoint_budget(current_msd_enabled)?;
+    new_config.validate_otg_functions()?;
 
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
     let old_hid_functions = old_config.constrained_otg_functions();
@@ -179,8 +204,6 @@ pub async fn apply_hid_config(
     let hid_functions_changed = old_hid_functions != new_hid_functions;
     let keyboard_leds_changed =
         old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
-    let endpoint_budget_changed =
-        old_config.resolved_otg_endpoint_limit() != new_config.resolved_otg_endpoint_limit();
     let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
 
     if old_config.backend == new_config.backend
@@ -191,7 +214,6 @@ pub async fn apply_hid_config(
         && !descriptor_changed
         && !hid_functions_changed
         && !keyboard_leds_changed
-        && !endpoint_budget_changed
         && !options.force
     {
         tracing::info!("HID config unchanged, skipping reload");
@@ -214,7 +236,7 @@ pub async fn apply_hid_config(
     }
 
     if otg_config_changed {
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, new_config, msd_config, network_config).await?;
     }
 
     if !transitioning_away_from_otg {
@@ -238,14 +260,12 @@ pub async fn apply_msd_config(
     state: &Arc<AppState>,
     old_config: &MsdConfig,
     new_config: &MsdConfig,
+    hid_config: &HidConfig,
+    network_config: &OtgNetworkConfig,
     options: ConfigApplyOptions,
 ) -> Result<()> {
-    let current_config = state.config.get();
-    let hid_backend_is_otg = current_config.hid.backend == HidBackend::Otg;
+    let hid_backend_is_otg = hid_config.backend == HidBackend::Otg;
     let effective_new_msd_enabled = new_config.enabled && hid_backend_is_otg;
-    current_config
-        .hid
-        .validate_otg_endpoint_budget(effective_new_msd_enabled)?;
 
     tracing::info!("MSD config sent, checking if reload needed...");
     tracing::debug!("Old MSD config: {:?}", old_config);
@@ -284,20 +304,21 @@ pub async fn apply_msd_config(
     if new_msd_enabled {
         tracing::info!("(Re)initializing MSD...");
 
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
 
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
-            if let Err(e) = msd.shutdown().await {
-                tracing::warn!("MSD shutdown failed: {}", e);
-            }
+            msd.shutdown()
+                .await
+                .map_err(|e| AppError::Config(format!("MSD shutdown failed: {e}")))?;
         }
         *msd_guard = None;
         drop(msd_guard);
 
         let msd =
             crate::msd::MsdController::new(state.otg_service.clone(), new_config.msd_dir_path());
-        msd.init()
+        let ventoy_resource_dir = state.data_dir().join("ventoy");
+        msd.init(&ventoy_resource_dir)
             .await
             .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
 
@@ -311,18 +332,17 @@ pub async fn apply_msd_config(
 
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
-            if let Err(e) = msd.shutdown().await {
-                tracing::warn!("MSD shutdown failed: {}", e);
-            }
+            msd.shutdown()
+                .await
+                .map_err(|e| AppError::Config(format!("MSD shutdown failed: {e}")))?;
         }
         *msd_guard = None;
         tracing::info!("MSD shutdown complete");
 
-        reconcile_otg_from_store(state).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
     }
 
-    let current_config = state.config.get();
-    if current_config.hid.backend == HidBackend::Otg
+    if hid_config.backend == HidBackend::Otg
         && (options.force || old_msd_enabled != new_msd_enabled)
     {
         state
@@ -333,6 +353,55 @@ pub async fn apply_msd_config(
     }
 
     Ok(())
+}
+
+#[cfg(unix)]
+pub async fn apply_otg_config(
+    state: &Arc<AppState>,
+    old_config: &AppConfig,
+    new_config: &AppConfig,
+) -> Result<()> {
+    let transitioning_away_from_otg =
+        old_config.hid.backend == HidBackend::Otg && new_config.hid.backend != HidBackend::Otg;
+
+    if transitioning_away_from_otg {
+        apply_hid_config(
+            state,
+            &old_config.hid,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+            ConfigApplyOptions::default(),
+        )
+        .await?;
+    } else {
+        reconcile_otg_config(
+            state,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+        )
+        .await?;
+        apply_hid_config(
+            state,
+            &old_config.hid,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+            ConfigApplyOptions::default(),
+        )
+        .await?;
+    }
+
+    apply_msd_config(
+        state,
+        &old_config.msd,
+        &new_config.msd,
+        &new_config.hid,
+        &new_config.otg_network,
+        ConfigApplyOptions::default(),
+    )
+    .await
 }
 
 pub async fn apply_atx_config(
@@ -403,11 +472,25 @@ pub async fn apply_audio_config(
 }
 
 pub async fn enforce_stream_codec_constraints(state: &Arc<AppState>) -> Result<Option<String>> {
-    let config = state.config.get();
+    let config = state.runtime_third_party_config().await;
     let constraints = StreamCodecConstraints::from_config(&config);
+    state
+        .stream_manager
+        .set_runtime_codec_constraints(constraints.clone())
+        .await;
     let enforcement =
         enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await?;
     Ok(enforcement.message)
+}
+
+async fn validate_runtime_candidate<T>(
+    state: &Arc<AppState>,
+    apply: impl FnOnce(&mut crate::config::AppConfig, T),
+    config: T,
+) -> Result<()> {
+    let mut candidate = state.runtime_third_party_config().await;
+    apply(&mut candidate, config);
+    validate_third_party_codec_compatibility(&candidate)
 }
 
 fn validate_rustdesk_candidate(
@@ -439,12 +522,26 @@ pub async fn apply_rustdesk_config(
 ) -> Result<()> {
     tracing::info!("Applying RustDesk config changes...");
 
-    validate_rustdesk_candidate(state, new_config)?;
+    if options.runtime_only {
+        validate_runtime_candidate(
+            state,
+            |candidate, config| candidate.rustdesk = config,
+            new_config.clone(),
+        )
+        .await?;
+    } else {
+        validate_rustdesk_candidate(state, new_config)?;
+    }
 
     let mut rustdesk_guard = state.rustdesk.write().await;
     let mut credentials_to_save = None;
+    let need_restart = options.force
+        || old_config.codec != new_config.codec
+        || old_config.rendezvous_server != new_config.rendezvous_server
+        || old_config.device_id != new_config.device_id
+        || old_config.device_password != new_config.device_password;
 
-    if !new_config.enabled {
+    if !options.preserve_service_state && !new_config.enabled {
         if let Some(ref service) = *rustdesk_guard {
             service
                 .stop()
@@ -455,38 +552,50 @@ pub async fn apply_rustdesk_config(
         *rustdesk_guard = None;
     }
 
-    if new_config.enabled {
-        let need_restart = options.force
-            || old_config.codec != new_config.codec
-            || old_config.rendezvous_server != new_config.rendezvous_server
-            || old_config.device_id != new_config.device_id
-            || old_config.device_password != new_config.device_password;
-
+    if !options.preserve_service_state && new_config.enabled {
         if rustdesk_guard.is_none() {
             tracing::info!("Initializing RustDesk service...");
-            let service = crate::rustdesk::RustDeskService::new(
+            let service = std::sync::Arc::new(crate::rustdesk::RustDeskService::new(
                 new_config.clone(),
                 state.stream_manager.clone(),
                 state.hid.clone(),
                 state.audio.clone(),
-            );
+            ));
+            *rustdesk_guard = Some(service.clone());
             service.start().await.map_err(|e| {
                 AppError::Config(format!("Failed to start RustDesk service: {}", e))
             })?;
             tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
             credentials_to_save = service.save_credentials();
-            *rustdesk_guard = Some(std::sync::Arc::new(service));
-        } else if need_restart {
+        } else {
             if let Some(ref service) = *rustdesk_guard {
-                service.restart(new_config.clone()).await.map_err(|e| {
-                    AppError::Config(format!("Failed to restart RustDesk service: {}", e))
-                })?;
-                tracing::info!(
-                    "RustDesk service restarted with ID: {}",
-                    new_config.device_id
-                );
+                if service.is_listening() {
+                    if need_restart {
+                        service.restart(new_config.clone()).await.map_err(|e| {
+                            AppError::Config(format!("Failed to restart RustDesk service: {}", e))
+                        })?;
+                        tracing::info!(
+                            "RustDesk service restarted with ID: {}",
+                            new_config.device_id
+                        );
+                    }
+                } else {
+                    service.update_config(new_config.clone());
+                    service.start().await.map_err(|e| {
+                        AppError::Config(format!("Failed to start RustDesk service: {}", e))
+                    })?;
+                }
                 credentials_to_save = service.save_credentials();
             }
+        }
+    } else if options.preserve_service_state && need_restart {
+        if let Some(ref service) = *rustdesk_guard {
+            let mut runtime_config = new_config.clone();
+            runtime_config.enabled = true;
+            service.restart(runtime_config).await.map_err(|e| {
+                AppError::Config(format!("Failed to restart RustDesk service: {}", e))
+            })?;
+            credentials_to_save = service.save_credentials();
         }
     }
 
@@ -521,11 +630,27 @@ pub async fn apply_vnc_config(
 ) -> Result<()> {
     tracing::info!("Applying VNC config changes...");
 
-    validate_vnc_candidate(state, new_config)?;
+    if options.runtime_only {
+        validate_runtime_candidate(
+            state,
+            |candidate, config| candidate.vnc = config,
+            new_config.clone(),
+        )
+        .await?;
+    } else {
+        validate_vnc_candidate(state, new_config)?;
+    }
 
-    if new_config.enabled {
-        let mut candidate = state.config.get().as_ref().clone();
+    let runtime_config = state.runtime_third_party_config().await;
+    let will_run = if options.preserve_service_state {
+        runtime_config.vnc.enabled
+    } else {
+        new_config.enabled
+    };
+    if will_run {
+        let mut candidate = runtime_config;
         candidate.vnc = new_config.clone();
+        candidate.vnc.enabled = true;
         let constraints = StreamCodecConstraints::from_config(&candidate);
         match enforce_constraints_with_stream_manager(&state.stream_manager, &constraints).await {
             Ok(result) if result.changed => {
@@ -542,37 +667,51 @@ pub async fn apply_vnc_config(
     }
 
     let mut vnc_guard = state.vnc.write().await;
+    let need_restart = options.force
+        || old_config.bind != new_config.bind
+        || old_config.port != new_config.port
+        || old_config.encoding != new_config.encoding
+        || old_config.password != new_config.password
+        || old_config.allow_one_client != new_config.allow_one_client;
 
-    if !new_config.enabled {
+    if !options.preserve_service_state && !new_config.enabled {
         if let Some(ref service) = *vnc_guard {
             service.stop().await?;
         }
         *vnc_guard = None;
     }
 
-    if new_config.enabled {
-        let need_restart = options.force
-            || old_config.bind != new_config.bind
-            || old_config.port != new_config.port
-            || old_config.encoding != new_config.encoding
-            || old_config.password != new_config.password
-            || old_config.jpeg_quality != new_config.jpeg_quality
-            || old_config.allow_one_client != new_config.allow_one_client;
-
+    if !options.preserve_service_state && new_config.enabled {
         if vnc_guard.is_none() {
-            let service = crate::vnc::VncService::new(
+            let service = Arc::new(crate::vnc::VncService::new(
                 new_config.clone(),
                 state.stream_manager.clone(),
                 state.hid.clone(),
-            );
+            ));
+            *vnc_guard = Some(service.clone());
             service.start().await?;
-            *vnc_guard = Some(Arc::new(service));
             tracing::info!("VNC service started");
-        } else if need_restart {
+        } else {
             if let Some(ref service) = *vnc_guard {
-                service.restart(new_config.clone()).await?;
-                tracing::info!("VNC service restarted");
+                if matches!(
+                    service.status().await,
+                    crate::vnc::VncServiceStatus::Running
+                ) {
+                    if need_restart {
+                        service.restart(new_config.clone()).await?;
+                        tracing::info!("VNC service restarted");
+                    }
+                } else {
+                    service.update_config(new_config.clone()).await;
+                    service.start().await?;
+                }
             }
+        }
+    } else if options.preserve_service_state && need_restart {
+        if let Some(ref service) = *vnc_guard {
+            let mut runtime_config = new_config.clone();
+            runtime_config.enabled = true;
+            service.restart(runtime_config).await?;
         }
     }
 
@@ -592,11 +731,28 @@ pub async fn apply_rtsp_config(
 ) -> Result<()> {
     tracing::info!("Applying RTSP config changes...");
 
-    validate_rtsp_candidate(state, new_config)?;
+    if options.runtime_only {
+        validate_runtime_candidate(
+            state,
+            |candidate, config| candidate.rtsp = config,
+            new_config.clone(),
+        )
+        .await?;
+    } else {
+        validate_rtsp_candidate(state, new_config)?;
+    }
 
     let mut rtsp_guard = state.rtsp.write().await;
+    let need_restart = options.force
+        || old_config.bind != new_config.bind
+        || old_config.port != new_config.port
+        || old_config.path != new_config.path
+        || old_config.codec != new_config.codec
+        || old_config.username != new_config.username
+        || old_config.password != new_config.password
+        || old_config.allow_one_client != new_config.allow_one_client;
 
-    if !new_config.enabled {
+    if !options.preserve_service_state && !new_config.enabled {
         if let Some(ref service) = *rtsp_guard {
             service
                 .stop()
@@ -606,26 +762,36 @@ pub async fn apply_rtsp_config(
         *rtsp_guard = None;
     }
 
-    if new_config.enabled {
-        let need_restart = options.force
-            || old_config.bind != new_config.bind
-            || old_config.port != new_config.port
-            || old_config.path != new_config.path
-            || old_config.codec != new_config.codec
-            || old_config.username != new_config.username
-            || old_config.password != new_config.password
-            || old_config.allow_one_client != new_config.allow_one_client;
-
+    if !options.preserve_service_state && new_config.enabled {
         if rtsp_guard.is_none() {
-            let service = RtspService::new(new_config.clone(), state.stream_manager.clone());
+            let service = Arc::new(RtspService::new(
+                new_config.clone(),
+                state.stream_manager.clone(),
+            ));
+            *rtsp_guard = Some(service.clone());
             service.start().await?;
             tracing::info!("RTSP service started");
-            *rtsp_guard = Some(Arc::new(service));
-        } else if need_restart {
+        } else {
             if let Some(ref service) = *rtsp_guard {
-                service.restart(new_config.clone()).await?;
-                tracing::info!("RTSP service restarted");
+                if matches!(
+                    service.status().await,
+                    crate::rtsp::RtspServiceStatus::Running
+                ) {
+                    if need_restart {
+                        service.restart(new_config.clone()).await?;
+                        tracing::info!("RTSP service restarted");
+                    }
+                } else {
+                    service.update_config(new_config.clone()).await;
+                    service.start().await?;
+                }
             }
+        }
+    } else if options.preserve_service_state && need_restart {
+        if let Some(ref service) = *rtsp_guard {
+            let mut runtime_config = new_config.clone();
+            runtime_config.enabled = true;
+            service.restart(runtime_config).await?;
         }
     }
 

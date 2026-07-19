@@ -43,7 +43,7 @@ function toggleLanguage() {
     :aria-label="t('common.toggleLanguage')"
     @click="toggleLanguage"
   >
-    <Languages class="h-4 w-4" />
+    <Languages class="size-4" />
     <span v-if="props.labelMode !== 'hidden'">{{ buttonLabel }}</span>
     <span class="sr-only">{{ t('common.toggleLanguage') }}</span>
   </Button>

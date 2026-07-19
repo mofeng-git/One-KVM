@@ -15,11 +15,21 @@ const API_BASE = '/api'
 
 export const authApi = {
   login: (username: string, password: string) =>
-    request<{ success: boolean; message?: string }>(
+    request<AuthLoginResponse>(
       '/auth/login',
       {
         method: 'POST',
         body: JSON.stringify({ username, password }),
+      },
+      { toastOnError: false },
+    ),
+
+  loginTotp: (challengeId: string, code: string) =>
+    request<AuthLoginResponse>(
+      '/auth/login/totp',
+      {
+        method: 'POST',
+        body: JSON.stringify({ challenge_id: challengeId, code }),
       },
       { toastOnError: false },
     ),
@@ -41,6 +51,46 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, current_password: currentPassword }),
     }),
+
+  totpStatus: () =>
+    request<TotpStatusResponse>('/auth/totp'),
+
+  beginTotpEnrollment: (currentPassword: string) =>
+    request<TotpEnrollmentResponse>('/auth/totp/enrollment', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword }),
+    }, { toastOnError: false }),
+
+  confirmTotpEnrollment: (enrollmentId: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/enrollment/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ enrollment_id: enrollmentId, code }),
+    }, { toastOnError: false }),
+
+  disableTotp: (currentPassword: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, code }),
+    }, { toastOnError: false }),
+}
+
+export interface AuthLoginResponse {
+  next: 'authenticated' | 'totp'
+  challenge_id?: string
+  expires_at_unix_ms?: number
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean
+  server_time_unix_ms: number
+}
+
+export interface TotpEnrollmentResponse {
+  enrollment_id: string
+  secret: string
+  otpauth_uri: string
+  expires_at_unix_ms: number
+  server_time_unix_ms: number
 }
 
 export interface NetworkAddress {
@@ -66,7 +116,7 @@ export interface FeatureCapability {
 }
 
 export interface PlatformCapabilities {
-  mode: 'android_amlogic' | 'linux' | 'windows'
+  mode: 'linux' | 'windows'
   mode_label: string
   video_capture: FeatureCapability
   encoder: FeatureCapability
@@ -123,7 +173,6 @@ export const systemApi = {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
-    hid_otg_endpoint_budget?: string
     hid_otg_keyboard_leds?: boolean
     msd_enabled?: boolean
     encoder_backend?: string
@@ -542,25 +591,34 @@ export interface DriveFile {
   size: number
 }
 
+export type DiskMode = 'single' | 'multi'
+export type MountedMediaKind = 'drive' | 'image'
+
+export interface MountedMedia {
+  id: string
+  kind: MountedMediaKind
+  name: string
+  cdrom: boolean
+  read_only: boolean
+  size: number
+}
+
 export const msdApi = {
   status: () =>
     request<{
       available: boolean
       state: {
-        connected: boolean
-        mode: 'none' | 'image' | 'drive'
-        current_image: {
-          id: string
-          name: string
-          size: number
-          created_at: string
-        } | null
+        disk_mode: DiskMode
+        slot_capacity: number
+        mounted_count: number
+        mounted_media: MountedMedia[]
         drive_info: {
           size: number
           used: number
           free: number
           initialized: boolean
         } | null
+        usb_reenumerating: boolean
       }
     }>('/msd/status'),
 
@@ -597,14 +655,26 @@ export const msdApi = {
   deleteImage: (id: string) =>
     request<{ success: boolean }>(`/msd/images/${id}`, { method: 'DELETE' }),
 
-  connect: (mode: 'image' | 'drive', imageId?: string, cdrom?: boolean, readOnly?: boolean) =>
-    request<{ success: boolean }>('/msd/connect', {
-      method: 'POST',
-      body: JSON.stringify({ mode, image_id: imageId, cdrom, read_only: readOnly }),
+  setDiskMode: (diskMode: DiskMode) =>
+    request<{ success: boolean }>('/msd/disk-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ disk_mode: diskMode }),
     }),
 
-  disconnect: () =>
-    request<{ success: boolean }>('/msd/disconnect', { method: 'POST' }),
+  mountImage: (id: string, cdrom: boolean, readOnly: boolean) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, {
+      method: 'POST',
+      body: JSON.stringify({ cdrom, read_only: readOnly }),
+    }),
+
+  unmountImage: (id: string) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, { method: 'DELETE' }),
+
+  mountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'POST' }),
+
+  unmountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'DELETE' }),
 
   driveInfo: () =>
     request<{
@@ -783,6 +853,8 @@ export {
   streamConfigApi,
   hidConfigApi,
   msdConfigApi,
+  otgConfigApi,
+  otgNetworkApi,
   atxConfigApi,
   audioConfigApi,
   extensionsApi,
@@ -791,6 +863,7 @@ export {
   rtspConfigApi,
   vncConfigApi,
   webConfigApi,
+  watchdogConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
