@@ -94,6 +94,7 @@ pub struct OtgBackend {
 }
 
 const HID_WRITE_TIMEOUT_MS: i32 = 20;
+const OTG_RUNTIME_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 impl OtgBackend {
     /// Gadget must already exist; paths come from `OtgService`.
@@ -587,7 +588,7 @@ impl OtgBackend {
                         path.display(),
                         err
                     );
-                    thread::sleep(Duration::from_millis(500));
+                    thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                     return false;
                 }
             }
@@ -611,6 +612,7 @@ impl OtgBackend {
 
                 if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP) {
                     *file = None;
+                    thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                     return true;
                 }
 
@@ -633,8 +635,13 @@ impl OtgBackend {
                     Ok(_) => false,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => false,
                     Err(err) => {
-                        warn!("OTG keyboard LED listener read failed: {}", err);
+                        if err.raw_os_error() == Some(libc::ESHUTDOWN) {
+                            debug!("OTG keyboard LED listener disconnected: {}", err);
+                        } else {
+                            warn!("OTG keyboard LED listener read failed: {}", err);
+                        }
                         *file = None;
+                        thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                         true
                     }
                 }
@@ -642,6 +649,7 @@ impl OtgBackend {
             Err(err) => {
                 warn!("OTG keyboard LED listener poll failed: {}", err);
                 *file = None;
+                thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                 true
             }
         }
@@ -676,7 +684,7 @@ impl OtgBackend {
                         changed = true;
                     }
 
-                    if keyboard_leds_enabled {
+                    if keyboard_leds_enabled && current_udc_configured {
                         if let Some(path) = keyboard_path.as_ref() {
                             changed |= Self::poll_keyboard_led_once(
                                 &mut keyboard_led_file,
@@ -684,10 +692,11 @@ impl OtgBackend {
                                 &led_state,
                             );
                         } else {
-                            thread::sleep(Duration::from_millis(500));
+                            thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                         }
                     } else {
-                        thread::sleep(Duration::from_millis(500));
+                        keyboard_led_file = None;
+                        thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
                     }
 
                     if changed {
