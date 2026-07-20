@@ -368,7 +368,7 @@ watch(() => props.open, (isOpen) => {
               :model-value="String(baudrate)"
               @update:model-value="handleBaudrateChange"
             >
-              <SelectTrigger size="sm" class="text-xs">
+              <SelectTrigger size="sm" class="w-full text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

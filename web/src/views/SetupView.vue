@@ -816,7 +816,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   {{ t('setup.encoderHint') }}
                 </p>
                 <Select v-model="encoderBackend">
-                  <SelectTrigger>
+                  <SelectTrigger class="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -838,7 +838,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             <div class="space-y-2">
               <Label for="hidBackend">{{ t('setup.hidBackend') }}</Label>
               <Select v-model="hidBackend">
-                <SelectTrigger>
+                <SelectTrigger class="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -873,7 +873,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
               <div class="space-y-2">
                 <Label for="ch9329Baudrate">{{ t('setup.baudRate') }}</Label>
                 <Select :model-value="ch9329Baudrate" @update:model-value="value => ch9329Baudrate = Number(value)">
-                  <SelectTrigger>
+                  <SelectTrigger class="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

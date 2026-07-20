@@ -5,8 +5,8 @@ use crate::config::HidConfig;
 use crate::error::Result;
 use crate::state::AppState;
 
-use super::otg::update_otg_config_inner;
-use super::types::{HidConfigUpdate, OtgConfigUpdate};
+use super::types::HidConfigUpdate;
+use super::usb_update::{stage_hid_config_update, update_usb_config};
 
 pub async fn get_hid_config(State(state): State<Arc<AppState>>) -> Json<HidConfig> {
     Json(state.config.get().hid.clone())
@@ -16,13 +16,9 @@ pub async fn update_hid_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<HidConfigUpdate>,
 ) -> Result<Json<HidConfig>> {
-    let response = update_otg_config_inner(
-        &state,
-        OtgConfigUpdate {
-            hid: Some(req),
-            ..Default::default()
-        },
-    )
+    let config = update_usb_config(&state, move |staged| {
+        stage_hid_config_update(&mut staged.hid, &req)
+    })
     .await?;
-    Ok(Json(response.hid))
+    Ok(Json(config.hid))
 }

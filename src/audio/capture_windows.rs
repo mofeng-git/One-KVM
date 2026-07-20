@@ -508,9 +508,5 @@ fn device_label(device: &cpal::Device) -> String {
     device
         .description()
         .map(|desc| desc.to_string())
-        .or_else(|_| {
-            #[allow(deprecated)]
-            device.name()
-        })
         .unwrap_or_else(|_| "Unknown WASAPI capture device".to_string())
 }

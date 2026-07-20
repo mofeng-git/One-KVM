@@ -15,6 +15,7 @@ mod redfish;
 mod rtsp;
 mod rustdesk;
 mod stream;
+mod usb_update;
 pub(crate) mod video;
 mod vnc;
 mod watchdog;

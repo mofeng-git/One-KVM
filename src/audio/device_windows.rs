@@ -142,10 +142,7 @@ fn device_labels(device: &cpal::Device) -> DeviceLabels {
             }
         }
         Err(_) => {
-            #[allow(deprecated)]
-            let display = device
-                .name()
-                .unwrap_or_else(|_| "Unknown WASAPI capture device".to_string());
+            let display = "Unknown WASAPI capture device".to_string();
             DeviceLabels {
                 display: display.clone(),
                 search_text: display,

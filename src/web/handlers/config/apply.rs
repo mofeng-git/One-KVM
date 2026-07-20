@@ -355,53 +355,68 @@ pub async fn apply_msd_config(
     Ok(())
 }
 
-#[cfg(unix)]
-pub async fn apply_otg_config(
+pub async fn apply_usb_config(
     state: &Arc<AppState>,
     old_config: &AppConfig,
     new_config: &AppConfig,
 ) -> Result<()> {
-    let transitioning_away_from_otg =
-        old_config.hid.backend == HidBackend::Otg && new_config.hid.backend != HidBackend::Otg;
+    #[cfg(unix)]
+    {
+        let transitioning_away_from_otg =
+            old_config.hid.backend == HidBackend::Otg && new_config.hid.backend != HidBackend::Otg;
 
-    if transitioning_away_from_otg {
-        apply_hid_config(
+        if transitioning_away_from_otg {
+            apply_hid_config(
+                state,
+                &old_config.hid,
+                &new_config.hid,
+                &new_config.msd,
+                &new_config.otg_network,
+                ConfigApplyOptions::default(),
+            )
+            .await?;
+        } else {
+            reconcile_otg_config(
+                state,
+                &new_config.hid,
+                &new_config.msd,
+                &new_config.otg_network,
+            )
+            .await?;
+            apply_hid_config(
+                state,
+                &old_config.hid,
+                &new_config.hid,
+                &new_config.msd,
+                &new_config.otg_network,
+                ConfigApplyOptions::default(),
+            )
+            .await?;
+        }
+
+        apply_msd_config(
             state,
-            &old_config.hid,
-            &new_config.hid,
+            &old_config.msd,
             &new_config.msd,
+            &new_config.hid,
             &new_config.otg_network,
             ConfigApplyOptions::default(),
         )
-        .await?;
-    } else {
-        reconcile_otg_config(
-            state,
-            &new_config.hid,
-            &new_config.msd,
-            &new_config.otg_network,
-        )
-        .await?;
-        apply_hid_config(
-            state,
-            &old_config.hid,
-            &new_config.hid,
-            &new_config.msd,
-            &new_config.otg_network,
-            ConfigApplyOptions::default(),
-        )
-        .await?;
+        .await
     }
 
-    apply_msd_config(
-        state,
-        &old_config.msd,
-        &new_config.msd,
-        &new_config.hid,
-        &new_config.otg_network,
-        ConfigApplyOptions::default(),
-    )
-    .await
+    #[cfg(not(unix))]
+    {
+        apply_hid_config(
+            state,
+            &old_config.hid,
+            &new_config.hid,
+            &new_config.msd,
+            &new_config.otg_network,
+            ConfigApplyOptions::default(),
+        )
+        .await
+    }
 }
 
 pub async fn apply_atx_config(
