@@ -44,7 +44,7 @@ impl Default for VideoConfig {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MsdConfig {
     pub enabled: bool,

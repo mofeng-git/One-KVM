@@ -365,6 +365,10 @@ pub async fn apply_usb_config(
         let transitioning_away_from_otg =
             old_config.hid.backend == HidBackend::Otg && new_config.hid.backend != HidBackend::Otg;
 
+        let hid_unchanged = old_config.hid == new_config.hid;
+        let otg_gadget_rebuilt =
+            old_config.msd != new_config.msd || old_config.otg_network != new_config.otg_network;
+
         if transitioning_away_from_otg {
             apply_hid_config(
                 state,
@@ -392,6 +396,19 @@ pub async fn apply_usb_config(
                 ConfigApplyOptions::default(),
             )
             .await?;
+        }
+
+        // When the OTG gadget was rebuilt due to MSD or network config changes
+        // while HID config stayed the same, the /dev/hidg* devices are new and
+        // the HID backend must be reloaded to reopen them.
+        if hid_unchanged && otg_gadget_rebuilt && new_config.hid.backend == HidBackend::Otg {
+            tracing::info!("OTG gadget rebuilt, reloading HID backend for new devices");
+            let hid_backend = hid_backend_type(&new_config.hid);
+            state
+                .hid
+                .reload(hid_backend)
+                .await
+                .map_err(|e| AppError::Config(format!("HID reload after gadget rebuild failed: {}", e)))?;
         }
 
         apply_msd_config(
