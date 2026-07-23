@@ -308,7 +308,7 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(unix)]
     if let Err(e) = otg_service
-        .apply_config(&config.hid, &config.msd, &config.otg_network)
+        .apply_config(&config.hid, &config.msd, &config.otg_network, &config.uac)
         .await
     {
         tracing::warn!("Failed to apply OTG config: {}", e);
@@ -578,6 +578,24 @@ async fn main() -> anyhow::Result<()> {
         shutdown_tx.clone(),
         data_dir.clone(),
     );
+
+    // Initialize UAC playback writer if UAC is enabled
+    if config.uac.enabled {
+        let uac_cfg = one_kvm::audio::uac_streamer::UacPlaybackConfig {
+            sample_rate: config.uac.sample_rate,
+            channels: config.uac.channels as u16,
+            ..Default::default()
+        };
+        match one_kvm::audio::uac_streamer::UacPlaybackWriter::start(uac_cfg) {
+            Ok(writer) => {
+                *state.uac_playback.write().await = Some(writer);
+                tracing::info!("UAC playback writer started");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start UAC playback writer: {}", e);
+            }
+        }
+    }
 
     if config.watchdog.enabled {
         if let Err(error) = state.watchdog.enable().await {

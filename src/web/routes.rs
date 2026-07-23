@@ -13,6 +13,7 @@ use tower_http::{
 
 use super::audio_ws::audio_ws_handler;
 use super::handlers;
+use super::uac_ws::uac_audio_ws_handler;
 use super::ws::ws_handler;
 use crate::auth::auth_middleware;
 use crate::hid::websocket::ws_hid_handler;
@@ -100,6 +101,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/audio/devices", get(handlers::list_audio_devices))
         // Audio WebSocket endpoint
         .route("/ws/audio", any(audio_ws_handler))
+        .route("/ws/uac-audio", any(uac_audio_ws_handler))
         // Configuration management (domain-separated endpoints)
         .route("/config", get(handlers::config::get_all_config))
         .route("/config/video", get(handlers::config::get_video_config))
@@ -277,6 +279,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route(
                 "/otg/network/status",
                 get(handlers::config::get_otg_network_status),
+            )
+            .route(
+                "/config/uac",
+                get(handlers::config::get_uac_config),
+            )
+            .route(
+                "/config/uac",
+                patch(handlers::config::update_uac_config),
             )
             .route("/msd/status", get(handlers::msd_status))
             .route("/msd/images", get(handlers::msd_images_list))

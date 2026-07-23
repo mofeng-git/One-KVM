@@ -47,6 +47,7 @@ pub struct OtgGadgetManager {
     hid_instance: u8,
     msd_instance: u8,
     network_instance: u8,
+    uac_instance: u8,
     functions: Vec<Box<dyn GadgetFunction>>,
     bound_udc: Option<String>,
     created_by_us: bool,
@@ -73,6 +74,7 @@ impl OtgGadgetManager {
             hid_instance: 0,
             msd_instance: 0,
             network_instance: 0,
+            uac_instance: 0,
             functions: Vec::with_capacity(4),
             bound_udc: None,
             created_by_us: false,
@@ -145,6 +147,14 @@ impl OtgGadgetManager {
         let func_clone = func.clone();
         self.add_function(Box::new(func))?;
         self.network_instance += 1;
+        Ok(func_clone)
+    }
+
+    pub fn add_uac(&mut self, sample_rate: u32, channels: u8) -> Result<super::uac::UacFunction> {
+        let func = super::uac::UacFunction::new(self.uac_instance, sample_rate, channels)?;
+        let func_clone = func.clone();
+        self.add_function(Box::new(func))?;
+        self.uac_instance += 1;
         Ok(func_clone)
     }
 

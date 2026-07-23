@@ -11,6 +11,8 @@ pub mod monitor;
 pub mod recovery;
 pub mod streamer;
 pub mod types;
+pub mod uac_streamer;
+pub mod uac_websocket;
 
 pub use capture::{AudioCapturer, AudioConfig, AudioFrame};
 pub use controller::AudioController;

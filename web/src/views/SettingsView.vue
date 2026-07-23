@@ -11,6 +11,7 @@ import {
   authApi,
   configApi,
   otgNetworkApi,
+  uacApi,
   hidApi,
   streamApi,
   atxConfigApi,
@@ -685,6 +686,7 @@ const config = ref({
   turn_server: '',
   turn_username: '',
   turn_password: '',
+  uac_enabled: false,
 })
 
 const otgNetworkInterfaces = ref<NetworkInterfaceInfo[]>([])
@@ -1479,6 +1481,12 @@ async function saveConfig() {
         },
       })
       otgNetworkStatus.value = response.status
+
+      await uacApi.update({
+        enabled: otgEnabled && config.value.uac_enabled,
+        sample_rate: 48000,
+        channels: 2,
+      })
     }
 
     if (activeSection.value !== 'hid') {
@@ -1499,7 +1507,7 @@ async function saveConfig() {
 
 async function loadConfig() {
   try {
-    const [video, stream, hid, msd, otgNetwork] = await Promise.all([
+    const [video, stream, hid, msd, otgNetwork, uac] = await Promise.all([
       configStore.refreshVideo(),
       configStore.refreshStream(),
       configStore.refreshHid(),
@@ -1511,6 +1519,7 @@ async function loadConfig() {
         host_mac: '',
         device_mac: '',
       })),
+      uacApi.get().catch(() => ({ enabled: false, sample_rate: 48000, channels: 2 })),
     ])
 
     config.value = {
@@ -1536,6 +1545,7 @@ async function loadConfig() {
       msd_dir: msd.msd_dir || '',
       otg_network_enabled: otgNetwork.enabled,
       otg_network_driver: otgNetwork.driver_mode,
+      uac_enabled: uac.enabled,
       otg_network_interface: otgNetwork.bridge_interface,
       encoder_backend: stream.encoder || 'auto',
       stun_server: stream.stun_server || '',
@@ -3341,6 +3351,15 @@ watch(isWindows, () => {
                         <p v-if="otgNetworkStatus?.health === 'degraded'" class="text-xs text-destructive">
                           {{ t('settings.otgRuntimeDegraded') }}: {{ otgNetworkStatus.error || t('common.error') }}
                         </p>
+                      </div>
+                      <div class="space-y-3 rounded-md border border-border/60 p-3">
+                        <div class="flex items-center justify-between gap-4">
+                          <div>
+                            <Label>{{ t('settings.uacMic') }}</Label>
+                            <p class="text-xs text-muted-foreground">{{ t('settings.uacMicDesc') }}</p>
+                          </div>
+                          <Switch v-model="config.uac_enabled" />
+                        </div>
                       </div>
                     </div>
                     <p class="text-xs text-warning">

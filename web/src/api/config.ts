@@ -118,6 +118,16 @@ export const otgNetworkApi = {
   interfaces: () => request<NetworkInterfaceInfo[]>('/devices/network'),
 }
 
+export const uacApi = {
+  get: () => request<{enabled: boolean; sample_rate: number; channels: number}>('/config/uac'),
+
+  update: (config: {enabled: boolean; sample_rate: number; channels: number}) =>
+    request('/config/uac', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+}
+
 export const otgConfigApi = {
   update: (config: OtgConfigUpdate) =>
     request<OtgConfigResponse>('/config/otg', {

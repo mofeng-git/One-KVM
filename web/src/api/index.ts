@@ -855,6 +855,7 @@ export {
   msdConfigApi,
   otgConfigApi,
   otgNetworkApi,
+  uacApi,
   atxConfigApi,
   audioConfigApi,
   extensionsApi,

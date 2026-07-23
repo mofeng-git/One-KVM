@@ -76,17 +76,18 @@ async fn reconcile_otg_config(
     hid: &HidConfig,
     msd: &MsdConfig,
     network: &OtgNetworkConfig,
+    uac: &crate::otg::service::UacConfig,
 ) -> Result<()> {
     #[cfg(not(unix))]
     {
-        let _ = (state, hid, msd, network);
+        let _ = (state, hid, msd, network, uac);
         Ok(())
     }
     #[cfg(unix)]
     {
         state
             .otg_service
-            .apply_config(hid, msd, network)
+            .apply_config(hid, msd, network, uac)
             .await
             .map_err(|e| AppError::Config(format!("OTG reconcile failed: {}", e)))
     }
@@ -236,7 +237,7 @@ pub async fn apply_hid_config(
     }
 
     if otg_config_changed {
-        reconcile_otg_config(state, new_config, msd_config, network_config).await?;
+        reconcile_otg_config(state, new_config, msd_config, network_config, &state.config.get().uac).await?;
     }
 
     if !transitioning_away_from_otg {
@@ -304,7 +305,7 @@ pub async fn apply_msd_config(
     if new_msd_enabled {
         tracing::info!("(Re)initializing MSD...");
 
-        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config, &state.config.get().uac).await?;
 
         let mut msd_guard = state.msd.write().await;
         if let Some(msd) = msd_guard.as_mut() {
@@ -339,7 +340,7 @@ pub async fn apply_msd_config(
         *msd_guard = None;
         tracing::info!("MSD shutdown complete");
 
-        reconcile_otg_config(state, hid_config, new_config, network_config).await?;
+        reconcile_otg_config(state, hid_config, new_config, network_config, &state.config.get().uac).await?;
     }
 
     if hid_config.backend == HidBackend::Otg
@@ -367,7 +368,9 @@ pub async fn apply_usb_config(
 
         let hid_unchanged = old_config.hid == new_config.hid;
         let otg_gadget_rebuilt =
-            old_config.msd != new_config.msd || old_config.otg_network != new_config.otg_network;
+            old_config.msd != new_config.msd
+                || old_config.otg_network != new_config.otg_network
+                || old_config.uac != new_config.uac;
 
         if transitioning_away_from_otg {
             apply_hid_config(
@@ -385,6 +388,7 @@ pub async fn apply_usb_config(
                 &new_config.hid,
                 &new_config.msd,
                 &new_config.otg_network,
+                &new_config.uac,
             )
             .await?;
             apply_hid_config(
@@ -409,6 +413,32 @@ pub async fn apply_usb_config(
                 .reload(hid_backend)
                 .await
                 .map_err(|e| AppError::Config(format!("HID reload after gadget rebuild failed: {}", e)))?;
+        }
+
+        // UAC playback writer lifecycle
+        if old_config.uac.enabled != new_config.uac.enabled {
+            let mut guard = state.uac_playback.write().await;
+            if new_config.uac.enabled {
+                let config = crate::audio::uac_streamer::UacPlaybackConfig {
+                    sample_rate: new_config.uac.sample_rate,
+                    channels: new_config.uac.channels as u16,
+                    ..Default::default()
+                };
+                match crate::audio::uac_streamer::UacPlaybackWriter::start(config) {
+                    Ok(writer) => {
+                        tracing::info!("UAC playback writer started");
+                        *guard = Some(writer);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start UAC playback writer: {}", e);
+                    }
+                }
+            } else {
+                if let Some(writer) = guard.take() {
+                    writer.stop();
+                    tracing::info!("UAC playback writer stopped");
+                }
+            }
         }
 
         apply_msd_config(
