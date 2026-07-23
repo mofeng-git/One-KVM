@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use crate::error::{AppError, Result};
 
 /// Kill aplay after this much idle time (no incoming audio frames).
-const IDLE_CLOSE_TIMEOUT_MS: u64 = 2000;
+const IDLE_CLOSE_TIMEOUT_MS: u64 = 5000;
 
 /// Configuration for the UAC playback stream.
 #[derive(Debug, Clone)]
@@ -82,10 +82,12 @@ impl UacPlaybackWriter {
             .arg("-f").arg("S16_LE")
             .arg("-r").arg(rate.to_string())
             .arg("-c").arg(ch.to_string())
+            .arg("--buffer-size=32768")       // ~680ms buffer, tolerant to jitter
+            .arg("--period-size=1024")
             .arg("-")                         // stdin
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::inherit());        // → journalctl
+            .stderr(Stdio::null());           // suppress underrun noise
 
         match cmd.spawn() {
             Ok(mut child) => {
@@ -115,6 +117,7 @@ impl UacPlaybackWriter {
         let idle_timeout = Duration::from_millis(IDLE_CLOSE_TIMEOUT_MS);
         let mut aplay: Option<(Child, Box<dyn Write + Send>)> = None;
         let mut last_write = std::time::Instant::now();
+        let mut was_idle = false;
         let mut frame_count: u64 = 0;
         let mut byte_count: u64 = 0;
 
@@ -150,6 +153,14 @@ impl UacPlaybackWriter {
             match frame {
                 Some(f) => {
                     last_write = std::time::Instant::now();
+
+                    // If resuming after idle, force a fresh aplay
+                    if was_idle {
+                        if let Some((c, s)) = aplay.take() {
+                            Self::kill_aplay(c, s);
+                        }
+                        was_idle = false;
+                    }
 
                     // Ensure aplay is alive
                     if aplay.is_none() {
@@ -195,6 +206,7 @@ impl UacPlaybackWriter {
                     if let Some((c, s)) = aplay.take() {
                         Self::kill_aplay(c, s);
                     }
+                    was_idle = true;
                     if *stop_rx.borrow() {
                         break;
                     }
