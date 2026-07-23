@@ -15,6 +15,8 @@ mod redfish;
 mod rtsp;
 mod rustdesk;
 mod stream;
+#[cfg(unix)]
+mod uac;
 mod usb_update;
 pub(crate) mod video;
 mod vnc;
@@ -40,6 +42,8 @@ pub use rustdesk::{
     regenerate_device_password, start_rustdesk_service, stop_rustdesk_service,
     update_rustdesk_config,
 };
+#[cfg(unix)]
+pub use uac::{get_uac_config, update_uac_config};
 pub use stream::{get_stream_config, update_stream_config};
 pub use video::{get_video_config, update_video_config};
 pub use vnc::{

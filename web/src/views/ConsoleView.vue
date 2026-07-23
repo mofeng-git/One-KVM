@@ -14,7 +14,7 @@ import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composabl
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
-import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi } from '@/api'
+import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi, uacApi } from '@/api'
 import type { ComputerUseScreenshot, ComputerUseSession } from '@/api'
 import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
@@ -2961,7 +2961,15 @@ function handleToggleMouseMode() {
   }
 }
 
+const uacEnabled = ref(false)
+
 onMounted(async () => {
+  // Check if UAC is enabled (show mic button only if USB mic is available)
+  try {
+    const uacCfg = await uacApi.get()
+    uacEnabled.value = uacCfg.enabled
+  } catch { /* ignore */ }
+
   consoleEvents.subscribe()
 
   watch([wsConnected, wsNetworkError], ([connected, netError], [_prevConnected, prevNetError]) => {
@@ -3166,6 +3174,7 @@ onUnmounted(() => {
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
       :show-paste-text="showPasteText"
+      :show-mic="uacEnabled"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="openStatsSheet"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"

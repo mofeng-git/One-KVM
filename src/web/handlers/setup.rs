@@ -147,7 +147,7 @@ pub async fn setup_init(
     {
         if let Err(e) = state
             .otg_service
-            .apply_config(&new_config.hid, &new_config.msd, &new_config.otg_network)
+            .apply_config(&new_config.hid, &new_config.msd, &new_config.otg_network, &crate::otg::service::UacConfig::default())
             .await
         {
             tracing::warn!("Failed to apply OTG config during setup: {}", e);

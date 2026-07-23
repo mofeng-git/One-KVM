@@ -18,6 +18,8 @@ pub mod report_desc;
 pub mod self_check;
 #[cfg(unix)]
 pub mod service;
+#[cfg(unix)]
+pub mod uac;
 
 #[cfg(unix)]
 pub use manager::{wait_for_hid_devices, OtgGadgetManager};
@@ -26,7 +28,9 @@ pub use msd::{MsdFunction, MsdLunConfig};
 #[cfg(unix)]
 pub use network::NetworkFunction;
 #[cfg(unix)]
-pub use service::{HidDevicePaths, OtgNetworkStatus, OtgRuntimeHealth, OtgService};
+pub use service::{HidDevicePaths, OtgNetworkStatus, OtgRuntimeHealth, OtgService, UacConfig};
+#[cfg(unix)]
+pub use uac::UacFunction;
 
 /// List USB Device Controller names exposed by sysfs.
 pub fn list_udc_devices() -> Vec<String> {

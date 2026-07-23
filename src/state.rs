@@ -77,6 +77,8 @@ pub struct AppState {
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
     pub audio: Arc<AudioController>,
+    pub uac_playback: Arc<RwLock<Option<crate::audio::uac_streamer::UacPlaybackWriter>>>,
+    pub uac_config: Arc<RwLock<crate::otg::service::UacConfig>>,
     pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
     pub vnc: Arc<RwLock<Option<Arc<VncService>>>>,
     pub rtsp: Arc<RwLock<Option<Arc<RtspService>>>>,
@@ -146,6 +148,8 @@ impl AppState {
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
             config_apply_locks: ConfigApplyLocks::new(),
             data_dir,
+            uac_playback: Arc::new(RwLock::new(None)),
+            uac_config: Arc::new(RwLock::new(crate::otg::service::UacConfig::default())),
         })
     }
 

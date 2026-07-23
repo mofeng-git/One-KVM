@@ -44,6 +44,7 @@ pub struct AppConfig {
     pub rtsp: RtspConfig,
     pub redfish: RedfishConfig,
     pub watchdog: WatchdogConfig,
+    pub uac: crate::otg::service::UacConfig,
 }
 
 impl AppConfig {
@@ -51,6 +52,7 @@ impl AppConfig {
         if self.hid.backend != HidBackend::Otg {
             self.msd.enabled = false;
             self.otg_network.enabled = false;
+            self.uac.enabled = false;
         }
         self.atx.normalize();
     }
