@@ -1,9 +1,10 @@
 //! CSI/HDMI bridge helpers: subdev discovery, DV probe, RK628 "fake VGA" filter (must run before `S_FMT` / `STREAMON` on capture — see RK628 driver).
 
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, FromRawFd};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
@@ -97,43 +98,322 @@ impl std::fmt::Debug for DvTimingsMode {
     }
 }
 
-/// Heuristic: scan `/sys/class/video4linux/v4l-subdev*` names for rk628 / hdmirx / tc358743.
-pub fn discover_subdev_for_video(video_path: &Path) -> Option<(PathBuf, CsiBridgeKind)> {
-    let sysfs_base = Path::new("/sys/class/video4linux");
-    let entries = std::fs::read_dir(sysfs_base).ok()?;
+const SYSFS_VIDEO4LINUX: &str = "/sys/class/video4linux";
+const DEV_ROOT: &str = "/dev";
+const MEDIA_ENT_ID_FLAG_NEXT: u32 = 1 << 31;
+const MEDIA_LNK_FL_ENABLED: u32 = 1 << 0;
+const MEDIA_LNK_FL_LINK_TYPE: u32 = 0xf << 28;
+const MEDIA_LNK_FL_DATA_LINK: u32 = 0 << 28;
 
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        if !name_str.starts_with("v4l-subdev") {
-            continue;
-        }
-        let Some(kind) = read_sysfs_name(&entry.path())
-            .as_deref()
-            .and_then(CsiBridgeKind::from_subdev_name)
-        else {
-            continue;
-        };
-        let dev_path = PathBuf::from("/dev").join(&*name_str);
-        if dev_path.exists() {
-            info!(
-                "Discovered CSI bridge subdev for {:?}: {:?} ({:?})",
-                video_path, dev_path, kind
-            );
-            return Some((dev_path, kind));
-        }
-    }
-    debug!(
-        "No CSI bridge subdev found in /sys/class/video4linux for {:?}",
-        video_path
-    );
-    None
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MediaEntityDesc {
+    id: u32,
+    name: [u8; 32],
+    type_: u32,
+    revision: u32,
+    flags: u32,
+    group_id: u32,
+    pads: u16,
+    links: u16,
+    reserved: [u32; 4],
+    raw: [u8; 184],
 }
 
-fn read_sysfs_name(subdev_sysfs: &Path) -> Option<String> {
-    std::fs::read_to_string(subdev_sysfs.join("name"))
-        .ok()
-        .map(|s| s.trim().to_string())
+impl Default for MediaEntityDesc {
+    fn default() -> Self {
+        // This mirrors the zero-initialization required by the media UAPI.
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct MediaPadDesc {
+    entity: u32,
+    index: u16,
+    flags: u32,
+    reserved: [u32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct MediaLinkDesc {
+    source: MediaPadDesc,
+    sink: MediaPadDesc,
+    flags: u32,
+    reserved: [u32; 2],
+}
+
+#[repr(C)]
+struct MediaLinksEnum {
+    entity: u32,
+    pads: *mut MediaPadDesc,
+    links: *mut MediaLinkDesc,
+    reserved: [u32; 4],
+}
+
+nix::ioctl_readwrite!(media_ioc_enum_entities, b'|', 0x01, MediaEntityDesc);
+nix::ioctl_readwrite!(media_ioc_enum_links, b'|', 0x02, MediaLinksEnum);
+
+#[derive(Debug, Clone)]
+struct MediaGraphEntity {
+    id: u32,
+    name: String,
+    major: u32,
+    minor: u32,
+    pads: u16,
+    links: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MediaGraphLink {
+    source: u32,
+    sink: u32,
+}
+
+/// Find the CSI/HDMI bridge that is connected to `video_path` in the same
+/// media-controller graph. Name-only global scans are deliberately avoided:
+/// boards can expose RK628, native HDMI RX and USB capture at the same time.
+pub fn discover_subdev_for_video(video_path: &Path) -> Option<(PathBuf, CsiBridgeKind)> {
+    match discover_subdev_for_video_inner(video_path) {
+        Ok(Some((path, kind, media_path))) => {
+            info!(
+                "Discovered CSI bridge subdev for {:?}: {:?} ({:?}) via {:?}",
+                video_path, path, kind, media_path
+            );
+            Some((path, kind))
+        }
+        Ok(None) => {
+            debug!(
+                "No connected CSI bridge subdev found in media topology for {:?}",
+                video_path
+            );
+            None
+        }
+        Err(error) => {
+            warn!(
+                "Failed to inspect media topology for {:?}: {}",
+                video_path, error
+            );
+            None
+        }
+    }
+}
+
+fn discover_subdev_for_video_inner(
+    video_path: &Path,
+) -> io::Result<Option<(PathBuf, CsiBridgeKind, PathBuf)>> {
+    let video_device = device_numbers(video_path)?;
+    let Some(media_path) = media_device_for_video(video_device)? else {
+        return Ok(None);
+    };
+
+    let media = File::open(&media_path)?;
+    let (entities, links) = read_media_graph(&media)?;
+    let Some((entity, kind)) = connected_bridge_entity(&entities, &links, video_device) else {
+        return Ok(None);
+    };
+    let Some(subdev_path) = video4linux_devnode((entity.major, entity.minor))? else {
+        return Ok(None);
+    };
+
+    if !subdev_path
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with("v4l-subdev"))
+    {
+        return Ok(None);
+    }
+
+    Ok(Some((subdev_path, kind, media_path)))
+}
+
+fn device_numbers(path: &Path) -> io::Result<(u32, u32)> {
+    let rdev = std::fs::metadata(path)?.rdev();
+    let major = nix::sys::stat::major(rdev);
+    let minor = nix::sys::stat::minor(rdev);
+    Ok((major as u32, minor as u32))
+}
+
+fn parse_device_numbers(value: &str) -> Option<(u32, u32)> {
+    let (major, minor) = value.trim().split_once(':')?;
+    Some((major.parse().ok()?, minor.parse().ok()?))
+}
+
+fn video4linux_class_entry(device: (u32, u32)) -> io::Result<Option<PathBuf>> {
+    for entry in std::fs::read_dir(SYSFS_VIDEO4LINUX)? {
+        let entry = entry?;
+        let dev = match std::fs::read_to_string(entry.path().join("dev")) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if parse_device_numbers(&dev) == Some(device) {
+            return Ok(Some(entry.path()));
+        }
+    }
+    Ok(None)
+}
+
+fn video4linux_devnode(device: (u32, u32)) -> io::Result<Option<PathBuf>> {
+    let Some(class_entry) = video4linux_class_entry(device)? else {
+        return Ok(None);
+    };
+    let Some(name) = class_entry.file_name() else {
+        return Ok(None);
+    };
+    let path = Path::new(DEV_ROOT).join(name);
+    Ok(path.exists().then_some(path))
+}
+
+fn media_device_for_video(video_device: (u32, u32)) -> io::Result<Option<PathBuf>> {
+    let Some(class_entry) = video4linux_class_entry(video_device)? else {
+        return Ok(None);
+    };
+    let mut media_nodes = std::fs::read_dir(class_entry.join("device"))?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            name.to_string_lossy().starts_with("media").then_some(name)
+        })
+        .collect::<Vec<_>>();
+    media_nodes.sort();
+
+    for name in media_nodes {
+        let path = Path::new(DEV_ROOT).join(name);
+        if path.exists() {
+            return Ok(Some(path));
+        }
+    }
+    Ok(None)
+}
+
+fn read_media_graph(media: &File) -> io::Result<(Vec<MediaGraphEntity>, Vec<MediaGraphLink>)> {
+    let mut entities = Vec::new();
+    let mut previous_id = 0u32;
+
+    loop {
+        let mut desc = MediaEntityDesc {
+            id: previous_id | MEDIA_ENT_ID_FLAG_NEXT,
+            ..Default::default()
+        };
+        // SAFETY: `desc` has the exact media_entity_desc UAPI layout and is
+        // writable for the duration of the ioctl.
+        match unsafe { media_ioc_enum_entities(media.as_raw_fd(), &mut desc) } {
+            Ok(_) => {}
+            Err(Errno::EINVAL) => break,
+            Err(error) => return Err(io::Error::from_raw_os_error(error as i32)),
+        }
+        if desc.id == previous_id || entities.len() >= 4096 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "media entity enumeration did not advance",
+            ));
+        }
+        previous_id = desc.id;
+
+        let nul = desc
+            .name
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(desc.name.len());
+        let name = String::from_utf8_lossy(&desc.name[..nul]).into_owned();
+        let major = u32::from_ne_bytes(desc.raw[0..4].try_into().expect("fixed media dev field"));
+        let minor = u32::from_ne_bytes(desc.raw[4..8].try_into().expect("fixed media dev field"));
+        entities.push(MediaGraphEntity {
+            id: desc.id,
+            name,
+            major,
+            minor,
+            pads: desc.pads,
+            links: desc.links,
+        });
+    }
+
+    let mut graph_links = HashSet::new();
+    for entity in &entities {
+        let mut pads = vec![MediaPadDesc::default(); entity.pads as usize];
+        let mut links = vec![MediaLinkDesc::default(); entity.links as usize];
+        let mut request = MediaLinksEnum {
+            entity: entity.id,
+            pads: if pads.is_empty() {
+                std::ptr::null_mut()
+            } else {
+                pads.as_mut_ptr()
+            },
+            links: if links.is_empty() {
+                std::ptr::null_mut()
+            } else {
+                links.as_mut_ptr()
+            },
+            reserved: [0; 4],
+        };
+        // SAFETY: the vectors provide the number of entries reported by the
+        // entity descriptor and remain alive while the kernel fills them.
+        unsafe { media_ioc_enum_links(media.as_raw_fd(), &mut request) }
+            .map_err(|error| io::Error::from_raw_os_error(error as i32))?;
+
+        for link in links {
+            if link.flags & MEDIA_LNK_FL_ENABLED == 0
+                || link.flags & MEDIA_LNK_FL_LINK_TYPE != MEDIA_LNK_FL_DATA_LINK
+            {
+                continue;
+            }
+            graph_links.insert((link.source.entity, link.sink.entity));
+        }
+    }
+
+    let mut links = graph_links
+        .into_iter()
+        .map(|(source, sink)| MediaGraphLink { source, sink })
+        .collect::<Vec<_>>();
+    links.sort_by_key(|link| (link.source, link.sink));
+    Ok((entities, links))
+}
+
+fn connected_bridge_entity<'a>(
+    entities: &'a [MediaGraphEntity],
+    links: &[MediaGraphLink],
+    video_device: (u32, u32),
+) -> Option<(&'a MediaGraphEntity, CsiBridgeKind)> {
+    let start = entities
+        .iter()
+        .find(|entity| (entity.major, entity.minor) == video_device)?;
+    let by_id = entities
+        .iter()
+        .map(|entity| (entity.id, entity))
+        .collect::<HashMap<_, _>>();
+    let mut adjacency = HashMap::<u32, Vec<u32>>::new();
+    for link in links {
+        adjacency.entry(link.source).or_default().push(link.sink);
+        adjacency.entry(link.sink).or_default().push(link.source);
+    }
+    for neighbors in adjacency.values_mut() {
+        neighbors.sort_unstable();
+        neighbors.dedup();
+    }
+
+    let mut visited = HashSet::from([start.id]);
+    let mut queue = VecDeque::from([start.id]);
+    while let Some(id) = queue.pop_front() {
+        if id != start.id {
+            if let Some(entity) = by_id.get(&id) {
+                if entity.major != 0 || entity.minor != 0 {
+                    if let Some(kind) = CsiBridgeKind::from_subdev_name(&entity.name) {
+                        return Some((entity, kind));
+                    }
+                }
+            }
+        }
+
+        if let Some(neighbors) = adjacency.get(&id) {
+            for neighbor in neighbors {
+                if visited.insert(*neighbor) {
+                    queue.push_back(*neighbor);
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn open_subdev(path: &Path) -> io::Result<File> {
@@ -339,6 +619,21 @@ pub fn wait_source_change(subdev_fd: &File, timeout: Duration) -> io::Result<boo
 mod tests {
     use super::*;
 
+    fn graph_entity(id: u32, name: &str, device: (u32, u32)) -> MediaGraphEntity {
+        MediaGraphEntity {
+            id,
+            name: name.to_string(),
+            major: device.0,
+            minor: device.1,
+            pads: 0,
+            links: 0,
+        }
+    }
+
+    fn graph_link(source: u32, sink: u32) -> MediaGraphLink {
+        MediaGraphLink { source, sink }
+    }
+
     #[test]
     fn subdevice_handles_are_non_blocking() {
         let file = tempfile::NamedTempFile::new().unwrap();
@@ -346,6 +641,47 @@ mod tests {
         let flags = unsafe { libc::fcntl(opened.as_raw_fd(), libc::F_GETFL) };
         assert!(flags >= 0);
         assert_ne!(flags & libc::O_NONBLOCK, 0);
+    }
+
+    #[test]
+    fn media_graph_finds_only_the_connected_rk628() {
+        // Captured shape of the RK3588 RKCIF graph:
+        // video0 <- mipi-csi2 <- dphy <- RK628.  A second RK628 entity is
+        // present in the same synthetic topology but is not connected.
+        let entities = vec![
+            graph_entity(1, "stream_cif_mipi_id0", (81, 0)),
+            graph_entity(45, "rockchip-mipi-csi2", (0, 0)),
+            graph_entity(58, "rockchip-csi2-dphy0", (0, 0)),
+            graph_entity(63, "m00_b_rk628-csi 3-0050", (81, 16)),
+            graph_entity(90, "other-rk628-csi 7-0050", (81, 19)),
+        ];
+        let links = vec![graph_link(63, 58), graph_link(58, 45), graph_link(45, 1)];
+
+        let (entity, kind) = connected_bridge_entity(&entities, &links, (81, 0)).unwrap();
+        assert_eq!(entity.id, 63);
+        assert_eq!(kind, CsiBridgeKind::Rk628);
+    }
+
+    #[test]
+    fn media_graph_does_not_attach_an_unrelated_rk628_to_native_hdmirx() {
+        let entities = vec![
+            graph_entity(1, "rk_hdmirx", (81, 11)),
+            graph_entity(63, "m00_b_rk628-csi 3-0050", (81, 16)),
+        ];
+
+        assert!(connected_bridge_entity(&entities, &[], (81, 11)).is_none());
+    }
+
+    #[test]
+    fn media_graph_leaves_usb_capture_without_a_csi_bridge() {
+        let entities = vec![
+            graph_entity(1, "USB Video: USB Video", (81, 12)),
+            graph_entity(8, "Processing 2", (0, 0)),
+            graph_entity(11, "Input 1", (0, 0)),
+        ];
+        let links = vec![graph_link(11, 8), graph_link(8, 1)];
+
+        assert!(connected_bridge_entity(&entities, &links, (81, 12)).is_none());
     }
 
     #[test]
