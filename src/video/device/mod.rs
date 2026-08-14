@@ -125,6 +125,12 @@ pub fn resolve_video_input_config(
     requested_resolution: Resolution,
     requested_fps: u32,
 ) -> ResolvedVideoInputConfig {
+    let mut resolved = ResolvedVideoInputConfig {
+        format: requested_format,
+        resolution: requested_resolution,
+        fps: requested_fps,
+    };
+
     if device.control_mode == VideoControlMode::SourceFollowing {
         if let VideoInputStatus {
             state: VideoInputState::Locked,
@@ -135,25 +141,38 @@ pub fn resolve_video_input_config(
         } = &device.input_status
         {
             if let Ok(format) = format.parse::<PixelFormat>() {
-                return ResolvedVideoInputConfig {
+                resolved = ResolvedVideoInputConfig {
                     format,
                     resolution: Resolution::new(*width, *height),
                     fps: fps.round().clamp(1.0, 120.0) as u32,
                 };
             }
         }
+
+        // Source-following devices do not allow One-KVM to choose the HDMI
+        // resolution or frame rate, but their pixel format still has to be one
+        // of the formats enumerated by the capture node.  In particular, rkcif
+        // commonly exposes NV12 but One-KVM's default is MJPEG.  Passing that
+        // unsupported default to S_FMT leaves the pipeline in an invalid state.
+        if !device.formats.is_empty()
+            && !device
+                .formats
+                .iter()
+                .any(|format| format.format == resolved.format)
+        {
+            resolved.format = device.formats[0].format;
+        }
     }
 
-    ResolvedVideoInputConfig {
-        format: requested_format,
-        resolution: requested_resolution,
-        fps: requested_fps,
-    }
+    resolved
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    use super::linux::FormatInfo;
 
     #[cfg(unix)]
     fn device(control_mode: VideoControlMode, input_status: VideoInputStatus) -> VideoDeviceInfo {
@@ -172,6 +191,15 @@ mod tests {
             input_status,
             subdev_path: None,
             bridge_kind: None,
+        }
+    }
+
+    #[cfg(unix)]
+    fn format(format: PixelFormat) -> FormatInfo {
+        FormatInfo {
+            format,
+            resolutions: Vec::new(),
+            description: format.to_string(),
         }
     }
 
@@ -244,6 +272,48 @@ mod tests {
             assert_eq!(resolved.resolution, Resolution::new(1280, 720));
             assert_eq!(resolved.fps, 30);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn source_following_replaces_unenumerated_default_format_without_signal() {
+        let mut device = device(
+            VideoControlMode::SourceFollowing,
+            VideoInputStatus::no_signal(),
+        );
+        device.formats = vec![format(PixelFormat::Nv12), format(PixelFormat::Yuyv)];
+
+        let resolved = resolve_video_input_config(
+            &device,
+            PixelFormat::Mjpeg,
+            Resolution::new(1920, 1080),
+            30,
+        );
+
+        assert_eq!(resolved.format, PixelFormat::Nv12);
+        assert_eq!(resolved.resolution, Resolution::new(1920, 1080));
+        assert_eq!(resolved.fps, 30);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn source_following_replaces_stale_active_format_but_keeps_input_mode() {
+        let mut device = device(
+            VideoControlMode::SourceFollowing,
+            VideoInputStatus::locked(PixelFormat::Mjpeg, 1280, 720, 59.94),
+        );
+        device.formats = vec![format(PixelFormat::Nv12), format(PixelFormat::Yuyv)];
+
+        let resolved = resolve_video_input_config(
+            &device,
+            PixelFormat::Mjpeg,
+            Resolution::new(1920, 1080),
+            30,
+        );
+
+        assert_eq!(resolved.format, PixelFormat::Nv12);
+        assert_eq!(resolved.resolution, Resolution::new(1280, 720));
+        assert_eq!(resolved.fps, 60);
     }
 
     #[test]
