@@ -117,7 +117,21 @@ struct MediaEntityDesc {
     pads: u16,
     links: u16,
     reserved: [u32; 4],
-    raw: [u8; 184],
+    info: MediaEntityInfo,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MediaDeviceNode {
+    major: u32,
+    minor: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+union MediaEntityInfo {
+    dev: MediaDeviceNode,
+    _raw: [u8; 184],
 }
 
 impl Default for MediaEntityDesc {
@@ -172,6 +186,13 @@ struct MediaGraphLink {
     sink: u32,
 }
 
+#[derive(Debug)]
+struct MediaGraph {
+    path: PathBuf,
+    entities: Vec<MediaGraphEntity>,
+    links: Vec<MediaGraphLink>,
+}
+
 /// Find the CSI/HDMI bridge that is connected to `video_path` in the same
 /// media-controller graph. Name-only global scans are deliberately avoided:
 /// boards can expose RK628, native HDMI RX and USB capture at the same time.
@@ -205,13 +226,45 @@ fn discover_subdev_for_video_inner(
     video_path: &Path,
 ) -> io::Result<Option<(PathBuf, CsiBridgeKind, PathBuf)>> {
     let video_device = device_numbers(video_path)?;
-    let Some(media_path) = media_device_for_video(video_device)? else {
-        return Ok(None);
-    };
+    let mut graphs = Vec::new();
+    let mut first_error = None;
 
-    let media = File::open(&media_path)?;
-    let (entities, links) = read_media_graph(&media)?;
-    let Some((entity, kind)) = connected_bridge_entity(&entities, &links, video_device) else {
+    // A physical device may expose more than one media controller.  Inspect
+    // every controller and use the graph that actually contains video_path;
+    // choosing the first mediaN node merely moves the old global-scan bug.
+    for media_path in media_device_paths()? {
+        let graph = File::open(&media_path).and_then(|media| {
+            read_media_graph(&media).map(|(entities, links)| MediaGraph {
+                path: media_path.clone(),
+                entities,
+                links,
+            })
+        });
+        match graph {
+            Ok(graph) => graphs.push(graph),
+            Err(error) => {
+                debug!(
+                    "Failed to inspect media controller {:?}: {}",
+                    media_path, error
+                );
+                first_error.get_or_insert(error);
+            }
+        }
+    }
+
+    let graph_contains_video = graphs.iter().any(|graph| {
+        graph
+            .entities
+            .iter()
+            .any(|entity| (entity.major, entity.minor) == video_device)
+    });
+    let Some((media_path, entity, kind)) = connected_bridge_in_media_graphs(&graphs, video_device)
+    else {
+        if !graph_contains_video {
+            if let Some(error) = first_error {
+                return Err(error);
+            }
+        }
         return Ok(None);
     };
     let Some(subdev_path) = video4linux_devnode((entity.major, entity.minor))? else {
@@ -225,7 +278,7 @@ fn discover_subdev_for_video_inner(
         return Ok(None);
     }
 
-    Ok(Some((subdev_path, kind, media_path)))
+    Ok(Some((subdev_path, kind, media_path.to_path_buf())))
 }
 
 fn device_numbers(path: &Path) -> io::Result<(u32, u32)> {
@@ -265,26 +318,30 @@ fn video4linux_devnode(device: (u32, u32)) -> io::Result<Option<PathBuf>> {
     Ok(path.exists().then_some(path))
 }
 
-fn media_device_for_video(video_device: (u32, u32)) -> io::Result<Option<PathBuf>> {
-    let Some(class_entry) = video4linux_class_entry(video_device)? else {
-        return Ok(None);
-    };
-    let mut media_nodes = std::fs::read_dir(class_entry.join("device"))?
+fn media_device_paths() -> io::Result<Vec<PathBuf>> {
+    let mut media_nodes = std::fs::read_dir(DEV_ROOT)?
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let name = entry.file_name();
-            name.to_string_lossy().starts_with("media").then_some(name)
+            let name = name.to_str()?;
+            let index = media_device_index(name)?;
+            Some((index, entry.path()))
         })
         .collect::<Vec<_>>();
-    media_nodes.sort();
+    media_nodes.sort_by(|(left_index, left_path), (right_index, right_path)| {
+        left_index
+            .cmp(right_index)
+            .then_with(|| left_path.cmp(right_path))
+    });
+    Ok(media_nodes.into_iter().map(|(_, path)| path).collect())
+}
 
-    for name in media_nodes {
-        let path = Path::new(DEV_ROOT).join(name);
-        if path.exists() {
-            return Ok(Some(path));
-        }
+fn media_device_index(name: &str) -> Option<u32> {
+    let suffix = name.strip_prefix("media")?;
+    if suffix.is_empty() || !suffix.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
     }
-    Ok(None)
+    suffix.parse().ok()
 }
 
 fn read_media_graph(media: &File) -> io::Result<(Vec<MediaGraphEntity>, Vec<MediaGraphLink>)> {
@@ -317,13 +374,14 @@ fn read_media_graph(media: &File) -> io::Result<(Vec<MediaGraphEntity>, Vec<Medi
             .position(|byte| *byte == 0)
             .unwrap_or(desc.name.len());
         let name = String::from_utf8_lossy(&desc.name[..nul]).into_owned();
-        let major = u32::from_ne_bytes(desc.raw[0..4].try_into().expect("fixed media dev field"));
-        let minor = u32::from_ne_bytes(desc.raw[4..8].try_into().expect("fixed media dev field"));
+        // SAFETY: the kernel filled the `dev` member of the media UAPI union
+        // for V4L2 devnode entities.  Non-devnode entities report zeroes.
+        let device = unsafe { desc.info.dev };
         entities.push(MediaGraphEntity {
             id: desc.id,
             name,
-            major,
-            minor,
+            major: device.major,
+            minor: device.minor,
             pads: desc.pads,
             links: desc.links,
         });
@@ -382,12 +440,13 @@ fn connected_bridge_entity<'a>(
         .iter()
         .map(|entity| (entity.id, entity))
         .collect::<HashMap<_, _>>();
-    let mut adjacency = HashMap::<u32, Vec<u32>>::new();
+    let mut upstream = HashMap::<u32, Vec<u32>>::new();
     for link in links {
-        adjacency.entry(link.source).or_default().push(link.sink);
-        adjacency.entry(link.sink).or_default().push(link.source);
+        // Media data flows source -> sink.  Starting at a capture video node,
+        // only sink -> source traversal can lead to its real input bridge.
+        upstream.entry(link.sink).or_default().push(link.source);
     }
-    for neighbors in adjacency.values_mut() {
+    for neighbors in upstream.values_mut() {
         neighbors.sort_unstable();
         neighbors.dedup();
     }
@@ -405,7 +464,7 @@ fn connected_bridge_entity<'a>(
             }
         }
 
-        if let Some(neighbors) = adjacency.get(&id) {
+        if let Some(neighbors) = upstream.get(&id) {
             for neighbor in neighbors {
                 if visited.insert(*neighbor) {
                     queue.push_back(*neighbor);
@@ -414,6 +473,16 @@ fn connected_bridge_entity<'a>(
         }
     }
     None
+}
+
+fn connected_bridge_in_media_graphs(
+    graphs: &[MediaGraph],
+    video_device: (u32, u32),
+) -> Option<(&Path, &MediaGraphEntity, CsiBridgeKind)> {
+    graphs.iter().find_map(|graph| {
+        connected_bridge_entity(&graph.entities, &graph.links, video_device)
+            .map(|(entity, kind)| (graph.path.as_path(), entity, kind))
+    })
 }
 
 pub fn open_subdev(path: &Path) -> io::Result<File> {
@@ -619,6 +688,18 @@ pub fn wait_source_change(subdev_fd: &File, timeout: Duration) -> io::Result<boo
 mod tests {
     use super::*;
 
+    fn media_graph(
+        path: &str,
+        entities: Vec<MediaGraphEntity>,
+        links: Vec<MediaGraphLink>,
+    ) -> MediaGraph {
+        MediaGraph {
+            path: PathBuf::from(path),
+            entities,
+            links,
+        }
+    }
+
     fn graph_entity(id: u32, name: &str, device: (u32, u32)) -> MediaGraphEntity {
         MediaGraphEntity {
             id,
@@ -632,6 +713,26 @@ mod tests {
 
     fn graph_link(source: u32, sink: u32) -> MediaGraphLink {
         MediaGraphLink { source, sink }
+    }
+
+    #[test]
+    fn media_uapi_layout_matches_linux_legacy_api() {
+        assert_eq!(std::mem::size_of::<MediaEntityDesc>(), 256);
+        assert_eq!(std::mem::size_of::<MediaPadDesc>(), 20);
+        assert_eq!(std::mem::size_of::<MediaLinkDesc>(), 52);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(std::mem::size_of::<MediaLinksEnum>(), 40);
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(std::mem::size_of::<MediaLinksEnum>(), 28);
+    }
+
+    #[test]
+    fn media_device_names_require_a_numeric_suffix() {
+        assert_eq!(media_device_index("media0"), Some(0));
+        assert_eq!(media_device_index("media12"), Some(12));
+        assert_eq!(media_device_index("media"), None);
+        assert_eq!(media_device_index("media-controller"), None);
+        assert_eq!(media_device_index("video0"), None);
     }
 
     #[test]
@@ -660,6 +761,47 @@ mod tests {
         let (entity, kind) = connected_bridge_entity(&entities, &links, (81, 0)).unwrap();
         assert_eq!(entity.id, 63);
         assert_eq!(kind, CsiBridgeKind::Rk628);
+    }
+
+    #[test]
+    fn media_graph_search_only_walks_towards_link_sources() {
+        let entities = vec![
+            graph_entity(1, "stream_cif_mipi_id0", (81, 0)),
+            graph_entity(20, "rockchip-mipi-csi2", (0, 0)),
+            graph_entity(63, "unrelated-rk628-csi 7-0050", (81, 19)),
+        ];
+        // Entity 20 is upstream of the capture node.  Entity 63 is downstream
+        // of 20 and must not be reached while tracing the capture input.
+        let links = vec![graph_link(20, 1), graph_link(20, 63)];
+
+        assert!(connected_bridge_entity(&entities, &links, (81, 0)).is_none());
+    }
+
+    #[test]
+    fn media_graphs_select_the_controller_containing_the_video_node() {
+        let graphs = vec![
+            media_graph(
+                "/dev/media0",
+                vec![
+                    graph_entity(1, "other-video", (81, 4)),
+                    graph_entity(63, "wrong-rk628-csi", (81, 16)),
+                ],
+                vec![graph_link(63, 1)],
+            ),
+            media_graph(
+                "/dev/media1",
+                vec![
+                    graph_entity(10, "stream_cif_mipi_id0", (81, 0)),
+                    graph_entity(75, "tc358743 2-000f", (81, 20)),
+                ],
+                vec![graph_link(75, 10)],
+            ),
+        ];
+
+        let (path, entity, kind) = connected_bridge_in_media_graphs(&graphs, (81, 0)).unwrap();
+        assert_eq!(path, Path::new("/dev/media1"));
+        assert_eq!(entity.id, 75);
+        assert_eq!(kind, CsiBridgeKind::Tc358743);
     }
 
     #[test]
