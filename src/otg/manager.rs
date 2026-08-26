@@ -385,36 +385,25 @@ impl OtgGadgetManager {
             return Ok(());
         }
 
-        let entries = std::fs::read_dir(&functions_path).map_err(|e| {
-            AppError::Internal(format!(
-                "Failed to read functions directory {}: {}",
-                functions_path.display(),
-                e
-            ))
-        })?;
-
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = match name.to_str() {
-                Some(n) => n,
-                None => continue,
-            };
-            if !name.contains(".usb") {
-                continue;
-            }
-
+        // Rebuild links in the same order functions were added
+        // (UAC first) so the isochronous endpoint gets a low-numbered
+        // hardware endpoint. `read_dir` returns entries in filesystem
+        // order (e.g. alphabetical), which pushes `uac1.usb0` after
+        // `hid.*` and assigns it a high endpoint number that DWC3
+        // cannot perform isochronous transfers on.
+        for func in &self.functions {
+            let name = func.name();
             let src = functions_path.join(name);
             let dest = self.config_path.join(name);
 
             if dest.exists() {
-                if let Err(e) = remove_file(&dest) {
-                    warn!(
+                remove_file(&dest).map_err(|e| {
+                    AppError::Internal(format!(
                         "Failed to remove existing config link {}: {}",
                         dest.display(),
                         e
-                    );
-                    continue;
-                }
+                    ))
+                })?;
             }
 
             create_symlink(&src, &dest)?;
