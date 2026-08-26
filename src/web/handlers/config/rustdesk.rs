@@ -53,7 +53,9 @@ async fn current_status(
 #[derive(Debug, serde::Serialize)]
 pub struct RustDeskConfigResponse {
     pub enabled: bool,
+    pub mode: crate::rustdesk::config::RustDeskMode,
     pub codec: crate::rustdesk::config::RustDeskCodec,
+    pub direct_access_port: u16,
     pub rendezvous_server: String,
     pub relay_server: Option<String>,
     pub device_id: String,
@@ -66,7 +68,9 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
     fn from(config: &RustDeskConfig) -> Self {
         Self {
             enabled: config.enabled,
+            mode: config.mode,
             codec: config.codec,
+            direct_access_port: config.direct_access_port,
             rendezvous_server: config.rendezvous_server.clone(),
             relay_server: config.relay_server.clone(),
             device_id: config.device_id.clone(),
@@ -117,28 +121,22 @@ pub async fn update_rustdesk_config(
 pub async fn regenerate_device_id(
     State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<RustDeskConfigResponse>> {
-    state
-        .config
-        .update(|config| {
-            config.rustdesk.device_id = RustDeskConfig::generate_device_id();
-        })
-        .await?;
-
-    let new_config = state.config.get().rustdesk.clone();
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let old_config = state.config.get().rustdesk.clone();
+    let mut regenerated = old_config.clone();
+    regenerated.device_id = RustDeskConfig::generate_device_id();
+    let new_config = persist_and_apply(&state, old_config, regenerated).await?;
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
 pub async fn regenerate_device_password(
     State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<RustDeskConfigResponse>> {
-    state
-        .config
-        .update(|config| {
-            config.rustdesk.device_password = RustDeskConfig::generate_password();
-        })
-        .await?;
-
-    let new_config = state.config.get().rustdesk.clone();
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let old_config = state.config.get().rustdesk.clone();
+    let mut regenerated = old_config.clone();
+    regenerated.device_password = RustDeskConfig::generate_password();
+    let new_config = persist_and_apply(&state, old_config, regenerated).await?;
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 

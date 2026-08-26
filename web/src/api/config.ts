@@ -221,7 +221,9 @@ export const extensionsApi = {
 
 export interface RustDeskConfigResponse {
   enabled: boolean
+  mode: 'id' | 'direct_ip'
   codec: 'h264' | 'h265'
+  direct_access_port: number
   rendezvous_server: string
   relay_server: string | null
   device_id: string
@@ -238,7 +240,9 @@ export interface RustDeskStatusResponse {
 
 export interface RustDeskConfigUpdate {
   enabled?: boolean
+  mode?: 'id' | 'direct_ip'
   codec?: 'h264' | 'h265'
+  direct_access_port?: number
   rendezvous_server?: string
   relay_server?: string
   relay_key?: string

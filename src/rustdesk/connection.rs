@@ -100,6 +100,12 @@ pub enum ConnectionState {
     Error(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionMode {
+    Secure,
+    DirectIp,
+}
+
 /// Incoming connection from a RustDesk client
 pub struct Connection {
     /// Connection ID
@@ -113,12 +119,18 @@ pub struct Connection {
     /// Connection state
     state: Arc<RwLock<ConnectionState>>,
     /// Our signing keypair (Ed25519) for signing SignedId messages
-    signing_keypair: SigningKeyPair,
+    signing_keypair: Option<SigningKeyPair>,
     /// Temporary Curve25519 keypair for this connection (used for encryption)
     /// Generated fresh for each connection, public key goes in IdPk.pk
     temp_keypair: (box_::PublicKey, box_::SecretKey),
     /// Device password
     password: String,
+    /// Connection path determines whether the RustDesk signed-ID handshake is used.
+    mode: ConnectionMode,
+    /// Password hashing salt sent to the client.
+    password_salt: String,
+    /// Per-connection challenge prevents replaying a captured password hash.
+    password_challenge: String,
     /// HID controller for keyboard/mouse events
     hid: Option<Arc<HidController>>,
     /// Audio controller for audio streaming
@@ -197,7 +209,8 @@ impl Connection {
     pub fn new(
         id: u32,
         config: &RustDeskConfig,
-        signing_keypair: SigningKeyPair,
+        mode: ConnectionMode,
+        signing_keypair: Option<SigningKeyPair>,
         hid: Option<Arc<HidController>>,
         audio: Option<Arc<AudioController>>,
         video_manager: Option<Arc<VideoStreamManager>>,
@@ -223,6 +236,9 @@ impl Connection {
             signing_keypair,
             temp_keypair,
             password: config.device_password.clone(),
+            mode,
+            password_salt: config.device_id.clone(),
+            password_challenge: uuid::Uuid::new_v4().simple().to_string(),
             hid,
             audio,
             video_manager,
@@ -282,14 +298,27 @@ impl Connection {
         let writer = Arc::new(Mutex::new(writer));
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
-        // Send our SignedId first (this is what RustDesk protocol expects)
-        // The SignedId contains our device ID and temporary public key
-        let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = signed_id_msg
-            .write_to_bytes()
-            .map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
-        debug!("Sending SignedId with device_id={}", self.device_id);
-        self.send_framed_arc(&writer, &signed_id_bytes).await?;
+        match self.mode {
+            ConnectionMode::Secure => {
+                // ID-server and relay connections authenticate our ephemeral key through hbbs.
+                let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
+                let signed_id_bytes = signed_id_msg
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
+                debug!("Sending SignedId with device_id={}", self.device_id);
+                self.send_framed_arc(&writer, &signed_id_bytes).await?;
+            }
+            ConnectionMode::DirectIp => {
+                // Standard RustDesk direct-IP clients do not perform the signed-ID handshake.
+                // They expect password authentication to start immediately.
+                let hash_msg = self.create_hash_message();
+                let hash_bytes = hash_msg
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode Hash: {}", e))?;
+                debug!("Sending password challenge for direct IP connection");
+                self.send_framed_arc(&writer, &hash_bytes).await?;
+            }
+        }
 
         // Channel for receiving video frames to send (bounded to provide backpressure)
         let (video_tx, mut video_rx) = mpsc::channel::<Bytes>(4);
@@ -842,7 +871,11 @@ impl Connection {
 
         // Sign the IdPk bytes with Ed25519
         // RustDesk's sign::sign() prepends the 64-byte signature to the message
-        let signed_id_pk = self.signing_keypair.sign(&id_pk_bytes);
+        let signed_id_pk = self
+            .signing_keypair
+            .as_ref()
+            .expect("secure RustDesk connections require a signing keypair")
+            .sign(&id_pk_bytes);
 
         let mut signed_id = SignedId::new();
         signed_id.id = signed_id_pk.into();
@@ -980,7 +1013,7 @@ impl Connection {
     /// Verify password
     fn verify_password(&self, provided: &[u8]) -> bool {
         // RustDesk password verification:
-        // We send Hash { salt: device_id, challenge: "" } to client
+        // We send a stable salt and a fresh per-connection challenge to the client.
         // The client calculates: SHA256(SHA256(password + salt) + challenge)
         // See create_hash_message() for the salt and challenge we use
         //
@@ -993,9 +1026,11 @@ impl Connection {
             return false;
         }
 
-        // The client calculates: SHA256(SHA256(password + salt) + challenge)
-        // where salt is our device_id and challenge is empty
-        let expected_hash = crypto::hash_password_double(&self.password, &self.device_id, "");
+        let expected_hash = crypto::hash_password_double(
+            &self.password,
+            &self.password_salt,
+            &self.password_challenge,
+        );
 
         // Try comparison with double hash
         if provided == expected_hash.as_slice() {
@@ -1003,9 +1038,10 @@ impl Connection {
             return true;
         }
 
-        // Also try single hash for compatibility
-        let expected_hash_single = crypto::hash_password(&self.password, &self.device_id);
-        if provided == expected_hash_single.as_slice() {
+        // Keep the legacy single-hash fallback only inside the encrypted ID-service path.
+        // It has no per-connection challenge and must not be accepted on direct IP access.
+        let expected_hash_single = crypto::hash_password(&self.password, &self.password_salt);
+        if self.mode == ConnectionMode::Secure && provided == expected_hash_single.as_slice() {
             debug!("Password verified with single hash");
             return true;
         }
@@ -1116,11 +1152,9 @@ impl Connection {
     /// Create Hash message for password authentication
     /// The client will hash the password with the salt and send it back in LoginRequest
     fn create_hash_message(&self) -> HbbMessage {
-        // Use device_id as salt for simplicity (RustDesk uses Config::get_salt())
-        // The challenge field is not used for our password verification
         let mut hash = Hash::new();
-        hash.salt = self.device_id.clone();
-        hash.challenge = String::new();
+        hash.salt = self.password_salt.clone();
+        hash.challenge = self.password_challenge.clone();
 
         let mut msg = HbbMessage::new();
         msg.union = Some(message::Union::Hash(hash));
@@ -1397,6 +1431,10 @@ impl ConnectionManager {
         *self.video_manager.write() = Some(video_manager);
     }
 
+    pub fn update_config(&self, config: RustDeskConfig) {
+        *self.config.write() = config;
+    }
+
     /// Set keypair
     pub fn set_keypair(&self, keypair: KeyPair) {
         *self.keypair.write() = Some(keypair);
@@ -1432,6 +1470,25 @@ impl ConnectionManager {
         stream: TcpStream,
         peer_addr: SocketAddr,
     ) -> anyhow::Result<u32> {
+        self.accept_connection_with_mode(stream, peer_addr, ConnectionMode::Secure)
+            .await
+    }
+
+    pub async fn accept_direct_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+    ) -> anyhow::Result<u32> {
+        self.accept_connection_with_mode(stream, peer_addr, ConnectionMode::DirectIp)
+            .await
+    }
+
+    async fn accept_connection_with_mode(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+        mode: ConnectionMode,
+    ) -> anyhow::Result<u32> {
         let id = {
             let mut next = self.next_id.write();
             let id = *next;
@@ -1440,12 +1497,22 @@ impl ConnectionManager {
         };
 
         let config = self.config.read().clone();
-        let signing_keypair = self.ensure_signing_keypair();
+        let signing_keypair = match mode {
+            ConnectionMode::Secure => Some(self.ensure_signing_keypair()),
+            ConnectionMode::DirectIp => None,
+        };
         let hid = self.hid.read().clone();
         let audio = self.audio.read().clone();
         let video_manager = self.video_manager.read().clone();
-        let (mut conn, _rx) =
-            Connection::new(id, &config, signing_keypair, hid, audio, video_manager);
+        let (mut conn, _rx) = Connection::new(
+            id,
+            &config,
+            mode,
+            signing_keypair,
+            hid,
+            audio,
+            video_manager,
+        );
 
         // Track connection state for external access
         let state = conn.state.clone();
@@ -1780,4 +1847,101 @@ async fn run_audio_streaming(
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connection(mode: ConnectionMode) -> Connection {
+        crypto::init().expect("crypto should initialize");
+        let config = RustDeskConfig {
+            device_id: "123456789".to_string(),
+            device_password: "fixed-password".to_string(),
+            ..Default::default()
+        };
+        let (connection, _rx) = Connection::new(
+            1,
+            &config,
+            mode,
+            (mode == ConnectionMode::Secure).then(SigningKeyPair::generate),
+            None,
+            None,
+            None,
+        );
+        connection
+    }
+
+    async fn first_server_message(mode: ConnectionMode) -> HbbMessage {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test listener should bind");
+        let address = listener
+            .local_addr()
+            .expect("listener should have an address");
+        let client = tokio::spawn(async move {
+            TcpStream::connect(address)
+                .await
+                .expect("client should connect")
+        });
+        let (server_stream, peer_addr) = listener.accept().await.expect("server should accept");
+        let mut client_stream = client.await.expect("client task should finish");
+        let mut server_connection = connection(mode);
+        let server =
+            tokio::spawn(
+                async move { server_connection.handle_tcp(server_stream, peer_addr).await },
+            );
+
+        let bytes = read_frame(&mut client_stream)
+            .await
+            .expect("client should receive the first frame");
+        drop(client_stream);
+        let _ = tokio::time::timeout(Duration::from_secs(1), server).await;
+        decode_message(&bytes).expect("first frame should contain a RustDesk message")
+    }
+
+    #[test]
+    fn direct_ip_password_challenge_is_non_empty_and_verifiable() {
+        let connection = connection(ConnectionMode::DirectIp);
+        let message = connection.create_hash_message();
+        let hash = match message.union {
+            Some(message::Union::Hash(hash)) => hash,
+            _ => panic!("expected Hash message"),
+        };
+
+        assert_eq!(hash.salt, "123456789");
+        assert!(!hash.challenge.is_empty());
+
+        let response = crypto::hash_password_double("fixed-password", &hash.salt, &hash.challenge);
+        assert!(connection.verify_password(&response));
+    }
+
+    #[test]
+    fn direct_ip_rejects_legacy_replayable_single_hash() {
+        let direct = connection(ConnectionMode::DirectIp);
+        let single_hash = crypto::hash_password("fixed-password", "123456789");
+        assert!(!direct.verify_password(&single_hash));
+
+        let secure = connection(ConnectionMode::Secure);
+        assert!(secure.verify_password(&single_hash));
+    }
+
+    #[test]
+    fn password_challenge_changes_for_each_connection() {
+        let first = connection(ConnectionMode::DirectIp);
+        let second = connection(ConnectionMode::DirectIp);
+        assert_ne!(first.password_challenge, second.password_challenge);
+    }
+
+    #[tokio::test]
+    async fn direct_ip_connection_starts_with_password_hash() {
+        let message = first_server_message(ConnectionMode::DirectIp).await;
+        assert!(matches!(message.union, Some(message::Union::Hash(_))));
+    }
+
+    #[tokio::test]
+    async fn secure_connection_starts_with_signed_id() {
+        let message = first_server_message(ConnectionMode::Secure).await;
+        assert!(matches!(message.union, Some(message::Union::SignedId(_))));
+    }
 }

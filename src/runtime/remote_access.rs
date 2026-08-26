@@ -121,7 +121,7 @@ impl RemoteAccessCoordinator {
         let vnc = self.vnc.read().await.clone();
         let rtsp = self.rtsp.read().await.clone();
 
-        config.rustdesk.enabled = rustdesk.is_some_and(|service| service.is_listening());
+        config.rustdesk.enabled = rustdesk.is_some_and(|service| service.is_running());
         config.vnc.enabled = match vnc {
             Some(service) => matches!(
                 service.status().await,
@@ -191,8 +191,12 @@ impl RemoteAccessCoordinator {
             .await?;
 
         let need_restart = options.force
+            || old_config.mode != new_config.mode
             || old_config.codec != new_config.codec
+            || old_config.direct_access_port != new_config.direct_access_port
             || old_config.rendezvous_server != new_config.rendezvous_server
+            || old_config.relay_server != new_config.relay_server
+            || old_config.relay_key != new_config.relay_key
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
         let current = self.rustdesk.read().await.clone();
@@ -224,7 +228,7 @@ impl RemoteAccessCoordinator {
                     credentials_to_save = service.save_credentials();
                 }
                 Some(service) => {
-                    if service.is_listening() {
+                    if service.is_running() {
                         if need_restart {
                             service.restart(new_config.clone()).await.map_err(|error| {
                                 AppError::Config(format!(

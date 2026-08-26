@@ -496,15 +496,23 @@ const rustdeskCopied = ref<'id' | 'password' | null>(null)
 const { copy: clipboardCopy } = useClipboard()
 const rustdeskLocalConfig = ref({
   enabled: false,
+  mode: 'id' as 'id' | 'direct_ip',
   codec: 'h264' as 'h264' | 'h265',
+  direct_access_port: 21118,
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
 })
 
 const rustdeskValidationMessage = computed(() => {
-  if (!rustdeskLocalConfig.value.rendezvous_server?.trim()) {
+  if (rustdeskLocalConfig.value.mode === 'id' && !rustdeskLocalConfig.value.rendezvous_server?.trim()) {
     return t('extensions.rustdesk.rendezvousServerRequired')
+  }
+  if (
+    rustdeskLocalConfig.value.mode === 'direct_ip'
+    && (rustdeskLocalConfig.value.direct_access_port < 1 || rustdeskLocalConfig.value.direct_access_port > 65535)
+  ) {
+    return t('extensions.rustdesk.directAccessPortInvalid')
   }
   return ''
 })
@@ -1941,7 +1949,9 @@ function applyRustdeskStatus(status: RustDeskStatusResponse) {
   rustdeskStatus.value = status
   rustdeskLocalConfig.value = {
     enabled: config.enabled,
+    mode: config.mode || 'id',
     codec: config.codec || 'h264',
+    direct_access_port: config.direct_access_port || 21118,
     rendezvous_server: config.rendezvous_server,
     relay_server: config.relay_server || '',
     relay_key: config.relay_key || '',
@@ -2335,7 +2345,9 @@ function updateStatusBadgeText(): string {
 function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
   return {
     enabled,
+    mode: rustdeskLocalConfig.value.mode,
     codec: rustdeskLocalConfig.value.codec,
+    direct_access_port: rustdeskLocalConfig.value.direct_access_port,
     rendezvous_server: normalizeRustdeskServer(
       rustdeskLocalConfig.value.rendezvous_server,
       21116,
@@ -2346,7 +2358,10 @@ function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
 }
 
 async function saveRustdeskConfig() {
-  if (rustdeskLocalConfig.value.enabled && !validateRustdeskConfig()) return
+  if (
+    (rustdeskLocalConfig.value.enabled || rustdeskLocalConfig.value.mode === 'direct_ip')
+    && !validateRustdeskConfig()
+  ) return
 
   loading.value = true
   saved.value = false
@@ -5067,6 +5082,21 @@ watch(isWindows, () => {
                     <Switch v-model="rustdeskLocalConfig.enabled" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.mode') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Select v-model="rustdeskLocalConfig.mode" :disabled="rustdeskStatus?.service_status === 'running'">
+                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="id">{{ t('extensions.rustdesk.modeId') }}</SelectItem>
+                          <SelectItem value="direct_ip">{{ t('extensions.rustdesk.modeDirectIp') }}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p class="text-xs text-muted-foreground">
+                        {{ rustdeskLocalConfig.mode === 'id' ? t('extensions.rustdesk.modeIdDesc') : t('extensions.rustdesk.modeDirectIpDesc') }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Select v-model="rustdeskLocalConfig.codec" :disabled="rustdeskStatus?.service_status === 'running'">
@@ -5075,7 +5105,7 @@ watch(isWindows, () => {
                       </Select>
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input
@@ -5086,7 +5116,7 @@ watch(isWindows, () => {
                       <p v-if="rustdeskLocalConfig.enabled && rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input
@@ -5096,7 +5126,7 @@ watch(isWindows, () => {
                       />
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <div class="relative">
@@ -5123,6 +5153,24 @@ watch(isWindows, () => {
                       </div>
                     </div>
                   </div>
+                  <div v-if="rustdeskLocalConfig.mode === 'direct_ip'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.directAccessPort') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input
+                        v-model.number="rustdeskLocalConfig.direct_access_port"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        :disabled="rustdeskStatus?.service_status === 'running'"
+                      />
+                      <p v-if="rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
+                    </div>
+                  </div>
+                  <Alert v-if="rustdeskLocalConfig.mode === 'direct_ip'" variant="warning">
+                    <AlertTriangle />
+                    <AlertTitle>{{ t('extensions.rustdesk.directAccessWarningTitle') }}</AlertTitle>
+                    <AlertDescription>{{ t('extensions.rustdesk.directAccessWarningDesc') }}</AlertDescription>
+                  </Alert>
                 </div>
                 <Separator />
 
@@ -5131,7 +5179,7 @@ watch(isWindows, () => {
                   <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
 
                   <!-- Device ID -->
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
                     <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskConfig?.device_id || '-' }}</code>
@@ -5177,7 +5225,7 @@ watch(isWindows, () => {
                   </div>
 
                   <!-- Keypair Status -->
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
                     <div class="sm:col-span-3">
                       <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">

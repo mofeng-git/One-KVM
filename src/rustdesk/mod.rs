@@ -26,7 +26,7 @@ use crate::hid::HidController;
 use crate::utils::bind_tcp_listener;
 use crate::video::stream_manager::VideoStreamManager;
 
-use self::config::RustDeskConfig;
+use self::config::{RustDeskConfig, RustDeskMode};
 use self::connection::ConnectionManager;
 use self::protocol::{make_local_addr, make_relay_response, make_request_relay};
 use self::rendezvous::{AddrMangle, RendezvousMediator, RendezvousStatus};
@@ -53,8 +53,6 @@ impl std::fmt::Display for ServiceStatus {
     }
 }
 
-const DIRECT_LISTEN_PORT: u16 = 21118;
-
 pub struct RustDeskService {
     config: Arc<RwLock<RustDeskConfig>>,
     status: Arc<RwLock<ServiceStatus>>,
@@ -78,6 +76,7 @@ impl RustDeskService {
     ) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let connection_manager = Arc::new(ConnectionManager::new(config.clone()));
+        let direct_access_port = config.direct_access_port;
 
         Self {
             config: Arc::new(RwLock::new(config)),
@@ -85,7 +84,7 @@ impl RustDeskService {
             rendezvous: Arc::new(RwLock::new(None)),
             rendezvous_handle: Arc::new(RwLock::new(None)),
             tcp_listener_handle: Arc::new(RwLock::new(None)),
-            listen_port: Arc::new(RwLock::new(DIRECT_LISTEN_PORT)),
+            listen_port: Arc::new(RwLock::new(direct_access_port)),
             connection_manager,
             video_manager,
             hid,
@@ -107,6 +106,7 @@ impl RustDeskService {
     }
 
     pub fn update_config(&self, config: RustDeskConfig) {
+        self.connection_manager.update_config(config.clone());
         *self.config.write() = config;
     }
 
@@ -124,6 +124,10 @@ impl RustDeskService {
 
     pub fn is_listening(&self) -> bool {
         self.tcp_listener_handle.read().is_some()
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.status() == ServiceStatus::Running
     }
 
     pub async fn start(&self) -> anyhow::Result<()> {
@@ -146,15 +150,35 @@ impl RustDeskService {
 
         *self.status.write() = ServiceStatus::Starting;
         info!(
-            "Starting RustDesk service with ID: {} -> {}",
-            config.device_id,
-            config.rendezvous_addr()
+            "Starting RustDesk service in {:?} mode with ID: {}",
+            config.mode, config.device_id,
         );
 
         if let Err(e) = crypto::init() {
             error!("Failed to initialize crypto: {}", e);
             *self.status.write() = ServiceStatus::Error(e.to_string());
             return Err(e.into());
+        }
+
+        self.connection_manager.set_hid(self.hid.clone());
+
+        self.connection_manager.set_audio(self.audio.clone());
+
+        self.connection_manager
+            .set_video_manager(self.video_manager.clone());
+
+        if config.mode == RustDeskMode::DirectIp {
+            let (tcp_handles, listen_port) = match self.start_tcp_listener_with_port().await {
+                Ok(result) => result,
+                Err(err) => {
+                    *self.status.write() = ServiceStatus::Error(err.to_string());
+                    return Err(err);
+                }
+            };
+            *self.tcp_listener_handle.write() = Some(tcp_handles);
+            *self.listen_port.write() = listen_port;
+            *self.status.write() = ServiceStatus::Running;
+            return Ok(());
         }
 
         let mediator = Arc::new(RendezvousMediator::new(config.clone()));
@@ -165,25 +189,7 @@ impl RustDeskService {
         let signing_keypair = mediator.ensure_signing_keypair();
         self.connection_manager.set_signing_keypair(signing_keypair);
 
-        self.connection_manager.set_hid(self.hid.clone());
-
-        self.connection_manager.set_audio(self.audio.clone());
-
-        self.connection_manager
-            .set_video_manager(self.video_manager.clone());
-
         *self.rendezvous.write() = Some(mediator.clone());
-
-        let (tcp_handles, listen_port) = match self.start_tcp_listener_with_port().await {
-            Ok(result) => result,
-            Err(err) => {
-                *self.status.write() = ServiceStatus::Error(err.to_string());
-                return Err(err);
-            }
-        };
-        *self.tcp_listener_handle.write() = Some(tcp_handles);
-
-        mediator.set_listen_port(listen_port);
 
         let connection_manager = self.connection_manager.clone();
         let service_config = self.config.clone();
@@ -299,16 +305,8 @@ impl RustDeskService {
     }
 
     async fn start_tcp_listener_with_port(&self) -> anyhow::Result<(Vec<JoinHandle<()>>, u16)> {
-        let (listeners, listen_port) = match self.bind_direct_listeners(DIRECT_LISTEN_PORT) {
-            Ok(result) => result,
-            Err(err) => {
-                warn!(
-                    "Failed to bind RustDesk TCP on port {}: {}, falling back to random port",
-                    DIRECT_LISTEN_PORT, err
-                );
-                self.bind_direct_listeners(0)?
-            }
-        };
+        let direct_access_port = self.config.read().direct_access_port;
+        let (listeners, listen_port) = self.bind_direct_listeners(direct_access_port)?;
 
         *self.listen_port.write() = listen_port;
 
@@ -330,7 +328,7 @@ impl RustDeskService {
                                     info!("Accepted direct connection from {}", peer_addr);
                                     let conn_mgr = conn_mgr.clone();
                                     tokio::spawn(async move {
-                                        if let Err(e) = conn_mgr.accept_connection(stream, peer_addr).await {
+                                        if let Err(e) = conn_mgr.accept_direct_connection(stream, peer_addr).await {
                                             error!("Failed to handle direct connection from {}: {}", peer_addr, e);
                                         }
                                     });
