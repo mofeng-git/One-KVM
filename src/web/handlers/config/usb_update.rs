@@ -157,6 +157,7 @@ mod tests {
             ch9329_port: None,
             ch9329_baudrate: None,
             ch9329_hybrid_mouse: None,
+            ch9329_macos_drag: None,
             ch9329_descriptor: None,
             otg_udc: None,
             otg_descriptor: None,

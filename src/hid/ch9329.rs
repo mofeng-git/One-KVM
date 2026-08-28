@@ -235,6 +235,7 @@ pub struct Ch9329Backend {
     last_abs_y: Arc<AtomicU16>,
     relative_mouse_active: Arc<AtomicBool>,
     hybrid_mouse: bool,
+    macos_drag: bool,
     runtime: Arc<Ch9329RuntimeState>,
 }
 
@@ -248,6 +249,15 @@ impl Ch9329Backend {
     }
 
     pub fn with_options(port_path: &str, baud_rate: u32, hybrid_mouse: bool) -> Result<Self> {
+        Self::with_compatibility_options(port_path, baud_rate, hybrid_mouse, false)
+    }
+
+    pub fn with_compatibility_options(
+        port_path: &str,
+        baud_rate: u32,
+        hybrid_mouse: bool,
+        macos_drag: bool,
+    ) -> Result<Self> {
         Ok(Self {
             port_path: port_path.to_string(),
             baud_rate,
@@ -263,6 +273,7 @@ impl Ch9329Backend {
             last_abs_y: Arc::new(AtomicU16::new(0)),
             relative_mouse_active: Arc::new(AtomicBool::new(false)),
             hybrid_mouse,
+            macos_drag,
             runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
@@ -965,14 +976,29 @@ impl Ch9329Backend {
     }
 
     fn should_send_button_wheel_relative(&self) -> bool {
-        self.hybrid_mouse || self.relative_mouse_active.load(Ordering::Relaxed)
+        (self.hybrid_mouse && !self.macos_drag)
+            || self.relative_mouse_active.load(Ordering::Relaxed)
     }
 
     fn absolute_move_buttons(&self, buttons: u8) -> u8 {
-        if self.hybrid_mouse {
+        if self.hybrid_mouse && !self.macos_drag {
             0
         } else {
             buttons
+        }
+    }
+
+    fn absolute_delta_to_relative(current: u16, previous: u16, extent: u32) -> i8 {
+        let delta = current as i32 - previous as i32;
+        if delta == 0 {
+            return 0;
+        }
+
+        let scaled = delta * extent.max(1) as i32 / CH9329_MOUSE_RESOLUTION as i32;
+        if scaled == 0 {
+            delta.signum() as i8
+        } else {
+            scaled.clamp(-127, 127) as i8
         }
     }
 
@@ -1267,9 +1293,23 @@ impl HidBackend for Ch9329Backend {
                 self.relative_mouse_active.store(false, Ordering::Relaxed);
                 let x = ((event.x.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
                 let y = ((event.y.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
-                self.last_abs_x.store(x, Ordering::Relaxed);
-                self.last_abs_y.store(y, Ordering::Relaxed);
-                self.send_mouse_absolute(self.absolute_move_buttons(buttons), x, y, 0)?;
+                let previous_x = self.last_abs_x.swap(x, Ordering::Relaxed);
+                let previous_y = self.last_abs_y.swap(y, Ordering::Relaxed);
+
+                if self.macos_drag && buttons != 0 {
+                    // macOS accepts button edges from CH9329 absolute report ID 2,
+                    // but may terminate a drag when movement continues on that
+                    // report. Keep the absolute button held and move through the
+                    // relative report until the matching absolute button-up.
+                    let (width, height) = *self.screen_resolution.read();
+                    let dx = Self::absolute_delta_to_relative(x, previous_x, width);
+                    let dy = Self::absolute_delta_to_relative(y, previous_y, height);
+                    if dx != 0 || dy != 0 {
+                        self.send_mouse_relative(buttons, dx, dy, 0)?;
+                    }
+                } else {
+                    self.send_mouse_absolute(self.absolute_move_buttons(buttons), x, y, 0)?;
+                }
             }
             MouseEventType::Down => {
                 if let Some(button) = event.button {
@@ -1650,11 +1690,64 @@ mod tests {
     }
 
     #[test]
-    fn test_hybrid_mouse_routes_buttons_and_wheel_to_relative_reports() {
+    fn test_hybrid_mouse_preserves_linux_compatibility_routing() {
         let backend = Ch9329Backend::with_options("/dev/null", DEFAULT_BAUD_RATE, true).unwrap();
 
         assert!(backend.should_send_button_wheel_relative());
         assert_eq!(backend.absolute_move_buttons(0x07), 0);
+    }
+
+    #[tokio::test]
+    async fn test_macos_drag_uses_absolute_edges_and_relative_motion() {
+        let backend =
+            Ch9329Backend::with_compatibility_options("/dev/null", DEFAULT_BAUD_RATE, false, true)
+                .unwrap();
+        let (worker_tx, worker_rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(worker_tx);
+        backend.set_screen_resolution(1920, 1080);
+
+        backend
+            .send_mouse(MouseEvent::move_abs(8000, 8000))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_down(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::move_abs(8064, 8064))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_up(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+
+        let packets: Vec<_> = worker_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                WorkerCommand::Packet { cmd, data } => Some((cmd, data)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            packets,
+            vec![
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x01, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x01, 0x03, 0x02, 0x00]),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xF0, 0x03, 0xF0, 0x03, 0x00],
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -1663,5 +1756,29 @@ mod tests {
 
         assert!(!backend.should_send_button_wheel_relative());
         assert_eq!(backend.absolute_move_buttons(0x07), 0x07);
+    }
+
+    #[test]
+    fn test_absolute_delta_to_relative_preserves_small_movements_and_clamps() {
+        assert_eq!(
+            Ch9329Backend::absolute_delta_to_relative(1001, 1000, 1920),
+            1
+        );
+        assert_eq!(
+            Ch9329Backend::absolute_delta_to_relative(999, 1000, 1920),
+            -1
+        );
+        assert_eq!(
+            Ch9329Backend::absolute_delta_to_relative(2000, 1000, 1920),
+            127
+        );
+        assert_eq!(
+            Ch9329Backend::absolute_delta_to_relative(0, 1000, 1920),
+            -127
+        );
+        assert_eq!(
+            Ch9329Backend::absolute_delta_to_relative(1000, 1000, 1920),
+            0
+        );
     }
 }

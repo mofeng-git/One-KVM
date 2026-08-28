@@ -668,6 +668,7 @@ const config = ref({
   } as OtgHidFunctions,
   hid_otg_keyboard_leds: false,
   hid_ch9329_hybrid_mouse: false,
+  hid_ch9329_macos_drag: false,
   msd_enabled: false,
   msd_dir: '',
   msd_flash_inquiry_string: 'One-KVM Virtual Flash',
@@ -1434,6 +1435,7 @@ async function saveConfig() {
         ch9329_port: config.value.hid_serial_device || undefined,
         ch9329_baudrate: config.value.hid_serial_baudrate,
         ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
+        ch9329_macos_drag: config.value.hid_ch9329_macos_drag,
         otg_udc: config.value.hid_otg_udc,
       }
       if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
@@ -1533,6 +1535,7 @@ async function loadConfig() {
       } as OtgHidFunctions,
       hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
       hid_ch9329_hybrid_mouse: hid.ch9329_hybrid_mouse ?? false,
+      hid_ch9329_macos_drag: hid.ch9329_macos_drag ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       msd_flash_inquiry_string: msd.flash_inquiry_string || 'One-KVM Virtual Flash',
@@ -3197,6 +3200,13 @@ watch(isWindows, () => {
                           <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
                         </div>
                         <Switch v-model="config.hid_ch9329_hybrid_mouse" />
+                      </div>
+                      <div class="flex items-center justify-between gap-4">
+                        <div>
+                          <Label>{{ t('settings.ch9329MacosDrag') }}</Label>
+                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329MacosDragDesc') }}</p>
+                        </div>
+                        <Switch v-model="config.hid_ch9329_macos_drag" />
                       </div>
                     </div>
                   </div>

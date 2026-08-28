@@ -713,6 +713,8 @@ export default {
     ch9329OptionsDesc: 'Configure runtime compatibility for the CH9329 serial HID chip',
     ch9329HybridMouse: 'Linux Absolute Mouse Compatibility',
     ch9329HybridMouseDesc: 'Keep absolute movement on absolute packets, but send buttons and wheel through relative packets',
+    ch9329MacosDrag: 'macOS Drag Compatibility',
+    ch9329MacosDragDesc: 'Use absolute packets for button edges and relative packets for movement while a button is held',
     ch9329Descriptor: 'CH9329 USB Device Descriptor',
     ch9329DescriptorDesc: 'Read USB identification fields from the CH9329 chip before editing',
     ch9329DescriptorLoading: 'Reading CH9329 descriptor...',

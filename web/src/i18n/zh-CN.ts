@@ -712,6 +712,8 @@ export default {
     ch9329OptionsDesc: '配置 CH9329 串口 HID 芯片的运行兼容性',
     ch9329HybridMouse: 'Linux 绝对鼠标兼容模式',
     ch9329HybridMouseDesc: '绝对移动仍使用绝对鼠标包，点击和滚轮改用相对鼠标包发送',
+    ch9329MacosDrag: 'macOS 拖拽兼容模式',
+    ch9329MacosDragDesc: '按钮按下与释放使用绝对鼠标包，按住期间改用相对鼠标包移动',
     ch9329Descriptor: 'CH9329 USB 设备描述符',
     ch9329DescriptorDesc: '先从 CH9329 芯片读取 USB 标识信息，读取成功后再修改',
     ch9329DescriptorLoading: '正在读取 CH9329 描述符...',

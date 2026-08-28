@@ -181,6 +181,8 @@ pub struct HidConfig {
     #[serde(default)]
     pub ch9329_hybrid_mouse: bool,
     #[serde(default)]
+    pub ch9329_macos_drag: bool,
+    #[serde(default)]
     pub ch9329_descriptor: Ch9329DescriptorConfig,
     pub mouse_absolute: bool,
 }
@@ -197,6 +199,7 @@ impl Default for HidConfig {
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
             ch9329_hybrid_mouse: false,
+            ch9329_macos_drag: false,
             ch9329_descriptor: Ch9329DescriptorConfig::default(),
             mouse_absolute: true,
         }

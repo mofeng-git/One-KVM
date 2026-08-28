@@ -320,6 +320,7 @@ async fn main() -> anyhow::Result<()> {
             port: config.hid.ch9329_port.clone(),
             baud_rate: config.hid.ch9329_baudrate,
             hybrid_mouse: config.hid.ch9329_hybrid_mouse,
+            macos_drag: config.hid.ch9329_macos_drag,
         },
         config::HidBackend::None => HidBackendType::None,
     };

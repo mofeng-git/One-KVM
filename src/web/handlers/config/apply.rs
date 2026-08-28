@@ -57,6 +57,7 @@ fn hid_backend_type(config: &HidConfig) -> crate::hid::HidBackendType {
             port: config.ch9329_port.clone(),
             baud_rate: config.ch9329_baudrate,
             hybrid_mouse: config.ch9329_hybrid_mouse,
+            macos_drag: config.ch9329_macos_drag,
         },
         HidBackend::None => crate::hid::HidBackendType::None,
     }
@@ -206,7 +207,8 @@ pub async fn apply_hid_config(
     let hid_functions_changed = old_hid_functions != new_hid_functions;
     let keyboard_leds_changed =
         old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
-    let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
+    let ch9329_runtime_changed = old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse
+        || old_config.ch9329_macos_drag != new_config.ch9329_macos_drag;
 
     if old_config.backend == new_config.backend
         && old_config.ch9329_port == new_config.ch9329_port

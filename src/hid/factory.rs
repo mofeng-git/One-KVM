@@ -43,16 +43,20 @@ impl HidBackendFactory {
                 port,
                 baud_rate,
                 hybrid_mouse,
+                macos_drag,
             } => {
                 info!(
-                    "Initializing CH9329 HID backend on {} @ {} baud, hybrid_mouse={}",
-                    port, baud_rate, hybrid_mouse
+                    "Initializing CH9329 HID backend on {} @ {} baud, hybrid_mouse={}, macos_drag={}",
+                    port, baud_rate, hybrid_mouse, macos_drag
                 );
-                Ok(Some(Arc::new(ch9329::Ch9329Backend::with_options(
-                    port,
-                    *baud_rate,
-                    *hybrid_mouse,
-                )?)))
+                Ok(Some(Arc::new(
+                    ch9329::Ch9329Backend::with_compatibility_options(
+                        port,
+                        *baud_rate,
+                        *hybrid_mouse,
+                        *macos_drag,
+                    )?,
+                )))
             }
             HidBackendType::None => {
                 warn!("HID backend disabled");

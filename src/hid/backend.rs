@@ -24,6 +24,8 @@ pub enum HidBackendType {
         baud_rate: u32,
         #[serde(default)]
         hybrid_mouse: bool,
+        #[serde(default)]
+        macos_drag: bool,
     },
     #[default]
     None,
