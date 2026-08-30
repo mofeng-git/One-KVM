@@ -248,6 +248,11 @@ export interface ExtensionsConfig {
 	frpc: FrpcConfig;
 }
 
+export enum RustDeskMode {
+	Id = "id",
+	DirectIp = "direct_ip",
+}
+
 export enum RustDeskCodec {
 	H264 = "h264",
 	H265 = "h265",
@@ -255,7 +260,9 @@ export enum RustDeskCodec {
 
 export interface RustDeskConfig {
 	enabled: boolean;
+	mode: RustDeskMode;
 	codec: RustDeskCodec;
+	direct_access_port: number;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
@@ -633,7 +640,9 @@ export interface RtspStatusResponse {
 
 export interface RustDeskConfigUpdate {
 	enabled?: boolean;
+	mode?: RustDeskMode;
 	codec?: RustDeskCodec;
+	direct_access_port?: number;
 	rendezvous_server?: string;
 	relay_server?: string;
 	relay_key?: string;

@@ -12,11 +12,23 @@ pub enum RustDeskCodec {
 }
 
 #[typeshare]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum RustDeskMode {
+    #[default]
+    Id,
+    DirectIp,
+}
+
+#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RustDeskConfig {
     pub enabled: bool,
+    pub mode: RustDeskMode,
     pub codec: RustDeskCodec,
+    pub direct_access_port: u16,
     pub rendezvous_server: String,
     pub relay_server: Option<String>,
     #[typeshare(skip)]
@@ -40,7 +52,9 @@ impl Default for RustDeskConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            mode: RustDeskMode::Id,
             codec: RustDeskCodec::H264,
+            direct_access_port: 21118,
             rendezvous_server: String::new(),
             relay_server: None,
             relay_key: None,
@@ -58,9 +72,12 @@ impl Default for RustDeskConfig {
 impl RustDeskConfig {
     pub fn is_valid(&self) -> bool {
         self.enabled
-            && !self.rendezvous_server.is_empty()
             && !self.device_id.is_empty()
             && !self.device_password.is_empty()
+            && match self.mode {
+                RustDeskMode::Id => !self.rendezvous_server.trim().is_empty(),
+                RustDeskMode::DirectIp => self.direct_access_port != 0,
+            }
     }
 
     pub fn effective_rendezvous_server(&self) -> &str {
@@ -213,5 +230,44 @@ mod tests {
 
         config.rendezvous_server = String::new();
         assert_eq!(config.effective_rendezvous_server(), "");
+    }
+
+    #[test]
+    fn direct_ip_mode_is_valid_without_rendezvous_server() {
+        let config = RustDeskConfig {
+            enabled: true,
+            mode: RustDeskMode::DirectIp,
+            rendezvous_server: String::new(),
+            ..Default::default()
+        };
+
+        assert!(config.is_valid());
+    }
+
+    #[test]
+    fn id_mode_is_invalid_without_rendezvous_server() {
+        let config = RustDeskConfig {
+            enabled: true,
+            mode: RustDeskMode::Id,
+            rendezvous_server: String::new(),
+            ..Default::default()
+        };
+
+        assert!(!config.is_valid());
+    }
+
+    #[test]
+    fn legacy_config_defaults_to_id_mode() {
+        let config: RustDeskConfig = serde_json::from_value(serde_json::json!({
+            "enabled": false,
+            "codec": "h264",
+            "rendezvous_server": "",
+            "device_id": "123456789",
+            "device_password": "password"
+        }))
+        .expect("legacy RustDesk config should deserialize");
+
+        assert_eq!(config.mode, RustDeskMode::Id);
+        assert_eq!(config.direct_access_port, 21118);
     }
 }

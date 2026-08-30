@@ -1,7 +1,7 @@
 //! Variable-length TCP framing (RustDesk wire format).
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::io;
+use std::io::{self, IoSlice};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const MAX_PACKET_LENGTH: usize = 0x3FFFFFFF;
@@ -53,6 +53,18 @@ fn decode_header(first_byte: u8, header_bytes: &[u8]) -> (usize, usize) {
 }
 
 pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<BytesMut> {
+    read_frame_with_limit(reader, MAX_PACKET_LENGTH).await
+}
+
+/// Read one framed message while enforcing a caller-selected allocation limit.
+///
+/// Network-facing protocol stages should use a substantially smaller limit than
+/// the wire format's theoretical maximum so an untrusted peer cannot force a
+/// huge allocation by sending only a length header.
+pub async fn read_frame_with_limit<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    max_packet_length: usize,
+) -> io::Result<BytesMut> {
     let mut first_byte = [0u8; 1];
     reader.read_exact(&mut first_byte).await?;
 
@@ -65,10 +77,10 @@ pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Byte
 
     let (_, msg_len) = decode_header(first_byte[0], &header_rest);
 
-    if msg_len > MAX_PACKET_LENGTH {
+    if msg_len > max_packet_length {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Message too large",
+            format!("Message too large: {msg_len} bytes exceeds {max_packet_length}-byte limit"),
         ));
     }
 
@@ -83,6 +95,53 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, data: &[u8]) -> 
     let frame = encode_frame(data)?;
     writer.write_all(&frame).await?;
     writer.flush().await?;
+    Ok(())
+}
+
+/// Write a frame without copying its payload into a second contiguous buffer.
+/// TCP writers normally send the small header and payload in one vectored write.
+pub async fn write_frame_vectored<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    data: &[u8],
+) -> io::Result<()> {
+    let len = data.len();
+    let mut header = [0u8; 4];
+    let header_len = if len <= 0x3F {
+        header[0] = (len << 2) as u8;
+        1
+    } else if len <= 0x3FFF {
+        header[..2].copy_from_slice(&(((len << 2) as u16) | 0x1).to_le_bytes());
+        2
+    } else if len <= 0x3FFFFF {
+        let value = ((len << 2) as u32) | 0x2;
+        header[0] = (value & 0xFF) as u8;
+        header[1] = ((value >> 8) & 0xFF) as u8;
+        header[2] = ((value >> 16) & 0xFF) as u8;
+        3
+    } else if len <= MAX_PACKET_LENGTH {
+        header.copy_from_slice(&(((len << 2) as u32) | 0x3).to_le_bytes());
+        4
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Message too large",
+        ));
+    };
+
+    let slices = [IoSlice::new(&header[..header_len]), IoSlice::new(data)];
+    let written = writer.write_vectored(&slices).await?;
+    if written == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::WriteZero,
+            "failed to write RustDesk frame",
+        ));
+    }
+    if written < header_len {
+        writer.write_all(&header[written..header_len]).await?;
+        writer.write_all(data).await?;
+    } else {
+        writer.write_all(&data[written - header_len..]).await?;
+    }
     Ok(())
 }
 
@@ -280,5 +339,33 @@ mod tests {
         let mut buf = BytesMut::from(&encoded[..]);
         let decoded = codec.decode(&mut buf).unwrap().unwrap();
         assert_eq!(decoded.len(), 100000);
+    }
+
+    #[tokio::test]
+    async fn read_limit_rejects_length_before_allocating_payload() {
+        let encoded = encode_frame(&vec![0u8; 1024]).unwrap();
+        let (mut writer, mut reader) = tokio::io::duplex(encoded.len());
+        tokio::spawn(async move {
+            writer.write_all(&encoded).await.unwrap();
+        });
+
+        let error = read_frame_with_limit(&mut reader, 128).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
+    async fn vectored_writer_round_trips() {
+        let payload = vec![0x5a; 100_000];
+        let (mut writer, mut reader) = tokio::io::duplex(payload.len() + 4);
+        let expected = payload.clone();
+        let send = tokio::spawn(async move {
+            write_frame_vectored(&mut writer, &payload).await.unwrap();
+        });
+
+        let decoded = read_frame_with_limit(&mut reader, expected.len())
+            .await
+            .unwrap();
+        send.await.unwrap();
+        assert_eq!(decoded.as_ref(), expected.as_slice());
     }
 }
