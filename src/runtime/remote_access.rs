@@ -22,6 +22,9 @@ use super::ConfigApplyOptions;
 pub struct RustDeskRuntimeStatus {
     pub service_status: String,
     pub rendezvous_status: Option<String>,
+    pub connection_count: usize,
+    pub listening: bool,
+    pub listen_port: Option<u16>,
 }
 
 pub struct RemoteAccessCoordinator {
@@ -145,10 +148,16 @@ impl RemoteAccessCoordinator {
             Some(service) => RustDeskRuntimeStatus {
                 service_status: service.status().to_string(),
                 rendezvous_status: service.rendezvous_status().map(|status| status.to_string()),
+                connection_count: service.connection_count(),
+                listening: service.is_listening(),
+                listen_port: service.is_listening().then(|| service.listen_port()),
             },
             None => RustDeskRuntimeStatus {
                 service_status: "not_initialized".to_string(),
                 rendezvous_status: None,
+                connection_count: 0,
+                listening: false,
+                listen_port: None,
             },
         }
     }

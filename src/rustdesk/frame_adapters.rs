@@ -91,6 +91,12 @@ impl VideoFrameAdapter {
             return data;
         }
 
+        // Parameter sets are relevant only on random-access frames. Avoid a
+        // full Annex-B/AVCC scan on every delta frame in every client session.
+        if !is_keyframe {
+            return data;
+        }
+
         let (sps, pps) = crate::video::codec::h264_bitstream::extract_sps_pps(&data);
         let mut has_sps = false;
         let mut has_pps = false;

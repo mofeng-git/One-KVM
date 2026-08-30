@@ -236,6 +236,9 @@ export interface RustDeskStatusResponse {
   config: RustDeskConfigResponse
   service_status: string
   rendezvous_status: string | null
+  connection_count: number
+  listening: boolean
+  listen_port: number | null
 }
 
 export interface RustDeskConfigUpdate {

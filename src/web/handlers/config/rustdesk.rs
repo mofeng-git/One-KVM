@@ -47,6 +47,9 @@ async fn current_status(
         config: RustDeskConfigResponse::from(&config),
         service_status: runtime.service_status,
         rendezvous_status: runtime.rendezvous_status,
+        connection_count: runtime.connection_count,
+        listening: runtime.listening,
+        listen_port: runtime.listen_port,
     }
 }
 
@@ -86,6 +89,9 @@ pub struct RustDeskStatusResponse {
     pub config: RustDeskConfigResponse,
     pub service_status: String,
     pub rendezvous_status: Option<String>,
+    pub connection_count: usize,
+    pub listening: bool,
+    pub listen_port: Option<u16>,
 }
 
 pub async fn get_rustdesk_config(

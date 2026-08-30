@@ -5166,18 +5166,11 @@ watch(isWindows, () => {
                       <p v-if="rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
                     </div>
                   </div>
-                  <Alert v-if="rustdeskLocalConfig.mode === 'direct_ip'" variant="warning">
-                    <AlertTriangle />
-                    <AlertTitle>{{ t('extensions.rustdesk.directAccessWarningTitle') }}</AlertTitle>
-                    <AlertDescription>{{ t('extensions.rustdesk.directAccessWarningDesc') }}</AlertDescription>
-                  </Alert>
                 </div>
                 <Separator />
 
                 <!-- Device Info -->
                 <div class="space-y-3">
-                  <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
-
                   <!-- Device ID -->
                   <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
