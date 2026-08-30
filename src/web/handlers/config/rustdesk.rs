@@ -63,7 +63,6 @@ pub struct RustDeskConfigResponse {
     pub relay_server: Option<String>,
     pub device_id: String,
     pub has_password: bool,
-    pub has_keypair: bool,
     pub relay_key: Option<String>,
 }
 
@@ -78,7 +77,6 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
             relay_server: config.relay_server.clone(),
             device_id: config.device_id.clone(),
             has_password: !config.device_password.is_empty(),
-            has_keypair: config.public_key.is_some() && config.private_key.is_some(),
             relay_key: config.relay_key.clone(),
         }
     }

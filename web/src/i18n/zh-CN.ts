@@ -1100,7 +1100,6 @@ export default {
       notInitialized: '未初始化',
       copyId: '复制 ID',
       copyPassword: '复制密码',
-      keypairGenerated: '密钥对已生成',
     },
     rtsp: {
       title: 'RTSP 视频流',

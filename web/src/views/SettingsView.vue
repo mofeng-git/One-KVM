@@ -5217,15 +5217,6 @@ watch(isWindows, () => {
                     </div>
                   </div>
 
-                  <!-- Keypair Status -->
-                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
-                    <div class="sm:col-span-3">
-                      <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">
-                        {{ rustdeskConfig?.has_keypair ? t('common.yes') : t('common.no') }}
-                      </Badge>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">

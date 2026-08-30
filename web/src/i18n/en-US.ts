@@ -1101,7 +1101,6 @@ export default {
       notInitialized: 'Not Initialized',
       copyId: 'Copy ID',
       copyPassword: 'Copy Password',
-      keypairGenerated: 'Keypair Generated',
     },
     rtsp: {
       title: 'RTSP Streaming',

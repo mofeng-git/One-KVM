@@ -228,7 +228,6 @@ export interface RustDeskConfigResponse {
   relay_server: string | null
   device_id: string
   has_password: boolean
-  has_keypair: boolean
   relay_key: string | null
 }
 
