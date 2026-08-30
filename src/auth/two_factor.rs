@@ -227,15 +227,14 @@ impl TwoFactorService {
             return Err(AppError::AuthError("Invalid TOTP code".to_string()));
         }
 
-        let mut transaction = self.pool.begin().await?;
         let result =
             sqlx::query("INSERT INTO user_totp_credentials (user_id, secret) VALUES (?1, ?2)")
                 .bind(user_id)
                 .bind(secret.to_string())
-                .execute(&mut *transaction)
+                .execute(&self.pool)
                 .await;
         match result {
-            Ok(_) => transaction.commit().await?,
+            Ok(_) => {}
             Err(sqlx::Error::Database(error)) if error.is_unique_violation() => {
                 return Err(AppError::Conflict("TOTP is already enabled".to_string()));
             }

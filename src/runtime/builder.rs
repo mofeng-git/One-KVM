@@ -226,7 +226,7 @@ async fn load_runtime_config(
 ) -> anyhow::Result<(DatabasePool, ConfigStore, AppConfig)> {
     let db = open_database_pool(data_dir).await?;
 
-    let config_store = ConfigStore::new(db.clone_pool())?;
+    let config_store = ConfigStore::new(db.clone_pool());
     config_store.load().await?;
     let mut config = (*config_store.get()).clone();
     config.apply_platform_defaults();
@@ -568,7 +568,7 @@ mod tests {
         let data_dir = temp_dir.path().join("data");
         let msd_dir = temp_dir.path().join("disabled-msd");
         let db = open_database_pool(&data_dir).await.unwrap();
-        let config_store = ConfigStore::new(db.clone_pool()).unwrap();
+        let config_store = ConfigStore::new(db.clone_pool());
         config_store.load().await.unwrap();
         let mut config = (*config_store.get()).clone();
         config.msd.enabled = false;

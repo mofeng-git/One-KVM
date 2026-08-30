@@ -1,10 +1,12 @@
 mod pool;
+mod wol_history;
 
 use std::path::Path;
 
 use crate::error::Result;
 
 pub use pool::DatabasePool;
+pub use wol_history::WolHistoryStore;
 
 /// Open the application database stored in `data_dir` and ensure its schema exists.
 pub async fn open_database_pool(data_dir: &Path) -> Result<DatabasePool> {
