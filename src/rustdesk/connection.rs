@@ -300,7 +300,9 @@ impl Connection {
         // Keep socket writes out of the input loop. A congested video path must
         // never prevent us from reading keyboard and mouse events.
         let (control_tx, control_rx) = mpsc::channel::<WriterCommand>(32);
-        let (video_tx, video_rx) = mpsc::channel::<Bytes>(1);
+        // Absorb short encoder/socket scheduling bursts without treating a
+        // momentarily busy writer as a broken inter-frame sequence.
+        let (video_tx, video_rx) = mpsc::channel::<Bytes>(4);
         let (audio_tx, audio_rx) = mpsc::channel::<Bytes>(8);
         let mut writer_task = tokio::spawn(run_connection_writer(
             writer, control_rx, video_rx, audio_rx,
@@ -1405,6 +1407,8 @@ async fn run_connection_writer(
 
     loop {
         let (data, encrypt) = tokio::select! {
+            biased;
+
             command = control_rx.recv() => {
                 match command {
                     Some(WriterCommand::SetSessionKey(key)) => {
@@ -1415,13 +1419,13 @@ async fn run_connection_writer(
                     Some(WriterCommand::Shutdown) | None => break,
                 }
             }
-            frame = audio_rx.recv() => {
+            frame = video_rx.recv() => {
                 match frame {
                     Some(data) => (data, session_key.is_some()),
                     None => continue,
                 }
             }
-            frame = video_rx.recv() => {
+            frame = audio_rx.recv() => {
                 match frame {
                     Some(data) => (data, session_key.is_some()),
                     None => continue,
@@ -1874,26 +1878,12 @@ async fn run_video_streaming(
                         frame.pts_ms as u64,
                     );
 
-                    // Never queue a run of stale frames behind a slow socket.
-                    // If the one-frame queue is full, wait for a fresh keyframe
-                    // before resuming so the decoder cannot receive a broken GOP.
-                    match video_tx.try_send(msg_bytes) {
-                        Ok(()) => {}
-                        Err(mpsc::error::TrySendError::Full(_)) => {
-                            waiting_for_keyframe = true;
-                            let now = Instant::now();
-                            if now.duration_since(last_keyframe_request) >= Duration::from_millis(200) {
-                                if let Err(error) = video_manager.request_keyframe().await {
-                                    debug!("Failed to request recovery keyframe for connection {}: {}", conn_id, error);
-                                }
-                                last_keyframe_request = now;
-                            }
-                            continue;
-                        }
-                        Err(mpsc::error::TrySendError::Closed(_)) => {
-                            debug!("Video channel closed for connection {}", conn_id);
-                            break 'subscribe_loop;
-                        }
+                    // A small bounded queue absorbs transient writer jitter.
+                    // Backpressure here cannot block input handling because the
+                    // TCP reader and writer run independently.
+                    if video_tx.send(msg_bytes).await.is_err() {
+                        debug!("Video channel closed for connection {}", conn_id);
+                        break 'subscribe_loop;
                     }
 
                     last_sequence = Some(frame.sequence);
