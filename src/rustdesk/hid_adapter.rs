@@ -50,13 +50,7 @@ pub fn convert_mouse_event(
             });
         }
         mouse_type::MOVE_RELATIVE => {
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::Move,
-                x: event.x,
-                y: event.y,
-                button: None,
-                scroll: 0,
-            });
+            events.extend(convert_relative_mouse_delta(event.x, event.y));
         }
         mouse_type::DOWN => {
             if let Some(button) = button_id_to_button(button_id) {
@@ -91,6 +85,28 @@ pub fn convert_mouse_event(
             });
         }
         _ => {}
+    }
+
+    events
+}
+
+/// Split accumulated relative movement into USB HID-sized reports. Both the OTG
+/// and CH9329 relative endpoints are limited to signed 8-bit deltas.
+pub fn convert_relative_mouse_delta(mut x: i32, mut y: i32) -> Vec<OneKvmMouseEvent> {
+    let mut events = Vec::new();
+
+    while x != 0 || y != 0 {
+        let dx = x.clamp(-127, 127);
+        let dy = y.clamp(-127, 127);
+        events.push(OneKvmMouseEvent {
+            event_type: MouseEventType::Move,
+            x: dx,
+            y: dy,
+            button: None,
+            scroll: 0,
+        });
+        x -= dx;
+        y -= dy;
     }
 
     events
@@ -609,6 +625,17 @@ mod tests {
         assert_eq!(events[0].event_type, MouseEventType::Move);
         assert_eq!(events[0].x, -12);
         assert_eq!(events[0].y, 8);
+    }
+
+    #[test]
+    fn test_large_relative_move_is_split_without_losing_delta() {
+        let events = convert_relative_mouse_delta(300, -260);
+        assert_eq!(events.len(), 3);
+        assert!(events
+            .iter()
+            .all(|event| event.x.abs() <= 127 && event.y.abs() <= 127));
+        assert_eq!(events.iter().map(|event| event.x).sum::<i32>(), 300);
+        assert_eq!(events.iter().map(|event| event.y).sum::<i32>(), -260);
     }
 
     #[test]
