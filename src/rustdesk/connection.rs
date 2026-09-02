@@ -21,11 +21,13 @@ use crate::video::codec::BitratePreset;
 use crate::video::codec_constraints::{encoder_codec_to_id, encoder_codec_to_video_codec};
 use crate::video::stream_manager::VideoStreamManager;
 
-use super::bytes_codec::{read_frame, write_frame, write_frame_buffered};
+use super::bytes_codec::{read_frame, write_frame_buffered};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_events, convert_mouse_event, mouse_type};
+use super::hid_adapter::{
+    convert_key_events, convert_mouse_event, convert_relative_mouse_delta, mouse_type,
+};
 use super::protocol::{
     decode_message, login_response, message, misc, Clipboard, ControlKey, DisplayInfo, Hash,
     HbbMessage, IdPk, KeyEvent, LoginRequest, LoginResponse, Misc, MouseEvent, OptionMessage,
@@ -40,6 +42,10 @@ const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 
 /// Default mouse event throttle interval (16ms ≈ 60Hz)
 const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
+
+/// Bound relative movement accumulated during throttling. This prevents a malformed
+/// client from turning one input event into an excessively large HID burst.
+const MAX_PENDING_RELATIVE_DELTA: i64 = 4096;
 
 /// Advertised RustDesk version for client compatibility.
 const RUSTDESK_COMPAT_VERSION: &str = "1.4.5";
@@ -56,6 +62,10 @@ struct InputThrottler {
     last_mouse_time: Instant,
     /// Minimum interval between mouse move events
     mouse_interval: Duration,
+    /// Relative mouse deltas cannot be dropped: unlike absolute coordinates, a later
+    /// event cannot recover movement lost during throttling.
+    pending_relative_x: i64,
+    pending_relative_y: i64,
 }
 
 impl InputThrottler {
@@ -64,11 +74,12 @@ impl InputThrottler {
         Self {
             last_mouse_time: Instant::now() - Duration::from_millis(DEFAULT_MOUSE_THROTTLE_MS),
             mouse_interval: Duration::from_millis(DEFAULT_MOUSE_THROTTLE_MS),
+            pending_relative_x: 0,
+            pending_relative_y: 0,
         }
     }
 
-    /// Check if a mouse move event should be sent
-    /// Returns true if enough time has passed since the last event
+    /// Check if a mouse move event should be sent.
     fn should_send_mouse_move(&mut self) -> bool {
         let now = Instant::now();
         if now.duration_since(self.last_mouse_time) >= self.mouse_interval {
@@ -79,9 +90,88 @@ impl InputThrottler {
         }
     }
 
+    fn accumulate_relative_move(&mut self, x: i32, y: i32) {
+        self.pending_relative_x = (self.pending_relative_x + i64::from(x))
+            .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA);
+        self.pending_relative_y = (self.pending_relative_y + i64::from(y))
+            .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA);
+    }
+
+    fn take_relative_move(&mut self) -> Option<(i32, i32)> {
+        if self.pending_relative_x == 0 && self.pending_relative_y == 0 {
+            return None;
+        }
+
+        let movement = (
+            self.pending_relative_x as i32,
+            self.pending_relative_y as i32,
+        );
+        self.pending_relative_x = 0;
+        self.pending_relative_y = 0;
+        Some(movement)
+    }
+
+    fn clear_relative_move(&mut self) {
+        self.pending_relative_x = 0;
+        self.pending_relative_y = 0;
+    }
+
     /// Force update the last mouse time (for button events that must be sent)
     fn mark_mouse_sent(&mut self) {
         self.last_mouse_time = Instant::now();
+    }
+}
+
+/// Serializes all outbound RustDesk messages while allowing the connection reader to
+/// keep processing input when video or audio writes are backpressured.
+struct OutboundWriter {
+    state: Mutex<OutboundWriterState>,
+}
+
+struct OutboundWriterState {
+    writer: OwnedWriteHalf,
+    session_key: Option<secretbox::Key>,
+    enc_seqnum: u64,
+    frame_buf: BytesMut,
+}
+
+impl OutboundWriter {
+    fn new(writer: OwnedWriteHalf) -> Self {
+        Self {
+            state: Mutex::new(OutboundWriterState {
+                writer,
+                session_key: None,
+                enc_seqnum: 0,
+                frame_buf: BytesMut::with_capacity(128 * 1024),
+            }),
+        }
+    }
+
+    async fn set_session_key(&self, key: secretbox::Key) {
+        self.state.lock().await.session_key = Some(key);
+    }
+
+    async fn send_plain(&self, data: &[u8]) -> std::io::Result<()> {
+        let mut state = self.state.lock().await;
+        let OutboundWriterState {
+            writer, frame_buf, ..
+        } = &mut *state;
+        write_frame_buffered(writer, data, frame_buf).await
+    }
+
+    async fn send_encrypted(&self, data: &[u8]) -> std::io::Result<()> {
+        let mut state = self.state.lock().await;
+        let payload = if let Some(key) = state.session_key.clone() {
+            state.enc_seqnum += 1;
+            let nonce = Connection::get_nonce(state.enc_seqnum);
+            secretbox::seal(data, &nonce, &key)
+        } else {
+            data.to_vec()
+        };
+        let OutboundWriterState {
+            writer, frame_buf, ..
+        } = &mut *state;
+        write_frame_buffered(writer, &payload, frame_buf).await
     }
 }
 
@@ -140,8 +230,6 @@ pub struct Connection {
     session_key: Option<secretbox::Key>,
     /// Encryption enabled flag
     encryption_enabled: bool,
-    /// Encryption sequence number (for nonce generation)
-    enc_seqnum: u64,
     /// Decryption sequence number (for nonce generation)
     dec_seqnum: u64,
     /// Negotiated video codec (after client capability exchange)
@@ -234,7 +322,6 @@ impl Connection {
             audio_task: None,
             session_key: None,
             encryption_enabled: false,
-            enc_seqnum: 0,
             dec_seqnum: 0,
             negotiated_codec: None,
             video_frame_tx: None,
@@ -279,7 +366,7 @@ impl Connection {
         *self.state.write() = ConnectionState::Handshaking;
 
         let (mut reader, writer) = stream.into_split();
-        let writer = Arc::new(Mutex::new(writer));
+        let writer = Arc::new(OutboundWriter::new(writer));
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         // Send our SignedId first (this is what RustDesk protocol expects)
@@ -291,22 +378,43 @@ impl Connection {
         debug!("Sending SignedId with device_id={}", self.device_id);
         self.send_framed_arc(&writer, &signed_id_bytes).await?;
 
+        // Keep media writes out of the connection read loop. A congested video socket
+        // must not prevent us from reading and dispatching mouse/keyboard messages.
+        let (write_error_tx, mut write_error_rx) = mpsc::unbounded_channel::<String>();
+
         // Channel for receiving video frames to send (bounded to provide backpressure)
         let (video_tx, mut video_rx) = mpsc::channel::<Bytes>(4);
         let mut video_streaming = false;
+        let video_writer = writer.clone();
+        let video_error_tx = write_error_tx.clone();
+        let video_sender_task = tokio::spawn(async move {
+            while let Some(frame_data) = video_rx.recv().await {
+                if let Err(error) = video_writer.send_encrypted(&frame_data).await {
+                    let _ = video_error_tx.send(format!("video: {}", error));
+                    break;
+                }
+            }
+        });
 
         // Channel for receiving audio frames to send (bounded to provide backpressure)
         let (audio_tx, mut audio_rx) = mpsc::channel::<Bytes>(8);
         let mut audio_streaming = false;
+        let audio_writer = writer.clone();
+        let audio_error_tx = write_error_tx.clone();
+        let audio_sender_task = tokio::spawn(async move {
+            while let Some(frame_data) = audio_rx.recv().await {
+                if let Err(error) = audio_writer.send_encrypted(&frame_data).await {
+                    let _ = audio_error_tx.send(format!("audio: {}", error));
+                    break;
+                }
+            }
+        });
+        drop(write_error_tx);
 
         // Timer for sending TestDelay to measure round-trip latency
         // RustDesk clients display this delay information
         let mut test_delay_interval = tokio::time::interval(Duration::from_secs(1));
         test_delay_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-        // Pre-allocated buffer for framing (reused across sends to reduce allocations)
-        // Typical H264 frame is 10-100KB, pre-allocate 128KB
-        let mut frame_buf = BytesMut::with_capacity(128 * 1024);
 
         loop {
             tokio::select! {
@@ -334,48 +442,9 @@ impl Connection {
                     }
                 }
 
-                // Send video frames (encrypted if session key is set)
-                // Optimized path: inline encryption and use pre-allocated buffer
-                Some(frame_data) = video_rx.recv() => {
-                    let send_result = if let Some(ref key) = self.session_key {
-                        // Encrypt the frame
-                        self.enc_seqnum += 1;
-                        let nonce = Self::get_nonce(self.enc_seqnum);
-                        let ciphertext = secretbox::seal(&frame_data, &nonce, key);
-                        // Send using pre-allocated buffer
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &ciphertext, &mut frame_buf).await
-                    } else {
-                        // No encryption, send plain
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &frame_data, &mut frame_buf).await
-                    };
-
-                    if let Err(e) = send_result {
-                        error!("Error sending video frame: {}", e);
-                        break;
-                    }
-                }
-
-                // Send audio frames (encrypted if session key is set)
-                Some(frame_data) = audio_rx.recv() => {
-                    let send_result = if let Some(ref key) = self.session_key {
-                        // Encrypt the frame
-                        self.enc_seqnum += 1;
-                        let nonce = Self::get_nonce(self.enc_seqnum);
-                        let ciphertext = secretbox::seal(&frame_data, &nonce, key);
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &ciphertext, &mut frame_buf).await
-                    } else {
-                        // No encryption, send plain
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &frame_data, &mut frame_buf).await
-                    };
-
-                    if let Err(e) = send_result {
-                        error!("Error sending audio frame: {}", e);
-                        break;
-                    }
+                Some(error) = write_error_rx.recv() => {
+                    error!("RustDesk outbound write failed: {}", error);
+                    break;
                 }
 
                 // Send TestDelay periodically to measure latency
@@ -395,6 +464,9 @@ impl Connection {
             }
         }
 
+        video_sender_task.abort();
+        audio_sender_task.abort();
+
         // Stop video streaming task if running
         if let Some(task) = self.video_task.take() {
             task.abort();
@@ -409,14 +481,13 @@ impl Connection {
         Ok(())
     }
 
-    /// Send framed message using Arc<Mutex<OwnedWriteHalf>> with RustDesk's variable-length encoding
+    /// Send a plain framed message through the serialized outbound writer.
     async fn send_framed_arc(
         &self,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
         data: &[u8],
     ) -> anyhow::Result<()> {
-        let mut w = writer.lock().await;
-        write_frame(&mut *w, data).await?;
+        writer.send_plain(data).await?;
         Ok(())
     }
 
@@ -431,20 +502,11 @@ impl Connection {
     /// RustDesk uses sequence-based nonce, NOT nonce prefix in message
     async fn send_encrypted_arc(
         &mut self,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
         data: &[u8],
     ) -> anyhow::Result<()> {
-        if let Some(ref key) = self.session_key {
-            // Increment encryption sequence number
-            self.enc_seqnum += 1;
-            let nonce = Self::get_nonce(self.enc_seqnum);
-            // Encrypt the message - RustDesk only sends ciphertext, no nonce prefix
-            let ciphertext = secretbox::seal(data, &nonce, key);
-            self.send_framed_arc(writer, &ciphertext).await
-        } else {
-            // No encryption, send plain
-            self.send_framed_arc(writer, data).await
-        }
+        writer.send_encrypted(data).await?;
+        Ok(())
     }
 
     /// Handle incoming message with Arc writer
@@ -452,7 +514,7 @@ impl Connection {
     async fn handle_message_arc(
         &mut self,
         data: &[u8],
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
         video_tx: &mpsc::Sender<Bytes>,
         video_streaming: &mut bool,
         audio_tx: &mpsc::Sender<Bytes>,
@@ -576,7 +638,7 @@ impl Connection {
     async fn handle_login_request_arc(
         &mut self,
         lr: &LoginRequest,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
     ) -> anyhow::Result<bool> {
         info!(
             "Login request from {} ({}), password_len={}",
@@ -673,7 +735,7 @@ impl Connection {
     async fn handle_misc_arc(
         &mut self,
         misc: &Misc,
-        _writer: &Arc<Mutex<OwnedWriteHalf>>,
+        _writer: &Arc<OutboundWriter>,
     ) -> anyhow::Result<()> {
         match &misc.union {
             Some(misc::Union::SwitchDisplay(sd)) => {
@@ -857,7 +919,7 @@ impl Connection {
     async fn handle_peer_public_key(
         &mut self,
         pk: &PublicKey,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
     ) -> anyhow::Result<()> {
         // RustDesk's PublicKey message has two parts:
         // - asymmetric_value: The peer's temporary Curve25519 public key (32 bytes)
@@ -880,6 +942,7 @@ impl Connection {
             ) {
                 Ok(session_key) => {
                     info!("Session key negotiated successfully");
+                    writer.set_session_key(session_key.clone()).await;
                     self.session_key = Some(session_key);
                     self.encryption_enabled = true;
                 }
@@ -930,7 +993,7 @@ impl Connection {
     async fn handle_signed_id(
         &mut self,
         si: &SignedId,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
     ) -> anyhow::Result<()> {
         // The SignedId contains a signed IdPk message
         // Try to parse the IdPk from the signed data
@@ -1137,7 +1200,7 @@ impl Connection {
     async fn handle_test_delay(
         &mut self,
         td: &TestDelay,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &Arc<OutboundWriter>,
     ) -> anyhow::Result<()> {
         if td.from_client {
             // Client initiated the delay test, respond with the same time
@@ -1153,10 +1216,15 @@ impl Connection {
             let data = response
                 .write_to_bytes()
                 .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-            self.send_encrypted_arc(writer, &data).await?;
+            let outbound = writer.clone();
+            tokio::spawn(async move {
+                if let Err(error) = outbound.send_encrypted(&data).await {
+                    warn!("Failed to send TestDelay response: {}", error);
+                }
+            });
 
             debug!(
-                "TestDelay response sent: time={}, last_delay={}ms",
+                "TestDelay response queued: time={}, last_delay={}ms",
                 td.time, self.last_delay
             );
         } else {
@@ -1180,7 +1248,7 @@ impl Connection {
     /// The client will echo this back, allowing us to calculate RTT.
     /// The measured delay is then included in future TestDelay messages
     /// for the client to display.
-    async fn send_test_delay(&mut self, writer: &Arc<Mutex<OwnedWriteHalf>>) -> anyhow::Result<()> {
+    async fn send_test_delay(&mut self, writer: &Arc<OutboundWriter>) -> anyhow::Result<()> {
         // Get current time in milliseconds since epoch
         let time_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1199,13 +1267,19 @@ impl Connection {
         let data = msg
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-        self.send_encrypted_arc(writer, &data).await?;
+        let outbound = writer.clone();
+        tokio::spawn(async move {
+            if let Err(error) = outbound.send_encrypted(&data).await {
+                warn!("Failed to send TestDelay: {}", error);
+            }
+        });
 
-        // Record when we sent this, so we can calculate RTT when client echoes back
+        // Record when we queued this, so we can calculate approximate RTT when the
+        // client echoes it back without blocking the input reader on a media write.
         self.last_test_delay_sent = Some(Instant::now());
 
         debug!(
-            "TestDelay sent: time={}, last_delay={}ms",
+            "TestDelay queued: time={}, last_delay={}ms",
             time_ms, self.last_delay
         );
         Ok(())
@@ -1278,34 +1352,57 @@ impl Connection {
         Ok(())
     }
 
-    /// Handle mouse event with throttling
+    /// Handle mouse event with throttling.
     ///
-    /// Pure move events (no button/scroll) are throttled to prevent HID EAGAIN errors.
-    /// Button down/up and scroll events are always sent immediately.
+    /// Absolute moves may safely be coalesced because the next coordinate catches up.
+    /// Relative moves must be accumulated, otherwise every throttled event permanently
+    /// loses displacement and the remote cursor appears to trail behind the local one.
     async fn handle_mouse_event(&mut self, me: &MouseEvent) -> anyhow::Result<()> {
         // Parse RustDesk mask format: (button << 3) | event_type
         let event_type = me.mask & 0x07;
         let is_relative_move = event_type == mouse_type::MOVE_RELATIVE;
+        let is_absolute_move = event_type == mouse_type::MOVE;
+        let is_pure_move = is_absolute_move || is_relative_move;
+
+        let mut mouse_events = Vec::new();
 
         if is_relative_move {
             self.relative_mouse_active = true;
-        } else if event_type == mouse_type::MOVE {
-            self.relative_mouse_active = false;
+            self.input_throttler.accumulate_relative_move(me.x, me.y);
+            if !self.input_throttler.should_send_mouse_move() {
+                return Ok(());
+            }
+            if let Some((x, y)) = self.input_throttler.take_relative_move() {
+                mouse_events.extend(convert_relative_mouse_delta(x, y));
+            }
+        } else {
+            if is_absolute_move {
+                self.relative_mouse_active = false;
+                self.input_throttler.clear_relative_move();
+                if !self.input_throttler.should_send_mouse_move() {
+                    return Ok(());
+                }
+            } else if self.relative_mouse_active {
+                // Preserve ordering: flush movement accumulated immediately before a
+                // button or wheel event so the action occurs at the intended position.
+                if let Some((x, y)) = self.input_throttler.take_relative_move() {
+                    mouse_events.extend(convert_relative_mouse_delta(x, y));
+                }
+            }
+            mouse_events.extend(convert_mouse_event(
+                me,
+                self.screen_width,
+                self.screen_height,
+            ));
         }
 
-        // Check if this is a pure move event (no button/scroll)
-        let is_pure_move = event_type == mouse_type::MOVE || is_relative_move;
-
-        // For pure move events, apply throttling
-        if is_pure_move && !self.input_throttler.should_send_mouse_move() {
-            // Skip this move event to prevent HID EAGAIN
-            return Ok(());
-        }
-
-        debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
-
-        // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events = convert_mouse_event(me, self.screen_width, self.screen_height);
+        debug!(
+            "Mouse event: x={}, y={}, mask={}, hid_reports={}",
+            me.x,
+            me.y,
+            me.mask,
+            mouse_events.len()
+        );
 
         // Send to HID controller if available
         if let Some(ref hid) = self.hid {
