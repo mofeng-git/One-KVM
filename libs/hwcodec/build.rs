@@ -5,7 +5,8 @@ use std::{
 };
 
 fn main() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Read the current source path when running, since build artifacts may move.
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("cpp");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed={}", cpp_dir.display());
@@ -17,7 +18,7 @@ fn main() {
 }
 
 fn build_common(builder: &mut Build) {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let common_dir = manifest_dir.join("cpp").join("common");
 
@@ -367,7 +368,7 @@ mod ffmpeg {
     }
 
     fn ffmpeg_ffi() {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_ram_dir = manifest_dir.join("cpp").join("common");
         let ffi_header_path = ffmpeg_ram_dir.join("ffmpeg_ffi.h");
         println!("cargo:rerun-if-changed={}", ffi_header_path.display());
@@ -381,7 +382,7 @@ mod ffmpeg {
     }
 
     fn build_ffmpeg_ram(builder: &mut Build) {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_ram_dir = manifest_dir.join("cpp").join("ffmpeg_ram");
         let ffi_header = ffmpeg_ram_dir
             .join("ffmpeg_ram_ffi.h")
@@ -420,7 +421,7 @@ mod ffmpeg {
             return;
         }
 
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let capture_header = manifest_dir
             .join("cpp")
             .join("ffmpeg_capture_ffi.h")
@@ -443,7 +444,7 @@ mod ffmpeg {
     }
 
     fn build_ffmpeg_hw(builder: &mut Build) {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_hw_dir = manifest_dir.join("cpp").join("ffmpeg_hw");
         let ffi_header = ffmpeg_hw_dir
             .join("ffmpeg_hw_ffi.h")
