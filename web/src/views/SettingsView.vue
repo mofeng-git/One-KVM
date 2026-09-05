@@ -59,6 +59,7 @@ import { toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
+import { useConsoleLayout, type ConsoleLayout } from '@/composables/useConsoleLayout'
 import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
@@ -143,6 +144,9 @@ import {
   Bot,
   ClipboardPaste,
   Wrench,
+  PanelTop,
+  PanelLeft,
+  GalleryHorizontalEnd,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -153,6 +157,15 @@ const configStore = useConfigStore()
 const authStore = useAuthStore()
 const featureVisibility = useFeatureVisibility()
 const { theme, setTheme } = useTheme()
+const { consoleLayout, setConsoleLayout } = useConsoleLayout()
+const consoleLayoutOptions: Array<{
+  value: ConsoleLayout
+  icon: typeof PanelTop
+}> = [
+  { value: 'current', icon: PanelTop },
+  { value: 'floating', icon: GalleryHorizontalEnd },
+  { value: 'sidebar', icon: PanelLeft },
+]
 const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
@@ -2793,6 +2806,55 @@ watch(isWindows, () => {
                   <Button :variant="theme === 'system' ? 'default' : 'outline'" size="sm" class="justify-center" @click="setTheme('system')">
                     <Monitor class="size-4 mr-1.5" />{{ t('settings.systemMode') }}
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.consoleLayout') }}</CardTitle>
+                <CardDescription>{{ t('settings.consoleLayoutDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <button
+                    v-for="option in consoleLayoutOptions"
+                    :key="option.value"
+                    type="button"
+                    class="group rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                    :class="consoleLayout === option.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border'"
+                    :aria-pressed="consoleLayout === option.value"
+                    @click="setConsoleLayout(option.value)"
+                  >
+                    <div class="mb-3 flex h-20 overflow-hidden rounded-md border bg-muted/40">
+                      <div
+                        v-if="option.value === 'sidebar'"
+                        class="flex w-4 flex-col items-center gap-1 border-r bg-background p-1"
+                      >
+                        <span v-for="i in 4" :key="i" class="size-1.5 rounded-sm bg-muted-foreground/50" />
+                      </div>
+                      <div class="relative flex-1 bg-zinc-950">
+                        <div
+                          v-if="option.value === 'current'"
+                          class="absolute inset-x-0 top-0 flex h-3 items-center gap-1 border-b bg-background px-1"
+                        >
+                          <span v-for="i in 5" :key="i" class="h-1 w-2 rounded-full bg-muted-foreground/50" />
+                        </div>
+                        <div
+                          v-else-if="option.value === 'floating'"
+                          class="absolute inset-x-2 top-2 flex h-3 items-center gap-1 rounded border bg-background/90 px-1 shadow"
+                        >
+                          <span v-for="i in 5" :key="i" class="h-1 w-2 rounded-full bg-muted-foreground/50" />
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <component :is="option.icon" class="size-4 text-muted-foreground" />
+                      <span class="text-sm font-medium">{{ t(`settings.consoleLayoutOptions.${option.value}`) }}</span>
+                      <Check v-if="consoleLayout === option.value" class="ml-auto size-4 text-primary" />
+                    </div>
+                    <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{{ t(`settings.consoleLayoutHints.${option.value}`) }}</p>
+                  </button>
                 </div>
               </CardContent>
             </Card>

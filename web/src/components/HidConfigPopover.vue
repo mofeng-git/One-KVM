@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusConsolePanel } from "@/composables/useConsoleAppearance"
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -29,6 +30,7 @@ import type { HidConfigUpdate } from '@/types/generated'
 const props = defineProps<{
   open: boolean
   mouseMode?: 'absolute' | 'relative'
+  side?: 'top' | 'right' | 'bottom' | 'left'
 }>()
 
 const emit = defineEmits<{
@@ -231,13 +233,24 @@ watch(() => props.open, (isOpen) => {
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs">
+      <Button
+        variant="ghost"
+        size="sm"
+        class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+        :aria-label="buttonText"
+        :title="buttonText"
+      >
         <MousePointer v-if="mouseMode === 'absolute'" class="size-3.5 sm:size-4" />
         <Move v-else class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="w-[min(320px,92vw)] p-3" align="start">
+    <PopoverContent
+      @open-auto-focus="focusConsolePanel"
+      class="console-config-panel w-[min(320px,92vw)] p-3"
+      align="start"
+      :side="props.side ?? 'bottom'"
+    >
       <div class="space-y-3">
         <h4 class="text-sm font-medium">{{ t('actionbar.hidConfig') }}</h4>
 

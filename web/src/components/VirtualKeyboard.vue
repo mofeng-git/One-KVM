@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Keyboard from 'simple-keyboard'
@@ -38,6 +39,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const consoleAppearance = useConsoleAppearance()
 
 const isAttached = ref(props.attached ?? true)
 const selectedOs = ref<KeyboardOsType>('windows')
@@ -594,6 +596,7 @@ onUnmounted(() => {
       v-if="visible"
       :id="keyboardId"
       ref="keyboardRef"
+      :data-console-layout="consoleAppearance"
       class="vkb"
       :class="{
         'vkb--attached': isAttached,
@@ -909,7 +912,7 @@ html.dark .hg-theme-default .hg-button.down-key,
   min-width: 1200px;
   max-width: 1600px;
   width: auto;
-  border-radius: var(--radius-lg);
+  border-radius: var(--console-surface-radius, var(--radius-lg));
   box-shadow: 0 25px 50px -12px color-mix(in oklch, var(--foreground) 25%, transparent);
 }
 
@@ -936,7 +939,7 @@ html.dark .hg-theme-default .hg-button.down-key,
 
 .vkb--floating .vkb-header {
   cursor: move;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--console-surface-radius, var(--radius-lg)) var(--console-surface-radius, var(--radius-lg)) 0 0;
 }
 
 .vkb-header-left {

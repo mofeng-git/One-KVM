@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -42,6 +43,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const consoleAppearance = useConsoleAppearance()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
@@ -215,6 +217,8 @@ onMounted(loadConfig)
 
 <template>
   <aside
+    data-slot="computer-use-panel"
+    :data-console-layout="consoleAppearance"
     v-show="open"
     class="absolute inset-y-0 right-0 z-30 h-full min-h-0 w-full border-l bg-background shadow-xl sm:w-[420px] md:relative md:z-auto xl:w-[460px]"
   >

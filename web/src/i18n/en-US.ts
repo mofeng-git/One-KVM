@@ -96,12 +96,19 @@ export default {
     backToPassword: 'Back to password',
   },
   status: {
+    no_signal: 'No signal',
+    busy: 'Device busy',
     connected: 'Connected',
     connecting: 'Connecting',
     disconnected: 'Disconnected',
     error: 'Error',
   },
   actionbar: {
+    muted: 'Muted',
+    more: 'More actions',
+    collapseToolbar: 'Collapse toolbar',
+    expandToolbar: 'Expand toolbar',
+
     paste: 'Paste Text',
     micStart: 'Start Transfer',
     micStop: 'Stop Transfer',
@@ -190,6 +197,8 @@ export default {
     selectAudioDevice: 'Select device...',
   },
   infobar: {
+    pointerCaptured: 'Mouse captured · Esc to release',
+
     keys: 'Keys',
     pointer: 'Pointer',
     caps: 'Caps',
@@ -439,6 +448,7 @@ export default {
     uploadFailed: 'File upload failed',
     driveUnreadable: 'Format unsupported',
     driveUnreadableTooltip: 'Unable to parse the exFAT filesystem. It may have been formatted with an unsupported format.',
+    driveFilesystemUnsupportedHint: 'Web file browsing does not support this filesystem, but you can still connect the drive to the target machine.',
     reinitializeDrive: 'Re-initialize',
     diskMode: 'Drive Mode',
     singleDiskMode: 'Single',
@@ -484,7 +494,7 @@ export default {
       downloadIncomplete: 'The remote image download was incomplete.',
       driveNotInitialized: 'The virtual drive is not initialized.',
       driveConnected: 'The virtual drive is connected to the controlled computer. Disconnect it before editing files.',
-      driveFilesystemUnsupported: 'The virtual drive filesystem is unsupported. Reinitialize it to continue.',
+      driveFilesystemUnsupported: 'Web file management does not support this format, but the drive can still be mounted on the controlled computer.',
       driveSizeInvalid: 'The virtual drive size is invalid.',
       storageSpaceUnavailable: 'Available virtual media storage space could not be determined.',
       storageFull: 'Virtual media storage does not have enough free space.',
@@ -551,6 +561,18 @@ export default {
     networkAddresses: 'Network Addresses',
     language: 'Language',
     theme: 'Theme',
+    consoleLayout: 'Console layout',
+    consoleLayoutDesc: 'Choose how console controls are arranged. The preference is saved in this browser.',
+    consoleLayoutHints: {
+      current: 'Full status and labeled tools for configuration and troubleshooting.',
+      sidebar: 'Compact status and fixed icons for frequent actions.',
+      floating: 'Essential floating controls that collapse to keep the video clear.',
+    },
+    consoleLayoutOptions: {
+      current: 'Top bar',
+      floating: 'Floating bar',
+      sidebar: 'Sidebar',
+    },
     lightMode: 'Light',
     darkMode: 'Dark',
     systemMode: 'System',
@@ -948,6 +970,8 @@ export default {
     },
   },
   statusCard: {
+    connectionDetails: 'Connection details',
+
     device: 'Device',
     video: 'Video',
     hid: 'HID',

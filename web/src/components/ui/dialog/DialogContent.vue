@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
+const consoleAppearance = useConsoleAppearance()
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { X } from "lucide-vue-next"
@@ -31,6 +33,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <DialogOverlay />
     <DialogContent
       data-slot="dialog-content"
+      :data-console-layout="consoleAppearance"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(

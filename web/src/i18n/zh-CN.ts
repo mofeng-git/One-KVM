@@ -96,12 +96,19 @@ export default {
     backToPassword: '返回密码登录',
   },
   status: {
+    no_signal: '无信号',
+    busy: '设备占用中',
     connected: '已连接',
     connecting: '连接中',
     disconnected: '已断开',
     error: '错误',
   },
   actionbar: {
+    muted: '已静音',
+    more: '更多操作',
+    collapseToolbar: '收起工具栏',
+    expandToolbar: '展开工具栏',
+
     paste: '粘贴文本',
     micStart: '开始传声',
     micStop: '停止传声',
@@ -190,6 +197,8 @@ export default {
     selectAudioDevice: '选择设备...',
   },
   infobar: {
+    pointerCaptured: '鼠标已捕获 · Esc 释放',
+
     keys: '按键',
     pointer: '指针',
     caps: 'Caps',
@@ -438,6 +447,7 @@ export default {
     uploadFailed: '文件上传失败',
     driveUnreadable: '格式不支持',
     driveUnreadableTooltip: '无法解析 exFAT 文件系统，可能已被格式化为不支持的格式。',
+    driveFilesystemUnsupportedHint: '网页暂不支持浏览此文件系统，但仍可连接到被控机使用。',
     reinitializeDrive: '重新初始化',
     diskMode: '驱动器模式',
     singleDiskMode: '单驱动器',
@@ -483,7 +493,7 @@ export default {
       downloadIncomplete: '远程镜像下载不完整。',
       driveNotInitialized: '虚拟盘尚未初始化。',
       driveConnected: '虚拟盘已连接到被控机，请先断开连接再操作文件。',
-      driveFilesystemUnsupported: '虚拟盘文件系统不受支持，请重新初始化后再操作。',
+      driveFilesystemUnsupported: '网页文件管理不支持此格式，但仍可挂载到被控机使用。',
       driveSizeInvalid: '虚拟盘大小无效。',
       storageSpaceUnavailable: '无法获取虚拟媒体存储空间信息。',
       storageFull: '虚拟媒体存储空间不足。',
@@ -550,6 +560,18 @@ export default {
     networkAddresses: '网络地址',
     language: '语言',
     theme: '主题',
+    consoleLayout: '控制台布局',
+    consoleLayoutDesc: '选择控制台操作区的排列方式，设置将保存在当前浏览器。',
+    consoleLayoutHints: {
+      current: '完整状态与文字工具栏，适合配置和排障。',
+      sidebar: '精简状态与固定图标入口，适合频繁操作。',
+      floating: '常用操作悬浮显示，可收起以专注画面。',
+    },
+    consoleLayoutOptions: {
+      current: '顶栏',
+      floating: '浮动栏',
+      sidebar: '侧边栏',
+    },
     lightMode: '浅色模式',
     darkMode: '深色模式',
     systemMode: '跟随系统',
@@ -947,6 +969,8 @@ export default {
     },
   },
   statusCard: {
+    connectionDetails: '连接详情',
+
     device: '设备',
     video: '视频',
     hid: 'HID',

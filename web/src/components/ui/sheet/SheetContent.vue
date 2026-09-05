@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
+const consoleAppearance = useConsoleAppearance()
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { X } from "lucide-vue-next"
@@ -36,6 +38,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <SheetOverlay />
     <DialogContent
       data-slot="sheet-content"
+      :data-console-layout="consoleAppearance"
+      :data-edge="side"
       :class="cn(
         'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
         side === 'right'
