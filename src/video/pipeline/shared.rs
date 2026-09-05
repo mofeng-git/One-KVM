@@ -29,6 +29,96 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::encoder_state::{build_encoder_state, should_parallel_decode_mjpeg, EncoderThreadState};
 
+#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+#[path = "dmabuf.rs"]
+mod dmabuf;
+
+#[cfg(any(
+    test,
+    all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm"))
+))]
+fn rkmpp_dma_eligible(
+    backend: Option<EncoderBackend>,
+    codec: VideoEncoderType,
+    format: PixelFormat,
+) -> bool {
+    backend == Some(EncoderBackend::Rkmpp)
+        && matches!(codec, VideoEncoderType::H264 | VideoEncoderType::H265)
+        && matches!(
+            format,
+            PixelFormat::Bgr24
+                | PixelFormat::Nv12
+                | PixelFormat::Yuyv
+                | PixelFormat::Rgb24
+                | PixelFormat::Mjpeg
+        )
+}
+
+#[cfg(test)]
+mod dma_selection_tests {
+    use super::*;
+    #[test]
+    fn only_selected_rkmpp_uses_dma() {
+        for backend in [
+            EncoderBackend::Software,
+            EncoderBackend::Vaapi,
+            EncoderBackend::Nvenc,
+            EncoderBackend::Qsv,
+            EncoderBackend::Amf,
+            EncoderBackend::V4l2m2m,
+        ] {
+            for codec in [VideoEncoderType::H264, VideoEncoderType::H265] {
+                for format in [
+                    PixelFormat::Bgr24,
+                    PixelFormat::Nv12,
+                    PixelFormat::Yuyv,
+                    PixelFormat::Rgb24,
+                    PixelFormat::Mjpeg,
+                ] {
+                    assert!(!rkmpp_dma_eligible(Some(backend), codec, format));
+                }
+            }
+        }
+        assert!(!rkmpp_dma_eligible(
+            None,
+            VideoEncoderType::H264,
+            PixelFormat::Nv12
+        ));
+        for codec in [VideoEncoderType::H264, VideoEncoderType::H265] {
+            for format in [
+                PixelFormat::Bgr24,
+                PixelFormat::Nv12,
+                PixelFormat::Yuyv,
+                PixelFormat::Rgb24,
+                PixelFormat::Mjpeg,
+            ] {
+                assert!(rkmpp_dma_eligible(
+                    Some(EncoderBackend::Rkmpp),
+                    codec,
+                    format
+                ));
+            }
+        }
+        for format in [
+            PixelFormat::Nv16,
+            PixelFormat::Nv21,
+            PixelFormat::Nv24,
+            PixelFormat::Yuv420,
+        ] {
+            assert!(!rkmpp_dma_eligible(
+                Some(EncoderBackend::Rkmpp),
+                VideoEncoderType::H264,
+                format
+            ));
+        }
+        assert!(!rkmpp_dma_eligible(
+            Some(EncoderBackend::Rkmpp),
+            VideoEncoderType::VP9,
+            PixelFormat::Nv12
+        ));
+    }
+}
+
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 /// After this many consecutive timeouts, log a prominent warning.
@@ -172,7 +262,9 @@ pub struct EncodedVideoFrame {
 }
 
 enum PipelineCmd {
-    SetBitrate { bitrate_kbps: u32, gop: u32 },
+    SetBitrate {
+        preset: crate::video::codec::BitratePreset,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,6 +347,15 @@ impl Default for SharedVideoPipelineConfig {
 }
 
 impl SharedVideoPipelineConfig {
+    /// Keep encoder timing aligned with the negotiated HDMI source on every open.
+    fn align_source_fps(&mut self, source_fps: Option<f64>) {
+        if self.control_mode == VideoControlMode::SourceFollowing {
+            if let Some(fps) = source_fps {
+                self.fps = fps.round().clamp(1.0, 120.0) as u32;
+            }
+        }
+    }
+
     /// Get effective bitrate in kbps
     pub fn bitrate_kbps(&self) -> u32 {
         self.bitrate_preset.bitrate_kbps()
@@ -538,14 +639,13 @@ impl SharedVideoPipeline {
 
     fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
         match cmd {
-            PipelineCmd::SetBitrate { bitrate_kbps, gop } => {
-                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
-                let _ = gop;
+            PipelineCmd::SetBitrate { preset } => {
+                let bitrate_kbps = preset.bitrate_kbps();
                 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
-                            .reconfigure(bitrate_kbps as i32, gop as i32)
+                            .reconfigure(bitrate_kbps as i32, preset.gop_size(state.fps) as i32)
                             .map_err(|e| {
                                 let detail = if e.is_empty() {
                                     ffmpeg_hw_last_error()
@@ -767,7 +867,8 @@ impl SharedVideoPipeline {
             subdev_path.clone(),
             parse_bridge_kind(bridge_kind.as_deref()),
         );
-        let preopened: Option<CaptureStream> = match open_capture_stream(
+        #[allow(unused_mut)]
+        let mut preopened: Option<CaptureStream> = match open_capture_stream(
             &device_path,
             config.resolution,
             config.input_format,
@@ -781,11 +882,7 @@ impl SharedVideoPipeline {
                 let negotiated_res = s.resolution();
                 let negotiated_fmt = s.format();
                 let previous = (config.resolution, config.input_format, config.fps);
-                if config.control_mode == VideoControlMode::SourceFollowing {
-                    if let Some(source_fps) = s.source_fps() {
-                        config.fps = source_fps.round().clamp(1.0, 120.0) as u32;
-                    }
-                }
+                config.align_source_fps(s.source_fps());
                 config.resolution = negotiated_res;
                 config.input_format = negotiated_fmt;
                 if previous != (config.resolution, config.input_format, config.fps) {
@@ -821,6 +918,32 @@ impl SharedVideoPipeline {
             }
             Err(e) => return Err(e),
         };
+
+        #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+        if dmabuf::eligible(&config) {
+            if let Some(stream) = preopened.as_ref().filter(|s| s.supports_rkmpp_dmabuf()) {
+                match dmabuf::prepare(stream, &config) {
+                    Ok(encoder) => {
+                        return dmabuf::start(
+                            self.clone(),
+                            preopened.take().expect("preopened DMA capture"),
+                            encoder,
+                            config,
+                            device_path,
+                            buffer_count,
+                            BridgeContext::from_parts(
+                                subdev_path,
+                                parse_bridge_kind(bridge_kind.as_deref()),
+                            ),
+                        );
+                    }
+                    Err(error) => warn!(
+                        "RKMPP DMA unavailable; using existing copy pipeline: {}",
+                        error
+                    ),
+                }
+            }
+        }
 
         let mut encoder_config = config.clone();
         if parallel_mjpeg_decode {
@@ -1400,23 +1523,7 @@ impl SharedVideoPipeline {
         let input_format = state.input_format;
         let raw_frame = frame.data();
 
-        let process_start = PROCESS_START.get_or_init(Instant::now);
-        let current_ts_us = process_start.elapsed().as_micros() as i64;
-        let start_ts_us = self.pipeline_start_time_us.load(Ordering::Acquire);
-        let pts_ms = if start_ts_us == 0 {
-            let start_ts_us = match self.pipeline_start_time_us.compare_exchange(
-                0,
-                current_ts_us,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => current_ts_us,
-                Err(existing) => existing,
-            };
-            current_ts_us.saturating_sub(start_ts_us) / 1000
-        } else {
-            current_ts_us.saturating_sub(start_ts_us) / 1000
-        };
+        let pts_ms = self.pts_ms();
 
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if state.ffmpeg_hw_enabled {
@@ -1551,6 +1658,28 @@ impl SharedVideoPipeline {
         }
     }
 
+    fn pts_ms(&self) -> i64 {
+        let current_ts_us = PROCESS_START
+            .get_or_init(Instant::now)
+            .elapsed()
+            .as_micros() as i64;
+        let start_ts_us = self.pipeline_start_time_us.load(Ordering::Acquire);
+        let start_ts_us = if start_ts_us == 0 {
+            match self.pipeline_start_time_us.compare_exchange(
+                0,
+                current_ts_us,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => current_ts_us,
+                Err(existing) => existing,
+            }
+        } else {
+            start_ts_us
+        };
+        current_ts_us.saturating_sub(start_ts_us) / 1000
+    }
+
     /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)
     pub fn stop(&self) {
         if self.running_flag.swap(false, Ordering::AcqRel) {
@@ -1630,13 +1759,11 @@ impl SharedVideoPipeline {
         &self,
         preset: crate::video::codec::BitratePreset,
     ) -> Result<()> {
-        let bitrate_kbps = preset.bitrate_kbps();
-        let gop = {
+        {
             let mut config = self.config.write().await;
             config.bitrate_preset = preset;
-            config.gop_size()
-        };
-        self.send_cmd(PipelineCmd::SetBitrate { bitrate_kbps, gop });
+        }
+        self.send_cmd(PipelineCmd::SetBitrate { preset });
         Ok(())
     }
 
@@ -1830,6 +1957,60 @@ impl Drop for SharedVideoPipeline {
 mod tests {
     use super::*;
     use crate::video::codec::BitratePreset;
+
+    #[tokio::test]
+    async fn bitrate_commands_preserve_custom_values_and_gop_policy() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::default()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        *pipeline.cmd_tx.write() = Some(tx);
+        for preset in [
+            BitratePreset::Custom(2500),
+            BitratePreset::Custom(1000),
+            BitratePreset::Speed,
+            BitratePreset::Quality,
+        ] {
+            pipeline.set_bitrate_preset(preset).await.unwrap();
+            let PipelineCmd::SetBitrate { preset: received } = rx.try_recv().unwrap();
+            assert_eq!(received, preset);
+            assert_eq!(pipeline.config().await.bitrate_preset, preset);
+            // Rebuilt encoders must retain the preset's policy at the new FPS.
+            let restored = SharedVideoPipelineConfig {
+                bitrate_preset: received,
+                fps: 60,
+                ..Default::default()
+            };
+            assert_eq!(restored.bitrate_kbps(), preset.bitrate_kbps());
+            assert_eq!(restored.gop_size(), preset.gop_size(60));
+        }
+    }
+
+    #[test]
+    fn source_reopen_updates_fps_and_gop_without_changing_geometry_or_bitrate() {
+        let mut config = SharedVideoPipelineConfig {
+            control_mode: VideoControlMode::SourceFollowing,
+            resolution: Resolution::HD1080,
+            fps: 60,
+            bitrate_preset: BitratePreset::Quality,
+            ..Default::default()
+        };
+        config.align_source_fps(Some(29.97));
+        assert_eq!(config.fps, 30);
+        assert_eq!(config.gop_size(), 60);
+        assert_eq!(config.resolution, Resolution::HD1080);
+        assert_eq!(config.bitrate_kbps(), 8000);
+        config.align_source_fps(None);
+        assert_eq!(config.fps, 30);
+        config.align_source_fps(Some(59.94));
+        assert_eq!(config.fps, 60);
+        assert_eq!(config.gop_size(), 120);
+    }
+
+    #[test]
+    fn configurable_capture_keeps_requested_fps() {
+        let mut config = SharedVideoPipelineConfig::default();
+        config.align_source_fps(Some(60.0));
+        assert_eq!(config.fps, 30);
+    }
 
     #[test]
     fn test_pipeline_config() {
