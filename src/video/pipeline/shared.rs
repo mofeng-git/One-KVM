@@ -21,6 +21,7 @@ use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
@@ -60,6 +61,92 @@ use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+struct MjpegDecodeJob {
+    data: Vec<u8>,
+    sequence: u64,
+}
+
+fn mjpeg_decode_worker_count(available_parallelism: usize) -> usize {
+    available_parallelism.max(1)
+}
+
+fn spawn_mjpeg_decode_workers(
+    pipeline: &Arc<SharedVideoPipeline>,
+    latest_frame: &Arc<ParkingRwLock<Option<Arc<VideoFrame>>>>,
+    frame_seq_tx: &watch::Sender<u64>,
+    buffer_pool: &Arc<FrameBufferPool>,
+    resolution: Resolution,
+) -> Vec<SyncSender<MjpegDecodeJob>> {
+    let available = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    let worker_count = mjpeg_decode_worker_count(available);
+    let mut senders = Vec::with_capacity(worker_count);
+
+    for worker_id in 0..worker_count {
+        // A rendezvous channel deliberately has no queue. If every decoder is
+        // busy, capture drops the new compressed frame instead of building up
+        // latency behind stale frames.
+        let (tx, rx) = sync_channel::<MjpegDecodeJob>(0);
+        let worker_pipeline = pipeline.clone();
+        let worker_latest_frame = latest_frame.clone();
+        let worker_frame_seq_tx = frame_seq_tx.clone();
+        let worker_buffer_pool = buffer_pool.clone();
+        let thread_name = format!("mjpeg-decoder-{worker_id}");
+        let spawn_result = std::thread::Builder::new()
+            .name(thread_name)
+            .spawn(move || {
+                let mut decoder = MjpegToNv12Decoder::new(resolution);
+                while let Ok(job) = rx.recv() {
+                    let nv12_size = resolution.width as usize * resolution.height as usize * 3 / 2;
+                    let mut nv12 = worker_buffer_pool.take(nv12_size);
+                    let decode_result = decoder.decode_into(&job.data, &mut nv12);
+                    worker_buffer_pool.put(job.data);
+
+                    if let Err(error) = decode_result {
+                        worker_buffer_pool.put(nv12);
+                        warn!("Dropping undecodable MJPEG frame: {}", error);
+                        continue;
+                    }
+                    if !worker_pipeline.running_flag.load(Ordering::Acquire) {
+                        worker_buffer_pool.put(nv12);
+                        break;
+                    }
+
+                    let frame = Arc::new(VideoFrame::from_pooled(
+                        Arc::new(FrameBuffer::new(nv12, Some(worker_buffer_pool.clone()))),
+                        resolution,
+                        PixelFormat::Nv12,
+                        resolution.width,
+                        job.sequence,
+                    ));
+                    let published = {
+                        let mut latest = worker_latest_frame.write();
+                        if latest
+                            .as_ref()
+                            .is_some_and(|current| current.sequence >= job.sequence)
+                        {
+                            false
+                        } else {
+                            *latest = Some(frame);
+                            true
+                        }
+                    };
+                    if published {
+                        let _ = worker_frame_seq_tx.send(job.sequence.wrapping_add(1));
+                    }
+                }
+            });
+
+        match spawn_result {
+            Ok(_) => senders.push(tx),
+            Err(error) => error!("Failed to start MJPEG decoder worker: {}", error),
+        }
+    }
+
+    info!("Started {} parallel MJPEG decoder worker(s)", senders.len());
+    senders
+}
 
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
@@ -738,7 +825,7 @@ impl SharedVideoPipeline {
         let mut encoder_config = config.clone();
         if parallel_mjpeg_decode {
             encoder_config.input_format = PixelFormat::Nv12;
-            info!("Using capture-thread libyuv MJPEG decode with parallel hardware encoding");
+            info!("Using parallel libyuv MJPEG decode with hardware encoding");
         }
         let mut encoder_state = build_encoder_state(&encoder_config)?;
         let _ = self.running.send(true);
@@ -864,8 +951,25 @@ impl SharedVideoPipeline {
                 let mut pixel_format = config.input_format;
                 let mut active_fps = config.fps;
                 let mut stride: u32 = 0;
-                let mut mjpeg_decoder =
-                    parallel_mjpeg_decode.then(|| MjpegToNv12Decoder::new(config.resolution));
+                let mut mjpeg_decode_senders = parallel_mjpeg_decode
+                    .then(|| {
+                        spawn_mjpeg_decode_workers(
+                            &pipeline,
+                            &latest_frame,
+                            &frame_seq_tx,
+                            &buffer_pool,
+                            config.resolution,
+                        )
+                    })
+                    .filter(|senders| !senders.is_empty());
+                let mut next_mjpeg_decoder = 0usize;
+                let mut mjpeg_decoder = parallel_mjpeg_decode
+                    .then(|| MjpegToNv12Decoder::new(config.resolution))
+                    .filter(|_| {
+                        mjpeg_decode_senders
+                            .as_ref()
+                            .is_none_or(|senders| senders.is_empty())
+                    });
 
                 if let Some(s) = preopened {
                     resolution = s.resolution();
@@ -1210,6 +1314,32 @@ impl SharedVideoPipeline {
                         pixel_format,
                         active_fps,
                     ));
+
+                    if let Some(senders) = mjpeg_decode_senders.as_mut() {
+                        let mut pending = Some(MjpegDecodeJob {
+                            data: owned,
+                            sequence: meta.sequence,
+                        });
+                        for offset in 0..senders.len() {
+                            let index = (next_mjpeg_decoder + offset) % senders.len();
+                            let job = pending.take().expect("pending MJPEG decode job");
+                            match senders[index].try_send(job) {
+                                Ok(()) => {
+                                    next_mjpeg_decoder = (index + 1) % senders.len();
+                                    break;
+                                }
+                                Err(TrySendError::Full(job))
+                                | Err(TrySendError::Disconnected(job)) => {
+                                    pending = Some(job);
+                                }
+                            }
+                        }
+                        if let Some(job) = pending {
+                            buffer_pool.put(job.data);
+                        }
+                        continue;
+                    }
+
                     let (frame_data, frame_format, frame_stride) =
                         if let Some(decoder) = mjpeg_decoder.as_mut() {
                             let nv12_size =
@@ -1830,6 +1960,14 @@ mod tests {
             .try_recv()
             .expect("cached bootstrap frame should seed the subscriber queue");
         assert!(Arc::ptr_eq(&received, &bootstrap));
+    }
+
+    #[test]
+    fn mjpeg_workers_match_available_cpu_count() {
+        assert_eq!(mjpeg_decode_worker_count(1), 1);
+        assert_eq!(mjpeg_decode_worker_count(2), 2);
+        assert_eq!(mjpeg_decode_worker_count(4), 4);
+        assert_eq!(mjpeg_decode_worker_count(64), 64);
     }
 
     #[test]

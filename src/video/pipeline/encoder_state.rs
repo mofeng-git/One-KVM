@@ -190,8 +190,8 @@ fn create_mjpeg_decoder(resolution: Resolution) -> Result<(MjpegDecoderKind, Pix
 }
 
 /// V4L2 M2M hardware encoding and libjpeg-turbo use independent CPU/hardware
-/// resources. Decode MJPEG in the capture worker so encoding the previous NV12
-/// frame can overlap with decoding the next frame.
+/// resources. Decode MJPEG outside the encoder worker so encoding the previous
+/// NV12 frame can overlap with decoding subsequent frames.
 pub(super) fn should_parallel_decode_mjpeg(config: &SharedVideoPipelineConfig) -> bool {
     if !config.input_format.is_compressed()
         || !matches!(
