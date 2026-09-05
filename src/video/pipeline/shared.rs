@@ -71,7 +71,10 @@ pub struct EncodedVideoFrame {
     pub data: Bytes,
     /// Presentation timestamp in milliseconds
     pub pts_ms: i64,
-    /// Whether this is a keyframe
+    /// Whether this frame can initialize a decoder without earlier frames.
+    ///
+    /// For H.264/H.265 this is stricter than the encoder packet flag: the
+    /// payload must be IDR/IRAP and include all required parameter sets.
     pub is_keyframe: bool,
     /// Frame sequence number
     pub sequence: u64,
@@ -306,6 +309,8 @@ pub struct SharedVideoPipeline {
     /// Atomic flag for keyframe request (avoids lock contention)
     keyframe_requested: AtomicBool,
     parameter_sets: ParkingMutex<CachedH26xParameterSets>,
+    /// Most recent random-access frame with all decoder parameter sets.
+    bootstrap_frame: ParkingRwLock<Option<Arc<EncodedVideoFrame>>>,
     /// Pipeline start time for monotonic PTS calculation (microseconds from process start).
     /// Uses AtomicI64 instead of Mutex for lock-free access.
     pipeline_start_time_us: AtomicI64,
@@ -346,6 +351,7 @@ impl SharedVideoPipeline {
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
             parameter_sets: ParkingMutex::new(CachedH26xParameterSets::default()),
+            bootstrap_frame: ParkingRwLock::new(None),
             pipeline_start_time_us: AtomicI64::new(0),
             pending_sync_geometry: ParkingMutex::new(None),
             device_lost_reason: ParkingMutex::new(None),
@@ -404,6 +410,9 @@ impl SharedVideoPipeline {
         // Keep at most one pending frame so a slow WebRTC writer cannot make
         // the encoder wait or accumulate seconds of latency.
         let (tx, rx) = mpsc::channel(1);
+        if let Some(frame) = self.bootstrap_frame.read().clone() {
+            let _ = tx.try_send(frame);
+        }
         self.subscribers.write().push(tx);
         rx
     }
@@ -526,8 +535,15 @@ impl SharedVideoPipeline {
     ) -> (Bytes, bool) {
         match codec {
             VideoEncoderType::H264 => {
+                let was_annex_b = h264_bitstream::is_annex_b(data.as_ref());
+                let data = h264_bitstream::normalize_annex_b(data);
+                if !was_annex_b && h264_bitstream::is_annex_b(data.as_ref()) {
+                    debug!("[Pipeline] Converted length-prefixed H264 packet to Annex-B");
+                }
                 let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
-                let is_keyframe = ffmpeg_keyframe || h264_bitstream::is_keyframe(data.as_ref());
+                // Require metadata and payload to agree before advertising a
+                // decoder bootstrap frame.
+                let is_idr = ffmpeg_keyframe && h264_bitstream::is_keyframe(data.as_ref());
                 let mut cache = self.parameter_sets.lock();
                 if let Some(sps) = sps.as_ref() {
                     cache.h264_sps = Some(sps.clone());
@@ -536,8 +552,11 @@ impl SharedVideoPipeline {
                     cache.h264_pps = Some(pps.clone());
                 }
 
-                if !is_keyframe || (sps.is_some() && pps.is_some()) {
-                    return (data, is_keyframe);
+                if !is_idr {
+                    return (data, false);
+                }
+                if sps.is_some() && pps.is_some() {
+                    return (data, true);
                 }
 
                 match (&cache.h264_sps, &cache.h264_pps) {
@@ -553,12 +572,13 @@ impl SharedVideoPipeline {
                         debug!("[Pipeline] Prepended cached SPS/PPS to H264 IDR");
                         (Bytes::from(output), true)
                     }
-                    _ => (data, true),
+                    // An IDR without SPS/PPS is not a decoder bootstrap frame.
+                    _ => (data, false),
                 }
             }
             VideoEncoderType::H265 => {
                 let (vps, sps, pps) = h265_bitstream::extract_vps_sps_pps(data.as_ref());
-                let is_keyframe = ffmpeg_keyframe || h265_bitstream::is_keyframe(data.as_ref());
+                let is_irap = ffmpeg_keyframe && h265_bitstream::is_keyframe(data.as_ref());
                 let mut cache = self.parameter_sets.lock();
                 if let Some(vps) = vps.as_ref() {
                     cache.h265_vps = Some(vps.clone());
@@ -570,8 +590,11 @@ impl SharedVideoPipeline {
                     cache.h265_pps = Some(pps.clone());
                 }
 
-                if !is_keyframe || (vps.is_some() && sps.is_some() && pps.is_some()) {
-                    return (data, is_keyframe);
+                if !is_irap {
+                    return (data, false);
+                }
+                if vps.is_some() && sps.is_some() && pps.is_some() {
+                    return (data, true);
                 }
 
                 match (&cache.h265_vps, &cache.h265_sps, &cache.h265_pps) {
@@ -591,7 +614,7 @@ impl SharedVideoPipeline {
                         debug!("[Pipeline] Prepended cached VPS/SPS/PPS to H265 IRAP");
                         (Bytes::from(output), true)
                     }
-                    _ => (data, true),
+                    _ => (data, false),
                 }
             }
             _ => (data, ffmpeg_keyframe),
@@ -599,6 +622,10 @@ impl SharedVideoPipeline {
     }
 
     fn broadcast_encoded(&self, frame: Arc<EncodedVideoFrame>) {
+        if frame.is_keyframe {
+            *self.bootstrap_frame.write() = Some(frame.clone());
+        }
+
         let subscribers = {
             let guard = self.subscribers.read();
             if guard.is_empty() {
@@ -637,6 +664,9 @@ impl SharedVideoPipeline {
             warn!("Pipeline already running");
             return Ok(());
         }
+
+        *self.parameter_sets.lock() = CachedH26xParameterSets::default();
+        *self.bootstrap_frame.write() = None;
 
         let mut config = self.config.read().await.clone();
         let parallel_mjpeg_decode = should_parallel_decode_mjpeg(&config);
@@ -1678,6 +1708,128 @@ mod tests {
 
         let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, BitratePreset::Speed);
         assert_eq!(h265.output_codec, VideoEncoderType::H265);
+    }
+
+    #[test]
+    fn h264_keyframe_requires_idr_and_parameter_sets() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+
+        let predicted = Bytes::from_static(&[0, 0, 0, 1, 0x41, 0xc0]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, predicted, true);
+        assert!(
+            !key,
+            "a driver flag must not turn a P-frame into a keyframe"
+        );
+
+        let parameter_sets =
+            Bytes::from_static(&[0, 0, 0, 1, 0x67, 0x42, 0x40, 0x1f, 0, 0, 0, 1, 0x68, 0xce]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, parameter_sets, false);
+        assert!(!key, "parameter sets alone are not a keyframe");
+
+        let idr = Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88]);
+        let (_, key) = pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, idr, false);
+        assert!(!key, "an IDR without a driver key flag is not trusted");
+
+        let idr = Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88]);
+        let (bootstrap, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, idr, true);
+        assert!(
+            key,
+            "matching driver metadata and IDR payload should bootstrap"
+        );
+        assert!(h264_bitstream::has_sps_pps(bootstrap.as_ref()));
+        assert!(h264_bitstream::is_keyframe(bootstrap.as_ref()));
+    }
+
+    #[test]
+    fn h265_keyframe_requires_irap_and_parameter_sets() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h265(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+
+        let trail = Bytes::from_static(&[0, 0, 0, 1, 1 << 1, 1, 0xaa]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, trail, true);
+        assert!(
+            !key,
+            "a driver flag must not turn a trailing frame into a keyframe"
+        );
+
+        let parameter_sets = Bytes::from_static(&[
+            0,
+            0,
+            0,
+            1,
+            32 << 1,
+            1,
+            0xaa,
+            0,
+            0,
+            0,
+            1,
+            33 << 1,
+            1,
+            0xbb,
+            0,
+            0,
+            0,
+            1,
+            34 << 1,
+            1,
+            0xcc,
+        ]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, parameter_sets, false);
+        assert!(!key, "parameter sets alone are not a keyframe");
+
+        let irap = Bytes::from_static(&[0, 0, 0, 1, 19 << 1, 1, 0xdd]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, irap, false);
+        assert!(!key, "an IRAP without a driver key flag is not trusted");
+
+        let irap = Bytes::from_static(&[0, 0, 0, 1, 19 << 1, 1, 0xdd]);
+        let (bootstrap, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, irap, true);
+        assert!(
+            key,
+            "matching driver metadata and IRAP payload should bootstrap"
+        );
+        assert!(h265_bitstream::has_vps_sps_pps(bootstrap.as_ref()));
+        assert!(h265_bitstream::is_keyframe(bootstrap.as_ref()));
+    }
+
+    #[test]
+    fn new_subscriber_receives_cached_bootstrap_frame() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let bootstrap = Arc::new(EncodedVideoFrame {
+            data: Bytes::from_static(&[
+                0, 0, 0, 1, 0x67, 0x42, 0x40, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0, 0, 0, 1, 0x65, 0x88,
+            ]),
+            pts_ms: 0,
+            is_keyframe: true,
+            sequence: 1,
+            duration: Duration::from_millis(33),
+            codec: VideoEncoderType::H264,
+        });
+
+        pipeline.broadcast_encoded(bootstrap.clone());
+        let mut subscriber = pipeline.subscribe();
+        let received = subscriber
+            .try_recv()
+            .expect("cached bootstrap frame should seed the subscriber queue");
+        assert!(Arc::ptr_eq(&received, &bootstrap));
     }
 
     #[test]
