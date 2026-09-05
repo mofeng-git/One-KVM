@@ -26,7 +26,9 @@ use super::bytes_codec::{read_frame_with_limit, write_frame_vectored};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_events, convert_mouse_event, mouse_type};
+use super::hid_adapter::{convert_key_events_in_code_space, convert_mouse_event, mouse_type};
+use super::keyboard_mapping::KeyboardCodeSpace;
+use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{
     decode_message, login_response, message, misc, Clipboard, ControlKey, DisplayInfo, Hash,
     HbbMessage, IdPk, KeyEvent, LoginRequest, LoginResponse, Misc, MouseEvent, OptionMessage,
@@ -50,10 +52,46 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_PASSWORD_ATTEMPTS: u8 = 5;
 const CONNECTION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Advertised RustDesk version for client compatibility.
-const RUSTDESK_COMPAT_VERSION: &str = "1.4.5";
-// Advertised platform for RustDesk clients. This affects which UI options are shown.
-const RUSTDESK_COMPAT_PLATFORM: &str = "Windows";
+/// RustDesk-facing identity and the physical key code space implied by it.
+struct RustDeskCompatibility {
+    version: &'static str,
+    platform: RustDeskCompatibilityPlatform,
+}
+
+#[derive(Clone, Copy)]
+enum RustDeskCompatibilityPlatform {
+    Windows,
+}
+
+impl RustDeskCompatibilityPlatform {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Windows => "Windows",
+        }
+    }
+
+    const fn keyboard_code_space(self) -> KeyboardCodeSpace {
+        match self {
+            Self::Windows => KeyboardCodeSpace::WindowsSet1,
+        }
+    }
+}
+
+const RUSTDESK_COMPATIBILITY: RustDeskCompatibility = RustDeskCompatibility {
+    version: "1.4.5",
+    platform: RustDeskCompatibilityPlatform::Windows,
+};
+
+fn key_event_union_details(event: &KeyEvent) -> (&'static str, String) {
+    match &event.union {
+        Some(ke_union::Union::ControlKey(key)) => ("ControlKey", format!("0x{:X}", key.value())),
+        Some(ke_union::Union::Chr(code)) => ("Chr", format!("0x{code:X}")),
+        Some(ke_union::Union::Unicode(code)) => ("Unicode", format!("0x{code:X}")),
+        Some(ke_union::Union::Seq(seq)) => ("Seq", format!("{seq:?}")),
+        Some(ke_union::Union::Win2winHotkey(code)) => ("Win2winHotkey", format!("0x{code:X}")),
+        None => ("None", "none".to_string()),
+    }
+}
 
 /// Input event throttler
 ///
@@ -1124,11 +1162,11 @@ impl Connection {
             let mut peer_info = PeerInfo::new();
             peer_info.username = "one-kvm".to_string();
             peer_info.hostname = hostname_from_etc();
-            peer_info.platform = RUSTDESK_COMPAT_PLATFORM.to_string();
+            peer_info.platform = RUSTDESK_COMPATIBILITY.platform.name().to_string();
             peer_info.displays.push(display_info);
             peer_info.current_display = 0;
             peer_info.sas_enabled = false;
-            peer_info.version = RUSTDESK_COMPAT_VERSION.to_string();
+            peer_info.version = RUSTDESK_COMPATIBILITY.version.to_string();
             peer_info.encoding = protobuf::MessageField::some(encoding);
 
             let mut login_response = LoginResponse::new();
@@ -1265,9 +1303,15 @@ impl Connection {
 
     /// Handle key event
     async fn handle_key_event(&mut self, ke: &KeyEvent) -> anyhow::Result<()> {
+        let (union_type, raw_value) = key_event_union_details(ke);
         debug!(
-            "Key event: down={}, press={}, chr={:?}, modifiers={:?}",
-            ke.down, ke.press, ke.union, ke.modifiers
+            mode = ke.mode.value(),
+            union = union_type,
+            raw = %raw_value,
+            down = ke.down,
+            press = ke.press,
+            modifiers = ?ke.modifiers,
+            "RustDesk key event"
         );
 
         // Check for CapsLock state change in modifiers
@@ -1305,15 +1349,21 @@ impl Connection {
         }
 
         // Convert RustDesk key event to One-KVM key events
-        let kb_events = convert_key_events(ke);
+        let kb_events = convert_key_events_in_code_space(
+            ke,
+            RUSTDESK_COMPATIBILITY.platform.keyboard_code_space(),
+        );
         if !kb_events.is_empty() {
             if let Some(ref hid) = self.hid {
                 for kb_event in kb_events {
                     debug!(
-                        "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
-                        kb_event.key.to_hid_usage(),
-                        kb_event.event_type,
-                        kb_event.modifiers.to_hid_byte()
+                        mode = ke.mode.value(),
+                        union = union_type,
+                        raw = %raw_value,
+                        hid = format_args!("0x{:02X}", kb_event.key.to_hid_usage()),
+                        event_type = ?kb_event.event_type,
+                        modifiers = format_args!("0x{:02X}", kb_event.modifiers.to_hid_byte()),
+                        "Converted RustDesk key event"
                     );
 
                     if let Err(e) = hid.send_keyboard(kb_event).await {
@@ -1324,7 +1374,12 @@ impl Connection {
                 debug!("HID controller not available, skipping key event");
             }
         } else {
-            warn!("Could not convert key event to HID: chr={:?}", ke.union);
+            debug!(
+                mode = ke.mode.value(),
+                union = union_type,
+                raw = %raw_value,
+                "RustDesk key event produced no HID event"
+            );
         }
 
         Ok(())
