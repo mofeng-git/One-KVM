@@ -198,7 +198,7 @@ pub fn get_available_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
         align: 1,
         fps: 30,
         gop: 30,
-        rc: RateControl::RC_CBR,
+        rc: RateControl::RC_VBR,
         quality: Quality::Quality_Low, // Use low quality preset for fastest encoding (ultrafast)
         kbs: 2000,
         q: 23,
@@ -297,7 +297,7 @@ impl H264Encoder {
             align: 1,
             fps: config.fps as i32,
             gop: config.gop_size as i32,
-            rc: RateControl::RC_CBR,
+            rc: RateControl::RC_VBR,
             quality: Quality::Quality_Low, // Use low quality preset for fastest encoding (lowest latency)
             kbs: config.bitrate_kbps as i32,
             q: 23,

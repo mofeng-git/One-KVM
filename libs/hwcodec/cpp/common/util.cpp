@@ -397,6 +397,14 @@ struct CodecOptions {
 
 bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
                       int q) {
+  // Remote-desktop content is usually sparse. VBR avoids padding static
+  // frames up to the target bitrate while allowing short bursts for screen
+  // changes. Keep those bursts bounded at twice the target bitrate.
+  if (rc == RC_VBR && c->bit_rate > 0) {
+    c->rc_max_rate = c->bit_rate * 2;
+    c->rc_buffer_size = c->rc_max_rate;
+  }
+
   if (name.find("vaapi") != std::string::npos && rc == RC_CQ) {
     // Used only after the normal bitrate-based VAAPI initialization fails.
     // Some drivers, including Intel iHD on Jasper Lake, expose CQP as their
@@ -495,6 +503,10 @@ bool set_others(void *priv_data, const std::string &name) {
 bool change_bit_rate(AVCodecContext *c, const std::string &name, int kbs) {
   if (kbs > 0) {
     c->bit_rate = kbs * 1000;
+    if (c->rc_max_rate > 0 && name.find("qsv") == std::string::npos) {
+      c->rc_max_rate = c->bit_rate * 2;
+      c->rc_buffer_size = c->rc_max_rate;
+    }
     if (name.find("qsv") != std::string::npos) {
       c->rc_max_rate = c->bit_rate;
     }
