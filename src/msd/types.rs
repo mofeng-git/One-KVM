@@ -156,25 +156,43 @@ impl DiskMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DriveFileAccess {
+    Available,
+    Unsupported,
+    BlockedWhileConnected,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DriveInfo {
     pub size: u64,
-    pub used: u64,
-    pub free: u64,
+    pub used: Option<u64>,
+    pub free: Option<u64>,
     pub initialized: bool,
+    pub file_access: DriveFileAccess,
     #[serde(skip_serializing)]
     pub path: PathBuf,
 }
 
 impl DriveInfo {
-    pub fn new(path: PathBuf, size: u64) -> Self {
+    pub fn from_raw(path: PathBuf, size: u64, file_access: DriveFileAccess) -> Self {
         Self {
             size,
-            used: 0,
-            free: size,
-            initialized: false,
+            used: None,
+            free: None,
+            initialized: true,
+            file_access,
             path,
         }
+    }
+
+    pub fn with_file_access(mut self, file_access: DriveFileAccess) -> Self {
+        self.used = None;
+        self.free = None;
+        self.file_access = file_access;
+        self
     }
 }
 
@@ -266,5 +284,37 @@ mod tests {
         assert!(json.get("mode").is_none());
         assert!(json.get("current_image").is_none());
         assert!(json.get("slots").is_none());
+    }
+
+    #[test]
+    fn drive_info_json_has_stable_nullable_space_and_file_access() {
+        let info = DriveInfo::from_raw(
+            PathBuf::from("/tmp/drive.img"),
+            4096,
+            DriveFileAccess::Unsupported,
+        );
+
+        let value = serde_json::to_value(info).unwrap();
+        assert_eq!(value["size"], 4096);
+        assert_eq!(value["used"], serde_json::Value::Null);
+        assert_eq!(value["free"], serde_json::Value::Null);
+        assert_eq!(value["initialized"], true);
+        assert_eq!(value["file_access"], "unsupported");
+        assert!(value.get("path").is_none());
+    }
+
+    #[test]
+    fn drive_file_access_serializes_all_public_states() {
+        for (access, expected) in [
+            (DriveFileAccess::Available, "available"),
+            (DriveFileAccess::Unsupported, "unsupported"),
+            (
+                DriveFileAccess::BlockedWhileConnected,
+                "blocked_while_connected",
+            ),
+            (DriveFileAccess::Unknown, "unknown"),
+        ] {
+            assert_eq!(serde_json::to_value(access).unwrap(), expected);
+        }
     }
 }

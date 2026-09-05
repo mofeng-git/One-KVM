@@ -102,7 +102,9 @@ impl MsdErrorCode {
             Self::MsdDownloadIncomplete => "The remote image download was incomplete.",
             Self::MsdDriveNotInitialized => "The virtual drive is not initialized.",
             Self::MsdDriveConnected => "The virtual drive is connected to the controlled computer.",
-            Self::MsdDriveFilesystemUnsupported => "The virtual drive filesystem is unsupported.",
+            Self::MsdDriveFilesystemUnsupported => {
+                "Web file management does not support this virtual drive format."
+            }
             Self::MsdDriveSizeInvalid => "The virtual drive size is invalid.",
             Self::MsdStorageSpaceUnavailable => {
                 "Available virtual media storage space could not be determined."
@@ -183,7 +185,7 @@ impl MsdErrorCode {
                 "Verify the remote server and network connection, then retry."
             }
             Self::MsdDriveFilesystemUnsupported => {
-                "Reinitialize the virtual drive with a supported filesystem, then retry."
+                "Mount the drive on the controlled computer, or use a supported format for web file management."
             }
             Self::MsdStorageSpaceUnavailable => {
                 "Verify that virtual media storage is available, then retry."
@@ -386,7 +388,7 @@ mod tests {
             (
                 MsdDriveFilesystemUnsupported,
                 "MSD_DRIVE_FILESYSTEM_UNSUPPORTED",
-                "The virtual drive filesystem is unsupported.",
+                "Web file management does not support this virtual drive format.",
             ),
             (
                 MsdDriveSizeInvalid,

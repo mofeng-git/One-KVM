@@ -2,7 +2,7 @@ use super::config::apply::try_apply_lock;
 use super::*;
 
 use crate::msd::{
-    DiskModeRequest, DownloadProgress, DriveFile, DriveInfo, DriveInitRequest,
+    DiskModeRequest, DownloadProgress, DriveFile, DriveFileAccess, DriveInfo, DriveInitRequest,
     ImageDownloadRequest, ImageInfo, ImageManager, ImageMountRequest, MsdErrorCode, MsdState,
     MsdStateResponse, VentoyDrive, MIN_DRIVE_SIZE_MB,
 };
@@ -420,16 +420,26 @@ pub async fn msd_drive_info(State(state): State<Arc<AppState>>) -> Result<Json<D
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
-    if !drive.exists() {
-        // 404: drive image file does not exist at all — truly not initialized
-        return Err(MsdErrorCode::MsdDriveNotInitialized.into());
+    let msd_guard = state.msd.read().await;
+    let connected = match msd_guard.as_ref() {
+        Some(controller) => controller.is_drive_connected().await,
+        None => false,
+    };
+
+    // Never parse the filesystem while the USB host owns it. Metadata is safe
+    // to read and still lets the UI show the backing image capacity.
+    let info = if connected {
+        drive.raw_info(DriveFileAccess::BlockedWhileConnected)
+    } else {
+        drive.info().await
+    }
+    .map_err(|error| operation_failed("read virtual drive info", error))?;
+
+    if let Some(controller) = msd_guard.as_ref() {
+        controller.set_drive_info(Some(info.clone())).await;
     }
 
-    drive
-        .info()
-        .await
-        .map(Json)
-        .map_err(|error| operation_failed("read virtual drive info", error))
+    Ok(Json(info))
 }
 
 /// Initialize Ventoy drive
@@ -439,7 +449,6 @@ pub async fn msd_drive_init(
     payload: std::result::Result<Json<DriveInitRequest>, JsonRejection>,
 ) -> Result<Json<DriveInfo>> {
     let req = parse_msd_json(payload)?;
-    assert_drive_not_connected(&state).await?;
     let config = state.config.get();
     let msd_dir = config.msd.msd_dir_path();
 
@@ -449,6 +458,16 @@ pub async fn msd_drive_init(
     })?;
     validate_drive_init_size(req.size_mb, disk_space.available)?;
 
+    // Mount/unmount handlers also take this outer write lock. Holding it
+    // across image creation prevents a mount from racing the destructive
+    // reinitialization after the connected-state check.
+    let msd_guard = state.msd.write().await;
+    if let Some(controller) = msd_guard.as_ref() {
+        if controller.is_drive_connected().await {
+            return Err(MsdErrorCode::MsdDriveConnected.into());
+        }
+    }
+
     let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
@@ -456,6 +475,9 @@ pub async fn msd_drive_init(
         .init(req.size_mb)
         .await
         .map_err(|error| operation_failed("initialize virtual drive", error))?;
+    if let Some(controller) = msd_guard.as_ref() {
+        controller.set_drive_info(Some(info.clone())).await;
+    }
     Ok(Json(info))
 }
 
@@ -471,13 +493,14 @@ pub async fn msd_drive_delete(State(state): State<Arc<AppState>>) -> Result<Json
             return Err(MsdErrorCode::MsdDriveConnected.into());
         }
     }
-    drop(msd_guard);
-
     // Delete the drive file
     let drive_path = config.msd.drive_path();
     if drive_path.exists() {
         std::fs::remove_file(&drive_path)
             .map_err(|error| classify_storage_error("delete virtual drive", error))?;
+    }
+    if let Some(controller) = msd_guard.as_ref() {
+        controller.set_drive_info(None).await;
     }
 
     Ok(Json(LoginResponse {

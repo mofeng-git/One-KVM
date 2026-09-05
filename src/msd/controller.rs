@@ -8,9 +8,10 @@ use tracing::{debug, info, warn};
 use super::image::ImageManager;
 use super::monitor::MsdHealthMonitor;
 use super::types::{
-    DiskMode, DownloadProgress, DownloadStatus, DriveInfo, ImageInfo, MountedMedia,
-    MountedMediaKind, MsdState,
+    DiskMode, DownloadProgress, DownloadStatus, DriveFileAccess, DriveInfo, ImageInfo,
+    MountedMedia, MountedMediaKind, MsdState,
 };
+use super::ventoy_drive::VentoyDrive;
 use crate::error::{AppError, MsdErrorCode, Result};
 use crate::otg::{MsdFunction, MsdLunConfig, OtgService};
 
@@ -83,14 +84,9 @@ impl MsdController {
         state.available = true;
 
         if self.drive_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(&self.drive_path) {
-                let drive_info = DriveInfo {
-                    size: metadata.len(),
-                    used: 0,
-                    free: metadata.len(),
-                    initialized: true,
-                    path: self.drive_path.clone(),
-                };
+            if let Ok(drive_info) =
+                VentoyDrive::new(self.drive_path.clone()).raw_info(DriveFileAccess::Unknown)
+            {
                 state.drive_info = Some(drive_info.clone());
                 debug!(
                     "Found existing virtual drive: {}",
@@ -199,28 +195,6 @@ impl MsdController {
 
         self.assert_available(&state).await?;
 
-        if !self.drive_path.exists() {
-            self.monitor
-                .report_error("Virtual drive not initialized", "drive_not_found")
-                .await;
-            return Err(MsdErrorCode::MsdDriveNotInitialized.into());
-        }
-
-        let drive_info = state.drive_info.clone().or_else(|| {
-            std::fs::metadata(&self.drive_path)
-                .ok()
-                .map(|metadata| DriveInfo {
-                    size: metadata.len(),
-                    used: 0,
-                    free: metadata.len(),
-                    initialized: true,
-                    path: self.drive_path.clone(),
-                })
-        });
-        if state.drive_info.is_none() {
-            state.drive_info = drive_info.clone();
-        }
-
         if state
             .mounted_media
             .iter()
@@ -229,8 +203,22 @@ impl MsdController {
             return Err(MsdErrorCode::MsdMediaAlreadyMounted.into());
         }
 
-        let drive_info =
-            drive_info.ok_or_else(|| AppError::from(MsdErrorCode::MsdDriveNotInitialized))?;
+        let drive_info = match self.drive_mount_info() {
+            Ok(info) => info,
+            Err(error) => {
+                if matches!(
+                    &error,
+                    AppError::Msd(msd) if msd.code() == MsdErrorCode::MsdDriveNotInitialized
+                ) {
+                    self.monitor
+                        .report_error("Virtual drive not initialized", "drive_not_found")
+                        .await;
+                }
+                return Err(error);
+            }
+        };
+        state.drive_info = Some(drive_info.clone());
+
         let lun = Self::lowest_free_lun(&state)
             .ok_or_else(|| AppError::from(MsdErrorCode::MsdMediaSlotsFull))?;
 
@@ -240,6 +228,8 @@ impl MsdController {
             return Err(e);
         }
         state.mounted_media.push(media);
+        state.drive_info =
+            Some(drive_info.with_file_access(DriveFileAccess::BlockedWhileConnected));
 
         info!(
             "Mounted virtual drive on LUN {}: {}",
@@ -252,6 +242,15 @@ impl MsdController {
 
         self.finish_connect_success().await;
         Ok(())
+    }
+
+    fn drive_mount_info(&self) -> Result<DriveInfo> {
+        VentoyDrive::new(self.drive_path.clone()).raw_info(DriveFileAccess::Unknown)
+    }
+
+    pub async fn set_drive_info(&self, drive_info: Option<DriveInfo>) {
+        self.state.write().await.drive_info = drive_info;
+        self.mark_device_info_dirty().await;
     }
 
     async fn assert_available(&self, state: &MsdState) -> Result<()> {
@@ -293,6 +292,16 @@ impl MsdController {
     }
 
     fn reset_mounts_for_mode(state: &mut MsdState, disk_mode: DiskMode) {
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
+        {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
         state.disk_mode = disk_mode;
         state.mounted_media.clear();
     }
@@ -397,6 +406,12 @@ impl MsdController {
 
         self.disconnect_lun(media.lun).await?;
         state.mounted_media.remove(index);
+        if media.kind == MountedMediaKind::Drive {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
         info!("Unmounted media");
 
         drop(state);
@@ -490,6 +505,16 @@ impl MsdController {
             disconnected.push(media.clone());
         }
 
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
+        {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
         state.mounted_media.clear();
         info!("Disconnected all mounted media");
 
@@ -744,6 +769,29 @@ mod tests {
         assert!(state.mounted_media.is_empty());
     }
 
+    #[tokio::test]
+    async fn drive_mount_metadata_ignores_cached_drive_info() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = MsdController::new(Arc::new(OtgService::new()), temp_dir.path());
+        std::fs::create_dir_all(&controller.ventoy_dir).unwrap();
+        std::fs::write(&controller.drive_path, vec![0u8; 128]).unwrap();
+        controller.state.write().await.drive_info = Some(DriveInfo::from_raw(
+            controller.drive_path.clone(),
+            64,
+            DriveFileAccess::Available,
+        ));
+
+        std::fs::write(&controller.drive_path, vec![0u8; 256]).unwrap();
+        let info = controller.drive_mount_info().unwrap();
+
+        assert_eq!(info.size, 256);
+        assert_eq!(info.used, None);
+        assert_eq!(info.file_access, DriveFileAccess::Unknown);
+        let media = MountedMedia::drive(0, &info);
+        let config = MsdController::media_config(&media);
+        assert_eq!(config.file, controller.drive_path);
+    }
+
     #[test]
     fn single_disk_mode_only_exposes_lun_zero() {
         let mut state = MsdState::default();
@@ -842,13 +890,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let drive_path = temp_dir.path().join("ventoy.img");
         std::fs::write(&drive_path, b"drive").unwrap();
-        let drive = DriveInfo {
-            size: 5,
-            used: 0,
-            free: 5,
-            initialized: true,
-            path: drive_path,
-        };
+        let drive = DriveInfo::from_raw(drive_path, 5, DriveFileAccess::Unknown);
         let mut state = MsdState::default();
         MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
         state.mounted_media.push(MountedMedia::drive(0, &drive));
@@ -900,13 +942,11 @@ mod tests {
         let image_path = temp_dir.path().join("test.img");
         std::fs::write(&image_path, b"img").unwrap();
         let image = ImageInfo::new("test".into(), "test.img".into(), image_path, 3);
-        let drive = DriveInfo {
-            size: 5,
-            used: 0,
-            free: 5,
-            initialized: true,
-            path: temp_dir.path().join("ventoy.img"),
-        };
+        let drive = DriveInfo::from_raw(
+            temp_dir.path().join("ventoy.img"),
+            5,
+            DriveFileAccess::Unknown,
+        );
         let mut state = MsdState::default();
         state
             .mounted_media
