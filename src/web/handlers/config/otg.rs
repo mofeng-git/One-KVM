@@ -8,7 +8,7 @@ use crate::otg::OtgNetworkStatus;
 use crate::web::state::UsbApiState;
 
 use super::types::OtgConfigUpdate;
-use super::usb_update::{stage_hid_config_update, update_usb_config};
+use super::usb_update::{stage_hid_config_update, update_usb_config_with_reset};
 
 #[typeshare]
 #[derive(Debug, Serialize)]
@@ -30,7 +30,12 @@ pub(super) async fn update_otg_config_inner(
     state: &UsbApiState,
     request: OtgConfigUpdate,
 ) -> Result<OtgConfigResponse> {
-    let staged_config = update_usb_config(state, move |staged| {
+    let reset = request
+        .hid
+        .as_ref()
+        .and_then(|h| h.bluetooth_reset_pairing)
+        .unwrap_or(false);
+    let staged_config = update_usb_config_with_reset(state, reset, move |staged| {
         let requested_ch9329_descriptor = match request.hid.as_ref() {
             Some(update) => stage_hid_config_update(&mut staged.hid, update)?,
             None => None,

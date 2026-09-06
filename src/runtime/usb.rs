@@ -168,6 +168,7 @@ impl UsbCoordinator {
         options: ConfigApplyOptions,
     ) -> Result<()> {
         new_config.validate_otg_functions()?;
+        new_config.bluetooth.validate()?;
 
         let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
         let hid_functions_changed =
@@ -180,6 +181,7 @@ impl UsbCoordinator {
         if old_config.backend == new_config.backend
             && old_config.ch9329_port == new_config.ch9329_port
             && old_config.ch9329_baudrate == new_config.ch9329_baudrate
+            && old_config.bluetooth == new_config.bluetooth
             && !ch9329_runtime_changed
             && old_config.otg_udc == new_config.otg_udc
             && !descriptor_changed
@@ -314,6 +316,9 @@ fn hid_backend_type(config: &HidConfig) -> HidBackendType {
             hybrid_mouse: config.ch9329_hybrid_mouse,
         },
         HidBackend::None => HidBackendType::None,
+        HidBackend::Bluetooth => HidBackendType::Bluetooth {
+            config: config.bluetooth.clone(),
+        },
     }
 }
 

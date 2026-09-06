@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+pub mod hid_bonds;
 mod pool;
 mod wol_history;
 

@@ -104,6 +104,8 @@ impl RuntimeBuilder {
         let hid = Arc::new(HidController::new(hid_backend, Some(otg_service.clone())));
         #[cfg(not(unix))]
         let hid = Arc::new(HidController::new(hid_backend));
+        #[cfg(target_os = "linux")]
+        hid.set_bond_store(config_store.hid_bonds());
         hid.set_event_bus(events.clone()).await;
         if let Err(error) = hid.init().await {
             tracing::warn!("Failed to initialize HID backend: {}", error);
@@ -412,6 +414,9 @@ fn hid_backend_type(config: &AppConfig) -> HidBackendType {
             hybrid_mouse: config.hid.ch9329_hybrid_mouse,
         },
         config::HidBackend::None => HidBackendType::None,
+        config::HidBackend::Bluetooth => HidBackendType::Bluetooth {
+            config: config.hid.bluetooth.clone(),
+        },
     }
 }
 

@@ -402,6 +402,9 @@ impl Ch9329DescriptorConfigUpdate {
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
+    /// Request-only; never persisted or replayed during startup.
+    pub bluetooth_reset_pairing: Option<bool>,
+    pub bluetooth: Option<crate::config::BluetoothHidConfig>,
     pub backend: Option<HidBackend>,
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
@@ -426,6 +429,9 @@ pub struct OtgConfigUpdate {
 
 impl HidConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(config) = &self.bluetooth {
+            config.validate()?;
+        }
         if let Some(baudrate) = self.ch9329_baudrate {
             let valid_rates = [9600, 19200, 38400, 57600, 115200];
             if !valid_rates.contains(&baudrate) {
@@ -444,6 +450,9 @@ impl HidConfigUpdate {
     }
 
     pub fn apply_to(&self, config: &mut HidConfig) {
+        if let Some(bluetooth) = &self.bluetooth {
+            config.bluetooth = bluetooth.clone();
+        }
         if let Some(backend) = self.backend.clone() {
             config.backend = backend;
         }

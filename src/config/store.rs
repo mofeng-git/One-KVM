@@ -83,6 +83,11 @@ impl ConfigStore {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
+    pub fn hid_bonds(&self) -> crate::db::hid_bonds::HidBondStore {
+        crate::db::hid_bonds::HidBondStore(self.pool.clone())
+    }
+
     pub fn get(&self) -> Arc<AppConfig> {
         self.cache.load_full()
     }

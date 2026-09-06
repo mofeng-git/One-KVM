@@ -144,4 +144,5 @@ const SCHEMA_MIGRATIONS: &[&[&str]] = &[
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_singleton
     ON users ((1))
     "#],
+    &["CREATE TABLE hid_bonds (adapter TEXT NOT NULL, peer TEXT NOT NULL, pending INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(adapter, peer))"],
 ];
