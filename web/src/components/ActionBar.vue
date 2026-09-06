@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
-import type { VideoScaleMode } from '@/composables/useVideoScaling'
+import type { VideoRotation, VideoScaleMode } from '@/composables/useVideoScaling'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import {
@@ -68,8 +68,10 @@ const props = defineProps<{
   layout?: ConsoleLayout
   mouseMode?: 'absolute' | 'relative'
   videoMode?: VideoMode
+  videoRotation?: VideoRotation
   ttydRunning?: boolean
   showPower?: boolean
+  atxEnabled?: boolean
   showTerminal?: boolean
   showComputerUse?: boolean
   showPasteText?: boolean
@@ -90,6 +92,7 @@ async function setFloatingCollapsed(collapsed: boolean) {
   target?.$el?.focus()
 }
 const showAtx = computed(() => props.showPower !== false)
+const atxEnabled = computed(() => props.atxEnabled === true)
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 const showPasteText = computed(() => props.showPasteText !== false)
 const showMic = computed(() => props.showMic === true)
@@ -102,6 +105,7 @@ const emit = defineEmits<{
   (e: 'toggleVirtualKeyboard'): void
   (e: 'toggleMouseMode'): void
   (e: 'update:videoMode', mode: VideoMode): void
+  (e: 'update:videoRotation', rotation: VideoRotation): void
   (e: 'powerShort'): void
   (e: 'powerLong'): void
   (e: 'reset'): void
@@ -381,8 +385,10 @@ const hasRightOverflow = computed(() => {
           <VideoConfigPopover
             v-model:open="videoPopoverOpen"
             :video-mode="props.videoMode || 'mjpeg'"
+            :video-rotation="props.videoRotation ?? 0"
             :side="isSidebarLayout ? 'right' : 'bottom'"
             @update:video-mode="emit('update:videoMode', $event)"
+            @update:video-rotation="emit('update:videoRotation', $event)"
           />
         </div>
 
@@ -450,6 +456,7 @@ const hasRightOverflow = computed(() => {
               :side="isSidebarLayout ? 'right' : 'bottom'"
             >
               <AtxPopover
+                :atx-enabled="atxEnabled"
                 @close="atxOpen = false"
                 @power-short="emit('powerShort')"
                 @power-long="emit('powerLong')"
@@ -686,6 +693,7 @@ const hasRightOverflow = computed(() => {
         <SheetTitle>{{ t('actionbar.power') }}</SheetTitle>
       </SheetHeader>
       <AtxPopover
+        :atx-enabled="atxEnabled"
         @close="mobileAtxOpen = false"
         @power-short="emit('powerShort')"
         @power-long="emit('powerLong')"

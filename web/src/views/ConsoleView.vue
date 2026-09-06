@@ -10,7 +10,7 @@ import { useConsoleEvents } from '@/composables/useConsoleEvents'
 import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
-import { useVideoScaling } from '@/composables/useVideoScaling'
+import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
 import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
@@ -105,6 +105,19 @@ const consoleEvents = useConsoleEvents({
 })
 
 const videoMode = ref<VideoMode>('mjpeg')
+const VIDEO_ROTATIONS: VideoRotation[] = [0, 90, 180, 270]
+const storedVideoRotation = Number(localStorage.getItem('videoRotation'))
+const videoRotation = ref<VideoRotation>(
+  VIDEO_ROTATIONS.includes(storedVideoRotation as VideoRotation)
+    ? storedVideoRotation as VideoRotation
+    : 0,
+)
+
+function setVideoRotation(rotation: VideoRotation) {
+  if (!VIDEO_ROTATIONS.includes(rotation)) return
+  videoRotation.value = rotation
+  localStorage.setItem('videoRotation', String(rotation))
+}
 const computerUseOpen = ref(false)
 const computerUseSession = ref<ComputerUseSession | null>(null)
 const computerUseTimeline = ref<ComputerUseTimelineItem[]>([])
@@ -135,10 +148,11 @@ const {
   sourceSizeAvailable,
   stageClass: videoStageClass,
   containerStyle: videoContainerStyle,
+  contentStyle: videoContentStyle,
   updateSourceSize: updateVideoSourceSize,
   clearSourceSize: clearVideoSourceSize,
   setScaleMode: setVideoScaleMode,
-} = useVideoScaling()
+} = useVideoScaling({ rotation: videoRotation })
 
 const backendFps = ref(0)
 
@@ -2320,6 +2334,13 @@ function getRenderedVideoRect() {
   const rect = videoElement.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return null
 
+  // For a quarter turn, the transformed element already describes the exact
+  // visible portrait frame. Its original landscape aspect ratio must not be
+  // used to add artificial letterboxing here.
+  if (videoRotation.value === 90 || videoRotation.value === 270) {
+    return rect
+  }
+
   const contentAspectRatio = getActiveVideoAspectRatio()
   if (!contentAspectRatio) {
     return rect
@@ -2349,6 +2370,32 @@ function getRenderedVideoRect() {
   }
 }
 
+function rotateAbsolutePosition(x: number, y: number) {
+  switch (videoRotation.value) {
+    case 90:
+      return { x: y, y: 1 - x }
+    case 180:
+      return { x: 1 - x, y: 1 - y }
+    case 270:
+      return { x: 1 - y, y: x }
+    default:
+      return { x, y }
+  }
+}
+
+function rotateRelativeDelta(dx: number, dy: number) {
+  switch (videoRotation.value) {
+    case 90:
+      return { dx: dy, dy: -dx }
+    case 180:
+      return { dx: -dx, dy: -dy }
+    case 270:
+      return { dx: -dy, dy: dx }
+    default:
+      return { dx, dy }
+  }
+}
+
 function getAbsoluteMousePosition(e: MouseEvent) {
   const rect = getRenderedVideoRect()
   if (!rect) return null
@@ -2356,9 +2403,10 @@ function getAbsoluteMousePosition(e: MouseEvent) {
   const normalizedX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   const normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
 
+  const sourcePosition = rotateAbsolutePosition(normalizedX, normalizedY)
   return {
-    x: Math.round(normalizedX * 32767),
-    y: Math.round(normalizedY * 32767),
+    x: Math.round(sourcePosition.x * 32767),
+    y: Math.round(sourcePosition.y * 32767),
   }
 }
 
@@ -2624,11 +2672,12 @@ function handleTouchPointerMove(e: PointerEvent) {
 
   activePointer.lastX += dx
   activePointer.lastY += dy
-  accumulatedDelta.x += dx
-  accumulatedDelta.y += dy
+  const rotatedDelta = rotateRelativeDelta(dx, dy)
+  accumulatedDelta.x += rotatedDelta.dx
+  accumulatedDelta.y += rotatedDelta.dy
   mousePosition.value = {
-    x: mousePosition.value.x + dx,
-    y: mousePosition.value.y + dy,
+    x: mousePosition.value.x + rotatedDelta.dx,
+    y: mousePosition.value.y + rotatedDelta.dy,
   }
   updateLocalCrosshairByDelta(dx, dy)
   requestMouseMoveFlush()
@@ -2699,14 +2748,16 @@ function handleMouseMove(e: MouseEvent) {
       const dy = e.movementY
 
       if (dx !== 0 || dy !== 0) {
-        accumulatedDelta.x += dx
-        accumulatedDelta.y += dy
+        const rotatedDelta = rotateRelativeDelta(dx, dy)
+        accumulatedDelta.x += rotatedDelta.dx
+        accumulatedDelta.y += rotatedDelta.dy
         requestMouseMoveFlush()
       }
 
+      const rotatedDelta = rotateRelativeDelta(dx, dy)
       mousePosition.value = {
-        x: mousePosition.value.x + dx,
-        y: mousePosition.value.y + dy,
+        x: mousePosition.value.x + rotatedDelta.dx,
+        y: mousePosition.value.y + rotatedDelta.dy,
       }
     }
   }
@@ -3304,13 +3355,15 @@ onUnmounted(() => {
         </div>
       </div>
     </header>
-    <Teleport defer :to="consoleLayout === 'floating' ? '#console-header-toolbar' : 'body'" :disabled="consoleLayout !== 'floating'">
+    <Teleport :key="consoleLayout" defer :to="consoleLayout === 'floating' ? '#console-header-toolbar' : 'body'" :disabled="consoleLayout !== 'floating'">
     <ActionBar
       :layout="consoleLayout"
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
+      :video-rotation="videoRotation"
       :ttyd-running="ttydStatus?.running"
       :show-power="showPower"
+      :atx-enabled="systemStore.atx?.available === true"
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
       :show-paste-text="showPasteText"
@@ -3323,6 +3376,7 @@ onUnmounted(() => {
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
       @toggle-mouse-mode="handleToggleMouseMode"
       @update:video-mode="handleVideoModeChange"
+      @update:video-rotation="setVideoRotation"
       @power-short="handlePowerShort"
       @power-long="handlePowerLong"
       @reset="handleReset"
@@ -3365,32 +3419,34 @@ onUnmounted(() => {
               @wheel.prevent="handleWheel"
               @contextmenu="handleContextMenu"
             >
-          <img
-            v-show="videoMode === 'mjpeg'"
-            ref="videoRef"
-            :src="mjpegUrl"
-            class="size-full object-contain pointer-events-none select-none"
-            :alt="t('console.videoAlt')"
-            draggable="false"
-            @load="handleVideoLoad"
-            @error="handleVideoError"
-          />
-          <video
-            v-show="videoMode !== 'mjpeg'"
-            ref="webrtcVideoRef"
-            class="size-full object-contain pointer-events-none"
-            autoplay
-            playsinline
-            @loadedmetadata="handleWebRTCVideoResize"
-            @loadeddata="handleWebRTCVideoResize"
-            @resize="handleWebRTCVideoResize"
-          />
-          <img
-            v-if="frameOverlayUrl"
-            :src="frameOverlayUrl"
-            class="absolute inset-0 size-full object-contain pointer-events-none"
-            alt=""
-          />
+              <div class="relative shrink-0" :style="videoContentStyle">
+                <img
+                  v-show="videoMode === 'mjpeg'"
+                  ref="videoRef"
+                  :src="mjpegUrl"
+                  class="size-full object-contain pointer-events-none select-none"
+                  :alt="t('console.videoAlt')"
+                  draggable="false"
+                  @load="handleVideoLoad"
+                  @error="handleVideoError"
+                />
+                <video
+                  v-show="videoMode !== 'mjpeg'"
+                  ref="webrtcVideoRef"
+                  class="size-full object-contain pointer-events-none"
+                  autoplay
+                  playsinline
+                  @loadedmetadata="handleWebRTCVideoResize"
+                  @loadeddata="handleWebRTCVideoResize"
+                  @resize="handleWebRTCVideoResize"
+                />
+                <img
+                  v-if="frameOverlayUrl"
+                  :src="frameOverlayUrl"
+                  class="absolute inset-0 size-full object-contain pointer-events-none"
+                  alt=""
+                />
+              </div>
           <div
             v-if="cursorVisible && localCrosshairPos"
             class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"

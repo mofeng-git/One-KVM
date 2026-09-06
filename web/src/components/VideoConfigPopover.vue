@@ -33,6 +33,7 @@ import { toConfigFps } from '@/lib/fps'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { useConfigStore } from '@/stores/config'
 import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
+import type { VideoRotation } from '@/composables/useVideoScaling'
 import VideoInputFields from '@/components/VideoInputFields.vue'
 
 export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
@@ -40,12 +41,14 @@ export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
 const props = defineProps<{
   open: boolean
   videoMode: VideoMode
+  videoRotation: VideoRotation
   side?: 'top' | 'right' | 'bottom' | 'left'
 }>()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'update:videoMode', value: VideoMode): void
+  (e: 'update:videoRotation', value: VideoRotation): void
 }>()
 
 const { t } = useI18n()
@@ -209,6 +212,7 @@ const currentConfig = computed(() => ({
 }))
 
 const buttonText = computed(() => t('actionbar.videoConfig'))
+const videoRotationOptions: VideoRotation[] = [0, 90, 180, 270]
 
 // Available codecs for selection (filtered by backend support and enriched with backend info)
 const availableCodecs = computed(() => {
@@ -625,6 +629,27 @@ watch(
             <p v-if="isCodecLocked" class="text-xs text-warning">
               {{ codecLockMessage }}
             </p>
+          </div>
+
+          <!-- Display Rotation -->
+          <div class="space-y-2">
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoRotation') }}</Label>
+            <div class="grid grid-cols-4 gap-1.5">
+              <Button
+                v-for="rotation in videoRotationOptions"
+                :key="rotation"
+                variant="outline"
+                size="sm"
+                :class="[
+                  'h-8 px-1 text-xs tabular-nums',
+                  props.videoRotation === rotation && 'border-primary bg-primary/10',
+                ]"
+                :aria-pressed="props.videoRotation === rotation"
+                @click="emit('update:videoRotation', rotation)"
+              >
+                {{ rotation }}°
+              </Button>
+            </div>
           </div>
 
           <!-- Bitrate Preset - Only shown for WebRTC modes -->

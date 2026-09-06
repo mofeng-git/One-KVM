@@ -233,6 +233,7 @@ export default {
     streamSettings: '流设置',
     deviceSettings: '设备配置',
     videoMode: '视频模式',
+    videoRotation: '视频旋转',
     selectMode: '选择模式...',
     videoModeHint: 'HTTP 对带宽占用较大但模式兼容性好；WebRTC 对网络要求较高但带宽占用低',
     videoDevice: '视频设备',

@@ -233,6 +233,7 @@ export default {
     streamSettings: 'Stream Settings',
     deviceSettings: 'Device Settings',
     videoMode: 'Mode',
+    videoRotation: 'Rotation',
     selectMode: 'Select mode...',
     videoModeHint: 'HTTP uses more bandwidth but offers broad compatibility; WebRTC has stricter network requirements but uses less bandwidth',
     videoDevice: 'Device',
