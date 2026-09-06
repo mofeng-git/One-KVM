@@ -87,8 +87,9 @@ export const streamConfigApi = {
 export const hidConfigApi = {
   get: () => request<HidConfig>('/config/hid'),
 
-  update: (config: HidConfigUpdate) =>
+  update: (config: HidConfigUpdate, signal?: AbortSignal) =>
     request<HidConfig>('/config/hid', {
+      signal,
       method: 'PATCH',
       body: JSON.stringify(config),
     }),

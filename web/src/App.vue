@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import 'vue-sonner/style.css'
+import HidDriverDialog from '@/components/HidDriverDialog.vue'
+import { readPendingHid, type PendingHid } from '@/lib/hidGuide'
 import '@/sonner-overrides.css'
-import { computed, KeepAlive, onMounted } from 'vue'
+import { computed, KeepAlive, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -24,6 +26,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const { isDark } = useTheme()
+const pendingGuide = ref<PendingHid | null>(null)
+watch(() => authStore.isAuthenticated, authenticated => {
+  pendingGuide.value = authenticated ? readPendingHid() : null
+}, { immediate: true })
 
 onMounted(async () => {
   try {
@@ -46,7 +52,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <RouterView v-slot="{ Component, route }">
+  <HidDriverDialog v-if="pendingGuide && authStore.isAuthenticated" :pending="pendingGuide" @close="pendingGuide = null" />
+  <RouterView v-if="!pendingGuide" v-slot="{ Component, route }">
     <KeepAlive v-if="authStore.isAuthenticated">
       <component :is="Component" v-if="route.name === 'Console'" />
     </KeepAlive>

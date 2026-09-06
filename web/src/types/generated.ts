@@ -16,9 +16,16 @@ export interface VideoConfig {
 	quality: number;
 }
 
+export interface BluetoothHidConfig {
+	adapter: string;
+	name: string;
+	peer?: string;
+}
+
 export enum HidBackend {
 	Otg = "otg",
 	Ch9329 = "ch9329",
+	Bluetooth = "bluetooth",
 	None = "none",
 }
 
@@ -54,6 +61,7 @@ export interface Ch9329DescriptorConfig {
 }
 
 export interface HidConfig {
+	bluetooth: BluetoothHidConfig;
 	backend: HidBackend;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfig;
@@ -304,6 +312,13 @@ export interface WatchdogConfig {
 	enabled: boolean;
 }
 
+/** Configuration for the USB Audio Class microphone gadget. */
+export interface UacConfig {
+	enabled: boolean;
+	sample_rate: number;
+	channels: number;
+}
+
 export interface AppConfig {
 	initialized: boolean;
 	auth: AuthConfig;
@@ -322,6 +337,7 @@ export interface AppConfig {
 	rtsp: RtspConfig;
 	redfish: RedfishConfig;
 	watchdog: WatchdogConfig;
+	uac: UacConfig;
 }
 
 /** Update for a single ATX output binding */
@@ -548,6 +564,8 @@ export interface OtgHidFunctionsUpdate {
 }
 
 export interface HidConfigUpdate {
+	bluetooth_reset_pairing?: boolean;
+	bluetooth?: BluetoothHidConfig;
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;

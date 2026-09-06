@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
+import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -46,6 +48,7 @@ import type {
   AtxDriverType,
   ActiveLevel,
   AtxDevices,
+  HidConfigUpdate,
   OtgHidProfile,
   OtgHidFunctions,
   Ch9329DescriptorConfig,
@@ -1450,13 +1453,8 @@ async function saveConfig() {
       if (!isHidSettingsValid.value) {
         return
       }
-      const hidUpdate: any = {
-        backend: config.value.hid_backend as any,
-        ch9329_port: config.value.hid_serial_device || undefined,
-        ch9329_baudrate: config.value.hid_serial_baudrate,
-        ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
-        otg_udc: config.value.hid_otg_udc,
-      }
+      const hidUpdate: HidConfigUpdate = configStore.hid?.backend === 'ch9329'
+        ? { ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse } : {}
       if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
         hidUpdate.ch9329_descriptor = {
           vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
@@ -1474,32 +1472,37 @@ async function saveConfig() {
           product: otgProduct.value || 'One-KVM USB Device',
           serial_number: otgSerialNumber.value || undefined,
         }
-        hidUpdate.otg_profile = 'custom'
+        hidUpdate.otg_profile = 'custom' as OtgHidProfile
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      const otgEnabled = config.value.hid_backend === 'otg'
-      const response = await configStore.updateOtg({
-        hid: hidUpdate,
-        msd: {
-          enabled: otgEnabled && config.value.msd_enabled,
-          msd_dir: config.value.msd_dir || undefined,
-          flash_inquiry_string: config.value.msd_flash_inquiry_string,
-          cdrom_inquiry_string: config.value.msd_cdrom_inquiry_string,
-        },
-        network: {
-          enabled: otgEnabled && config.value.otg_network_enabled,
-          driver_mode: config.value.otg_network_driver as any,
-          bridge_interface: config.value.otg_network_interface,
-        },
-      })
-      otgNetworkStatus.value = response.status
+      if (configStore.hid?.backend === 'otg') {
+        const otgEnabled = config.value.hid_backend === 'otg'
+        const response = await configStore.updateOtg({
+          hid: hidUpdate,
+          msd: {
+            enabled: otgEnabled && config.value.msd_enabled,
+            msd_dir: config.value.msd_dir || undefined,
+            flash_inquiry_string: config.value.msd_flash_inquiry_string,
+            cdrom_inquiry_string: config.value.msd_cdrom_inquiry_string,
+          },
+          network: {
+            enabled: otgEnabled && config.value.otg_network_enabled,
+            driver_mode: config.value.otg_network_driver as any,
+            bridge_interface: config.value.otg_network_interface,
+          },
+        })
+        otgNetworkStatus.value = response.status
 
-      await uacApi.update({
-        enabled: otgEnabled && config.value.uac_enabled,
-        sample_rate: 48000,
-        channels: 2,
-      })
+        await uacApi.update({
+          enabled: otgEnabled && config.value.uac_enabled,
+          sample_rate: 48000,
+          channels: 2,
+        })
+      } else if (configStore.hid?.backend === 'ch9329') {
+        await configStore.updateHid(hidUpdate)
+      }
+      await loadConfig()
     }
 
     if (activeSection.value !== 'hid') {
@@ -1517,6 +1520,15 @@ async function saveConfig() {
     loading.value = false
   }
 }
+
+const hidFeatureBaseline = ref('')
+function hidFeatureSnapshot() {
+  return JSON.stringify({
+    fields: Object.fromEntries(Object.entries(config.value).filter(([key]) => key.startsWith('msd_') || key.startsWith('otg_network_') || key.startsWith('uac_') || ['hid_otg_functions', 'hid_otg_keyboard_leds', 'hid_ch9329_hybrid_mouse'].includes(key))),
+    descriptor: [otgVendorIdHex.value, otgProductIdHex.value, otgManufacturer.value, otgProduct.value, otgSerialNumber.value],
+  })
+}
+const hidFeaturesDirty = computed(() => !!hidFeatureBaseline.value && (hidFeatureBaseline.value !== hidFeatureSnapshot() || isCh9329DescriptorDirty.value))
 
 async function loadConfig() {
   try {
@@ -1590,6 +1602,8 @@ async function loadConfig() {
       clearCh9329DescriptorState()
     }
     otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
+    await nextTick()
+    hidFeatureBaseline.value = hidFeatureSnapshot()
   } catch {
   }
 }
@@ -2826,34 +2840,12 @@ watch(isWindows, () => {
                     :aria-pressed="consoleLayout === option.value"
                     @click="setConsoleLayout(option.value)"
                   >
-                    <div class="mb-3 flex h-20 overflow-hidden rounded-md border bg-muted/40">
-                      <div
-                        v-if="option.value === 'sidebar'"
-                        class="flex w-4 flex-col items-center gap-1 border-r bg-background p-1"
-                      >
-                        <span v-for="i in 4" :key="i" class="size-1.5 rounded-sm bg-muted-foreground/50" />
-                      </div>
-                      <div class="relative flex-1 bg-zinc-950">
-                        <div
-                          v-if="option.value === 'current'"
-                          class="absolute inset-x-0 top-0 flex h-3 items-center gap-1 border-b bg-background px-1"
-                        >
-                          <span v-for="i in 5" :key="i" class="h-1 w-2 rounded-full bg-muted-foreground/50" />
-                        </div>
-                        <div
-                          v-else-if="option.value === 'floating'"
-                          class="absolute inset-x-2 top-2 flex h-3 items-center gap-1 rounded border bg-background/90 px-1 shadow"
-                        >
-                          <span v-for="i in 5" :key="i" class="h-1 w-2 rounded-full bg-muted-foreground/50" />
-                        </div>
-                      </div>
-                    </div>
+                    <ConsoleLayoutPreview :layout="option.value" class="mb-3" />
                     <div class="flex items-center gap-2">
                       <component :is="option.icon" class="size-4 text-muted-foreground" />
                       <span class="text-sm font-medium">{{ t(`settings.consoleLayoutOptions.${option.value}`) }}</span>
                       <Check v-if="consoleLayout === option.value" class="ml-auto size-4 text-primary" />
                     </div>
-                    <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{{ t(`settings.consoleLayoutHints.${option.value}`) }}</p>
                   </button>
                 </div>
               </CardContent>
@@ -3125,64 +3117,10 @@ watch(isWindows, () => {
 
           <!-- HID Section -->
           <div v-show="activeSection === 'hid'" class="space-y-4">
-            <Card>
-              <CardHeader class="flex flex-row items-start justify-between space-y-0">
-                <div class="space-y-1.5">
-                  <CardTitle>{{ t('settings.hidSettings') }}</CardTitle>
-                  <CardDescription>{{ t('settings.hidSettingsDesc') }}</CardDescription>
-                </div>
-                <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadHidDeviceOptions">
-                  <RefreshCw class="size-4" />
-                </Button>
-              </CardHeader>
+            <HidDeviceSettings :active="activeSection === 'hid'" :dirty="hidFeaturesDirty" @applied="loadConfig" @discard="loadConfig" />
+            <Card v-if="configStore.hid?.backend === 'otg' || configStore.hid?.backend === 'ch9329'">
+              <CardHeader><CardTitle>{{ t('hidGuide.features') }}</CardTitle></CardHeader>
               <CardContent class="space-y-4">
-                <div class="space-y-2">
-                  <Label for="hid-backend">{{ t('settings.hidBackend') }}</Label>
-                  <Select v-model="config.hid_backend">
-                    <SelectTrigger id="hid-backend" class="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ch9329">CH9329 (Serial)</SelectItem>
-                      <SelectItem value="otg">USB OTG</SelectItem>
-                      <SelectItem value="none">{{ t('common.disabled') }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
-                  <Label for="serial-device">{{ t('settings.serialDevice') }}</Label>
-                  <Select
-                    :model-value="config.hid_serial_device"
-                    @update:model-value="value => config.hid_serial_device = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                  >
-                    <SelectTrigger id="serial-device" class="w-full"><SelectValue :placeholder="t('settings.selectDevice')" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('settings.selectDevice') }}</SelectItem>
-                      <SelectItem v-for="dev in devices.serial" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
-                  <Label for="serial-baudrate">{{ t('settings.baudRate') }}</Label>
-                  <Select :model-value="config.hid_serial_baudrate" @update:model-value="value => config.hid_serial_baudrate = Number(value)">
-                    <SelectTrigger id="serial-baudrate" class="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="baud in [9600, 19200, 38400, 57600, 115200]" :key="baud" :value="baud">{{ baud }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'otg'" class="space-y-2">
-                  <Label for="otg-udc">{{ t('settings.otgUdc') }}</Label>
-                  <Select
-                    :model-value="config.hid_otg_udc"
-                    @update:model-value="value => config.hid_otg_udc = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                  >
-                    <SelectTrigger id="otg-udc" class="w-full"><SelectValue :placeholder="t('settings.autoRecommended')" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('settings.autoRecommended') }}</SelectItem>
-                      <SelectItem v-for="udc in devices.udc" :key="udc.name" :value="udc.name">{{ udc.name }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <template v-if="config.hid_backend === 'ch9329'">
                   <Separator class="my-4" />
                   <div class="space-y-4">
@@ -5453,7 +5391,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="['video', 'hid'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div v-if="activeSection === 'video' || (activeSection === 'hid' && ['otg', 'ch9329'].includes(configStore.hid?.backend ?? ''))" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
@@ -5470,7 +5408,7 @@ watch(isWindows, () => {
               <p v-if="saveError" class="text-xs text-destructive">{{ saveError }}</p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
               <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
-                <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t(activeSection === 'hid' ? 'hidGuide.saveFeatures' : 'common.save') }}
               </Button>
             </div>
           </div>

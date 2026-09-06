@@ -25,6 +25,7 @@ import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/key
 import { toast } from 'vue-sonner'
 import { cn, generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
+import { getHidStatus } from '@/lib/hidStatus'
 import { videoDebugLog } from '@/lib/debugLog'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { isAudioDeviceLostStateReason, isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
@@ -212,7 +213,7 @@ const isConsoleActive = ref(false)
 function syncMouseModeFromConfig() {
   const mouseAbsolute = configStore.hid?.mouse_absolute
   if (typeof mouseAbsolute !== 'boolean') return
-  const nextMode: 'absolute' | 'relative' = mouseAbsolute ? 'absolute' : 'relative'
+  const nextMode: 'absolute' | 'relative' = mouseAbsolute && configStore.hid?.backend !== 'bluetooth' ? 'absolute' : 'relative'
   if (mouseMode.value !== nextMode) {
     resetTouchInput()
     mouseMode.value = nextMode
@@ -353,27 +354,15 @@ const videoDetails = computed<StatusDetail[]>(() => {
   return details
 })
 
-const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
-  const hid = systemStore.hid
-  if (hid?.errorCode === 'udc_not_configured') return 'disconnected'
-  if (hid?.error) return 'error'
-
-  if (videoMode.value !== 'mjpeg') {
-    if (webrtc.dataChannelReady.value) return 'connected'
-    if (webrtc.isConnecting.value) return 'connecting'
-    if (webrtc.isConnected.value) return 'connecting'
-  }
-
-  if (hidWs.networkError.value) return 'connecting'
-
-  if (!hidWs.connected.value) return 'disconnected'
-
-  if (hidWs.hidUnavailable.value) return 'disconnected'
-
-  if (hid?.available && hid.online) return 'connected'
-  if (hid?.available && hid.initialized) return 'connecting'
-  return 'disconnected'
-})
+const hidStatus = computed(() => getHidStatus(systemStore.hid, {
+  useWebRtc: videoMode.value !== 'mjpeg',
+  dataChannelReady: webrtc.dataChannelReady.value,
+  rtcConnecting: webrtc.isConnecting.value,
+  rtcConnected: webrtc.isConnected.value,
+  wsConnected: hidWs.connected.value,
+  wsNetworkError: hidWs.networkError.value,
+  wsHidUnavailable: hidWs.hidUnavailable.value,
+}))
 
 const hidQuickInfo = computed(() => {
   const hid = systemStore.hid
@@ -3072,7 +3061,7 @@ function handleToggleMouseMode() {
     exitPointerLock()
   }
 
-  mouseMode.value = mouseMode.value === 'absolute' ? 'relative' : 'absolute'
+  mouseMode.value = configStore.hid?.backend === 'bluetooth' ? 'relative' : (mouseMode.value === 'absolute' ? 'relative' : 'absolute')
   pendingMouseMove = null
   accumulatedDelta = { x: 0, y: 0 }
   lastMousePosition.value = { x: 0, y: 0 }
