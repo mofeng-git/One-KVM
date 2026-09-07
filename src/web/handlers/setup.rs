@@ -175,7 +175,7 @@ pub async fn setup_init(
 
     // Apply the complete USB runtime configuration, including the MSD controller.
     let new_config = state.config.get();
-    if let Err(e) = config::apply::apply_usb_config(&state, &old_config, &new_config).await {
+    if let Err(e) = state.usb.apply_config(&old_config, &new_config).await {
         tracing::warn!("Failed to apply USB config during setup: {}", e);
     }
 
@@ -201,13 +201,14 @@ pub async fn setup_init(
     // Start RustDesk if enabled
     if new_config.rustdesk.enabled {
         let empty_config = crate::rustdesk::config::RustDeskConfig::default();
-        if let Err(e) = config::apply::apply_rustdesk_config(
-            &state,
-            &empty_config,
-            &new_config.rustdesk,
-            ConfigApplyOptions::default(),
-        )
-        .await
+        if let Err(e) = state
+            .remote_access
+            .apply_rustdesk(
+                &empty_config,
+                &new_config.rustdesk,
+                ConfigApplyOptions::default(),
+            )
+            .await
         {
             tracing::warn!("Failed to start RustDesk during setup: {}", e);
         } else {
@@ -218,13 +219,14 @@ pub async fn setup_init(
     // Start RTSP if enabled
     if new_config.rtsp.enabled {
         let empty_config = crate::config::RtspConfig::default();
-        if let Err(e) = config::apply::apply_rtsp_config(
-            &state,
-            &empty_config,
-            &new_config.rtsp,
-            ConfigApplyOptions::default(),
-        )
-        .await
+        if let Err(e) = state
+            .remote_access
+            .apply_rtsp(
+                &empty_config,
+                &new_config.rtsp,
+                ConfigApplyOptions::default(),
+            )
+            .await
         {
             tracing::warn!("Failed to start RTSP during setup: {}", e);
         } else {

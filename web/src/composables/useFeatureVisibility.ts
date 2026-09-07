@@ -1,10 +1,11 @@
 import { useLocalStorage } from '@vueuse/core'
 import type { RemovableRef } from '@vueuse/core'
 
-export type FeatureVisibilityKey = 'webTerminal' | 'computerUse' | 'pasteText'
+export type FeatureVisibilityKey = 'power' | 'webTerminal' | 'computerUse' | 'pasteText'
 export type FeatureVisibility = Record<FeatureVisibilityKey, boolean>
 
 const DEFAULT_FEATURE_VISIBILITY: FeatureVisibility = {
+  power: true,
   webTerminal: true,
   computerUse: true,
   pasteText: true,

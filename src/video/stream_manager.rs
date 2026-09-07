@@ -195,25 +195,15 @@ impl VideoStreamManager {
         info!("Initializing video stream manager with mode: {:?}", mode);
         *self.mode.write().await = mode.clone();
 
-        // Check if streamer is already initialized (capturer exists)
-        let needs_init = self.streamer.state().await == StreamerState::Uninitialized;
+        // A failed fixed-device configuration can leave the streamer in a transient
+        // state without a capture device. Treat that the same as an uninitialized
+        // streamer so the advertised auto-detection fallback actually runs.
+        let state = self.streamer.state().await;
+        let (device_path, _, _, _, _) = self.streamer.current_capture_config().await;
+        let needs_init = state == StreamerState::Uninitialized || device_path.is_none();
 
         if needs_init {
-            match mode {
-                StreamMode::Mjpeg => {
-                    // Initialize MJPEG streamer
-                    if let Err(e) = self.streamer.init_auto().await {
-                        warn!("Failed to auto-initialize MJPEG streamer: {}", e);
-                    }
-                }
-                StreamMode::WebRTC => {
-                    // WebRTC is initialized on-demand when clients connect
-                    // But we still need to initialize the video capture
-                    if let Err(e) = self.streamer.init_auto().await {
-                        warn!("Failed to auto-initialize video capture for WebRTC: {}", e);
-                    }
-                }
-            }
+            self.streamer.init_auto().await?;
         }
 
         self.sync_webrtc_capture_source("after init").await;

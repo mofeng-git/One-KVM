@@ -583,6 +583,16 @@ export interface DriveFile {
   size: number
 }
 
+export type DriveFileAccess = 'available' | 'unsupported' | 'blocked_while_connected' | 'unknown'
+
+export interface DriveInfo {
+  size: number
+  used: number | null
+  free: number | null
+  initialized: boolean
+  file_access: DriveFileAccess
+}
+
 export type DiskMode = 'single' | 'multi'
 export type MountedMediaKind = 'drive' | 'image'
 
@@ -604,12 +614,7 @@ export const msdApi = {
         slot_capacity: number
         mounted_count: number
         mounted_media: MountedMedia[]
-        drive_info: {
-          size: number
-          used: number
-          free: number
-          initialized: boolean
-        } | null
+        drive_info: DriveInfo | null
         usb_reenumerating: boolean
       }
     }>('/msd/status', {}, { toastOnError: false }),
@@ -650,20 +655,10 @@ export const msdApi = {
     request<{ success: boolean }>('/msd/drive/mount', { method: 'DELETE' }, { errorTitleKey: 'msd.operations.unmountDrive' }),
 
   driveInfo: () =>
-    request<{
-      size: number
-      used: number
-      free: number
-      initialized: boolean
-    }>('/msd/drive', {}, { toastOnError: false }),
+    request<DriveInfo>('/msd/drive', {}, { toastOnError: false }),
 
   initDrive: (sizeMb?: number) =>
-    request<{
-      size: number
-      used: number
-      free: number
-      initialized: boolean
-    }>(
+    request<DriveInfo>(
       '/msd/drive/init',
       {
         method: 'POST',

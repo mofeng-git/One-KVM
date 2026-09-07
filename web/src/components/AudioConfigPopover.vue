@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { focusConsolePanel } from "@/composables/useConsoleAppearance"
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Loader2, RefreshCw, Volume2 } from 'lucide-vue-next'
+import { Loader2, RefreshCw, Volume2, VolumeX } from 'lucide-vue-next'
 
 import { audioApi, configApi } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface AudioDevice {
 const props = defineProps<{
   open: boolean
   microphoneEnabled?: boolean
+  side?: 'top' | 'right' | 'bottom' | 'left'
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +42,7 @@ const configStore = useConfigStore()
 const systemStore = useSystemStore()
 const unifiedAudio = getUnifiedAudio()
 const microphone = getMicrophone()
+const playbackMuted = computed(() => unifiedAudio.muted.value || unifiedAudio.volume.value === 0)
 
 const localVolume = ref([unifiedAudio.volume.value * 100])
 const devices = ref<AudioDevice[]>([])
@@ -150,13 +153,21 @@ onUnmounted(() => {
         variant="ghost"
         size="sm"
         class="size-8 p-0 text-xs sm:w-auto sm:gap-1.5 sm:px-2"
+        :aria-label="playbackMuted ? `${t('actionbar.audioConfig')} · ${t('actionbar.muted')}` : t('actionbar.audioConfig')"
+        :title="playbackMuted ? `${t('actionbar.audioConfig')} · ${t('actionbar.muted')}` : t('actionbar.audioConfig')"
       >
-        <Volume2 class="size-3.5 sm:size-4" />
+        <VolumeX v-if="playbackMuted" class="size-3.5 sm:size-4" />
+        <Volume2 v-else class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ t('actionbar.audioConfig') }}</span>
       </Button>
     </PopoverTrigger>
 
-    <PopoverContent class="w-[min(320px,92vw)] p-3" align="start">
+    <PopoverContent
+      @open-auto-focus="focusConsolePanel"
+      class="console-config-panel w-[min(320px,92vw)] p-3"
+      align="start"
+      :side="props.side ?? 'bottom'"
+    >
       <div class="space-y-3">
         <h4 class="text-sm font-medium">{{ t('actionbar.audioConfig') }}</h4>
 

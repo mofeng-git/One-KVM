@@ -402,6 +402,9 @@ impl Ch9329DescriptorConfigUpdate {
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
+    /// Request-only; never persisted or replayed during startup.
+    pub bluetooth_reset_pairing: Option<bool>,
+    pub bluetooth: Option<crate::config::BluetoothHidConfig>,
     pub backend: Option<HidBackend>,
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
@@ -427,6 +430,9 @@ pub struct OtgConfigUpdate {
 
 impl HidConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(config) = &self.bluetooth {
+            config.validate()?;
+        }
         if let Some(baudrate) = self.ch9329_baudrate {
             let valid_rates = [9600, 19200, 38400, 57600, 115200];
             if !valid_rates.contains(&baudrate) {
@@ -445,6 +451,9 @@ impl HidConfigUpdate {
     }
 
     pub fn apply_to(&self, config: &mut HidConfig) {
+        if let Some(bluetooth) = &self.bluetooth {
+            config.bluetooth = bluetooth.clone();
+        }
         if let Some(backend) = self.backend.clone() {
             config.backend = backend;
         }
@@ -903,7 +912,9 @@ fn validate_rustdesk_relay_key(key: &str) -> Result<(), AppError> {
 #[derive(Debug, Deserialize)]
 pub struct RustDeskConfigUpdate {
     pub enabled: Option<bool>,
+    pub mode: Option<crate::rustdesk::config::RustDeskMode>,
     pub codec: Option<crate::rustdesk::config::RustDeskCodec>,
+    pub direct_access_port: Option<u16>,
     pub rendezvous_server: Option<String>,
     pub relay_server: Option<String>,
     pub relay_key: Option<String>,
@@ -912,6 +923,11 @@ pub struct RustDeskConfigUpdate {
 
 impl RustDeskConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if self.direct_access_port == Some(0) {
+            return Err(AppError::BadRequest(
+                "RustDesk direct access port must be greater than 0".into(),
+            ));
+        }
         // Validate rendezvous server format (should be host:port)
         if let Some(ref server) = self.rendezvous_server {
             if !server.is_empty() && !server.contains(':') {
@@ -948,10 +964,24 @@ impl RustDeskConfigUpdate {
     }
 
     pub fn validate_merged(&self, config: &RustDeskConfig) -> crate::error::Result<()> {
-        if config.enabled && config.rendezvous_server.trim().is_empty() {
-            return Err(AppError::BadRequest(
-                "RustDesk ID server is required".into(),
-            ));
+        if config.enabled {
+            match config.mode {
+                crate::rustdesk::config::RustDeskMode::Id
+                    if config.rendezvous_server.trim().is_empty() =>
+                {
+                    return Err(AppError::BadRequest(
+                        "RustDesk ID server is required in ID service mode".into(),
+                    ));
+                }
+                crate::rustdesk::config::RustDeskMode::DirectIp
+                    if config.direct_access_port == 0 =>
+                {
+                    return Err(AppError::BadRequest(
+                        "RustDesk direct access port must be greater than 0".into(),
+                    ));
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -960,8 +990,14 @@ impl RustDeskConfigUpdate {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
         }
+        if let Some(mode) = self.mode {
+            config.mode = mode;
+        }
         if let Some(codec) = self.codec {
             config.codec = codec;
+        }
+        if let Some(port) = self.direct_access_port {
+            config.direct_access_port = port;
         }
         if let Some(ref server) = self.rendezvous_server {
             config.rendezvous_server = server.clone();
@@ -1470,7 +1506,9 @@ mod tests {
     fn rustdesk_relay_key_accepts_hbbs_style_base64_32_bytes() {
         let update = RustDeskConfigUpdate {
             enabled: None,
+            mode: None,
             codec: None,
+            direct_access_port: None,
             rendezvous_server: None,
             relay_server: None,
             relay_key: Some("pLU0pEj2IZnNVKzrIO1pIdwGA3dOVJJLkFIYGOCGH1E=".to_string()),
@@ -1485,13 +1523,58 @@ mod tests {
         let not_32 = "AAAAAAAAAAAAAAAAAAAAAA==".to_string();
         let update = RustDeskConfigUpdate {
             enabled: None,
+            mode: None,
             codec: None,
+            direct_access_port: None,
             rendezvous_server: None,
             relay_server: None,
             relay_key: Some(not_32),
             device_password: None,
         };
         assert!(update.validate().is_err());
+    }
+
+    #[test]
+    fn rustdesk_direct_ip_mode_does_not_require_id_server() {
+        let mut config = RustDeskConfig::default();
+        config.enabled = true;
+        config.mode = crate::rustdesk::config::RustDeskMode::DirectIp;
+        config.rendezvous_server.clear();
+
+        let update = RustDeskConfigUpdate {
+            enabled: Some(true),
+            mode: Some(crate::rustdesk::config::RustDeskMode::DirectIp),
+            codec: None,
+            direct_access_port: Some(21118),
+            rendezvous_server: Some(String::new()),
+            relay_server: None,
+            relay_key: None,
+            device_password: None,
+        };
+
+        assert!(update.validate().is_ok());
+        assert!(update.validate_merged(&config).is_ok());
+    }
+
+    #[test]
+    fn rustdesk_id_mode_requires_id_server_when_enabled() {
+        let mut config = RustDeskConfig::default();
+        config.enabled = true;
+        config.mode = crate::rustdesk::config::RustDeskMode::Id;
+        config.rendezvous_server.clear();
+
+        let update = RustDeskConfigUpdate {
+            enabled: Some(true),
+            mode: Some(crate::rustdesk::config::RustDeskMode::Id),
+            codec: None,
+            direct_access_port: None,
+            rendezvous_server: Some(String::new()),
+            relay_server: None,
+            relay_key: None,
+            device_password: None,
+        };
+
+        assert!(update.validate_merged(&config).is_err());
     }
 
     #[test]

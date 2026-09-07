@@ -17,13 +17,13 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    pub fn new(pool: Pool<Sqlite>) -> Result<Self> {
-        Ok(Self {
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self {
             pool,
             cache: Arc::new(ArcSwap::from_pointee(AppConfig::default())),
             change_tx: broadcast::channel(16).0,
             write_lock: Arc::new(Mutex::new(())),
-        })
+        }
     }
 
     pub async fn load(&self) -> Result<()> {
@@ -81,6 +81,11 @@ impl ConfigStore {
         .await?;
 
         Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn hid_bonds(&self) -> crate::db::hid_bonds::HidBondStore {
+        crate::db::hid_bonds::HidBondStore(self.pool.clone())
     }
 
     pub fn get(&self) -> Arc<AppConfig> {
@@ -145,7 +150,7 @@ mod tests {
         let db = DatabasePool::new(&db_path).await.unwrap();
         db.init_schema().await.unwrap();
 
-        let store = ConfigStore::new(db.clone_pool()).unwrap();
+        let store = ConfigStore::new(db.clone_pool());
         store.load().await.unwrap();
 
         let config = store.get();
@@ -163,7 +168,7 @@ mod tests {
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
 
-        let store2 = ConfigStore::new(db.clone_pool()).unwrap();
+        let store2 = ConfigStore::new(db.clone_pool());
         store2.load().await.unwrap();
         let config = store2.get();
         assert!(config.initialized);
@@ -176,7 +181,7 @@ mod tests {
         let db_path = dir.path().join("test.db");
         let db = DatabasePool::new(&db_path).await.unwrap();
         db.init_schema().await.unwrap();
-        let store = ConfigStore::new(db.clone_pool()).unwrap();
+        let store = ConfigStore::new(db.clone_pool());
         store.load().await.unwrap();
 
         sqlx::query("DROP TABLE config")
@@ -210,7 +215,7 @@ mod tests {
             .await
             .unwrap();
 
-        let store = ConfigStore::new(db.clone_pool()).unwrap();
+        let store = ConfigStore::new(db.clone_pool());
         store.load().await.unwrap();
         let (persisted,): (String,) =
             sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")

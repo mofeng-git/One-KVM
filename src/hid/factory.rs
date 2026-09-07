@@ -8,6 +8,8 @@ use crate::error::{AppError, Result};
 use crate::otg::OtgService;
 
 pub struct HidBackendFactory {
+    #[cfg(target_os = "linux")]
+    pub bonds: std::sync::OnceLock<Arc<dyn one_kvm_bluetooth_hid::bonds::BondStore>>,
     #[cfg(unix)]
     otg_service: Option<Arc<OtgService>>,
 }
@@ -15,7 +17,11 @@ pub struct HidBackendFactory {
 impl HidBackendFactory {
     #[cfg(unix)]
     pub fn new(otg_service: Option<Arc<OtgService>>) -> Self {
-        Self { otg_service }
+        Self {
+            otg_service,
+            #[cfg(target_os = "linux")]
+            bonds: Default::default(),
+        }
     }
 
     #[cfg(not(unix))]
@@ -57,6 +63,22 @@ impl HidBackendFactory {
                         *macos_drag,
                     )?,
                 )))
+            }
+            HidBackendType::Bluetooth { config } => {
+                #[cfg(target_os = "linux")]
+                {
+                    Ok(Some(Arc::new(super::bluetooth::BluetoothBackend::new(
+                        config.clone(),
+                        self.bonds.get().cloned(),
+                    )?)))
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let _ = config;
+                    Err(AppError::Config(
+                        "Bluetooth HID requires Linux and BlueZ".into(),
+                    ))
+                }
             }
             HidBackendType::None => {
                 warn!("HID backend disabled");

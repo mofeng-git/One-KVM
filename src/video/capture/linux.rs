@@ -3,6 +3,8 @@
 use std::fs::File;
 use std::io;
 use std::os::fd::AsFd;
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -28,6 +30,10 @@ use crate::video::device::bridge::{self as csi_bridge, CsiBridgeKind, ProbeResul
 use crate::video::device::VideoControlMode;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::signal::SignalStatus;
+
+#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+#[path = "dmabuf_layout.rs"]
+mod dmabuf_layout;
 
 /// Metadata for a captured frame.
 #[derive(Debug, Clone, Copy)]
@@ -67,6 +73,8 @@ pub struct CaptureStream {
     bridge_kind: Option<CsiBridgeKind>,
     native_hdmirx_state: Option<NativeHdmirxState>,
     native_hdmirx_next_state_check: Option<Instant>,
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    dma_layout_bytes: Option<usize>,
 }
 
 fn open_capture_device(path: &Path) -> io::Result<File> {
@@ -319,6 +327,24 @@ impl CaptureStream {
             mappings.push(plane_maps);
         }
 
+        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        let dma_layout_bytes = PixelFormat::from_v4l2r(actual_fmt.pixelformat).and_then(|format| {
+            dmabuf_layout::DmaCaptureLayout {
+                native_hdmi: is_native_hdmirx,
+                driver: &caps.driver,
+                bus_info: &caps.bus_info,
+                configurable_usb: !is_source_following
+                    && bridge.kind.is_none()
+                    && !bridge.has_subdev(),
+                single_planar: queue == QueueType::VideoCapture,
+                fourcc: format.to_fourcc(),
+                width: actual_resolution.width,
+                height: actual_resolution.height,
+                stride,
+            }
+            .minimum_bytes()
+        });
+
         let mut stream = Self {
             fd,
             queue,
@@ -332,6 +358,8 @@ impl CaptureStream {
             bridge_kind: bridge.kind,
             native_hdmirx_state,
             native_hdmirx_next_state_check,
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            dma_layout_bytes,
         };
 
         stream.queue_all_buffers()?;
@@ -421,10 +449,7 @@ impl CaptureStream {
         }
     }
 
-    pub fn next_into(
-        &mut self,
-        dst: &mut Vec<u8>,
-    ) -> std::result::Result<CaptureMeta, CaptureReadError> {
+    fn dequeue_buffer(&mut self) -> std::result::Result<V4l2Buffer, CaptureReadError> {
         self.wait_ready()?;
 
         // Several vendor BSPs update G_FMT/DV timings without making the
@@ -455,6 +480,143 @@ impl CaptureStream {
                 };
                 CaptureReadError::Io(error)
             })?;
+        Ok(dqbuf)
+    }
+
+    /// Native HDMI NV12/BGR24 and single-planar USB UVC YUYV/NV12/RGB24/MJPEG.
+    /// Actual EXPBUF/import support is probed separately; failure retains copy.
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    pub(crate) fn supports_rkmpp_dmabuf(&self) -> bool {
+        self.dma_layout_bytes.is_some_and(|minimum| {
+            (2..=16).contains(&self.mappings.len())
+                && self
+                    .mappings
+                    .iter()
+                    .all(|planes| planes.len() == 1 && planes[0].len() >= minimum)
+        })
+    }
+
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    pub(crate) fn export_dmabufs(&self) -> io::Result<Vec<(OwnedFd, usize)>> {
+        if !self.supports_rkmpp_dmabuf() {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Unsupported RKMPP DMA capture layout",
+            ));
+        }
+        self.mappings
+            .iter()
+            .enumerate()
+            .map(|(index, planes)| {
+                let fd = ioctl::expbuf(&self.fd, self.queue, index, 0, ioctl::ExpbufFlags::CLOEXEC)
+                    .map_err(|error| io::Error::other(error.to_string()))?;
+                Ok((fd, planes[0].len()))
+            })
+            .collect()
+    }
+
+    /// Run a synchronous consumer while a buffer is dequeued. QBUF occurs only
+    /// after the callback returns, including its error path. Consumers must end
+    /// hardware access before returning; see hwcodec::rkmpp_dmabuf::encode.
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    pub(crate) fn with_next_dmabuf<T>(
+        &mut self,
+        consume: impl FnOnce(usize, usize, Option<OwnedFd>) -> T,
+    ) -> std::result::Result<(CaptureMeta, T), CaptureReadError> {
+        let buffer = self.dequeue_buffer()?;
+        let index = buffer.as_v4l2_buffer().index as usize;
+        let sequence = buffer.as_v4l2_buffer().sequence as u64;
+        if index >= self.mappings.len() {
+            return Err(
+                io::Error::new(io::ErrorKind::InvalidData, "Invalid capture buffer index").into(),
+            );
+        }
+        let expected = self.expected_capture_bytes();
+        let mapped_size = self.mappings[index][0].len();
+        let native_hdmi = self.native_hdmirx_state.is_some();
+        let compressed = self.format == PixelFormat::Mjpeg;
+        let lease = BufferReturn(Some(|| {
+            self.queue_buffer(index as u32)
+                .map_err(|e| io::Error::other(e.to_string()))
+        }));
+        if buffer.as_v4l2_buffer().flags & v4l2r::bindings::V4L2_BUF_FLAG_ERROR != 0 {
+            // A corrupt UVC frame is not a source change or a DMA failure.
+            // Return it without ever letting the encoder read its payload.
+            lease.finish()?;
+            return Err(io::Error::from(io::ErrorKind::WouldBlock).into());
+        }
+        if !native_hdmi
+            && buffer.as_v4l2_buffer().field != v4l2r::bindings::v4l2_field_V4L2_FIELD_NONE
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Interlaced USB DMA frames are not supported",
+            )
+            .into());
+        }
+        let mut planes = buffer.planes_iter();
+        let plane = planes
+            .next()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing DMA plane"))?;
+        if planes.next().is_some() || plane.data_offset.copied().unwrap_or(0) != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Unsupported DMA plane offset/layout",
+            )
+            .into());
+        }
+        let bytes_used = *plane.bytesused as usize;
+        if !dmabuf_layout::valid_payload(compressed, bytes_used, mapped_size, expected) {
+            if !native_hdmi {
+                // An unexpected UVC payload is not evidence of a source mode
+                // change. Disable DMA instead of reopening it indefinitely.
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Unexpected USB DMA payload length",
+                )
+                .into());
+            }
+            return Err(CaptureReadError::SourceChanged);
+        }
+        // UVC commonly fills vmalloc memory on the CPU. Older BSP exporters
+        // cache DMA attachments without usable per-frame CPU-access sync hooks.
+        // A fresh export object forces a fresh device mapping of this completed
+        // frame. Reuse the actual capture allocation, not a stale attachment.
+        let fresh_fd = if !native_hdmi {
+            Some(
+                ioctl::expbuf(
+                    &self.fd,
+                    self.queue,
+                    index,
+                    0,
+                    ioctl::ExpbufFlags::CLOEXEC | ioctl::ExpbufFlags::RDWR,
+                )
+                .map_err(|error| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("USB DMA re-export failed: {error}"),
+                    )
+                })?,
+            )
+        } else {
+            None
+        };
+        let output = consume(index, bytes_used, fresh_fd);
+        lease.finish()?;
+        Ok((
+            CaptureMeta {
+                bytes_used,
+                sequence,
+            },
+            output,
+        ))
+    }
+
+    pub fn next_into(
+        &mut self,
+        dst: &mut Vec<u8>,
+    ) -> std::result::Result<CaptureMeta, CaptureReadError> {
+        let dqbuf = self.dequeue_buffer()?;
         let index = dqbuf.as_v4l2_buffer().index as usize;
         let sequence = dqbuf.as_v4l2_buffer().sequence as u64;
 
@@ -664,7 +826,7 @@ impl CaptureStream {
         Ok(())
     }
 
-    fn queue_buffer(&mut self, index: u32) -> Result<()> {
+    fn queue_buffer(&self, index: u32) -> Result<()> {
         let handle = MmapHandle;
         let planes = self.mappings[index as usize]
             .iter()
@@ -679,6 +841,64 @@ impl CaptureStream {
         ioctl::qbuf::<_, ()>(&self.fd, qbuf)
             .map_err(|e| AppError::VideoError(format!("Failed to queue buffer: {}", e)))?;
         Ok(())
+    }
+}
+
+#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+struct BufferReturn<F: FnOnce() -> io::Result<()>>(Option<F>);
+
+#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+impl<F: FnOnce() -> io::Result<()>> BufferReturn<F> {
+    fn finish(mut self) -> io::Result<()> {
+        self.0.take().expect("capture lease already returned")()
+    }
+}
+
+#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+impl<F: FnOnce() -> io::Result<()>> Drop for BufferReturn<F> {
+    fn drop(&mut self) {
+        if let Some(return_buffer) = self.0.take() {
+            if let Err(error) = return_buffer() {
+                warn!("Failed to return leased capture buffer: {}", error);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod dma_lease_tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    fn returns_buffer_once_after_consumer_and_does_not_retry_failed_qbuf() {
+        let operations = RefCell::new(Vec::new());
+        let lease = BufferReturn(Some(|| {
+            operations.borrow_mut().push("qbuf");
+            Err(io::Error::other("device lost"))
+        }));
+        operations.borrow_mut().push("encode completed");
+        assert!(lease.finish().is_err());
+        assert_eq!(*operations.borrow(), ["encode completed", "qbuf"]);
+    }
+
+    #[test]
+    fn returns_buffer_on_validation_error_or_unwind() {
+        let returns = std::cell::Cell::new(0);
+        {
+            let _lease = BufferReturn(Some(|| {
+                returns.set(returns.get() + 1);
+                Ok(())
+            }));
+        }
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _lease = BufferReturn(Some(|| {
+                returns.set(returns.get() + 1);
+                Ok(())
+            }));
+            panic!("consumer panic");
+        }));
+        assert_eq!(returns.get(), 2);
     }
 }
 

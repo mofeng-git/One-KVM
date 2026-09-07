@@ -252,13 +252,37 @@ pub fn avcc_to_annex_b(data: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-pub fn normalize_for_webrtc(data: &[u8]) -> Vec<u8> {
-    if is_annex_b(data) {
-        return strip_aud_nal_units(data);
+/// Normalize a length-prefixed H.264 access unit to Annex-B when necessary.
+///
+/// FFmpeg normally exposes elementary H.264 from hardware encoders as
+/// Annex-B, but some V4L2 M2M drivers return AVCC-style packets. Consumers
+/// such as RustDesk do not receive codec extradata from our protocol adapter,
+/// so passing those packets through unchanged leaves the decoder unable to
+/// find NAL unit boundaries.
+pub fn normalize_annex_b(data: bytes::Bytes) -> bytes::Bytes {
+    // A four-byte start code is unambiguous for real encoder output. A
+    // three-byte prefix is not: an AVCC NAL of 256..511 bytes also begins
+    // with 00 00 01. Validate AVCC before accepting that shorter prefix.
+    if data.starts_with(&[0, 0, 0, 1]) {
+        return data;
     }
 
-    if let Some(annex_b) = avcc_to_annex_b(data) {
-        return strip_aud_nal_units(&annex_b);
+    if let Some(annex_b) = avcc_to_annex_b(data.as_ref()) {
+        return bytes::Bytes::from(annex_b);
+    }
+
+    data
+}
+
+pub fn normalize_for_webrtc(data: &[u8]) -> Vec<u8> {
+    if !data.starts_with(&[0, 0, 0, 1]) {
+        if let Some(annex_b) = avcc_to_annex_b(data) {
+            return strip_aud_nal_units(&annex_b);
+        }
+    }
+
+    if is_annex_b(data) {
+        return strip_aud_nal_units(data);
     }
 
     data.to_vec()
@@ -295,5 +319,37 @@ mod tests {
             parse_profile_level_id_from_sps(&[0x67, 0x42, 0x40, 0x2a]),
             Some("42402a".to_string())
         );
+    }
+
+    #[test]
+    fn converts_avcc_access_unit_to_annex_b() {
+        let avcc = [
+            0, 0, 0, 4, 0x67, 0x42, 0x40, 0x1f, // SPS
+            0, 0, 0, 2, 0x68, 0xce, // PPS
+            0, 0, 0, 3, 0x65, 0x88, 0x84, // IDR
+        ];
+
+        let annex_b = normalize_annex_b(bytes::Bytes::copy_from_slice(&avcc));
+        assert!(is_annex_b(&annex_b));
+        assert!(has_sps_pps(&annex_b));
+        assert!(is_keyframe(&annex_b));
+    }
+
+    #[test]
+    fn leaves_annex_b_packet_unchanged() {
+        let annex_b = bytes::Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88, 0x84]);
+        let normalized = normalize_annex_b(annex_b.clone());
+        assert_eq!(normalized, annex_b);
+    }
+
+    #[test]
+    fn recognizes_avcc_length_that_looks_like_three_byte_start_code() {
+        let mut avcc = vec![0, 0, 1, 0];
+        avcc.push(0x65);
+        avcc.resize(4 + 256, 0x88);
+
+        let annex_b = normalize_annex_b(bytes::Bytes::from(avcc));
+        assert_eq!(&annex_b[..5], &[0, 0, 0, 1, 0x65]);
+        assert!(is_keyframe(&annex_b));
     }
 }

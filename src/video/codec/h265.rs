@@ -45,8 +45,6 @@ pub enum H265EncoderType {
     Rkmpp,
     /// V4L2 M2M (ARM generic)
     V4l2M2m,
-    /// Amlogic S912/GXM AMLENC
-    Amlogic,
     /// Software encoder (libx265)
     Software,
     /// No encoder available
@@ -63,7 +61,6 @@ impl std::fmt::Display for H265EncoderType {
             H265EncoderType::Vaapi => write!(f, "VAAPI"),
             H265EncoderType::Rkmpp => write!(f, "RKMPP"),
             H265EncoderType::V4l2M2m => write!(f, "V4L2 M2M"),
-            H265EncoderType::Amlogic => write!(f, "AMLENC"),
             H265EncoderType::Software => write!(f, "Software"),
             H265EncoderType::None => write!(f, "None"),
         }
@@ -79,7 +76,6 @@ impl From<EncoderBackend> for H265EncoderType {
             EncoderBackend::Vaapi => H265EncoderType::Vaapi,
             EncoderBackend::Rkmpp => H265EncoderType::Rkmpp,
             EncoderBackend::V4l2m2m => H265EncoderType::V4l2M2m,
-            EncoderBackend::Amlogic => H265EncoderType::Amlogic,
             EncoderBackend::Software => H265EncoderType::Software,
         }
     }

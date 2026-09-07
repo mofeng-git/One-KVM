@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
+import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -46,6 +48,7 @@ import type {
   AtxDriverType,
   ActiveLevel,
   AtxDevices,
+  HidConfigUpdate,
   OtgHidProfile,
   OtgHidFunctions,
   Ch9329DescriptorConfig,
@@ -59,6 +62,7 @@ import { toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
+import { useConsoleLayout, type ConsoleLayout } from '@/composables/useConsoleLayout'
 import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
 import { getVideoFormatState } from '@/lib/video-format-support'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
@@ -143,6 +147,9 @@ import {
   Bot,
   ClipboardPaste,
   Wrench,
+  PanelTop,
+  PanelLeft,
+  GalleryHorizontalEnd,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -153,6 +160,15 @@ const configStore = useConfigStore()
 const authStore = useAuthStore()
 const featureVisibility = useFeatureVisibility()
 const { theme, setTheme } = useTheme()
+const { consoleLayout, setConsoleLayout } = useConsoleLayout()
+const consoleLayoutOptions: Array<{
+  value: ConsoleLayout
+  icon: typeof PanelTop
+}> = [
+  { value: 'current', icon: PanelTop },
+  { value: 'floating', icon: GalleryHorizontalEnd },
+  { value: 'sidebar', icon: PanelLeft },
+]
 const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
@@ -496,15 +512,23 @@ const rustdeskCopied = ref<'id' | 'password' | null>(null)
 const { copy: clipboardCopy } = useClipboard()
 const rustdeskLocalConfig = ref({
   enabled: false,
+  mode: 'id' as 'id' | 'direct_ip',
   codec: 'h264' as 'h264' | 'h265',
+  direct_access_port: 21118,
   rendezvous_server: '',
   relay_server: '',
   relay_key: '',
 })
 
 const rustdeskValidationMessage = computed(() => {
-  if (!rustdeskLocalConfig.value.rendezvous_server?.trim()) {
+  if (rustdeskLocalConfig.value.mode === 'id' && !rustdeskLocalConfig.value.rendezvous_server?.trim()) {
     return t('extensions.rustdesk.rendezvousServerRequired')
+  }
+  if (
+    rustdeskLocalConfig.value.mode === 'direct_ip'
+    && (rustdeskLocalConfig.value.direct_access_port < 1 || rustdeskLocalConfig.value.direct_access_port > 65535)
+  ) {
+    return t('extensions.rustdesk.directAccessPortInvalid')
   }
   return ''
 })
@@ -1430,14 +1454,11 @@ async function saveConfig() {
       if (!isHidSettingsValid.value) {
         return
       }
-      const hidUpdate: any = {
-        backend: config.value.hid_backend as any,
-        ch9329_port: config.value.hid_serial_device || undefined,
-        ch9329_baudrate: config.value.hid_serial_baudrate,
-        ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
-        ch9329_macos_drag: config.value.hid_ch9329_macos_drag,
-        otg_udc: config.value.hid_otg_udc,
-      }
+      const hidUpdate: HidConfigUpdate = configStore.hid?.backend === 'ch9329'
+        ? {
+            ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
+            ch9329_macos_drag: config.value.hid_ch9329_macos_drag,
+          } : {}
       if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
         hidUpdate.ch9329_descriptor = {
           vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
@@ -1455,32 +1476,37 @@ async function saveConfig() {
           product: otgProduct.value || 'One-KVM USB Device',
           serial_number: otgSerialNumber.value || undefined,
         }
-        hidUpdate.otg_profile = 'custom'
+        hidUpdate.otg_profile = 'custom' as OtgHidProfile
         hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
         hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
       }
-      const otgEnabled = config.value.hid_backend === 'otg'
-      const response = await configStore.updateOtg({
-        hid: hidUpdate,
-        msd: {
-          enabled: otgEnabled && config.value.msd_enabled,
-          msd_dir: config.value.msd_dir || undefined,
-          flash_inquiry_string: config.value.msd_flash_inquiry_string,
-          cdrom_inquiry_string: config.value.msd_cdrom_inquiry_string,
-        },
-        network: {
-          enabled: otgEnabled && config.value.otg_network_enabled,
-          driver_mode: config.value.otg_network_driver as any,
-          bridge_interface: config.value.otg_network_interface,
-        },
-      })
-      otgNetworkStatus.value = response.status
+      if (configStore.hid?.backend === 'otg') {
+        const otgEnabled = config.value.hid_backend === 'otg'
+        const response = await configStore.updateOtg({
+          hid: hidUpdate,
+          msd: {
+            enabled: otgEnabled && config.value.msd_enabled,
+            msd_dir: config.value.msd_dir || undefined,
+            flash_inquiry_string: config.value.msd_flash_inquiry_string,
+            cdrom_inquiry_string: config.value.msd_cdrom_inquiry_string,
+          },
+          network: {
+            enabled: otgEnabled && config.value.otg_network_enabled,
+            driver_mode: config.value.otg_network_driver as any,
+            bridge_interface: config.value.otg_network_interface,
+          },
+        })
+        otgNetworkStatus.value = response.status
 
-      await uacApi.update({
-        enabled: otgEnabled && config.value.uac_enabled,
-        sample_rate: 48000,
-        channels: 2,
-      })
+        await uacApi.update({
+          enabled: otgEnabled && config.value.uac_enabled,
+          sample_rate: 48000,
+          channels: 2,
+        })
+      } else if (configStore.hid?.backend === 'ch9329') {
+        await configStore.updateHid(hidUpdate)
+      }
+      await loadConfig()
     }
 
     if (activeSection.value !== 'hid') {
@@ -1498,6 +1524,15 @@ async function saveConfig() {
     loading.value = false
   }
 }
+
+const hidFeatureBaseline = ref('')
+function hidFeatureSnapshot() {
+  return JSON.stringify({
+    fields: Object.fromEntries(Object.entries(config.value).filter(([key]) => key.startsWith('msd_') || key.startsWith('otg_network_') || key.startsWith('uac_') || ['hid_otg_functions', 'hid_otg_keyboard_leds', 'hid_ch9329_hybrid_mouse', 'hid_ch9329_macos_drag'].includes(key))),
+    descriptor: [otgVendorIdHex.value, otgProductIdHex.value, otgManufacturer.value, otgProduct.value, otgSerialNumber.value],
+  })
+}
+const hidFeaturesDirty = computed(() => !!hidFeatureBaseline.value && (hidFeatureBaseline.value !== hidFeatureSnapshot() || isCh9329DescriptorDirty.value))
 
 async function loadConfig() {
   try {
@@ -1572,6 +1607,8 @@ async function loadConfig() {
       clearCh9329DescriptorState()
     }
     otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
+    await nextTick()
+    hidFeatureBaseline.value = hidFeatureSnapshot()
   } catch {
   }
 }
@@ -1944,7 +1981,9 @@ function applyRustdeskStatus(status: RustDeskStatusResponse) {
   rustdeskStatus.value = status
   rustdeskLocalConfig.value = {
     enabled: config.enabled,
+    mode: config.mode || 'id',
     codec: config.codec || 'h264',
+    direct_access_port: config.direct_access_port || 21118,
     rendezvous_server: config.rendezvous_server,
     relay_server: config.relay_server || '',
     relay_key: config.relay_key || '',
@@ -2338,7 +2377,9 @@ function updateStatusBadgeText(): string {
 function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
   return {
     enabled,
+    mode: rustdeskLocalConfig.value.mode,
     codec: rustdeskLocalConfig.value.codec,
+    direct_access_port: rustdeskLocalConfig.value.direct_access_port,
     rendezvous_server: normalizeRustdeskServer(
       rustdeskLocalConfig.value.rendezvous_server,
       21116,
@@ -2349,7 +2390,10 @@ function rustdeskUpdatePayload(enabled = rustdeskLocalConfig.value.enabled) {
 }
 
 async function saveRustdeskConfig() {
-  if (rustdeskLocalConfig.value.enabled && !validateRustdeskConfig()) return
+  if (
+    (rustdeskLocalConfig.value.enabled || rustdeskLocalConfig.value.mode === 'direct_ip')
+    && !validateRustdeskConfig()
+  ) return
 
   loading.value = true
   saved.value = false
@@ -2787,6 +2831,33 @@ watch(isWindows, () => {
 
             <Card>
               <CardHeader>
+                <CardTitle>{{ t('settings.consoleLayout') }}</CardTitle>
+                <CardDescription>{{ t('settings.consoleLayoutDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <button
+                    v-for="option in consoleLayoutOptions"
+                    :key="option.value"
+                    type="button"
+                    class="group rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                    :class="consoleLayout === option.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border'"
+                    :aria-pressed="consoleLayout === option.value"
+                    @click="setConsoleLayout(option.value)"
+                  >
+                    <ConsoleLayoutPreview :layout="option.value" class="mb-3" />
+                    <div class="flex items-center gap-2">
+                      <component :is="option.icon" class="size-4 text-muted-foreground" />
+                      <span class="text-sm font-medium">{{ t(`settings.consoleLayoutOptions.${option.value}`) }}</span>
+                      <Check v-if="consoleLayout === option.value" class="ml-auto size-4 text-primary" />
+                    </div>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>{{ t('settings.language') }}</CardTitle>
                 <CardDescription>{{ t('settings.languageDesc') }}</CardDescription>
               </CardHeader>
@@ -2802,6 +2873,20 @@ watch(isWindows, () => {
               </CardHeader>
               <CardContent class="space-y-1">
                 <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-power" class="flex min-w-0 items-center gap-2 font-normal">
+                    <Power class="size-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('actionbar.power') }}</span>
+                  </Label>
+                  <Switch id="feature-power" v-model="featureVisibility.power" />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-paste-text" class="flex min-w-0 items-center gap-2 font-normal">
+                    <ClipboardPaste class="size-4 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ t('settings.pasteText') }}</span>
+                  </Label>
+                  <Switch id="feature-paste-text" v-model="featureVisibility.pasteText" />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-web-terminal" class="flex min-w-0 items-center gap-2 font-normal">
                     <Terminal class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ t('actionbar.webTerminal') }}</span>
@@ -2814,13 +2899,6 @@ watch(isWindows, () => {
                     <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
                   </Label>
                   <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
-                </div>
-                <div class="flex items-center justify-between gap-4 px-3 py-3">
-                  <Label for="feature-paste-text" class="flex min-w-0 items-center gap-2 font-normal">
-                    <ClipboardPaste class="size-4 shrink-0 text-muted-foreground" />
-                    <span class="truncate">{{ t('settings.pasteText') }}</span>
-                  </Label>
-                  <Switch id="feature-paste-text" v-model="featureVisibility.pasteText" />
                 </div>
               </CardContent>
             </Card>
@@ -3044,64 +3122,10 @@ watch(isWindows, () => {
 
           <!-- HID Section -->
           <div v-show="activeSection === 'hid'" class="space-y-4">
-            <Card>
-              <CardHeader class="flex flex-row items-start justify-between space-y-0">
-                <div class="space-y-1.5">
-                  <CardTitle>{{ t('settings.hidSettings') }}</CardTitle>
-                  <CardDescription>{{ t('settings.hidSettingsDesc') }}</CardDescription>
-                </div>
-                <Button variant="ghost" size="icon-sm" :aria-label="t('common.refresh')" @click="loadHidDeviceOptions">
-                  <RefreshCw class="size-4" />
-                </Button>
-              </CardHeader>
+            <HidDeviceSettings :active="activeSection === 'hid'" :dirty="hidFeaturesDirty" @applied="loadConfig" @discard="loadConfig" />
+            <Card v-if="configStore.hid?.backend === 'otg' || configStore.hid?.backend === 'ch9329'">
+              <CardHeader><CardTitle>{{ t('hidGuide.features') }}</CardTitle></CardHeader>
               <CardContent class="space-y-4">
-                <div class="space-y-2">
-                  <Label for="hid-backend">{{ t('settings.hidBackend') }}</Label>
-                  <Select v-model="config.hid_backend">
-                    <SelectTrigger id="hid-backend" class="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ch9329">CH9329 (Serial)</SelectItem>
-                      <SelectItem value="otg">USB OTG</SelectItem>
-                      <SelectItem value="none">{{ t('common.disabled') }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
-                  <Label for="serial-device">{{ t('settings.serialDevice') }}</Label>
-                  <Select
-                    :model-value="config.hid_serial_device"
-                    @update:model-value="value => config.hid_serial_device = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                  >
-                    <SelectTrigger id="serial-device" class="w-full"><SelectValue :placeholder="t('settings.selectDevice')" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('settings.selectDevice') }}</SelectItem>
-                      <SelectItem v-for="dev in devices.serial" :key="dev.path" :value="dev.path">{{ dev.name }} ({{ dev.path }})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'ch9329'" class="space-y-2">
-                  <Label for="serial-baudrate">{{ t('settings.baudRate') }}</Label>
-                  <Select :model-value="config.hid_serial_baudrate" @update:model-value="value => config.hid_serial_baudrate = Number(value)">
-                    <SelectTrigger id="serial-baudrate" class="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="baud in [9600, 19200, 38400, 57600, 115200]" :key="baud" :value="baud">{{ baud }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="config.hid_backend === 'otg'" class="space-y-2">
-                  <Label for="otg-udc">{{ t('settings.otgUdc') }}</Label>
-                  <Select
-                    :model-value="config.hid_otg_udc"
-                    @update:model-value="value => config.hid_otg_udc = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                  >
-                    <SelectTrigger id="otg-udc" class="w-full"><SelectValue :placeholder="t('settings.autoRecommended')" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('settings.autoRecommended') }}</SelectItem>
-                      <SelectItem v-for="udc in devices.udc" :key="udc.name" :value="udc.name">{{ udc.name }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <template v-if="config.hid_backend === 'ch9329'">
                   <Separator class="my-4" />
                   <div class="space-y-4">
@@ -5070,6 +5094,21 @@ watch(isWindows, () => {
                     <Switch v-model="rustdeskLocalConfig.enabled" />
                   </div>
                   <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.mode') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Select v-model="rustdeskLocalConfig.mode" :disabled="rustdeskStatus?.service_status === 'running'">
+                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="id">{{ t('extensions.rustdesk.modeId') }}</SelectItem>
+                          <SelectItem value="direct_ip">{{ t('extensions.rustdesk.modeDirectIp') }}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p class="text-xs text-muted-foreground">
+                        {{ rustdeskLocalConfig.mode === 'id' ? t('extensions.rustdesk.modeIdDesc') : t('extensions.rustdesk.modeDirectIpDesc') }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Select v-model="rustdeskLocalConfig.codec" :disabled="rustdeskStatus?.service_status === 'running'">
@@ -5078,7 +5117,7 @@ watch(isWindows, () => {
                       </Select>
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input
@@ -5089,7 +5128,7 @@ watch(isWindows, () => {
                       <p v-if="rustdeskLocalConfig.enabled && rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <Input
@@ -5099,7 +5138,7 @@ watch(isWindows, () => {
                       />
                     </div>
                   </div>
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
                     <div class="sm:col-span-3 space-y-1">
                       <div class="relative">
@@ -5126,15 +5165,26 @@ watch(isWindows, () => {
                       </div>
                     </div>
                   </div>
+                  <div v-if="rustdeskLocalConfig.mode === 'direct_ip'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.directAccessPort') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
+                      <Input
+                        v-model.number="rustdeskLocalConfig.direct_access_port"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        :disabled="rustdeskStatus?.service_status === 'running'"
+                      />
+                      <p v-if="rustdeskValidationMessage" class="text-xs text-destructive">{{ rustdeskValidationMessage }}</p>
+                    </div>
+                  </div>
                 </div>
                 <Separator />
 
                 <!-- Device Info -->
                 <div class="space-y-3">
-                  <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
-
                   <!-- Device ID -->
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                  <div v-if="rustdeskLocalConfig.mode === 'id'" class="grid gap-2 sm:grid-cols-4 sm:items-center">
                     <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
                     <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskConfig?.device_id || '-' }}</code>
@@ -5179,15 +5229,6 @@ watch(isWindows, () => {
                     </div>
                   </div>
 
-                  <!-- Keypair Status -->
-                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
-                    <div class="sm:col-span-3">
-                      <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">
-                        {{ rustdeskConfig?.has_keypair ? t('common.yes') : t('common.no') }}
-                      </Badge>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
               <CardFooter class="border-t pt-4 justify-end">
@@ -5362,7 +5403,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="['video', 'hid'].includes(activeSection)" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div v-if="activeSection === 'video' || (activeSection === 'hid' && ['otg', 'ch9329'].includes(configStore.hid?.backend ?? ''))" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
@@ -5379,7 +5420,7 @@ watch(isWindows, () => {
               <p v-if="saveError" class="text-xs text-destructive">{{ saveError }}</p>
               <p v-else class="text-xs text-muted-foreground hidden sm:block">{{ t('settings.unsavedChangesHint') }}</p>
               <Button class="shrink-0 ml-auto" :disabled="loading || (activeSection === 'hid' && !isHidSettingsValid)" @click="saveConfig">
-                <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
+                <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t(activeSection === 'hid' ? 'hidGuide.saveFeatures' : 'common.save') }}
               </Button>
             </div>
           </div>

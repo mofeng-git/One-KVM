@@ -2,6 +2,7 @@ mod audio_ws;
 mod error;
 mod handlers;
 mod routes;
+pub(crate) mod state;
 mod static_files;
 #[cfg(unix)]
 mod uac_ws;

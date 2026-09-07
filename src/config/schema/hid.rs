@@ -2,12 +2,61 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 #[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct BluetoothHidConfig {
+    pub adapter: String,
+    pub name: String,
+    pub peer: Option<String>,
+}
+impl Default for BluetoothHidConfig {
+    fn default() -> Self {
+        Self {
+            adapter: "hci0".into(),
+            name: "One-KVM HID".into(),
+            peer: None,
+        }
+    }
+}
+impl BluetoothHidConfig {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        let invalid = |reason: &str| crate::error::AppError::BadRequest(reason.into());
+        if !self
+            .adapter
+            .strip_prefix("hci")
+            .is_some_and(|s| !s.is_empty() && s.bytes().all(|c| c.is_ascii_digit()))
+        {
+            return Err(invalid(
+                "Bluetooth adapter must be hci followed by an index",
+            ));
+        }
+        if self.name.is_empty() || self.name.len() > 64 || self.name.chars().any(char::is_control) {
+            return Err(invalid(
+                "Bluetooth name must contain 1–64 UTF-8 bytes without control characters",
+            ));
+        }
+        if let Some(peer) = &self.peer {
+            let parts: Vec<_> = peer.split(':').collect();
+            if parts.len() != 6
+                || parts
+                    .iter()
+                    .any(|p| p.len() != 2 || !p.bytes().all(|c| c.is_ascii_hexdigit()))
+            {
+                return Err(invalid("Invalid Bluetooth peer address"));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum HidBackend {
     Otg,
     Ch9329,
+    Bluetooth,
     #[default]
     None,
 }
@@ -166,6 +215,7 @@ impl OtgHidProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct HidConfig {
+    pub bluetooth: BluetoothHidConfig,
     pub backend: HidBackend,
     pub otg_udc: Option<String>,
     #[serde(default)]
@@ -191,6 +241,7 @@ impl Default for HidConfig {
     fn default() -> Self {
         Self {
             backend: HidBackend::None,
+            bluetooth: BluetoothHidConfig::default(),
             otg_udc: None,
             otg_descriptor: OtgDescriptorConfig::default(),
             otg_profile: OtgHidProfile::default(),
@@ -253,5 +304,51 @@ impl HidConfig {
                     None
                 }
             })
+    }
+}
+
+#[cfg(test)]
+mod bluetooth_tests {
+    use super::*;
+    #[test]
+    fn old_configs_keep_bluetooth_disabled_and_get_defaults() {
+        let config: HidConfig = serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();
+        assert_eq!(config.backend, HidBackend::Otg);
+        assert_eq!(config.bluetooth, BluetoothHidConfig::default());
+    }
+    #[test]
+    fn obsolete_ble_flag_is_ignored_and_not_saved() {
+        let config: BluetoothHidConfig =
+            serde_json::from_str(r#"{"adapter":"hci0","name":"My keyboard","le_only":true}"#)
+                .unwrap();
+        config.validate().unwrap();
+        assert!(serde_json::to_value(config)
+            .unwrap()
+            .get("le_only")
+            .is_none());
+    }
+    #[test]
+    fn bluetooth_uses_relative_mouse_and_existing_usb_constraints() {
+        let mut config = crate::config::AppConfig::default();
+        config.hid.backend = HidBackend::Bluetooth;
+        config.hid.mouse_absolute = true;
+        config.msd.enabled = true;
+        config.uac.enabled = true;
+        config.otg_network.enabled = true;
+        config.enforce_invariants();
+        assert!(!config.hid.mouse_absolute);
+        assert!(!config.msd.enabled && !config.uac.enabled && !config.otg_network.enabled);
+    }
+    #[test]
+    fn reject_invalid_adapter_address_and_oversize_advertisement_name() {
+        let mut config = BluetoothHidConfig::default();
+        config.adapter = "/dev/hci0".into();
+        assert!(config.validate().is_err());
+        config.adapter = "hci0".into();
+        config.peer = Some("not-a-mac".into());
+        assert!(config.validate().is_err());
+        config.peer = None;
+        config.name = "蓝".repeat(24);
+        assert!(config.validate().is_err());
     }
 }

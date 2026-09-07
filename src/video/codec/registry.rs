@@ -10,16 +10,10 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-use super::amlenc::{self, AmlencCodec, AMLENC_H264_CODEC_NAME, AMLENC_H265_CODEC_NAME};
-
 use hwcodec::common::{DataFormat, Quality, RateControl};
 use hwcodec::ffmpeg::{resolve_pixel_format, AVPixelFormat};
 use hwcodec::ffmpeg_ram::encode::{EncodeContext, Encoder as HwEncoder};
 use hwcodec::ffmpeg_ram::CodecInfo;
-
-// Keep native AMLENC behind the highest-priority desktop GPU backends while
-// ensuring it is selected before hwcodec's software priority (3).
-const AMLENC_PRIORITY: i32 = 2;
 
 /// Video encoder format type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -102,8 +96,6 @@ pub enum EncoderBackend {
     Rkmpp,
     /// V4L2 Memory-to-Memory (ARM)
     V4l2m2m,
-    /// Amlogic S912/GXM vendor AMLENC
-    Amlogic,
     /// Software encoding (libx264, libx265, libvpx)
     Software,
 }
@@ -123,8 +115,6 @@ impl EncoderBackend {
             EncoderBackend::Rkmpp
         } else if name.contains("v4l2m2m") {
             EncoderBackend::V4l2m2m
-        } else if name.contains("amlenc") {
-            EncoderBackend::Amlogic
         } else {
             EncoderBackend::Software
         }
@@ -144,7 +134,6 @@ impl EncoderBackend {
             EncoderBackend::Amf => "AMF",
             EncoderBackend::Rkmpp => "RKMPP",
             EncoderBackend::V4l2m2m => "V4L2 M2M",
-            EncoderBackend::Amlogic => "AMLENC",
             EncoderBackend::Software => "Software",
         }
     }
@@ -159,7 +148,6 @@ impl EncoderBackend {
             "amf" => Some(EncoderBackend::Amf),
             "rkmpp" => Some(EncoderBackend::Rkmpp),
             "v4l2m2m" | "v4l2" => Some(EncoderBackend::V4l2m2m),
-            "amlogic" | "amlenc" => Some(EncoderBackend::Amlogic),
             "software" | "cpu" => Some(EncoderBackend::Software),
             _ => None,
         }
@@ -286,79 +274,6 @@ impl EncoderRegistry {
         }
     }
 
-    fn detect_amlenc(&mut self) {
-        match amlenc::system_is_s912_gxm() {
-            Ok(true) => {}
-            Ok(false) => {
-                debug!("AMLENC skipped: host is not Linux/aarch64 S912/GXM");
-                return;
-            }
-            Err(error) => {
-                warn!("AMLENC skipped: {}", error);
-                return;
-            }
-        }
-
-        self.detect_amlenc_candidates(
-            true,
-            |codec| std::path::Path::new(codec.device_node()).exists(),
-            amlenc::smoke_test,
-        );
-    }
-
-    fn detect_amlenc_candidates<NodeExists, SmokeTest>(
-        &mut self,
-        compatible: bool,
-        mut node_exists: NodeExists,
-        mut smoke_test: SmokeTest,
-    ) where
-        NodeExists: FnMut(AmlencCodec) -> bool,
-        SmokeTest: FnMut(AmlencCodec) -> crate::error::Result<()>,
-    {
-        if !compatible {
-            return;
-        }
-
-        for (codec, format, codec_name) in [
-            (
-                AmlencCodec::H264,
-                VideoEncoderType::H264,
-                AMLENC_H264_CODEC_NAME,
-            ),
-            (
-                AmlencCodec::H265,
-                VideoEncoderType::H265,
-                AMLENC_H265_CODEC_NAME,
-            ),
-        ] {
-            let node = codec.device_node();
-            if !node_exists(codec) {
-                warn!(
-                    "AMLENC {} unavailable: device node {} is missing",
-                    format, node
-                );
-                continue;
-            }
-
-            match smoke_test(codec) {
-                Ok(()) => {
-                    self.encoders
-                        .entry(format)
-                        .or_default()
-                        .push(AvailableEncoder {
-                            format,
-                            codec_name: codec_name.to_string(),
-                            backend: EncoderBackend::Amlogic,
-                            priority: AMLENC_PRIORITY,
-                            is_hardware: true,
-                        });
-                    info!("Registered native AMLENC encoder: {}", codec_name);
-                }
-                Err(error) => warn!("AMLENC {} unavailable ({}): {}", format, node, error),
-            }
-        }
-    }
-
     /// Get the global registry instance
     ///
     /// The registry is initialized lazily on first access with 1280x720 detection.
@@ -425,8 +340,6 @@ impl EncoderRegistry {
                     .push(encoder);
             }
         }
-
-        self.detect_amlenc();
 
         // Sort encoders by priority (lower is better)
         for encoders in self.encoders.values_mut() {
@@ -624,14 +537,6 @@ mod tests {
             EncoderBackend::from_codec_name("libx264"),
             EncoderBackend::Software
         );
-        assert_eq!(
-            EncoderBackend::from_codec_name("h264_amlenc"),
-            EncoderBackend::Amlogic
-        );
-        assert_eq!(
-            EncoderBackend::from_str("amlogic"),
-            Some(EncoderBackend::Amlogic)
-        );
     }
 
     #[test]
@@ -655,66 +560,5 @@ mod tests {
         // Should have detected at least H264 (software fallback available)
         println!("Available formats: {:?}", registry.available_formats(false));
         println!("Selectable formats: {:?}", registry.selectable_formats());
-    }
-
-    #[test]
-    fn test_amlenc_registration_prerequisite_matrix() {
-        let ok = |_codec| Ok(());
-
-        let mut incompatible = EncoderRegistry::new();
-        incompatible.detect_amlenc_candidates(false, |_| true, ok);
-        assert!(incompatible.encoders.is_empty());
-
-        let mut no_nodes = EncoderRegistry::new();
-        no_nodes.detect_amlenc_candidates(true, |_| false, ok);
-        assert!(no_nodes.encoders.is_empty());
-
-        for reason in ["library missing", "ABI marker missing"] {
-            let mut rejected = EncoderRegistry::new();
-            rejected.detect_amlenc_candidates(
-                true,
-                |_| true,
-                |_| Err(crate::error::AppError::VideoError(reason.to_string())),
-            );
-            assert!(rejected.encoders.is_empty());
-        }
-
-        let mut h264_only = EncoderRegistry::new();
-        h264_only.detect_amlenc_candidates(true, |codec| codec == AmlencCodec::H264, ok);
-        assert!(h264_only
-            .encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Amlogic)
-            .is_some());
-        assert!(h264_only
-            .encoder_with_backend(VideoEncoderType::H265, EncoderBackend::Amlogic)
-            .is_none());
-
-        let mut both = EncoderRegistry::new();
-        both.detect_amlenc_candidates(true, |_| true, ok);
-        assert!(both
-            .encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Amlogic)
-            .is_some());
-        assert!(both
-            .encoder_with_backend(VideoEncoderType::H265, EncoderBackend::Amlogic)
-            .is_some());
-
-        both.encoders
-            .entry(VideoEncoderType::H264)
-            .or_default()
-            .push(AvailableEncoder {
-                format: VideoEncoderType::H264,
-                codec_name: "libx264".to_string(),
-                backend: EncoderBackend::Software,
-                priority: 3,
-                is_hardware: false,
-            });
-        both.encoders
-            .get_mut(&VideoEncoderType::H264)
-            .unwrap()
-            .sort_by_key(|encoder| encoder.priority);
-        assert_eq!(
-            both.best_available_encoder(VideoEncoderType::H264)
-                .map(|encoder| encoder.backend),
-            Some(EncoderBackend::Amlogic)
-        );
     }
 }

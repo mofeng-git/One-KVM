@@ -3,8 +3,8 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use super::{
-    AmlencCodec, AmlencConfig, AmlencEncoder, EncoderRegistry, H264Config, H264Encoder, H265Config,
-    H265Encoder, VP8Config, VP8Encoder, VP9Config, VP9Encoder, VideoEncoderType,
+    EncoderRegistry, H264Config, H264Encoder, H265Config, H265Encoder, VP8Config, VP8Encoder,
+    VP9Config, VP9Encoder, VideoEncoderType,
 };
 use crate::error::{AppError, Result};
 use crate::video::format::{PixelFormat, Resolution};
@@ -226,46 +226,12 @@ fn run_smoke_test(
     resolution: Resolution,
     codec_name_ffmpeg: &str,
 ) -> Result<()> {
-    if codec_name_ffmpeg.contains("amlenc") {
-        return run_amlenc_smoke_test(codec, resolution);
-    }
     match codec {
         VideoEncoderType::H264 => run_h264_smoke_test(resolution, codec_name_ffmpeg),
         VideoEncoderType::H265 => run_h265_smoke_test(resolution, codec_name_ffmpeg),
         VideoEncoderType::VP8 => run_vp8_smoke_test(resolution, codec_name_ffmpeg),
         VideoEncoderType::VP9 => run_vp9_smoke_test(resolution, codec_name_ffmpeg),
     }
-}
-
-fn run_amlenc_smoke_test(codec: VideoEncoderType, resolution: Resolution) -> Result<()> {
-    let amlenc_codec = match codec {
-        VideoEncoderType::H264 => AmlencCodec::H264,
-        VideoEncoderType::H265 => AmlencCodec::H265,
-        _ => {
-            return Err(AppError::VideoError(
-                "AMLENC only supports H.264 and H.265".to_string(),
-            ))
-        }
-    };
-    let mut encoder = AmlencEncoder::new(AmlencConfig {
-        codec: amlenc_codec,
-        resolution,
-        fps: 30,
-        bitrate_kbps: bitrate_kbps_for_resolution(resolution),
-        gop: 30,
-    })?;
-    let frame_len = PixelFormat::Nv12.frame_size(resolution).ok_or_else(|| {
-        AppError::VideoError("Cannot calculate AMLENC NV12 self-check size".to_string())
-    })?;
-    let frame = build_nv12_test_frame(resolution, frame_len);
-    for _ in 0..SELF_CHECK_FRAME_ATTEMPTS {
-        if encoder.encode_raw(&frame)?.is_some() {
-            return Ok(());
-        }
-    }
-    Err(AppError::VideoError(
-        "AMLENC produced no output after multiple frames".to_string(),
-    ))
 }
 
 fn run_h264_smoke_test(resolution: Resolution, codec_name_ffmpeg: &str) -> Result<()> {

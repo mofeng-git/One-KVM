@@ -18,6 +18,9 @@ fn default_ch9329_baud_rate() -> u32 {
 #[derive(Default)]
 pub enum HidBackendType {
     Otg,
+    Bluetooth {
+        config: crate::config::BluetoothHidConfig,
+    },
     Ch9329 {
         port: String,
         #[serde(default = "default_ch9329_baud_rate")]
@@ -35,6 +38,7 @@ impl HidBackendType {
     pub fn name_str(&self) -> &str {
         match self {
             Self::Otg => "otg",
+            Self::Bluetooth { .. } => "bluetooth",
             Self::Ch9329 { .. } => "ch9329",
             Self::None => "none",
         }
@@ -80,6 +84,17 @@ pub trait HidBackend: Send + Sync {
     async fn read_ch9329_descriptor(&self) -> Result<Ch9329DescriptorState> {
         Err(crate::error::AppError::BadRequest(
             "CH9329 descriptor reading is not supported by this backend".to_string(),
+        ))
+    }
+
+    async fn bluetooth_status(&self) -> Result<serde_json::Value> {
+        Err(crate::error::AppError::BadRequest(
+            "Bluetooth HID is not active".into(),
+        ))
+    }
+    async fn bluetooth_action(&self, _action: &str, _seconds: u32) -> Result<()> {
+        Err(crate::error::AppError::BadRequest(
+            "Bluetooth HID is not active".into(),
         ))
     }
 

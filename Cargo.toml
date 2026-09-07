@@ -70,6 +70,7 @@ desktop = [
     "dep:v4l2r",
     "dep:alsa",
     "dep:gpio-cdev",
+    "dep:one-kvm-bluetooth-hid",
     "dep:cpal",
     "dep:windows-sys",
 ]
@@ -179,6 +180,8 @@ turbojpeg = { version = "1.3", optional = true }
 audiopus = { version = "0.2", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+one-kvm-bluetooth-hid = { path = "libs/bluetooth-hid", optional = true }
+
 # Utilities
 nix = { version = "0.31", default-features = false, features = ["fs", "socket", "net", "hostname", "poll"], optional = true }
 

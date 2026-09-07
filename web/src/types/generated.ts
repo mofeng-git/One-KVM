@@ -16,9 +16,16 @@ export interface VideoConfig {
 	quality: number;
 }
 
+export interface BluetoothHidConfig {
+	adapter: string;
+	name: string;
+	peer?: string;
+}
+
 export enum HidBackend {
 	Otg = "otg",
 	Ch9329 = "ch9329",
+	Bluetooth = "bluetooth",
 	None = "none",
 }
 
@@ -54,6 +61,7 @@ export interface Ch9329DescriptorConfig {
 }
 
 export interface HidConfig {
+	bluetooth: BluetoothHidConfig;
 	backend: HidBackend;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfig;
@@ -149,7 +157,6 @@ export enum EncoderType {
 	Amf = "amf",
 	Rkmpp = "rkmpp",
 	V4l2m2m = "v4l2m2m",
-	Amlogic = "amlogic",
 }
 
 export type BitratePreset = 
@@ -250,6 +257,11 @@ export interface ExtensionsConfig {
 	frpc: FrpcConfig;
 }
 
+export enum RustDeskMode {
+	Id = "id",
+	DirectIp = "direct_ip",
+}
+
 export enum RustDeskCodec {
 	H264 = "h264",
 	H265 = "h265",
@@ -257,7 +269,9 @@ export enum RustDeskCodec {
 
 export interface RustDeskConfig {
 	enabled: boolean;
+	mode: RustDeskMode;
 	codec: RustDeskCodec;
+	direct_access_port: number;
 	rendezvous_server: string;
 	relay_server?: string;
 	device_id: string;
@@ -299,6 +313,13 @@ export interface WatchdogConfig {
 	enabled: boolean;
 }
 
+/** Configuration for the USB Audio Class microphone gadget. */
+export interface UacConfig {
+	enabled: boolean;
+	sample_rate: number;
+	channels: number;
+}
+
 export interface AppConfig {
 	initialized: boolean;
 	auth: AuthConfig;
@@ -317,6 +338,7 @@ export interface AppConfig {
 	rtsp: RtspConfig;
 	redfish: RedfishConfig;
 	watchdog: WatchdogConfig;
+	uac: UacConfig;
 }
 
 /** Update for a single ATX output binding */
@@ -543,6 +565,8 @@ export interface OtgHidFunctionsUpdate {
 }
 
 export interface HidConfigUpdate {
+	bluetooth_reset_pairing?: boolean;
+	bluetooth?: BluetoothHidConfig;
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
@@ -636,7 +660,9 @@ export interface RtspStatusResponse {
 
 export interface RustDeskConfigUpdate {
 	enabled?: boolean;
+	mode?: RustDeskMode;
 	codec?: RustDeskCodec;
+	direct_access_port?: number;
 	rendezvous_server?: string;
 	relay_server?: string;
 	relay_key?: string;

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
+const consoleAppearance = useConsoleAppearance()
 import type { HoverCardContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
@@ -20,7 +22,7 @@ const props = withDefaults(
   },
 )
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "sideOffset")
 
 const forwardedProps = useForwardProps(delegatedProps)
 </script>
@@ -29,6 +31,8 @@ const forwardedProps = useForwardProps(delegatedProps)
   <HoverCardPortal>
     <HoverCardContent
       data-slot="hover-card-content"
+      :data-console-layout="consoleAppearance"
+      :side-offset="props.sideOffset + (consoleAppearance === 'floating' ? 10 : consoleAppearance === 'sidebar' ? 4 : 0)"
       v-bind="{ ...$attrs, ...forwardedProps }"
       :class="
         cn(

@@ -31,8 +31,6 @@ pub struct VideoFrameAdapter {
     codec: VideoCodec,
     seq: u32,
     timestamp_base: u64,
-    h264_sps: Option<Bytes>,
-    h264_pps: Option<Bytes>,
 }
 
 impl VideoFrameAdapter {
@@ -41,8 +39,6 @@ impl VideoFrameAdapter {
             codec,
             seq: 0,
             timestamp_base: 0,
-            h264_sps: None,
-            h264_pps: None,
         }
     }
 
@@ -56,7 +52,6 @@ impl VideoFrameAdapter {
         is_keyframe: bool,
         timestamp_ms: u64,
     ) -> Message {
-        let data = self.prepare_h264_frame(data, is_keyframe);
         if self.seq == 0 {
             self.timestamp_base = timestamp_ms;
         }
@@ -84,39 +79,6 @@ impl VideoFrameAdapter {
         let mut msg = Message::new();
         msg.union = Some(msg_union::Union::VideoFrame(video_frame));
         msg
-    }
-
-    fn prepare_h264_frame(&mut self, data: Bytes, is_keyframe: bool) -> Bytes {
-        if self.codec != VideoCodec::H264 {
-            return data;
-        }
-
-        let (sps, pps) = crate::video::codec::h264_bitstream::extract_sps_pps(&data);
-        let mut has_sps = false;
-        let mut has_pps = false;
-
-        if let Some(sps) = sps {
-            self.h264_sps = Some(Bytes::from(sps));
-            has_sps = true;
-        }
-        if let Some(pps) = pps {
-            self.h264_pps = Some(Bytes::from(pps));
-            has_pps = true;
-        }
-
-        if is_keyframe && (!has_sps || !has_pps) {
-            if let (Some(sps), Some(pps)) = (self.h264_sps.as_ref(), self.h264_pps.as_ref()) {
-                let mut out = Vec::with_capacity(8 + sps.len() + pps.len() + data.len());
-                out.extend_from_slice(&[0, 0, 0, 1]);
-                out.extend_from_slice(sps);
-                out.extend_from_slice(&[0, 0, 0, 1]);
-                out.extend_from_slice(pps);
-                out.extend_from_slice(&data);
-                return Bytes::from(out);
-            }
-        }
-
-        data
     }
 
     pub fn encode_frame(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> Message {

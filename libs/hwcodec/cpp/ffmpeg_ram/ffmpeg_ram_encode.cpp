@@ -26,7 +26,6 @@ static thread_local std::string g_encoder_last_error;
 
 static void set_encoder_last_error(const std::string &message) {
   g_encoder_last_error = message;
-  LOG_ERROR(message);
 }
 
 static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
@@ -380,12 +379,12 @@ private:
     frame->pts = ms;
 
     // Force keyframe if requested
-    if (force_keyframe_) {
+    if (force_keyframe_ && util_encode::supports_forced_keyframe(name_)) {
       frame->pict_type = AV_PICTURE_TYPE_I;
-      force_keyframe_ = false;
     } else {
       frame->pict_type = AV_PICTURE_TYPE_NONE;
     }
+    force_keyframe_ = false;
 
     ret = avcodec_send_frame(c_, frame);
     if (ret == AVERROR(EAGAIN)) {
@@ -646,8 +645,8 @@ ffmpeg_ram_new_encoder(const char *name, int width,
     // allowing CQP-only drivers to pass probing and normal encoder creation.
     if (name && std::string(name).find("vaapi") != std::string::npos &&
         rc != RC_CQ) {
-      LOG_WARN(std::string("VAAPI bitrate-based rate control failed for ") +
-               name + ", retrying with CQP");
+      LOG_DEBUG(std::string("VAAPI bitrate-based rate control failed for ") +
+                name + ", retrying with CQP");
       encoder = try_create(RC_CQ, 0);
       if (encoder) {
         return encoder;

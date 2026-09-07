@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
-import type { VideoScaleMode } from '@/composables/useVideoScaling'
+import type { VideoRotation, VideoScaleMode } from '@/composables/useVideoScaling'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import {
@@ -39,6 +39,10 @@ import {
   Terminal,
   MoreHorizontal,
   Bot,
+  ChevronUp,
+  ChevronDown,
+  Keyboard,
+  Scaling,
 } from 'lucide-vue-next'
 import PasteModal from '@/components/PasteModal.vue'
 import AtxPopover from '@/components/AtxPopover.vue'
@@ -47,6 +51,7 @@ import HidConfigPopover from '@/components/HidConfigPopover.vue'
 import AudioConfigPopover from '@/components/AudioConfigPopover.vue'
 import MsdDialog from '@/components/MsdDialog.vue'
 import VideoDisplayControls from '@/components/VideoDisplayControls.vue'
+import type { ConsoleLayout } from '@/composables/useConsoleLayout'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -59,12 +64,14 @@ const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
 const showMsd = computed(() => {
   return !!systemStore.msd?.available && !isCh9329Backend.value
 })
-const showAtx = computed(() => systemStore.atx?.available === true)
-
 const props = defineProps<{
+  layout?: ConsoleLayout
   mouseMode?: 'absolute' | 'relative'
   videoMode?: VideoMode
+  videoRotation?: VideoRotation
   ttydRunning?: boolean
+  showPower?: boolean
+  atxEnabled?: boolean
   showTerminal?: boolean
   showComputerUse?: boolean
   showPasteText?: boolean
@@ -72,6 +79,20 @@ const props = defineProps<{
   scaleMode?: VideoScaleMode
   sourceSizeAvailable?: boolean
 }>()
+const isSidebarLayout = computed(() => props.layout === 'sidebar')
+const isFloatingLayout = computed(() => props.layout === 'floating')
+const floatingCollapsed = ref(false)
+const expandButtonRef = ref<InstanceType<typeof Button> | null>(null)
+const collapseButtonRef = ref<InstanceType<typeof Button> | null>(null)
+
+async function setFloatingCollapsed(collapsed: boolean) {
+  floatingCollapsed.value = collapsed
+  await nextTick()
+  const target = collapsed ? expandButtonRef.value : collapseButtonRef.value
+  target?.$el?.focus()
+}
+const showAtx = computed(() => props.showPower !== false)
+const atxEnabled = computed(() => props.atxEnabled === true)
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 const showPasteText = computed(() => props.showPasteText !== false)
 const showMic = computed(() => props.showMic === true)
@@ -84,6 +105,7 @@ const emit = defineEmits<{
   (e: 'toggleVirtualKeyboard'): void
   (e: 'toggleMouseMode'): void
   (e: 'update:videoMode', mode: VideoMode): void
+  (e: 'update:videoRotation', rotation: VideoRotation): void
   (e: 'powerShort'): void
   (e: 'powerLong'): void
   (e: 'reset'): void
@@ -133,13 +155,18 @@ const openMobilePaste = () => openFromOverflow(() => {
 const barRef = ref<HTMLElement | null>(null)
 const measureRef = ref<HTMLElement | null>(null)
 const barWidth = ref(0)
+const barHeight = ref(0)
+const coreWidth = ref(0)
+const coreHeight = ref(0)
+const fixedHeight = ref(0)
+const actionHeight = ref(36)
+const minimalDisplayControls = computed(() => isFloatingLayout.value && barWidth.value < 640)
 const alwaysRightWidth = ref(152)
 let layoutResizeObserver: ResizeObserver | null = null
 
 type CollapsibleItem =
-  | 'video' | 'audio' | 'hid'
   | 'msd' | 'atx' | 'paste'
-  | 'stats' | 'terminal' | 'settings'
+  | 'stats' | 'terminal' | 'settings' | 'ai'
 
 interface ItemSpec {
   id: CollapsibleItem
@@ -147,15 +174,13 @@ interface ItemSpec {
 }
 
 const ITEM_SPECS: ItemSpec[] = [
-  { id: 'video',     side: 'left' },
-  { id: 'audio',     side: 'left' },
-  { id: 'hid',       side: 'left' },
   { id: 'msd',       side: 'left' },
   { id: 'atx',       side: 'left' },
   { id: 'paste',     side: 'left' },
   { id: 'stats',     side: 'right' },
   { id: 'terminal',  side: 'right' },
   { id: 'settings',  side: 'right' },
+  { id: 'ai',        side: 'right' },
 ]
 
 const measuredWidths = ref<Map<CollapsibleItem, { icon: number; label: number }>>(new Map())
@@ -167,7 +192,13 @@ const measureLayout = async () => {
   const measureContainer = measureRef.value
   if (!bar || !measureContainer) return
 
-  barWidth.value = bar.clientWidth
+  const style = window.getComputedStyle(bar)
+  barWidth.value = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+  barHeight.value = bar.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+  const core = Array.from(bar.querySelectorAll<HTMLElement>('[data-core-action]'))
+  coreWidth.value = core.reduce((sum, element) => sum + element.offsetWidth, 0)
+  coreHeight.value = core.reduce((sum, element) => sum + element.offsetHeight, 0)
+  actionHeight.value = core[0]?.offsetHeight || 36
 
   const newWidths = new Map<CollapsibleItem, { icon: number; label: number }>()
   for (const spec of ITEM_SPECS) {
@@ -190,7 +221,12 @@ const measureLayout = async () => {
       + Number.parseFloat(style.marginLeft || '0')
       + Number.parseFloat(style.marginRight || '0')
   }, 0)
-  if (width > 0) alwaysRightWidth.value = Math.ceil(width)
+  alwaysRightWidth.value = Math.ceil(width)
+  fixedHeight.value = elements.reduce((sum, element) => {
+    const style = window.getComputedStyle(element)
+    return sum + element.getBoundingClientRect().height
+      + parseFloat(style.marginTop || '0') + parseFloat(style.marginBottom || '0')
+  }, 0)
 
   measurementReady.value = true
 }
@@ -202,7 +238,7 @@ const observeLayout = async () => {
     void measureLayout()
   })
   if (barRef.value) layoutResizeObserver.observe(barRef.value)
-  barRef.value?.querySelectorAll('[data-fixed-action]').forEach((element) => {
+  barRef.value?.querySelectorAll('[data-fixed-action], [data-core-action]').forEach((element) => {
     layoutResizeObserver?.observe(element)
   })
 }
@@ -220,7 +256,7 @@ watch(locale, () => {
   void measureLayout()
 })
 
-watch(() => props.showComputerUse, () => {
+watch([() => props.layout, () => props.showComputerUse, floatingCollapsed, minimalDisplayControls], () => {
   void observeLayout()
 })
 
@@ -241,52 +277,55 @@ watch(showPasteText, (visible) => {
 const OVERFLOW_BUTTON_BUDGET_PX = 36
 
 const collapsibleItems = computed(() => {
-  const items = ITEM_SPECS.slice(3).filter(item => {
+  const items = ITEM_SPECS.filter(item => {
+    if (isFloatingLayout.value && item.side === 'right') return false
     if (item.id === 'msd' && !showMsd.value) return false
     if (item.id === 'atx' && !showAtx.value) return false
     if (item.id === 'paste' && !showPasteText.value) return false
     if (item.id === 'stats' && !showStats.value) return false
     if (item.id === 'terminal' && props.showTerminal === false) return false
+    if (item.id === 'ai' && props.showComputerUse === false) return false
     return true
   })
   return items
 })
 
 const visibleSet = computed(() => {
-  if (!measurementReady.value) {
-    return new Map<CollapsibleItem, 'icon' | 'label'>()
-  }
-
-  const available = barWidth.value - alwaysRightWidth.value - OVERFLOW_BUTTON_BUDGET_PX
-  
-  let used = 0
-  if (barRef.value) {
-    const leftContainer = barRef.value.querySelector('.left-buttons') as HTMLElement
-    if (leftContainer) {
-      const children = Array.from(leftContainer.children).slice(0, 3) as HTMLElement[]
-      used = children.reduce((sum, el) => sum + el.offsetWidth, 0)
-    }
-  }
-  
-  if (used === 0) used = 330
-  
   const result = new Map<CollapsibleItem, 'icon' | 'label'>()
+  if (!measurementReady.value) return result
 
+  if (isSidebarLayout.value) {
+    // Reserve More and a gap between the two groups before assigning vertical slots.
+    let available = barHeight.value - coreHeight.value - fixedHeight.value - actionHeight.value - 16
+    const priority: CollapsibleItem[] = ['paste', 'settings', 'msd', 'atx', 'stats', 'terminal', 'ai']
+    for (const id of priority) {
+      if (!collapsibleItems.value.some(item => item.id === id)) continue
+      if (available < actionHeight.value) break
+      result.set(id, 'icon')
+      available -= actionHeight.value
+    }
+    return result
+  }
+
+  const available = barWidth.value - alwaysRightWidth.value - Math.max(OVERFLOW_BUTTON_BUDGET_PX, actionHeight.value) - (isFloatingLayout.value ? 48 : 12)
+  let used = coreWidth.value
+  // Keep actions reachable before spending the remaining space on labels.
   for (const item of collapsibleItems.value) {
     const widths = measuredWidths.value.get(item.id)
-    if (!widths) continue
-    
-    if (used + widths.icon <= available) {
-      if (used + widths.label <= available) {
-        result.set(item.id, 'label')
-        used += widths.label
-      } else {
-        result.set(item.id, 'icon')
-        used += widths.icon
-      }
+    if (!widths || used + widths.icon > available) continue
+    result.set(item.id, 'icon')
+    used += widths.icon
+  }
+  if (isFloatingLayout.value && barWidth.value < 640) return result
+  for (const item of collapsibleItems.value) {
+    const widths = measuredWidths.value.get(item.id)
+    if (!widths || !result.has(item.id)) continue
+    const extra = widths.label - widths.icon
+    if (used + extra <= available) {
+      result.set(item.id, 'label')
+      used += extra
     }
   }
-  
   return result
 })
 
@@ -304,36 +343,87 @@ const hasRightOverflow = computed(() => {
 </script>
 
 <template>
-  <div class="w-full border-b bg-background">
-    <div ref="barRef" class="flex items-center px-2 sm:px-4 py-1 sm:py-1.5">
+  <div
+    :class="[
+      'console-action-bar bg-background',
+      props.layout === 'floating' && 'console-action-bar--floating',
+      isFloatingLayout && floatingCollapsed && 'console-action-bar--collapsed',
+      props.layout === 'sidebar' && 'console-action-bar--sidebar',
+      (!props.layout || props.layout === 'current') && 'w-full border-b',
+    ]"
+  >
+    <Button
+      v-if="isFloatingLayout && floatingCollapsed"
+      ref="expandButtonRef"
+      variant="ghost"
+      size="sm"
+      class="console-action-bar__expand gap-1.5 rounded-xl text-xs"
+      :aria-label="t('actionbar.expandToolbar')"
+      :aria-expanded="false"
+      @click="setFloatingCollapsed(false)"
+    >
+      <ChevronDown class="size-4" />{{ t('actionbar.expandToolbar') }}
+    </Button>
+    <div
+      v-show="!isFloatingLayout || !floatingCollapsed"
+      ref="barRef"
+      class="console-action-bar__inner flex items-center"
+      :class="isSidebarLayout
+        ? 'h-full flex-col px-1 py-2 sm:px-1.5'
+        : 'px-2 py-1 sm:px-4 sm:py-1.5'"
+    >
       <!-- Left side buttons -->
-      <ButtonGroup class="left-buttons flex-1 min-w-0 overflow-hidden">
+      <ButtonGroup
+        class="left-buttons min-w-0"
+        :class="isSidebarLayout
+          ? 'flex-none flex-col overflow-visible'
+          : 'flex-1 overflow-hidden'"
+        :orientation="isSidebarLayout ? 'vertical' : 'horizontal'"
+      >
         <!-- Video Config - Always visible -->
-        <VideoConfigPopover
-          v-model:open="videoPopoverOpen"
-          :video-mode="props.videoMode || 'mjpeg'"
-          @update:video-mode="emit('update:videoMode', $event)"
-        />
+        <div data-core-action class="flex shrink-0">
+          <VideoConfigPopover
+            v-model:open="videoPopoverOpen"
+            :video-mode="props.videoMode || 'mjpeg'"
+            :video-rotation="props.videoRotation ?? 0"
+            :side="isSidebarLayout ? 'right' : 'bottom'"
+            @update:video-mode="emit('update:videoMode', $event)"
+            @update:video-rotation="emit('update:videoRotation', $event)"
+          />
+        </div>
 
         <!-- Audio Config - Always visible -->
-        <AudioConfigPopover
-          v-model:open="audioPopoverOpen"
-          :microphone-enabled="showMic"
-        />
+        <div data-core-action class="flex shrink-0">
+          <AudioConfigPopover
+            v-model:open="audioPopoverOpen"
+            :microphone-enabled="showMic"
+            :side="isSidebarLayout ? 'right' : 'bottom'"
+          />
+        </div>
 
         <!-- HID Config - Always visible -->
-        <HidConfigPopover
-          v-model:open="hidPopoverOpen"
-          :mouse-mode="mouseMode"
-          @update:mouse-mode="emit('toggleMouseMode')"
-        />
+        <div data-core-action class="flex shrink-0">
+          <HidConfigPopover
+            v-model:open="hidPopoverOpen"
+            :mouse-mode="mouseMode"
+            :side="isSidebarLayout ? 'right' : 'bottom'"
+            @update:mouse-mode="emit('toggleMouseMode')"
+          />
+        </div>
 
         <!-- Virtual Media (MSD) - Adaptive -->
         <div v-if="showMsd && isVisible('msd')">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="msdDialogOpen = true">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-8 gap-1.5 text-xs"
+                  :aria-label="t('actionbar.virtualMedia')"
+                  :title="t('actionbar.virtualMedia')"
+                  @click="msdDialogOpen = true"
+                >
                   <HardDrive class="size-4" />
                   <span v-if="visibleSet.get('msd') === 'label'">{{ t('actionbar.virtualMedia') }}</span>
                 </Button>
@@ -349,13 +439,24 @@ const hasRightOverflow = computed(() => {
         <div v-if="showAtx && isVisible('atx')">
           <Popover v-model:open="atxOpen">
             <PopoverTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 gap-1.5 text-xs"
+                :aria-label="t('actionbar.power')"
+                :title="t('actionbar.power')"
+              >
                 <Power class="size-4" />
                 <span v-if="visibleSet.get('atx') === 'label'">{{ t('actionbar.power') }}</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent class="w-[min(280px,90vw)] p-0" align="start">
+            <PopoverContent
+              class="w-[min(280px,90vw)] p-0"
+              align="start"
+              :side="isSidebarLayout ? 'right' : 'bottom'"
+            >
               <AtxPopover
+                :atx-enabled="atxEnabled"
                 @close="atxOpen = false"
                 @power-short="emit('powerShort')"
                 @power-long="emit('powerLong')"
@@ -370,12 +471,24 @@ const hasRightOverflow = computed(() => {
         <div v-if="showPasteText && isVisible('paste')">
           <Popover v-model:open="pasteOpen">
             <PopoverTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 gap-1.5 text-xs"
+                :aria-label="t('actionbar.paste')"
+                :title="t('actionbar.paste')"
+              >
                 <ClipboardPaste class="size-4" />
                 <span v-if="visibleSet.get('paste') === 'label'">{{ t('actionbar.paste') }}</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent class="w-[min(400px,90vw)] p-0" align="start">
+            <PopoverContent
+              :class="isSidebarLayout
+                ? 'w-[min(400px,calc(100vw-4.5rem))] p-0'
+                : 'w-[min(400px,90vw)] p-0'"
+              align="start"
+              :side="isSidebarLayout ? 'right' : 'bottom'"
+            >
               <PasteModal v-if="pasteOpen" @close="pasteOpen = false" />
             </PopoverContent>
           </Popover>
@@ -384,8 +497,16 @@ const hasRightOverflow = computed(() => {
       </ButtonGroup>
 
       <!-- Right side buttons -->
-      <ButtonGroup class="shrink-0 ml-1 sm:ml-2">
+      <ButtonGroup
+        class="shrink-0"
+        :class="isSidebarLayout
+          ? 'mt-auto flex-none flex-col'
+          : 'ml-1 sm:ml-2'"
+        :orientation="isSidebarLayout ? 'vertical' : 'horizontal'"
+      >
         <VideoDisplayControls
+          :minimal="minimalDisplayControls"
+          :text-only-scale="isSidebarLayout"
           :scale-mode="props.scaleMode"
           :source-size-available="props.sourceSizeAvailable"
           @toggle-fullscreen="emit('toggleFullscreen')"
@@ -398,7 +519,7 @@ const hasRightOverflow = computed(() => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="emit('toggleStats')">
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" :aria-label="t('actionbar.stats')" @click="emit('toggleStats')">
                   <BarChart3 class="size-4" />
                   <span v-if="visibleSet.get('stats') === 'label'">{{ t('actionbar.stats') }}</span>
                 </Button>
@@ -420,6 +541,7 @@ const hasRightOverflow = computed(() => {
                   size="sm"
                   class="h-8 gap-1.5 text-xs"
                   :disabled="!props.ttydRunning"
+                  :aria-label="t('actionbar.webTerminal')"
                   @click="emit('openTerminal')"
                 >
                   <Terminal class="size-4" />
@@ -434,18 +556,18 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- Computer Use - Optional -->
-        <TooltipProvider v-if="props.showComputerUse !== false">
+        <TooltipProvider v-if="isVisible('ai')">
           <Tooltip>
             <TooltipTrigger as-child>
               <Button
-                data-fixed-action
                 variant="ghost"
                 size="sm"
-                class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+                class="h-8 gap-1.5 text-xs"
+                :aria-label="t('computerUse.title')"
                 @click="emit('openComputerUse')"
               >
                 <Bot class="size-3.5 sm:size-4" />
-                <span class="hidden xl:inline">AI</span>
+                <span v-if="visibleSet.get('ai') === 'label'">AI</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -459,7 +581,7 @@ const hasRightOverflow = computed(() => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="router.push('/settings')">
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" :aria-label="t('actionbar.settings')" @click="router.push('/settings')">
                   <Settings class="size-4" />
                   <span v-if="visibleSet.get('settings') === 'label'">{{ t('actionbar.settings') }}</span>
                 </Button>
@@ -472,13 +594,25 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- Overflow Menu - Only show if there are overflowed items -->
-        <DropdownMenu v-if="hasOverflow" v-model:open="overflowMenuOpen">
+        <DropdownMenu v-if="hasOverflow || minimalDisplayControls" v-model:open="overflowMenuOpen">
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="size-8 p-0">
+            <Button variant="ghost" size="sm" class="size-8 p-0" :aria-label="t('actionbar.more')" :title="t('actionbar.more')">
               <MoreHorizontal class="size-3.5 sm:size-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-48">
+          <DropdownMenuContent align="end" :side="isSidebarLayout ? 'right' : 'bottom'" class="w-56 max-h-[70dvh] overflow-y-auto">
+            <template v-if="minimalDisplayControls">
+              <DropdownMenuItem @click="openFromOverflow(() => emit('toggleVirtualKeyboard'))">
+                <Keyboard class="size-4 mr-2" />{{ t('actionbar.keyboard') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                :disabled="!props.sourceSizeAvailable"
+                @click="emit('update:scaleMode', props.scaleMode === 'actual' ? 'fit' : 'actual')"
+              >
+                <Scaling class="size-4 mr-2" />{{ t(props.scaleMode === 'actual' ? 'actionbar.fitSizeAria' : 'actionbar.actualSizeAria') }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </template>
             <!-- MSD -->
             <DropdownMenuItem v-if="showMsd && !isVisible('msd')" @click="openFromOverflow(() => msdDialogOpen = true)">
               <HardDrive class="size-4 mr-2" />
@@ -500,14 +634,14 @@ const hasRightOverflow = computed(() => {
             <DropdownMenuSeparator v-if="hasLeftOverflow && hasRightOverflow" />
 
             <!-- Stats -->
-            <DropdownMenuItem v-if="showStats && !isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
+            <DropdownMenuItem v-if="!isFloatingLayout && showStats && !isVisible('stats')" @click="openFromOverflow(() => emit('toggleStats'))">
               <BarChart3 class="size-4 mr-2" />
               {{ t('actionbar.stats') }}
             </DropdownMenuItem>
 
             <!-- Web Terminal -->
             <DropdownMenuItem
-              v-if="props.showTerminal !== false && !isVisible('terminal')"
+              v-if="!isFloatingLayout && props.showTerminal !== false && !isVisible('terminal')"
               :disabled="!props.ttydRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >
@@ -515,13 +649,30 @@ const hasRightOverflow = computed(() => {
               {{ t('actionbar.webTerminal') }}
             </DropdownMenuItem>
 
+            <DropdownMenuItem v-if="!isFloatingLayout && props.showComputerUse !== false && !isVisible('ai')" @click="openFromOverflow(() => emit('openComputerUse'))">
+              <Bot class="size-4 mr-2" />{{ t('computerUse.title') }}
+            </DropdownMenuItem>
+
             <!-- Settings -->
-            <DropdownMenuItem v-if="!isVisible('settings')" @click="openFromOverflow(() => router.push('/settings'))">
+            <DropdownMenuItem v-if="!isFloatingLayout && !isVisible('settings')" @click="openFromOverflow(() => router.push('/settings'))">
               <Settings class="size-4 mr-2" />
               {{ t('actionbar.settings') }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          v-if="isFloatingLayout"
+          ref="collapseButtonRef"
+          data-fixed-action
+          variant="ghost"
+          size="icon-sm"
+          :aria-label="t('actionbar.collapseToolbar')"
+          :title="t('actionbar.collapseToolbar')"
+          :aria-expanded="true"
+          @click="setFloatingCollapsed(true)"
+        >
+          <ChevronUp class="size-4" />
+        </Button>
       </ButtonGroup>
     </div>
   </div>
@@ -542,6 +693,7 @@ const hasRightOverflow = computed(() => {
         <SheetTitle>{{ t('actionbar.power') }}</SheetTitle>
       </SheetHeader>
       <AtxPopover
+        :atx-enabled="atxEnabled"
         @close="mobileAtxOpen = false"
         @power-short="emit('powerShort')"
         @power-long="emit('powerLong')"
@@ -588,13 +740,131 @@ const hasRightOverflow = computed(() => {
       <!-- Settings -->
       <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" /></Button>
       <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" />{{ t('actionbar.settings') }}</Button>
-      <!-- Always-visible items (for measuring their actual width) -->
-      <Button data-measure="video-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
-      <Button data-measure="video-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
-      <Button data-measure="audio-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
-      <Button data-measure="audio-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
-      <Button data-measure="hid-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
-      <Button data-measure="hid-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
+      <Button data-measure="ai-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Bot class="size-4" /></Button>
+      <Button data-measure="ai-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Bot class="size-4" />AI</Button>
     </div>
   </div>
 </template>
+
+<style scoped>
+.console-action-bar--floating {
+  position: relative;
+  z-index: 40;
+  width: 100%;
+  max-width: 64rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--background) 96%, transparent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  backdrop-filter: blur(14px);
+}
+
+.console-action-bar--floating .console-action-bar__inner {
+  border-radius: inherit;
+}
+
+.console-action-bar--sidebar {
+  position: absolute;
+  z-index: 40;
+  top: 2.5rem;
+  bottom: 1.75rem;
+  left: 0;
+  width: 3.5rem;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--background) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.console-action-bar--sidebar :deep([data-slot='button-group']) {
+  width: 100%;
+}
+
+.console-action-bar--sidebar :deep(button) {
+  height: 36px;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+  overflow: hidden;
+  padding-inline: 0.5rem;
+  border-radius: 0.5rem;
+}
+
+.console-action-bar--sidebar :deep(button > span) {
+  display: none;
+}
+
+.console-action-bar--sidebar :deep([data-fixed-action][aria-hidden='true']) {
+  width: 1.5rem;
+  height: 1px;
+  margin: 0.35rem auto;
+}
+
+.console-action-bar--sidebar .console-action-bar__inner {
+  overflow-y: auto;
+  gap: 1rem;
+  scrollbar-width: thin;
+}
+
+.console-action-bar--floating .console-action-bar__inner {
+  padding: 4px 12px;
+  gap: 8px;
+}
+
+.console-action-bar--floating :deep([data-slot='button-group']) {
+  gap: 4px;
+}
+
+.console-action-bar--floating .console-action-bar__inner :deep(button) {
+  min-width: 36px;
+  height: 38px;
+  padding-inline: 10px;
+  flex-shrink: 0;
+  border-radius: 10px;
+}
+
+.console-action-bar--floating .console-action-bar__inner :deep(button[aria-expanded='true']) {
+  background: var(--accent);
+}
+
+@media (max-width: 639px) {
+  .console-action-bar--floating .console-action-bar__inner {
+    padding-inline: 4px;
+    gap: 0;
+  }
+  .console-action-bar--floating :deep([data-slot='button-group']) {
+    gap: 0;
+  }
+  .console-action-bar--floating .console-action-bar__inner :deep(button) {
+    width: 36px;
+    padding-inline: 0;
+  }
+}
+
+.console-action-bar--floating.console-action-bar--collapsed {
+  width: auto;
+}
+
+@media (pointer: coarse) {
+  .console-action-bar__expand {
+    min-height: 44px;
+  }
+  .console-action-bar--sidebar :deep(button) {
+    height: 44px;
+  }
+  .console-action-bar--floating .console-action-bar__inner :deep(button) {
+    min-width: 44px;
+    height: 44px;
+  }
+  .console-action-bar--floating .console-action-bar__inner {
+    padding-inline: 4px;
+  }
+}
+
+@media (min-width: 640px) {
+  .console-action-bar--sidebar {
+    top: 3.5rem;
+    width: 4rem;
+  }
+}
+</style>

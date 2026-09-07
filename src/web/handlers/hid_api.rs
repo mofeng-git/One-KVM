@@ -112,3 +112,43 @@ fn cached_ch9329_descriptor(
         descriptor,
     }
 }
+
+#[derive(Deserialize)]
+pub struct BluetoothAction {
+    pub action: String,
+    pub seconds: Option<u32>,
+}
+pub async fn hid_bluetooth_status(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>> {
+    Ok(Json(state.hid.bluetooth_status().await?))
+}
+pub async fn hid_bluetooth_action(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<BluetoothAction>,
+) -> Result<Json<serde_json::Value>> {
+    let _guard = crate::runtime::try_apply_lock(&state.config_apply_locks.otg, "bluetooth")?;
+    state
+        .hid
+        .bluetooth_action(&req.action, req.seconds.unwrap_or(120))
+        .await?;
+    Ok(Json(serde_json::json!({"success": true})))
+}
+
+pub async fn hid_bluetooth_adapters() -> Result<Json<serde_json::Value>> {
+    #[cfg(target_os = "linux")]
+    {
+        Ok(Json(
+            serde_json::to_value(
+                one_kvm_bluetooth_hid::adapters()
+                    .await
+                    .map_err(AppError::ServiceUnavailable)?,
+            )
+            .map_err(|e| AppError::Internal(e.to_string()))?,
+        ))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Err(AppError::BadRequest("Bluetooth HID requires Linux".into()))
+    }
+}

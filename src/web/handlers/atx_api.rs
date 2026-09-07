@@ -171,7 +171,7 @@ pub async fn atx_wol(
     // Send WOL packet
     crate::atx::send_wol(&mac_address, interface)?;
 
-    if let Err(error) = crate::atx::record_wol_history(state.db.pool(), &mac_address).await {
+    if let Err(error) = state.db.wol_history().record(&mac_address).await {
         warn!("Failed to persist WOL history: {}", error);
     }
 
@@ -191,7 +191,7 @@ pub async fn atx_wol_history(
         .unwrap_or(WOL_HISTORY_DEFAULT_LIMIT)
         .clamp(1, WOL_HISTORY_MAX_LIMIT);
 
-    let rows = crate::atx::list_wol_history(state.db.pool(), limit).await?;
+    let rows = state.db.wol_history().list(limit).await?;
 
     let history = rows
         .into_iter()

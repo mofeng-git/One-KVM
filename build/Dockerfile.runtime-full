@@ -17,6 +17,8 @@ RUN sed -i 's/ main$/ main contrib non-free/' /etc/apt/sources.list && \
     apt-get install -y --no-install-recommends \
         # Core runtime (all platforms) - no codec libs needed
         ca-certificates \
+        # Bluetooth HID uses the host BlueZ system bus; btmgmt manages a dedicated adapter.
+        bluez \
         libudev1 \
         libasound2 \
         # OTG Ethernet bridge control (nmcli talks to the host NetworkManager over D-Bus)

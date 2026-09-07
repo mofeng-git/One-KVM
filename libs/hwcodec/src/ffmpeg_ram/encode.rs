@@ -343,7 +343,7 @@ fn log_failed_probe_attempt(
 }
 
 fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> bool {
-    use log::{debug, warn};
+    use log::debug;
 
     debug!("Testing encoder: {}", codec.name);
 
@@ -395,7 +395,7 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
                     }
                     Err(err) => {
                         last_err = Some(err);
-                        warn!(
+                        debug!(
                             "Encoder {} test attempt {} returned error: {}",
                             codec.name, attempt_no, err
                         );
@@ -412,10 +412,7 @@ fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> boo
             );
             false
         }
-        Err(_) => {
-            warn!("Failed to create encoder {}", codec.name);
-            false
-        }
+        Err(_) => false,
     }
 }
 
@@ -543,7 +540,7 @@ impl Encoder {
             if codec.is_null() {
                 let message = encoder_last_error_message();
                 if !message.is_empty() {
-                    log::error!("ffmpeg_ram_new_encoder failed: {}", message);
+                    log::debug!("ffmpeg_ram_new_encoder failed: {}", message);
                 }
                 return Err(());
             }
@@ -595,6 +592,16 @@ impl Encoder {
                 Some(Encoder::packet_callback),
             );
             if result == -11 || result == 0 {
+                if self.ctx.name.contains("v4l2m2m") {
+                    return Ok(frames
+                        .into_iter()
+                        .map(|frame| EncodeBytesFrame {
+                            data: Bytes::copy_from_slice(frame.data.as_ref()),
+                            pts: frame.pts,
+                            key: frame.key,
+                        })
+                        .collect());
+                }
                 return Ok(frames);
             }
             Err(result)

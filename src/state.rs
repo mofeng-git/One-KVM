@@ -19,11 +19,9 @@ use crate::hid::HidController;
 use crate::msd::MsdController;
 #[cfg(unix)]
 use crate::otg::OtgService;
-use crate::rtsp::RtspService;
-use crate::rustdesk::RustDeskService;
+use crate::runtime::{RemoteAccessCoordinator, UsbCoordinator};
 use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
-use crate::vnc::VncService;
 use crate::watchdog::WatchdogController;
 use crate::webrtc::WebRtcStreamer;
 
@@ -81,9 +79,8 @@ pub struct AppState {
     pub audio: Arc<AudioController>,
     #[cfg(unix)]
     pub uac_playback: Arc<RwLock<Option<crate::audio::uac::UacPlayback>>>,
-    pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
-    pub vnc: Arc<RwLock<Option<Arc<VncService>>>>,
-    pub rtsp: Arc<RwLock<Option<Arc<RtspService>>>>,
+    pub usb: Arc<UsbCoordinator>,
+    pub remote_access: Arc<RemoteAccessCoordinator>,
     pub extensions: Arc<ExtensionManager>,
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
@@ -111,9 +108,6 @@ impl AppState {
         #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
-        rustdesk: Option<Arc<RustDeskService>>,
-        vnc: Option<Arc<VncService>>,
-        rtsp: Option<Arc<RtspService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
         update: Arc<UpdateService>,
@@ -121,6 +115,28 @@ impl AppState {
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
         let (device_info_tx, _device_info_rx) = watch::channel(None);
+
+        let remote_access = RemoteAccessCoordinator::new(
+            config.clone(),
+            stream_manager.clone(),
+            hid.clone(),
+            audio.clone(),
+        );
+        #[cfg(unix)]
+        let msd = Arc::new(RwLock::new(msd));
+        #[cfg(unix)]
+        let uac_playback = Arc::new(RwLock::new(None));
+        let usb = UsbCoordinator::new(
+            hid.clone(),
+            #[cfg(unix)]
+            otg_service.clone(),
+            #[cfg(unix)]
+            msd.clone(),
+            #[cfg(unix)]
+            uac_playback.clone(),
+            events.clone(),
+            data_dir.clone(),
+        );
 
         Arc::new(Self {
             db,
@@ -135,12 +151,11 @@ impl AppState {
             hid,
             computer_use,
             #[cfg(unix)]
-            msd: Arc::new(RwLock::new(msd)),
+            msd,
             atx: Arc::new(RwLock::new(atx)),
             audio,
-            rustdesk: Arc::new(RwLock::new(rustdesk)),
-            vnc: Arc::new(RwLock::new(vnc)),
-            rtsp: Arc::new(RwLock::new(rtsp)),
+            usb,
+            remote_access,
             extensions,
             events,
             device_info_tx,
@@ -151,39 +166,12 @@ impl AppState {
             config_apply_locks: ConfigApplyLocks::new(),
             data_dir,
             #[cfg(unix)]
-            uac_playback: Arc::new(RwLock::new(None)),
+            uac_playback,
         })
     }
 
     pub fn data_dir(&self) -> &std::path::PathBuf {
         &self.data_dir
-    }
-
-    pub async fn runtime_third_party_config(&self) -> crate::config::AppConfig {
-        let mut config = self.config.get().as_ref().clone();
-
-        config.rustdesk.enabled = self
-            .rustdesk
-            .read()
-            .await
-            .as_ref()
-            .is_some_and(|service| service.is_listening());
-        config.vnc.enabled = match self.vnc.read().await.as_ref() {
-            Some(service) => matches!(
-                service.status().await,
-                crate::vnc::VncServiceStatus::Starting | crate::vnc::VncServiceStatus::Running
-            ),
-            None => false,
-        };
-        config.rtsp.enabled = match self.rtsp.read().await.as_ref() {
-            Some(service) => matches!(
-                service.status().await,
-                crate::rtsp::RtspServiceStatus::Starting | crate::rtsp::RtspServiceStatus::Running
-            ),
-            None => false,
-        };
-
-        config
     }
 
     pub fn subscribe_device_info(&self) -> watch::Receiver<Option<SystemEvent>> {

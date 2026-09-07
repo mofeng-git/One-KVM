@@ -36,7 +36,7 @@ use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
-use crate::video::codec::h264_bitstream;
+use crate::video::codec::{h264_bitstream, h265_bitstream};
 use crate::video::types::{
     BitratePreset, EncodedVideoFrame, PixelFormat, Resolution, VideoEncoderType,
 };
@@ -638,11 +638,16 @@ impl UniversalSession {
                                     next_keyframe_retry = Instant::now();
                                 }
 
-                                // Some H264 encoders output SPS/PPS in a separate non-keyframe AU
-                                // before IDR. Keep this frame so browser can decode the next IDR.
-                                let forward_h264_parameter_frame = waiting_for_keyframe
-                                    && expected_codec == VideoEncoderType::H264
-                                    && h264_bitstream::has_sps_pps(encoded_frame.data.as_ref());
+                                let forward_parameter_frame = waiting_for_keyframe
+                                    && match expected_codec {
+                                        VideoEncoderType::H264 => h264_bitstream::has_sps_pps(
+                                            encoded_frame.data.as_ref(),
+                                        ),
+                                        VideoEncoderType::H265 => h265_bitstream::has_vps_sps_pps(
+                                            encoded_frame.data.as_ref(),
+                                        ),
+                                        _ => false,
+                                    };
 
                                 let now = Instant::now();
                                 if keyframe_requests < KEYFRAME_RETRY_LIMIT
@@ -659,7 +664,7 @@ impl UniversalSession {
                                         );
                                     }
                                 }
-                                if !forward_h264_parameter_frame {
+                                if !forward_parameter_frame {
                                     continue;
                                 }
                             }

@@ -36,6 +36,8 @@ pub mod redfish;
 #[cfg(feature = "desktop")]
 pub mod rtsp;
 #[cfg(feature = "desktop")]
+pub mod runtime;
+#[cfg(feature = "desktop")]
 pub mod rustdesk;
 #[cfg(feature = "desktop")]
 pub mod state;

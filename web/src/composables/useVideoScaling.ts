@@ -1,18 +1,20 @@
 import { computed, nextTick, ref, watch } from 'vue'
-import type { CSSProperties } from 'vue'
+import type { CSSProperties, Ref } from 'vue'
 import { useElementSize } from '@vueuse/core'
 
 export type VideoScaleMode = 'fit' | 'actual'
+export type VideoRotation = 0 | 90 | 180 | 270
 
 export interface VideoSize {
   width: number
   height: number
 }
 
-export function useVideoScaling() {
+export function useVideoScaling(options: { rotation?: Readonly<Ref<VideoRotation>> } = {}) {
   const workspaceRef = ref<HTMLDivElement | null>(null)
   const scaleMode = ref<VideoScaleMode>('fit')
   const sourceSize = ref<VideoSize | null>(null)
+  const rotation = options.rotation ?? ref<VideoRotation>(0)
   const { width: workspaceWidth, height: workspaceHeight } = useElementSize(workspaceRef)
 
   const sourceSizeAvailable = computed(() => sourceSize.value !== null)
@@ -20,8 +22,18 @@ export function useVideoScaling() {
     scaleMode.value === 'actual' && sourceSizeAvailable.value ? 'actual' : 'fit'
   ))
 
-  const fittedSize = computed<VideoSize | null>(() => {
+  const hasQuarterTurn = computed(() => rotation.value === 90 || rotation.value === 270)
+  const rotatedSourceSize = computed<VideoSize | null>(() => {
     const source = sourceSize.value
+    if (!source) return null
+
+    return hasQuarterTurn.value
+      ? { width: source.height, height: source.width }
+      : source
+  })
+
+  const fittedSize = computed<VideoSize | null>(() => {
+    const source = rotatedSourceSize.value
     if (!source || workspaceWidth.value <= 0 || workspaceHeight.value <= 0) return null
 
     const scale = Math.min(
@@ -40,7 +52,7 @@ export function useVideoScaling() {
   )
 
   const containerStyle = computed<CSSProperties>(() => {
-    const size = effectiveScaleMode.value === 'actual' ? sourceSize.value : fittedSize.value
+    const size = effectiveScaleMode.value === 'actual' ? rotatedSourceSize.value : fittedSize.value
     if (size) {
       return {
         width: `${size.width}px`,
@@ -52,6 +64,19 @@ export function useVideoScaling() {
       width: '100%',
       height: '100%',
       minHeight: '120px',
+    }
+  })
+
+  // A quarter turn swaps the displayed dimensions. Keep the video itself at
+  // its unrotated dimensions, then rotate it inside the correctly sized frame.
+  const contentStyle = computed<CSSProperties>(() => {
+    const size = effectiveScaleMode.value === 'actual' ? rotatedSourceSize.value : fittedSize.value
+    const quarterTurn = hasQuarterTurn.value
+
+    return {
+      width: size ? `${quarterTurn ? size.height : size.width}px` : '100%',
+      height: size ? `${quarterTurn ? size.width : size.height}px` : '100%',
+      transform: `rotate(${rotation.value}deg)`,
     }
   })
 
@@ -88,6 +113,7 @@ export function useVideoScaling() {
     sourceSizeAvailable,
     stageClass,
     containerStyle,
+    contentStyle,
     updateSourceSize,
     clearSourceSize,
     setScaleMode,

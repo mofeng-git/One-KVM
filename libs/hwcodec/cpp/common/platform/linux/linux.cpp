@@ -146,6 +146,67 @@ int linux_support_v4l2m2m() {
     return false;
   };
 
+  auto is_qcom_platform = [&]() -> bool {
+    const char *platform_hints[] = {
+      "qcom",
+      "qualcomm",
+      "venus",
+      "iris",
+      "sc7280",
+      "qcm6490",
+      "qcs6490",
+    };
+
+    const char *platform_files[] = {
+      "/proc/device-tree/compatible",
+      "/proc/device-tree/model",
+      "/sys/firmware/devicetree/base/compatible",
+      "/sys/firmware/devicetree/base/model",
+    };
+
+    for (size_t i = 0; i < sizeof(platform_files) / sizeof(platform_files[0]); i++) {
+      std::string value;
+      if (read_text_file(platform_files[i], &value) &&
+          contains_any(to_lower(value), platform_hints,
+                       sizeof(platform_hints) / sizeof(platform_hints[0]))) {
+        return true;
+      }
+    }
+
+    const char *video_nodes[] = {
+      "video0",
+      "video1",
+      "video2",
+      "video3",
+      "video10",
+      "video11",
+      "video32",
+    };
+    const char *video_hints[] = {
+      "qcom-iris",
+      "qcom,",
+      "venus",
+      "iris",
+    };
+
+    for (size_t i = 0; i < sizeof(video_nodes) / sizeof(video_nodes[0]); i++) {
+      std::string name;
+      std::string modalias;
+      const std::string base = std::string("/sys/class/video4linux/") + video_nodes[i];
+      if (read_text_file((base + "/name").c_str(), &name) &&
+          contains_any(to_lower(name), video_hints, sizeof(video_hints) / sizeof(video_hints[0]))) {
+        return true;
+      }
+      if (read_text_file((base + "/device/modalias").c_str(), &modalias) &&
+          contains_any(to_lower(modalias), video_hints,
+                       sizeof(video_hints) / sizeof(video_hints[0]))) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   auto is_amlogic_platform = [&]() -> bool {
     const char *platform_hints[] = {
       "amlogic",
@@ -210,7 +271,8 @@ int linux_support_v4l2m2m() {
     return false;
   };
 
-  const bool amlogic_platform = is_amlogic_platform();
+  const bool qcom_platform = is_qcom_platform();
+  const bool amlogic_platform = !qcom_platform && is_amlogic_platform();
   if (amlogic_platform && !v4l2m2m_allowed()) {
     LOG_WARN(std::string(
         "V4L2 M2M: skipped probe on Amlogic platform; set ONE_KVM_V4L2M2M_ALLOW=1 to enable"));

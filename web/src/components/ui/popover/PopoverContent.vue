@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConsoleAppearance } from "@/composables/useConsoleAppearance"
+const consoleAppearance = useConsoleAppearance()
 import type { PopoverContentEmits, PopoverContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
@@ -22,7 +24,7 @@ const props = withDefaults(
 )
 const emits = defineEmits<PopoverContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "sideOffset")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -31,6 +33,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <PopoverPortal>
     <PopoverContent
       data-slot="popover-content"
+      :data-console-layout="consoleAppearance"
+      :side-offset="props.sideOffset + (consoleAppearance === 'floating' ? 10 : consoleAppearance === 'sidebar' ? 4 : 0)"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
