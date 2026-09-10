@@ -175,14 +175,15 @@ impl UsbCoordinator {
             old_config.constrained_otg_functions() != new_config.constrained_otg_functions();
         let keyboard_leds_changed =
             old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
-        let ch9329_runtime_changed =
-            old_config.ch9329_hybrid_mouse != new_config.ch9329_hybrid_mouse;
+        let mouse_compatibility_changed = old_config.ch9329_hybrid_mouse
+            != new_config.ch9329_hybrid_mouse
+            || old_config.mouse_macos_drag != new_config.mouse_macos_drag;
 
         if old_config.backend == new_config.backend
             && old_config.ch9329_port == new_config.ch9329_port
             && old_config.ch9329_baudrate == new_config.ch9329_baudrate
             && old_config.bluetooth == new_config.bluetooth
-            && !ch9329_runtime_changed
+            && !mouse_compatibility_changed
             && old_config.otg_udc == new_config.otg_udc
             && !descriptor_changed
             && !hid_functions_changed
@@ -299,7 +300,7 @@ impl UsbCoordinator {
 
         if hid_config.backend == HidBackend::Otg && (options.force || old_enabled != new_enabled) {
             self.hid
-                .reload(HidBackendType::Otg)
+                .reload(hid_backend_type(hid_config))
                 .await
                 .map_err(|error| AppError::Config(format!("OTG HID reload failed: {error}")))?;
         }
@@ -309,11 +310,14 @@ impl UsbCoordinator {
 
 fn hid_backend_type(config: &HidConfig) -> HidBackendType {
     match config.backend {
-        HidBackend::Otg => HidBackendType::Otg,
+        HidBackend::Otg => HidBackendType::Otg {
+            macos_drag: config.mouse_macos_drag,
+        },
         HidBackend::Ch9329 => HidBackendType::Ch9329 {
             port: config.ch9329_port.clone(),
             baud_rate: config.ch9329_baudrate,
             hybrid_mouse: config.ch9329_hybrid_mouse,
+            macos_drag: config.mouse_macos_drag,
         },
         HidBackend::None => HidBackendType::None,
         HidBackend::Bluetooth => HidBackendType::Bluetooth {

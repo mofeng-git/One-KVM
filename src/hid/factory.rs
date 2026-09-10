@@ -44,21 +44,27 @@ impl HidBackendFactory {
 
     async fn create(&self, backend_type: &HidBackendType) -> Result<Option<Arc<dyn HidBackend>>> {
         match backend_type {
-            HidBackendType::Otg => self.create_otg_backend().await.map(Some),
+            HidBackendType::Otg { macos_drag } => {
+                self.create_otg_backend(*macos_drag).await.map(Some)
+            }
             HidBackendType::Ch9329 {
                 port,
                 baud_rate,
                 hybrid_mouse,
+                macos_drag,
             } => {
                 info!(
-                    "Initializing CH9329 HID backend on {} @ {} baud, hybrid_mouse={}",
-                    port, baud_rate, hybrid_mouse
+                    "Initializing CH9329 HID backend on {} @ {} baud, hybrid_mouse={}, macos_drag={}",
+                    port, baud_rate, hybrid_mouse, macos_drag
                 );
-                Ok(Some(Arc::new(ch9329::Ch9329Backend::with_options(
-                    port,
-                    *baud_rate,
-                    *hybrid_mouse,
-                )?)))
+                Ok(Some(Arc::new(
+                    ch9329::Ch9329Backend::with_compatibility_options(
+                        port,
+                        *baud_rate,
+                        *hybrid_mouse,
+                        *macos_drag,
+                    )?,
+                )))
             }
             HidBackendType::Bluetooth { config } => {
                 #[cfg(target_os = "linux")]
@@ -84,7 +90,7 @@ impl HidBackendFactory {
     }
 
     #[cfg(unix)]
-    async fn create_otg_backend(&self) -> Result<Arc<dyn HidBackend>> {
+    async fn create_otg_backend(&self, macos_drag: bool) -> Result<Arc<dyn HidBackend>> {
         let otg_service = self
             .otg_service
             .as_ref()
@@ -96,11 +102,13 @@ impl HidBackendFactory {
             .ok_or_else(|| AppError::Config("OTG HID paths are not available".to_string()))?;
 
         info!("Creating OTG HID backend from device paths");
-        Ok(Arc::new(super::otg::OtgBackend::from_handles(handles)?))
+        Ok(Arc::new(super::otg::OtgBackend::with_macos_drag(
+            handles, macos_drag,
+        )?))
     }
 
     #[cfg(not(unix))]
-    async fn create_otg_backend(&self) -> Result<Arc<dyn HidBackend>> {
+    async fn create_otg_backend(&self, _macos_drag: bool) -> Result<Arc<dyn HidBackend>> {
         Err(AppError::Config(
             "OTG HID is only available on Linux".to_string(),
         ))

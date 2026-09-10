@@ -107,6 +107,8 @@ impl RuntimeBuilder {
         #[cfg(target_os = "linux")]
         hid.set_bond_store(config_store.hid_bonds());
         hid.set_event_bus(events.clone()).await;
+        hid.set_screen_resolution(video_resolution.width, video_resolution.height)
+            .await;
         if let Err(error) = hid.init().await {
             tracing::warn!("Failed to initialize HID backend: {}", error);
         }
@@ -407,11 +409,14 @@ async fn build_otg(config: &AppConfig) -> Arc<OtgService> {
 
 fn hid_backend_type(config: &AppConfig) -> HidBackendType {
     match config.hid.backend {
-        config::HidBackend::Otg => HidBackendType::Otg,
+        config::HidBackend::Otg => HidBackendType::Otg {
+            macos_drag: config.hid.mouse_macos_drag,
+        },
         config::HidBackend::Ch9329 => HidBackendType::Ch9329 {
             port: config.hid.ch9329_port.clone(),
             baud_rate: config.hid.ch9329_baudrate,
             hybrid_mouse: config.hid.ch9329_hybrid_mouse,
+            macos_drag: config.hid.mouse_macos_drag,
         },
         config::HidBackend::None => HidBackendType::None,
         config::HidBackend::Bluetooth => HidBackendType::Bluetooth {

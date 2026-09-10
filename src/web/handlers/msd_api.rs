@@ -270,10 +270,8 @@ pub async fn msd_disk_mode_put(
         }));
     }
 
-    let hid_is_otg = matches!(
-        state.hid.backend_type().await,
-        crate::hid::HidBackendType::Otg
-    );
+    let hid_backend_type = state.hid.backend_type().await;
+    let hid_is_otg = matches!(hid_backend_type, crate::hid::HidBackendType::Otg { .. });
 
     if hid_is_otg {
         state
@@ -294,7 +292,7 @@ pub async fn msd_disk_mode_put(
     let hid_reload_result = if hid_is_otg {
         state
             .hid
-            .reload(crate::hid::HidBackendType::Otg)
+            .reload(hid_backend_type)
             .await
             .map_err(|e| AppError::Config(format!("OTG HID reload failed: {e}")))
     } else {

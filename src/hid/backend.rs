@@ -17,7 +17,10 @@ fn default_ch9329_baud_rate() -> u32 {
 #[serde(tag = "type", rename_all = "lowercase")]
 #[derive(Default)]
 pub enum HidBackendType {
-    Otg,
+    Otg {
+        #[serde(default)]
+        macos_drag: bool,
+    },
     Bluetooth {
         config: crate::config::BluetoothHidConfig,
     },
@@ -27,6 +30,8 @@ pub enum HidBackendType {
         baud_rate: u32,
         #[serde(default)]
         hybrid_mouse: bool,
+        #[serde(default)]
+        macos_drag: bool,
     },
     #[default]
     None,
@@ -35,7 +40,7 @@ pub enum HidBackendType {
 impl HidBackendType {
     pub fn name_str(&self) -> &str {
         match self {
-            Self::Otg => "otg",
+            Self::Otg { .. } => "otg",
             Self::Bluetooth { .. } => "bluetooth",
             Self::Ch9329 { .. } => "ch9329",
             Self::None => "none",

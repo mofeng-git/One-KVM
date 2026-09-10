@@ -231,6 +231,9 @@ pub struct HidConfig {
     #[serde(default)]
     pub ch9329_hybrid_mouse: bool,
     #[serde(default)]
+    #[serde(alias = "ch9329_macos_drag")]
+    pub mouse_macos_drag: bool,
+    #[serde(default)]
     pub ch9329_descriptor: Ch9329DescriptorConfig,
     pub mouse_absolute: bool,
 }
@@ -248,6 +251,7 @@ impl Default for HidConfig {
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
             ch9329_hybrid_mouse: false,
+            mouse_macos_drag: false,
             ch9329_descriptor: Ch9329DescriptorConfig::default(),
             mouse_absolute: true,
         }
@@ -273,6 +277,11 @@ impl HidConfig {
         }
 
         let functions = self.effective_otg_functions();
+        if self.mouse_macos_drag && (!functions.mouse_relative || !functions.mouse_absolute) {
+            return Err(crate::error::AppError::BadRequest(
+                "macOS drag compatibility requires both OTG mouse interfaces".to_string(),
+            ));
+        }
         if functions.is_empty() {
             return Err(crate::error::AppError::BadRequest(
                 "OTG HID functions cannot be empty".to_string(),
@@ -307,6 +316,22 @@ impl HidConfig {
 #[cfg(test)]
 mod bluetooth_tests {
     use super::*;
+    #[test]
+    fn mouse_compatibility_defaults_alias_and_otg_validation() {
+        let defaults: HidConfig = serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();
+        assert!(!defaults.mouse_macos_drag);
+        let mut config: HidConfig =
+            serde_json::from_str(r#"{"backend":"otg","ch9329_macos_drag":true}"#).unwrap();
+        assert!(config.mouse_macos_drag);
+        assert!(config.validate_otg_functions().is_ok());
+        config.otg_profile = OtgHidProfile::LegacyMouseRelative;
+        assert!(config.validate_otg_functions().is_err());
+        config.backend = HidBackend::Ch9329;
+        assert!(config.validate_otg_functions().is_ok());
+        let saved = serde_json::to_value(&config).unwrap();
+        assert_eq!(saved["mouse_macos_drag"], true);
+        assert!(saved.get("ch9329_macos_drag").is_none());
+    }
     #[test]
     fn old_configs_keep_bluetooth_disabled_and_get_defaults() {
         let config: HidConfig = serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();

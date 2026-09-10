@@ -238,6 +238,8 @@ pub struct Ch9329Backend {
     last_abs_y: Arc<AtomicU16>,
     relative_mouse_active: Arc<AtomicBool>,
     hybrid_mouse: bool,
+    macos_drag: bool,
+    macos_drag_state: Mutex<super::macos_drag::MacosDrag>,
     runtime: Arc<Ch9329RuntimeState>,
 }
 
@@ -251,6 +253,15 @@ impl Ch9329Backend {
     }
 
     pub fn with_options(port_path: &str, baud_rate: u32, hybrid_mouse: bool) -> Result<Self> {
+        Self::with_compatibility_options(port_path, baud_rate, hybrid_mouse, false)
+    }
+
+    pub fn with_compatibility_options(
+        port_path: &str,
+        baud_rate: u32,
+        hybrid_mouse: bool,
+        macos_drag: bool,
+    ) -> Result<Self> {
         Ok(Self {
             port_path: port_path.to_string(),
             baud_rate,
@@ -266,6 +277,8 @@ impl Ch9329Backend {
             last_abs_y: Arc::new(AtomicU16::new(0)),
             relative_mouse_active: Arc::new(AtomicBool::new(false)),
             hybrid_mouse,
+            macos_drag,
+            macos_drag_state: Mutex::new(super::macos_drag::MacosDrag::default()),
             runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
@@ -978,11 +991,12 @@ impl Ch9329Backend {
     }
 
     fn should_send_button_wheel_relative(&self) -> bool {
-        self.hybrid_mouse || self.relative_mouse_active.load(Ordering::Relaxed)
+        (self.hybrid_mouse && !self.macos_drag)
+            || self.relative_mouse_active.load(Ordering::Relaxed)
     }
 
     fn absolute_move_buttons(&self, buttons: u8) -> u8 {
-        if self.hybrid_mouse {
+        if self.hybrid_mouse && !self.macos_drag {
             0
         } else {
             buttons
@@ -1272,6 +1286,31 @@ impl HidBackend for Ch9329Backend {
     async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
         let buttons = self.mouse_buttons.load(Ordering::Relaxed);
 
+        if self.macos_drag {
+            use super::macos_drag::MouseReport;
+            let mut state = self.macos_drag_state.lock();
+            let (buttons, reports) = state.plan(event, buttons, *self.screen_resolution.read());
+            self.mouse_buttons.store(buttons, Ordering::Relaxed);
+            for report in reports {
+                match report {
+                    MouseReport::Absolute { buttons, x, y } => {
+                        let x = (u32::from(x) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        let y = (u32::from(y) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        self.send_mouse_absolute(buttons, x, y, 0)?;
+                    }
+                    MouseReport::Relative {
+                        buttons,
+                        dx,
+                        dy,
+                        wheel,
+                    } => {
+                        self.send_mouse_relative(buttons, dx, dy, wheel)?;
+                    }
+                }
+            }
+            return Ok(());
+        }
+
         match event.event_type {
             MouseEventType::Move => {
                 self.relative_mouse_active.store(true, Ordering::Relaxed);
@@ -1361,6 +1400,7 @@ impl HidBackend for Ch9329Backend {
         }
 
         self.mouse_buttons.store(0, Ordering::Relaxed);
+        self.macos_drag_state.lock().reset();
         self.last_abs_x.store(0, Ordering::Relaxed);
         self.last_abs_y.store(0, Ordering::Relaxed);
         self.relative_mouse_active.store(false, Ordering::Relaxed);
@@ -1666,11 +1706,65 @@ mod tests {
     }
 
     #[test]
-    fn test_hybrid_mouse_routes_buttons_and_wheel_to_relative_reports() {
+    fn test_hybrid_mouse_preserves_linux_compatibility_routing() {
         let backend = Ch9329Backend::with_options("/dev/null", DEFAULT_BAUD_RATE, true).unwrap();
 
         assert!(backend.should_send_button_wheel_relative());
         assert_eq!(backend.absolute_move_buttons(0x07), 0);
+    }
+
+    #[tokio::test]
+    async fn test_macos_drag_uses_absolute_edges_and_relative_motion() {
+        let backend =
+            Ch9329Backend::with_compatibility_options("/dev/null", DEFAULT_BAUD_RATE, false, true)
+                .unwrap();
+        let (worker_tx, worker_rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(worker_tx);
+        backend.set_screen_resolution(1920, 1080);
+
+        backend
+            .send_mouse(MouseEvent::move_abs(8000, 8000))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_down(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::move_abs(8064, 8064))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_up(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+
+        let packets: Vec<_> = worker_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                WorkerCommand::Packet { cmd, data } => Some((cmd, data)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            packets,
+            vec![
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x01, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x01, 0x03, 0x02, 0x00]),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x00, 0x00, 0x00, 0x00]),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xF0, 0x03, 0xF0, 0x03, 0x00],
+                ),
+            ]
+        );
     }
 
     #[test]

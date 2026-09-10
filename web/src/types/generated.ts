@@ -71,6 +71,7 @@ export interface HidConfig {
 	ch9329_port: string;
 	ch9329_baudrate: number;
 	ch9329_hybrid_mouse?: boolean;
+	mouse_macos_drag?: boolean;
 	ch9329_descriptor?: Ch9329DescriptorConfig;
 	mouse_absolute: boolean;
 }
@@ -570,6 +571,7 @@ export interface HidConfigUpdate {
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
 	ch9329_hybrid_mouse?: boolean;
+	mouse_macos_drag?: boolean;
 	ch9329_descriptor?: Ch9329DescriptorConfigUpdate;
 	otg_udc?: string;
 	otg_descriptor?: OtgDescriptorConfigUpdate;
