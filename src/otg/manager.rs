@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
 use super::configfs::{
-    configfs_path, create_dir, create_symlink, find_udc, is_configfs_available, remove_dir,
-    remove_file, write_file, write_file_if_exists, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE,
-    DEFAULT_USB_PRODUCT_ID, DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
+    configfs_path, create_dir, find_udc, is_configfs_available, remove_dir, write_file,
+    write_file_if_exists, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
+    DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
 };
 use super::function::GadgetFunction;
 use super::hid::HidFunction;
@@ -221,9 +221,7 @@ impl OtgGadgetManager {
     }
 
     pub fn bind(&mut self, udc: &str) -> Result<()> {
-        if let Err(e) = self.recreate_config_links() {
-            warn!("Failed to recreate gadget config links before bind: {}", e);
-        }
+        self.recreate_config_links()?;
 
         debug!("Binding gadget to UDC: {}", udc);
         write_file(&self.gadget_path.join("UDC"), &udc)?;
@@ -385,39 +383,22 @@ impl OtgGadgetManager {
             return Ok(());
         }
 
-        let entries = std::fs::read_dir(&functions_path).map_err(|e| {
-            AppError::Internal(format!(
-                "Failed to read functions directory {}: {}",
-                functions_path.display(),
-                e
-            ))
-        })?;
-
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = match name.to_str() {
-                Some(n) => n,
-                None => continue,
-            };
-            if !name.contains(".usb") {
-                continue;
+        // ConfigFS binds functions in link insertion order. Preserve the
+        // setup order (UAC before HID), including on rebind: directory
+        // iteration order is unspecified and can change endpoint allocation.
+        for func in &self.functions {
+            let dest = self.config_path.join(func.name());
+            if dest.symlink_metadata().is_ok() {
+                fs::remove_file(&dest).map_err(|error| {
+                    AppError::Internal(format!(
+                        "Failed to remove config link {}: {error}",
+                        dest.display()
+                    ))
+                })?;
             }
-
-            let src = functions_path.join(name);
-            let dest = self.config_path.join(name);
-
-            if dest.exists() {
-                if let Err(e) = remove_file(&dest) {
-                    warn!(
-                        "Failed to remove existing config link {}: {}",
-                        dest.display(),
-                        e
-                    );
-                    continue;
-                }
-            }
-
-            create_symlink(&src, &dest)?;
+        }
+        for func in &self.functions {
+            func.link(&self.config_path, &self.gadget_path)?;
         }
 
         Ok(())
@@ -470,6 +451,81 @@ pub async fn wait_for_hid_devices(device_paths: &[PathBuf], timeout_ms: u64) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+    use std::sync::{Arc, Mutex};
+
+    struct RecordedFunction {
+        name: &'static str,
+        links: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl GadgetFunction for RecordedFunction {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn create(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+        fn link(&self, config: &Path, gadget: &Path) -> Result<()> {
+            super::super::configfs::create_symlink(
+                &gadget.join("functions").join(self.name),
+                &config.join(self.name),
+            )?;
+            self.links.lock().unwrap().push(self.name.into());
+            Ok(())
+        }
+        fn unlink(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+        fn cleanup(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn rebind_links_uac_before_hid_in_registration_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut manager = OtgGadgetManager::new();
+        manager.gadget_path = temp.path().to_path_buf();
+        manager.config_path = temp.path().join("configs/c.1");
+        fs::create_dir_all(&manager.config_path).unwrap();
+        let links = Arc::new(Mutex::new(Vec::new()));
+        for name in ["uac1.usb0", "hid.usb0", "mass_storage.usb0"] {
+            fs::create_dir_all(temp.path().join("functions").join(name)).unwrap();
+            // Include a dangling pre-existing link, as well as testing rebind.
+            std::os::unix::fs::symlink("/nonexistent-uac-test", manager.config_path.join(name))
+                .unwrap();
+            manager
+                .add_function(Box::new(RecordedFunction {
+                    name,
+                    links: Arc::clone(&links),
+                }))
+                .unwrap();
+        }
+        for _ in 0..2 {
+            links.lock().unwrap().clear();
+            manager.recreate_config_links().unwrap();
+            assert_eq!(
+                *links.lock().unwrap(),
+                ["uac1.usb0", "hid.usb0", "mass_storage.usb0"]
+            );
+        }
+    }
+
+    #[test]
+    fn link_failure_prevents_udc_binding() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut manager = OtgGadgetManager::new();
+        manager.gadget_path = temp.path().to_path_buf();
+        manager.config_path = temp.path().join("configs/c.1");
+        fs::create_dir_all(temp.path().join("functions/hid.usb0")).unwrap();
+        // A directory occupying a config link cannot be removed as a file.
+        fs::create_dir_all(manager.config_path.join("hid.usb0")).unwrap();
+        fs::write(temp.path().join("UDC"), "").unwrap();
+        manager.add_keyboard(false).unwrap();
+        assert!(manager.bind("test-udc").is_err());
+        assert_eq!(fs::read_to_string(temp.path().join("UDC")).unwrap(), "");
+    }
 
     #[test]
     fn test_manager_creation() {
