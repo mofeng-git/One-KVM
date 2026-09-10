@@ -409,7 +409,8 @@ pub struct HidConfigUpdate {
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
     pub ch9329_hybrid_mouse: Option<bool>,
-    pub ch9329_macos_drag: Option<bool>,
+    #[serde(alias = "ch9329_macos_drag")]
+    pub mouse_macos_drag: Option<bool>,
     pub ch9329_descriptor: Option<Ch9329DescriptorConfigUpdate>,
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
@@ -466,8 +467,8 @@ impl HidConfigUpdate {
         if let Some(enabled) = self.ch9329_hybrid_mouse {
             config.ch9329_hybrid_mouse = enabled;
         }
-        if let Some(enabled) = self.ch9329_macos_drag {
-            config.ch9329_macos_drag = enabled;
+        if let Some(enabled) = self.mouse_macos_drag {
+            config.mouse_macos_drag = enabled;
         }
         if let Some(ref desc) = self.ch9329_descriptor {
             desc.apply_to(&mut config.ch9329_descriptor);

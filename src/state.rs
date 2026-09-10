@@ -218,6 +218,11 @@ impl AppState {
 
     pub async fn publish_device_info(&self) {
         let device_info = self.get_device_info().await;
+        if let SystemEvent::DeviceInfo { video, .. } = &device_info {
+            if let Some((width, height)) = video.resolution {
+                self.hid.set_screen_resolution(width, height).await;
+            }
+        }
         let _ = self.device_info_tx.send(Some(device_info));
     }
 

@@ -239,6 +239,7 @@ pub struct Ch9329Backend {
     relative_mouse_active: Arc<AtomicBool>,
     hybrid_mouse: bool,
     macos_drag: bool,
+    macos_drag_state: Mutex<super::macos_drag::MacosDrag>,
     runtime: Arc<Ch9329RuntimeState>,
 }
 
@@ -277,6 +278,7 @@ impl Ch9329Backend {
             relative_mouse_active: Arc::new(AtomicBool::new(false)),
             hybrid_mouse,
             macos_drag,
+            macos_drag_state: Mutex::new(super::macos_drag::MacosDrag::default()),
             runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
@@ -1001,20 +1003,6 @@ impl Ch9329Backend {
         }
     }
 
-    fn absolute_delta_to_relative(current: u16, previous: u16, extent: u32) -> i8 {
-        let delta = current as i32 - previous as i32;
-        if delta == 0 {
-            return 0;
-        }
-
-        let scaled = delta * extent.max(1) as i32 / CH9329_MOUSE_RESOLUTION as i32;
-        if scaled == 0 {
-            delta.signum() as i8
-        } else {
-            scaled.clamp(-127, 127) as i8
-        }
-    }
-
     fn worker_loop(
         port_path: String,
         baud_rate: u32,
@@ -1298,6 +1286,31 @@ impl HidBackend for Ch9329Backend {
     async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
         let buttons = self.mouse_buttons.load(Ordering::Relaxed);
 
+        if self.macos_drag {
+            use super::macos_drag::MouseReport;
+            let mut state = self.macos_drag_state.lock();
+            let (buttons, reports) = state.plan(event, buttons, *self.screen_resolution.read());
+            self.mouse_buttons.store(buttons, Ordering::Relaxed);
+            for report in reports {
+                match report {
+                    MouseReport::Absolute { buttons, x, y } => {
+                        let x = (u32::from(x) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        let y = (u32::from(y) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        self.send_mouse_absolute(buttons, x, y, 0)?;
+                    }
+                    MouseReport::Relative {
+                        buttons,
+                        dx,
+                        dy,
+                        wheel,
+                    } => {
+                        self.send_mouse_relative(buttons, dx, dy, wheel)?;
+                    }
+                }
+            }
+            return Ok(());
+        }
+
         match event.event_type {
             MouseEventType::Move => {
                 self.relative_mouse_active.store(true, Ordering::Relaxed);
@@ -1309,23 +1322,9 @@ impl HidBackend for Ch9329Backend {
                 self.relative_mouse_active.store(false, Ordering::Relaxed);
                 let x = ((event.x.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
                 let y = ((event.y.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
-                let previous_x = self.last_abs_x.swap(x, Ordering::Relaxed);
-                let previous_y = self.last_abs_y.swap(y, Ordering::Relaxed);
-
-                if self.macos_drag && buttons != 0 {
-                    // macOS accepts button edges from CH9329 absolute report ID 2,
-                    // but may terminate a drag when movement continues on that
-                    // report. Keep the absolute button held and move through the
-                    // relative report until the matching absolute button-up.
-                    let (width, height) = *self.screen_resolution.read();
-                    let dx = Self::absolute_delta_to_relative(x, previous_x, width);
-                    let dy = Self::absolute_delta_to_relative(y, previous_y, height);
-                    if dx != 0 || dy != 0 {
-                        self.send_mouse_relative(buttons, dx, dy, 0)?;
-                    }
-                } else {
-                    self.send_mouse_absolute(self.absolute_move_buttons(buttons), x, y, 0)?;
-                }
+                self.last_abs_x.store(x, Ordering::Relaxed);
+                self.last_abs_y.store(y, Ordering::Relaxed);
+                self.send_mouse_absolute(self.absolute_move_buttons(buttons), x, y, 0)?;
             }
             MouseEventType::Down => {
                 if let Some(button) = event.button {
@@ -1401,6 +1400,7 @@ impl HidBackend for Ch9329Backend {
         }
 
         self.mouse_buttons.store(0, Ordering::Relaxed);
+        self.macos_drag_state.lock().reset();
         self.last_abs_x.store(0, Ordering::Relaxed);
         self.last_abs_y.store(0, Ordering::Relaxed);
         self.relative_mouse_active.store(false, Ordering::Relaxed);
@@ -1758,6 +1758,7 @@ mod tests {
                     vec![0x02, 0x01, 0xE8, 0x03, 0xE8, 0x03, 0x00],
                 ),
                 (cmd::SEND_MS_REL_DATA, vec![0x01, 0x01, 0x03, 0x02, 0x00]),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x00, 0x00, 0x00, 0x00]),
                 (
                     cmd::SEND_MS_ABS_DATA,
                     vec![0x02, 0x00, 0xF0, 0x03, 0xF0, 0x03, 0x00],
@@ -1772,29 +1773,5 @@ mod tests {
 
         assert!(!backend.should_send_button_wheel_relative());
         assert_eq!(backend.absolute_move_buttons(0x07), 0x07);
-    }
-
-    #[test]
-    fn test_absolute_delta_to_relative_preserves_small_movements_and_clamps() {
-        assert_eq!(
-            Ch9329Backend::absolute_delta_to_relative(1001, 1000, 1920),
-            1
-        );
-        assert_eq!(
-            Ch9329Backend::absolute_delta_to_relative(999, 1000, 1920),
-            -1
-        );
-        assert_eq!(
-            Ch9329Backend::absolute_delta_to_relative(2000, 1000, 1920),
-            127
-        );
-        assert_eq!(
-            Ch9329Backend::absolute_delta_to_relative(0, 1000, 1920),
-            -127
-        );
-        assert_eq!(
-            Ch9329Backend::absolute_delta_to_relative(1000, 1000, 1920),
-            0
-        );
     }
 }

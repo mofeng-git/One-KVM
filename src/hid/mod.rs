@@ -9,6 +9,7 @@ pub mod consumer;
 pub mod datachannel;
 mod factory;
 pub mod keyboard;
+mod macos_drag;
 #[cfg(unix)]
 pub mod otg;
 #[cfg(unix)]
@@ -135,6 +136,7 @@ pub struct HidController {
     runtime_worker: Mutex<Option<JoinHandle<()>>>,
     backend_available: Arc<AtomicBool>,
     reset_requested: Arc<AtomicBool>,
+    screen_resolution: parking_lot::RwLock<(u32, u32)>,
 }
 
 impl HidController {
@@ -157,6 +159,7 @@ impl HidController {
             runtime_worker: Mutex::new(None),
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
+            screen_resolution: parking_lot::RwLock::new((1920, 1080)),
         }
     }
 
@@ -179,6 +182,7 @@ impl HidController {
             runtime_worker: Mutex::new(None),
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
+            screen_resolution: parking_lot::RwLock::new((1920, 1080)),
         }
     }
 
@@ -210,7 +214,12 @@ impl HidController {
             }
         };
 
-        *self.backend.write().await = Some(backend);
+        {
+            let mut slot = self.backend.write().await;
+            let (width, height) = *self.screen_resolution.read();
+            backend.set_screen_resolution(width, height);
+            *slot = Some(backend);
+        }
         self.sync_runtime_state_from_backend().await;
 
         self.start_event_worker().await;
@@ -245,7 +254,8 @@ impl HidController {
     }
 
     pub async fn prepare_otg_rebuild(&self) -> Result<()> {
-        if !matches!(*self.backend_type.read().await, HidBackendType::Otg) {
+        let backend_type = self.backend_type.read().await.clone();
+        if !matches!(backend_type, HidBackendType::Otg { .. }) {
             return Ok(());
         }
 
@@ -259,7 +269,7 @@ impl HidController {
 
         let current = self.runtime_state.read().await.clone();
         let rebuilding_state = HidRuntimeState::with_error(
-            &HidBackendType::Otg,
+            &backend_type,
             &current,
             "OTG gadget is rebuilding",
             "rebuilding",
@@ -337,6 +347,24 @@ impl HidController {
         self.backend_type.read().await.clone()
     }
 
+    /// Keep the active capture dimensions across HID reloads and USB rebuilds.
+    pub async fn set_screen_resolution(&self, width: u32, height: u32) {
+        if width == 0 || height == 0 || width > 65535 || height > 65535 {
+            return;
+        }
+        {
+            let mut resolution = self.screen_resolution.write();
+            if *resolution == (width, height) {
+                return;
+            }
+            *resolution = (width, height);
+        }
+        if let Some(backend) = self.backend.read().await.as_ref() {
+            let (width, height) = *self.screen_resolution.read();
+            backend.set_screen_resolution(width, height);
+        }
+    }
+
     pub async fn snapshot(&self) -> HidRuntimeState {
         self.runtime_state.read().await.clone()
     }
@@ -403,7 +431,14 @@ impl HidController {
             }
         };
 
-        *self.backend.write().await = new_backend;
+        {
+            let mut slot = self.backend.write().await;
+            if let Some(backend) = new_backend.as_ref() {
+                let (width, height) = *self.screen_resolution.read();
+                backend.set_screen_resolution(width, height);
+            }
+            *slot = new_backend;
+        }
 
         if matches!(new_backend_type, HidBackendType::None) {
             *self.backend_type.write().await = HidBackendType::None;
@@ -687,6 +722,27 @@ fn merge_pending_move(pending: &mut Option<MouseEvent>, event: MouseEvent) {
 #[cfg(test)]
 mod queue_tests {
     use super::*;
+    #[tokio::test]
+    async fn screen_resolution_updates_backend_and_retains_valid_dimensions() {
+        #[cfg(unix)]
+        let controller = HidController::new(HidBackendType::None, None);
+        #[cfg(not(unix))]
+        let controller = HidController::new(HidBackendType::None);
+        let backend = Arc::new(ch9329::Ch9329Backend::new("/dev/null").unwrap());
+        *controller.backend.write().await = Some(backend.clone());
+        controller.set_screen_resolution(3840, 2160).await;
+        assert_eq!(
+            backend.runtime_snapshot().screen_resolution,
+            Some((3840, 2160))
+        );
+        controller.set_screen_resolution(0, 0).await;
+        assert_eq!(*controller.screen_resolution.read(), (3840, 2160));
+        controller.set_screen_resolution(1280, 720).await;
+        assert_eq!(
+            backend.runtime_snapshot().screen_resolution,
+            Some((1280, 720))
+        );
+    }
     struct TestBackend {
         pressed: Arc<AtomicBool>,
         reset_done: Arc<tokio::sync::Notify>,
