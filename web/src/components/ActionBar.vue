@@ -43,9 +43,11 @@ import {
   ChevronDown,
   Keyboard,
   Scaling,
+  MonitorCog,
 } from 'lucide-vue-next'
 import PasteModal from '@/components/PasteModal.vue'
 import AtxPopover from '@/components/AtxPopover.vue'
+import SwitchPopover from '@/components/SwitchPopover.vue'
 import VideoConfigPopover, { type VideoMode } from '@/components/VideoConfigPopover.vue'
 import HidConfigPopover from '@/components/HidConfigPopover.vue'
 import AudioConfigPopover from '@/components/AudioConfigPopover.vue'
@@ -116,6 +118,7 @@ const emit = defineEmits<{
 
 const pasteOpen = ref(false)
 const atxOpen = ref(false)
+const switchOpen = ref(false)
 const videoPopoverOpen = ref(false)
 const hidPopoverOpen = ref(false)
 const audioPopoverOpen = ref(false)
@@ -466,6 +469,29 @@ const hasRightOverflow = computed(() => {
             </PopoverContent>
           </Popover>
         </div>
+
+        <!-- KVM Input Switch - Always visible -->
+        <Popover v-model:open="switchOpen">
+          <PopoverTrigger as-child>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-8 gap-1.5 text-xs"
+              :aria-label="t('kvmSwitch.actionbar')"
+              :title="t('kvmSwitch.actionbar')"
+            >
+              <MonitorCog class="size-4" />
+              <span class="hidden sm:inline">{{ t('kvmSwitch.actionbar') }}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            class="w-[min(300px,90vw)] p-0"
+            align="start"
+            :side="isSidebarLayout ? 'right' : 'bottom'"
+          >
+            <SwitchPopover @close="switchOpen = false" />
+          </PopoverContent>
+        </Popover>
 
         <!-- Paste Text - Adaptive -->
         <div v-if="showPasteText && isVisible('paste')">
