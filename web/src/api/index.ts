@@ -569,6 +569,34 @@ export const atxApi = {
     }),
 }
 
+export interface SwitchChannel {
+  index: number
+  label: string
+  active: boolean
+}
+
+export interface SwitchStatus {
+  available: boolean
+  connected: boolean
+  device: string
+  baud_rate: number
+  channel_count: number
+  current_channel: number | null
+  channels: SwitchChannel[]
+  error: string | null
+}
+
+export const switchApi = {
+  status: () =>
+    request<SwitchStatus>('/switch/status', {}, { toastOnError: false }),
+
+  switchChannel: (channel: number) =>
+    request<{ success: boolean; message?: string }>('/switch/channel', {
+      method: 'POST',
+      body: JSON.stringify({ channel }),
+    }),
+}
+
 export interface MsdImage {
   id: string
   name: string
@@ -837,6 +865,7 @@ export {
   otgNetworkApi,
   uacApi,
   atxConfigApi,
+  switchConfigApi,
   audioConfigApi,
   extensionsApi,
   redfishConfigApi,
@@ -876,6 +905,8 @@ export type {
   MsdConfigUpdate,
   AtxConfig,
   AtxConfigUpdate,
+  SwitchConfig,
+  SwitchConfigUpdate,
   AudioConfig,
   AudioConfigUpdate,
   HidBackend,

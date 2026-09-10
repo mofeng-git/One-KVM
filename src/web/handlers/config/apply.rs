@@ -136,6 +136,40 @@ pub async fn apply_atx_config(
     Ok(())
 }
 
+pub async fn apply_switch_config(
+    state: &Arc<AppState>,
+    _old_config: &SwitchConfig,
+    new_config: &SwitchConfig,
+) -> Result<()> {
+    tracing::info!("Applying KVM switch config changes...");
+
+    let controller_config = new_config.to_controller_config();
+
+    let switch_guard = state.switch.read().await;
+    if let Some(sw) = switch_guard.as_ref() {
+        if let Err(e) = sw.reload(controller_config).await {
+            tracing::error!("KVM switch reload failed: {}", e);
+            return Err(AppError::Config(format!("KVM switch reload failed: {}", e)));
+        }
+        tracing::info!("KVM switch controller reloaded successfully");
+    } else {
+        drop(switch_guard);
+
+        if new_config.enabled {
+            tracing::info!("KVM switch enabled in config, initializing...");
+
+            let sw = crate::switch::SwitchController::new(controller_config);
+            sw.init()
+                .await
+                .map_err(|e| AppError::Config(format!("KVM switch initialization failed: {}", e)))?;
+            *state.switch.write().await = Some(sw);
+            tracing::info!("KVM switch controller initialized successfully");
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn apply_audio_config(
     state: &Arc<AppState>,
     _old_config: &AudioConfig,

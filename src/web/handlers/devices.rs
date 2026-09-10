@@ -12,6 +12,11 @@ pub async fn list_atx_devices() -> Json<AtxDevices> {
     Json(discover_devices())
 }
 
+/// 列出可用于 KVM 切换器的串口设备。
+pub async fn list_switch_devices() -> Json<Vec<String>> {
+    Json(crate::switch::available_serial_ports())
+}
+
 #[cfg(unix)]
 pub async fn list_usb_devices() -> Json<Vec<usb_reset::UsbDeviceInfo>> {
     Json(usb_reset::list_usb_devices())
