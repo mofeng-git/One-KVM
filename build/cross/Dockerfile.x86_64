@@ -4,6 +4,7 @@
 ARG DEBIAN_IMAGE=debian:11
 FROM ${DEBIAN_IMAGE}
 
+ARG DEBIAN_SNAPSHOT=20260713T000000Z
 ARG CHINAMIRRO=0
 ARG GH_PROXY=https://gh-proxy.com/
 ARG RUSTUP_DIST_SERVER_CN=https://rsproxy.cn
@@ -17,12 +18,11 @@ ARG X265_VERSION=3.4
 ARG OPUS_VERSION=1.5.2
 ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
 
-# Optionally use China mirrors for builds in China.
-RUN if [ "$CHINAMIRRO" = "1" ]; then \
-        sed -i -E \
-            -e 's|http://deb.debian.org/debian([[:space:]])|http://mirrors.tuna.tsinghua.edu.cn/debian\1|g' \
-            /etc/apt/sources.list; \
-    fi
+RUN printf '%s\n' \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/ bullseye main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/ bullseye-security main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/ bullseye-updates main" \
+        > /etc/apt/sources.list
 
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
