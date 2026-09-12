@@ -276,11 +276,8 @@ impl ExtensionManager {
                 let c = &config.gostc;
                 validate_gostc_config(c)?;
 
-                let mut args = Vec::new();
-
-                if c.tls {
-                    args.push("--tls=true".to_string());
-                }
+                // gostc defaults to TLS, so disabling it must be explicit.
+                let mut args = vec![format!("--tls={}", c.tls)];
 
                 args.extend(["-addr".to_string(), c.addr.trim().to_string()]);
 
