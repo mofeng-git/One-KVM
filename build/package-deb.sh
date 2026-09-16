@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build deb packages from pre-compiled binaries
-# Binaries are compiled once on Debian 11 (GLIBC 2.31) via build-images.sh
+# Binaries are compiled once on Debian 12 (GLIBC 2.36) via build-images.sh
 # This script packages them directly on the host using dpkg-deb
 # Usage: ./build/build-deb.sh [arch]
 # Example: ./build/build-deb.sh aarch64
@@ -125,7 +125,7 @@ EOF
     chmod 755 "$PKG_DIR/DEBIAN/prerm"
 
     # Create control file
-    BASE_DEPS="libc6 (>= 2.31), libgcc-s1, libstdc++6, libasound2t64 (>= 1.1) | libasound2 (>= 1.1), libdrm2 (>= 2.4)"
+    BASE_DEPS="libc6 (>= 2.36), libgcc-s1, libstdc++6, libasound2t64 (>= 1.1) | libasound2 (>= 1.1), libdrm2 (>= 2.4)"
     AMD64_DEPS="libva2 (>= 2.0), libva-drm2 (>= 2.10), libva-x11-2 (>= 2.10), libmfx-gen1.2 (>= 22.0) | libmfx1 (>= 21.1), libx11-6 (>= 1.6), libxcb1 (>= 1.14), i965-va-driver-shaders (>= 2.4), intel-media-va-driver-non-free (>= 21.1)"
     DEPS="$BASE_DEPS"
     if [ "$DEB_ARCH" = "amd64" ]; then
@@ -143,7 +143,7 @@ Recommends: bluez
 Maintainer: SilentWind <admin@mofeng.run>
 Description: A open and lightweight IP-KVM solution
  Enables BIOS-level remote management of servers and workstations.
- Built on Debian 11, compatible with Debian 11+, Ubuntu 20.04+.
+ Built on Debian 12, compatible with Debian 12+, Ubuntu 24.04+.
 EOF
 
     # Build deb directly on host
