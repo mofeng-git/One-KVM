@@ -314,6 +314,10 @@ build_for_platform() {
 
     if [ "$PUSH" = true ]; then
         build_cmd="$build_cmd --push"
+        # Aliyun ACR rejects the OCI artifact manifests used by BuildKit attestations.
+        if [[ "$REGISTRY" == registry.cn-*.aliyuncs.com/* ]]; then
+            build_cmd="$build_cmd --provenance=false --sbom=false"
+        fi
     elif [ "$LOAD" = true ]; then
         build_cmd="$build_cmd --load"
     fi
