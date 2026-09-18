@@ -857,6 +857,37 @@ impl AtxConfigUpdate {
     }
 }
 
+/// KVM 切换器配置更新请求。
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct SwitchConfigUpdate {
+    pub enabled: Option<bool>,
+    pub device: Option<String>,
+    pub baud_rate: Option<u32>,
+    pub channel_count: Option<u8>,
+    pub channel_names: Option<Vec<String>>,
+}
+
+impl SwitchConfigUpdate {
+    pub fn apply_to(&self, config: &mut SwitchConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref device) = self.device {
+            config.device = device.clone();
+        }
+        if let Some(baud_rate) = self.baud_rate {
+            config.baud_rate = baud_rate;
+        }
+        if let Some(channel_count) = self.channel_count {
+            config.channel_count = channel_count;
+        }
+        if let Some(ref names) = self.channel_names {
+            config.channel_names = names.clone();
+        }
+    }
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct AudioConfigUpdate {

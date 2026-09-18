@@ -131,6 +131,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/hid", patch(handlers::config::update_hid_config))
         .route("/config/atx", get(handlers::config::get_atx_config))
         .route("/config/atx", patch(handlers::config::update_atx_config))
+        .route("/config/switch", get(handlers::config::get_switch_config))
+        .route("/config/switch", patch(handlers::config::update_switch_config))
         .route("/config/audio", get(handlers::config::get_audio_config))
         .route(
             "/config/audio",
@@ -235,8 +237,12 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/atx/power", post(handlers::atx_power))
         .route("/atx/wol", post(handlers::atx_wol))
         .route("/atx/wol/history", get(handlers::atx_wol_history))
+        // KVM switch endpoints
+        .route("/switch/status", get(handlers::switch_status))
+        .route("/switch/channel", post(handlers::switch_channel))
         // Device discovery endpoints
         .route("/devices/atx", get(handlers::devices::list_atx_devices))
+        .route("/devices/switch", get(handlers::devices::list_switch_devices))
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
         .route("/extensions/{id}", get(handlers::extensions::get_extension))
