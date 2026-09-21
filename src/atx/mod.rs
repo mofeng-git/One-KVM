@@ -27,7 +27,7 @@ pub use types::{
     ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxInputBinding, AtxKeyConfig,
     AtxOutputBinding, AtxPowerRequest, AtxState, HddStatus, PowerStatus, LCUS_RELAY_MAX_CHANNEL,
 };
-pub use wol::{list_wol_history, record_wol_history, send_wol};
+pub use wol::send_wol;
 
 #[cfg(any(unix, test))]
 fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {

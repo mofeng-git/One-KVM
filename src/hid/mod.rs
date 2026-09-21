@@ -1,12 +1,15 @@
 //! HID path: browser (WebSocket or WebRTC DataChannel) → queue → OTG gadget or CH9329.
 
 pub mod backend;
+#[cfg(target_os = "linux")]
+mod bluetooth;
 pub mod ch9329;
 mod ch9329_proto;
 pub mod consumer;
 pub mod datachannel;
 mod factory;
 pub mod keyboard;
+mod macos_drag;
 #[cfg(unix)]
 pub mod otg;
 #[cfg(unix)]
@@ -132,6 +135,8 @@ pub struct HidController {
     hid_worker: Mutex<Option<JoinHandle<()>>>,
     runtime_worker: Mutex<Option<JoinHandle<()>>>,
     backend_available: Arc<AtomicBool>,
+    reset_requested: Arc<AtomicBool>,
+    screen_resolution: parking_lot::RwLock<(u32, u32)>,
 }
 
 impl HidController {
@@ -153,6 +158,8 @@ impl HidController {
             hid_worker: Mutex::new(None),
             runtime_worker: Mutex::new(None),
             backend_available: Arc::new(AtomicBool::new(false)),
+            reset_requested: Arc::new(AtomicBool::new(false)),
+            screen_resolution: parking_lot::RwLock::new((1920, 1080)),
         }
     }
 
@@ -174,7 +181,14 @@ impl HidController {
             hid_worker: Mutex::new(None),
             runtime_worker: Mutex::new(None),
             backend_available: Arc::new(AtomicBool::new(false)),
+            reset_requested: Arc::new(AtomicBool::new(false)),
+            screen_resolution: parking_lot::RwLock::new((1920, 1080)),
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn set_bond_store(&self, store: crate::db::hid_bonds::HidBondStore) {
+        let _ = self.backend_factory.bonds.set(Arc::new(store));
     }
 
     pub async fn set_event_bus(&self, events: Arc<EventBus>) {
@@ -200,7 +214,12 @@ impl HidController {
             }
         };
 
-        *self.backend.write().await = Some(backend);
+        {
+            let mut slot = self.backend.write().await;
+            let (width, height) = *self.screen_resolution.read();
+            backend.set_screen_resolution(width, height);
+            *slot = Some(backend);
+        }
         self.sync_runtime_state_from_backend().await;
 
         self.start_event_worker().await;
@@ -235,7 +254,8 @@ impl HidController {
     }
 
     pub async fn prepare_otg_rebuild(&self) -> Result<()> {
-        if !matches!(*self.backend_type.read().await, HidBackendType::Otg) {
+        let backend_type = self.backend_type.read().await.clone();
+        if !matches!(backend_type, HidBackendType::Otg { .. }) {
             return Ok(());
         }
 
@@ -249,7 +269,7 @@ impl HidController {
 
         let current = self.runtime_state.read().await.clone();
         let rebuilding_state = HidRuntimeState::with_error(
-            &HidBackendType::Otg,
+            &backend_type,
             &current,
             "OTG gadget is rebuilding",
             "rebuilding",
@@ -293,6 +313,25 @@ impl HidController {
         self.enqueue_event(QueuedHidEvent::Consumer(event)).await
     }
 
+    pub async fn bluetooth_status(&self) -> Result<serde_json::Value> {
+        let backend = self
+            .backend
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::BadRequest("HID unavailable".into()))?;
+        backend.bluetooth_status().await
+    }
+    pub async fn bluetooth_action(&self, action: &str, seconds: u32) -> Result<()> {
+        let backend = self
+            .backend
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| AppError::BadRequest("HID unavailable".into()))?;
+        backend.bluetooth_action(action, seconds).await
+    }
+
     pub async fn reset(&self) -> Result<()> {
         if !self.backend_available.load(Ordering::Acquire) {
             return Ok(());
@@ -306,6 +345,24 @@ impl HidController {
 
     pub async fn backend_type(&self) -> HidBackendType {
         self.backend_type.read().await.clone()
+    }
+
+    /// Keep the active capture dimensions across HID reloads and USB rebuilds.
+    pub async fn set_screen_resolution(&self, width: u32, height: u32) {
+        if width == 0 || height == 0 || width > 65535 || height > 65535 {
+            return;
+        }
+        {
+            let mut resolution = self.screen_resolution.write();
+            if *resolution == (width, height) {
+                return;
+            }
+            *resolution = (width, height);
+        }
+        if let Some(backend) = self.backend.read().await.as_ref() {
+            let (width, height) = *self.screen_resolution.read();
+            backend.set_screen_resolution(width, height);
+        }
     }
 
     pub async fn snapshot(&self) -> HidRuntimeState {
@@ -349,6 +406,14 @@ impl HidController {
 
         if let Some(backend) = self.backend.write().await.take() {
             if let Err(e) = backend.shutdown().await {
+                // A Bluetooth shutdown may fail to restore adapter settings. Surface
+                // that failure so the config transaction can roll back.
+                if matches!(
+                    *self.backend_type.read().await,
+                    HidBackendType::Bluetooth { .. }
+                ) {
+                    return Err(e);
+                }
                 warn!("Error shutting down old HID backend: {}", e);
             }
         }
@@ -366,7 +431,14 @@ impl HidController {
             }
         };
 
-        *self.backend.write().await = new_backend;
+        {
+            let mut slot = self.backend.write().await;
+            if let Some(backend) = new_backend.as_ref() {
+                let (width, height) = *self.screen_resolution.read();
+                backend.set_screen_resolution(width, height);
+            }
+            *slot = new_backend;
+        }
 
         if matches!(new_backend_type, HidBackendType::None) {
             *self.backend_type.write().await = HidBackendType::None;
@@ -437,6 +509,7 @@ impl HidController {
         let backend = self.backend.clone();
         let pending_move = self.pending_move.clone();
         let pending_move_flag = self.pending_move_flag.clone();
+        let reset_requested = self.reset_requested.clone();
 
         let handle = tokio::spawn(async move {
             let mut rx = rx;
@@ -446,6 +519,15 @@ impl HidController {
                     None => break,
                 };
 
+                if reset_requested.swap(false, Ordering::AcqRel) {
+                    // A full input queue must not lose a key/button release and leave
+                    // the host stuck. Discard the obsolete batch and send all-up.
+                    while rx.try_recv().is_ok() {}
+                    *pending_move.lock() = None;
+                    pending_move_flag.store(false, Ordering::Release);
+                    process_hid_event(QueuedHidEvent::Reset, &backend).await;
+                    continue;
+                }
                 process_hid_event(event, &backend).await;
 
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
@@ -504,7 +586,7 @@ impl HidController {
         match self.hid_tx.try_send(QueuedHidEvent::Mouse(event.clone())) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(_)) => {
-                *self.pending_move.lock() = Some(event);
+                merge_pending_move(&mut self.pending_move.lock(), event);
                 self.pending_move_flag.store(true, Ordering::Release);
                 Ok(())
             }
@@ -524,11 +606,16 @@ impl HidController {
                     tx.send(ev),
                 )
                 .await;
-                if send_result.is_ok() {
-                    Ok(())
-                } else {
-                    warn!("HID event queue full, dropping event");
-                    Ok(())
+                match send_result {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(_)) => Err(AppError::BadRequest("HID event queue closed".into())),
+                    Err(_) => {
+                        self.reset_requested.store(true, Ordering::Release);
+                        warn!("HID event queue full; scheduling all-input release");
+                        Err(AppError::ServiceUnavailable(
+                            "HID input queue full; input state will be reset".into(),
+                        ))
+                    }
                 }
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
@@ -618,5 +705,123 @@ async fn apply_runtime_state(
 
     if let Some(events) = events.read().await.as_ref() {
         events.mark_device_info_dirty();
+    }
+}
+
+fn merge_pending_move(pending: &mut Option<MouseEvent>, event: MouseEvent) {
+    if let Some(previous) = pending {
+        if previous.event_type == MouseEventType::Move && event.event_type == MouseEventType::Move {
+            previous.x = previous.x.saturating_add(event.x).clamp(-32767, 32767);
+            previous.y = previous.y.saturating_add(event.y).clamp(-32767, 32767);
+            return;
+        }
+    }
+    *pending = Some(event);
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+    #[tokio::test]
+    async fn screen_resolution_updates_backend_and_retains_valid_dimensions() {
+        #[cfg(unix)]
+        let controller = HidController::new(HidBackendType::None, None);
+        #[cfg(not(unix))]
+        let controller = HidController::new(HidBackendType::None);
+        let backend = Arc::new(ch9329::Ch9329Backend::new("/dev/null").unwrap());
+        *controller.backend.write().await = Some(backend.clone());
+        controller.set_screen_resolution(3840, 2160).await;
+        assert_eq!(
+            backend.runtime_snapshot().screen_resolution,
+            Some((3840, 2160))
+        );
+        controller.set_screen_resolution(0, 0).await;
+        assert_eq!(*controller.screen_resolution.read(), (3840, 2160));
+        controller.set_screen_resolution(1280, 720).await;
+        assert_eq!(
+            backend.runtime_snapshot().screen_resolution,
+            Some((1280, 720))
+        );
+    }
+    struct TestBackend {
+        pressed: Arc<AtomicBool>,
+        reset_done: Arc<tokio::sync::Notify>,
+        runtime: tokio::sync::watch::Sender<()>,
+    }
+    #[async_trait::async_trait]
+    impl HidBackend for TestBackend {
+        async fn init(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn send_keyboard(&self, _: KeyboardEvent) -> Result<()> {
+            self.pressed.store(true, Ordering::Release);
+            Ok(())
+        }
+        async fn send_mouse(&self, _: MouseEvent) -> Result<()> {
+            Ok(())
+        }
+        async fn reset(&self) -> Result<()> {
+            self.pressed.store(false, Ordering::Release);
+            self.reset_done.notify_one();
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+        fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+            HidBackendRuntimeSnapshot::default()
+        }
+        fn subscribe_runtime(&self) -> tokio::sync::watch::Receiver<()> {
+            self.runtime.subscribe()
+        }
+    }
+    #[tokio::test]
+    async fn congested_queue_releases_host_instead_of_replaying_keydowns() {
+        #[cfg(unix)]
+        let controller = HidController::new(HidBackendType::None, None);
+        #[cfg(not(unix))]
+        let controller = HidController::new(HidBackendType::None);
+        let pressed = Arc::new(AtomicBool::new(true));
+        let done = Arc::new(tokio::sync::Notify::new());
+        let (runtime, _) = tokio::sync::watch::channel(());
+        *controller.backend.write().await = Some(Arc::new(TestBackend {
+            pressed: pressed.clone(),
+            reset_done: done.clone(),
+            runtime,
+        }));
+        for _ in 0..HID_EVENT_QUEUE_CAPACITY {
+            controller
+                .enqueue_event(QueuedHidEvent::Keyboard(KeyboardEvent::key_down(
+                    CanonicalKey::KeyA,
+                    KeyboardModifiers::default(),
+                )))
+                .await
+                .unwrap();
+        }
+        assert!(controller
+            .enqueue_event(QueuedHidEvent::Reset)
+            .await
+            .is_err());
+        controller.start_event_worker().await;
+        tokio::time::timeout(Duration::from_secs(1), done.notified())
+            .await
+            .unwrap();
+        assert!(!pressed.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn relative_motion_is_accumulated_but_absolute_is_replaced() {
+        let mut pending = Some(MouseEvent::move_rel(100, -20));
+        merge_pending_move(&mut pending, MouseEvent::move_rel(80, 30));
+        assert_eq!(
+            (pending.as_ref().unwrap().x, pending.as_ref().unwrap().y),
+            (180, 10)
+        );
+        merge_pending_move(&mut pending, MouseEvent::move_abs(10, 20));
+        merge_pending_move(&mut pending, MouseEvent::move_abs(30, 40));
+        assert_eq!(
+            (pending.as_ref().unwrap().x, pending.as_ref().unwrap().y),
+            (30, 40)
+        );
     }
 }

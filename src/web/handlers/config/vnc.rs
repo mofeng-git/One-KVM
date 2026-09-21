@@ -1,20 +1,22 @@
 use axum::{extract::State, Json};
-use std::sync::Arc;
 
 use crate::error::Result;
-use crate::state::AppState;
+use crate::web::state::RemoteAccessApiState;
 
-use super::apply::{apply_vnc_config, try_apply_lock, ConfigApplyOptions};
 use super::types::{VncConfigResponse, VncConfigUpdate, VncStatusResponse};
+use crate::runtime::{try_apply_lock, ConfigApplyOptions};
 
-fn validate_candidate(state: &Arc<AppState>, config: &crate::config::VncConfig) -> Result<()> {
+fn validate_candidate(
+    state: &RemoteAccessApiState,
+    config: &crate::config::VncConfig,
+) -> Result<()> {
     let mut candidate = state.config.get().as_ref().clone();
     candidate.vnc = config.clone();
     crate::video::codec_constraints::validate_third_party_codec_compatibility(&candidate)
 }
 
 async fn persist_and_apply(
-    state: &Arc<AppState>,
+    state: &RemoteAccessApiState,
     old_config: crate::config::VncConfig,
     new_config: crate::config::VncConfig,
 ) -> Result<crate::config::VncConfig> {
@@ -26,30 +28,26 @@ async fn persist_and_apply(
         })
         .await?;
     let stored_config = state.config.get().vnc.clone();
-    apply_vnc_config(
-        state,
-        &old_config,
-        &stored_config,
-        ConfigApplyOptions::preserving_service_state(),
-    )
-    .await?;
+    state
+        .coordinator
+        .apply_vnc(
+            &old_config,
+            &stored_config,
+            ConfigApplyOptions::preserving_service_state(),
+        )
+        .await?;
     Ok(stored_config)
 }
 
-async fn current_status(state: &Arc<AppState>) -> (crate::vnc::VncServiceStatus, usize) {
-    let guard = state.vnc.read().await;
-    if let Some(ref service) = *guard {
-        (service.status().await, service.connection_count())
-    } else {
-        (crate::vnc::VncServiceStatus::Stopped, 0)
-    }
+async fn current_status(state: &RemoteAccessApiState) -> (crate::vnc::VncServiceStatus, usize) {
+    state.coordinator.vnc_status().await
 }
 
-pub async fn get_vnc_config(State(state): State<Arc<AppState>>) -> Json<VncConfigResponse> {
+pub async fn get_vnc_config(State(state): State<RemoteAccessApiState>) -> Json<VncConfigResponse> {
     Json(VncConfigResponse::from(&state.config.get().vnc))
 }
 
-pub async fn get_vnc_status(State(state): State<Arc<AppState>>) -> Json<VncStatusResponse> {
+pub async fn get_vnc_status(State(state): State<RemoteAccessApiState>) -> Json<VncStatusResponse> {
     let config = state.config.get().vnc.clone();
     let (status, connection_count) = current_status(&state).await;
 
@@ -57,12 +55,12 @@ pub async fn get_vnc_status(State(state): State<Arc<AppState>>) -> Json<VncStatu
 }
 
 pub async fn update_vnc_config(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
     Json(req): Json<VncConfigUpdate>,
 ) -> Result<Json<VncConfigResponse>> {
     req.validate()?;
 
-    let _apply_guard = try_apply_lock(&state.config_apply_locks.vnc, "vnc")?;
+    let _apply_guard = try_apply_lock(&state.vnc_apply_lock, "vnc")?;
     let old_config = state.config.get().vnc.clone();
     let mut merged_config = old_config.clone();
     req.apply_to(&mut merged_config);
@@ -73,23 +71,24 @@ pub async fn update_vnc_config(
 }
 
 pub async fn start_vnc_service(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<VncStatusResponse>> {
-    let _apply_guard = try_apply_lock(&state.config_apply_locks.vnc, "vnc")?;
+    let _apply_guard = try_apply_lock(&state.vnc_apply_lock, "vnc")?;
     let stored_config = state.config.get().vnc.clone();
-    let runtime_config = state.runtime_third_party_config().await.vnc;
+    let runtime_config = state.coordinator.runtime_config().await.vnc;
     let mut start_config = stored_config.clone();
     start_config.enabled = true;
     if start_config.password.as_deref().unwrap_or("").is_empty() {
         start_config.password = stored_config.password.clone();
     }
-    apply_vnc_config(
-        &state,
-        &runtime_config,
-        &start_config,
-        ConfigApplyOptions::runtime_only(),
-    )
-    .await?;
+    state
+        .coordinator
+        .apply_vnc(
+            &runtime_config,
+            &start_config,
+            ConfigApplyOptions::runtime_only(),
+        )
+        .await?;
     let (status, connection_count) = current_status(&state).await;
 
     Ok(Json(VncStatusResponse::new(
@@ -100,20 +99,21 @@ pub async fn start_vnc_service(
 }
 
 pub async fn stop_vnc_service(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<VncStatusResponse>> {
-    let _apply_guard = try_apply_lock(&state.config_apply_locks.vnc, "vnc")?;
+    let _apply_guard = try_apply_lock(&state.vnc_apply_lock, "vnc")?;
     let stored_config = state.config.get().vnc.clone();
-    let runtime_config = state.runtime_third_party_config().await.vnc;
+    let runtime_config = state.coordinator.runtime_config().await.vnc;
     let mut stop_config = stored_config.clone();
     stop_config.enabled = false;
-    apply_vnc_config(
-        &state,
-        &runtime_config,
-        &stop_config,
-        ConfigApplyOptions::runtime_only(),
-    )
-    .await?;
+    state
+        .coordinator
+        .apply_vnc(
+            &runtime_config,
+            &stop_config,
+            ConfigApplyOptions::runtime_only(),
+        )
+        .await?;
 
     Ok(Json(VncStatusResponse::new(
         &stored_config,

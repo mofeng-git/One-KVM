@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import HidDriverForm from '@/components/HidDriverForm.vue'
+import { selectionFrom, readPendingHid, writePendingHid } from '@/lib/hidGuide'
+
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -77,13 +80,8 @@ const audioSupported = computed(() => platform.value?.audio.available ?? true)
 const totalSteps = 4
 const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
-const hidBackend = ref('ch9329')
-const ch9329Port = ref('')
-const ch9329Baudrate = ref(9600)
-const otgUdc = ref('')
-const hidOtgProfile = ref('full_no_consumer')
-const otgMsdEnabled = ref(true)
-const otgKeyboardLeds = ref(true)
+const hidSelection = ref(readPendingHid()?.selection ?? selectionFrom())
+const hidSelectionValid = ref(false)
 
 const ttydEnabled = ref(false)
 const ttydAvailable = ref(false)
@@ -154,15 +152,6 @@ const {
   refreshingInputStatus,
 } = videoConfiguration
 
-function applyOtgDefaults() {
-  if (hidBackend.value !== 'otg') return
-
-  hidOtgProfile.value = 'full_no_consumer'
-  otgKeyboardLeds.value = true
-}
-
-const baudRates = [9600, 19200, 38400, 57600, 115200]
-
 const stepLabels = computed(() => [
   t('setup.stepAccount'),
   t('setup.stepAudioVideo'),
@@ -231,29 +220,10 @@ watch(videoDevice, (newDevice) => {
   }
 })
 
-// Watch HID backend change to set defaults
-watch(hidBackend, (newBackend) => {
-  if (newBackend === 'ch9329' && !ch9329Port.value && devices.value.serial.length > 0) {
-    ch9329Port.value = devices.value.serial[0]?.path || ''
-  }
-  if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
-    otgUdc.value = devices.value.udc[0]?.name || ''
-  }
-  applyOtgDefaults()
-})
-
-watch(otgUdc, () => {
-  applyOtgDefaults()
-})
-
 onMounted(async () => {
   try {
     const status = await authStore.checkSetupStatus()
     platform.value = status.platform
-    if (isWindows.value) {
-      hidBackend.value = 'ch9329'
-      otgMsdEnabled.value = false
-    }
     if (!audioSupported.value) {
       audioEnabled.value = false
       audioDevice.value = '__none__'
@@ -269,16 +239,6 @@ onMounted(async () => {
     if (result.video.length > 0 && result.video[0]) {
       videoDevice.value = result.video[0].path
     }
-
-    // Auto-select first serial device for CH9329
-    if (result.serial.length > 0 && result.serial[0]) {
-      ch9329Port.value = result.serial[0].path
-    }
-
-    if (!isWindows.value && result.udc.length > 0 && result.udc[0]) {
-      otgUdc.value = result.udc[0].name
-    }
-    applyOtgDefaults()
 
     // Auto-select audio device if available (and no video device to trigger watch)
     if (audioSupported.value && result.audio.length > 0 && !audioDevice.value) {
@@ -356,14 +316,11 @@ function validateStep2(): boolean {
 }
 
 function validateStep3(): boolean {
-  if (hidBackend.value === 'ch9329' && !ch9329Port.value) {
-    error.value = t('setup.selectSerialPort')
+  if (!hidSelectionValid.value) {
+    error.value = t('hidGuide.selectDevice')
     return false
   }
-  if (hidBackend.value === 'otg' && !otgUdc.value) {
-    error.value = t('setup.selectUdc')
-    return false
-  }
+  writePendingHid({ selection: hidSelection.value, phase: 'selected' })
   return true
 }
 
@@ -372,6 +329,7 @@ function nextStep() {
 
   if (step.value === 1 && !validateStep1()) return
   if (step.value === 2 && !validateStep2()) return
+  if (step.value === 3 && !validateStep3()) return
 
   if (step.value < totalSteps) {
     slideDirection.value = 'forward'
@@ -390,9 +348,22 @@ function prevStep() {
 async function handleSetup() {
   error.value = ''
 
-  if (!validateStep3()) return
+  if (!readPendingHid() || loading.value) return
 
   loading.value = true
+  // Reconcile a previous timed-out account request before submitting again.
+  try {
+    const status = await authStore.checkSetupStatus()
+    if (status.initialized) {
+      loading.value = false
+      await router.push('/login')
+      return
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+    loading.value = false
+    return
+  }
 
   const [width, height] = (videoResolution.value || '').split('x').map(Number)
 
@@ -415,17 +386,8 @@ async function handleSetup() {
     setupData.video_fps = toConfigFps(videoFps.value)
   }
 
-  setupData.hid_backend = hidBackend.value
-  if (hidBackend.value === 'ch9329') {
-    setupData.hid_ch9329_port = ch9329Port.value
-    setupData.hid_ch9329_baudrate = ch9329Baudrate.value
-  }
-  if (hidBackend.value === 'otg' && otgUdc.value) {
-    setupData.hid_otg_udc = otgUdc.value
-    setupData.hid_otg_profile = hidOtgProfile.value
-    setupData.hid_otg_keyboard_leds = otgKeyboardLeds.value
-    setupData.msd_enabled = otgMsdEnabled.value
-  }
+  setupData.hid_backend = 'none'
+  setupData.msd_enabled = false
 
   // Encoder backend setting
   if (encoderBackend.value !== 'auto') {
@@ -441,8 +403,8 @@ async function handleSetup() {
   const success = await authStore.setup(setupData)
 
   if (success) {
-    await authStore.login(username.value, password.value)
-    router.push('/')
+    const loggedIn = await authStore.login(username.value, password.value)
+    router.push(loggedIn ? '/' : '/login')
   } else {
     error.value = authStore.error || t('setup.setupFailed')
   }
@@ -728,92 +690,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
           <div v-else-if="step === 3" key="step3" class="space-y-4">
             <h3 class="text-lg font-medium text-center">{{ t('setup.stepHid') }}</h3>
 
-            <div class="space-y-2">
-              <Label for="hidBackend">{{ t('setup.hidBackend') }}</Label>
-              <Select v-model="hidBackend">
-                <SelectTrigger class="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ch9329">
-                    CH9329 ({{ t('setup.serialHid') }})
-                  </SelectItem>
-                  <SelectItem v-if="!isWindows" value="otg">USB OTG</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <!-- CH9329 Settings -->
-            <div v-if="hidBackend === 'ch9329'" class="space-y-4 p-4 rounded-lg bg-muted/50">
-              <div class="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-                <HelpCircle class="w-4 h-4 mt-0.5 shrink-0" />
-                <p>{{ t('setup.ch9329Help') }}</p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="ch9329Port">{{ t('setup.serialPort') }}</Label>
-                <Select
-                  :model-value="ch9329Port"
-                  @update:model-value="value => ch9329Port = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                >
-                  <SelectTrigger id="ch9329Port" class="w-full">
-                    <SelectValue :placeholder="t('setup.selectSerialPort')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('setup.selectSerialPort') }}</SelectItem>
-                    <SelectItem v-for="port in devices.serial" :key="port.path" :value="port.path">
-                      {{ port.name }} ({{ port.path }})
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="!devices.serial.length" class="text-xs text-muted-foreground">
-                  {{ t('setup.noSerialDevices') }}
-                </p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="ch9329Baudrate">{{ t('setup.baudRate') }}</Label>
-                <Select :model-value="ch9329Baudrate" @update:model-value="value => ch9329Baudrate = Number(value)">
-                  <SelectTrigger class="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="rate in baudRates" :key="rate" :value="rate">
-                      {{ rate }} bps
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <!-- OTG Settings -->
-            <div v-if="hidBackend === 'otg' && !isWindows" class="space-y-4 p-4 rounded-lg bg-muted/50">
-              <div class="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-                <HelpCircle class="w-4 h-4 mt-0.5 shrink-0" />
-                <p>{{ t('setup.otgHelp') }}</p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="otgUdc">{{ t('setup.udc') }}</Label>
-                <Select
-                  :model-value="otgUdc"
-                  @update:model-value="value => otgUdc = value === EMPTY_SELECT_VALUE ? '' : String(value)"
-                >
-                  <SelectTrigger id="otgUdc" class="w-full">
-                    <SelectValue :placeholder="t('setup.selectUdc')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('setup.selectUdc') }}</SelectItem>
-                    <SelectItem v-for="udc in devices.udc" :key="udc.name" :value="udc.name">
-                      {{ udc.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="!devices.udc.length" class="text-xs text-muted-foreground">
-                  {{ t('setup.noUdcDevices') }}
-                </p>
-              </div>
-            </div>
+            <HidDriverForm v-model="hidSelection" @valid="hidSelectionValid = $event" />
           </div>
 
           <!-- Step 4: Extensions Settings -->
@@ -860,8 +737,8 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             {{ t('common.back') }}
           </Button>
 
-          <Button v-if="step < totalSteps" class="flex-1" @click="nextStep">
-            {{ t('common.next') }}
+          <Button v-if="step < totalSteps" class="flex-1" :disabled="step === 3 && !hidSelectionValid" @click="nextStep">
+            {{ t(step === 3 ? 'hidGuide.useConfiguration' : 'common.next') }}
             <ChevronRight class="w-4 h-4 ml-2" />
           </Button>
 
@@ -874,7 +751,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
         <!-- Keyboard shortcuts hint -->
         <p class="text-xs text-muted-foreground text-center">
           <kbd class="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd>
-          {{ t('common.next') }}
+          {{ t(step === 3 ? 'hidGuide.useConfiguration' : 'common.next') }}
           <span v-if="step > 1" class="ml-2">
             <kbd class="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd>
             {{ t('common.back') }}

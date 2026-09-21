@@ -27,9 +27,17 @@ const emit = defineEmits<{
   (e: 'wol', macAddress: string): void
 }>()
 
+const props = withDefaults(defineProps<{
+  /** Whether a hardware ATX controller is configured and available. */
+  atxEnabled?: boolean
+}>(), {
+  atxEnabled: false,
+})
+
 const { t } = useI18n()
 
-const activeTab = ref('atx')
+const activeTab = ref(props.atxEnabled ? 'atx' : 'wol')
+const showAtxControls = computed(() => props.atxEnabled)
 const tabTriggerClass = 'h-8 rounded-md border-0 bg-transparent text-center text-xs text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
 
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
@@ -194,12 +202,17 @@ watch(
   },
   { immediate: true },
 )
+
+watch(showAtxControls, (enabled) => {
+  // A disabled ATX controller must never leave the hidden ATX tab selected.
+  if (!enabled) activeTab.value = 'wol'
+})
 </script>
 
 <template>
   <div class="p-2.5 space-y-2.5">
     <Tabs v-model="activeTab">
-      <TabsList class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-0.5">
+      <TabsList v-if="showAtxControls" class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-0.5">
         <TabsTrigger
           value="atx"
           :class="tabTriggerClass"
@@ -217,7 +230,7 @@ watch(
       </TabsList>
 
       <!-- ATX Tab -->
-      <TabsContent value="atx" class="mt-2.5 space-y-2.5">
+      <TabsContent v-if="showAtxControls" value="atx" class="mt-2.5 space-y-2.5">
         <!-- Status -->
         <div class="grid grid-cols-2 gap-2">
           <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">

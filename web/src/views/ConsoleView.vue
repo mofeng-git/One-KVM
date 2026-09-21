@@ -10,10 +10,11 @@ import { useConsoleEvents } from '@/composables/useConsoleEvents'
 import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
-import { useVideoScaling } from '@/composables/useVideoScaling'
+import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
 import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
+import { useConsoleLayout } from '@/composables/useConsoleLayout'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { getMicrophone } from '@/composables/useMicrophone'
 import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi, uacApi } from '@/api'
@@ -24,14 +25,18 @@ import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/key
 import { toast } from 'vue-sonner'
 import { cn, generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
+import { getHidStatus } from '@/lib/hidStatus'
 import { videoDebugLog } from '@/lib/debugLog'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { isAudioDeviceLostStateReason, isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
 import type { StreamDeviceLostEventData, StreamStateChangedEventData } from '@/types/websocket'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
 
-import StatusCard, { type StatusDetail } from '@/components/StatusCard.vue'
+import StatusCard, { type StatusDetail, type ConnectionStatus } from '@/components/StatusCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
+import ConsoleHeaderActions from '@/components/ConsoleHeaderActions.vue'
+import { provideConsoleAppearance } from '@/composables/useConsoleAppearance'
+import ConsoleStatusSummary, { type ConsoleStatusItem } from '@/components/ConsoleStatusSummary.vue'
 import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
@@ -100,6 +105,19 @@ const consoleEvents = useConsoleEvents({
 })
 
 const videoMode = ref<VideoMode>('mjpeg')
+const VIDEO_ROTATIONS: VideoRotation[] = [0, 90, 180, 270]
+const storedVideoRotation = Number(localStorage.getItem('videoRotation'))
+const videoRotation = ref<VideoRotation>(
+  VIDEO_ROTATIONS.includes(storedVideoRotation as VideoRotation)
+    ? storedVideoRotation as VideoRotation
+    : 0,
+)
+
+function setVideoRotation(rotation: VideoRotation) {
+  if (!VIDEO_ROTATIONS.includes(rotation)) return
+  videoRotation.value = rotation
+  localStorage.setItem('videoRotation', String(rotation))
+}
 const computerUseOpen = ref(false)
 const computerUseSession = ref<ComputerUseSession | null>(null)
 const computerUseTimeline = ref<ComputerUseTimelineItem[]>([])
@@ -130,10 +148,11 @@ const {
   sourceSizeAvailable,
   stageClass: videoStageClass,
   containerStyle: videoContainerStyle,
+  contentStyle: videoContentStyle,
   updateSourceSize: updateVideoSourceSize,
   clearSourceSize: clearVideoSourceSize,
   setScaleMode: setVideoScaleMode,
-} = useVideoScaling()
+} = useVideoScaling({ rotation: videoRotation })
 
 const backendFps = ref(0)
 
@@ -208,7 +227,7 @@ const isConsoleActive = ref(false)
 function syncMouseModeFromConfig() {
   const mouseAbsolute = configStore.hid?.mouse_absolute
   if (typeof mouseAbsolute !== 'boolean') return
-  const nextMode: 'absolute' | 'relative' = mouseAbsolute ? 'absolute' : 'relative'
+  const nextMode: 'absolute' | 'relative' = mouseAbsolute && configStore.hid?.backend !== 'bluetooth' ? 'absolute' : 'relative'
   if (mouseMode.value !== nextMode) {
     resetTouchInput()
     mouseMode.value = nextMode
@@ -236,13 +255,19 @@ const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
 const featureVisibility = useFeatureVisibility()
 const { isDark, toggleTheme } = useTheme()
+const { consoleLayout } = useConsoleLayout()
+provideConsoleAppearance(consoleLayout)
 const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
+const showPower = computed(() => featureVisibility.value.power)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
 const showComputerUse = computed(() => featureVisibility.value.computerUse)
 const showPasteText = computed(() => featureVisibility.value.pasteText)
 
-const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
+const videoStatus = computed<ConnectionStatus>(() => {
   if (wsNetworkError.value) return 'connecting'
+  if (streamSignalState.value === 'no_signal') return 'no_signal'
+  if (streamSignalState.value === 'device_busy') return 'busy'
+  if (streamSignalState.value === 'device_lost') return 'error'
 
   if (videoError.value) return 'error'
   if (videoLoading.value) return 'connecting'
@@ -253,6 +278,24 @@ const videoStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   if (videoMode.value === 'mjpeg' && mjpegFrameReceived.value) return 'connected'
   if (systemStore.stream?.online) return 'connected'
   return 'disconnected'
+})
+
+// Optional idle devices are neutral; video and HID must stay visible when unavailable.
+const consoleStatusItems = computed<ConsoleStatusItem[]>(() => {
+  const items: ConsoleStatusItem[] = [
+    { id: 'video', title: t('statusCard.video'), status: videoStatus.value,
+      quickInfo: videoQuickInfo.value, details: videoDetails.value, required: true,
+      errorMessage: showSignalOverlay.value ? signalOverlayInfo.value.title : videoErrorMessage.value },
+    { id: 'audio', title: t('statusCard.audio'), status: audioStatus.value,
+      quickInfo: audioQuickInfo.value, details: audioDetails.value, errorMessage: audioErrorMessage.value },
+    { id: 'hid', title: t('statusCard.hid'), status: hidStatus.value,
+      quickInfo: hidQuickInfo.value, details: hidDetails.value, errorMessage: hidErrorMessage.value, required: true },
+  ]
+  if (showMsdStatusCard.value) items.push({
+    id: 'msd', title: t('statusCard.msd'), status: msdStatus.value,
+    quickInfo: msdQuickInfo.value, details: msdDetails.value, errorMessage: msdErrorMessage.value,
+  })
+  return items
 })
 
 function openStatsSheet() {
@@ -287,6 +330,7 @@ const isMjpegPaused = computed(() => {
 })
 
 const videoQuickInfo = computed(() => {
+  if (videoStatus.value === 'no_signal' || videoStatus.value === 'busy') return t(`status.${videoStatus.value}`)
   const stream = systemStore.stream
   if (!stream?.resolution) return ''
   const resShort = getResolutionShortName(stream.resolution[0], stream.resolution[1])
@@ -305,8 +349,9 @@ const videoDetails = computed<StatusDetail[]>(() => {
   const formatDisplay = inputFmt === outputFmt ? inputFmt : `${inputFmt} → ${outputFmt}`
 
   const targetFpsValue = formatFpsValue(stream.targetFps ?? 0)
-  const actualFpsValue = paused ? t('statusCard.paused') : formatFpsValue(receivedFps)
-  const actualStatus: StatusDetail['status'] = paused
+  const signalUnavailable = streamSignalState.value !== 'ok'
+  const actualFpsValue = signalUnavailable ? videoQuickInfo.value : paused ? t('statusCard.paused') : formatFpsValue(receivedFps)
+  const actualStatus: StatusDetail['status'] = signalUnavailable ? 'warning' : paused
     ? undefined
     : receivedFps > 5 ? 'ok'
       : receivedFps > 0 ? 'warning'
@@ -323,27 +368,15 @@ const videoDetails = computed<StatusDetail[]>(() => {
   return details
 })
 
-const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
-  const hid = systemStore.hid
-  if (hid?.errorCode === 'udc_not_configured') return 'disconnected'
-  if (hid?.error) return 'error'
-
-  if (videoMode.value !== 'mjpeg') {
-    if (webrtc.dataChannelReady.value) return 'connected'
-    if (webrtc.isConnecting.value) return 'connecting'
-    if (webrtc.isConnected.value) return 'connecting'
-  }
-
-  if (hidWs.networkError.value) return 'connecting'
-
-  if (!hidWs.connected.value) return 'disconnected'
-
-  if (hidWs.hidUnavailable.value) return 'disconnected'
-
-  if (hid?.available && hid.online) return 'connected'
-  if (hid?.available && hid.initialized) return 'connecting'
-  return 'disconnected'
-})
+const hidStatus = computed(() => getHidStatus(systemStore.hid, {
+  useWebRtc: videoMode.value !== 'mjpeg',
+  dataChannelReady: webrtc.dataChannelReady.value,
+  rtcConnecting: webrtc.isConnecting.value,
+  rtcConnected: webrtc.isConnected.value,
+  wsConnected: hidWs.connected.value,
+  wsNetworkError: hidWs.networkError.value,
+  wsHidUnavailable: hidWs.hidUnavailable.value,
+}))
 
 const hidQuickInfo = computed(() => {
   const hid = systemStore.hid
@@ -2301,6 +2334,13 @@ function getRenderedVideoRect() {
   const rect = videoElement.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return null
 
+  // For a quarter turn, the transformed element already describes the exact
+  // visible portrait frame. Its original landscape aspect ratio must not be
+  // used to add artificial letterboxing here.
+  if (videoRotation.value === 90 || videoRotation.value === 270) {
+    return rect
+  }
+
   const contentAspectRatio = getActiveVideoAspectRatio()
   if (!contentAspectRatio) {
     return rect
@@ -2330,6 +2370,32 @@ function getRenderedVideoRect() {
   }
 }
 
+function rotateAbsolutePosition(x: number, y: number) {
+  switch (videoRotation.value) {
+    case 90:
+      return { x: y, y: 1 - x }
+    case 180:
+      return { x: 1 - x, y: 1 - y }
+    case 270:
+      return { x: 1 - y, y: x }
+    default:
+      return { x, y }
+  }
+}
+
+function rotateRelativeDelta(dx: number, dy: number) {
+  switch (videoRotation.value) {
+    case 90:
+      return { dx: dy, dy: -dx }
+    case 180:
+      return { dx: -dx, dy: -dy }
+    case 270:
+      return { dx: -dy, dy: dx }
+    default:
+      return { dx, dy }
+  }
+}
+
 function getAbsoluteMousePosition(e: MouseEvent) {
   const rect = getRenderedVideoRect()
   if (!rect) return null
@@ -2337,9 +2403,10 @@ function getAbsoluteMousePosition(e: MouseEvent) {
   const normalizedX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   const normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
 
+  const sourcePosition = rotateAbsolutePosition(normalizedX, normalizedY)
   return {
-    x: Math.round(normalizedX * 32767),
-    y: Math.round(normalizedY * 32767),
+    x: Math.round(sourcePosition.x * 32767),
+    y: Math.round(sourcePosition.y * 32767),
   }
 }
 
@@ -2605,11 +2672,12 @@ function handleTouchPointerMove(e: PointerEvent) {
 
   activePointer.lastX += dx
   activePointer.lastY += dy
-  accumulatedDelta.x += dx
-  accumulatedDelta.y += dy
+  const rotatedDelta = rotateRelativeDelta(dx, dy)
+  accumulatedDelta.x += rotatedDelta.dx
+  accumulatedDelta.y += rotatedDelta.dy
   mousePosition.value = {
-    x: mousePosition.value.x + dx,
-    y: mousePosition.value.y + dy,
+    x: mousePosition.value.x + rotatedDelta.dx,
+    y: mousePosition.value.y + rotatedDelta.dy,
   }
   updateLocalCrosshairByDelta(dx, dy)
   requestMouseMoveFlush()
@@ -2680,14 +2748,16 @@ function handleMouseMove(e: MouseEvent) {
       const dy = e.movementY
 
       if (dx !== 0 || dy !== 0) {
-        accumulatedDelta.x += dx
-        accumulatedDelta.y += dy
+        const rotatedDelta = rotateRelativeDelta(dx, dy)
+        accumulatedDelta.x += rotatedDelta.dx
+        accumulatedDelta.y += rotatedDelta.dy
         requestMouseMoveFlush()
       }
 
+      const rotatedDelta = rotateRelativeDelta(dx, dy)
       mousePosition.value = {
-        x: mousePosition.value.x + dx,
-        y: mousePosition.value.y + dy,
+        x: mousePosition.value.x + rotatedDelta.dx,
+        y: mousePosition.value.y + rotatedDelta.dy,
       }
     }
   }
@@ -3042,7 +3112,7 @@ function handleToggleMouseMode() {
     exitPointerLock()
   }
 
-  mouseMode.value = mouseMode.value === 'absolute' ? 'relative' : 'absolute'
+  mouseMode.value = configStore.hid?.backend === 'bluetooth' ? 'relative' : (mouseMode.value === 'absolute' ? 'relative' : 'absolute')
   pendingMouseMove = null
   accumulatedDelta = { x: 0, y: 0 }
   lastMousePosition.value = { x: 0, y: 0 }
@@ -3156,17 +3226,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen h-dvh flex flex-col bg-background">
-    <header class="shrink-0 border-b bg-background">
+  <div class="relative h-screen h-dvh flex flex-col bg-background">
+    <header class="shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
       <div class="px-2 sm:px-4">
-        <div class="h-10 sm:h-14 flex items-center justify-between">
-          <div class="flex items-center gap-2 sm:gap-6">
-            <div class="flex items-center gap-1.5 sm:gap-2">
+        <div class="console-header__row h-10 sm:h-14 flex items-center justify-between">
+          <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-6">
+            <div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap sm:gap-2">
               <BrandMark size="md" class="hidden sm:block" />
               <BrandMark size="sm" class="sm:hidden" />
               <span class="font-bold text-sm sm:text-lg">One-KVM</span>
             </div>
-            <div class="flex md:hidden items-center gap-1">
+            <ConsoleStatusSummary
+              v-if="consoleLayout !== 'current'"
+              :items="consoleStatusItems"
+              :show-video-info="consoleLayout === 'sidebar'"
+            />
+            <div v-else class="flex md:hidden items-center gap-1">
               <StatusCard
                 :title="t('statusCard.video')"
                 type="video"
@@ -3188,8 +3263,19 @@ onUnmounted(() => {
               />
             </div>
           </div>
-          <div class="flex items-center gap-1 sm:gap-2">
-            <div class="hidden md:flex items-center gap-2">
+          <div v-if="consoleLayout === 'floating'" id="console-header-toolbar" class="console-header__toolbar" />
+          <div class="console-header__account flex shrink-0 items-center gap-1 sm:gap-2">
+            <ConsoleHeaderActions
+              v-if="consoleLayout === 'floating'"
+              :show-stats="showConnectionStats"
+              :show-terminal="showTerminal"
+              :terminal-running="!!ttydStatus?.running"
+              :show-computer-use="showComputerUse"
+              @open-stats="openStatsSheet"
+              @open-terminal="openTerminal"
+              @open-computer-use="openComputerUse"
+            />
+            <div v-if="consoleLayout === 'current'" class="hidden md:flex items-center gap-2">
               <StatusCard
                 :title="t('statusCard.video')"
                 type="video"
@@ -3269,10 +3355,15 @@ onUnmounted(() => {
         </div>
       </div>
     </header>
+    <Teleport :key="consoleLayout" defer :to="consoleLayout === 'floating' ? '#console-header-toolbar' : 'body'" :disabled="consoleLayout !== 'floating'">
     <ActionBar
+      :layout="consoleLayout"
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
+      :video-rotation="videoRotation"
       :ttyd-running="ttydStatus?.running"
+      :show-power="showPower"
+      :atx-enabled="systemStore.atx?.available === true"
       :show-terminal="showTerminal"
       :show-computer-use="showComputerUse"
       :show-paste-text="showPasteText"
@@ -3285,6 +3376,7 @@ onUnmounted(() => {
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
       @toggle-mouse-mode="handleToggleMouseMode"
       @update:video-mode="handleVideoModeChange"
+      @update:video-rotation="setVideoRotation"
       @power-short="handlePowerShort"
       @power-long="handlePowerLong"
       @reset="handleReset"
@@ -3292,7 +3384,11 @@ onUnmounted(() => {
       @open-terminal="openTerminal"
       @open-computer-use="openComputerUse"
     />
-    <div class="flex-1 overflow-hidden relative">
+    </Teleport>
+    <div
+      class="flex-1 overflow-hidden relative transition-[padding] duration-300"
+      :class="consoleLayout === 'sidebar' && 'pl-14 sm:pl-16'"
+    >
       <div class="absolute inset-0 dot-grid-bg" />
       <div class="relative flex h-full w-full min-w-0 items-stretch gap-3 p-1 sm:p-4">
         <div
@@ -3323,32 +3419,34 @@ onUnmounted(() => {
               @wheel.prevent="handleWheel"
               @contextmenu="handleContextMenu"
             >
-          <img
-            v-show="videoMode === 'mjpeg'"
-            ref="videoRef"
-            :src="mjpegUrl"
-            class="size-full object-contain pointer-events-none select-none"
-            :alt="t('console.videoAlt')"
-            draggable="false"
-            @load="handleVideoLoad"
-            @error="handleVideoError"
-          />
-          <video
-            v-show="videoMode !== 'mjpeg'"
-            ref="webrtcVideoRef"
-            class="size-full object-contain pointer-events-none"
-            autoplay
-            playsinline
-            @loadedmetadata="handleWebRTCVideoResize"
-            @loadeddata="handleWebRTCVideoResize"
-            @resize="handleWebRTCVideoResize"
-          />
-          <img
-            v-if="frameOverlayUrl"
-            :src="frameOverlayUrl"
-            class="absolute inset-0 size-full object-contain pointer-events-none"
-            alt=""
-          />
+              <div class="relative shrink-0" :style="videoContentStyle">
+                <img
+                  v-show="videoMode === 'mjpeg'"
+                  ref="videoRef"
+                  :src="mjpegUrl"
+                  class="size-full object-contain pointer-events-none select-none"
+                  :alt="t('console.videoAlt')"
+                  draggable="false"
+                  @load="handleVideoLoad"
+                  @error="handleVideoError"
+                />
+                <video
+                  v-show="videoMode !== 'mjpeg'"
+                  ref="webrtcVideoRef"
+                  class="size-full object-contain pointer-events-none"
+                  autoplay
+                  playsinline
+                  @loadedmetadata="handleWebRTCVideoResize"
+                  @loadeddata="handleWebRTCVideoResize"
+                  @resize="handleWebRTCVideoResize"
+                />
+                <img
+                  v-if="frameOverlayUrl"
+                  :src="frameOverlayUrl"
+                  class="absolute inset-0 size-full object-contain pointer-events-none"
+                  alt=""
+                />
+              </div>
           <div
             v-if="cursorVisible && localCrosshairPos"
             class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
@@ -3532,6 +3630,13 @@ onUnmounted(() => {
     </Teleport>
     <div id="keyboard-anchor"></div>
     <InfoBar
+      v-if="consoleLayout !== 'floating' || pressedKeys.length > 0 || isPointerLocked"
+      :compact="consoleLayout !== 'current'"
+      :captured="isPointerLocked"
+      :minimal="consoleLayout === 'floating'"
+      :class="consoleLayout === 'floating'
+        ? 'pointer-events-none absolute bottom-2 left-1/2 z-30 max-w-[calc(100%-1rem)] -translate-x-1/2 rounded-lg border shadow-sm !w-auto'
+        : 'shrink-0'"
       :pressed-keys="pressedKeys"
       :caps-lock="keyboardLed.capsLock"
       :num-lock="keyboardLed.numLock"
@@ -3599,6 +3704,27 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Expanded controls may overlap header actions, but stay outside the video stage. */
+.console-header--floating .console-header__row {
+  position: relative;
+  height: 60px;
+}
+.console-header__toolbar {
+  position: absolute;
+  z-index: 40;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  max-width: 64rem;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.console-header__toolbar :deep(.console-action-bar) {
+  pointer-events: auto;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;

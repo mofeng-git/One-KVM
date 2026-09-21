@@ -56,6 +56,9 @@ impl AppConfig {
             self.otg_network.enabled = false;
             self.uac.enabled = false;
         }
+        if self.hid.backend == HidBackend::Bluetooth {
+            self.hid.mouse_absolute = false;
+        }
         self.atx.normalize();
     }
 

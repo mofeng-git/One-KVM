@@ -21,7 +21,7 @@ build_arch() {
 
     case "${CHINAMIRRO:-}" in
         1|true|TRUE|yes|YES|on|ON)
-            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://gh-proxy.com/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-docker.1ms.run/library/debian:11}"
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://gh-proxy.com/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-docker.1ms.run/library/debian:12}"
             cross_build_opts="$cross_build_opts --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg NO_PROXY="
             cross_build_opts="$cross_build_opts --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg no_proxy="
             echo "=== China mirror acceleration: enabled ==="

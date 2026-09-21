@@ -44,7 +44,10 @@ const PARAM_CFG_VID_PID_OFFSET: usize = 11;
 const PARAM_CFG_STRING_FLAGS_OFFSET: usize = 36;
 const DESCRIPTOR_READ_RETRIES: usize = 3;
 const DESCRIPTOR_RETRY_DELAY_MS: u64 = 80;
-const DESCRIPTOR_APPLY_RESET_WAIT_MS: u64 = 3000;
+
+// CH9329/CH9329F can take several seconds to restart after a descriptor update.
+const DESCRIPTOR_APPLY_RESET_WAIT_MS: u64 = 5000;
+
 const USB_STRING_MAX_LEN: usize = 23;
 const USB_STRING_FLAG_ENABLE: u8 = 0x80;
 const USB_STRING_FLAG_MANUFACTURER: u8 = 0x04;
@@ -235,6 +238,8 @@ pub struct Ch9329Backend {
     last_abs_y: Arc<AtomicU16>,
     relative_mouse_active: Arc<AtomicBool>,
     hybrid_mouse: bool,
+    macos_drag: bool,
+    macos_drag_state: Mutex<super::macos_drag::MacosDrag>,
     runtime: Arc<Ch9329RuntimeState>,
 }
 
@@ -248,6 +253,15 @@ impl Ch9329Backend {
     }
 
     pub fn with_options(port_path: &str, baud_rate: u32, hybrid_mouse: bool) -> Result<Self> {
+        Self::with_compatibility_options(port_path, baud_rate, hybrid_mouse, false)
+    }
+
+    pub fn with_compatibility_options(
+        port_path: &str,
+        baud_rate: u32,
+        hybrid_mouse: bool,
+        macos_drag: bool,
+    ) -> Result<Self> {
         Ok(Self {
             port_path: port_path.to_string(),
             baud_rate,
@@ -263,6 +277,8 @@ impl Ch9329Backend {
             last_abs_y: Arc::new(AtomicU16::new(0)),
             relative_mouse_active: Arc::new(AtomicBool::new(false)),
             hybrid_mouse,
+            macos_drag,
+            macos_drag_state: Mutex::new(super::macos_drag::MacosDrag::default()),
             runtime: Arc::new(Ch9329RuntimeState::new()),
         })
     }
@@ -368,33 +384,41 @@ impl Ch9329Backend {
 
         Self::write_packet(port, address, cmd, data)?;
 
-        let mut pending = Vec::with_capacity(128);
+        // Keep enough room for a full parameter response and adjacent packets.
+        let mut pending = Vec::with_capacity(256);
         let deadline = Instant::now() + Duration::from_millis(RESPONSE_TIMEOUT_MS);
         let expected_ok = expected_response_cmd(cmd, false);
         let expected_err = expected_response_cmd(cmd, true);
 
         loop {
-            let mut chunk = [0u8; 128];
+            let mut chunk = [0u8; 256];
             match port.read(&mut chunk) {
                 Ok(n) if n > 0 => {
                     pending.extend_from_slice(&chunk[..n]);
 
+                    // Drain every complete frame so adjacent/out-of-order responses
+                    // cannot block the response for the current command.
                     while let Some((response, consumed)) = try_extract_response(&pending) {
+                        let current_response_cmd = response.cmd;
                         pending.drain(..consumed);
-                        if response.cmd == expected_ok || response.cmd == expected_err {
+
+                        if current_response_cmd == expected_ok
+                            || current_response_cmd == expected_err
+                        {
                             return Ok(response);
                         }
 
                         trace!(
-                            "CH9329 ignored out-of-order response: expected 0x{:02X}/0x{:02X}, got 0x{:02X}",
+                            "CH9329 filtered an overlapping packet: expected 0x{:02X}/0x{:02X}, bypass 0x{:02X}",
                             expected_ok,
                             expected_err,
-                            response.cmd
+                            current_response_cmd
                         );
                     }
 
+                    // Bound memory use if a noisy or disconnected port keeps delivering bytes.
                     if pending.len() > MAX_PACKET_SIZE * 4 {
-                        let keep = MAX_PACKET_SIZE;
+                        let keep = MAX_PACKET_SIZE * 2;
                         pending.drain(..pending.len().saturating_sub(keep));
                     }
                 }
@@ -410,15 +434,19 @@ impl Ch9329Backend {
 
             if Instant::now() >= deadline {
                 return Err(Self::backend_error(
-                    format!("No matching response from CH9329 for cmd 0x{:02X}", cmd),
+                    format!(
+                        "No matching response from CH9329 for cmd 0x{:02X}. Remaining buffer: {}",
+                        cmd,
+                        Self::hex_bytes(&pending)
+                    ),
                     "no_response",
                 ));
             }
 
-            thread::sleep(Duration::from_millis(1));
+            // Give the serial driver a short opportunity to deliver the next chunk.
+            thread::sleep(Duration::from_micros(200));
         }
     }
-
     fn try_best_effort_reset(port: &mut dyn serialport::SerialPort, address: u8) {
         if let Err(err) = Self::write_packet(port, address, cmd::RESET, &[]) {
             trace!("CH9329 best-effort reset failed: {}", err);
@@ -698,7 +726,6 @@ impl Ch9329Backend {
         let mut port = Self::open_port(port_path, baud_rate)?;
         Self::read_device_descriptor_on_port(port.as_mut(), DEFAULT_ADDR)
     }
-
     fn open_ready_port(
         port_path: &str,
         baud_rate: u32,
@@ -869,7 +896,7 @@ impl Ch9329Backend {
             match Self::open_ready_port(port_path, baud_rate, address) {
                 Ok((port, info)) => {
                     info!(
-                        "CH9329 reconnected: {}, USB: {}",
+                        "CH9329-compatible chip reconnected: {}, USB: {}",
                         info.version,
                         if info.usb_connected {
                             "connected"
@@ -892,7 +919,6 @@ impl Ch9329Backend {
             }
         }
     }
-
     fn recover_worker_port(
         mut port: Box<dyn serialport::SerialPort>,
         rx: &mpsc::Receiver<WorkerCommand>,
@@ -965,11 +991,12 @@ impl Ch9329Backend {
     }
 
     fn should_send_button_wheel_relative(&self) -> bool {
-        self.hybrid_mouse || self.relative_mouse_active.load(Ordering::Relaxed)
+        (self.hybrid_mouse && !self.macos_drag)
+            || self.relative_mouse_active.load(Ordering::Relaxed)
     }
 
     fn absolute_move_buttons(&self, buttons: u8) -> u8 {
-        if self.hybrid_mouse {
+        if self.hybrid_mouse && !self.macos_drag {
             0
         } else {
             buttons
@@ -1170,7 +1197,7 @@ impl HidBackend for Ch9329Backend {
         match init_rx.recv_timeout(Duration::from_millis(INIT_WAIT_MS)) {
             Ok(Ok(info)) => {
                 info!(
-                    "CH9329 chip detected: {}, USB: {}, LEDs: NumLock={}, CapsLock={}, ScrollLock={}",
+                    "CH9329-compatible chip detected: {}, USB: {}, LEDs: NumLock={}, CapsLock={}, ScrollLock={}",
                     info.version,
                     if info.usb_connected {
                         "connected"
@@ -1189,13 +1216,13 @@ impl HidBackend for Ch9329Backend {
             Ok(Err(err)) => {
                 self.record_error(
                     format!(
-                        "CH9329 not responding on {} @ {} baud: {}",
+                        "CH9329-compatible chip not responding on {} @ {} baud: {}",
                         self.port_path, self.baud_rate, err
                     ),
                     "init_failed",
                 );
                 warn!(
-                    "CH9329 not responding on {} @ {} baud, retrying in background: {}",
+                    "CH9329-compatible chip not responding on {} @ {} baud, retrying in background: {}",
                     self.port_path, self.baud_rate, err
                 );
                 *self.worker_tx.lock() = Some(tx);
@@ -1205,9 +1232,12 @@ impl HidBackend for Ch9329Backend {
             Err(_) => {
                 let _ = tx.send(WorkerCommand::Shutdown);
                 let _ = handle.join();
-                self.record_error("Timed out waiting for CH9329 worker init", "init_timeout");
+                self.record_error(
+                    "Timed out waiting for CH9329-compatible worker init",
+                    "init_timeout",
+                );
                 Err(AppError::Internal(
-                    "Timed out waiting for CH9329 initialization".to_string(),
+                    "Timed out waiting for CH9329-compatible initialization".to_string(),
                 ))
             }
         }
@@ -1255,6 +1285,31 @@ impl HidBackend for Ch9329Backend {
 
     async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
         let buttons = self.mouse_buttons.load(Ordering::Relaxed);
+
+        if self.macos_drag {
+            use super::macos_drag::MouseReport;
+            let mut state = self.macos_drag_state.lock();
+            let (buttons, reports) = state.plan(event, buttons, *self.screen_resolution.read());
+            self.mouse_buttons.store(buttons, Ordering::Relaxed);
+            for report in reports {
+                match report {
+                    MouseReport::Absolute { buttons, x, y } => {
+                        let x = (u32::from(x) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        let y = (u32::from(y) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+                        self.send_mouse_absolute(buttons, x, y, 0)?;
+                    }
+                    MouseReport::Relative {
+                        buttons,
+                        dx,
+                        dy,
+                        wheel,
+                    } => {
+                        self.send_mouse_relative(buttons, dx, dy, wheel)?;
+                    }
+                }
+            }
+            return Ok(());
+        }
 
         match event.event_type {
             MouseEventType::Move => {
@@ -1345,6 +1400,7 @@ impl HidBackend for Ch9329Backend {
         }
 
         self.mouse_buttons.store(0, Ordering::Relaxed);
+        self.macos_drag_state.lock().reset();
         self.last_abs_x.store(0, Ordering::Relaxed);
         self.last_abs_y.store(0, Ordering::Relaxed);
         self.relative_mouse_active.store(false, Ordering::Relaxed);
@@ -1650,11 +1706,65 @@ mod tests {
     }
 
     #[test]
-    fn test_hybrid_mouse_routes_buttons_and_wheel_to_relative_reports() {
+    fn test_hybrid_mouse_preserves_linux_compatibility_routing() {
         let backend = Ch9329Backend::with_options("/dev/null", DEFAULT_BAUD_RATE, true).unwrap();
 
         assert!(backend.should_send_button_wheel_relative());
         assert_eq!(backend.absolute_move_buttons(0x07), 0);
+    }
+
+    #[tokio::test]
+    async fn test_macos_drag_uses_absolute_edges_and_relative_motion() {
+        let backend =
+            Ch9329Backend::with_compatibility_options("/dev/null", DEFAULT_BAUD_RATE, false, true)
+                .unwrap();
+        let (worker_tx, worker_rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(worker_tx);
+        backend.set_screen_resolution(1920, 1080);
+
+        backend
+            .send_mouse(MouseEvent::move_abs(8000, 8000))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_down(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::move_abs(8064, 8064))
+            .await
+            .unwrap();
+        backend
+            .send_mouse(MouseEvent::button_up(crate::hid::MouseButton::Left))
+            .await
+            .unwrap();
+
+        let packets: Vec<_> = worker_rx
+            .try_iter()
+            .filter_map(|command| match command {
+                WorkerCommand::Packet { cmd, data } => Some((cmd, data)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            packets,
+            vec![
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x01, 0xE8, 0x03, 0xE8, 0x03, 0x00],
+                ),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x01, 0x03, 0x02, 0x00]),
+                (cmd::SEND_MS_REL_DATA, vec![0x01, 0x00, 0x00, 0x00, 0x00]),
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![0x02, 0x00, 0xF0, 0x03, 0xF0, 0x03, 0x00],
+                ),
+            ]
+        );
     }
 
     #[test]

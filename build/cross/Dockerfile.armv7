@@ -1,7 +1,7 @@
-# Cross-compilation image for ARMv7 based on Debian 11
-# Build on Debian 11 (GLIBC 2.31) for maximum runtime compatibility
+# Cross-compilation image for ARMv7 based on Debian 12
+# Build on Debian 12 (GLIBC 2.36) to match the runtime images
 
-ARG DEBIAN_IMAGE=debian:11
+ARG DEBIAN_IMAGE=debian:12
 FROM ${DEBIAN_IMAGE}
 
 ARG CHINAMIRRO=0
@@ -22,8 +22,8 @@ ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
 # Optionally use China mirrors for builds in China.
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
         sed -i -E \
-            -e 's|http://deb.debian.org/debian([[:space:]])|http://mirrors.tuna.tsinghua.edu.cn/debian\1|g' \
-            /etc/apt/sources.list; \
+            -e 's@http://deb.debian.org/debian([[:space:]]|$)@http://mirrors.tuna.tsinghua.edu.cn/debian\1@g' \
+            /etc/apt/sources.list.d/debian.sources; \
     fi
 
 # Install Rust toolchain
@@ -83,8 +83,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install ARMv7 development libraries (without VAAPI/X11 for ARM)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl1.1 \
-    libssl1.1:armhf \
+    libssl3 \
+    libssl3:armhf \
     libasound2-dev:armhf \
     libv4l-dev:armhf \
     libudev-dev:armhf \

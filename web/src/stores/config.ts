@@ -516,8 +516,8 @@ export const useConfigStore = defineStore('config', () => {
     return response
   }
 
-  async function updateHid(update: HidConfigUpdate) {
-    const response = await hidConfigApi.update(update)
+  async function updateHid(update: HidConfigUpdate, signal?: AbortSignal) {
+    const response = await hidConfigApi.update(update, signal)
     hid.value = response
     return response
   }

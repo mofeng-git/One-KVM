@@ -1,5 +1,5 @@
 # Cross-compilation configuration for One-KVM
-# Uses pre-built custom Debian 11 based images for consistent build/runtime environment
+# Uses pre-built custom Debian 12 based images for consistent build/runtime environment
 # See: https://github.com/cross-rs/cross
 
 [build]

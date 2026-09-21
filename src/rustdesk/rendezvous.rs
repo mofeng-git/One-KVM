@@ -128,7 +128,7 @@ pub type RelayCallback = Arc<dyn Fn(String, String, String, Vec<u8>, String) + S
 pub type PunchCallback =
     Arc<dyn Fn(Option<SocketAddr>, String, String, String, Vec<u8>, String) + Send + Sync>;
 
-pub type IntranetCallback = Arc<dyn Fn(String, Vec<u8>, SocketAddr, String, String) + Send + Sync>;
+pub type IntranetCallback = Arc<dyn Fn(String, Vec<u8>, IpAddr, String, String) + Send + Sync>;
 
 pub struct RendezvousMediator {
     config: Arc<RwLock<RustDeskConfig>>,
@@ -143,7 +143,6 @@ pub struct RendezvousMediator {
     relay_callback: Arc<RwLock<Option<RelayCallback>>>,
     punch_callback: Arc<RwLock<Option<PunchCallback>>>,
     intranet_callback: Arc<RwLock<Option<IntranetCallback>>>,
-    listen_port: Arc<RwLock<u16>>,
     shutdown_tx: broadcast::Sender<()>,
 }
 
@@ -166,21 +165,8 @@ impl RendezvousMediator {
             relay_callback: Arc::new(RwLock::new(None)),
             punch_callback: Arc::new(RwLock::new(None)),
             intranet_callback: Arc::new(RwLock::new(None)),
-            listen_port: Arc::new(RwLock::new(21118)),
             shutdown_tx,
         }
-    }
-
-    pub fn set_listen_port(&self, port: u16) {
-        let old_port = *self.listen_port.read();
-        if old_port != port {
-            *self.listen_port.write() = port;
-            self.increment_serial();
-        }
-    }
-
-    pub fn listen_port(&self) -> u16 {
-        *self.listen_port.read()
     }
 
     pub fn increment_serial(&self) {
@@ -430,7 +416,9 @@ impl RendezvousMediator {
     ) -> anyhow::Result<()> {
         let id = self.device_id();
 
-        let local_addrs = get_local_addresses();
+        let local_addrs = tokio::task::spawn_blocking(get_local_addresses)
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to inspect local addresses: {error}"))?;
         if local_addrs.is_empty() {
             debug!("No local addresses available for LocalAddr response");
             return Ok(());
@@ -439,21 +427,18 @@ impl RendezvousMediator {
         let config = self.config.read().clone();
         let rendezvous_addr = config.rendezvous_addr();
 
-        let listen_port = self.listen_port();
-
         let local_ip = local_addrs[0];
-        let local_sock_addr = SocketAddr::new(local_ip, listen_port);
 
         info!(
-            "FetchLocalAddr: calling intranet callback with local_addr={}, rendezvous={}",
-            local_sock_addr, rendezvous_addr
+            "FetchLocalAddr: requesting an on-demand listener for {}, rendezvous={}",
+            local_ip, rendezvous_addr
         );
 
         if let Some(callback) = self.intranet_callback.read().as_ref() {
             callback(
                 rendezvous_addr,
                 peer_socket_addr.to_vec(),
-                local_sock_addr,
+                local_ip,
                 relay_server.to_string(),
                 id,
             );

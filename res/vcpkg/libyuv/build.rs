@@ -5,7 +5,8 @@ use std::{
 };
 
 fn main() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Read the current source path when running, since build artifacts may move.
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("cpp");
 
     println!("cargo:rerun-if-changed=cpp/yuv_ffi.h");

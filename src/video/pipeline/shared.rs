@@ -21,6 +21,7 @@ use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
@@ -28,9 +29,98 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::encoder_state::{build_encoder_state, should_parallel_decode_mjpeg, EncoderThreadState};
 
+#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+#[path = "dmabuf.rs"]
+mod dmabuf;
+
+#[cfg(any(
+    test,
+    all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm"))
+))]
+fn rkmpp_dma_eligible(
+    backend: Option<EncoderBackend>,
+    codec: VideoEncoderType,
+    format: PixelFormat,
+) -> bool {
+    backend == Some(EncoderBackend::Rkmpp)
+        && matches!(codec, VideoEncoderType::H264 | VideoEncoderType::H265)
+        && matches!(
+            format,
+            PixelFormat::Bgr24
+                | PixelFormat::Nv12
+                | PixelFormat::Yuyv
+                | PixelFormat::Rgb24
+                | PixelFormat::Mjpeg
+        )
+}
+
+#[cfg(test)]
+mod dma_selection_tests {
+    use super::*;
+    #[test]
+    fn only_selected_rkmpp_uses_dma() {
+        for backend in [
+            EncoderBackend::Software,
+            EncoderBackend::Vaapi,
+            EncoderBackend::Nvenc,
+            EncoderBackend::Qsv,
+            EncoderBackend::Amf,
+            EncoderBackend::V4l2m2m,
+        ] {
+            for codec in [VideoEncoderType::H264, VideoEncoderType::H265] {
+                for format in [
+                    PixelFormat::Bgr24,
+                    PixelFormat::Nv12,
+                    PixelFormat::Yuyv,
+                    PixelFormat::Rgb24,
+                    PixelFormat::Mjpeg,
+                ] {
+                    assert!(!rkmpp_dma_eligible(Some(backend), codec, format));
+                }
+            }
+        }
+        assert!(!rkmpp_dma_eligible(
+            None,
+            VideoEncoderType::H264,
+            PixelFormat::Nv12
+        ));
+        for codec in [VideoEncoderType::H264, VideoEncoderType::H265] {
+            for format in [
+                PixelFormat::Bgr24,
+                PixelFormat::Nv12,
+                PixelFormat::Yuyv,
+                PixelFormat::Rgb24,
+                PixelFormat::Mjpeg,
+            ] {
+                assert!(rkmpp_dma_eligible(
+                    Some(EncoderBackend::Rkmpp),
+                    codec,
+                    format
+                ));
+            }
+        }
+        for format in [
+            PixelFormat::Nv16,
+            PixelFormat::Nv21,
+            PixelFormat::Nv24,
+            PixelFormat::Yuv420,
+        ] {
+            assert!(!rkmpp_dma_eligible(
+                Some(EncoderBackend::Rkmpp),
+                VideoEncoderType::H264,
+                format
+            ));
+        }
+        assert!(!rkmpp_dma_eligible(
+            Some(EncoderBackend::Rkmpp),
+            VideoEncoderType::VP9,
+            PixelFormat::Nv12
+        ));
+    }
+}
+
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
-const AMLENC_MAX_FPS: u32 = 60;
 /// After this many consecutive timeouts, log a prominent warning.
 const CAPTURE_TIMEOUT_RESTART_THRESHOLD: u32 = 5;
 const CAPTURE_TIMEOUT_SOFT_RESTART_THRESHOLD: u32 = 3;
@@ -49,21 +139,104 @@ use crate::video::capture::status::{
     signal_status_from_capture_kind, CaptureIoErrorKind,
 };
 use crate::video::capture::{BridgeContext, CaptureReadError, CaptureStream};
-use crate::video::codec::h264_bitstream;
 use crate::video::codec::registry::{EncoderBackend, VideoEncoderType};
 use crate::video::codec::MjpegToNv12Decoder;
+use crate::video::codec::{h264_bitstream, h265_bitstream};
 use crate::video::device::parse_bridge_kind;
 use crate::video::device::VideoControlMode;
 use crate::video::format::{PixelFormat, Resolution};
 
-fn amlenc_supported_fps(requested_fps: u32) -> u32 {
-    requested_fps.min(AMLENC_MAX_FPS)
-}
 use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+struct MjpegDecodeJob {
+    data: Vec<u8>,
+    sequence: u64,
+}
+
+fn mjpeg_decode_worker_count(available_parallelism: usize) -> usize {
+    available_parallelism.max(1)
+}
+
+fn spawn_mjpeg_decode_workers(
+    pipeline: &Arc<SharedVideoPipeline>,
+    latest_frame: &Arc<ParkingRwLock<Option<Arc<VideoFrame>>>>,
+    frame_seq_tx: &watch::Sender<u64>,
+    buffer_pool: &Arc<FrameBufferPool>,
+    resolution: Resolution,
+) -> Vec<SyncSender<MjpegDecodeJob>> {
+    let available = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    let worker_count = mjpeg_decode_worker_count(available);
+    let mut senders = Vec::with_capacity(worker_count);
+
+    for worker_id in 0..worker_count {
+        // A rendezvous channel deliberately has no queue. If every decoder is
+        // busy, capture drops the new compressed frame instead of building up
+        // latency behind stale frames.
+        let (tx, rx) = sync_channel::<MjpegDecodeJob>(0);
+        let worker_pipeline = pipeline.clone();
+        let worker_latest_frame = latest_frame.clone();
+        let worker_frame_seq_tx = frame_seq_tx.clone();
+        let worker_buffer_pool = buffer_pool.clone();
+        let thread_name = format!("mjpeg-decoder-{worker_id}");
+        let spawn_result = std::thread::Builder::new()
+            .name(thread_name)
+            .spawn(move || {
+                let mut decoder = MjpegToNv12Decoder::new(resolution);
+                while let Ok(job) = rx.recv() {
+                    let nv12_size = resolution.width as usize * resolution.height as usize * 3 / 2;
+                    let mut nv12 = worker_buffer_pool.take(nv12_size);
+                    let decode_result = decoder.decode_into(&job.data, &mut nv12);
+                    worker_buffer_pool.put(job.data);
+
+                    if let Err(error) = decode_result {
+                        worker_buffer_pool.put(nv12);
+                        warn!("Dropping undecodable MJPEG frame: {}", error);
+                        continue;
+                    }
+                    if !worker_pipeline.running_flag.load(Ordering::Acquire) {
+                        worker_buffer_pool.put(nv12);
+                        break;
+                    }
+
+                    let frame = Arc::new(VideoFrame::from_pooled(
+                        Arc::new(FrameBuffer::new(nv12, Some(worker_buffer_pool.clone()))),
+                        resolution,
+                        PixelFormat::Nv12,
+                        resolution.width,
+                        job.sequence,
+                    ));
+                    let published = {
+                        let mut latest = worker_latest_frame.write();
+                        if latest
+                            .as_ref()
+                            .is_some_and(|current| current.sequence >= job.sequence)
+                        {
+                            false
+                        } else {
+                            *latest = Some(frame);
+                            true
+                        }
+                    };
+                    if published {
+                        let _ = worker_frame_seq_tx.send(job.sequence.wrapping_add(1));
+                    }
+                }
+            });
+
+        match spawn_result {
+            Ok(_) => senders.push(tx),
+            Err(error) => error!("Failed to start MJPEG decoder worker: {}", error),
+        }
+    }
+
+    info!("Started {} parallel MJPEG decoder worker(s)", senders.len());
+    senders
+}
 
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
@@ -75,7 +248,10 @@ pub struct EncodedVideoFrame {
     pub data: Bytes,
     /// Presentation timestamp in milliseconds
     pub pts_ms: i64,
-    /// Whether this is a keyframe
+    /// Whether this frame can initialize a decoder without earlier frames.
+    ///
+    /// For H.264/H.265 this is stricter than the encoder packet flag: the
+    /// payload must be IDR/IRAP and include all required parameter sets.
     pub is_keyframe: bool,
     /// Frame sequence number
     pub sequence: u64,
@@ -86,7 +262,9 @@ pub struct EncodedVideoFrame {
 }
 
 enum PipelineCmd {
-    SetBitrate { bitrate_kbps: u32, gop: u32 },
+    SetBitrate {
+        preset: crate::video::codec::BitratePreset,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,6 +347,15 @@ impl Default for SharedVideoPipelineConfig {
 }
 
 impl SharedVideoPipelineConfig {
+    /// Keep encoder timing aligned with the negotiated HDMI source on every open.
+    fn align_source_fps(&mut self, source_fps: Option<f64>) {
+        if self.control_mode == VideoControlMode::SourceFollowing {
+            if let Some(fps) = source_fps {
+                self.fps = fps.round().clamp(1.0, 120.0) as u32;
+            }
+        }
+    }
+
     /// Get effective bitrate in kbps
     pub fn bitrate_kbps(&self) -> u32 {
         self.bitrate_preset.bitrate_kbps()
@@ -280,6 +467,15 @@ pub struct SharedVideoPipelineStats {
     pub current_fps: f32,
 }
 
+#[derive(Default)]
+struct CachedH26xParameterSets {
+    h264_sps: Option<Vec<u8>>,
+    h264_pps: Option<Vec<u8>>,
+    h265_vps: Option<Vec<u8>>,
+    h265_sps: Option<Vec<u8>>,
+    h265_pps: Option<Vec<u8>>,
+}
+
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
     config: RwLock<SharedVideoPipelineConfig>,
@@ -287,9 +483,8 @@ pub struct SharedVideoPipeline {
     stats: Mutex<SharedVideoPipelineStats>,
     running: watch::Sender<bool>,
     running_rx: watch::Receiver<bool>,
-    /// Becomes true only after the synchronous encoder worker has dropped its
-    /// vendor handles.  Capture teardown alone is not sufficient for AMLENC:
-    /// a blocked dequeue/encode can otherwise overlap the next pipeline.
+    /// Becomes true only after the synchronous encoder worker has exited and
+    /// dropped its encoder handles.
     encoder_done: watch::Sender<bool>,
     encoder_done_rx: watch::Receiver<bool>,
     h264_profile_level_id: watch::Sender<Option<String>>,
@@ -301,6 +496,9 @@ pub struct SharedVideoPipeline {
     sequence: AtomicU64,
     /// Atomic flag for keyframe request (avoids lock contention)
     keyframe_requested: AtomicBool,
+    parameter_sets: ParkingMutex<CachedH26xParameterSets>,
+    /// Most recent random-access frame with all decoder parameter sets.
+    bootstrap_frame: ParkingRwLock<Option<Arc<EncodedVideoFrame>>>,
     /// Pipeline start time for monotonic PTS calculation (microseconds from process start).
     /// Uses AtomicI64 instead of Mutex for lock-free access.
     pipeline_start_time_us: AtomicI64,
@@ -340,6 +538,8 @@ impl SharedVideoPipeline {
             running_flag: AtomicBool::new(false),
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
+            parameter_sets: ParkingMutex::new(CachedH26xParameterSets::default()),
+            bootstrap_frame: ParkingRwLock::new(None),
             pipeline_start_time_us: AtomicI64::new(0),
             pending_sync_geometry: ParkingMutex::new(None),
             device_lost_reason: ParkingMutex::new(None),
@@ -398,6 +598,9 @@ impl SharedVideoPipeline {
         // Keep at most one pending frame so a slow WebRTC writer cannot make
         // the encoder wait or accumulate seconds of latency.
         let (tx, rx) = mpsc::channel(1);
+        if let Some(frame) = self.bootstrap_frame.read().clone() {
+            let _ = tx.try_send(frame);
+        }
         self.subscribers.write().push(tx);
         rx
     }
@@ -436,14 +639,13 @@ impl SharedVideoPipeline {
 
     fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
         match cmd {
-            PipelineCmd::SetBitrate { bitrate_kbps, gop } => {
-                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
-                let _ = gop;
+            PipelineCmd::SetBitrate { preset } => {
+                let bitrate_kbps = preset.bitrate_kbps();
                 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
-                            .reconfigure(bitrate_kbps as i32, gop as i32)
+                            .reconfigure(bitrate_kbps as i32, preset.gop_size(state.fps) as i32)
                             .map_err(|e| {
                                 let detail = if e.is_empty() {
                                     ffmpeg_hw_last_error()
@@ -512,7 +714,105 @@ impl SharedVideoPipeline {
         let _ = self.h264_profile_level_id.send(Some(profile_level_id));
     }
 
+    fn inspect_and_parameterize_packet(
+        &self,
+        codec: VideoEncoderType,
+        data: Bytes,
+        ffmpeg_keyframe: bool,
+    ) -> (Bytes, bool) {
+        match codec {
+            VideoEncoderType::H264 => {
+                let was_annex_b = h264_bitstream::is_annex_b(data.as_ref());
+                let data = h264_bitstream::normalize_annex_b(data);
+                if !was_annex_b && h264_bitstream::is_annex_b(data.as_ref()) {
+                    debug!("[Pipeline] Converted length-prefixed H264 packet to Annex-B");
+                }
+                let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
+                // Require metadata and payload to agree before advertising a
+                // decoder bootstrap frame.
+                let is_idr = ffmpeg_keyframe && h264_bitstream::is_keyframe(data.as_ref());
+                let mut cache = self.parameter_sets.lock();
+                if let Some(sps) = sps.as_ref() {
+                    cache.h264_sps = Some(sps.clone());
+                }
+                if let Some(pps) = pps.as_ref() {
+                    cache.h264_pps = Some(pps.clone());
+                }
+
+                if !is_idr {
+                    return (data, false);
+                }
+                if sps.is_some() && pps.is_some() {
+                    return (data, true);
+                }
+
+                match (&cache.h264_sps, &cache.h264_pps) {
+                    (Some(cached_sps), Some(cached_pps)) => {
+                        let mut output = Vec::with_capacity(
+                            data.len() + cached_sps.len() + cached_pps.len() + 8,
+                        );
+                        output.extend_from_slice(&[0, 0, 0, 1]);
+                        output.extend_from_slice(cached_sps);
+                        output.extend_from_slice(&[0, 0, 0, 1]);
+                        output.extend_from_slice(cached_pps);
+                        output.extend_from_slice(data.as_ref());
+                        debug!("[Pipeline] Prepended cached SPS/PPS to H264 IDR");
+                        (Bytes::from(output), true)
+                    }
+                    // An IDR without SPS/PPS is not a decoder bootstrap frame.
+                    _ => (data, false),
+                }
+            }
+            VideoEncoderType::H265 => {
+                let (vps, sps, pps) = h265_bitstream::extract_vps_sps_pps(data.as_ref());
+                let is_irap = ffmpeg_keyframe && h265_bitstream::is_keyframe(data.as_ref());
+                let mut cache = self.parameter_sets.lock();
+                if let Some(vps) = vps.as_ref() {
+                    cache.h265_vps = Some(vps.clone());
+                }
+                if let Some(sps) = sps.as_ref() {
+                    cache.h265_sps = Some(sps.clone());
+                }
+                if let Some(pps) = pps.as_ref() {
+                    cache.h265_pps = Some(pps.clone());
+                }
+
+                if !is_irap {
+                    return (data, false);
+                }
+                if vps.is_some() && sps.is_some() && pps.is_some() {
+                    return (data, true);
+                }
+
+                match (&cache.h265_vps, &cache.h265_sps, &cache.h265_pps) {
+                    (Some(cached_vps), Some(cached_sps), Some(cached_pps)) => {
+                        let mut output = Vec::with_capacity(
+                            data.len()
+                                + cached_vps.len()
+                                + cached_sps.len()
+                                + cached_pps.len()
+                                + 12,
+                        );
+                        for parameter_set in [cached_vps, cached_sps, cached_pps] {
+                            output.extend_from_slice(&[0, 0, 0, 1]);
+                            output.extend_from_slice(parameter_set);
+                        }
+                        output.extend_from_slice(data.as_ref());
+                        debug!("[Pipeline] Prepended cached VPS/SPS/PPS to H265 IRAP");
+                        (Bytes::from(output), true)
+                    }
+                    _ => (data, false),
+                }
+            }
+            _ => (data, ffmpeg_keyframe),
+        }
+    }
+
     fn broadcast_encoded(&self, frame: Arc<EncodedVideoFrame>) {
+        if frame.is_keyframe {
+            *self.bootstrap_frame.write() = Some(frame.clone());
+        }
+
         let subscribers = {
             let guard = self.subscribers.read();
             if guard.is_empty() {
@@ -552,19 +852,11 @@ impl SharedVideoPipeline {
             return Ok(());
         }
 
+        *self.parameter_sets.lock() = CachedH26xParameterSets::default();
+        *self.bootstrap_frame.write() = None;
+
         let mut config = self.config.read().await.clone();
         let parallel_mjpeg_decode = should_parallel_decode_mjpeg(&config);
-        if parallel_mjpeg_decode {
-            let stable_fps = amlenc_supported_fps(config.fps);
-            if stable_fps != config.fps {
-                warn!(
-                    "Limiting S912 AMLENC capture at {}x{} from {} to {} fps (hardware limit)",
-                    config.resolution.width, config.resolution.height, config.fps, stable_fps
-                );
-                config.fps = stable_fps;
-                *self.config.write().await = config.clone();
-            }
-        }
         {
             let mut last = self.last_state_notification.lock();
             *last = None;
@@ -575,7 +867,8 @@ impl SharedVideoPipeline {
             subdev_path.clone(),
             parse_bridge_kind(bridge_kind.as_deref()),
         );
-        let preopened: Option<CaptureStream> = match open_capture_stream(
+        #[allow(unused_mut)]
+        let mut preopened: Option<CaptureStream> = match open_capture_stream(
             &device_path,
             config.resolution,
             config.input_format,
@@ -589,16 +882,9 @@ impl SharedVideoPipeline {
                 let negotiated_res = s.resolution();
                 let negotiated_fmt = s.format();
                 let previous = (config.resolution, config.input_format, config.fps);
-                if config.control_mode == VideoControlMode::SourceFollowing {
-                    if let Some(source_fps) = s.source_fps() {
-                        config.fps = source_fps.round().clamp(1.0, 120.0) as u32;
-                    }
-                }
+                config.align_source_fps(s.source_fps());
                 config.resolution = negotiated_res;
                 config.input_format = negotiated_fmt;
-                if parallel_mjpeg_decode {
-                    config.fps = amlenc_supported_fps(config.fps);
-                }
                 if previous != (config.resolution, config.input_format, config.fps) {
                     info!(
                             "Negotiated capture {}x{} {:?} @ {} fps (configured {}x{} {:?} @ {} fps) — aligning encoder to source",
@@ -633,10 +919,36 @@ impl SharedVideoPipeline {
             Err(e) => return Err(e),
         };
 
+        #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+        if dmabuf::eligible(&config) {
+            if let Some(stream) = preopened.as_ref().filter(|s| s.supports_rkmpp_dmabuf()) {
+                match dmabuf::prepare(stream, &config) {
+                    Ok(encoder) => {
+                        return dmabuf::start(
+                            self.clone(),
+                            preopened.take().expect("preopened DMA capture"),
+                            encoder,
+                            config,
+                            device_path,
+                            buffer_count,
+                            BridgeContext::from_parts(
+                                subdev_path,
+                                parse_bridge_kind(bridge_kind.as_deref()),
+                            ),
+                        );
+                    }
+                    Err(error) => warn!(
+                        "RKMPP DMA unavailable; using existing copy pipeline: {}",
+                        error
+                    ),
+                }
+            }
+        }
+
         let mut encoder_config = config.clone();
         if parallel_mjpeg_decode {
             encoder_config.input_format = PixelFormat::Nv12;
-            info!("Using capture-thread libyuv MJPEG decode with parallel AMLENC encoding");
+            info!("Using parallel libyuv MJPEG decode with hardware encoding");
         }
         let mut encoder_state = build_encoder_state(&encoder_config)?;
         let _ = self.running.send(true);
@@ -741,8 +1053,7 @@ impl SharedVideoPipeline {
                 }
 
                 pipeline.clear_cmd_tx();
-                // Dropping encoder_state here releases AMLENC before a caller
-                // is allowed to construct a replacement pipeline.
+                // Release encoder resources before allowing a replacement pipeline.
                 drop(encoder_state);
                 let _ = pipeline.encoder_done.send(true);
             });
@@ -763,8 +1074,25 @@ impl SharedVideoPipeline {
                 let mut pixel_format = config.input_format;
                 let mut active_fps = config.fps;
                 let mut stride: u32 = 0;
-                let mut mjpeg_decoder =
-                    parallel_mjpeg_decode.then(|| MjpegToNv12Decoder::new(config.resolution));
+                let mut mjpeg_decode_senders = parallel_mjpeg_decode
+                    .then(|| {
+                        spawn_mjpeg_decode_workers(
+                            &pipeline,
+                            &latest_frame,
+                            &frame_seq_tx,
+                            &buffer_pool,
+                            config.resolution,
+                        )
+                    })
+                    .filter(|senders| !senders.is_empty());
+                let mut next_mjpeg_decoder = 0usize;
+                let mut mjpeg_decoder = parallel_mjpeg_decode
+                    .then(|| MjpegToNv12Decoder::new(config.resolution))
+                    .filter(|_| {
+                        mjpeg_decode_senders
+                            .as_ref()
+                            .is_none_or(|senders| senders.is_empty())
+                    });
 
                 if let Some(s) = preopened {
                     resolution = s.resolution();
@@ -1109,6 +1437,32 @@ impl SharedVideoPipeline {
                         pixel_format,
                         active_fps,
                     ));
+
+                    if let Some(senders) = mjpeg_decode_senders.as_mut() {
+                        let mut pending = Some(MjpegDecodeJob {
+                            data: owned,
+                            sequence: meta.sequence,
+                        });
+                        for offset in 0..senders.len() {
+                            let index = (next_mjpeg_decoder + offset) % senders.len();
+                            let job = pending.take().expect("pending MJPEG decode job");
+                            match senders[index].try_send(job) {
+                                Ok(()) => {
+                                    next_mjpeg_decoder = (index + 1) % senders.len();
+                                    break;
+                                }
+                                Err(TrySendError::Full(job))
+                                | Err(TrySendError::Disconnected(job)) => {
+                                    pending = Some(job);
+                                }
+                            }
+                        }
+                        if let Some(job) = pending {
+                            buffer_pool.put(job.data);
+                        }
+                        continue;
+                    }
+
                     let (frame_data, frame_format, frame_stride) =
                         if let Some(decoder) = mjpeg_decoder.as_mut() {
                             let nv12_size =
@@ -1169,23 +1523,7 @@ impl SharedVideoPipeline {
         let input_format = state.input_format;
         let raw_frame = frame.data();
 
-        let process_start = PROCESS_START.get_or_init(Instant::now);
-        let current_ts_us = process_start.elapsed().as_micros() as i64;
-        let start_ts_us = self.pipeline_start_time_us.load(Ordering::Acquire);
-        let pts_ms = if start_ts_us == 0 {
-            let start_ts_us = match self.pipeline_start_time_us.compare_exchange(
-                0,
-                current_ts_us,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => current_ts_us,
-                Err(existing) => existing,
-            };
-            current_ts_us.saturating_sub(start_ts_us) / 1000
-        } else {
-            current_ts_us.saturating_sub(start_ts_us) / 1000
-        };
+        let pts_ms = self.pts_ms();
 
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if state.ffmpeg_hw_enabled {
@@ -1213,9 +1551,11 @@ impl SharedVideoPipeline {
             })?;
 
             if let Some((data, is_keyframe)) = packet {
+                let (data, is_keyframe) =
+                    self.inspect_and_parameterize_packet(codec, Bytes::from(data), is_keyframe);
                 let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
                 return Ok(vec![EncodedVideoFrame {
-                    data: Bytes::from(data),
+                    data,
                     pts_ms,
                     is_keyframe,
                     sequence,
@@ -1295,14 +1635,15 @@ impl SharedVideoPipeline {
 
                 let mut encoded_frames = Vec::with_capacity(frames.len());
                 for encoded in frames {
-                    let is_keyframe = encoded.key == 1;
+                    let (data, is_keyframe) =
+                        self.inspect_and_parameterize_packet(codec, encoded.data, encoded.key == 1);
                     let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
                     if codec == VideoEncoderType::H264 {
-                        self.update_h264_profile_level_id(&encoded.data);
+                        self.update_h264_profile_level_id(&data);
                     }
 
                     encoded_frames.push(EncodedVideoFrame {
-                        data: encoded.data,
+                        data,
                         pts_ms,
                         is_keyframe,
                         sequence,
@@ -1315,6 +1656,28 @@ impl SharedVideoPipeline {
             }
             Err(e) => Err(e),
         }
+    }
+
+    fn pts_ms(&self) -> i64 {
+        let current_ts_us = PROCESS_START
+            .get_or_init(Instant::now)
+            .elapsed()
+            .as_micros() as i64;
+        let start_ts_us = self.pipeline_start_time_us.load(Ordering::Acquire);
+        let start_ts_us = if start_ts_us == 0 {
+            match self.pipeline_start_time_us.compare_exchange(
+                0,
+                current_ts_us,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => current_ts_us,
+                Err(existing) => existing,
+            }
+        } else {
+            start_ts_us
+        };
+        current_ts_us.saturating_sub(start_ts_us) / 1000
     }
 
     /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)
@@ -1396,13 +1759,11 @@ impl SharedVideoPipeline {
         &self,
         preset: crate::video::codec::BitratePreset,
     ) -> Result<()> {
-        let bitrate_kbps = preset.bitrate_kbps();
-        let gop = {
+        {
             let mut config = self.config.write().await;
             config.bitrate_preset = preset;
-            config.gop_size()
-        };
-        self.send_cmd(PipelineCmd::SetBitrate { bitrate_kbps, gop });
+        }
+        self.send_cmd(PipelineCmd::SetBitrate { preset });
         Ok(())
     }
 
@@ -1597,6 +1958,60 @@ mod tests {
     use super::*;
     use crate::video::codec::BitratePreset;
 
+    #[tokio::test]
+    async fn bitrate_commands_preserve_custom_values_and_gop_policy() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::default()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        *pipeline.cmd_tx.write() = Some(tx);
+        for preset in [
+            BitratePreset::Custom(2500),
+            BitratePreset::Custom(1000),
+            BitratePreset::Speed,
+            BitratePreset::Quality,
+        ] {
+            pipeline.set_bitrate_preset(preset).await.unwrap();
+            let PipelineCmd::SetBitrate { preset: received } = rx.try_recv().unwrap();
+            assert_eq!(received, preset);
+            assert_eq!(pipeline.config().await.bitrate_preset, preset);
+            // Rebuilt encoders must retain the preset's policy at the new FPS.
+            let restored = SharedVideoPipelineConfig {
+                bitrate_preset: received,
+                fps: 60,
+                ..Default::default()
+            };
+            assert_eq!(restored.bitrate_kbps(), preset.bitrate_kbps());
+            assert_eq!(restored.gop_size(), preset.gop_size(60));
+        }
+    }
+
+    #[test]
+    fn source_reopen_updates_fps_and_gop_without_changing_geometry_or_bitrate() {
+        let mut config = SharedVideoPipelineConfig {
+            control_mode: VideoControlMode::SourceFollowing,
+            resolution: Resolution::HD1080,
+            fps: 60,
+            bitrate_preset: BitratePreset::Quality,
+            ..Default::default()
+        };
+        config.align_source_fps(Some(29.97));
+        assert_eq!(config.fps, 30);
+        assert_eq!(config.gop_size(), 60);
+        assert_eq!(config.resolution, Resolution::HD1080);
+        assert_eq!(config.bitrate_kbps(), 8000);
+        config.align_source_fps(None);
+        assert_eq!(config.fps, 30);
+        config.align_source_fps(Some(59.94));
+        assert_eq!(config.fps, 60);
+        assert_eq!(config.gop_size(), 120);
+    }
+
+    #[test]
+    fn configurable_capture_keeps_requested_fps() {
+        let mut config = SharedVideoPipelineConfig::default();
+        config.align_source_fps(Some(60.0));
+        assert_eq!(config.fps, 30);
+    }
+
     #[test]
     fn test_pipeline_config() {
         let h264 = SharedVideoPipelineConfig::h264(Resolution::HD1080, BitratePreset::Balanced);
@@ -1604,11 +2019,136 @@ mod tests {
 
         let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, BitratePreset::Speed);
         assert_eq!(h265.output_codec, VideoEncoderType::H265);
+    }
 
-        assert_eq!(amlenc_supported_fps(30), 30);
-        assert_eq!(amlenc_supported_fps(50), 50);
-        assert_eq!(amlenc_supported_fps(60), 60);
-        assert_eq!(amlenc_supported_fps(120), 60);
+    #[test]
+    fn h264_keyframe_requires_idr_and_parameter_sets() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+
+        let predicted = Bytes::from_static(&[0, 0, 0, 1, 0x41, 0xc0]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, predicted, true);
+        assert!(
+            !key,
+            "a driver flag must not turn a P-frame into a keyframe"
+        );
+
+        let parameter_sets =
+            Bytes::from_static(&[0, 0, 0, 1, 0x67, 0x42, 0x40, 0x1f, 0, 0, 0, 1, 0x68, 0xce]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, parameter_sets, false);
+        assert!(!key, "parameter sets alone are not a keyframe");
+
+        let idr = Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88]);
+        let (_, key) = pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, idr, false);
+        assert!(!key, "an IDR without a driver key flag is not trusted");
+
+        let idr = Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88]);
+        let (bootstrap, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, idr, true);
+        assert!(
+            key,
+            "matching driver metadata and IDR payload should bootstrap"
+        );
+        assert!(h264_bitstream::has_sps_pps(bootstrap.as_ref()));
+        assert!(h264_bitstream::is_keyframe(bootstrap.as_ref()));
+    }
+
+    #[test]
+    fn h265_keyframe_requires_irap_and_parameter_sets() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h265(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+
+        let trail = Bytes::from_static(&[0, 0, 0, 1, 1 << 1, 1, 0xaa]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, trail, true);
+        assert!(
+            !key,
+            "a driver flag must not turn a trailing frame into a keyframe"
+        );
+
+        let parameter_sets = Bytes::from_static(&[
+            0,
+            0,
+            0,
+            1,
+            32 << 1,
+            1,
+            0xaa,
+            0,
+            0,
+            0,
+            1,
+            33 << 1,
+            1,
+            0xbb,
+            0,
+            0,
+            0,
+            1,
+            34 << 1,
+            1,
+            0xcc,
+        ]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, parameter_sets, false);
+        assert!(!key, "parameter sets alone are not a keyframe");
+
+        let irap = Bytes::from_static(&[0, 0, 0, 1, 19 << 1, 1, 0xdd]);
+        let (_, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, irap, false);
+        assert!(!key, "an IRAP without a driver key flag is not trusted");
+
+        let irap = Bytes::from_static(&[0, 0, 0, 1, 19 << 1, 1, 0xdd]);
+        let (bootstrap, key) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H265, irap, true);
+        assert!(
+            key,
+            "matching driver metadata and IRAP payload should bootstrap"
+        );
+        assert!(h265_bitstream::has_vps_sps_pps(bootstrap.as_ref()));
+        assert!(h265_bitstream::is_keyframe(bootstrap.as_ref()));
+    }
+
+    #[test]
+    fn new_subscriber_receives_cached_bootstrap_frame() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let bootstrap = Arc::new(EncodedVideoFrame {
+            data: Bytes::from_static(&[
+                0, 0, 0, 1, 0x67, 0x42, 0x40, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0, 0, 0, 1, 0x65, 0x88,
+            ]),
+            pts_ms: 0,
+            is_keyframe: true,
+            sequence: 1,
+            duration: Duration::from_millis(33),
+            codec: VideoEncoderType::H264,
+        });
+
+        pipeline.broadcast_encoded(bootstrap.clone());
+        let mut subscriber = pipeline.subscribe();
+        let received = subscriber
+            .try_recv()
+            .expect("cached bootstrap frame should seed the subscriber queue");
+        assert!(Arc::ptr_eq(&received, &bootstrap));
+    }
+
+    #[test]
+    fn mjpeg_workers_match_available_cpu_count() {
+        assert_eq!(mjpeg_decode_worker_count(1), 1);
+        assert_eq!(mjpeg_decode_worker_count(2), 2);
+        assert_eq!(mjpeg_decode_worker_count(4), 4);
+        assert_eq!(mjpeg_decode_worker_count(64), 64);
     }
 
     #[test]

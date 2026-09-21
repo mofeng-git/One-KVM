@@ -38,7 +38,7 @@ pub async fn update_stream_config(
     )
     .await?;
 
-    super::apply::enforce_stream_codec_constraints(&state).await?;
+    state.remote_access.enforce_codec_constraints().await?;
 
     Ok(Json(StreamConfigResponse::from(&new_stream_config)))
 }

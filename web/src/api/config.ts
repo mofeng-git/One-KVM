@@ -87,8 +87,9 @@ export const streamConfigApi = {
 export const hidConfigApi = {
   get: () => request<HidConfig>('/config/hid'),
 
-  update: (config: HidConfigUpdate) =>
+  update: (config: HidConfigUpdate, signal?: AbortSignal) =>
     request<HidConfig>('/config/hid', {
+      signal,
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
@@ -221,12 +222,13 @@ export const extensionsApi = {
 
 export interface RustDeskConfigResponse {
   enabled: boolean
+  mode: 'id' | 'direct_ip'
   codec: 'h264' | 'h265'
+  direct_access_port: number
   rendezvous_server: string
   relay_server: string | null
   device_id: string
   has_password: boolean
-  has_keypair: boolean
   relay_key: string | null
 }
 
@@ -234,11 +236,16 @@ export interface RustDeskStatusResponse {
   config: RustDeskConfigResponse
   service_status: string
   rendezvous_status: string | null
+  connection_count: number
+  listening: boolean
+  listen_port: number | null
 }
 
 export interface RustDeskConfigUpdate {
   enabled?: boolean
+  mode?: 'id' | 'direct_ip'
   codec?: 'h264' | 'h265'
+  direct_access_port?: number
   rendezvous_server?: string
   relay_server?: string
   relay_key?: string

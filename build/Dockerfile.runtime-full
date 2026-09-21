@@ -1,22 +1,24 @@
 # One-KVM Runtime Image (full)
 # This Dockerfile only packages pre-compiled binaries (no compilation)
 # Used after cross-compiling with `cross build`
-# Using Debian 11 for maximum compatibility (GLIBC 2.31)
+# Using Debian 12 to match the build images (GLIBC 2.36)
 
 ARG TARGETPLATFORM=linux/amd64
 
-FROM debian:11-slim
+FROM debian:12-slim
 
 ARG TARGETPLATFORM
 
 # Install runtime dependencies in a single layer
 # All codec libraries (libx264, libx265, libopus) are now statically linked
 # Only hardware acceleration drivers and core system libraries remain dynamic
-RUN sed -i 's/ main$/ main contrib non-free/' /etc/apt/sources.list && \
+RUN sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         # Core runtime (all platforms) - no codec libs needed
         ca-certificates \
+        # Bluetooth HID uses the host BlueZ system bus; btmgmt manages a dedicated adapter.
+        bluez \
         libudev1 \
         libasound2 \
         # OTG Ethernet bridge control (nmcli talks to the host NetworkManager over D-Bus)

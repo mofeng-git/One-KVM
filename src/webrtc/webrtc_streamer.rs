@@ -14,7 +14,6 @@ use crate::events::{EventBus, StreamKind, SystemEvent};
 use crate::hid::HidController;
 use crate::video::capture::DEFAULT_CAPTURE_BUFFER_COUNT;
 use crate::video::codec::h264_bitstream;
-use crate::video::codec::EncoderRegistry;
 use crate::video::device::{
     enumerate_devices, select_recovery_device, VideoControlMode, VideoDevice, VideoDeviceInfo,
     VideoDeviceRecoveryHint,
@@ -1314,26 +1313,6 @@ impl WebRtcStreamer {
         };
 
         if pipeline_running {
-            let pipeline = self.video_pipeline.read().await.clone();
-            if let Some(pipeline) = pipeline {
-                let pipeline_config = pipeline.config().await;
-                let selected_backend = pipeline_config.encoder_backend.or_else(|| {
-                    EncoderRegistry::global()
-                        .best_available_encoder(pipeline_config.output_codec)
-                        .map(|encoder| encoder.backend)
-                });
-                if pipeline_config.input_format == PixelFormat::Mjpeg
-                    && selected_backend == Some(EncoderBackend::Amlogic)
-                {
-                    info!(
-                        "Applying AMLENC bitrate {} in the encoder worker without restarting MJPEG decode",
-                        preset
-                    );
-                    pipeline.set_bitrate_preset(preset).await?;
-                    return Ok(());
-                }
-            }
-
             info!("Restarting video pipeline to apply new bitrate: {}", preset);
 
             self.stop_video_pipeline_and_release().await?;

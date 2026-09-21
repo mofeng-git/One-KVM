@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
-import { msdApi, type MsdImage, type DriveFile, type MountedMedia, type DiskMode } from '@/api'
+import { msdApi, type MsdImage, type DriveFile, type DriveInfo, type MountedMedia, type DiskMode } from '@/api'
 import { ApiError, localizeMsdErrorCode } from '@/api/request'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
@@ -92,13 +92,12 @@ const showMountOptionsDialog = ref(false)
 const driveFiles = ref<DriveFile[]>([])
 const currentPath = ref('/')
 const loadingDrive = ref(false)
-const driveInfo = ref<{ size: number; used: number; free: number; initialized: boolean } | null>(null)
+const driveInfo = ref<DriveInfo | null>(null)
 const driveInitialized = ref(false)
 const uploadingFile = ref(false)
 const fileUploadProgress = ref(0)
 const driveError = ref<string | null>(null) // filesystem error (e.g. unsupported format)
 const driveErrorCode = ref<string | null>(null)
-const driveFilesystemUnsupported = computed(() => driveErrorCode.value === 'MSD_DRIVE_FILESYSTEM_UNSUPPORTED')
 
 const showDeleteDialog = ref(false)
 const deleteTarget = ref<{ type: 'image' | 'file'; id: string; name: string } | null>(null)
@@ -175,6 +174,14 @@ const mediaSlotsFull = computed(() => mountedCount.value >= slotCapacity.value)
 const driveMedia = computed(() => mountedMedia.value.find(media => media.kind === 'drive') ?? null)
 // Drive is currently mounted on the target machine via USB — file ops are blocked
 const driveConnectedToTarget = computed(() => !!driveMedia.value)
+const driveFileAccess = computed(() => {
+  if (driveConnectedToTarget.value) return 'blocked_while_connected'
+  return driveInfo.value?.file_access ?? 'unknown'
+})
+const driveFilesAvailable = computed(() => driveFileAccess.value === 'available')
+const driveFilesystemUnsupported = computed(() =>
+  driveFileAccess.value === 'unsupported' || driveErrorCode.value === 'MSD_DRIVE_FILESYSTEM_UNSUPPORTED',
+)
 
 
 
@@ -253,7 +260,7 @@ async function loadData() {
   await refreshMsdState()
   await loadImages()
   await loadDriveInfo()
-  if (driveInitialized.value) {
+  if (driveFilesAvailable.value) {
     await loadDriveFiles()
   }
 }
@@ -369,7 +376,6 @@ async function unmountMedia(media: MountedMedia) {
   try {
     if (media.kind === 'drive') {
       await msdApi.unmountDrive()
-      await refreshDriveBrowser()
     } else {
       await msdApi.unmountImage(media.id)
     }
@@ -444,6 +450,7 @@ async function loadDriveInfo() {
   try {
     driveInfo.value = await msdApi.driveInfo()
     driveInitialized.value = true
+    driveFiles.value = driveFilesAvailable.value ? driveFiles.value : []
   } catch (e: any) {
     if (e instanceof ApiError) {
       if (e.code === 'MSD_DRIVE_NOT_INITIALIZED' || e.status === 404) {
@@ -486,7 +493,7 @@ async function createDrive() {
     const sizeMb = finalDriveSize.value
     await msdApi.initDrive(sizeMb)
     await loadDriveInfo()
-    await loadDriveFiles()
+    if (driveFilesAvailable.value) await loadDriveFiles()
     await refreshDiskSpace()
     showDriveInitDialog.value = false
   } catch (e) {
@@ -516,7 +523,7 @@ async function deleteDrive() {
 async function loadDriveFiles() {
   // Do not read image file while it is mounted on the target machine:
   // concurrent access causes filesystem corruption (Windows error 0x80070570)
-  if (driveConnectedToTarget.value) {
+  if (driveConnectedToTarget.value || !driveFilesAvailable.value) {
     driveFiles.value = []
     return
   }
@@ -538,7 +545,7 @@ async function loadDriveFiles() {
 
 async function refreshDriveBrowser() {
   await loadDriveInfo()
-  if (driveInitialized.value) {
+  if (driveFilesAvailable.value) {
     await loadDriveFiles()
   } else {
     driveFiles.value = []
@@ -965,20 +972,27 @@ onUnmounted(() => {
                   ? 'border-primary bg-primary/5'
                   : driveError
                     ? 'border-destructive/40 bg-destructive/5'
+                    : driveFilesystemUnsupported
+                      ? 'border-warning/40 bg-warning/5'
                     : 'bg-muted/50'"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <HardDrive class="size-4 text-muted-foreground" />
                     <span class="text-sm font-medium">{{ t('msd.drive') }}</span>
-                    <!-- Show size badge only when info is available -->
                     <Badge v-if="driveInfo" variant="outline" class="text-xs">
                       {{ Math.round((driveInfo?.size || 0) / 1024 / 1024) }} MB
                     </Badge>
-                    <!-- Show unreadable badge when format is wrong -->
+                    <Badge
+                      v-if="driveFilesystemUnsupported"
+                      variant="outline"
+                      class="border-warning/50 text-xs text-warning"
+                    >
+                      {{ t('msd.driveUnreadable') }}
+                    </Badge>
                     <template v-else-if="driveError">
                       <Badge variant="outline" class="text-xs border-destructive/50 text-destructive">
-                        {{ driveFilesystemUnsupported ? t('msd.driveUnreadable') : t('common.error') }}
+                        {{ t('common.error') }}
                       </Badge>
                       <Tooltip>
                         <TooltipTrigger as-child>
@@ -993,19 +1007,7 @@ onUnmounted(() => {
                     </template>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <!-- When drive format is unrecognized, only offer re-initialization -->
-                    <template v-if="driveFilesystemUnsupported && !msdConnected">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-8 text-xs"
-                        :disabled="operationInProgress"
-                        @click="initializeDrive"
-                      >
-                        {{ t('msd.reinitializeDrive') }}
-                      </Button>
-                    </template>
-                    <template v-else-if="driveConnectedToTarget">
+                    <template v-if="driveConnectedToTarget">
                       <Badge variant="default" class="h-8 px-2 text-xs">
                         <span class="relative flex size-1.5 mr-1.5">
                           <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-foreground opacity-75"></span>
@@ -1030,12 +1032,22 @@ onUnmounted(() => {
                         variant="default"
                         size="sm"
                         class="h-8 text-xs"
-                        :disabled="operationInProgress || mediaSlotsFull || !!driveError"
+                        :disabled="operationInProgress || mediaSlotsFull || !driveInfo || !!driveError"
                         @click="connectDrive"
                       >
                         <Link v-if="!connecting" class="size-3.5 mr-1" />
                         <span v-if="connecting">{{ t('common.connecting') }}...</span>
                         <span v-else>{{ t('msd.connect') }}</span>
+                      </Button>
+                      <Button
+                        v-if="driveFilesystemUnsupported"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 text-xs"
+                        :disabled="operationInProgress"
+                        @click="initializeDrive"
+                      >
+                        {{ t('msd.reinitializeDrive') }}
                       </Button>
                     </template>
                     <Button
@@ -1049,17 +1061,27 @@ onUnmounted(() => {
                     </Button>
                   </div>
                 </div>
-                <!-- Storage usage bar — hidden when format is unrecognized -->
-                <div v-if="driveInfo" class="space-y-1.5">
+                <div
+                  v-if="driveFilesAvailable && driveInfo?.used !== null && driveInfo?.free !== null"
+                  class="space-y-1.5"
+                >
                   <Progress
-                    :model-value="driveInfo.size > 0 ? (driveInfo.used / driveInfo.size) * 100 : 0"
+                    :model-value="driveInfo && driveInfo.size > 0 ? ((driveInfo.used ?? 0) / driveInfo.size) * 100 : 0"
                     class="h-2"
                   />
                   <div class="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{{ formatBytes(driveInfo?.used || 0) }} {{ t('msd.usedSpace') }}</span>
-                    <span>{{ formatBytes(driveInfo?.free || 0) }} {{ t('msd.freeSpace') }}</span>
+                    <span>{{ formatBytes(driveInfo?.used ?? 0) }} {{ t('msd.usedSpace') }}</span>
+                    <span>{{ formatBytes(driveInfo?.free ?? 0) }} {{ t('msd.freeSpace') }}</span>
                   </div>
                 </div>
+              </div>
+
+              <div
+                v-if="driveFilesystemUnsupported"
+                class="flex shrink-0 items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3"
+              >
+                <Info class="mt-0.5 size-4 shrink-0 text-warning" />
+                <p class="text-sm text-muted-foreground">{{ t('msd.driveFilesystemUnsupportedHint') }}</p>
               </div>
 
               <div
@@ -1075,7 +1097,7 @@ onUnmounted(() => {
 
 
               <!-- File Browser -->
-              <div class="flex-1 min-h-0 flex flex-col space-y-2">
+              <div v-if="driveFilesAvailable" class="flex-1 min-h-0 flex flex-col space-y-2">
 
                 <!-- Toolbar -->
                 <div class="shrink-0 flex items-center justify-between gap-2">
@@ -1163,20 +1185,12 @@ onUnmounted(() => {
 
                 <!-- File List -->
                 <Skeleton v-if="loadingDrive" class="h-24 w-full" />
-                <Empty v-else-if="driveFiles.length === 0 && !driveConnectedToTarget && !driveError" class="shrink-0 py-6">
+                <Empty v-else-if="driveFiles.length === 0 && !driveError" class="shrink-0 py-6">
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><Folder /></EmptyMedia>
                     <EmptyDescription>{{ t('msd.emptyFolder') }}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
-
-                <!-- Connected placeholder: file list hidden while drive mounted on target -->
-                <div
-                  v-else-if="driveConnectedToTarget"
-                  class="shrink-0 text-center py-6 text-muted-foreground text-sm"
-                >
-                  {{ t('msd.driveConnectedFilesHidden') }}
-                </div>
 
                 <div v-else class="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                   <div class="space-y-1">
@@ -1231,6 +1245,12 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div
+                v-else-if="driveConnectedToTarget"
+                class="shrink-0 py-6 text-center text-sm text-muted-foreground"
+              >
+                {{ t('msd.driveConnectedFilesHidden') }}
               </div>
             </template>
           </TabsContent>

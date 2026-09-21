@@ -32,14 +32,14 @@ pub extern "C" fn hwcodec_av_log_callback(level: i32, message: *const std::os::r
         if let Ok(str_slice) = c_str.to_str() {
             let string = String::from(str_slice);
             if level == AV_LOG_ERROR as i32 {
-                log::error!("{}", string);
                 if string.contains(could_not_find_ref_with_poc) {
                     hwcodec_set_flag_could_not_find_ref_with_poc();
                 }
+                log::debug!("{}", string);
             } else if level == AV_LOG_PANIC as i32 || level == AV_LOG_FATAL as i32 {
                 log::error!("{}", string);
             } else if level == AV_LOG_WARNING as i32 {
-                log::warn!("{}", string);
+                log::debug!("{}", string);
             } else if level == AV_LOG_INFO as i32 {
                 log::info!("{}", string);
             } else if level == AV_LOG_VERBOSE as i32 || level == AV_LOG_DEBUG as i32 {

@@ -185,3 +185,79 @@ body {
 .settings-dense [data-slot="card-footer"].border-t {
   padding-top: 1rem;
 }
+
+/* Console surfaces follow their owning layout, including content rendered in portals. */
+[data-console-layout="current"] {
+  --console-surface-radius: 8px;
+  --console-control-radius: 5px;
+  --console-menu-row: 32px;
+  --console-surface-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+}
+[data-console-layout="floating"] {
+  --console-surface-radius: 16px;
+  --console-control-radius: 10px;
+  --console-menu-row: 38px;
+  --console-surface-shadow: 0 12px 36px rgb(0 0 0 / 20%);
+}
+[data-console-layout="sidebar"] {
+  --console-surface-radius: 10px;
+  --console-control-radius: 7px;
+  --console-menu-row: 36px;
+  --console-surface-shadow: 4px 6px 20px rgb(0 0 0 / 14%);
+}
+[data-console-layout]:is(
+  [data-slot="popover-content"], [data-slot="hover-card-content"],
+  [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+  [data-slot="select-content"], [data-slot="dialog-content"]
+) {
+  border-radius: var(--console-surface-radius);
+  box-shadow: var(--console-surface-shadow);
+}
+[data-console-layout][data-slot="popover-content"] {
+  max-height: min(var(--reka-popover-content-available-height, 80dvh), 80dvh);
+  overflow-y: auto;
+}
+[data-console-layout] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="button"]) {
+  border-radius: var(--console-control-radius);
+}
+[data-console-layout] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"]) {
+  min-height: var(--console-menu-row);
+  border-radius: var(--console-control-radius);
+}
+[data-console-layout="floating"]:is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"]) {
+  padding: 6px;
+}
+.console-config-panel[data-console-layout="floating"] {
+  width: min(360px, calc(100vw - 24px));
+  padding: 16px;
+}
+.console-config-panel[data-console-layout="sidebar"] {
+  padding: 14px;
+}
+[data-console-layout="floating"][data-slot="tooltip-content"] {
+  border-radius: 8px;
+}
+[data-console-layout="floating"][data-slot="sheet-content"] {
+  margin: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+[data-console-layout="floating"][data-slot="sheet-content"]:is([data-edge="left"], [data-edge="right"]) {
+  height: calc(100% - 24px);
+  max-width: min(24rem, calc(100vw - 24px));
+}
+[data-console-layout="sidebar"][data-slot="sheet-content"][data-edge="right"] {
+  border-radius: 12px 0 0 12px;
+}
+@media (pointer: coarse) {
+  [data-console-layout] :is([data-slot="dropdown-menu-item"], [data-slot="select-item"]) {
+    min-height: 44px;
+  }
+}
+
+[data-console-layout][data-slot="computer-use-panel"] {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--console-surface-radius);
+  box-shadow: var(--console-surface-shadow);
+}

@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::password::{hash_password, verify_password};
@@ -112,15 +110,13 @@ impl UserStore {
         }
 
         let password_hash = hash_password(new_password)?;
-        let now = OffsetDateTime::now_utc();
-
-        let result =
-            sqlx::query("UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3")
-                .bind(&password_hash)
-                .bind(now.format(&Rfc3339).expect("RFC3339 format"))
-                .bind(user_id)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query(
+            "UPDATE users SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
+        )
+        .bind(&password_hash)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("User not found".to_string()));
@@ -143,13 +139,13 @@ impl UserStore {
             return Ok(());
         }
 
-        let now = OffsetDateTime::now_utc();
-        let result = sqlx::query("UPDATE users SET username = ?1, updated_at = ?2 WHERE id = ?3")
-            .bind(new_username)
-            .bind(now.format(&Rfc3339).expect("RFC3339 format"))
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+        let result = sqlx::query(
+            "UPDATE users SET username = ?1, updated_at = datetime('now') WHERE id = ?2",
+        )
+        .bind(new_username)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("User not found".to_string()));

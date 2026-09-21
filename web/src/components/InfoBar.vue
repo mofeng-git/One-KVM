@@ -15,6 +15,8 @@ const props = defineProps<{
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
   compact?: boolean
+  captured?: boolean
+  minimal?: boolean
 }>()
 
 const { t } = useI18n()
@@ -45,22 +47,23 @@ const keysDisplay = computed(() => {
   <div class="w-full border-t bg-background">
     <!-- Compact mode (explicit prop or auto on small screens via sm:hidden) -->
     <div :class="compact ? '' : 'sm:hidden'">
-      <div class="flex items-center justify-between text-xs px-2 py-0.5">
-        <div v-if="keyboardLedEnabled" class="flex items-center gap-1">
-          <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-warning'" />C
+      <div class="flex items-center justify-between gap-3 text-xs px-2 h-7">
+        <div v-if="keyboardLedEnabled && !minimal" class="flex items-center gap-1">
+          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
+            <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Caps
           </Badge>
-          <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-warning'" />N
+          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
+            <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Num
           </Badge>
-          <Badge variant="outline" class="h-4 gap-1 px-1 text-[10px] text-foreground">
-            <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-warning'" />S
+          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
+            <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Scroll
           </Badge>
         </div>
-        <div v-else class="text-[10px] text-muted-foreground/60">
+        <div v-else-if="!minimal" class="text-xs text-muted-foreground">
           {{ t('infobar.keyboardLedUnavailable') }}
         </div>
-        <div v-if="keysDisplay" class="text-[10px] text-muted-foreground truncate max-w-[200px]">
+        <span v-if="captured && minimal" class="min-w-0 truncate text-xs text-muted-foreground" :title="t('infobar.pointerCaptured')">{{ t('infobar.pointerCaptured') }}</span>
+        <div v-if="keysDisplay" class="text-xs text-muted-foreground truncate max-w-[200px]">
           {{ keysDisplay }}
         </div>
       </div>
@@ -87,15 +90,15 @@ const keysDisplay = computed(() => {
           <Separator orientation="vertical" class="h-5" />
           <template v-if="keyboardLedEnabled">
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
               {{ t('infobar.caps') }}
             </Badge>
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
               {{ t('infobar.num') }}
             </Badge>
             <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-warning'" />
+              <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
               {{ t('infobar.scroll') }}
             </Badge>
           </template>

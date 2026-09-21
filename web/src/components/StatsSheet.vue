@@ -408,17 +408,17 @@ onUnmounted(() => {
   <Sheet :open="props.open" @update:open="emit('update:open', $event)">
     <SheetContent
       side="right"
-      class="w-[90vw] max-w-[440px] border-l bg-background p-0"
+      class="w-[90vw] max-w-[440px] gap-0 overflow-hidden border-l bg-background p-0"
     >
       <!-- Header -->
-      <SheetHeader class="border-b px-6 py-3">
+      <SheetHeader class="shrink-0 border-b px-6 py-3">
         <div class="flex items-center gap-2">
           <SheetTitle class="text-base">{{ t('stats.title') }}</SheetTitle>
           <Badge variant="secondary">WebRTC</Badge>
         </div>
       </SheetHeader>
 
-      <ScrollArea class="h-[calc(100dvh-60px)]">
+      <ScrollArea class="min-h-0 flex-1">
         <div class="px-6 py-4 space-y-6">
           <!-- Video Information -->
           <div class="space-y-3">

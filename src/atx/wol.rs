@@ -7,8 +7,6 @@ use tracing::info;
 
 use crate::error::{AppError, Result};
 
-const WOL_HISTORY_MAX_ENTRIES: i64 = 50;
-
 const MAGIC_PACKET_SIZE: usize = 102;
 
 fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
@@ -116,55 +114,6 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
 
     info!("WOL packet sent successfully to {}", mac_address);
     Ok(())
-}
-
-pub async fn record_wol_history(pool: &sqlx::Pool<sqlx::Sqlite>, mac_address: &str) -> Result<()> {
-    sqlx::query(
-        r#"
-        INSERT INTO wol_history (mac_address, updated_at)
-        VALUES (?1, CAST(strftime('%s', 'now') AS INTEGER))
-        ON CONFLICT(mac_address) DO UPDATE SET
-            updated_at = excluded.updated_at
-        "#,
-    )
-    .bind(mac_address)
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        DELETE FROM wol_history
-        WHERE mac_address NOT IN (
-            SELECT mac_address FROM wol_history
-            ORDER BY updated_at DESC
-            LIMIT ?1
-        )
-        "#,
-    )
-    .bind(WOL_HISTORY_MAX_ENTRIES)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn list_wol_history(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    limit: usize,
-) -> Result<Vec<(String, i64)>> {
-    let rows = sqlx::query_as(
-        r#"
-        SELECT mac_address, updated_at
-        FROM wol_history
-        ORDER BY updated_at DESC
-        LIMIT ?1
-        "#,
-    )
-    .bind(limit as i64)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(rows)
 }
 
 #[cfg(test)]

@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/tooltip'
 
 const props = defineProps<{
+  minimal?: boolean
+  textOnlyScale?: boolean
   scaleMode?: VideoScaleMode
   sourceSizeAvailable?: boolean
 }>()
@@ -51,7 +53,7 @@ function toggleScaleMode() {
     </Tooltip>
   </TooltipProvider>
 
-  <TooltipProvider>
+  <TooltipProvider v-if="!minimal">
     <Tooltip>
       <TooltipTrigger as-child>
         <span data-fixed-action class="inline-flex">
@@ -64,7 +66,7 @@ function toggleScaleMode() {
             :aria-pressed="props.scaleMode === 'actual'"
             @click="toggleScaleMode"
           >
-            <Scaling class="size-3.5" />
+            <Scaling v-if="!textOnlyScale" class="size-3.5" />
             1:1
           </Button>
         </span>
@@ -75,7 +77,7 @@ function toggleScaleMode() {
     </Tooltip>
   </TooltipProvider>
 
-  <TooltipProvider>
+  <TooltipProvider v-if="!minimal">
     <Tooltip>
       <TooltipTrigger as-child>
         <Button
@@ -97,6 +99,7 @@ function toggleScaleMode() {
   </TooltipProvider>
 
   <div
+    v-if="!minimal"
     data-fixed-action
     aria-hidden="true"
     class="mx-2 h-5 w-px shrink-0 self-center bg-border"

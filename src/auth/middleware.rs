@@ -96,6 +96,7 @@ fn is_setup_public_endpoint(path: &str) -> bool {
         "/setup"
             | "/setup/init"
             | "/devices"
+            | "/hid/bluetooth/adapters"
             | "/video/input-status"
             | "/stream/codecs"
             | "/video/codecs"

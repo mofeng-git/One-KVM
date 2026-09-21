@@ -92,6 +92,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // HID endpoints
         .route("/hid/status", get(handlers::hid_status))
         .route(
+            "/hid/bluetooth/adapters",
+            get(handlers::hid_bluetooth_adapters),
+        )
+        .route(
+            "/hid/bluetooth",
+            get(handlers::hid_bluetooth_status).post(handlers::hid_bluetooth_action),
+        )
+        .route(
             "/hid/ch9329/descriptor",
             get(handlers::hid_ch9329_descriptor),
         )
