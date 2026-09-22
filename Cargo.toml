@@ -56,7 +56,6 @@ desktop = [
     "dep:serialport",
     "dep:async-trait",
     "dep:libc",
-    "dep:libloading",
     "dep:ventoy-img",
     "dep:protobuf",
     "dep:sodiumoxide",
@@ -158,7 +157,6 @@ sdp-types = { version = "0.1", optional = true }
 serialport = { version = "4", optional = true }
 async-trait = { version = "0.1", optional = true }
 libc = { version = "0.2", optional = true }
-libloading = { version = "0.8", optional = true }
 
 # Ventoy bootable image support
 ventoy-img = { path = "libs/ventoy-img-rs", optional = true }
