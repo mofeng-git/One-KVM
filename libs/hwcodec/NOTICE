@@ -1,0 +1,28 @@
+Third-Party Code Attribution
+=============================
+
+This crate (the Rust code under src/, the C/C++ code under cpp/, build.rs and
+README.md) is derived from the hwcodec component of the RustDesk project
+(https://github.com/rustdesk/rustdesk), "a real-time hardware codec library
+for RustDesk based on FFmpeg".
+
+Upstream work:
+  RustDesk hwcodec - https://github.com/rustdesk/rustdesk/tree/master/libs/hwcodec
+  Copyright (C) the RustDesk contributors
+  Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only)
+
+Modifications:
+  The code was ported, restructured and modified for the One-KVM build
+  (including FFmpeg integration changes described in README.md). Per sections
+  4 and 5 of the AGPL-3.0, the modified files remain licensed under
+  AGPL-3.0-only.
+
+This library links against FFmpeg configured with --enable-gpl
+(--enable-version3), x264 and x265, each distributed under the GPL-2.0-or-later
+(see build/debian/copyright and the repository root LICENSE).
+
+The complete AGPL-3.0 license text can be found in the LICENSE file at the
+repository root and at: https://www.gnu.org/licenses/agpl-3.0.en.html
+
+The corresponding source code of One-KVM is available at
+https://github.com/mofeng-git/One-KVM (see the release tags).

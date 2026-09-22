@@ -2,7 +2,7 @@
 name = "one-kvm-bluetooth-hid"
 version = "0.1.0"
 edition = "2021"
-license = "GPL-2.0"
+license = "AGPL-3.0-only"
 
 [dependencies]
 bluer = { version = "0.17", features = ["bluetoothd", "l2cap"] }

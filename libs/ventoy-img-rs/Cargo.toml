@@ -3,7 +3,7 @@ name = "ventoy-img"
 version = "0.1.0"
 edition = "2021"
 description = "Create and manage Ventoy bootable IMG files without root or loop devices"
-license = "GPL-2.0"
+license = "AGPL-3.0-only"
 
 [dependencies]
 # CLI
