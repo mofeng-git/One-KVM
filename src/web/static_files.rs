@@ -48,7 +48,9 @@ where
 {
     Router::new()
         .route("/", get(index_handler))
-        .route("/{*path}", get(static_handler))
+        // GET-only fallback: a `/{*path}` wildcard would shadow fallbacks
+        // nested under other routers (e.g. the /api 404 handler) in axum 0.8.
+        .fallback_service(get(static_handler))
 }
 
 async fn index_handler() -> Response<Body> {
@@ -63,33 +65,25 @@ async fn static_handler(uri: Uri) -> Response<Body> {
     }
 
     if !path.contains('.') {
+        // SPA fallback: extensionless paths are frontend routes.
         if let Some(response) = try_serve_file("index.html") {
             return response;
         }
     }
 
+    not_found_response()
+}
+
+fn not_found_response() -> Response<Body> {
     Response::builder()
-        .status(StatusCode::OK)
+        .status(StatusCode::NOT_FOUND)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .body(Body::from(placeholder_html()))
+        .body(Body::from(not_found_html()))
         .unwrap()
 }
 
 fn serve_file(path: &str) -> Response<Body> {
-    try_serve_file(path).unwrap_or_else(|| {
-        if path == "index.html" {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-                .body(Body::from(placeholder_html()))
-                .unwrap()
-        } else {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
-                .unwrap()
-        }
-    })
+    try_serve_file(path).unwrap_or_else(|| not_found_response())
 }
 
 fn try_serve_file(path: &str) -> Option<Response<Body>> {
@@ -149,41 +143,23 @@ fn static_response(path: &str, data: Vec<u8>) -> Response<Body> {
         .unwrap()
 }
 
-pub fn placeholder_html() -> String {
+pub fn not_found_html() -> String {
     r#"<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One-KVM</title>
+    <title>404 Not Found</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-        }
-        .container {
+            width: 35em;
+            margin: 0 auto;
             text-align: center;
-            padding: 2rem;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
         }
-        h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-        p { color: #888; font-size: 1.1rem; }
-        .version { color: #666; margin-top: 2rem; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>One-KVM</h1>
-        <p>Frontend not built yet.</p>
-        <p>Please build the frontend or access the API directly.</p>
-        <div class="version">v{{VERSION}}</div>
-    </div>
+    <h1>404 Not Found</h1>
 </body>
 </html>"#
-        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
+        .to_string()
 }
