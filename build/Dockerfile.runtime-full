@@ -8,11 +8,16 @@ ARG TARGETPLATFORM=linux/amd64
 FROM debian:12-slim
 
 ARG TARGETPLATFORM
+ARG APT_MIRROR=
 
 # Install runtime dependencies in a single layer
 # All codec libraries (libx264, libx265, libopus) are now statically linked
 # Only hardware acceleration drivers and core system libraries remain dynamic
-RUN sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources && \
+# Set APT_MIRROR=mirrors.tuna.tsinghua.edu.cn to speed up builds in China
+RUN if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s@deb.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources; \
+    fi \
+    && sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         # Core runtime (all platforms) - no codec libs needed
