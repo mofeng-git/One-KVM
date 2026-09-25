@@ -8,6 +8,8 @@ export default {
     "configure": "Configure driver",
     "reconfigure": "Reconfigure",
     "driver": "HID driver",
+    "wiringHelp": "Wiring guide",
+    "refreshDevices": "Refresh HID devices",
     "driver_otg": "USB OTG",
     "driver_ch9329": "CH9329",
     "driver_bluetooth": "Bluetooth HID",

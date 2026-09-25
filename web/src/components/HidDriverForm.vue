@@ -3,6 +3,8 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Cable, RefreshCw } from 'lucide-vue-next'
 import { configApi } from '@/api'
 import { request } from '@/api/request'
 import type { BluetoothAdapter } from '@/types/bluetooth'
@@ -52,13 +54,40 @@ onUnmounted(() => generation++)
 </script>
 <template>
   <fieldset :disabled="locked" class="space-y-4 min-w-0">
-    <label class="block space-y-1 text-sm">
-      <span>{{ t('hidGuide.driver') }}</span>
-      <select class="w-full rounded-md border bg-background px-3 py-2" :value="modelValue.backend" @change="emit('update:modelValue', { ...modelValue, backend: ($event.target as HTMLSelectElement).value as Driver })">
+    <div class="space-y-1 text-sm">
+      <div class="flex min-h-8 items-center justify-between gap-2">
+        <label for="hid-driver">{{ t('hidGuide.driver') }}</label>
+        <div class="flex items-center gap-1">
+          <HoverCard v-if="modelValue.backend !== 'none'" :open-delay="150" :close-delay="100">
+            <HoverCardTrigger as-child>
+              <Button type="button" variant="ghost" size="sm" class="h-8 gap-1.5 px-2 text-muted-foreground" :aria-label="t('hidGuide.wiringHelp')">
+                <Cable class="size-4" />
+                <span>{{ t('hidGuide.wiringHelp') }}</span>
+              </Button>
+            </HoverCardTrigger>
+            <HoverCardContent side="right" align="start" class="w-[min(480px,calc(100vw-2rem))] p-3">
+              <HidWiringDiagram :backend="modelValue.backend" />
+            </HoverCardContent>
+          </HoverCard>
+          <Button
+            v-if="modelValue.backend !== 'none'"
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            :disabled="loading"
+            :aria-label="t('hidGuide.refreshDevices')"
+            :title="t('hidGuide.refreshDevices')"
+            @click="refresh"
+          >
+            <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
+          </Button>
+        </div>
+      </div>
+      <select id="hid-driver" class="w-full rounded-md border bg-background px-3 py-2" :value="modelValue.backend" @change="emit('update:modelValue', { ...modelValue, backend: ($event.target as HTMLSelectElement).value as Driver })">
         <option v-for="driver in drivers" :key="driver" :value="driver">{{ t(`hidGuide.driver_${driver}`) }}</option>
       </select>
-    </label>
-    <HidWiringDiagram :backend="modelValue.backend" />
+    </div>
+    <p v-if="modelValue.backend === 'none'" class="text-sm text-muted-foreground">{{ t('hidGuide.disabledHelp') }}</p>
     <label v-if="modelValue.backend !== 'none'" class="block space-y-1 text-sm">
       <span>{{ t(`hidGuide.device_${modelValue.backend}`) }}</span>
       <select class="w-full rounded-md border bg-background px-3 py-2" :value="selected" :disabled="loading" @change="device(($event.target as HTMLSelectElement).value)">
@@ -79,6 +108,5 @@ onUnmounted(() => generation++)
     </label>
     <p v-if="missing" class="text-sm text-warning">{{ missing }}</p>
     <p v-if="error" role="alert" class="text-sm text-destructive break-words">{{ error }}</p>
-    <Button v-if="modelValue.backend !== 'none'" type="button" variant="outline" size="sm" :disabled="loading" @click="refresh">{{ t('common.refresh') }}</Button>
   </fieldset>
 </template>

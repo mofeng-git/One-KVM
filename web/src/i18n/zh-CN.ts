@@ -8,6 +8,8 @@ export default {
     "configure": "配置驱动",
     "reconfigure": "重新配置",
     "driver": "HID 驱动",
+    "wiringHelp": "接线示意",
+    "refreshDevices": "刷新 HID 设备",
     "driver_otg": "USB OTG",
     "driver_ch9329": "CH9329",
     "driver_bluetooth": "蓝牙 HID",

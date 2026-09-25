@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import HidDriverForm from '@/components/HidDriverForm.vue'
-import { selectionFrom, readPendingHid, writePendingHid } from '@/lib/hidGuide'
+import { selectionFrom } from '@/lib/hidGuide'
 
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -80,7 +80,7 @@ const audioSupported = computed(() => platform.value?.audio.available ?? true)
 const totalSteps = 4
 const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
-const hidSelection = ref(readPendingHid()?.selection ?? selectionFrom())
+const hidSelection = ref(selectionFrom())
 const hidSelectionValid = ref(false)
 
 const ttydEnabled = ref(false)
@@ -320,7 +320,6 @@ function validateStep3(): boolean {
     error.value = t('hidGuide.selectDevice')
     return false
   }
-  writePendingHid({ selection: hidSelection.value, phase: 'selected' })
   return true
 }
 
@@ -348,7 +347,7 @@ function prevStep() {
 async function handleSetup() {
   error.value = ''
 
-  if (!readPendingHid() || loading.value) return
+  if (loading.value) return
 
   loading.value = true
   // Reconcile a previous timed-out account request before submitting again.
