@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { focusConsolePanel } from "@/composables/useConsoleAppearance"
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
@@ -15,9 +15,6 @@ import {
 } from '@/components/ui/popover'
 import { MousePointer, Move } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import HidDeviceOverview from '@/components/HidDeviceOverview.vue'
-import HidDriverDialog from '@/components/HidDriverDialog.vue'
-import { useHidConnection } from '@/composables/useHidConnection'
 import { useConfigStore } from '@/stores/config'
 import { HidBackend } from '@/types/generated'
 
@@ -66,14 +63,7 @@ watch(showCursor, (newValue, oldValue) => {
   }
 })
 
-const guideOpen = ref(false)
 const buttonText = computed(() => t('actionbar.hidConfig'))
-const { status, bluetooth, error } = useHidConnection(computed(() => props.open && !guideOpen.value), computed(() => configStore.hid?.backend))
-async function configure() {
-  emit('update:open', false)
-  await nextTick()
-  guideOpen.value = true
-}
 
 function toggleMouseMode() {
   if (configStore.hid?.backend === HidBackend.Bluetooth) return
@@ -195,12 +185,7 @@ watch(() => props.open, (open) => {
             <Switch v-model="showCursor" />
           </div>
         </div>
-
-        <Separator />
-        <HidDeviceOverview :hid="configStore.hid" :status="status" :bluetooth="bluetooth" :error="error" />
-        <Button variant="outline" class="w-full" @click="configure">{{ t('hidGuide.reconfigure') }}</Button>
       </div>
     </PopoverContent>
   </Popover>
-  <HidDriverDialog v-if="guideOpen" @close="guideOpen = false" />
 </template>
