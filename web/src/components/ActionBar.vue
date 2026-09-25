@@ -257,6 +257,18 @@ watch(locale, () => {
 })
 
 watch([() => props.layout, () => props.showComputerUse, floatingCollapsed, minimalDisplayControls], () => {
+  // Layout changes can move this bar while its portal based controls are open.
+  // Close every transient surface first so no old portal remains attached to
+  // the document after the new layout is painted.
+  overflowMenuOpen.value = false
+  pasteOpen.value = false
+  atxOpen.value = false
+  videoPopoverOpen.value = false
+  hidPopoverOpen.value = false
+  audioPopoverOpen.value = false
+  msdDialogOpen.value = false
+  mobileAtxOpen.value = false
+  mobilePasteOpen.value = false
   void observeLayout()
 })
 
