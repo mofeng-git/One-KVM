@@ -204,9 +204,21 @@ get_tool_urls() {
 }
 
 # Download tools for a platform
+# Set CURL_PROXY=http://host:port to route GitHub downloads through an HTTP proxy
+# Set GHPROXY_PREFIX=https://ghfast.top/ to prefix GitHub URLs instead
 download_tools() {
     local platform="$1"
     local staging="$2"
+    local curl_proxy=()
+    if [ -n "${CURL_PROXY:-}" ]; then
+        curl_proxy=(-x "$CURL_PROXY")
+    fi
+    dl() {
+        # dl <url> <output>
+        local url="$1"
+        [ -n "${GHPROXY_PREFIX:-}" ] && url="${GHPROXY_PREFIX%/}/$url"
+        curl -fsSL "${curl_proxy[@]}" "$url" -o "$2"
+    }
 
     get_tool_urls "$platform"
 
@@ -214,14 +226,14 @@ download_tools() {
 
     # ttyd
     if [ ! -f "$staging/ttyd" ]; then
-        curl -fsSL "$TTYD_URL" -o "$staging/ttyd"
+        dl "$TTYD_URL" "$staging/ttyd"
         chmod +x "$staging/ttyd"
     fi
 
     if [ "$INCLUDE_THIRD_PARTY" = true ]; then
         # gostc
         if [ ! -f "$staging/gostc" ]; then
-            curl -fsSL "$GOSTC_URL" -o /tmp/gostc.tar.gz
+            dl "$GOSTC_URL" /tmp/gostc.tar.gz
             tar -xzf /tmp/gostc.tar.gz -C "$staging"
             chmod +x "$staging/gostc"
             rm /tmp/gostc.tar.gz
@@ -229,7 +241,7 @@ download_tools() {
 
         # easytier
         if [ ! -f "$staging/easytier-core" ]; then
-            curl -fsSL "$EASYTIER_URL" -o /tmp/easytier.zip
+            dl "$EASYTIER_URL" /tmp/easytier.zip
             unzip -o /tmp/easytier.zip -d /tmp/easytier
             cp "/tmp/easytier/$EASYTIER_DIR/easytier-core" "$staging/easytier-core"
             chmod +x "$staging/easytier-core"
@@ -311,6 +323,9 @@ build_for_platform() {
 
     local build_cmd="docker buildx build --platform $platform"
     build_cmd="$build_cmd --build-arg TARGETPLATFORM=$platform"
+    if [ -n "${APT_MIRROR:-}" ]; then
+        build_cmd="$build_cmd --build-arg APT_MIRROR=$APT_MIRROR"
+    fi
 
     if [ "$PUSH" = true ]; then
         build_cmd="$build_cmd --push"

@@ -6,10 +6,10 @@ FROM ${DEBIAN_IMAGE}
 
 ARG CHINAMIRRO=0
 ARG GH_PROXY=https://gh-proxy.com/
-ARG RUSTUP_DIST_SERVER_CN=https://rsproxy.cn
-ARG RUSTUP_UPDATE_ROOT_CN=https://rsproxy.cn/rustup
-ARG CARGO_INDEX_CN=https://rsproxy.cn/crates.io-index
-ARG CARGO_REGISTRY_CN=sparse+https://rsproxy.cn/index/
+ARG RUSTUP_DIST_SERVER_CN=https://mirrors.ustc.edu.cn/rust-static
+ARG RUSTUP_UPDATE_ROOT_CN=https://mirrors.ustc.edu.cn/rust-static/rustup
+ARG CARGO_INDEX_CN=https://mirrors.ustc.edu.cn/crates.io-index
+ARG CARGO_REGISTRY_CN=sparse+https://mirrors.ustc.edu.cn/crates.io-index/
 ARG LIBJPEG_TURBO_VERSION=3.1.4.1
 ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
 ARG LIBVPX_VERSION=1.16.0
@@ -39,12 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         mkdir -p /root/.cargo; \
         printf '%s\n' \
             '[source.crates-io]' \
-            "replace-with = 'rsproxy-sparse'" \
-            '[source.rsproxy]' \
+            "replace-with = 'cn-mirror-sparse'" \
+            '[source.cn-mirror]' \
             "registry = '${CARGO_INDEX_CN}'" \
-            '[source.rsproxy-sparse]' \
+            '[source.cn-mirror-sparse]' \
             "registry = '${CARGO_REGISTRY_CN}'" \
-            '[registries.rsproxy]' \
+            '[registries.cn-mirror]' \
             "index = '${CARGO_INDEX_CN}'" \
             '[net]' \
             'git-fetch-with-cli = true' \

@@ -21,21 +21,25 @@ build_arch() {
 
     case "${CHINAMIRRO:-}" in
         1|true|TRUE|yes|YES|on|ON)
-            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://gh-proxy.com/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-docker.1ms.run/library/debian:12}"
+            # Default Rust toolchain mirror is USTC (rsproxy.cn is unreachable via the
+            # Docker bridge on some networks because its CDN blocks the SNAT source IP).
+            local rust_dist="${RUSTUP_DIST_SERVER_MIRROR:-https://mirrors.ustc.edu.cn/rust-static}"
+            local rust_root="${RUSTUP_UPDATE_ROOT_MIRROR:-https://mirrors.ustc.edu.cn/rust-static/rustup}"
+            local crates_sparse="${CARGO_SPARSE_MIRROR:-sparse+https://mirrors.ustc.edu.cn/crates.io-index/}"
+            local crates_git="${CARGO_GIT_MIRROR:-https://mirrors.ustc.edu.cn/crates.io-index}"
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://ghfast.top/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-dockerproxy.net/library/debian:12}"
             cross_build_opts="$cross_build_opts --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg NO_PROXY="
             cross_build_opts="$cross_build_opts --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg no_proxy="
             echo "=== China mirror acceleration: enabled ==="
             echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
             env \
                 CROSS_BUILD_OPTS="$cross_build_opts" \
-                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=rsproxy-sparse \
-                CARGO_SOURCE_RSPROXY_REGISTRY=https://rsproxy.cn/crates.io-index \
-                CARGO_SOURCE_RSPROXY_SPARSE_REGISTRY=sparse+https://rsproxy.cn/index/ \
-                CARGO_REGISTRIES_RSPROXY_INDEX=https://rsproxy.cn/crates.io-index \
+                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=cn-mirror \
+                CARGO_SOURCE_CN-MIRROR_REGISTRY="$crates_sparse" \
                 CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
                 CARGO_NET_GIT_FETCH_WITH_CLI=true \
-                RUSTUP_DIST_SERVER=https://rsproxy.cn \
-                RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
+                RUSTUP_DIST_SERVER="$rust_dist" \
+                RUSTUP_UPDATE_ROOT="$rust_root" \
                 cross build --release --target "$rust_target"
             return
             ;;

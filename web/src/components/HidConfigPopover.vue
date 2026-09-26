@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { focusConsolePanel } from "@/composables/useConsoleAppearance"
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
@@ -13,13 +13,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { MousePointer, Move } from 'lucide-vue-next'
+import { MousePointer, Move, Loader2 } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import HidDeviceOverview from '@/components/HidDeviceOverview.vue'
-import HidDriverDialog from '@/components/HidDriverDialog.vue'
-import { useHidConnection } from '@/composables/useHidConnection'
 import { useConfigStore } from '@/stores/config'
-import { HidBackend } from '@/types/generated'
+import { HidBackend, OtgHidProfile } from '@/types/generated'
 
 const props = defineProps<{
   open: boolean
@@ -66,26 +63,64 @@ watch(showCursor, (newValue, oldValue) => {
   }
 })
 
-const guideOpen = ref(false)
 const buttonText = computed(() => t('actionbar.hidConfig'))
-const { status, bluetooth, error } = useHidConnection(computed(() => props.open && !guideOpen.value), computed(() => configStore.hid?.backend))
-async function configure() {
-  emit('update:open', false)
-  await nextTick()
-  guideOpen.value = true
+const hidSaving = ref(false)
+const hidControlsDisabled = computed(() => hidSaving.value || configStore.hidLoading || !configStore.hid)
+const supportsLinuxCompatibility = computed(() => configStore.hid?.backend === HidBackend.Ch9329)
+const supportsMacosCompatibility = computed(() =>
+  supportsLinuxCompatibility.value || configStore.hid?.backend === HidBackend.Otg
+)
+const macosDragRequiresInterfaces = computed(() => {
+  const hid = configStore.hid
+  if (hid?.backend !== HidBackend.Otg) return false
+  switch (hid.otg_profile) {
+    case OtgHidProfile.LegacyKeyboard:
+    case OtgHidProfile.LegacyMouseRelative:
+      return true
+    case OtgHidProfile.Custom:
+      return hid.otg_functions?.mouse_relative === false || hid.otg_functions?.mouse_absolute === false
+    default:
+      return false
+  }
+})
+
+type MouseCompatibilityOption = 'ch9329_hybrid_mouse' | 'mouse_macos_drag'
+
+async function updateMouseCompatibility(option: MouseCompatibilityOption, enabled: boolean) {
+  if (hidControlsDisabled.value || !supportsMacosCompatibility.value) return
+  if (option === 'ch9329_hybrid_mouse' && !supportsLinuxCompatibility.value) return
+  if (option === 'mouse_macos_drag' && enabled && macosDragRequiresInterfaces.value) return
+  if ((configStore.hid?.[option] ?? false) === enabled) return
+
+  hidSaving.value = true
+  try {
+    // Keep both preferences: the backend gives macOS priority when both are enabled.
+    await configStore.updateHid({ [option]: enabled })
+  } catch (error) {
+    toast.error(t('config.updateFailed'), {
+      description: error instanceof Error ? error.message : undefined,
+    })
+    // Read back persisted state, including when the response was lost after applying.
+    await configStore.refreshHid().catch(() => undefined)
+  } finally {
+    hidSaving.value = false
+  }
 }
 
 function toggleMouseMode() {
-  if (configStore.hid?.backend === HidBackend.Bluetooth) return
+  if (hidControlsDisabled.value || configStore.hid?.backend === HidBackend.Bluetooth) return
   const newMode = props.mouseMode === 'absolute' ? 'relative' : 'absolute'
   emit('update:mouseMode', newMode)
 
   // Update backend config
+  hidSaving.value = true
   configStore.updateHid({
     mouse_absolute: newMode === 'absolute',
   }).catch(_e => {
     console.info('[HidConfig] Failed to update mouse mode')
     toast.error(t('config.updateFailed'))
+  }).finally(() => {
+    hidSaving.value = false
   })
 }
 
@@ -103,7 +138,7 @@ watch(() => props.open, (open) => {
   if (!open) return
   mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
   showCursor.value = localStorage.getItem('hidShowCursor') !== 'false'
-  void configStore.refreshHid().catch(() => undefined)
+  if (!hidSaving.value) void configStore.refreshHid().catch(() => undefined)
 })
 </script>
 
@@ -146,7 +181,7 @@ watch(() => props.open, (open) => {
             <div class="flex gap-2">
               <Button
                 :variant="mouseMode === 'absolute' ? 'default' : 'outline'"
-                :disabled="configStore.hid?.backend === HidBackend.Bluetooth"
+                :disabled="hidControlsDisabled || configStore.hid?.backend === HidBackend.Bluetooth"
                 size="sm"
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
@@ -156,6 +191,7 @@ watch(() => props.open, (open) => {
               </Button>
               <Button
                 :variant="mouseMode === 'relative' ? 'default' : 'outline'"
+                :disabled="hidControlsDisabled || configStore.hid?.backend === HidBackend.Bluetooth"
                 size="sm"
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
@@ -196,11 +232,45 @@ watch(() => props.open, (open) => {
           </div>
         </div>
 
-        <Separator />
-        <HidDeviceOverview :hid="configStore.hid" :status="status" :bluetooth="bluetooth" :error="error" />
-        <Button variant="outline" class="w-full" @click="configure">{{ t('hidGuide.reconfigure') }}</Button>
+        <template v-if="supportsMacosCompatibility">
+          <Separator />
+          <div class="space-y-3" :aria-busy="hidSaving">
+            <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.mouseCompatibility') }}</h5>
+
+            <div v-if="supportsLinuxCompatibility" class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-linux-compatibility" class="text-xs">{{ t('settings.ch9329HybridMouse') }}</Label>
+                <HelpTooltip :content="t('settings.ch9329HybridMouseDesc')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-linux-compatibility"
+                :model-value="configStore.hid?.ch9329_hybrid_mouse ?? false"
+                :disabled="hidControlsDisabled"
+                @update:model-value="updateMouseCompatibility('ch9329_hybrid_mouse', $event)"
+              />
+            </div>
+
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-macos-compatibility" class="text-xs">{{ t('settings.mouseMacosDrag') }}</Label>
+                <HelpTooltip :content="t('settings.mouseMacosDragDesc')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-macos-compatibility"
+                :model-value="configStore.hid?.mouse_macos_drag ?? false"
+                :disabled="hidControlsDisabled || (macosDragRequiresInterfaces && !configStore.hid?.mouse_macos_drag)"
+                @update:model-value="updateMouseCompatibility('mouse_macos_drag', $event)"
+              />
+            </div>
+
+            <p v-if="macosDragRequiresInterfaces" class="text-xs text-warning">{{ t('actionbar.macosDragRequiresBoth') }}</p>
+            <p v-if="hidSaving" role="status" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 class="size-3 shrink-0 animate-spin" />
+              {{ t('actionbar.applying') }}
+            </p>
+          </div>
+        </template>
       </div>
     </PopoverContent>
   </Popover>
-  <HidDriverDialog v-if="guideOpen" @close="guideOpen = false" />
 </template>

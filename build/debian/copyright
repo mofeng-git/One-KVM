@@ -1,16 +1,130 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: one-kvm
-Source: https://github.com/mofeng-git/one-KVM
+Upstream-Contact: https://github.com/mofeng-git/One-KVM/issues
+Source: https://github.com/mofeng-git/One-KVM
 
 Files: *
 Copyright: 2025 One-KVM contributors
-License: GPL-2.0
+License: AGPL-3.0-only
+
+Files: protos/*
+Copyright: the RustDesk contributors
+           2025 One-KVM contributors
+License: AGPL-3.0-only
+Comment:
+ Protocol definition files derived from RustDesk
+ (https://github.com/rustdesk/rustdesk). Modified for One-KVM.
+ See protos/NOTICE for the full attribution.
+
+Files: src/rustdesk/*
+Copyright: the RustDesk contributors
+           2025 One-KVM contributors
+License: AGPL-3.0-only
+Comment:
+ Code derived from the RustDesk project, modified for One-KVM.
+ See src/rustdesk/NOTICE for the full attribution.
+
+Files: libs/hwcodec/*
+Copyright: the RustDesk contributors
+           2025 One-KVM contributors
+License: AGPL-3.0-only
+Comment:
+ Derived from the RustDesk hwcodec component. See libs/hwcodec/NOTICE.
+
+Files: libs/v4l2r/*
+Copyright: 2023-2024 Andrei Lytkin, Daniel Almeida, Collabora Ltd. and other v4l2r contributors
+License: Expat
 
 Files: libs/ventoy-img-rs/resources/*
 Copyright: Ventoy contributors
-License: GPL-2.0
+License: GPL-3.0+
+Comment:
+ Pre-built Ventoy boot files (boot.img, core.img.xz, ventoy.disk.img.xz).
+ Ventoy upstream: https://github.com/ventoy/Ventoy, licensed GPL-3.0-or-later.
 
-License: GPL-2.0
+Files: res/vcpkg/libyuv/*
+Copyright: The LibYuv Project Authors
+License: BSD-3-Clause
+
+Files: third-party/ffmpeg
+Copyright: FFmpeg developers and contributors
+License: GPL-2.0+
+Comment:
+ FFmpeg is built with --enable-gpl --enable-version3 and linked against
+ x264/x265; the resulting build is GPL-compatible with the AGPL-3.0 main
+ program. Upstream: https://ffmpeg.org/
+ The Linux builds use nyanmisaka/ffmpeg-rockchip at the commit pinned by
+ FFMPEG_ROCKCHIP_REV in build/cross/Dockerfile.*.
+
+Files: third-party/x264
+Copyright: x264 LLC and x264 contributors
+License: GPL-2.0+
+Comment: Upstream: https://www.videolan.org/developers/x264.html
+
+Files: third-party/x265
+Copyright: MulticoreWare, Inc. and x265 contributors
+License: GPL-2.0+
+Comment: Upstream: https://www.x265.org/
+
+Files: third-party/libvpx
+Copyright: The WebM Project authors
+License: BSD-3-Clause
+Comment: Upstream: https://www.webmproject.org/code/
+
+Files: third-party/libopus
+Copyright: Opus contributors
+License: BSD-3-Clause
+Comment: Upstream: https://opus-codec.org/
+
+Files: third-party/libjpeg-turbo
+Copyright: D. R. Commander and other libjpeg-turbo contributors
+License: BSD-3-Clause
+Comment: Upstream: https://libjpeg-turbo.org/
+
+Files: third-party/libsodium
+Copyright: 2013-2025 Frank Denis
+License: Expat
+Comment: Upstream: https://libsodium.gitbook.io/
+
+Files: third-party/sqlite
+Copyright: 1994-2010 Hipp, Wyrick & Company, Inc.
+License: SQLite-public-domain
+Comment: Upstream: https://www.sqlite.org/
+
+License: AGPL-3.0-only
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as published by
+ the Free Software Foundation, either version 3 of the License.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+ .
+ You should have received a copy of the GNU Affero General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of the GNU Affero General Public License
+ version 3 can be found in the file `/usr/share/common-licenses/AGPL-3'.
+
+License: GPL-3.0+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of the GNU General Public License
+ version 3 can be found in the file `/usr/share/common-licenses/GPL-3'.
+
+License: GPL-2.0+
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 2 of the License, or
@@ -22,8 +136,61 @@ License: GPL-2.0
  GNU General Public License for more details.
  .
  You should have received a copy of the GNU General Public License
- along with this program.  If not, write to the Free Software
- Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the full text of the GNU General Public License
+ version 2 can be found in the file `/usr/share/common-licenses/GPL-2'.
 
-On Debian systems, the full text of the GNU General Public License
-version 2 can be found in the file `/usr/share/common-licenses/GPL-2'.
+License: Expat
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation
+ the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the
+ Software is furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
+
+License: BSD-3-Clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+ 1. Redistributions of source code must retain the above copyright notice,
+ this list of conditions and the following disclaimer.
+ .
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
+ .
+ 3. Neither the name of the copyright holder nor the names of its contributors
+ may be used to endorse or promote products derived from this software
+ without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+
+License: SQLite-public-domain
+ The author disclaims copyright to this source code.  In place of a legal
+ notice, here is a blessing:
+ .
+ May you do good and not evil.
+ May you find forgiveness for yourself and understand yourself.
+ May you share freely, never taking more than you give.

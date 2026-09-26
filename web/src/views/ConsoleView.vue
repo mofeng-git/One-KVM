@@ -3263,7 +3263,6 @@ onUnmounted(() => {
               />
             </div>
           </div>
-          <div v-if="consoleLayout === 'floating'" id="console-header-toolbar" class="console-header__toolbar" />
           <div class="console-header__account flex shrink-0 items-center gap-1 sm:gap-2">
             <ConsoleHeaderActions
               v-if="consoleLayout === 'floating'"
@@ -3355,36 +3354,39 @@ onUnmounted(() => {
         </div>
       </div>
     </header>
-    <Teleport :key="consoleLayout" defer :to="consoleLayout === 'floating' ? '#console-header-toolbar' : 'body'" :disabled="consoleLayout !== 'floating'">
-    <ActionBar
-      :layout="consoleLayout"
-      :mouse-mode="mouseMode"
-      :video-mode="videoMode"
-      :video-rotation="videoRotation"
-      :ttyd-running="ttydStatus?.running"
-      :show-power="showPower"
-      :atx-enabled="systemStore.atx?.available === true"
-      :show-terminal="showTerminal"
-      :show-computer-use="showComputerUse"
-      :show-paste-text="showPasteText"
-      :show-mic="microphoneTransferEnabled"
-      :scale-mode="videoScaleMode"
-      :source-size-available="sourceSizeAvailable"
-      @toggle-fullscreen="toggleFullscreen"
-      @update:scale-mode="setVideoScaleMode"
-      @toggle-stats="openStatsSheet"
-      @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
-      @toggle-mouse-mode="handleToggleMouseMode"
-      @update:video-mode="handleVideoModeChange"
-      @update:video-rotation="setVideoRotation"
-      @power-short="handlePowerShort"
-      @power-long="handlePowerLong"
-      @reset="handleReset"
-      @wol="handleWol"
-      @open-terminal="openTerminal"
-      @open-computer-use="openComputerUse"
-    />
-    </Teleport>
+    <div
+      class="console-actionbar-host"
+      :class="`console-actionbar-host--${consoleLayout}`"
+    >
+      <ActionBar
+        :layout="consoleLayout"
+        :mouse-mode="mouseMode"
+        :video-mode="videoMode"
+        :video-rotation="videoRotation"
+        :ttyd-running="ttydStatus?.running"
+        :show-power="showPower"
+        :atx-enabled="systemStore.atx?.available === true"
+        :show-terminal="showTerminal"
+        :show-computer-use="showComputerUse"
+        :show-paste-text="showPasteText"
+        :show-mic="microphoneTransferEnabled"
+        :scale-mode="videoScaleMode"
+        :source-size-available="sourceSizeAvailable"
+        @toggle-fullscreen="toggleFullscreen"
+        @update:scale-mode="setVideoScaleMode"
+        @toggle-stats="openStatsSheet"
+        @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
+        @toggle-mouse-mode="handleToggleMouseMode"
+        @update:video-mode="handleVideoModeChange"
+        @update:video-rotation="setVideoRotation"
+        @power-short="handlePowerShort"
+        @power-long="handlePowerLong"
+        @reset="handleReset"
+        @wol="handleWol"
+        @open-terminal="openTerminal"
+        @open-computer-use="openComputerUse"
+      />
+    </div>
     <div
       class="flex-1 overflow-hidden relative transition-[padding] duration-300"
       :class="consoleLayout === 'sidebar' && 'pl-14 sm:pl-16'"
@@ -3704,6 +3706,48 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Keep the action bar in one DOM location while changing only its placement.
+   Moving a live Teleport target during a layout switch can leave stale portal
+   nodes behind when the target is conditionally rendered. */
+.console-actionbar-host {
+  position: relative;
+  z-index: 40;
+}
+
+.console-actionbar-host--floating {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.console-actionbar-host--floating :deep(.console-action-bar) {
+  pointer-events: auto;
+}
+
+.console-actionbar-host--sidebar :deep(.console-action-bar--sidebar) {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+}
+
+.console-actionbar-host--sidebar {
+  position: absolute;
+  inset: 3.5rem auto 1.75rem 0;
+  width: 4rem;
+}
+
+@media (max-width: 639px) {
+  .console-actionbar-host--sidebar {
+    inset: 2.5rem auto 1.75rem 0;
+    width: 3.5rem;
+  }
+}
+
 /* Expanded controls may overlap header actions, but stay outside the video stage. */
 .console-header--floating .console-header__row {
   position: relative;

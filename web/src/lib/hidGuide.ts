@@ -57,17 +57,3 @@ export function hidDeviceStage(status: HidDeviceStatus | null | undefined, bluet
   if (status.backend === 'otg' && status.error_code === 'udc_not_configured') return 'waiting'
   return status.online ? 'ready' : 'waiting'
 }
-export const pendingHidKey = 'one-kvm.pending-hid.v1'
-export interface PendingHid { selection: HidSelection; phase: 'selected' | 'applying' | 'applied' }
-export function readPendingHid(): PendingHid | null {
-  try {
-    const value = JSON.parse(sessionStorage.getItem(pendingHidKey) ?? 'null')
-    if (value && ['selected', 'applying', 'applied'].includes(value.phase)
-      && ['otg', 'ch9329', 'bluetooth', 'none'].includes(value.selection?.backend)
-      && typeof value.selection.otg_udc === 'string' && typeof value.selection.ch9329_port === 'string'
-      && typeof value.selection.ch9329_baudrate === 'number'
-      && typeof value.selection.bluetooth?.adapter === 'string' && typeof value.selection.bluetooth?.name === 'string') return value
-  } catch { /* Invalid or unavailable session storage is not an applied configuration. */ }
-  return null
-}
-export function writePendingHid(value: PendingHid) { sessionStorage.setItem(pendingHidKey, JSON.stringify(value)) }

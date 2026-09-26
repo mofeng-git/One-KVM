@@ -4,9 +4,11 @@ use axum::{
     routing::{delete, put},
 };
 use axum::{
+    http::StatusCode,
     middleware,
+    response::IntoResponse,
     routing::{any, get, patch, post},
-    Router,
+    Json, Router,
 };
 use std::sync::Arc;
 use tower_http::{
@@ -363,6 +365,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(protected_routes)
         .merge(stream_routes)
         .merge(upload_routes)
+        .fallback(api_not_found)
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -383,4 +386,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         Some(rf) => main_router.merge(rf),
         None => main_router,
     }
+}
+
+async fn api_not_found() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(super::ErrorResponse {
+            success: false,
+            code: None,
+            message: "Not Found".to_string(),
+        }),
+    )
 }

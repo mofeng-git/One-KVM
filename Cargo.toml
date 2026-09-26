@@ -4,7 +4,7 @@ version = "0.2.7"
 edition = "2021"
 authors = ["SilentWind"]
 description = "A open and lightweight IP-KVM solution written in Rust"
-license = "GPL-2.0"
+license = "AGPL-3.0-only"
 repository = "https://github.com/mofeng-git/One-KVM"
 keywords = ["kvm", "ipkvm", "remote-management", "embedded"]
 categories = ["embedded", "network-programming"]
@@ -56,7 +56,6 @@ desktop = [
     "dep:serialport",
     "dep:async-trait",
     "dep:libc",
-    "dep:libloading",
     "dep:ventoy-img",
     "dep:protobuf",
     "dep:sodiumoxide",
@@ -158,7 +157,6 @@ sdp-types = { version = "0.1", optional = true }
 serialport = { version = "4", optional = true }
 async-trait = { version = "0.1", optional = true }
 libc = { version = "0.2", optional = true }
-libloading = { version = "0.8", optional = true }
 
 # Ventoy bootable image support
 ventoy-img = { path = "libs/ventoy-img-rs", optional = true }
