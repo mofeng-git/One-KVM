@@ -603,6 +603,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
               :format="videoFormat"
               :resolution="videoResolution"
               :fps="videoFps"
+              resolution-fps-inline
               :refreshing="refreshingInputStatus"
               @update:format="videoFormat = $event"
               @update:resolution="videoResolution = $event"

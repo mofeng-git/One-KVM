@@ -691,8 +691,6 @@ const config = ref({
     consumer: true,
   } as OtgHidFunctions,
   hid_otg_keyboard_leds: false,
-  hid_ch9329_hybrid_mouse: false,
-  hid_mouse_macos_drag: false,
   msd_enabled: false,
   msd_dir: '',
   msd_flash_inquiry_string: 'One-KVM Virtual Flash',
@@ -1175,10 +1173,14 @@ const isCh9329DescriptorDirty = computed(() => {
     || current.serialNumber !== baseline.serialNumber
 })
 
+const hasMacosDragInterfaceConflict = computed(() =>
+  config.value.hid_backend === 'otg' && configStore.hid?.mouse_macos_drag
+  && (!effectiveOtgFunctions.value.mouse_relative || !effectiveOtgFunctions.value.mouse_absolute)
+)
+
 const isHidSettingsValid = computed(() =>
   isHidFunctionSelectionValid.value
-  && !(config.value.hid_backend === 'otg' && config.value.hid_mouse_macos_drag
-    && (!effectiveOtgFunctions.value.mouse_relative || !effectiveOtgFunctions.value.mouse_absolute))
+  && !hasMacosDragInterfaceConflict.value
   && isCh9329DescriptorValid.value
   && areMsdInquiryStringsValid.value
 )
@@ -1456,13 +1458,7 @@ async function saveConfig() {
       if (!isHidSettingsValid.value) {
         return
       }
-      const hidUpdate: HidConfigUpdate = configStore.hid?.backend === 'ch9329'
-        ? {
-            ch9329_hybrid_mouse: config.value.hid_ch9329_hybrid_mouse,
-          } : {}
-      if (['otg', 'ch9329'].includes(config.value.hid_backend)) {
-        hidUpdate.mouse_macos_drag = config.value.hid_mouse_macos_drag
-      }
+      const hidUpdate: HidConfigUpdate = {}
       if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
         hidUpdate.ch9329_descriptor = {
           vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
@@ -1532,7 +1528,7 @@ async function saveConfig() {
 const hidFeatureBaseline = ref('')
 function hidFeatureSnapshot() {
   return JSON.stringify({
-    fields: Object.fromEntries(Object.entries(config.value).filter(([key]) => key.startsWith('msd_') || key.startsWith('otg_network_') || key.startsWith('uac_') || ['hid_otg_functions', 'hid_otg_keyboard_leds', 'hid_ch9329_hybrid_mouse', 'hid_mouse_macos_drag'].includes(key))),
+    fields: Object.fromEntries(Object.entries(config.value).filter(([key]) => key.startsWith('msd_') || key.startsWith('otg_network_') || key.startsWith('uac_') || ['hid_otg_functions', 'hid_otg_keyboard_leds'].includes(key))),
     descriptor: [otgVendorIdHex.value, otgProductIdHex.value, otgManufacturer.value, otgProduct.value, otgSerialNumber.value],
   })
 }
@@ -1573,8 +1569,6 @@ async function loadConfig() {
         consumer: hid.otg_functions?.consumer ?? true,
       } as OtgHidFunctions,
       hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
-      hid_ch9329_hybrid_mouse: hid.ch9329_hybrid_mouse ?? false,
-      hid_mouse_macos_drag: hid.mouse_macos_drag ?? false,
       msd_enabled: msd.enabled || false,
       msd_dir: msd.msd_dir || '',
       msd_flash_inquiry_string: msd.flash_inquiry_string || 'One-KVM Virtual Flash',
@@ -3215,33 +3209,9 @@ watch(isWindows, () => {
                       {{ t('settings.ch9329DescriptorWarning') }}
                     </p>
                   </div>
-                  <Separator class="my-4" />
-                  <div class="space-y-4">
-                    <div>
-                      <h4 class="text-sm font-medium">{{ t('settings.ch9329Options') }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ t('settings.ch9329OptionsDesc') }}</p>
-                    </div>
-                    <div class="space-y-3 rounded-md border border-border/60 p-3">
-                      <div class="flex items-center justify-between gap-4">
-                        <div>
-                          <Label>{{ t('settings.ch9329HybridMouse') }}</Label>
-                          <p class="text-xs text-muted-foreground">{{ t('settings.ch9329HybridMouseDesc') }}</p>
-                        </div>
-                        <Switch v-model="config.hid_ch9329_hybrid_mouse" />
-                      </div>
-                    </div>
-                  </div>
                 </template>
 
                 <!-- OTG Descriptor Settings -->
-                <div v-if="['otg', 'ch9329'].includes(config.hid_backend)" class="flex items-center justify-between gap-4 rounded-md border border-border/60 p-3">
-                  <div>
-                    <Label>{{ t('settings.mouseMacosDrag') }}</Label>
-                    <p class="text-xs text-muted-foreground">{{ t('settings.mouseMacosDragDesc') }}</p>
-                    <p v-if="config.hid_backend === 'otg' && config.hid_mouse_macos_drag && (!effectiveOtgFunctions.mouse_relative || !effectiveOtgFunctions.mouse_absolute)" class="text-xs text-warning">{{ t('settings.mouseMacosDragRequiresBoth') }}</p>
-                  </div>
-                  <Switch v-model="config.hid_mouse_macos_drag" />
-                </div>
                 <template v-if="config.hid_backend === 'otg'">
                   <Separator class="my-4" />
                   <div class="space-y-4">
@@ -3344,6 +3314,7 @@ watch(isWindows, () => {
                             </div>
                             <Switch v-model="config.hid_otg_functions.mouse_absolute" />
                           </div>
+                          <p v-if="hasMacosDragInterfaceConflict" class="text-xs text-warning">{{ t('settings.mouseMacosDragRequiresBoth') }}</p>
                           <Separator />
                           <div class="flex items-center justify-between gap-4">
                             <Label>{{ t('settings.uacMic') }}</Label>
@@ -5413,6 +5384,10 @@ watch(isWindows, () => {
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.otgFunctionMinWarning') }}</span>
+              </p>
+              <p v-else-if="activeSection === 'hid' && hasMacosDragInterfaceConflict" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
+                <AlertTriangle class="size-3.5 shrink-0" />
+                <span>{{ t('settings.mouseMacosDragRequiresBoth') }}</span>
               </p>
               <p v-else-if="activeSection === 'hid' && !isCh9329DescriptorValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
