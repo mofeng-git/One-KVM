@@ -169,7 +169,8 @@ export const systemApi = {
     video_width?: number
     video_height?: number
     video_fps?: number
-    hid_backend?: string
+    hid_backend?: 'otg' | 'ch9329' | 'bluetooth' | 'none'
+    hid_bluetooth?: { adapter: string; name: string }
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string

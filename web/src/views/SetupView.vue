@@ -347,7 +347,7 @@ function prevStep() {
 async function handleSetup() {
   error.value = ''
 
-  if (loading.value) return
+  if (loading.value || !validateStep3()) return
 
   loading.value = true
   // Reconcile a previous timed-out account request before submitting again.
@@ -385,7 +385,16 @@ async function handleSetup() {
     setupData.video_fps = toConfigFps(videoFps.value)
   }
 
-  setupData.hid_backend = 'none'
+  const hid = hidSelection.value
+  setupData.hid_backend = hid.backend
+  if (hid.backend === 'ch9329') {
+    setupData.hid_ch9329_port = hid.ch9329_port
+    setupData.hid_ch9329_baudrate = hid.ch9329_baudrate
+  } else if (hid.backend === 'otg') {
+    setupData.hid_otg_udc = hid.otg_udc
+  } else if (hid.backend === 'bluetooth') {
+    setupData.hid_bluetooth = { ...hid.bluetooth }
+  }
   setupData.msd_enabled = false
 
   // Encoder backend setting

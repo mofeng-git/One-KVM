@@ -107,26 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function setup(data: {
-    username: string
-    password: string
-    video_device?: string
-    video_format?: string
-    video_width?: number
-    video_height?: number
-    video_fps?: number
-    hid_backend?: string
-    hid_ch9329_port?: string
-    hid_ch9329_baudrate?: number
-    hid_otg_udc?: string
-    hid_otg_profile?: string
-    hid_otg_keyboard_leds?: boolean
-    msd_enabled?: boolean
-    encoder_backend?: string
-    audio_device?: string
-    ttyd_enabled?: boolean
-    rustdesk_enabled?: boolean
-  }) {
+  async function setup(data: Parameters<typeof systemApi.setup>[0]) {
     loading.value = true
     error.value = null
 
