@@ -1,0 +1,36 @@
+--- a/libavcodec/v4l2_m2m_enc.c
++++ b/libavcodec/v4l2_m2m_enc.c
+@@ -338,6 +338,7 @@
+     V4L2m2mPriv *priv = avctx->priv_data;
+     enum AVPixelFormat pix_fmt_output;
+     uint32_t v4l2_fmt_output;
++    unsigned int output_width, output_height;
+     int ret;
+ 
+     ret = ff_v4l2_m2m_create_context(priv, &s);
+@@ -370,6 +371,25 @@
+         v4l2_fmt_output = output->format.fmt.pix_mp.pixelformat;
+     else
+         v4l2_fmt_output = output->format.fmt.pix.pixelformat;
++
++    /* Drivers may clamp the requested raw format to their supported size.
++     * The software-frame upload still uses avctx/frame dimensions, so a
++     * smaller negotiated format would overrun the mapped output buffers.
++     * Allow upward alignment, but reject frames that do not fit.
++     */
++    if (V4L2_TYPE_IS_MULTIPLANAR(output->type)) {
++        output_width  = output->format.fmt.pix_mp.width;
++        output_height = output->format.fmt.pix_mp.height;
++    } else {
++        output_width  = output->format.fmt.pix.width;
++        output_height = output->format.fmt.pix.height;
++    }
++    if (output_width < avctx->width || output_height < avctx->height) {
++        av_log(avctx, AV_LOG_ERROR,
++               "Encoder cannot fit requested %dx%d frame in negotiated %ux%u format\n",
++               avctx->width, avctx->height, output_width, output_height);
++        return AVERROR(EINVAL);
++    }
+ 
+     pix_fmt_output = ff_v4l2_format_v4l2_to_avfmt(v4l2_fmt_output, AV_CODEC_ID_RAWVIDEO);
+     if (pix_fmt_output != avctx->pix_fmt) {

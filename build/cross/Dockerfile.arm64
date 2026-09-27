@@ -60,6 +60,7 @@ RUN dpkg --add-architecture arm64
 # Install cross-compiler and native build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    patch \
     pkg-config \
     cmake \
     nasm \
@@ -250,6 +251,9 @@ RUN github_prefix="" \
     && make install \
     && rm -rf /tmp/opus /tmp/opus.tar.gz
 
+# Reject raw formats smaller than the requested frame before any V4L2 upload.
+COPY build/cross/patches/0001-v4l2-m2m-reject-undersized-encoder-format.patch /tmp/ffmpeg-v4l2-size.patch
+
 # Download and build FFmpeg with RKMPP support
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && github_prefix="" \
@@ -261,6 +265,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && git remote add origin "${github_prefix}https://github.com/nyanmisaka/ffmpeg-rockchip.git" \
     && git fetch --depth 1 origin ${FFMPEG_ROCKCHIP_REV} \
     && git checkout --detach FETCH_HEAD \
+    && patch -p1 < /tmp/ffmpeg-v4l2-size.patch \
     && cd .. \
     # Build RKMPP
     && mkdir -p rkmpp/build && cd rkmpp/build \
