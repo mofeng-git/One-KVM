@@ -1,6 +1,8 @@
-//! Multiplex H264/VP8/VP9 (`TrackLocalStaticSample`) vs H265 (`TrackLocalStaticRTP` + [`H265Payloader`]).
+//! Send H.26x as RTP and VP8/VP9 through sample tracks.
 
 use bytes::Bytes;
+use rtp::codecs::h264::H264Payloader;
+use rtp::packetizer::Payloader;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -155,8 +157,38 @@ struct H265RtpState {
     timestamp_increment: u32,
 }
 
-#[derive(Default)]
+struct H264RtpClock {
+    timestamp: u32,
+    last_pts_ms: Option<i64>,
+    increment: u32,
+    started: bool,
+}
+
+impl H264RtpClock {
+    fn next(&mut self, pts_ms: Option<i64>) -> u32 {
+        if self.started {
+            let ticks = match (self.last_pts_ms, pts_ms) {
+                (Some(previous), Some(current)) => {
+                    current.saturating_sub(previous).saturating_mul(90).max(1) as u32
+                }
+                _ => self.increment,
+            };
+            self.timestamp = self.timestamp.wrapping_add(ticks);
+        }
+        self.started = true;
+        if let Some(pts) = pts_ms {
+            self.last_pts_ms = Some(self.last_pts_ms.map_or(pts, |last| last.max(pts)));
+        } else {
+            self.last_pts_ms = None;
+        }
+        self.timestamp
+    }
+}
+
 struct H264TrackState {
+    payloader: H264Payloader,
+    sequence_number: u16,
+    clock: H264RtpClock,
     sps: Option<Vec<u8>>,
     pps: Option<Vec<u8>>,
 }
@@ -182,7 +214,7 @@ impl UniversalVideoTrack {
             rtcp_feedback: vec![],
         };
 
-        let (track, h265_state) = if config.codec == VideoCodec::H265 {
+        let (track, h265_state) = if matches!(config.codec, VideoCodec::H264 | VideoCodec::H265) {
             let rtp_track = Arc::new(TrackLocalStaticRTP::new(
                 codec_capability,
                 config.track_id.clone(),
@@ -196,7 +228,10 @@ impl UniversalVideoTrack {
                 timestamp_increment: 90000 / config.fps.max(1),
             };
 
-            (TrackType::Rtp(rtp_track), Some(Mutex::new(h265_state)))
+            (
+                TrackType::Rtp(rtp_track),
+                (config.codec == VideoCodec::H265).then(|| Mutex::new(h265_state)),
+            )
         } else {
             let sample_track = Arc::new(TrackLocalStaticSample::new(
                 codec_capability,
@@ -207,12 +242,24 @@ impl UniversalVideoTrack {
             (TrackType::Sample(sample_track), None)
         };
 
+        let h264_state = H264TrackState {
+            sps: None,
+            pps: None,
+            payloader: H264Payloader::default(),
+            sequence_number: rand::random(),
+            clock: H264RtpClock {
+                timestamp: rand::random(),
+                last_pts_ms: None,
+                increment: 90000 / config.fps.max(1),
+                started: false,
+            },
+        };
         Self {
             track,
             codec: config.codec,
             config,
             h265_state,
-            h264_state: Mutex::new(H264TrackState::default()),
+            h264_state: Mutex::new(h264_state),
         }
     }
 
@@ -232,12 +279,23 @@ impl UniversalVideoTrack {
     }
 
     pub async fn write_frame_bytes(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
+        self.write_frame_bytes_at(data, is_keyframe, None).await
+    }
+
+    /// Use the encoder's monotonic presentation time for H.264. Counting frames
+    /// compresses the RTP timeline whenever capture/encoding misses a frame.
+    pub async fn write_frame_bytes_at(
+        &self,
+        data: Bytes,
+        is_keyframe: bool,
+        pts_ms: Option<i64>,
+    ) -> Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
         match self.codec {
-            VideoCodec::H264 => self.write_h264_frame(data, is_keyframe).await,
+            VideoCodec::H264 => self.write_h264_frame(data, pts_ms).await,
             VideoCodec::H265 => self.write_h265_frame(data, is_keyframe).await,
             VideoCodec::VP8 => self.write_vp8_frame(data, is_keyframe).await,
             VideoCodec::VP9 => self.write_vp9_frame(data, is_keyframe).await,
@@ -249,16 +307,16 @@ impl UniversalVideoTrack {
             .await
     }
 
-    /// One Annex-B AU per sample so the stack can STAP/FU internally.
-    async fn write_h264_frame(&self, data: Bytes, _is_keyframe: bool) -> Result<()> {
+    /// Keep the stack's H.264 STAP/FU payloader, with explicit RTP timestamps.
+    async fn write_h264_frame(&self, data: Bytes, pts_ms: Option<i64>) -> Result<()> {
         let normalized = h264_bitstream::normalize_for_webrtc(data.as_ref());
         let mut data = Bytes::from(normalized);
 
         let idr = h264_bitstream::is_keyframe(data.as_ref());
         let has_parameter_sets = h264_bitstream::has_sps_pps(data.as_ref());
 
+        let mut state = self.h264_state.lock().await;
         {
-            let mut state = self.h264_state.lock().await;
             let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
             if let Some(sps) = sps {
                 state.sps = Some(sps);
@@ -281,28 +339,37 @@ impl UniversalVideoTrack {
             }
         }
 
-        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
-        let sample = Sample {
-            data,
-            duration: frame_duration,
-            ..Default::default()
+        let TrackType::Rtp(track) = &self.track else {
+            return Err(AppError::WebRtcError("H264 RTP track missing".to_owned()));
         };
-
-        match &self.track {
-            TrackType::Sample(track) => {
-                if let Err(e) = track.write_sample(&sample).await {
-                    debug!("H264 write_sample failed: {}", e);
-                    return Err(AppError::WebRtcError(format!(
-                        "H264 write_sample failed: {}",
-                        e
-                    )));
-                }
-            }
-            TrackType::Rtp(_) => {
-                warn!("H264 should not use RTP track");
-            }
+        let payloads = state
+            .payloader
+            .payload(RTP_MTU - 12, &data)
+            .map_err(|e| AppError::WebRtcError(format!("H264 packetization failed: {e}")))?;
+        if payloads.is_empty() {
+            return Ok(());
         }
-
+        let timestamp = state.clock.next(pts_ms);
+        let count = payloads.len();
+        // Serialize complete access units, including their sequence allocation.
+        for (index, payload) in payloads.into_iter().enumerate() {
+            let sequence_number = state.sequence_number;
+            state.sequence_number = state.sequence_number.wrapping_add(1);
+            let packet = rtp::packet::Packet {
+                header: rtp::header::Header {
+                    version: 2,
+                    marker: index + 1 == count,
+                    sequence_number,
+                    timestamp,
+                    ..Default::default()
+                },
+                payload,
+            };
+            track
+                .write_rtp(&packet)
+                .await
+                .map_err(|e| AppError::WebRtcError(format!("H264 RTP write failed: {e}")))?;
+        }
         Ok(())
     }
 
@@ -434,6 +501,37 @@ impl UniversalVideoTrack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_clock(timestamp: u32) -> H264RtpClock {
+        H264RtpClock {
+            timestamp,
+            last_pts_ms: None,
+            increment: 3000,
+            started: false,
+        }
+    }
+
+    #[test]
+    fn h264_timestamps_preserve_variable_frame_intervals() {
+        let mut clock = test_clock(1000);
+        assert_eq!(clock.next(Some(100)), 1000);
+        assert_eq!(clock.next(Some(133)), 3970);
+        // Missing input frames must leave a gap in media time too.
+        assert_eq!(clock.next(Some(300)), 19000);
+        assert_eq!(clock.next(Some(333)), 21970);
+    }
+
+    #[test]
+    fn h264_timestamps_wrap_and_handle_legacy_or_repeated_pts() {
+        let mut clock = test_clock(u32::MAX - 89);
+        assert_eq!(clock.next(Some(0)), u32::MAX - 89);
+        assert_eq!(clock.next(Some(1)), 0);
+        assert_eq!(clock.next(Some(1)), 1);
+        assert_eq!(clock.next(Some(0)), 2);
+        assert_eq!(clock.next(Some(2)), 92);
+        assert_eq!(clock.next(None), 3092);
+        assert_eq!(clock.next(None), 6092);
+    }
 
     #[test]
     fn test_video_codec_properties() {

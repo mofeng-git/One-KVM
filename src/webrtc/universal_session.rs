@@ -671,9 +671,10 @@ impl UniversalSession {
                         }
 
                         let send_result = video_track
-                            .write_frame_bytes(
+                            .write_frame_bytes_at(
                                 encoded_frame.data.clone(),
                                 encoded_frame.is_keyframe,
+                                Some(encoded_frame.pts_ms),
                             )
                             .await;
                         match send_result {
