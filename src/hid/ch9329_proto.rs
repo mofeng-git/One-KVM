@@ -9,8 +9,11 @@ pub const RESPONSE_ERROR_MASK: u8 = 0xC0;
 pub const DEFAULT_ADDR: u8 = 0x00;
 pub const DEFAULT_BAUD_RATE: u32 = 9600;
 pub const MAX_DATA_LEN: usize = 64;
-pub const MAX_PACKET_SIZE: usize = 70;
-const EXTENDED_PARAMETER_RESPONSE_SIZES: [usize; 2] = [72, 88];
+// Includes the 71-byte CH9329F GET_PARA_CFG response.
+pub const MAX_PACKET_SIZE: usize = 71;
+// This CH9329F firmware keeps LEN=50 but appends 15 reserved bytes before the
+// checksum, making the complete response 71 bytes.
+const EXTENDED_PARAMETER_RESPONSE_SIZE: usize = 71;
 
 pub mod cmd {
     pub const GET_INFO: u8 = 0x01;
@@ -243,14 +246,10 @@ pub fn try_extract_response(buffer: &[u8]) -> Option<(Response, usize)> {
             && matches!(buffer[data_start], 0x00..=0x03 | 0x80..=0x83)
             && matches!(buffer[data_start + 1], 0x00..=0x02 | 0x80..=0x82);
         if parameter_payload_is_plausible {
-            for extended_size in EXTENDED_PARAMETER_RESPONSE_SIZES {
-                let extended_end = offset + extended_size;
-                if buffer.len() >= extended_end {
-                    let checksum_index = extended_end - 1;
-                    if calculate_checksum(&buffer[offset..checksum_index]) != buffer[checksum_index]
-                    {
-                        continue;
-                    }
+            let extended_end = offset + EXTENDED_PARAMETER_RESPONSE_SIZE;
+            if buffer.len() >= extended_end {
+                let checksum_index = extended_end - 1;
+                if calculate_checksum(&buffer[offset..checksum_index]) == buffer[checksum_index] {
                     return Some((
                         Response {
                             cmd,
@@ -263,7 +262,7 @@ pub fn try_extract_response(buffer: &[u8]) -> Option<(Response, usize)> {
                 }
             }
 
-            if buffer.len() < offset + EXTENDED_PARAMETER_RESPONSE_SIZES[1] {
+            if buffer.len() < extended_end {
                 return None;
             }
         }
@@ -295,19 +294,18 @@ mod tests {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        for reserved_len in [16, 32] {
-            let mut frame = vec![0x57, 0xAB, DEFAULT_ADDR, 0x88, 50];
-            frame.extend_from_slice(&payload);
-            frame.extend_from_slice(&vec![0; reserved_len]);
-            frame.push(calculate_checksum(&frame));
+        let mut frame = vec![0x57, 0xAB, DEFAULT_ADDR, 0x88, 50];
+        frame.extend_from_slice(&payload);
+        frame.extend_from_slice(&[0; 15]);
+        frame.push(calculate_checksum(&frame));
 
-            assert!(Response::parse(&frame[..56]).is_none());
-            let (response, consumed) = try_extract_response(&frame).expect("extended response");
-            assert_eq!(response.cmd, 0x88);
-            assert_eq!(response.data, payload);
-            assert!(!response.is_error);
-            assert_eq!(consumed, frame.len());
-        }
+        assert_eq!(frame.len(), 71);
+        assert!(Response::parse(&frame[..56]).is_none());
+        let (response, consumed) = try_extract_response(&frame).expect("CH9329F response");
+        assert_eq!(response.cmd, 0x88);
+        assert_eq!(response.data, payload);
+        assert!(!response.is_error);
+        assert_eq!(consumed, frame.len());
     }
 
     #[test]
