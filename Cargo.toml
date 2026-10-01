@@ -206,7 +206,7 @@ windows-sys = { version = "0.61", features = [
 protobuf-codegen = "3.7"
 
 [patch.crates-io]
-dtls = { path = "vendor/dtls" }
+dtls = { path = "libs/dtls" }
 
 [profile.release]
 opt-level = 3

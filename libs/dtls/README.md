@@ -16,5 +16,5 @@ by this backend. The upstream application-controlled `insecure_skip_verify`
 policy is preserved, including WebRTC's separate certificate fingerprint check.
 Authentication security level 2 rejects weak RSA keys and SHA-1 leaf signatures.
 
-Run `cargo test --manifest-path vendor/dtls/Cargo.toml --lib` after updating this
+Run `cargo test --manifest-path libs/dtls/Cargo.toml --lib` after updating this
 fork, and verify the application dependency tree contains no `rustls` engine.
