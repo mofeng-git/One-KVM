@@ -378,10 +378,6 @@ impl H264Encoder {
         self.inner.supports_owned_nv12_input()
     }
 
-    pub fn input_stats(&self) -> Option<hwcodec::ffmpeg_ram::encode::EncodeInputStats> {
-        self.inner.input_stats()
-    }
-
     pub fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<HwEncodeFrame>> {
         if !self.supports_owned_nv12_input() {
             return self.encode_raw(data.as_ref(), pts_ms);

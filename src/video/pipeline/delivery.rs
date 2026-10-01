@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
@@ -16,7 +15,6 @@ pub(super) type FrameMailboxHandle = Arc<Mutex<Option<Arc<FrameMailbox<Arc<Video
 #[derive(Default)]
 pub(super) struct DeliveryStats {
     pub sent_frames: AtomicU64,
-    pub send_time_ns: AtomicU64,
     pub send_errors: AtomicU64,
 }
 
@@ -80,10 +78,7 @@ impl EncodedVideoFrameReceiver {
         }
     }
 
-    pub(crate) fn record_send(&self, elapsed: Duration, succeeded: bool) {
-        self.stats
-            .send_time_ns
-            .fetch_add(elapsed.as_nanos() as u64, Ordering::Relaxed);
+    pub(crate) fn record_send(&self, succeeded: bool) {
         if succeeded {
             self.stats.sent_frames.fetch_add(1, Ordering::Relaxed);
         } else {

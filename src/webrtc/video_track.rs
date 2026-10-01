@@ -4,9 +4,9 @@ use bytes::Bytes;
 use rtp::codecs::h264::H264Payloader;
 use rtp::packetizer::Payloader;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 use webrtc::media::Sample;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -191,63 +191,6 @@ struct H264TrackState {
     clock: H264RtpClock,
     sps: Option<Vec<u8>>,
     pps: Option<Vec<u8>>,
-    performance: H264SendPerformance,
-}
-
-#[derive(Default)]
-struct H264SendTiming {
-    prepare: Duration,
-    lock: Duration,
-    packetize: Duration,
-    write: Duration,
-}
-
-struct H264SendPerformance {
-    last_report: Instant,
-    frames: u64,
-    packets: u64,
-    bytes: u64,
-    timing: H264SendTiming,
-}
-
-impl H264SendPerformance {
-    fn new() -> Self {
-        Self {
-            last_report: Instant::now(),
-            frames: 0,
-            packets: 0,
-            bytes: 0,
-            timing: H264SendTiming::default(),
-        }
-    }
-
-    fn record(&mut self, bytes: usize, packets: usize, timing: H264SendTiming) {
-        self.frames += 1;
-        self.packets += packets as u64;
-        self.bytes += bytes as u64;
-        self.timing.prepare += timing.prepare;
-        self.timing.lock += timing.lock;
-        self.timing.packetize += timing.packetize;
-        self.timing.write += timing.write;
-        let elapsed = self.last_report.elapsed();
-        if elapsed < Duration::from_secs(5) {
-            return;
-        }
-        let average_ms = |duration: Duration| duration.as_secs_f64() * 1000.0 / self.frames as f64;
-        info!(
-            "[VideoSendPerf] window_s={:.2} frames={} packets_per_frame={:.2} frame_kib={:.2} prepare_ms={:.3} lock_ms={:.3} packetize_ms={:.3} write_ms={:.3} write_us_per_packet={:.3}",
-            elapsed.as_secs_f64(),
-            self.frames,
-            self.packets as f64 / self.frames as f64,
-            self.bytes as f64 / self.frames as f64 / 1024.0,
-            average_ms(self.timing.prepare),
-            average_ms(self.timing.lock),
-            average_ms(self.timing.packetize),
-            average_ms(self.timing.write),
-            self.timing.write.as_secs_f64() * 1_000_000.0 / self.packets.max(1) as f64,
-        );
-        *self = Self::new();
-    }
 }
 
 pub struct UniversalVideoTrack {
@@ -256,7 +199,6 @@ pub struct UniversalVideoTrack {
     config: UniversalVideoTrackConfig,
     h265_state: Option<Mutex<H265RtpState>>,
     h264_state: Mutex<H264TrackState>,
-    h264_perf_enabled: bool,
 }
 
 impl UniversalVideoTrack {
@@ -311,7 +253,6 @@ impl UniversalVideoTrack {
                 increment: 90000 / config.fps.max(1),
                 started: false,
             },
-            performance: H264SendPerformance::new(),
         };
         Self {
             track,
@@ -319,7 +260,6 @@ impl UniversalVideoTrack {
             config,
             h265_state,
             h264_state: Mutex::new(h264_state),
-            h264_perf_enabled: std::env::var("ONE_KVM_VIDEO_STATS").as_deref() == Ok("1"),
         }
     }
 
@@ -369,18 +309,13 @@ impl UniversalVideoTrack {
 
     /// Keep the stack's H.264 STAP/FU payloader, with explicit RTP timestamps.
     async fn write_h264_frame(&self, data: Bytes, pts_ms: Option<i64>) -> Result<()> {
-        let prepare_started = self.h264_perf_enabled.then(Instant::now);
         let mut data = h264_bitstream::normalize_annex_b(data);
 
         let inspection = h264_bitstream::inspect_annex_b(data.as_ref());
         let idr = inspection.is_idr;
         let has_parameter_sets = inspection.sps.is_some() && inspection.pps.is_some();
 
-        let prepare_time = prepare_started.map(|started| started.elapsed());
-        let lock_started = self.h264_perf_enabled.then(Instant::now);
         let mut state = self.h264_state.lock().await;
-        let lock_time = lock_started.map(|started| started.elapsed());
-        let packetize_started = self.h264_perf_enabled.then(Instant::now);
         {
             if let Some(sps) = inspection.sps {
                 state.sps = Some(sps.to_vec());
@@ -415,8 +350,6 @@ impl UniversalVideoTrack {
         }
         let timestamp = state.clock.next(pts_ms);
         let count = payloads.len();
-        let packetize_time = packetize_started.map(|started| started.elapsed());
-        let write_started = self.h264_perf_enabled.then(Instant::now);
         // Serialize complete access units, including their sequence allocation.
         for (index, payload) in payloads.into_iter().enumerate() {
             let sequence_number = state.sequence_number;
@@ -435,18 +368,6 @@ impl UniversalVideoTrack {
                 .write_rtp(&packet)
                 .await
                 .map_err(|e| AppError::WebRtcError(format!("H264 RTP write failed: {e}")))?;
-        }
-        if let Some(started) = write_started {
-            state.performance.record(
-                data.len(),
-                count,
-                H264SendTiming {
-                    prepare: prepare_time.unwrap_or_default(),
-                    lock: lock_time.unwrap_or_default(),
-                    packetize: packetize_time.unwrap_or_default(),
-                    write: started.elapsed(),
-                },
-            );
         }
         Ok(())
     }
@@ -657,30 +578,6 @@ mod tests {
                 current_payloader.payload(RTP_MTU - 12, &current).unwrap(),
             );
         }
-    }
-
-    #[test]
-    fn h264_send_performance_accumulates_stage_timings() {
-        let mut performance = H264SendPerformance::new();
-        for _ in 0..2 {
-            performance.record(
-                1200,
-                2,
-                H264SendTiming {
-                    prepare: Duration::from_micros(100),
-                    lock: Duration::from_micros(20),
-                    packetize: Duration::from_micros(200),
-                    write: Duration::from_micros(300),
-                },
-            );
-        }
-        assert_eq!(performance.frames, 2);
-        assert_eq!(performance.bytes, 2400);
-        assert_eq!(performance.packets, 4);
-        assert_eq!(performance.timing.prepare, Duration::from_micros(200));
-        assert_eq!(performance.timing.lock, Duration::from_micros(40));
-        assert_eq!(performance.timing.packetize, Duration::from_micros(400));
-        assert_eq!(performance.timing.write, Duration::from_micros(600));
     }
 
     #[test]

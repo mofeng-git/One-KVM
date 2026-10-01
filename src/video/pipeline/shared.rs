@@ -223,7 +223,6 @@ fn spawn_mjpeg_decode_workers(
                     }
                     let nv12_size = resolution.width as usize * resolution.height as usize * 3 / 2;
                     let mut nv12 = worker_buffer_pool.take(nv12_size);
-                    let decode_started = Instant::now();
                     let decode_result = decoder.decode_into(&job.data, &mut nv12);
                     worker_buffer_pool.put(job.data);
 
@@ -232,10 +231,7 @@ fn spawn_mjpeg_decode_workers(
                         warn!("Dropping undecodable MJPEG frame: {}", error);
                         continue;
                     }
-                    worker_pipeline.mjpeg_decode_time_ns.fetch_add(
-                        decode_started.elapsed().as_nanos() as u64,
-                        Ordering::Relaxed,
-                    );
+
                     worker_pipeline
                         .mjpeg_decoded_frames
                         .fetch_add(1, Ordering::Relaxed);
@@ -496,94 +492,6 @@ fn log_encoding_error(
     }
 }
 
-fn latency_percentile_ms(sorted_time_ns: &[u64], percentile: usize) -> f64 {
-    if sorted_time_ns.is_empty() {
-        return 0.0;
-    }
-    let index = (sorted_time_ns.len() * percentile.clamp(1, 100)).div_ceil(100) - 1;
-    sorted_time_ns[index] as f64 / 1_000_000.0
-}
-
-fn log_encoder_input_performance(
-    stats: hwcodec::ffmpeg_ram::encode::EncodeInputStats,
-    previous: &mut hwcodec::ffmpeg_ram::encode::EncodeInputStats,
-) {
-    let delta = |current: u64, before: u64| current.saturating_sub(before);
-    let inputs = delta(stats.input_frames, previous.input_frames);
-    let average_ms = |current: u64, before: u64| {
-        if inputs == 0 {
-            0.0
-        } else {
-            delta(current, before) as f64 / inputs as f64 / 1000.0
-        }
-    };
-    info!(
-        "[VideoInputPerf] inputs={} borrowed={} copied={} copied_bytes={} prepare_ms={:.3} send_frame_ms={:.3} receive_packet_ms={:.3} packet_callback_ms={:.3} output_copy_ms={:.3}",
-        inputs,
-        delta(stats.borrowed_frames, previous.borrowed_frames),
-        delta(stats.copied_frames, previous.copied_frames),
-        delta(stats.copied_bytes, previous.copied_bytes),
-        average_ms(stats.prepare_us, previous.prepare_us),
-        average_ms(stats.send_us, previous.send_us),
-        average_ms(stats.receive_us, previous.receive_us),
-        average_ms(stats.packet_us, previous.packet_us),
-        average_ms(stats.output_copy_us, previous.output_copy_us),
-    );
-    *previous = stats;
-}
-
-fn log_pipeline_performance(
-    stats: &SharedVideoPipelineStats,
-    previous: &SharedVideoPipelineStats,
-    elapsed: f64,
-    sorted_encode_time_ns: &[u64],
-) {
-    let delta = |current: u64, previous: u64| current.saturating_sub(previous);
-    let decoded = delta(stats.mjpeg_decoded_frames, previous.mjpeg_decoded_frames);
-    let encoded_inputs = delta(stats.encoded_input_frames, previous.encoded_input_frames);
-    let encoded = delta(stats.encoded_frames, previous.encoded_frames);
-    let sent = delta(stats.sent_frames, previous.sent_frames);
-    let send_errors = delta(stats.send_errors, previous.send_errors);
-    let average_ms = |time_ns: u64, count: u64| {
-        if count == 0 {
-            0.0
-        } else {
-            time_ns as f64 / count as f64 / 1_000_000.0
-        }
-    };
-    info!(
-        "[VideoPerf] window_s={:.2} decoded_fps={:.2} encoded_fps={:.2} sent_fps={:.2} decode_ms={:.2} encode_ms={:.2} send_ms={:.2} encoded_mbps={:.2} dropped_before_decode={} decoded_unused={} backpressure_events={} slow_subscriber_skips={} send_errors={}",
-        elapsed,
-        decoded as f64 / elapsed,
-        encoded as f64 / elapsed,
-        sent as f64 / elapsed,
-        average_ms(delta(stats.mjpeg_decode_time_ns, previous.mjpeg_decode_time_ns), decoded),
-        average_ms(delta(stats.encode_time_ns, previous.encode_time_ns), encoded_inputs),
-        average_ms(delta(stats.send_time_ns, previous.send_time_ns), sent + send_errors),
-        delta(stats.encoded_bytes, previous.encoded_bytes) as f64 * 8.0 / elapsed / 1_000_000.0,
-        delta(stats.mjpeg_dropped_before_decode, previous.mjpeg_dropped_before_decode),
-        delta(stats.decoded_frames_not_encoded, previous.decoded_frames_not_encoded),
-        delta(stats.output_backpressure_events, previous.output_backpressure_events),
-        delta(stats.encoded_frames_skipped_for_slow_subscribers, previous.encoded_frames_skipped_for_slow_subscribers),
-        send_errors,
-    );
-    info!(
-        "[VideoQueuePerf] window_s={:.2} input_fps={:.2} frame_wait_ms={:.2} output_wait_ms={:.2} timed_inputs={} encode_p95_ms={:.2} encode_p99_ms={:.2} drop_pending_capture={} drop_pending_decode={} drop_backpressure_capture={} drop_backpressure_decode={} drop_workers_busy={}",
-        elapsed,
-        encoded_inputs as f64 / elapsed,
-        average_ms(delta(stats.encoder_frame_wait_ns, previous.encoder_frame_wait_ns), encoded_inputs),
-        average_ms(delta(stats.encoder_output_wait_ns, previous.encoder_output_wait_ns), encoded_inputs),
-        sorted_encode_time_ns.len(),
-        latency_percentile_ms(sorted_encode_time_ns, 95),
-        latency_percentile_ms(sorted_encode_time_ns, 99),
-        delta(stats.mjpeg_dropped_pending_capture, previous.mjpeg_dropped_pending_capture),
-        delta(stats.mjpeg_dropped_pending_decode, previous.mjpeg_dropped_pending_decode),
-        delta(stats.mjpeg_dropped_backpressure_capture, previous.mjpeg_dropped_backpressure_capture),
-        delta(stats.mjpeg_dropped_backpressure_decode, previous.mjpeg_dropped_backpressure_decode),
-        delta(stats.mjpeg_dropped_workers_busy, previous.mjpeg_dropped_workers_busy),
-    );
-}
-
 /// Pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct SharedVideoPipelineStats {
@@ -596,17 +504,12 @@ pub struct SharedVideoPipelineStats {
     pub mjpeg_dropped_backpressure_decode: u64,
     pub mjpeg_dropped_workers_busy: u64,
     pub decoded_frames_not_encoded: u64,
-    pub mjpeg_decode_time_ns: u64,
     pub encoded_input_frames: u64,
     pub encoded_frames: u64,
     pub encoded_bytes: u64,
-    pub encode_time_ns: u64,
-    pub encoder_frame_wait_ns: u64,
-    pub encoder_output_wait_ns: u64,
     pub output_backpressure_events: u64,
     pub encoded_frames_skipped_for_slow_subscribers: u64,
     pub sent_frames: u64,
-    pub send_time_ns: u64,
     pub send_errors: u64,
 }
 
@@ -633,13 +536,9 @@ pub struct SharedVideoPipeline {
     mjpeg_dropped_backpressure_decode: AtomicU64,
     mjpeg_dropped_workers_busy: AtomicU64,
     decoded_frames_not_encoded: AtomicU64,
-    mjpeg_decode_time_ns: AtomicU64,
     encoded_input_frames: AtomicU64,
     encoded_frames: AtomicU64,
     encoded_bytes: AtomicU64,
-    encode_time_ns: AtomicU64,
-    encoder_frame_wait_ns: AtomicU64,
-    encoder_output_wait_ns: AtomicU64,
     output_backpressure_events: AtomicU64,
     output_backpressured: AtomicBool,
     output_backpressure_since_ns: AtomicU64,
@@ -701,13 +600,9 @@ impl SharedVideoPipeline {
             mjpeg_dropped_backpressure_decode: AtomicU64::new(0),
             mjpeg_dropped_workers_busy: AtomicU64::new(0),
             decoded_frames_not_encoded: AtomicU64::new(0),
-            mjpeg_decode_time_ns: AtomicU64::new(0),
             encoded_input_frames: AtomicU64::new(0),
             encoded_frames: AtomicU64::new(0),
             encoded_bytes: AtomicU64::new(0),
-            encode_time_ns: AtomicU64::new(0),
-            encoder_frame_wait_ns: AtomicU64::new(0),
-            encoder_output_wait_ns: AtomicU64::new(0),
             output_backpressure_events: AtomicU64::new(0),
             output_backpressured: AtomicBool::new(false),
             output_backpressure_since_ns: AtomicU64::new(0),
@@ -881,19 +776,14 @@ impl SharedVideoPipeline {
             .load(Ordering::Relaxed);
         stats.mjpeg_dropped_workers_busy = self.mjpeg_dropped_workers_busy.load(Ordering::Relaxed);
         stats.decoded_frames_not_encoded = self.decoded_frames_not_encoded.load(Ordering::Relaxed);
-        stats.mjpeg_decode_time_ns = self.mjpeg_decode_time_ns.load(Ordering::Relaxed);
         stats.encoded_input_frames = self.encoded_input_frames.load(Ordering::Relaxed);
         stats.encoded_frames = self.encoded_frames.load(Ordering::Relaxed);
         stats.encoded_bytes = self.encoded_bytes.load(Ordering::Relaxed);
-        stats.encode_time_ns = self.encode_time_ns.load(Ordering::Relaxed);
-        stats.encoder_frame_wait_ns = self.encoder_frame_wait_ns.load(Ordering::Relaxed);
-        stats.encoder_output_wait_ns = self.encoder_output_wait_ns.load(Ordering::Relaxed);
         stats.output_backpressure_events = self.output_backpressure_events.load(Ordering::Relaxed);
         stats.encoded_frames_skipped_for_slow_subscribers = self
             .encoded_frames_skipped_for_slow_subscribers
             .load(Ordering::Relaxed);
         stats.sent_frames = self.delivery_stats.sent_frames.load(Ordering::Relaxed);
-        stats.send_time_ns = self.delivery_stats.send_time_ns.load(Ordering::Relaxed);
         stats.send_errors = self.delivery_stats.send_errors.load(Ordering::Relaxed);
         stats
     }
@@ -1291,9 +1181,7 @@ impl SharedVideoPipeline {
         }
 
         let mut encoder_config = config.clone();
-        let admission_policy = MjpegAdmissionPolicy::from_prefetch_setting(
-            std::env::var("ONE_KVM_MJPEG_PREFETCH").ok().as_deref(),
-        );
+        let admission_policy = MjpegAdmissionPolicy::BoundedPrefetch;
         if parallel_mjpeg_decode {
             encoder_config.input_format = PixelFormat::Nv12;
             info!("Using parallel libyuv MJPEG decode with hardware encoding");
@@ -1314,13 +1202,9 @@ impl SharedVideoPipeline {
             .store(0, Ordering::Relaxed);
         self.mjpeg_dropped_workers_busy.store(0, Ordering::Relaxed);
         self.decoded_frames_not_encoded.store(0, Ordering::Relaxed);
-        self.mjpeg_decode_time_ns.store(0, Ordering::Relaxed);
         self.encoded_input_frames.store(0, Ordering::Relaxed);
         self.encoded_frames.store(0, Ordering::Relaxed);
         self.encoded_bytes.store(0, Ordering::Relaxed);
-        self.encode_time_ns.store(0, Ordering::Relaxed);
-        self.encoder_frame_wait_ns.store(0, Ordering::Relaxed);
-        self.encoder_output_wait_ns.store(0, Ordering::Relaxed);
         self.output_backpressure_events.store(0, Ordering::Relaxed);
         self.output_backpressured.store(false, Ordering::Release);
         self.output_backpressure_since_ns
@@ -1328,7 +1212,6 @@ impl SharedVideoPipeline {
         self.encoded_frames_skipped_for_slow_subscribers
             .store(0, Ordering::Relaxed);
         self.delivery_stats.sent_frames.store(0, Ordering::Relaxed);
-        self.delivery_stats.send_time_ns.store(0, Ordering::Relaxed);
         self.delivery_stats.send_errors.store(0, Ordering::Relaxed);
         for subscriber in self.subscribers.read().iter() {
             subscriber.needs_keyframe.store(true, Ordering::Release);
@@ -1357,17 +1240,12 @@ impl SharedVideoPipeline {
                 let mut encoded_frame_count: u64 = 0;
                 let mut last_fps_time = Instant::now();
                 let mut fps_frame_count: u64 = 0;
-                let perf_logging = std::env::var("ONE_KVM_VIDEO_STATS").as_deref() == Ok("1");
-                let mut last_perf_time = Instant::now();
-                let mut last_perf_stats = pipeline.stats_snapshot();
-                let mut last_input_stats = Default::default();
-                let mut encode_latencies = Vec::with_capacity(if perf_logging { 256 } else { 0 });
                 let encode_error_throttler = LogThrottler::with_secs(ENCODE_ERROR_THROTTLE_SECS);
                 let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
-                    let Some((frame, reservations, waits)) = frame_mailbox
-                        .receive_when_timed(|| pipeline.reserve_outputs(), perf_logging)
+                    let Some((frame, reservations)) =
+                        frame_mailbox.receive_when(|| pipeline.reserve_outputs())
                     else {
                         break;
                     };
@@ -1383,15 +1261,6 @@ impl SharedVideoPipeline {
                         }
                         continue;
                     }
-                    if perf_logging {
-                        pipeline
-                            .encoder_frame_wait_ns
-                            .fetch_add(waits.frame.as_nanos() as u64, Ordering::Relaxed);
-                        pipeline
-                            .encoder_output_wait_ns
-                            .fetch_add(waits.output.as_nanos() as u64, Ordering::Relaxed);
-                    }
-
                     while let Ok(cmd) = cmd_rx.try_recv() {
                         if let Err(e) = pipeline.apply_cmd(&mut encoder_state, cmd) {
                             error!("Failed to apply pipeline command: {}", e);
@@ -1402,15 +1271,7 @@ impl SharedVideoPipeline {
                     pipeline
                         .encoded_input_frames
                         .fetch_add(1, Ordering::Relaxed);
-                    let encode_started = Instant::now();
                     let encode_result = pipeline.encode_frame_sync(&mut encoder_state, &frame);
-                    let encode_elapsed_ns = encode_started.elapsed().as_nanos() as u64;
-                    pipeline
-                        .encode_time_ns
-                        .fetch_add(encode_elapsed_ns, Ordering::Relaxed);
-                    if perf_logging {
-                        encode_latencies.push(encode_elapsed_ns);
-                    }
 
                     match encode_result {
                         Ok(encoded_frames) => {
@@ -1448,28 +1309,6 @@ impl SharedVideoPipeline {
                             pipeline.mjpeg_dropped_before_decode.load(Ordering::Relaxed),
                             pipeline.decoded_frames_not_encoded.load(Ordering::Relaxed),
                         );
-                    }
-
-                    if perf_logging && last_perf_time.elapsed() >= Duration::from_secs(5) {
-                        let elapsed = last_perf_time.elapsed().as_secs_f64();
-                        let stats = pipeline.stats_snapshot();
-                        encode_latencies.sort_unstable();
-                        log_pipeline_performance(
-                            &stats,
-                            &last_perf_stats,
-                            elapsed,
-                            &encode_latencies,
-                        );
-                        if let Some(stats) = encoder_state
-                            .encoder
-                            .as_ref()
-                            .and_then(|encoder| encoder.input_stats())
-                        {
-                            log_encoder_input_performance(stats, &mut last_input_stats);
-                        }
-                        encode_latencies.clear();
-                        last_perf_stats = stats;
-                        last_perf_time = Instant::now();
                     }
                 }
 
@@ -1910,7 +1749,6 @@ impl SharedVideoPipeline {
                             let nv12_size =
                                 resolution.width as usize * resolution.height as usize * 3 / 2;
                             let mut nv12 = buffer_pool.take(nv12_size);
-                            let decode_started = Instant::now();
                             if let Err(error) = decoder.decode_into(&owned, &mut nv12) {
                                 buffer_pool.put(owned);
                                 buffer_pool.put(nv12);
@@ -1921,10 +1759,7 @@ impl SharedVideoPipeline {
                                 continue;
                             }
                             buffer_pool.put(owned);
-                            pipeline.mjpeg_decode_time_ns.fetch_add(
-                                decode_started.elapsed().as_nanos() as u64,
-                                Ordering::Relaxed,
-                            );
+
                             pipeline
                                 .mjpeg_decoded_frames
                                 .fetch_add(1, Ordering::Relaxed);
@@ -2582,10 +2417,6 @@ mod tests {
         ] {
             pipeline.record_mjpeg_drop(reason);
         }
-        pipeline.encoder_frame_wait_ns.store(123, Ordering::Relaxed);
-        pipeline
-            .encoder_output_wait_ns
-            .store(456, Ordering::Relaxed);
         let stats = pipeline.stats_snapshot();
         assert_eq!(stats.mjpeg_dropped_before_decode, 5);
         assert_eq!(stats.mjpeg_dropped_pending_capture, 1);
@@ -2593,8 +2424,6 @@ mod tests {
         assert_eq!(stats.mjpeg_dropped_backpressure_capture, 1);
         assert_eq!(stats.mjpeg_dropped_backpressure_decode, 1);
         assert_eq!(stats.mjpeg_dropped_workers_busy, 1);
-        assert_eq!(stats.encoder_frame_wait_ns, 123);
-        assert_eq!(stats.encoder_output_wait_ns, 456);
     }
 
     #[test]
@@ -2659,15 +2488,6 @@ mod tests {
         assert_eq!(stats.mjpeg_dropped_backpressure_decode, 1);
         assert_eq!(stats.mjpeg_dropped_pending_capture, 0);
         assert_eq!(stats.mjpeg_dropped_pending_decode, 0);
-    }
-
-    #[test]
-    fn encoding_percentiles_use_nearest_rank_and_handle_empty_windows() {
-        assert_eq!(latency_percentile_ms(&[], 95), 0.0);
-        assert_eq!(latency_percentile_ms(&[3_000_000], 99), 3.0);
-        let sorted: Vec<u64> = (1..=100).map(|millis| millis * 1_000_000).collect();
-        assert_eq!(latency_percentile_ms(&sorted, 95), 95.0);
-        assert_eq!(latency_percentile_ms(&sorted, 99), 99.0);
     }
 
     #[test]
@@ -3003,12 +2823,11 @@ mod tests {
     fn send_statistics_include_successes_errors_and_duration() {
         let pipeline = delivery_test_pipeline();
         let receiver = pipeline.subscribe();
-        receiver.record_send(Duration::from_micros(100), true);
-        receiver.record_send(Duration::from_micros(200), false);
+        receiver.record_send(true);
+        receiver.record_send(false);
         let stats = pipeline.stats_snapshot();
         assert_eq!(stats.sent_frames, 1);
         assert_eq!(stats.send_errors, 1);
-        assert_eq!(stats.send_time_ns, 300_000);
     }
 
     #[test]

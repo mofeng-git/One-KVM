@@ -39,9 +39,6 @@ pub(super) trait VideoEncoderTrait: Send {
     fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<EncodedFrame>> {
         self.encode_raw(data.as_ref(), pts_ms)
     }
-    fn input_stats(&self) -> Option<hwcodec::ffmpeg_ram::encode::EncodeInputStats> {
-        None
-    }
     fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()>;
     fn codec_name(&self) -> &str;
     fn request_keyframe(&mut self);
@@ -91,10 +88,6 @@ impl VideoEncoderTrait for H264EncoderWrapper {
                 pts: frame.pts,
             })
             .collect())
-    }
-
-    fn input_stats(&self) -> Option<hwcodec::ffmpeg_ram::encode::EncodeInputStats> {
-        self.0.input_stats()
     }
 
     fn codec_name(&self) -> &str {

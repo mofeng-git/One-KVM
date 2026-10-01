@@ -49,13 +49,9 @@ input to FFmpeg V4L2 M2M encoders. It holds a `Bytes` owner in a read-only
 input into an intermediate AVFrame. Other encoders retain the existing copy
 path. Converted or stride-compacted One-KVM input also retains that path.
 
-`ONE_KVM_V4L2_OWNED_INPUT=0` disables this optimization when the encoder is
-created, allowing comparisons with the same binary. `ONE_KVM_VIDEO_STATS=1`
-enables preparation, send-frame, receive-packet, callback and output-copy
-timings. One-KVM reports them in `[VideoInputPerf]` at five-second intervals;
-`copied_bytes` counts only the intermediate raw-input copy, not FFmpeg's
-remaining copy into V4L2 MMAP buffers. Encoded packet detachment remains in
-place to avoid retaining scarce V4L2 capture buffers in downstream caches.
+Encoded packet detachment remains in place to avoid retaining scarce V4L2
+capture buffers in downstream caches. FFmpeg still copies raw input into its
+V4L2 MMAP buffers.
 
 ## System requirements
 

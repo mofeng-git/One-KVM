@@ -501,22 +501,6 @@ pub struct Encoder {
     pub offset: Vec<i32>,
     pub length: i32,
     owned_nv12_input: bool,
-    measure: bool,
-    #[cfg(feature = "bytes")]
-    output_copy_us: u64,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct EncodeInputStats {
-    pub input_frames: u64,
-    pub borrowed_frames: u64,
-    pub copied_frames: u64,
-    pub copied_bytes: u64,
-    pub prepare_us: u64,
-    pub send_us: u64,
-    pub receive_us: u64,
-    pub packet_us: u64,
-    pub output_copy_us: u64,
 }
 
 impl Encoder {
@@ -565,8 +549,7 @@ impl Encoder {
             }
 
             let owned_nv12_input = ctx.name.ends_with("_v4l2m2m")
-                && ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_NV12 as i32
-                && std::env::var("ONE_KVM_V4L2_OWNED_INPUT").as_deref() != Ok("0");
+                && ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_NV12 as i32;
             Ok(Encoder {
                 codec,
                 frames: Box::into_raw(Box::new(Vec::<EncodeFrame>::new())),
@@ -575,9 +558,6 @@ impl Encoder {
                 offset,
                 length: length[0],
                 owned_nv12_input,
-                measure: std::env::var("ONE_KVM_VIDEO_STATS").as_deref() == Ok("1"),
-                #[cfg(feature = "bytes")]
-                output_copy_us: 0,
             })
         }
     }
@@ -626,28 +606,6 @@ impl Encoder {
         self.owned_nv12_input
     }
 
-    pub fn input_stats(&self) -> Option<EncodeInputStats> {
-        if !self.measure {
-            return None;
-        }
-        let mut stats = unsafe { std::mem::zeroed() };
-        unsafe { crate::ffmpeg_ram::ffmpeg_ram_encoder_stats(self.codec, &mut stats) };
-        Some(EncodeInputStats {
-            input_frames: stats.input_frames,
-            borrowed_frames: stats.borrowed_frames,
-            copied_frames: stats.copied_frames,
-            copied_bytes: stats.copied_bytes,
-            prepare_us: stats.prepare_us,
-            send_us: stats.send_us,
-            receive_us: stats.receive_us,
-            packet_us: stats.packet_us,
-            #[cfg(feature = "bytes")]
-            output_copy_us: self.output_copy_us,
-            #[cfg(not(feature = "bytes"))]
-            output_copy_us: 0,
-        })
-    }
-
     #[cfg(feature = "bytes")]
     pub fn encode_owned_bytes(
         &mut self,
@@ -688,7 +646,6 @@ impl Encoder {
         if !self.ctx.name.contains("v4l2m2m") {
             return Ok(frames);
         }
-        let start = self.measure.then(std::time::Instant::now);
         let detached = frames
             .into_iter()
             .map(|frame| EncodeBytesFrame {
@@ -697,9 +654,6 @@ impl Encoder {
                 key: frame.key,
             })
             .collect();
-        if let Some(start) = start {
-            self.output_copy_us += start.elapsed().as_micros() as u64;
-        }
         Ok(detached)
     }
 

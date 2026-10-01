@@ -669,7 +669,6 @@ impl UniversalSession {
                             }
                         }
 
-                        let send_started = Instant::now();
                         let send_result = video_track
                             .write_frame_bytes_at(
                                 encoded_frame.data.clone(),
@@ -677,7 +676,7 @@ impl UniversalSession {
                                 Some(encoded_frame.pts_ms),
                             )
                             .await;
-                        frame_rx.record_send(send_started.elapsed(), send_result.is_ok());
+                        frame_rx.record_send(send_result.is_ok());
                         match send_result {
                             Ok(()) => {
                                 frames_sent += 1;

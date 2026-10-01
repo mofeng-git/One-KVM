@@ -20,14 +20,6 @@ pub(super) enum MjpegDropReason {
 }
 
 impl MjpegAdmissionPolicy {
-    pub(super) fn from_prefetch_setting(setting: Option<&str>) -> Self {
-        if setting == Some("0") {
-            Self::PendingSlot
-        } else {
-            Self::BoundedPrefetch
-        }
-    }
-
     pub(super) fn check_pending(self, output_backpressured: bool) -> bool {
         self == Self::PendingSlot || output_backpressured
     }
@@ -53,20 +45,6 @@ impl MjpegAdmissionPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn bounded_prefetch_is_default_and_zero_restores_pending_slot_policy() {
-        for setting in [None, Some("1"), Some(""), Some("invalid")] {
-            assert_eq!(
-                MjpegAdmissionPolicy::from_prefetch_setting(setting),
-                MjpegAdmissionPolicy::BoundedPrefetch
-            );
-        }
-        assert_eq!(
-            MjpegAdmissionPolicy::from_prefetch_setting(Some("0")),
-            MjpegAdmissionPolicy::PendingSlot
-        );
-    }
 
     #[test]
     fn prefetch_keeps_decoding_while_output_has_capacity() {
