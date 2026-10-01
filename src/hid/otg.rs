@@ -871,7 +871,7 @@ impl HidBackend for OtgBackend {
             let extent = self.screen_resolution.read().unwrap_or((1920, 1080));
             let (buttons, reports) = state.plan(event, buttons, extent);
             self.mouse_buttons.store(buttons, Ordering::Relaxed);
-            for report in reports {
+            for report in reports.iter().copied() {
                 match report {
                     MouseReport::Absolute { buttons, x, y } => {
                         self.send_mouse_report_absolute(buttons, x, y, 0)?

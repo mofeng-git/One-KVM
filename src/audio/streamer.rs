@@ -15,6 +15,39 @@ use crate::error::{AppError, Result};
 /// 48 kHz stereo: 20 ms = 960 × 2 samples (S16LE).
 const OPUS_STEREO_SAMPLES: usize = 960 * 2;
 
+struct PcmFrames<'audio> {
+    pending: &'audio mut Vec<i16>,
+    samples: &'audio [i16],
+}
+
+impl<'audio> PcmFrames<'audio> {
+    fn new(pending: &'audio mut Vec<i16>, samples: &'audio [i16]) -> Self {
+        Self { pending, samples }
+    }
+
+    fn next_frame(&mut self) -> Option<&[i16]> {
+        if self.pending.len() == OPUS_STEREO_SAMPLES {
+            self.pending.clear();
+        }
+        if self.pending.is_empty() && self.samples.len() >= OPUS_STEREO_SAMPLES {
+            let (frame, remaining) = self.samples.split_at(OPUS_STEREO_SAMPLES);
+            self.samples = remaining;
+            return Some(frame);
+        }
+        if self.samples.is_empty() {
+            return None;
+        }
+        let count = (OPUS_STEREO_SAMPLES - self.pending.len()).min(self.samples.len());
+        if self.pending.capacity() < OPUS_STEREO_SAMPLES {
+            self.pending
+                .reserve_exact(OPUS_STEREO_SAMPLES - self.pending.len());
+        }
+        self.pending.extend_from_slice(&self.samples[..count]);
+        self.samples = &self.samples[count..];
+        (self.pending.len() == OPUS_STEREO_SAMPLES).then(|| self.pending.as_slice())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AudioStreamState {
     #[default]
@@ -331,18 +364,12 @@ impl AudioStreamer {
                             continue;
                         }
                     };
-                    if !samples.is_empty() {
-                        pending.extend_from_slice(samples);
-                    }
-
-                    while pending.len() >= OPUS_STEREO_SAMPLES {
+                    let mut frames = PcmFrames::new(&mut pending, samples);
+                    while let Some(samples) = frames.next_frame() {
                         let opus_result = {
                             let mut enc_guard = encoder.lock().await;
-                            (*enc_guard)
-                                .as_mut()
-                                .map(|enc| enc.encode(&pending[..OPUS_STEREO_SAMPLES]))
+                            (*enc_guard).as_mut().map(|enc| enc.encode(samples))
                         };
-                        pending.drain(..OPUS_STEREO_SAMPLES);
 
                         match opus_result {
                             Some(Ok(opus_frame)) => {
@@ -395,6 +422,53 @@ impl Default for AudioStreamer {
 mod tests {
     use super::*;
     use bytes::Bytes;
+
+    #[test]
+    fn aligned_pcm_frames_borrow_input_without_allocating() {
+        let samples = vec![123; OPUS_STEREO_SAMPLES * 2];
+        let mut pending = Vec::new();
+        let mut frames = PcmFrames::new(&mut pending, &samples);
+        assert_eq!(frames.next_frame().unwrap().as_ptr(), samples.as_ptr());
+        assert_eq!(
+            frames.next_frame().unwrap().as_ptr(),
+            samples[OPUS_STEREO_SAMPLES..].as_ptr()
+        );
+        assert!(frames.next_frame().is_none());
+        assert!(pending.is_empty());
+        assert_eq!(pending.capacity(), 0);
+    }
+
+    #[test]
+    fn fragmented_pcm_preserves_samples_and_opus_packets() {
+        let samples: Vec<i16> = (0..OPUS_STEREO_SAMPLES * 8 + 31)
+            .map(|index| ((index * 73 % 65536) as i32 - 32768) as i16)
+            .collect();
+        let mut pending = Vec::new();
+        let mut actual = Vec::new();
+        let mut encoder = OpusEncoder::new(OpusConfig::default()).unwrap();
+        let mut reference_encoder = OpusEncoder::new(OpusConfig::default()).unwrap();
+        let mut offset = 0;
+        for size in [1, 317, 4601, 2000, 11, 8470, samples.len()] {
+            let end = (offset + size).min(samples.len());
+            let mut frames = PcmFrames::new(&mut pending, &samples[offset..end]);
+            while let Some(frame) = frames.next_frame() {
+                actual.extend_from_slice(frame);
+                let encoded = encoder.encode(frame).unwrap();
+                let start = actual.len() - OPUS_STEREO_SAMPLES;
+                let reference = reference_encoder
+                    .encode(&samples[start..actual.len()])
+                    .unwrap();
+                assert_eq!(encoded.data, reference.data);
+                assert_eq!(encoded.sequence, reference.sequence);
+                assert_eq!(encoded.duration_ms, reference.duration_ms);
+            }
+            assert!(pending.len() < OPUS_STEREO_SAMPLES);
+            assert!(pending.capacity() <= OPUS_STEREO_SAMPLES);
+            offset = end;
+        }
+        assert_eq!(actual, samples[..OPUS_STEREO_SAMPLES * 8]);
+        assert_eq!(pending, samples[OPUS_STEREO_SAMPLES * 8..]);
+    }
 
     #[test]
     fn test_streamer_config_default() {

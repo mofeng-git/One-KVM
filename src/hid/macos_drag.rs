@@ -3,7 +3,7 @@
 
 use super::{MouseEvent, MouseEventType};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum MouseReport {
     Absolute {
         buttons: u8,
@@ -25,6 +25,7 @@ pub(super) struct MacosDrag {
     extent: (u32, u32),
     relative_input: bool,
     absolute_drag: bool,
+    reports: Vec<MouseReport>,
 }
 
 impl MacosDrag {
@@ -37,8 +38,13 @@ impl MacosDrag {
         event: MouseEvent,
         buttons: u8,
         extent: (u32, u32),
-    ) -> (u8, Vec<MouseReport>) {
-        let mut reports = Vec::new();
+    ) -> (u8, &[MouseReport]) {
+        if self.reports.capacity() > 128 {
+            self.reports = Vec::new();
+        } else {
+            self.reports.clear();
+        }
+        let reports = &mut self.reports;
         let mut next_buttons = buttons;
         if extent != self.extent || buttons == 0 {
             self.remainder = (0, 0);
@@ -56,7 +62,7 @@ impl MacosDrag {
                         Self::delta(position.0, self.position.0, extent.0, &mut self.remainder.0);
                     let dy =
                         Self::delta(position.1, self.position.1, extent.1, &mut self.remainder.1);
-                    Self::motion(&mut reports, buttons, dx, dy);
+                    Self::motion(reports, buttons, dx, dy);
                 } else {
                     reports.push(MouseReport::Absolute {
                         buttons: 0,
@@ -69,7 +75,7 @@ impl MacosDrag {
             MouseEventType::Move => {
                 self.relative_input = true;
                 Self::motion(
-                    &mut reports,
+                    reports,
                     buttons,
                     i64::from(event.x.clamp(-127, 127)),
                     i64::from(event.y.clamp(-127, 127)),
@@ -127,7 +133,7 @@ impl MacosDrag {
                 });
             }
         }
-        (next_buttons, reports)
+        (next_buttons, reports.as_slice())
     }
 
     fn delta(current: u16, previous: u16, extent: u32, remainder: &mut i64) -> i64 {
@@ -160,13 +166,39 @@ mod tests {
     use super::*;
     use crate::hid::MouseButton;
 
+    #[test]
+    fn repeated_motion_reuses_report_storage() {
+        let mut state = MacosDrag::default();
+        let (_, reports) = state.plan(MouseEvent::move_rel(1, 1), 0, (1920, 1080));
+        let allocation = reports.as_ptr();
+        for _ in 0..1000 {
+            let (_, reports) = state.plan(MouseEvent::move_rel(1, 1), 0, (1920, 1080));
+            assert_eq!(reports.as_ptr(), allocation);
+            assert_eq!(reports.len(), 1);
+        }
+    }
+
+    #[test]
+    fn oversized_report_storage_is_not_retained_for_small_events() {
+        let mut state = MacosDrag::default();
+        state.reports = Vec::with_capacity(256);
+        assert!(state.reports.capacity() > 128);
+        state.plan(MouseEvent::move_rel(1, 1), 0, (1920, 1080));
+        assert!(state.reports.capacity() <= 128);
+    }
+
     fn drag(steps: &[i32], extent: (u32, u32)) -> (i64, i64) {
         let mut state = MacosDrag::default();
         state.plan(MouseEvent::move_abs(8000, 8000), 0, extent);
         state.plan(MouseEvent::button_down(MouseButton::Left), 0, extent);
         let mut total = (0, 0);
         for &x in steps {
-            for report in state.plan(MouseEvent::move_abs(x, x), 1, extent).1 {
+            for report in state
+                .plan(MouseEvent::move_abs(x, x), 1, extent)
+                .1
+                .iter()
+                .copied()
+            {
                 if let MouseReport::Relative { dx, dy, .. } = report {
                     total.0 += i64::from(dx);
                     total.1 += i64::from(dy);
