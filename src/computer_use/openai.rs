@@ -995,7 +995,6 @@ mod tests {
     use super::*;
 
     fn test_provider(endpoint: &str) -> OpenAiComputerProvider {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         OpenAiComputerProvider::new(
             "secret".to_string(),
             endpoint.to_string(),

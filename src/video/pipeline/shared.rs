@@ -24,10 +24,15 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, watch, Mutex, RwLock};
+use tokio::sync::{mpsc, watch, RwLock};
 use tracing::{debug, error, info, trace, warn};
 
+use super::delivery::{
+    DeliveryStats, EncodedBatch, EncodedVideoFrameReceiver, FrameMailboxHandle,
+    VideoFrameReservation, VideoSubscriber,
+};
 use super::encoder_state::{build_encoder_state, should_parallel_decode_mjpeg, EncoderThreadState};
+use super::frame_mailbox::{FrameMailbox, PublishResult};
 
 #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
 #[path = "dmabuf.rs"]
@@ -151,6 +156,17 @@ use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+type VideoFrameMailbox = FrameMailbox<Arc<VideoFrame>>;
+
+fn spawn_video_worker(
+    name: &'static str,
+    worker: impl FnOnce() + Send + 'static,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name(name.to_string())
+        .spawn(worker)
+}
+
 struct MjpegDecodeJob {
     data: Vec<u8>,
     sequence: u64,
@@ -162,8 +178,7 @@ fn mjpeg_decode_worker_count(available_parallelism: usize) -> usize {
 
 fn spawn_mjpeg_decode_workers(
     pipeline: &Arc<SharedVideoPipeline>,
-    latest_frame: &Arc<ParkingRwLock<Option<Arc<VideoFrame>>>>,
-    frame_seq_tx: &watch::Sender<u64>,
+    frame_mailbox: &Arc<VideoFrameMailbox>,
     buffer_pool: &Arc<FrameBufferPool>,
     resolution: Resolution,
 ) -> Vec<SyncSender<MjpegDecodeJob>> {
@@ -179,8 +194,7 @@ fn spawn_mjpeg_decode_workers(
         // latency behind stale frames.
         let (tx, rx) = sync_channel::<MjpegDecodeJob>(0);
         let worker_pipeline = pipeline.clone();
-        let worker_latest_frame = latest_frame.clone();
-        let worker_frame_seq_tx = frame_seq_tx.clone();
+        let worker_frame_mailbox = frame_mailbox.clone();
         let worker_buffer_pool = buffer_pool.clone();
         let thread_name = format!("mjpeg-decoder-{worker_id}");
         let spawn_result = std::thread::Builder::new()
@@ -188,8 +202,20 @@ fn spawn_mjpeg_decode_workers(
             .spawn(move || {
                 let mut decoder = MjpegToNv12Decoder::new(resolution);
                 while let Ok(job) = rx.recv() {
+                    if !worker_pipeline.running_flag.load(Ordering::Acquire) {
+                        worker_buffer_pool.put(job.data);
+                        break;
+                    }
+                    if worker_frame_mailbox.has_pending() {
+                        worker_pipeline
+                            .mjpeg_dropped_before_decode
+                            .fetch_add(1, Ordering::Relaxed);
+                        worker_buffer_pool.put(job.data);
+                        continue;
+                    }
                     let nv12_size = resolution.width as usize * resolution.height as usize * 3 / 2;
                     let mut nv12 = worker_buffer_pool.take(nv12_size);
+                    let decode_started = Instant::now();
                     let decode_result = decoder.decode_into(&job.data, &mut nv12);
                     worker_buffer_pool.put(job.data);
 
@@ -198,7 +224,17 @@ fn spawn_mjpeg_decode_workers(
                         warn!("Dropping undecodable MJPEG frame: {}", error);
                         continue;
                     }
+                    worker_pipeline.mjpeg_decode_time_ns.fetch_add(
+                        decode_started.elapsed().as_nanos() as u64,
+                        Ordering::Relaxed,
+                    );
+                    worker_pipeline
+                        .mjpeg_decoded_frames
+                        .fetch_add(1, Ordering::Relaxed);
                     if !worker_pipeline.running_flag.load(Ordering::Acquire) {
+                        worker_pipeline
+                            .decoded_frames_not_encoded
+                            .fetch_add(1, Ordering::Relaxed);
                         worker_buffer_pool.put(nv12);
                         break;
                     }
@@ -210,20 +246,11 @@ fn spawn_mjpeg_decode_workers(
                         resolution.width,
                         job.sequence,
                     ));
-                    let published = {
-                        let mut latest = worker_latest_frame.write();
-                        if latest
-                            .as_ref()
-                            .is_some_and(|current| current.sequence >= job.sequence)
-                        {
-                            false
-                        } else {
-                            *latest = Some(frame);
-                            true
-                        }
-                    };
-                    if published {
-                        let _ = worker_frame_seq_tx.send(job.sequence.wrapping_add(1));
+                    if worker_frame_mailbox.publish(job.sequence, frame) != PublishResult::Published
+                    {
+                        worker_pipeline
+                            .decoded_frames_not_encoded
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
             });
@@ -461,10 +488,59 @@ fn log_encoding_error(
     }
 }
 
+fn log_pipeline_performance(
+    stats: &SharedVideoPipelineStats,
+    previous: &SharedVideoPipelineStats,
+    elapsed: f64,
+) {
+    let delta = |current: u64, previous: u64| current.saturating_sub(previous);
+    let decoded = delta(stats.mjpeg_decoded_frames, previous.mjpeg_decoded_frames);
+    let encoded_inputs = delta(stats.encoded_input_frames, previous.encoded_input_frames);
+    let encoded = delta(stats.encoded_frames, previous.encoded_frames);
+    let sent = delta(stats.sent_frames, previous.sent_frames);
+    let send_errors = delta(stats.send_errors, previous.send_errors);
+    let average_ms = |time_ns: u64, count: u64| {
+        if count == 0 {
+            0.0
+        } else {
+            time_ns as f64 / count as f64 / 1_000_000.0
+        }
+    };
+    info!(
+        "[VideoPerf] window_s={:.2} decoded_fps={:.2} encoded_fps={:.2} sent_fps={:.2} decode_ms={:.2} encode_ms={:.2} send_ms={:.2} encoded_mbps={:.2} dropped_before_decode={} decoded_unused={} backpressure_events={} slow_subscriber_skips={} send_errors={}",
+        elapsed,
+        decoded as f64 / elapsed,
+        encoded as f64 / elapsed,
+        sent as f64 / elapsed,
+        average_ms(delta(stats.mjpeg_decode_time_ns, previous.mjpeg_decode_time_ns), decoded),
+        average_ms(delta(stats.encode_time_ns, previous.encode_time_ns), encoded_inputs),
+        average_ms(delta(stats.send_time_ns, previous.send_time_ns), sent + send_errors),
+        delta(stats.encoded_bytes, previous.encoded_bytes) as f64 * 8.0 / elapsed / 1_000_000.0,
+        delta(stats.mjpeg_dropped_before_decode, previous.mjpeg_dropped_before_decode),
+        delta(stats.decoded_frames_not_encoded, previous.decoded_frames_not_encoded),
+        delta(stats.output_backpressure_events, previous.output_backpressure_events),
+        delta(stats.encoded_frames_skipped_for_slow_subscribers, previous.encoded_frames_skipped_for_slow_subscribers),
+        send_errors,
+    );
+}
+
 /// Pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct SharedVideoPipelineStats {
     pub current_fps: f32,
+    pub mjpeg_decoded_frames: u64,
+    pub mjpeg_dropped_before_decode: u64,
+    pub decoded_frames_not_encoded: u64,
+    pub mjpeg_decode_time_ns: u64,
+    pub encoded_input_frames: u64,
+    pub encoded_frames: u64,
+    pub encoded_bytes: u64,
+    pub encode_time_ns: u64,
+    pub output_backpressure_events: u64,
+    pub encoded_frames_skipped_for_slow_subscribers: u64,
+    pub sent_frames: u64,
+    pub send_time_ns: u64,
+    pub send_errors: u64,
 }
 
 #[derive(Default)]
@@ -479,8 +555,21 @@ struct CachedH26xParameterSets {
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
     config: RwLock<SharedVideoPipelineConfig>,
-    subscribers: ParkingRwLock<Vec<mpsc::Sender<Arc<EncodedVideoFrame>>>>,
-    stats: Mutex<SharedVideoPipelineStats>,
+    subscribers: ParkingRwLock<Vec<Arc<VideoSubscriber>>>,
+    stats: ParkingMutex<SharedVideoPipelineStats>,
+    frame_mailbox: FrameMailboxHandle,
+    mjpeg_decoded_frames: AtomicU64,
+    mjpeg_dropped_before_decode: AtomicU64,
+    decoded_frames_not_encoded: AtomicU64,
+    mjpeg_decode_time_ns: AtomicU64,
+    encoded_input_frames: AtomicU64,
+    encoded_frames: AtomicU64,
+    encoded_bytes: AtomicU64,
+    encode_time_ns: AtomicU64,
+    output_backpressure_events: AtomicU64,
+    output_backpressured: AtomicBool,
+    encoded_frames_skipped_for_slow_subscribers: AtomicU64,
+    delivery_stats: Arc<DeliveryStats>,
     running: watch::Sender<bool>,
     running_rx: watch::Receiver<bool>,
     /// Becomes true only after the synchronous encoder worker has exited and
@@ -527,7 +616,20 @@ impl SharedVideoPipeline {
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
             subscribers: ParkingRwLock::new(Vec::new()),
-            stats: Mutex::new(SharedVideoPipelineStats::default()),
+            stats: ParkingMutex::new(SharedVideoPipelineStats::default()),
+            frame_mailbox: Arc::new(ParkingMutex::new(None)),
+            mjpeg_decoded_frames: AtomicU64::new(0),
+            mjpeg_dropped_before_decode: AtomicU64::new(0),
+            decoded_frames_not_encoded: AtomicU64::new(0),
+            mjpeg_decode_time_ns: AtomicU64::new(0),
+            encoded_input_frames: AtomicU64::new(0),
+            encoded_frames: AtomicU64::new(0),
+            encoded_bytes: AtomicU64::new(0),
+            encode_time_ns: AtomicU64::new(0),
+            output_backpressure_events: AtomicU64::new(0),
+            output_backpressured: AtomicBool::new(false),
+            encoded_frames_skipped_for_slow_subscribers: AtomicU64::new(0),
+            delivery_stats: Arc::new(DeliveryStats::default()),
             running: running_tx,
             running_rx,
             encoder_done: encoder_done_tx,
@@ -593,16 +695,21 @@ impl SharedVideoPipeline {
     }
 
     /// Subscribe to encoded frames
-    pub fn subscribe(&self) -> mpsc::Receiver<Arc<EncodedVideoFrame>> {
-        // A queued video frame is already stale when the next frame is ready.
-        // Keep at most one pending frame so a slow WebRTC writer cannot make
-        // the encoder wait or accumulate seconds of latency.
+    pub fn subscribe(&self) -> EncodedVideoFrameReceiver {
         let (tx, rx) = mpsc::channel(1);
         if let Some(frame) = self.bootstrap_frame.read().clone() {
-            let _ = tx.try_send(frame);
+            let batch: EncodedBatch = vec![frame].into();
+            let _ = tx.try_send(batch);
         }
-        self.subscribers.write().push(tx);
-        rx
+        self.subscribers.write().push(Arc::new(VideoSubscriber {
+            sender: tx,
+            needs_keyframe: AtomicBool::new(true),
+            recovery_requested: AtomicBool::new(false),
+        }));
+        if let Some(mailbox) = self.frame_mailbox.lock().as_ref() {
+            mailbox.notify();
+        }
+        EncodedVideoFrameReceiver::new(rx, self.frame_mailbox.clone(), self.delivery_stats.clone())
     }
 
     /// Get subscriber count
@@ -610,7 +717,7 @@ impl SharedVideoPipeline {
         self.subscribers
             .read()
             .iter()
-            .filter(|tx| !tx.is_closed())
+            .filter(|subscriber| !subscriber.sender.is_closed())
             .count()
     }
 
@@ -671,7 +778,28 @@ impl SharedVideoPipeline {
 
     /// Get current stats
     pub async fn stats(&self) -> SharedVideoPipelineStats {
-        self.stats.lock().await.clone()
+        self.stats_snapshot()
+    }
+
+    fn stats_snapshot(&self) -> SharedVideoPipelineStats {
+        let mut stats = self.stats.lock().clone();
+        stats.mjpeg_decoded_frames = self.mjpeg_decoded_frames.load(Ordering::Relaxed);
+        stats.mjpeg_dropped_before_decode =
+            self.mjpeg_dropped_before_decode.load(Ordering::Relaxed);
+        stats.decoded_frames_not_encoded = self.decoded_frames_not_encoded.load(Ordering::Relaxed);
+        stats.mjpeg_decode_time_ns = self.mjpeg_decode_time_ns.load(Ordering::Relaxed);
+        stats.encoded_input_frames = self.encoded_input_frames.load(Ordering::Relaxed);
+        stats.encoded_frames = self.encoded_frames.load(Ordering::Relaxed);
+        stats.encoded_bytes = self.encoded_bytes.load(Ordering::Relaxed);
+        stats.encode_time_ns = self.encode_time_ns.load(Ordering::Relaxed);
+        stats.output_backpressure_events = self.output_backpressure_events.load(Ordering::Relaxed);
+        stats.encoded_frames_skipped_for_slow_subscribers = self
+            .encoded_frames_skipped_for_slow_subscribers
+            .load(Ordering::Relaxed);
+        stats.sent_frames = self.delivery_stats.sent_frames.load(Ordering::Relaxed);
+        stats.send_time_ns = self.delivery_stats.send_time_ns.load(Ordering::Relaxed);
+        stats.send_errors = self.delivery_stats.send_errors.load(Ordering::Relaxed);
+        stats
     }
 
     /// Check if running
@@ -704,8 +832,8 @@ impl SharedVideoPipeline {
         self.h264_profile_level_id_rx.clone()
     }
 
-    fn update_h264_profile_level_id(&self, data: &[u8]) {
-        let Some(profile_level_id) = h264_bitstream::extract_profile_level_id(data) else {
+    fn update_h264_profile_level_id(&self, sps: &[u8]) {
+        let Some(profile_level_id) = h264_bitstream::parse_profile_level_id_from_sps(sps) else {
             return;
         };
         if self.h264_profile_level_id.borrow().as_deref() == Some(profile_level_id.as_str()) {
@@ -727,16 +855,19 @@ impl SharedVideoPipeline {
                 if !was_annex_b && h264_bitstream::is_annex_b(data.as_ref()) {
                     debug!("[Pipeline] Converted length-prefixed H264 packet to Annex-B");
                 }
-                let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
+                let inspection = h264_bitstream::inspect_annex_b(data.as_ref());
+                let sps = inspection.sps;
+                let pps = inspection.pps;
                 // Require metadata and payload to agree before advertising a
                 // decoder bootstrap frame.
-                let is_idr = ffmpeg_keyframe && h264_bitstream::is_keyframe(data.as_ref());
+                let is_idr = ffmpeg_keyframe && inspection.is_idr;
                 let mut cache = self.parameter_sets.lock();
-                if let Some(sps) = sps.as_ref() {
-                    cache.h264_sps = Some(sps.clone());
+                if let Some(sps) = sps {
+                    self.update_h264_profile_level_id(sps);
+                    cache.h264_sps = Some(sps.to_vec());
                 }
-                if let Some(pps) = pps.as_ref() {
-                    cache.h264_pps = Some(pps.clone());
+                if let Some(pps) = pps {
+                    cache.h264_pps = Some(pps.to_vec());
                 }
 
                 if !is_idr {
@@ -808,30 +939,103 @@ impl SharedVideoPipeline {
         }
     }
 
-    fn broadcast_encoded(&self, frame: Arc<EncodedVideoFrame>) {
-        if frame.is_keyframe {
+    fn reserve_outputs(&self) -> Option<Vec<VideoFrameReservation>> {
+        let subscribers = self.subscribers.read();
+        let mut active_subscribers = 0;
+        let mut reservations = Vec::with_capacity(subscribers.len());
+        for subscriber in subscribers.iter() {
+            if subscriber.sender.is_closed() {
+                continue;
+            }
+            active_subscribers += 1;
+            if let Ok(permit) = subscriber.sender.clone().try_reserve_owned() {
+                if subscriber.needs_keyframe.load(Ordering::Acquire)
+                    && !subscriber.recovery_requested.swap(true, Ordering::AcqRel)
+                {
+                    self.keyframe_requested.store(true, Ordering::Release);
+                }
+                reservations.push(VideoFrameReservation {
+                    subscriber: subscriber.clone(),
+                    permit,
+                });
+            }
+        }
+        if active_subscribers > 0 && reservations.is_empty() {
+            if !self.output_backpressured.swap(true, Ordering::AcqRel) {
+                self.output_backpressure_events
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            None
+        } else {
+            self.output_backpressured.store(false, Ordering::Release);
+            Some(reservations)
+        }
+    }
+
+    fn broadcast_encoded_batch(
+        &self,
+        frames: EncodedBatch,
+        reservations: Vec<VideoFrameReservation>,
+    ) {
+        if frames.is_empty() {
+            return;
+        }
+        self.encoded_frames
+            .fetch_add(frames.len() as u64, Ordering::Relaxed);
+        self.encoded_bytes.fetch_add(
+            frames.iter().map(|frame| frame.data.len() as u64).sum(),
+            Ordering::Relaxed,
+        );
+        if let Some(frame) = frames.iter().rev().find(|frame| frame.is_keyframe) {
             *self.bootstrap_frame.write() = Some(frame.clone());
         }
-
-        let subscribers = {
-            let guard = self.subscribers.read();
-            if guard.is_empty() {
-                return;
+        {
+            let mut subscribers = self.subscribers.write();
+            subscribers.retain(|subscriber| !subscriber.sender.is_closed());
+            for subscriber in subscribers.iter() {
+                if !reservations
+                    .iter()
+                    .any(|reservation| Arc::ptr_eq(&reservation.subscriber, subscriber))
+                {
+                    subscriber.needs_keyframe.store(true, Ordering::Release);
+                    subscriber
+                        .recovery_requested
+                        .store(false, Ordering::Release);
+                    self.encoded_frames_skipped_for_slow_subscribers
+                        .fetch_add(frames.len() as u64, Ordering::Relaxed);
+                }
             }
-            guard.iter().cloned().collect::<Vec<_>>()
-        };
-
-        for tx in &subscribers {
-            // Never await a consumer.  A full one-slot queue means the
-            // consumer is behind; dropping this frame preserves bounded
-            // latency and the receiver's sequence-gap logic requests a fresh
-            // keyframe when necessary.
-            let _ = tx.try_send(frame.clone());
         }
-
-        if subscribers.iter().any(|tx| tx.is_closed()) {
-            let mut guard = self.subscribers.write();
-            guard.retain(|tx| !tx.is_closed());
+        for reservation in reservations {
+            let batch = if reservation
+                .subscriber
+                .needs_keyframe
+                .load(Ordering::Acquire)
+            {
+                let Some(first_keyframe) = frames.iter().position(|frame| frame.is_keyframe) else {
+                    self.encoded_frames_skipped_for_slow_subscribers
+                        .fetch_add(frames.len() as u64, Ordering::Relaxed);
+                    continue;
+                };
+                reservation
+                    .subscriber
+                    .needs_keyframe
+                    .store(false, Ordering::Release);
+                reservation
+                    .subscriber
+                    .recovery_requested
+                    .store(false, Ordering::Release);
+                self.encoded_frames_skipped_for_slow_subscribers
+                    .fetch_add(first_keyframe as u64, Ordering::Relaxed);
+                if first_keyframe == 0 {
+                    frames.clone()
+                } else {
+                    frames[first_keyframe..].to_vec().into()
+                }
+            } else {
+                frames.clone()
+            };
+            reservation.permit.send(batch);
         }
     }
 
@@ -951,14 +1155,34 @@ impl SharedVideoPipeline {
             info!("Using parallel libyuv MJPEG decode with hardware encoding");
         }
         let mut encoder_state = build_encoder_state(&encoder_config)?;
+        let frame_mailbox = Arc::new(VideoFrameMailbox::new());
+        *self.frame_mailbox.lock() = Some(frame_mailbox.clone());
+        self.mjpeg_decoded_frames.store(0, Ordering::Relaxed);
+        self.mjpeg_dropped_before_decode.store(0, Ordering::Relaxed);
+        self.decoded_frames_not_encoded.store(0, Ordering::Relaxed);
+        self.mjpeg_decode_time_ns.store(0, Ordering::Relaxed);
+        self.encoded_input_frames.store(0, Ordering::Relaxed);
+        self.encoded_frames.store(0, Ordering::Relaxed);
+        self.encoded_bytes.store(0, Ordering::Relaxed);
+        self.encode_time_ns.store(0, Ordering::Relaxed);
+        self.output_backpressure_events.store(0, Ordering::Relaxed);
+        self.output_backpressured.store(false, Ordering::Release);
+        self.encoded_frames_skipped_for_slow_subscribers
+            .store(0, Ordering::Relaxed);
+        self.delivery_stats.sent_frames.store(0, Ordering::Relaxed);
+        self.delivery_stats.send_time_ns.store(0, Ordering::Relaxed);
+        self.delivery_stats.send_errors.store(0, Ordering::Relaxed);
+        for subscriber in self.subscribers.read().iter() {
+            subscriber.needs_keyframe.store(true, Ordering::Release);
+            subscriber
+                .recovery_requested
+                .store(false, Ordering::Release);
+        }
         let _ = self.running.send(true);
         let _ = self.encoder_done.send(false);
         self.running_flag.store(true, Ordering::Release);
 
         let pipeline = self.clone();
-        let latest_frame: Arc<ParkingRwLock<Option<Arc<VideoFrame>>>> =
-            Arc::new(ParkingRwLock::new(None));
-        let (frame_seq_tx, mut frame_seq_rx) = watch::channel(0u64);
         let buffer_pool = Arc::new(FrameBufferPool::new(buffer_count.max(4) as usize));
         let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
         {
@@ -969,32 +1193,34 @@ impl SharedVideoPipeline {
         // Encoder loop uses a dedicated OS thread because FFmpeg work is synchronous.
         {
             let pipeline = pipeline.clone();
-            let latest_frame = latest_frame.clone();
-            let handle = tokio::runtime::Handle::current();
-            std::thread::spawn(move || {
+            let frame_mailbox = frame_mailbox.clone();
+            let encoder_worker = spawn_video_worker("video-encoder", move || {
                 let mut input_frame_count: u64 = 0;
                 let mut encoded_frame_count: u64 = 0;
                 let mut last_fps_time = Instant::now();
                 let mut fps_frame_count: u64 = 0;
-                let mut last_seq = *frame_seq_rx.borrow();
+                let perf_logging = std::env::var("ONE_KVM_VIDEO_STATS").as_deref() == Ok("1");
+                let mut last_perf_time = Instant::now();
+                let mut last_perf_stats = pipeline.stats_snapshot();
                 let encode_error_throttler = LogThrottler::with_secs(ENCODE_ERROR_THROTTLE_SECS);
                 let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
-                    if handle.block_on(frame_seq_rx.changed()).is_err() {
+                    let Some((frame, reservations)) =
+                        frame_mailbox.receive_when(|| pipeline.reserve_outputs())
+                    else {
                         break;
-                    }
+                    };
                     if !pipeline.running_flag.load(Ordering::Acquire) {
                         break;
                     }
 
-                    let seq = *frame_seq_rx.borrow();
-                    if seq == last_seq {
-                        continue;
-                    }
-                    last_seq = seq;
-
-                    if pipeline.subscriber_count() == 0 {
+                    if reservations.is_empty() {
+                        if parallel_mjpeg_decode {
+                            pipeline
+                                .decoded_frames_not_encoded
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
                         continue;
                     }
 
@@ -1004,26 +1230,28 @@ impl SharedVideoPipeline {
                         }
                     }
 
-                    let frame = {
-                        let guard = latest_frame.read();
-                        guard.clone()
-                    };
-                    let frame = match frame {
-                        Some(f) => f,
-                        None => continue,
-                    };
-
                     input_frame_count = input_frame_count.wrapping_add(1);
+                    pipeline
+                        .encoded_input_frames
+                        .fetch_add(1, Ordering::Relaxed);
+                    let encode_started = Instant::now();
+                    let encode_result = pipeline.encode_frame_sync(&mut encoder_state, &frame);
+                    pipeline.encode_time_ns.fetch_add(
+                        encode_started.elapsed().as_nanos() as u64,
+                        Ordering::Relaxed,
+                    );
 
-                    match pipeline.encode_frame_sync(&mut encoder_state, &frame) {
+                    match encode_result {
                         Ok(encoded_frames) => {
-                            for encoded_frame in encoded_frames {
-                                let encoded_arc = Arc::new(encoded_frame);
-                                pipeline.broadcast_encoded(encoded_arc);
-
-                                encoded_frame_count = encoded_frame_count.wrapping_add(1);
-                                fps_frame_count += 1;
-                            }
+                            encoded_frame_count =
+                                encoded_frame_count.wrapping_add(encoded_frames.len() as u64);
+                            fps_frame_count += encoded_frames.len() as u64;
+                            let frames: EncodedBatch = encoded_frames
+                                .into_iter()
+                                .map(Arc::new)
+                                .collect::<Vec<_>>()
+                                .into();
+                            pipeline.broadcast_encoded_batch(frames, reservations);
                         }
                         Err(e) => {
                             log_encoding_error(
@@ -1040,15 +1268,23 @@ impl SharedVideoPipeline {
                         fps_frame_count = 0;
                         last_fps_time = Instant::now();
 
-                        handle.block_on(async {
-                            let mut s = pipeline.stats.lock().await;
-                            s.current_fps = current_fps;
-                        });
+                        pipeline.stats.lock().current_fps = current_fps;
                         trace!(
-                            "Shared pipeline processed {} input frames, emitted {} encoded frames",
+                            "Shared pipeline processed {} input frames, emitted {} encoded frames; MJPEG decoded={}, dropped before decode={}, decoded but not encoded={}",
                             input_frame_count,
-                            encoded_frame_count
+                            encoded_frame_count,
+                            pipeline.mjpeg_decoded_frames.load(Ordering::Relaxed),
+                            pipeline.mjpeg_dropped_before_decode.load(Ordering::Relaxed),
+                            pipeline.decoded_frames_not_encoded.load(Ordering::Relaxed),
                         );
+                    }
+
+                    if perf_logging && last_perf_time.elapsed() >= Duration::from_secs(5) {
+                        let elapsed = last_perf_time.elapsed().as_secs_f64();
+                        let stats = pipeline.stats_snapshot();
+                        log_pipeline_performance(&stats, &last_perf_stats, elapsed);
+                        last_perf_stats = stats;
+                        last_perf_time = Instant::now();
                     }
                 }
 
@@ -1057,17 +1293,24 @@ impl SharedVideoPipeline {
                 drop(encoder_state);
                 let _ = pipeline.encoder_done.send(true);
             });
+            if let Err(error) = encoder_worker {
+                self.stop();
+                let _ = self.running.send(false);
+                let _ = self.encoder_done.send(true);
+                return Err(AppError::VideoError(format!(
+                    "Failed to start encoder worker: {error}"
+                )));
+            }
         }
 
         // Capture loop (runs on thread, updates latest frame)
         {
             let pipeline = pipeline.clone();
-            let latest_frame = latest_frame.clone();
-            let frame_seq_tx = frame_seq_tx.clone();
+            let frame_mailbox = frame_mailbox.clone();
             let buffer_pool = buffer_pool.clone();
             let bridge_ctx =
                 BridgeContext::from_parts(subdev_path, parse_bridge_kind(bridge_kind.as_deref()));
-            std::thread::spawn(move || {
+            let capture_worker = spawn_video_worker("video-capture", move || {
                 let mut stream: Option<CaptureStream> = None;
                 let mut initial_geometry: Option<(Resolution, PixelFormat)> = None;
                 let mut resolution = config.resolution;
@@ -1078,8 +1321,7 @@ impl SharedVideoPipeline {
                     .then(|| {
                         spawn_mjpeg_decode_workers(
                             &pipeline,
-                            &latest_frame,
-                            &frame_seq_tx,
+                            &frame_mailbox,
                             &buffer_pool,
                             config.resolution,
                         )
@@ -1140,8 +1382,8 @@ impl SharedVideoPipeline {
                 }
 
                 let mut no_subscribers_since: Option<Instant> = None;
+                let mut capture_sequence = 0u64;
                 let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
-                let mut sequence: u64 = 0;
                 let mut consecutive_timeouts: u32 = 0;
                 let recovery_policy = CaptureRecoveryPolicy::new(config.control_mode);
                 let capture_error_throttler = LogThrottler::with_secs(5);
@@ -1430,6 +1672,18 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
+                    capture_sequence = capture_sequence.wrapping_add(1);
+
+                    if parallel_mjpeg_decode
+                        && pixel_format == PixelFormat::Mjpeg
+                        && frame_mailbox.has_pending()
+                    {
+                        pipeline
+                            .mjpeg_dropped_before_decode
+                            .fetch_add(1, Ordering::Relaxed);
+                        buffer_pool.put(owned);
+                        continue;
+                    }
 
                     // Notify streaming only after the short-frame guard passes.
                     pipeline.notify_state(PipelineStateNotification::streaming(
@@ -1441,7 +1695,7 @@ impl SharedVideoPipeline {
                     if let Some(senders) = mjpeg_decode_senders.as_mut() {
                         let mut pending = Some(MjpegDecodeJob {
                             data: owned,
-                            sequence: meta.sequence,
+                            sequence: capture_sequence,
                         });
                         for offset in 0..senders.len() {
                             let index = (next_mjpeg_decoder + offset) % senders.len();
@@ -1458,6 +1712,9 @@ impl SharedVideoPipeline {
                             }
                         }
                         if let Some(job) = pending {
+                            pipeline
+                                .mjpeg_dropped_before_decode
+                                .fetch_add(1, Ordering::Relaxed);
                             buffer_pool.put(job.data);
                         }
                         continue;
@@ -1468,6 +1725,7 @@ impl SharedVideoPipeline {
                             let nv12_size =
                                 resolution.width as usize * resolution.height as usize * 3 / 2;
                             let mut nv12 = buffer_pool.take(nv12_size);
+                            let decode_started = Instant::now();
                             if let Err(error) = decoder.decode_into(&owned, &mut nv12) {
                                 buffer_pool.put(owned);
                                 buffer_pool.put(nv12);
@@ -1478,6 +1736,13 @@ impl SharedVideoPipeline {
                                 continue;
                             }
                             buffer_pool.put(owned);
+                            pipeline.mjpeg_decode_time_ns.fetch_add(
+                                decode_started.elapsed().as_nanos() as u64,
+                                Ordering::Relaxed,
+                            );
+                            pipeline
+                                .mjpeg_decoded_frames
+                                .fetch_add(1, Ordering::Relaxed);
                             (nv12, PixelFormat::Nv12, resolution.width)
                         } else {
                             (owned, pixel_format, stride)
@@ -1487,15 +1752,15 @@ impl SharedVideoPipeline {
                         resolution,
                         frame_format,
                         frame_stride,
-                        meta.sequence,
+                        capture_sequence,
                     ));
-                    sequence = meta.sequence.wrapping_add(1);
-
+                    if frame_mailbox.publish(capture_sequence, frame) != PublishResult::Published
+                        && mjpeg_decoder.is_some()
                     {
-                        let mut guard = latest_frame.write();
-                        *guard = Some(frame);
+                        pipeline
+                            .decoded_frames_not_encoded
+                            .fetch_add(1, Ordering::Relaxed);
                     }
-                    let _ = frame_seq_tx.send(sequence);
                 }
 
                 // `running` represents completed lifecycle state, not a stop request.
@@ -1503,10 +1768,17 @@ impl SharedVideoPipeline {
                 // have all completed before another consumer is told the device is free.
                 drop(stream);
                 pipeline.running_flag.store(false, Ordering::Release);
-                let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                frame_mailbox.close();
                 let _ = pipeline.running.send(false);
                 info!("Video pipeline stopped and capture device released");
             });
+            if let Err(error) = capture_worker {
+                self.stop();
+                let _ = self.running.send(false);
+                return Err(AppError::VideoError(format!(
+                    "Failed to start capture worker: {error}"
+                )));
+            }
         }
 
         Ok(())
@@ -1638,13 +1910,9 @@ impl SharedVideoPipeline {
                     let (data, is_keyframe) =
                         self.inspect_and_parameterize_packet(codec, encoded.data, encoded.key == 1);
                     let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                    if codec == VideoEncoderType::H264 {
-                        self.update_h264_profile_level_id(&data);
-                    }
-
                     encoded_frames.push(EncodedVideoFrame {
                         data,
-                        pts_ms,
+                        pts_ms: encoded.pts,
                         is_keyframe,
                         sequence,
                         duration: Duration::from_millis(1000 / fps as u64),
@@ -1682,7 +1950,11 @@ impl SharedVideoPipeline {
 
     /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)
     pub fn stop(&self) {
-        if self.running_flag.swap(false, Ordering::AcqRel) {
+        let was_running = self.running_flag.swap(false, Ordering::AcqRel);
+        if let Some(frame_mailbox) = self.frame_mailbox.lock().as_ref() {
+            frame_mailbox.close();
+        }
+        if was_running {
             self.clear_cmd_tx();
             info!("Stopping video pipeline");
         }
@@ -2059,6 +2331,101 @@ mod tests {
     }
 
     #[test]
+    fn h264_profile_is_updated_from_parameter_only_packet() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let packet =
+            Bytes::from_static(&[0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce]);
+        let (_, keyframe) =
+            pipeline.inspect_and_parameterize_packet(VideoEncoderType::H264, packet, false);
+        assert!(!keyframe);
+        assert_eq!(
+            pipeline.h264_profile_level_id_watch().borrow().as_deref(),
+            Some("42e01f")
+        );
+    }
+
+    #[tokio::test]
+    async fn decoder_statistics_report_work_and_drops() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        pipeline.mjpeg_decoded_frames.store(30, Ordering::Relaxed);
+        pipeline
+            .mjpeg_dropped_before_decode
+            .store(10, Ordering::Relaxed);
+        pipeline
+            .decoded_frames_not_encoded
+            .store(5, Ordering::Relaxed);
+        let stats = pipeline.stats().await;
+        assert_eq!(stats.mjpeg_decoded_frames, 30);
+        assert_eq!(stats.mjpeg_dropped_before_decode, 10);
+        assert_eq!(stats.decoded_frames_not_encoded, 5);
+    }
+
+    #[test]
+    fn encoder_packet_pts_is_preserved() {
+        use super::super::encoder_state::{EncodedFrame, VideoEncoderTrait};
+
+        struct TestEncoder;
+
+        impl VideoEncoderTrait for TestEncoder {
+            fn encode_raw(&mut self, _data: &[u8], _pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+                Ok(vec![EncodedFrame {
+                    data: Bytes::from_static(&[0, 0, 0, 1, 0x41, 0xc0]),
+                    key: 0,
+                    pts: 321,
+                }])
+            }
+
+            fn set_bitrate(&mut self, _bitrate_kbps: u32) -> Result<()> {
+                Ok(())
+            }
+
+            fn codec_name(&self) -> &str {
+                "test-h264"
+            }
+
+            fn request_keyframe(&mut self) {}
+        }
+
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let mut state = EncoderThreadState {
+            encoder: Some(Box::new(TestEncoder)),
+            mjpeg_decoder: None,
+            nv12_converter: None,
+            yuv420p_converter: None,
+            encoder_needs_yuv420p: false,
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            ffmpeg_hw_pipeline: None,
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            ffmpeg_hw_enabled: false,
+            fps: 30,
+            codec: VideoEncoderType::H264,
+            input_format: PixelFormat::Nv12,
+        };
+        let frame = VideoFrame::from_pooled(
+            Arc::new(FrameBuffer::new(vec![0; 1280 * 720 * 3 / 2], None)),
+            Resolution::HD720,
+            PixelFormat::Nv12,
+            1280,
+            1,
+        );
+        let encoded = pipeline.encode_frame_sync(&mut state, &frame).unwrap();
+        assert_eq!(encoded.len(), 1);
+        assert_eq!(encoded[0].pts_ms, 321);
+    }
+
+    #[test]
     fn h265_keyframe_requires_irap_and_parameter_sets() {
         let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h265(
             Resolution::HD720,
@@ -2135,12 +2502,211 @@ mod tests {
             codec: VideoEncoderType::H264,
         });
 
-        pipeline.broadcast_encoded(bootstrap.clone());
+        pipeline.broadcast_encoded_batch(vec![bootstrap.clone()].into(), Vec::new());
         let mut subscriber = pipeline.subscribe();
         let received = subscriber
             .try_recv()
             .expect("cached bootstrap frame should seed the subscriber queue");
         assert!(Arc::ptr_eq(&received, &bootstrap));
+    }
+
+    fn delivery_test_pipeline() -> Arc<SharedVideoPipeline> {
+        SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap()
+    }
+
+    fn delivery_test_frame(sequence: u64, is_keyframe: bool) -> Arc<EncodedVideoFrame> {
+        Arc::new(EncodedVideoFrame {
+            data: Bytes::from_static(&[0, 0, 0, 1, 0x41, 0xc0]),
+            pts_ms: sequence as i64 * 33,
+            is_keyframe,
+            sequence,
+            duration: Duration::from_millis(33),
+            codec: VideoEncoderType::H264,
+        })
+    }
+
+    fn delivery_test_raw_frame(sequence: u64) -> Arc<VideoFrame> {
+        Arc::new(VideoFrame::from_pooled(
+            Arc::new(FrameBuffer::new(vec![0; 6], None)),
+            Resolution {
+                width: 2,
+                height: 2,
+            },
+            PixelFormat::Nv12,
+            2,
+            sequence,
+        ))
+    }
+
+    #[test]
+    fn encoded_batch_delivers_all_frames_in_order() {
+        let pipeline = delivery_test_pipeline();
+        let mut receiver = pipeline.subscribe();
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(
+            vec![
+                delivery_test_frame(1, true),
+                delivery_test_frame(2, false),
+                delivery_test_frame(3, false),
+            ]
+            .into(),
+            reservations,
+        );
+        assert_eq!(receiver.try_recv().unwrap().sequence, 1);
+        assert_eq!(receiver.try_recv().unwrap().sequence, 2);
+        assert_eq!(receiver.try_recv().unwrap().sequence, 3);
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[test]
+    fn single_subscriber_backpressure_preserves_reference_chain() {
+        let pipeline = delivery_test_pipeline();
+        let mut receiver = pipeline.subscribe();
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(1, true)].into(), reservations);
+        assert!(pipeline.reserve_outputs().is_none());
+        assert!(pipeline.reserve_outputs().is_none());
+        assert_eq!(pipeline.stats_snapshot().output_backpressure_events, 1);
+        assert_eq!(receiver.try_recv().unwrap().sequence, 1);
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(2, false)].into(), reservations);
+        assert_eq!(receiver.try_recv().unwrap().sequence, 2);
+        let stats = pipeline.stats_snapshot();
+        assert_eq!(stats.encoded_frames, 2);
+        assert_eq!(stats.encoded_frames_skipped_for_slow_subscribers, 0);
+    }
+
+    #[test]
+    fn output_capacity_wakes_encoder_with_latest_raw_frame() {
+        use std::sync::mpsc as sync_mpsc;
+
+        let pipeline = delivery_test_pipeline();
+        let mailbox = Arc::new(VideoFrameMailbox::new());
+        *pipeline.frame_mailbox.lock() = Some(mailbox.clone());
+        let mut receiver = pipeline.subscribe();
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(1, true)].into(), reservations);
+        mailbox.publish(1, delivery_test_raw_frame(1));
+        mailbox.publish(2, delivery_test_raw_frame(2));
+        let (waiting_sender, waiting_receiver) = sync_mpsc::sync_channel(1);
+        let (result_sender, result_receiver) = sync_mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = mailbox.receive_when(|| {
+                let reservations = pipeline.reserve_outputs();
+                if reservations.is_none() {
+                    let _ = waiting_sender.try_send(());
+                }
+                reservations
+            });
+            let (frame, reservations) = result.unwrap();
+            result_sender
+                .send((frame.sequence, reservations.len()))
+                .unwrap();
+        });
+        waiting_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(receiver.try_recv().unwrap().sequence, 1);
+        assert_eq!(
+            result_receiver
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            (2, 1)
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn receiver_drop_wakes_encoder_waiting_for_capacity() {
+        use std::sync::mpsc as sync_mpsc;
+
+        let pipeline = delivery_test_pipeline();
+        let mailbox = Arc::new(VideoFrameMailbox::new());
+        *pipeline.frame_mailbox.lock() = Some(mailbox.clone());
+        let receiver = pipeline.subscribe();
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(1, true)].into(), reservations);
+        mailbox.publish(1, delivery_test_raw_frame(1));
+        let (waiting_sender, waiting_receiver) = sync_mpsc::sync_channel(1);
+        let (result_sender, result_receiver) = sync_mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = mailbox.receive_when(|| {
+                let reservations = pipeline.reserve_outputs();
+                if reservations.is_none() {
+                    let _ = waiting_sender.try_send(());
+                }
+                reservations
+            });
+            result_sender.send(result.unwrap().1.is_empty()).unwrap();
+        });
+        waiting_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        drop(receiver);
+        assert!(result_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap());
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn slow_subscriber_is_isolated_and_resumes_at_keyframe() {
+        let pipeline = delivery_test_pipeline();
+        let mut fast_receiver = pipeline.subscribe();
+        let mut slow_receiver = pipeline.subscribe();
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(1, true)].into(), reservations);
+        pipeline.keyframe_requested.store(false, Ordering::Release);
+        assert_eq!(fast_receiver.try_recv().unwrap().sequence, 1);
+        let reservations = pipeline.reserve_outputs().unwrap();
+        assert_eq!(reservations.len(), 1);
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(2, false)].into(), reservations);
+        assert_eq!(fast_receiver.try_recv().unwrap().sequence, 2);
+        assert!(!pipeline.keyframe_requested.load(Ordering::Acquire));
+        assert_eq!(slow_receiver.try_recv().unwrap().sequence, 1);
+        let reservations = pipeline.reserve_outputs().unwrap();
+        assert_eq!(reservations.len(), 2);
+        assert!(pipeline.keyframe_requested.swap(false, Ordering::AcqRel));
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(3, false)].into(), reservations);
+        assert_eq!(fast_receiver.try_recv().unwrap().sequence, 3);
+        assert!(matches!(
+            slow_receiver.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        let reservations = pipeline.reserve_outputs().unwrap();
+        assert!(!pipeline.keyframe_requested.load(Ordering::Acquire));
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(4, true)].into(), reservations);
+        assert_eq!(fast_receiver.try_recv().unwrap().sequence, 4);
+        assert_eq!(slow_receiver.try_recv().unwrap().sequence, 4);
+        let reservations = pipeline.reserve_outputs().unwrap();
+        pipeline.broadcast_encoded_batch(vec![delivery_test_frame(5, false)].into(), reservations);
+        assert_eq!(fast_receiver.try_recv().unwrap().sequence, 5);
+        assert_eq!(slow_receiver.try_recv().unwrap().sequence, 5);
+        assert_eq!(
+            pipeline
+                .stats_snapshot()
+                .encoded_frames_skipped_for_slow_subscribers,
+            2
+        );
+    }
+
+    #[test]
+    fn send_statistics_include_successes_errors_and_duration() {
+        let pipeline = delivery_test_pipeline();
+        let receiver = pipeline.subscribe();
+        receiver.record_send(Duration::from_micros(100), true);
+        receiver.record_send(Duration::from_micros(200), false);
+        let stats = pipeline.stats_snapshot();
+        assert_eq!(stats.sent_frames, 1);
+        assert_eq!(stats.send_errors, 1);
+        assert_eq!(stats.send_time_ns, 300_000);
     }
 
     #[test]
@@ -2149,6 +2715,24 @@ mod tests {
         assert_eq!(mjpeg_decode_worker_count(2), 2);
         assert_eq!(mjpeg_decode_worker_count(4), 4);
         assert_eq!(mjpeg_decode_worker_count(64), 64);
+    }
+
+    #[test]
+    fn stop_wakes_idle_encoder_even_after_capture_requested_stop() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let mailbox = Arc::new(VideoFrameMailbox::new());
+        *pipeline.frame_mailbox.lock() = Some(mailbox.clone());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            sender.send(mailbox.receive().is_none()).unwrap();
+        });
+        pipeline.stop();
+        assert!(receiver.recv_timeout(Duration::from_secs(2)).unwrap());
+        worker.join().unwrap();
     }
 
     #[test]

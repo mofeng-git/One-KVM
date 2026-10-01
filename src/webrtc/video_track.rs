@@ -4,9 +4,9 @@ use bytes::Bytes;
 use rtp::codecs::h264::H264Payloader;
 use rtp::packetizer::Payloader;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 use webrtc::media::Sample;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -191,6 +191,63 @@ struct H264TrackState {
     clock: H264RtpClock,
     sps: Option<Vec<u8>>,
     pps: Option<Vec<u8>>,
+    performance: H264SendPerformance,
+}
+
+#[derive(Default)]
+struct H264SendTiming {
+    prepare: Duration,
+    lock: Duration,
+    packetize: Duration,
+    write: Duration,
+}
+
+struct H264SendPerformance {
+    last_report: Instant,
+    frames: u64,
+    packets: u64,
+    bytes: u64,
+    timing: H264SendTiming,
+}
+
+impl H264SendPerformance {
+    fn new() -> Self {
+        Self {
+            last_report: Instant::now(),
+            frames: 0,
+            packets: 0,
+            bytes: 0,
+            timing: H264SendTiming::default(),
+        }
+    }
+
+    fn record(&mut self, bytes: usize, packets: usize, timing: H264SendTiming) {
+        self.frames += 1;
+        self.packets += packets as u64;
+        self.bytes += bytes as u64;
+        self.timing.prepare += timing.prepare;
+        self.timing.lock += timing.lock;
+        self.timing.packetize += timing.packetize;
+        self.timing.write += timing.write;
+        let elapsed = self.last_report.elapsed();
+        if elapsed < Duration::from_secs(5) {
+            return;
+        }
+        let average_ms = |duration: Duration| duration.as_secs_f64() * 1000.0 / self.frames as f64;
+        info!(
+            "[VideoSendPerf] window_s={:.2} frames={} packets_per_frame={:.2} frame_kib={:.2} prepare_ms={:.3} lock_ms={:.3} packetize_ms={:.3} write_ms={:.3} write_us_per_packet={:.3}",
+            elapsed.as_secs_f64(),
+            self.frames,
+            self.packets as f64 / self.frames as f64,
+            self.bytes as f64 / self.frames as f64 / 1024.0,
+            average_ms(self.timing.prepare),
+            average_ms(self.timing.lock),
+            average_ms(self.timing.packetize),
+            average_ms(self.timing.write),
+            self.timing.write.as_secs_f64() * 1_000_000.0 / self.packets.max(1) as f64,
+        );
+        *self = Self::new();
+    }
 }
 
 pub struct UniversalVideoTrack {
@@ -199,6 +256,7 @@ pub struct UniversalVideoTrack {
     config: UniversalVideoTrackConfig,
     h265_state: Option<Mutex<H265RtpState>>,
     h264_state: Mutex<H264TrackState>,
+    h264_perf_enabled: bool,
 }
 
 impl UniversalVideoTrack {
@@ -253,6 +311,7 @@ impl UniversalVideoTrack {
                 increment: 90000 / config.fps.max(1),
                 started: false,
             },
+            performance: H264SendPerformance::new(),
         };
         Self {
             track,
@@ -260,6 +319,7 @@ impl UniversalVideoTrack {
             config,
             h265_state,
             h264_state: Mutex::new(h264_state),
+            h264_perf_enabled: std::env::var("ONE_KVM_VIDEO_STATS").as_deref() == Ok("1"),
         }
     }
 
@@ -309,20 +369,24 @@ impl UniversalVideoTrack {
 
     /// Keep the stack's H.264 STAP/FU payloader, with explicit RTP timestamps.
     async fn write_h264_frame(&self, data: Bytes, pts_ms: Option<i64>) -> Result<()> {
-        let normalized = h264_bitstream::normalize_for_webrtc(data.as_ref());
-        let mut data = Bytes::from(normalized);
+        let prepare_started = self.h264_perf_enabled.then(Instant::now);
+        let mut data = h264_bitstream::normalize_annex_b(data);
 
-        let idr = h264_bitstream::is_keyframe(data.as_ref());
-        let has_parameter_sets = h264_bitstream::has_sps_pps(data.as_ref());
+        let inspection = h264_bitstream::inspect_annex_b(data.as_ref());
+        let idr = inspection.is_idr;
+        let has_parameter_sets = inspection.sps.is_some() && inspection.pps.is_some();
 
+        let prepare_time = prepare_started.map(|started| started.elapsed());
+        let lock_started = self.h264_perf_enabled.then(Instant::now);
         let mut state = self.h264_state.lock().await;
+        let lock_time = lock_started.map(|started| started.elapsed());
+        let packetize_started = self.h264_perf_enabled.then(Instant::now);
         {
-            let (sps, pps) = h264_bitstream::extract_sps_pps(data.as_ref());
-            if let Some(sps) = sps {
-                state.sps = Some(sps);
+            if let Some(sps) = inspection.sps {
+                state.sps = Some(sps.to_vec());
             }
-            if let Some(pps) = pps {
-                state.pps = Some(pps);
+            if let Some(pps) = inspection.pps {
+                state.pps = Some(pps.to_vec());
             }
 
             if idr && !has_parameter_sets {
@@ -351,6 +415,8 @@ impl UniversalVideoTrack {
         }
         let timestamp = state.clock.next(pts_ms);
         let count = payloads.len();
+        let packetize_time = packetize_started.map(|started| started.elapsed());
+        let write_started = self.h264_perf_enabled.then(Instant::now);
         // Serialize complete access units, including their sequence allocation.
         for (index, payload) in payloads.into_iter().enumerate() {
             let sequence_number = state.sequence_number;
@@ -369,6 +435,18 @@ impl UniversalVideoTrack {
                 .write_rtp(&packet)
                 .await
                 .map_err(|e| AppError::WebRtcError(format!("H264 RTP write failed: {e}")))?;
+        }
+        if let Some(started) = write_started {
+            state.performance.record(
+                data.len(),
+                count,
+                H264SendTiming {
+                    prepare: prepare_time.unwrap_or_default(),
+                    lock: lock_time.unwrap_or_default(),
+                    packetize: packetize_time.unwrap_or_default(),
+                    write: started.elapsed(),
+                },
+            );
         }
         Ok(())
     }
@@ -531,6 +609,108 @@ mod tests {
         assert_eq!(clock.next(Some(2)), 92);
         assert_eq!(clock.next(None), 3092);
         assert_eq!(clock.next(None), 6092);
+    }
+
+    #[test]
+    fn h264_zero_copy_input_preserves_rtp_payloads() {
+        let mut annex_b = vec![
+            0, 0, 0, 1, 0x09, 0xf0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0, 0,
+            1, 0x0c, 0xff, 0, 0, 0, 1, 0x65,
+        ];
+        annex_b.extend_from_slice(&vec![0x55; 2500]);
+        let mut avcc = vec![0, 0, 0, 2, 0x09, 0xf0, 0, 0, 1, 1, 0x65];
+        avcc.extend_from_slice(&vec![0x55; 256]);
+        let inputs = vec![
+            annex_b,
+            avcc,
+            vec![0, 0, 1, 0x41, 0x88, 0x55],
+            vec![0x41, 0x88, 0x55],
+            vec![0, 0, 0, 1, 0x09, 0xf0, 0, 0, 1, 0x0c, 0xff],
+            Vec::new(),
+        ];
+        for input in inputs {
+            let previous = Bytes::from(h264_bitstream::normalize_for_webrtc(&input));
+            let current = h264_bitstream::normalize_annex_b(Bytes::from(input));
+            let mut previous_payloader = H264Payloader::default();
+            let mut current_payloader = H264Payloader::default();
+            assert_eq!(
+                previous_payloader.payload(RTP_MTU - 12, &previous).unwrap(),
+                current_payloader.payload(RTP_MTU - 12, &current).unwrap(),
+            );
+        }
+    }
+
+    #[test]
+    fn h264_zero_copy_input_preserves_cached_parameter_sets() {
+        let mut previous_payloader = H264Payloader::default();
+        let mut current_payloader = H264Payloader::default();
+        for input in [
+            Bytes::from_static(&[0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f]),
+            Bytes::from_static(&[0, 0, 0, 1, 0x09, 0xf0, 0, 0, 1, 0x68, 0xce]),
+            Bytes::from_static(&[0, 0, 0, 1, 0x65, 0x88, 0x55]),
+        ] {
+            let previous = Bytes::from(h264_bitstream::normalize_for_webrtc(&input));
+            let current = h264_bitstream::normalize_annex_b(input.clone());
+            assert_eq!(current.as_ptr(), input.as_ptr());
+            assert_eq!(
+                previous_payloader.payload(RTP_MTU - 12, &previous).unwrap(),
+                current_payloader.payload(RTP_MTU - 12, &current).unwrap(),
+            );
+        }
+    }
+
+    #[test]
+    fn h264_send_performance_accumulates_stage_timings() {
+        let mut performance = H264SendPerformance::new();
+        for _ in 0..2 {
+            performance.record(
+                1200,
+                2,
+                H264SendTiming {
+                    prepare: Duration::from_micros(100),
+                    lock: Duration::from_micros(20),
+                    packetize: Duration::from_micros(200),
+                    write: Duration::from_micros(300),
+                },
+            );
+        }
+        assert_eq!(performance.frames, 2);
+        assert_eq!(performance.bytes, 2400);
+        assert_eq!(performance.packets, 4);
+        assert_eq!(performance.timing.prepare, Duration::from_micros(200));
+        assert_eq!(performance.timing.lock, Duration::from_micros(40));
+        assert_eq!(performance.timing.packetize, Duration::from_micros(400));
+        assert_eq!(performance.timing.write, Duration::from_micros(600));
+    }
+
+    #[test]
+    fn srtp_backend_preserves_authentication_and_sequence_rollover() {
+        use webrtc::srtp::context::Context;
+        use webrtc::srtp::protection_profile::ProtectionProfile;
+
+        for profile in [
+            ProtectionProfile::Aes128CmHmacSha1_80,
+            ProtectionProfile::AeadAes128Gcm,
+        ] {
+            let key = vec![42; profile.key_len()];
+            let salt = vec![13; profile.salt_len()];
+            let mut sender = Context::new(&key, &salt, profile, None, None).unwrap();
+            let mut receiver = Context::new(&key, &salt, profile, None, None).unwrap();
+            for sequence in [u16::MAX - 1, u16::MAX, 0, 1] {
+                for ssrc in [17u32, 18] {
+                    let mut packet = vec![0x55; 1200];
+                    packet[..12].copy_from_slice(&[0x80, 108, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+                    packet[2..4].copy_from_slice(&sequence.to_be_bytes());
+                    packet[8..12].copy_from_slice(&ssrc.to_be_bytes());
+                    let encrypted = sender.encrypt_rtp(&packet).unwrap();
+                    assert_ne!(&encrypted[12..1200], &packet[12..]);
+                    let mut corrupted = encrypted.to_vec();
+                    corrupted[13] ^= 1;
+                    assert!(receiver.decrypt_rtp(&corrupted).is_err());
+                    assert_eq!(receiver.decrypt_rtp(&encrypted).unwrap().as_ref(), packet);
+                }
+            }
+        }
     }
 
     #[test]

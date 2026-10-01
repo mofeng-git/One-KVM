@@ -1328,7 +1328,7 @@ impl WebConfigUpdate {
             }
         }
         // Cert and key must be provided together (cryptographic validity is checked in the
-        // handler via `RustlsConfig::from_pem`, same stack as the running HTTPS server).
+        // handler via `server_config_from_pem`, same stack as the running HTTPS server).
         match (&self.ssl_cert_pem, &self.ssl_key_pem) {
             (Some(_cert), Some(_key)) => {}
             (Some(_), None) => {

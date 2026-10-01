@@ -41,6 +41,11 @@ pub(super) trait VideoEncoderTrait: Send {
 pub(super) struct EncodedFrame {
     pub(super) data: Bytes,
     pub(super) key: i32,
+    /// Packet pts in milliseconds, stamped by the encoder when the input
+    /// frame was accepted. With a pipelined encoder a packet can be handed
+    /// back one call later than its input frame, so consumers must use this
+    /// instead of the wall clock time of the current call.
+    pub(super) pts: i64,
 }
 
 struct H264EncoderWrapper(H264Encoder);
@@ -53,6 +58,7 @@ impl VideoEncoderTrait for H264EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data,
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
@@ -99,6 +105,7 @@ impl VideoEncoderTrait for H265EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data,
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
@@ -126,6 +133,7 @@ impl VideoEncoderTrait for VP8EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data.into(),
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
@@ -151,6 +159,7 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data.into(),
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }

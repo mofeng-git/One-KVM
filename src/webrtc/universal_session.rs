@@ -37,9 +37,8 @@ use crate::error::{AppError, Result};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
 use crate::video::codec::{h264_bitstream, h265_bitstream};
-use crate::video::types::{
-    BitratePreset, EncodedVideoFrame, PixelFormat, Resolution, VideoEncoderType,
-};
+use crate::video::pipeline::EncodedVideoFrameReceiver;
+use crate::video::types::{BitratePreset, PixelFormat, Resolution, VideoEncoderType};
 
 const MIME_TYPE_H265: &str = "video/H265";
 const KEYFRAME_RETRY_LIMIT: u8 = 3;
@@ -527,7 +526,7 @@ impl UniversalSession {
     /// `on_connected` runs once ICE is up (e.g. request a keyframe).
     pub async fn start_from_video_pipeline(
         &self,
-        mut frame_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>,
+        mut frame_rx: EncodedVideoFrameReceiver,
         request_keyframe: Arc<dyn Fn() + Send + Sync + 'static>,
     ) {
         if let Some(handle) = self.video_receiver_handle.lock().await.take() {
@@ -670,6 +669,7 @@ impl UniversalSession {
                             }
                         }
 
+                        let send_started = Instant::now();
                         let send_result = video_track
                             .write_frame_bytes_at(
                                 encoded_frame.data.clone(),
@@ -677,6 +677,7 @@ impl UniversalSession {
                                 Some(encoded_frame.pts_ms),
                             )
                             .await;
+                        frame_rx.record_send(send_started.elapsed(), send_result.is_ok());
                         match send_result {
                             Ok(()) => {
                                 frames_sent += 1;

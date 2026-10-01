@@ -9,6 +9,7 @@ pub mod net;
 pub mod net;
 pub mod serial;
 pub mod throttle;
+pub mod tls;
 
 pub use fs::{list_dir_names, read_trimmed};
 pub use host::{hostname_from_etc, hostname_uname};

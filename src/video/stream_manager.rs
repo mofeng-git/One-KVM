@@ -697,9 +697,7 @@ impl VideoStreamManager {
     /// Returns None if video capture cannot be started or pipeline creation fails.
     pub async fn subscribe_encoded_frames(
         &self,
-    ) -> Option<
-        tokio::sync::mpsc::Receiver<std::sync::Arc<crate::video::pipeline::EncodedVideoFrame>>,
-    > {
+    ) -> Option<crate::video::pipeline::EncodedVideoFrameReceiver> {
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");

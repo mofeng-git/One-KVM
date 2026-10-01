@@ -69,63 +69,54 @@ pub fn strip_aud_nal_units(data: &[u8]) -> Vec<u8> {
     result
 }
 
-pub fn extract_sps_pps(data: &[u8]) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-    let mut sps: Option<Vec<u8>> = None;
-    let mut pps: Option<Vec<u8>> = None;
-    let mut i = 0;
+#[derive(Debug, Default)]
+pub struct H264AccessUnit<'data> {
+    pub sps: Option<&'data [u8]>,
+    pub pps: Option<&'data [u8]>,
+    pub is_idr: bool,
+}
 
-    while i < data.len() {
-        let start_code_len = if i + 4 <= data.len()
-            && data[i] == 0
-            && data[i + 1] == 0
-            && data[i + 2] == 0
-            && data[i + 3] == 1
-        {
-            4
-        } else if i + 3 <= data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
-            3
-        } else {
-            i += 1;
-            continue;
-        };
-
-        let nal_start = i + start_code_len;
-        if nal_start >= data.len() {
-            break;
-        }
-
-        let nal_type = data[nal_start] & 0x1F;
-
-        let mut nal_end = data.len();
-        let mut j = nal_start + 1;
-        while j + 3 <= data.len() {
-            if (data[j] == 0 && data[j + 1] == 0 && data[j + 2] == 1)
-                || (j + 4 <= data.len()
-                    && data[j] == 0
-                    && data[j + 1] == 0
-                    && data[j + 2] == 0
-                    && data[j + 3] == 1)
-            {
-                nal_end = j;
-                break;
+fn next_start_code(data: &[u8], mut offset: usize) -> Option<(usize, usize)> {
+    while offset + 3 <= data.len() {
+        if data[offset] == 0 && data[offset + 1] == 0 {
+            if data[offset + 2] == 1 {
+                return Some((offset, 3));
             }
-            j += 1;
-        }
-
-        match nal_type {
-            7 => {
-                sps = Some(data[nal_start..nal_end].to_vec());
+            if offset + 4 <= data.len() && data[offset + 2] == 0 && data[offset + 3] == 1 {
+                return Some((offset, 4));
             }
-            8 => {
-                pps = Some(data[nal_start..nal_end].to_vec());
-            }
-            _ => {}
         }
-
-        i = nal_end;
+        offset += 1;
     }
+    None
+}
 
-    (sps, pps)
+pub fn inspect_annex_b(data: &[u8]) -> H264AccessUnit<'_> {
+    let mut inspection = H264AccessUnit::default();
+    let mut start_code = next_start_code(data, 0);
+    while let Some((offset, prefix_length)) = start_code {
+        let nal_start = offset + prefix_length;
+        let next = next_start_code(data, nal_start);
+        let nal_end = next.map_or(data.len(), |(next_offset, _)| next_offset);
+        if nal_start < nal_end {
+            match data[nal_start] & 0x1f {
+                5 => inspection.is_idr = true,
+                7 => inspection.sps = Some(&data[nal_start..nal_end]),
+                8 => inspection.pps = Some(&data[nal_start..nal_end]),
+                _ => {}
+            }
+        }
+        start_code = next;
+    }
+    inspection
+}
+
+pub fn extract_sps_pps(data: &[u8]) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+    let inspection = inspect_annex_b(data);
+    (
+        inspection.sps.map(<[u8]>::to_vec),
+        inspection.pps.map(<[u8]>::to_vec),
+    )
 }
 
 pub fn has_sps_pps(data: &[u8]) -> bool {
@@ -215,8 +206,9 @@ pub fn parse_profile_level_id_from_sps(sps: &[u8]) -> Option<String> {
 }
 
 pub fn extract_profile_level_id(data: &[u8]) -> Option<String> {
-    let (sps, _) = extract_sps_pps(data);
-    sps.and_then(|sps_data| parse_profile_level_id_from_sps(&sps_data))
+    inspect_annex_b(data)
+        .sps
+        .and_then(parse_profile_level_id_from_sps)
 }
 
 pub fn is_annex_b(data: &[u8]) -> bool {
@@ -291,6 +283,58 @@ pub fn normalize_for_webrtc(data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inspects_parameter_sets_and_idr_in_one_pass() {
+        let data = [
+            0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 1, 0x68, 0xce, 0, 0, 0, 1, 0x65, 0x88,
+        ];
+        let inspection = inspect_annex_b(&data);
+        assert_eq!(inspection.sps, Some(&data[4..8]));
+        assert_eq!(inspection.pps, Some(&data[11..13]));
+        assert!(inspection.is_idr);
+        assert!(std::ptr::eq(
+            inspection.sps.unwrap().as_ptr(),
+            data[4..].as_ptr()
+        ));
+        assert_eq!(extract_profile_level_id(&data).as_deref(), Some("42e01f"));
+    }
+
+    #[test]
+    fn predicted_packet_has_no_parameter_sets_or_idr() {
+        let data = [0, 0, 0, 1, 0x41, 0xc0];
+        let inspection = inspect_annex_b(&data);
+        assert!(inspection.sps.is_none());
+        assert!(inspection.pps.is_none());
+        assert!(!inspection.is_idr);
+    }
+
+    #[test]
+    fn empty_and_truncated_nal_units_are_ignored() {
+        for data in [
+            &[][..],
+            &[0][..],
+            &[0, 0][..],
+            &[0, 0, 1][..],
+            &[0, 0, 0, 1][..],
+            &[0, 0, 1, 0, 0, 0, 1][..],
+        ] {
+            let inspection = inspect_annex_b(data);
+            assert!(inspection.sps.is_none());
+            assert!(inspection.pps.is_none());
+            assert!(!inspection.is_idr);
+        }
+    }
+
+    #[test]
+    fn inspection_keeps_last_parameter_sets() {
+        let data = [
+            0, 0, 1, 0x67, 0x42, 0xc0, 0x1e, 0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f,
+        ];
+        let inspection = inspect_annex_b(&data);
+        assert_eq!(inspection.sps, Some(&data[11..15]));
+        assert_eq!(extract_profile_level_id(&data).as_deref(), Some("42e01f"));
+    }
 
     #[test]
     fn detects_h264_keyframes() {
