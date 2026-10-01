@@ -544,7 +544,7 @@ pub struct Nv12Converter {
 /// MJPEG decoder that writes NV12 directly using libyuv.
 pub struct MjpegToNv12Decoder {
     resolution: Resolution,
-    output_buffer: Nv12Buffer,
+    output_buffer: Option<Nv12Buffer>,
     size_checked: bool,
 }
 
@@ -552,7 +552,7 @@ impl MjpegToNv12Decoder {
     pub fn new(resolution: Resolution) -> Self {
         Self {
             resolution,
-            output_buffer: Nv12Buffer::new(resolution),
+            output_buffer: None,
             size_checked: false,
         }
     }
@@ -561,11 +561,14 @@ impl MjpegToNv12Decoder {
         self.check_size(input)?;
         let width = self.resolution.width as i32;
         let height = self.resolution.height as i32;
+        let output = self
+            .output_buffer
+            .get_or_insert_with(|| Nv12Buffer::new(self.resolution));
 
-        libyuv::mjpg_to_nv12(input, self.output_buffer.as_bytes_mut(), width, height)
+        libyuv::mjpg_to_nv12(input, output.as_bytes_mut(), width, height)
             .map_err(|e| AppError::VideoError(format!("libyuv MJPEG->NV12 failed: {}", e)))?;
 
-        Ok(self.output_buffer.as_bytes())
+        Ok(output.as_bytes())
     }
 
     /// Decode into caller-owned storage so capture and encoding can run on
@@ -899,6 +902,7 @@ mod tests {
         let mut output = Vec::with_capacity(output_size);
         let allocation = output.as_ptr();
         let mut decoder = MjpegToNv12Decoder::new(resolution);
+        assert!(decoder.output_buffer.is_none());
 
         decoder.decode_into(&jpeg, &mut output).unwrap();
         assert_eq!(output.len(), output_size);
@@ -907,5 +911,10 @@ mod tests {
         decoder.decode_into(&jpeg, &mut output).unwrap();
         assert_eq!(output.len(), output_size);
         assert_eq!(output.as_ptr(), allocation);
+
+        assert!(decoder.output_buffer.is_none());
+        assert_eq!(decoder.decode(&jpeg).unwrap(), output.as_slice());
+        let internal = decoder.decode(&jpeg).unwrap().as_ptr();
+        assert_eq!(decoder.decode(&jpeg).unwrap().as_ptr(), internal);
     }
 }

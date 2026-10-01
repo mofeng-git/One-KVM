@@ -157,6 +157,11 @@ use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 use crate::video::signal::SignalStatus;
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+const OUTPUT_BACKPRESSURE_GRACE_NS: u64 = 10_000_000;
+
+fn sustained_output_backpressure(started_ns: u64, now_ns: u64) -> bool {
+    started_ns != 0 && now_ns.saturating_sub(started_ns - 1) >= OUTPUT_BACKPRESSURE_GRACE_NS
+}
 type VideoFrameMailbox = FrameMailbox<Arc<VideoFrame>>;
 
 fn spawn_video_worker(
@@ -637,6 +642,7 @@ pub struct SharedVideoPipeline {
     encoder_output_wait_ns: AtomicU64,
     output_backpressure_events: AtomicU64,
     output_backpressured: AtomicBool,
+    output_backpressure_since_ns: AtomicU64,
     encoded_frames_skipped_for_slow_subscribers: AtomicU64,
     delivery_stats: Arc<DeliveryStats>,
     running: watch::Sender<bool>,
@@ -704,6 +710,7 @@ impl SharedVideoPipeline {
             encoder_output_wait_ns: AtomicU64::new(0),
             output_backpressure_events: AtomicU64::new(0),
             output_backpressured: AtomicBool::new(false),
+            output_backpressure_since_ns: AtomicU64::new(0),
             encoded_frames_skipped_for_slow_subscribers: AtomicU64::new(0),
             delivery_stats: Arc::new(DeliveryStats::default()),
             running: running_tx,
@@ -911,6 +918,13 @@ impl SharedVideoPipeline {
         stage: MjpegAdmissionStage,
     ) -> bool {
         let backpressured = self.output_backpressured.load(Ordering::Acquire);
+        if backpressured && policy == MjpegAdmissionPolicy::BoundedPrefetch {
+            let started = self.output_backpressure_since_ns.load(Ordering::Acquire);
+            let now = PROCESS_START.get_or_init(Instant::now).elapsed().as_nanos() as u64;
+            if !sustained_output_backpressure(started, now) {
+                return false;
+            }
+        }
         if !policy.check_pending(backpressured) {
             return false;
         }
@@ -1081,6 +1095,11 @@ impl SharedVideoPipeline {
             }
         }
         if active_subscribers > 0 && reservations.is_empty() {
+            if !self.output_backpressured.load(Ordering::Acquire) {
+                let now = PROCESS_START.get_or_init(Instant::now).elapsed().as_nanos() as u64;
+                self.output_backpressure_since_ns
+                    .store(now.saturating_add(1), Ordering::Release);
+            }
             if !self.output_backpressured.swap(true, Ordering::AcqRel) {
                 self.output_backpressure_events
                     .fetch_add(1, Ordering::Relaxed);
@@ -1088,6 +1107,8 @@ impl SharedVideoPipeline {
             None
         } else {
             self.output_backpressured.store(false, Ordering::Release);
+            self.output_backpressure_since_ns
+                .store(0, Ordering::Release);
             Some(reservations)
         }
     }
@@ -1302,6 +1323,8 @@ impl SharedVideoPipeline {
         self.encoder_output_wait_ns.store(0, Ordering::Relaxed);
         self.output_backpressure_events.store(0, Ordering::Relaxed);
         self.output_backpressured.store(false, Ordering::Release);
+        self.output_backpressure_since_ns
+            .store(0, Ordering::Release);
         self.encoded_frames_skipped_for_slow_subscribers
             .store(0, Ordering::Relaxed);
         self.delivery_stats.sent_frames.store(0, Ordering::Relaxed);
@@ -2539,6 +2562,15 @@ mod tests {
     }
 
     #[test]
+    fn brief_output_backpressure_keeps_bounded_prefetch_running() {
+        assert!(!sustained_output_backpressure(0, 100_000_000));
+        assert!(!sustained_output_backpressure(1, 9_999_999));
+        assert!(sustained_output_backpressure(1, 10_000_000));
+        assert!(sustained_output_backpressure(1, 100_000_000));
+        assert!(!sustained_output_backpressure(20_000_001, 10_000_000));
+    }
+
+    #[test]
     fn mjpeg_drop_reasons_sum_to_total_without_double_counting() {
         let pipeline = delivery_test_pipeline();
         for reason in [
@@ -2606,6 +2638,7 @@ mod tests {
         }
         mailbox.publish(1, delivery_test_raw_frame(1));
         for stage in [MjpegAdmissionStage::Capture, MjpegAdmissionStage::Decode] {
+            std::thread::sleep(Duration::from_millis(11));
             assert!(pipeline.drop_pending_mjpeg(
                 &mailbox,
                 MjpegAdmissionPolicy::BoundedPrefetch,
