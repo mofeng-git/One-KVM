@@ -3,6 +3,7 @@
 mod delivery;
 mod encoder_state;
 mod frame_mailbox;
+mod mjpeg_admission;
 mod shared;
 
 pub use delivery::EncodedVideoFrameReceiver;

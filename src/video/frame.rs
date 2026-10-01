@@ -14,6 +14,14 @@ enum FrameData {
     Pooled(Arc<FrameBuffer>),
 }
 
+struct PooledFrameOwner(Arc<FrameBuffer>);
+
+impl AsRef<[u8]> for PooledFrameOwner {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
 impl std::fmt::Debug for FrameData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -198,6 +206,13 @@ impl VideoFrame {
         }
     }
 
+    pub(crate) fn owned_data_bytes(&self) -> Bytes {
+        match &self.data {
+            FrameData::Bytes(bytes) => bytes.clone(),
+            FrameData::Pooled(buffer) => Bytes::from_owner(PooledFrameOwner(buffer.clone())),
+        }
+    }
+
     /// Get data length
     pub fn len(&self) -> usize {
         self.data().len()
@@ -300,5 +315,40 @@ impl From<&VideoFrame> for FrameMeta {
             key_frame: frame.key_frame,
             online: frame.online,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owned_pooled_bytes_preserve_pointer_and_return_buffer_after_last_reference() {
+        let pool = Arc::new(FrameBufferPool::new(1));
+        let buffer = Arc::new(FrameBuffer::new(vec![17; 24], Some(pool.clone())));
+        let pointer = buffer.as_slice().as_ptr();
+        let frame = VideoFrame::from_pooled(buffer, Resolution::new(4, 4), PixelFormat::Nv12, 4, 1);
+        let bytes = frame.owned_data_bytes();
+        assert_eq!(bytes.as_ptr(), pointer);
+        let retained = bytes.slice(4..);
+        drop(frame);
+        drop(bytes);
+        assert!(pool.pool.lock().is_empty());
+        assert_eq!(retained.as_ref(), &[17; 20]);
+        drop(retained);
+        assert_eq!(pool.pool.lock().len(), 1);
+        let recycled = pool.take(24);
+        assert_eq!(recycled.as_ptr(), pointer);
+    }
+
+    #[test]
+    fn owned_bytes_input_is_a_shared_reference() {
+        let bytes = Bytes::from(vec![29; 24]);
+        let pointer = bytes.as_ptr();
+        let frame = VideoFrame::new(bytes, Resolution::new(4, 4), PixelFormat::Nv12, 4, 1);
+        let owned = frame.owned_data_bytes();
+        drop(frame);
+        assert_eq!(owned.as_ptr(), pointer);
+        assert_eq!(owned.as_ref(), &[29; 24]);
     }
 }

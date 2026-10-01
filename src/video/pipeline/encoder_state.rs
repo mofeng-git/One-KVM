@@ -33,6 +33,15 @@ pub(super) struct EncoderThreadState {
 
 pub(super) trait VideoEncoderTrait: Send {
     fn encode_raw(&mut self, data: &[u8], pts_ms: i64) -> Result<Vec<EncodedFrame>>;
+    fn supports_owned_nv12_input(&self) -> bool {
+        false
+    }
+    fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+        self.encode_raw(data.as_ref(), pts_ms)
+    }
+    fn input_stats(&self) -> Option<hwcodec::ffmpeg_ram::encode::EncodeInputStats> {
+        None
+    }
     fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()>;
     fn codec_name(&self) -> &str;
     fn request_keyframe(&mut self);
@@ -67,6 +76,27 @@ impl VideoEncoderTrait for H264EncoderWrapper {
         self.0.set_bitrate(bitrate_kbps)
     }
 
+    fn supports_owned_nv12_input(&self) -> bool {
+        self.0.supports_owned_nv12_input()
+    }
+
+    fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+        Ok(self
+            .0
+            .encode_owned_nv12(data, pts_ms)?
+            .into_iter()
+            .map(|frame| EncodedFrame {
+                data: frame.data,
+                key: frame.key,
+                pts: frame.pts,
+            })
+            .collect())
+    }
+
+    fn input_stats(&self) -> Option<hwcodec::ffmpeg_ram::encode::EncodeInputStats> {
+        self.0.input_stats()
+    }
+
     fn codec_name(&self) -> &str {
         self.0.codec_name()
     }
@@ -91,7 +121,11 @@ fn create_h264_encoder(
         },
         codec_name,
     )?;
-    info!("Created H264 encoder: {}", encoder.codec_name());
+    info!(
+        "Created H264 encoder: {} owned_nv12_input={}",
+        encoder.codec_name(),
+        encoder.supports_owned_nv12_input()
+    );
     Ok(Box::new(H264EncoderWrapper(encoder)))
 }
 
