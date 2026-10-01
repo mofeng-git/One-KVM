@@ -1,6 +1,6 @@
 [package]
 name = "one-kvm"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 authors = ["SilentWind"]
 description = "A open and lightweight IP-KVM solution written in Rust"
@@ -35,7 +35,7 @@ desktop = [
     "dep:urlencoding",
     "dep:rust-embed",
     "dep:mime_guess",
-    "dep:rustls",
+    "dep:openssl",
     "dep:rcgen",
     "dep:axum-server",
     "dep:clap",
@@ -110,8 +110,7 @@ base64 = { version = "0.22", optional = true }
 tempfile = { version = "3", optional = true }
 
 # HTTP client (for URL downloads)
-# Use rustls by default, but allow native-tls for systems with older GLIBC
-reqwest = { version = "0.13", features = ["stream", "rustls-no-provider", "json"], default-features = false, optional = true }
+reqwest = { version = "0.13", features = ["stream", "native-tls-vendored", "json"], default-features = false, optional = true }
 urlencoding = { version = "2", optional = true }
 
 # Static file embedding
@@ -119,9 +118,9 @@ rust-embed = { version = "8", features = ["compression", "debug-embed"], optiona
 mime_guess = { version = "2", optional = true }
 
 # TLS/HTTPS
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 rcgen = { version = "0.14", optional = true }
-axum-server = { version = "0.8", features = ["tls-rustls-no-provider"], optional = true }
+axum-server = { version = "0.8", features = ["tls-openssl"], optional = true }
 
 # CLI argument parsing
 clap = { version = "4", features = ["derive"], optional = true }
@@ -148,7 +147,7 @@ parking_lot = { version = "0.12", optional = true }
 arc-swap = { version = "1.8", optional = true }
 
 # WebRTC
-webrtc = { version = "0.17", optional = true }
+webrtc = { version = "0.17", features = ["vendored-openssl"], optional = true }
 rtp = { version = "0.17", optional = true }
 rtsp-types = { version = "0.1", optional = true }
 sdp-types = { version = "0.1", optional = true }
@@ -205,6 +204,9 @@ windows-sys = { version = "0.61", features = [
 
 [build-dependencies]
 protobuf-codegen = "3.7"
+
+[patch.crates-io]
+dtls = { path = "libs/dtls" }
 
 [profile.release]
 opt-level = 3

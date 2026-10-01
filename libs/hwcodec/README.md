@@ -41,6 +41,18 @@ Based on the information above, there are several optimizations and changes made
 * remove hevc_vaapi because of possible poor quality
 * amf: not tested, https://github.com/GPUOpen-LibrariesAndSDKs/AMF/issues/378
 
+#### Owned NV12 input
+
+The `bytes` feature provides `Encoder::encode_owned_bytes` for packed NV12
+input to FFmpeg V4L2 M2M encoders. It holds a `Bytes` owner in a read-only
+`AVBufferRef` until FFmpeg releases its last reference, instead of copying the
+input into an intermediate AVFrame. Other encoders retain the existing copy
+path. Converted or stride-compacted One-KVM input also retains that path.
+
+Encoded packet detachment remains in place to avoid retaining scarce V4L2
+capture buffers in downstream caches. FFmpeg still copies raw input into its
+V4L2 MMAP buffers.
+
 ## System requirements
 
 * intel

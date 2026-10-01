@@ -256,60 +256,80 @@ fn run(
         }
 
         let capture = active.as_mut().expect("opened capture");
-        let result = match capture.encoder.as_mut().expect("active encoder") {
-            CaptureEncoder::Dma(encoder) => {
-                let pts = pipeline.pts_ms();
-                capture
+        let reservations = pipeline.reserve_outputs();
+        let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
+            match capture.encoder.as_mut().expect("active encoder") {
+                CaptureEncoder::Dma(_) => capture
                     .stream
-                    .with_next_dmabuf(|index, bytes_used, fresh_fd| {
-                        let keyframe = pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
-                        // The callback holds the dequeue lease until native encode
-                        // completes (or destroys MPP on error), before QBUF.
-                        unsafe { encoder.encode(index, bytes_used, fresh_fd, pts, keyframe) }
-                    })
-                    .map(|(_, packet)| {
-                        packet
-                            .map(|packet| {
-                                let data = Bytes::from(packet);
-                                let is_keyframe = match config.output_codec {
-                                    VideoEncoderType::H264 => h264_bitstream::is_keyframe(&data),
-                                    VideoEncoderType::H265 => h265_bitstream::is_keyframe(&data),
-                                    _ => false,
-                                };
-                                let (data, is_keyframe) = pipeline.inspect_and_parameterize_packet(
-                                    config.output_codec,
-                                    data,
-                                    is_keyframe,
-                                );
-                                if config.output_codec == VideoEncoderType::H264 {
-                                    pipeline.update_h264_profile_level_id(&data);
-                                }
-                                vec![EncodedVideoFrame {
-                                    data,
-                                    pts_ms: pts,
-                                    is_keyframe,
-                                    sequence: pipeline.sequence.fetch_add(1, Ordering::Relaxed) + 1,
-                                    duration: Duration::from_micros(
-                                        1_000_000 / config.fps.max(1) as u64,
-                                    ),
-                                    codec: config.output_codec,
-                                }]
-                            })
-                            .map_err(AppError::VideoError)
-                    })
+                    .with_next_dmabuf(|_, _, _| ())
+                    .map(|_| Ok(Vec::new())),
+                CaptureEncoder::Copy(_) => {
+                    let mut raw = buffer_pool.take(0);
+                    let result = capture.stream.next_into(&mut raw).map(|_| Ok(Vec::new()));
+                    buffer_pool.put(raw);
+                    result
+                }
             }
-            CaptureEncoder::Copy(encoder) => {
-                let mut raw = buffer_pool.take(0);
-                capture.stream.next_into(&mut raw).map(|meta| {
-                    let frame = VideoFrame::from_pooled(
-                        Arc::new(FrameBuffer::new(raw, Some(buffer_pool.clone()))),
-                        config.resolution,
-                        config.input_format,
-                        capture.stream.stride(),
-                        meta.sequence,
-                    );
-                    pipeline.encode_frame_sync(encoder, &frame)
-                })
+        } else {
+            match capture.encoder.as_mut().expect("active encoder") {
+                CaptureEncoder::Dma(encoder) => {
+                    let pts = pipeline.pts_ms();
+                    capture
+                        .stream
+                        .with_next_dmabuf(|index, bytes_used, fresh_fd| {
+                            let keyframe =
+                                pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
+                            // The callback holds the dequeue lease until native encode
+                            // completes (or destroys MPP on error), before QBUF.
+                            unsafe { encoder.encode(index, bytes_used, fresh_fd, pts, keyframe) }
+                        })
+                        .map(|(_, packet)| {
+                            packet
+                                .map(|packet| {
+                                    let data = Bytes::from(packet);
+                                    let is_keyframe = match config.output_codec {
+                                        VideoEncoderType::H264 => {
+                                            h264_bitstream::is_keyframe(&data)
+                                        }
+                                        VideoEncoderType::H265 => {
+                                            h265_bitstream::is_keyframe(&data)
+                                        }
+                                        _ => false,
+                                    };
+                                    let (data, is_keyframe) = pipeline
+                                        .inspect_and_parameterize_packet(
+                                            config.output_codec,
+                                            data,
+                                            is_keyframe,
+                                        );
+                                    vec![EncodedVideoFrame {
+                                        data,
+                                        pts_ms: pts,
+                                        is_keyframe,
+                                        sequence: pipeline.sequence.fetch_add(1, Ordering::Relaxed)
+                                            + 1,
+                                        duration: Duration::from_micros(
+                                            1_000_000 / config.fps.max(1) as u64,
+                                        ),
+                                        codec: config.output_codec,
+                                    }]
+                                })
+                                .map_err(AppError::VideoError)
+                        })
+                }
+                CaptureEncoder::Copy(encoder) => {
+                    let mut raw = buffer_pool.take(0);
+                    capture.stream.next_into(&mut raw).map(|meta| {
+                        let frame = VideoFrame::from_pooled(
+                            Arc::new(FrameBuffer::new(raw, Some(buffer_pool.clone()))),
+                            config.resolution,
+                            config.input_format,
+                            capture.stream.stride(),
+                            meta.sequence,
+                        );
+                        pipeline.encode_frame_sync(encoder, &frame)
+                    })
+                }
             }
         };
 
@@ -321,10 +341,11 @@ fn run(
                     config.input_format,
                     config.fps,
                 ));
-                for frame in frames {
-                    pipeline.broadcast_encoded(Arc::new(frame));
-                    fps_frames += 1;
-                }
+                fps_frames += frames.len() as u32;
+                pipeline.broadcast_encoded_batch(
+                    frames.into_iter().map(Arc::new).collect::<Vec<_>>().into(),
+                    reservations.unwrap_or_default(),
+                );
             }
             Ok(Err(error)) => {
                 if matches!(capture.encoder, Some(CaptureEncoder::Dma(_))) {
@@ -380,7 +401,7 @@ fn run(
             }
         }
         if fps_start.elapsed() >= Duration::from_secs(1) {
-            pipeline.stats.blocking_lock().current_fps =
+            pipeline.stats.lock().current_fps =
                 fps_frames as f32 / fps_start.elapsed().as_secs_f32();
             fps_frames = 0;
             fps_start = Instant::now();

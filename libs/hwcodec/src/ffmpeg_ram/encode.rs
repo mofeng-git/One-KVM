@@ -1,5 +1,7 @@
 #[cfg(feature = "bytes")]
-use crate::ffmpeg_ram::{ffmpeg_ram_encode_packet, ffmpeg_ram_free_packet};
+use crate::ffmpeg_ram::{
+    ffmpeg_ram_encode_owned_packet, ffmpeg_ram_encode_packet, ffmpeg_ram_free_packet,
+};
 use crate::{
     common::DataFormat::{self, *},
     ffmpeg::{init_av_log, AVPixelFormat},
@@ -498,6 +500,7 @@ pub struct Encoder {
     pub linesize: Vec<i32>,
     pub offset: Vec<i32>,
     pub length: i32,
+    owned_nv12_input: bool,
 }
 
 impl Encoder {
@@ -545,6 +548,8 @@ impl Encoder {
                 return Err(());
             }
 
+            let owned_nv12_input = ctx.name.ends_with("_v4l2m2m")
+                && ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_NV12 as i32;
             Ok(Encoder {
                 codec,
                 frames: Box::into_raw(Box::new(Vec::<EncodeFrame>::new())),
@@ -552,6 +557,7 @@ impl Encoder {
                 linesize,
                 offset,
                 length: length[0],
+                owned_nv12_input,
             })
         }
     }
@@ -581,31 +587,79 @@ impl Encoder {
 
     #[cfg(feature = "bytes")]
     pub fn encode_bytes(&mut self, data: &[u8], ms: i64) -> Result<Vec<EncodeBytesFrame>, i32> {
+        let length = c_int::try_from(data.len()).map_err(|_| -22)?;
         unsafe {
             let mut frames = Vec::<EncodeBytesFrame>::new();
             let result = ffmpeg_ram_encode_packet(
                 self.codec,
                 data.as_ptr(),
-                data.len() as _,
+                length,
                 &mut frames as *mut _ as *const c_void,
                 ms,
                 Some(Encoder::packet_callback),
             );
-            if result == -11 || result == 0 {
-                if self.ctx.name.contains("v4l2m2m") {
-                    return Ok(frames
-                        .into_iter()
-                        .map(|frame| EncodeBytesFrame {
-                            data: Bytes::copy_from_slice(frame.data.as_ref()),
-                            pts: frame.pts,
-                            key: frame.key,
-                        })
-                        .collect());
-                }
-                return Ok(frames);
-            }
-            Err(result)
+            self.finish_bytes_encode(frames, result)
         }
+    }
+
+    pub fn supports_owned_nv12_input(&self) -> bool {
+        self.owned_nv12_input
+    }
+
+    #[cfg(feature = "bytes")]
+    pub fn encode_owned_bytes(
+        &mut self,
+        data: Bytes,
+        ms: i64,
+    ) -> Result<Vec<EncodeBytesFrame>, i32> {
+        if !self.owned_nv12_input {
+            return self.encode_bytes(data.as_ref(), ms);
+        }
+        let length = c_int::try_from(data.len()).map_err(|_| -22)?;
+        let owner = Box::new(data);
+        let pointer = owner.as_ptr();
+        let mut frames = Vec::<EncodeBytesFrame>::new();
+        let result = unsafe {
+            ffmpeg_ram_encode_owned_packet(
+                self.codec,
+                pointer,
+                length,
+                Box::into_raw(owner) as *mut c_void,
+                Some(Self::release_input),
+                &mut frames as *mut _ as *const c_void,
+                ms,
+                Some(Self::packet_callback),
+            )
+        };
+        self.finish_bytes_encode(frames, result)
+    }
+
+    #[cfg(feature = "bytes")]
+    fn finish_bytes_encode(
+        &mut self,
+        frames: Vec<EncodeBytesFrame>,
+        result: i32,
+    ) -> Result<Vec<EncodeBytesFrame>, i32> {
+        if result != -11 && result != 0 {
+            return Err(result);
+        }
+        if !self.ctx.name.contains("v4l2m2m") {
+            return Ok(frames);
+        }
+        let detached = frames
+            .into_iter()
+            .map(|frame| EncodeBytesFrame {
+                data: Bytes::copy_from_slice(frame.data.as_ref()),
+                pts: frame.pts,
+                key: frame.key,
+            })
+            .collect();
+        Ok(detached)
+    }
+
+    #[cfg(feature = "bytes")]
+    extern "C" fn release_input(owner: *mut c_void, _data: *mut u8) {
+        unsafe { drop(Box::from_raw(owner as *mut Bytes)) };
     }
 
     extern "C" fn callback(data: *const u8, size: c_int, pts: i64, key: i32, obj: *const c_void) {

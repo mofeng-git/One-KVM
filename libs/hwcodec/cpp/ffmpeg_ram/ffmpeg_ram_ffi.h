@@ -24,6 +24,11 @@ int ffmpeg_ram_encode(void *encoder, const uint8_t *data, int length,
 int ffmpeg_ram_encode_packet(void *encoder, const uint8_t *data, int length,
                              const void *obj, int64_t ms,
                              RamEncodePacketCallback callback);
+int ffmpeg_ram_encode_owned_packet(void *encoder, const uint8_t *data,
+                                   int length, void *owner,
+                                   void (*release)(void *, uint8_t *),
+                                   const void *obj, int64_t ms,
+                                   RamEncodePacketCallback callback);
 void ffmpeg_ram_free_encoder(void *encoder);
 void ffmpeg_ram_free_packet(void *packet);
 int ffmpeg_ram_get_linesize_offset_length(int pix_fmt, int width, int height,

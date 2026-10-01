@@ -97,12 +97,12 @@ pub(super) fn run_capture(
                 if samples.is_empty() {
                     continue;
                 }
-                let frame = AudioFrame::new_interleaved(
-                    Bytes::copy_from_slice(bytemuck::cast_slice(&samples)),
-                    2,
-                    48_000,
-                );
                 if frame_tx.receiver_count() > 0 {
+                    let frame = AudioFrame::new_interleaved(
+                        Bytes::copy_from_slice(bytemuck::cast_slice(&samples)),
+                        2,
+                        48_000,
+                    );
                     if let Err(e) = frame_tx.send(frame) {
                         debug!("No audio receivers: {}", e);
                     }

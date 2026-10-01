@@ -1291,7 +1291,7 @@ impl HidBackend for Ch9329Backend {
             let mut state = self.macos_drag_state.lock();
             let (buttons, reports) = state.plan(event, buttons, *self.screen_resolution.read());
             self.mouse_buttons.store(buttons, Ordering::Relaxed);
-            for report in reports {
+            for report in reports.iter().copied() {
                 match report {
                     MouseReport::Absolute { buttons, x, y } => {
                         let x = (u32::from(x) * CH9329_MOUSE_RESOLUTION / 32768) as u16;

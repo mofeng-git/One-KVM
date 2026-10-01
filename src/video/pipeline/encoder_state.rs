@@ -33,6 +33,12 @@ pub(super) struct EncoderThreadState {
 
 pub(super) trait VideoEncoderTrait: Send {
     fn encode_raw(&mut self, data: &[u8], pts_ms: i64) -> Result<Vec<EncodedFrame>>;
+    fn supports_owned_nv12_input(&self) -> bool {
+        false
+    }
+    fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+        self.encode_raw(data.as_ref(), pts_ms)
+    }
     fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()>;
     fn codec_name(&self) -> &str;
     fn request_keyframe(&mut self);
@@ -41,6 +47,11 @@ pub(super) trait VideoEncoderTrait: Send {
 pub(super) struct EncodedFrame {
     pub(super) data: Bytes,
     pub(super) key: i32,
+    /// Packet pts in milliseconds, stamped by the encoder when the input
+    /// frame was accepted. With a pipelined encoder a packet can be handed
+    /// back one call later than its input frame, so consumers must use this
+    /// instead of the wall clock time of the current call.
+    pub(super) pts: i64,
 }
 
 struct H264EncoderWrapper(H264Encoder);
@@ -53,12 +64,30 @@ impl VideoEncoderTrait for H264EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data,
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
 
     fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
         self.0.set_bitrate(bitrate_kbps)
+    }
+
+    fn supports_owned_nv12_input(&self) -> bool {
+        self.0.supports_owned_nv12_input()
+    }
+
+    fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<EncodedFrame>> {
+        Ok(self
+            .0
+            .encode_owned_nv12(data, pts_ms)?
+            .into_iter()
+            .map(|frame| EncodedFrame {
+                data: frame.data,
+                key: frame.key,
+                pts: frame.pts,
+            })
+            .collect())
     }
 
     fn codec_name(&self) -> &str {
@@ -85,7 +114,11 @@ fn create_h264_encoder(
         },
         codec_name,
     )?;
-    info!("Created H264 encoder: {}", encoder.codec_name());
+    info!(
+        "Created H264 encoder: {} owned_nv12_input={}",
+        encoder.codec_name(),
+        encoder.supports_owned_nv12_input()
+    );
     Ok(Box::new(H264EncoderWrapper(encoder)))
 }
 
@@ -99,6 +132,7 @@ impl VideoEncoderTrait for H265EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data,
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
@@ -126,6 +160,7 @@ impl VideoEncoderTrait for VP8EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data.into(),
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }
@@ -151,6 +186,7 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
             .map(|f| EncodedFrame {
                 data: f.data.into(),
                 key: f.key,
+                pts: f.pts,
             })
             .collect())
     }

@@ -370,7 +370,33 @@ impl H264Encoder {
 
         self.frame_count += 1;
 
-        match self.inner.encode_bytes(data, pts_ms) {
+        let result = self.inner.encode_bytes(data, pts_ms);
+        Self::finish_encode(result)
+    }
+
+    pub fn supports_owned_nv12_input(&self) -> bool {
+        self.inner.supports_owned_nv12_input()
+    }
+
+    pub fn encode_owned_nv12(&mut self, data: Bytes, pts_ms: i64) -> Result<Vec<HwEncodeFrame>> {
+        if !self.supports_owned_nv12_input() {
+            return self.encode_raw(data.as_ref(), pts_ms);
+        }
+        if data.len() < self.yuv_length as usize {
+            return Err(AppError::VideoError(format!(
+                "Frame data too small: {} < {}",
+                data.len(),
+                self.yuv_length
+            )));
+        }
+        self.frame_count += 1;
+        Self::finish_encode(self.inner.encode_owned_bytes(data, pts_ms))
+    }
+
+    fn finish_encode(
+        result: std::result::Result<Vec<hwcodec::ffmpeg_ram::encode::EncodeBytesFrame>, i32>,
+    ) -> Result<Vec<HwEncodeFrame>> {
+        match result {
             Ok(frames) => {
                 let owned_frames: Vec<HwEncodeFrame> = frames
                     .into_iter()
@@ -489,6 +515,39 @@ impl Encoder for H264Encoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_input_fallback_preserves_software_packets_and_pts() {
+        let config = H264Config::low_latency(Resolution::new(64, 64), 500);
+        let mut copied = H264Encoder::with_codec(config.clone(), "libx264").unwrap();
+        let mut owned = H264Encoder::with_codec(config, "libx264").unwrap();
+        assert!(!owned.supports_owned_nv12_input());
+        let mut packets = 0;
+        for sequence in 0..12 {
+            let data = Bytes::from(vec![64 + sequence as u8; owned.yuv_length as usize]);
+            let pts = sequence * 33;
+            let expected = copied.encode_raw(data.as_ref(), pts).unwrap();
+            let actual = owned.encode_owned_nv12(data, pts).unwrap();
+            assert_eq!(actual.len(), expected.len());
+            packets += actual.len();
+            for (actual, expected) in actual.iter().zip(expected.iter()) {
+                assert_eq!(actual.data, expected.data);
+                assert_eq!(actual.pts, expected.pts);
+                assert_eq!(actual.key, expected.key);
+            }
+        }
+        assert!(packets > 0);
+    }
+
+    #[test]
+    fn owned_input_rejects_short_frame_before_encoding() {
+        let config = H264Config::low_latency(Resolution::new(64, 64), 500);
+        let mut encoder = H264Encoder::with_codec(config, "libx264").unwrap();
+        assert!(encoder
+            .encode_owned_nv12(Bytes::from_static(&[0]), 0)
+            .is_err());
+        assert_eq!(encoder.frame_count, 0);
+    }
 
     #[test]
     fn test_detect_encoder() {

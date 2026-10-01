@@ -4,10 +4,9 @@ use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 
-use axum_server::tls_rustls::RustlsConfig;
+use axum_server::tls_openssl::OpenSSLAcceptor;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use futures::{stream::FuturesUnordered, StreamExt};
-use rustls::crypto::{ring, CryptoProvider};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use one_kvm::auth::{SessionStore, TwoFactorService, UserStore};
@@ -17,6 +16,7 @@ use one_kvm::platform::PlatformCapabilities;
 use one_kvm::runtime::{RuntimeBuilder, WebConfigOverrides};
 use one_kvm::state::ShutdownAction;
 use one_kvm::utils::bind_tcp_listener;
+use one_kvm::utils::tls::server_config_from_pem_file;
 
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
 enum LogLevel {
@@ -99,9 +99,6 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::parse();
 
     init_logging(args.log_level);
-
-    CryptoProvider::install_default(ring::default_provider())
-        .expect("Failed to install rustls crypto provider");
 
     tracing::info!("Starting One-KVM v{}", env!("CARGO_PKG_VERSION"));
     let platform = PlatformCapabilities::current();
@@ -187,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
         let tls_config = if let (Some(cert_path), Some(key_path)) =
             (&config.web.ssl_cert_path, &config.web.ssl_key_path)
         {
-            RustlsConfig::from_pem_file(cert_path, key_path).await?
+            server_config_from_pem_file(cert_path, key_path).await?
         } else {
             let cert_dir = data_dir.join("certs");
             let cert_path = cert_dir.join("server.crt");
@@ -203,7 +200,7 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("Using existing TLS certificate from {}", cert_dir.display());
             }
 
-            RustlsConfig::from_pem_file(&cert_path, &key_path).await?
+            server_config_from_pem_file(&cert_path, &key_path).await?
         };
 
         let servers = FuturesUnordered::new();
@@ -211,7 +208,8 @@ async fn main() -> anyhow::Result<()> {
             let local_addr = listener.local_addr()?;
             tracing::info!("Starting HTTPS server on {}", local_addr);
 
-            let server = axum_server::from_tcp_rustls(listener, tls_config.clone())?
+            let server = axum_server::from_tcp(listener)?
+                .acceptor(OpenSSLAcceptor::new(tls_config.clone()))
                 .serve(app.clone().into_make_service());
             servers.push(server);
         }

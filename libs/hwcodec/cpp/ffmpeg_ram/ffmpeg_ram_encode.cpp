@@ -14,6 +14,7 @@ extern "C" {
 #include <string>
 
 #include "common.h"
+#include "owned_nv12_frame.h"
 
 #define LOG_MODULE "FFMPEG_RAM_ENC"
 #include <log.h>
@@ -319,6 +320,24 @@ public:
     return do_encode(tmp_frame, obj, ms);
   }
 
+  int encode_owned_packet(const uint8_t *data, int length, void *owner,
+                           RamInputRelease release, const void *obj,
+                           uint64_t ms, RamEncodePacketCallback callback) {
+    if (pixfmt_ != AV_PIX_FMT_NV12 || hw_device_type_ != AV_HWDEVICE_TYPE_NONE ||
+        name_.find("v4l2m2m") == std::string::npos) {
+      release(owner, const_cast<uint8_t *>(data));
+      return AVERROR(ENOSYS);
+    }
+    auto frame = make_owned_nv12_frame(data, length, width_, height_, owner,
+                                       release);
+    if (!frame)
+      return AVERROR(EINVAL);
+    packet_callback_ = callback;
+    int ret = do_encode(frame.get(), obj, ms);
+    packet_callback_ = NULL;
+    return ret;
+  }
+
   int encode_packet(const uint8_t *data, int length, const void *obj,
                     uint64_t ms, RamEncodePacketCallback callback) {
     packet_callback_ = callback;
@@ -345,6 +364,11 @@ public:
   }
 
 private:
+  int send_frame(AVFrame *frame) {
+    const int ret = avcodec_send_frame(c_, frame);
+    return ret;
+  }
+
   int set_hwframe_ctx() {
     AVBufferRef *hw_frames_ref;
     AVHWFramesContext *frames_ctx = NULL;
@@ -386,13 +410,13 @@ private:
     }
     force_keyframe_ = false;
 
-    ret = avcodec_send_frame(c_, frame);
+    ret = send_frame(frame);
     if (ret == AVERROR(EAGAIN)) {
       int drain_ret = receive_available_packets(obj, encoded);
       if (drain_ret < 0) {
         return drain_ret;
       }
-      ret = avcodec_send_frame(c_, frame);
+      ret = send_frame(frame);
     }
     if (ret == AVERROR(EAGAIN)) {
       return encoded ? 0 : AVERROR(EAGAIN);
@@ -701,6 +725,25 @@ extern "C" void ffmpeg_ram_free_packet(void *packet) {
   AVPacket *pkt = reinterpret_cast<AVPacket *>(packet);
   if (pkt) {
     av_packet_free(&pkt);
+  }
+}
+
+extern "C" int ffmpeg_ram_encode_owned_packet(
+    FFmpegRamEncoder *encoder, const uint8_t *data, int length, void *owner,
+    RamInputRelease release, const void *obj, uint64_t ms,
+    RamEncodePacketCallback callback) {
+  if (!encoder || !release) {
+    if (release)
+      release(owner, const_cast<uint8_t *>(data));
+    return AVERROR(EINVAL);
+  }
+  try {
+    return encoder->encode_owned_packet(data, length, owner, release, obj, ms,
+                                        callback);
+  } catch (const std::exception &e) {
+    encoder->packet_callback_ = NULL;
+    LOG_ERROR(std::string("encode_owned_packet failed, ") + e.what());
+    return -1;
   }
 }
 

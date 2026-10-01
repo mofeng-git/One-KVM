@@ -3392,7 +3392,7 @@ onUnmounted(() => {
       :class="consoleLayout === 'sidebar' && 'pl-14 sm:pl-16'"
     >
       <div class="absolute inset-0 dot-grid-bg" />
-      <div class="relative flex h-full w-full min-w-0 items-stretch gap-3 p-1 sm:p-4">
+      <div class="relative flex h-full w-full min-w-0 items-stretch gap-3">
         <div
           class="flex min-w-0 flex-1 items-center justify-center transition-all duration-300"
           :class="{ 'md:pr-1': computerUsePanelVisible }"

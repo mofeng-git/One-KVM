@@ -79,12 +79,12 @@ pub(super) fn run_capture(
             Ok(frames_read) => {
                 consecutive_errors = 0;
                 let byte_count = frames_read * config.channels as usize * 2;
-                let frame = AudioFrame::new_interleaved(
-                    Bytes::copy_from_slice(&buffer[..byte_count]),
-                    config.channels,
-                    config.sample_rate,
-                );
                 if frame_tx.receiver_count() > 0 {
+                    let frame = AudioFrame::new_interleaved(
+                        Bytes::copy_from_slice(&buffer[..byte_count]),
+                        config.channels,
+                        config.sample_rate,
+                    );
                     let _ = frame_tx.send(frame);
                 }
             }

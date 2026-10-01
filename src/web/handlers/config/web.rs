@@ -1,9 +1,9 @@
 use axum::{extract::State, Json};
-use axum_server::tls_rustls::RustlsConfig;
 use std::sync::Arc;
 
 use crate::error::{AppError, Result};
 use crate::state::AppState;
+use crate::utils::tls::server_config_from_pem;
 
 use super::types::{WebConfigResponse, WebConfigUpdate};
 
@@ -27,8 +27,7 @@ pub async fn update_web_config(
     ) =
         (&req.ssl_cert_pem, &req.ssl_key_pem)
     {
-        RustlsConfig::from_pem(cert_pem.as_bytes().to_vec(), key_pem.as_bytes().to_vec())
-                .await
+        server_config_from_pem(cert_pem.as_bytes(), key_pem.as_bytes())
                 .map_err(|e| {
                     AppError::BadRequest(
                         format!(
@@ -88,16 +87,12 @@ pub async fn update_web_config(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustls::crypto::{ring, CryptoProvider};
 
-    #[tokio::test]
-    async fn rustls_accepts_rcgen_self_signed_pem() {
-        let _ = CryptoProvider::install_default(ring::default_provider());
+    #[test]
+    fn openssl_accepts_rcgen_self_signed_pem() {
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let cert_pem = cert.cert.pem();
         let key_pem = cert.signing_key.serialize_pem();
-        RustlsConfig::from_pem(cert_pem.into_bytes(), key_pem.into_bytes())
-            .await
-            .unwrap();
+        server_config_from_pem(cert_pem.as_bytes(), key_pem.as_bytes()).unwrap();
     }
 }
