@@ -15,6 +15,7 @@ mod redfish;
 mod rtsp;
 mod rustdesk;
 mod stream;
+mod switch;
 #[cfg(unix)]
 mod uac;
 mod usb_update;
@@ -43,6 +44,7 @@ pub use rustdesk::{
     update_rustdesk_config,
 };
 pub use stream::{get_stream_config, update_stream_config};
+pub use switch::{get_switch_config, update_switch_config};
 #[cfg(unix)]
 pub use uac::{get_uac_config, update_uac_config};
 pub use video::{get_video_config, update_video_config};

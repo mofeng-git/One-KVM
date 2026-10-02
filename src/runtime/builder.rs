@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::atx::AtxController;
+use crate::switch::SwitchController;
 use crate::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
 use crate::computer_use::ComputerUseManager;
@@ -116,6 +117,7 @@ impl RuntimeBuilder {
         #[cfg(unix)]
         let msd = build_msd(&config, &data_dir, &otg_service, &events).await;
         let atx = build_atx(&config).await;
+        let switch = build_switch(&config).await;
         let audio = build_audio(&config, &events).await;
         let extensions = Arc::new(ExtensionManager::new());
         tracing::info!("Extension manager initialized");
@@ -168,6 +170,7 @@ impl RuntimeBuilder {
             #[cfg(unix)]
             msd,
             atx,
+            switch,
             audio,
             extensions.clone(),
             events.clone(),
@@ -455,6 +458,20 @@ async fn build_atx(config: &AppConfig) -> Option<AtxController> {
     let controller = AtxController::new(config.atx.to_controller_config());
     if let Err(error) = controller.init().await {
         tracing::warn!("Failed to initialize ATX controller: {}", error);
+        return None;
+    }
+    Some(controller)
+}
+
+async fn build_switch(config: &AppConfig) -> Option<SwitchController> {
+    if !config.switch.enabled {
+        tracing::info!("KVM switch disabled in configuration");
+        return None;
+    }
+
+    let controller = SwitchController::new(config.switch.to_controller_config());
+    if let Err(error) = controller.init().await {
+        tracing::warn!("Failed to initialize KVM switch controller: {}", error);
         return None;
     }
     Some(controller)

@@ -137,6 +137,24 @@ export interface AtxConfig {
 	wol_interface: string;
 }
 
+export interface SwitchConfig {
+	enabled: boolean;
+	device: string;
+	baud_rate: number;
+	channel_count: number;
+	channel_names: string[];
+}
+
+export interface SwitchState {
+	available: boolean;
+	connected: boolean;
+	device: string;
+	baud_rate: number;
+	channel_count: number;
+	current_channel?: number;
+	error?: string;
+}
+
 export interface AudioConfig {
 	enabled: boolean;
 	device: string;
@@ -328,6 +346,7 @@ export interface AppConfig {
 	otg_network: OtgNetworkConfig;
 	msd: MsdConfig;
 	atx: AtxConfig;
+	switch: SwitchConfig;
 	audio: AudioConfig;
 	stream: StreamConfig;
 	web: WebConfig;
@@ -379,6 +398,15 @@ export interface AtxDevices {
 	gpio_chips: string[];
 	usb_relays: string[];
 	serial_ports: string[];
+}
+
+/** KVM 切换器配置更新请求 */
+export interface SwitchConfigUpdate {
+	enabled?: boolean;
+	device?: string;
+	baud_rate?: number;
+	channel_count?: number;
+	channel_names?: string[];
 }
 
 export interface AudioConfigUpdate {

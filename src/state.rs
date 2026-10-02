@@ -2,6 +2,7 @@ use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
 
 use crate::atx::AtxController;
+use crate::switch::SwitchController;
 use crate::audio::AudioController;
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
 use crate::computer_use::ComputerUseManager;
@@ -32,6 +33,7 @@ pub struct ConfigApplyLocks {
     pub otg: Arc<Mutex<()>>,
     pub audio: Arc<Mutex<()>>,
     pub atx: Arc<Mutex<()>>,
+    pub switch: Arc<Mutex<()>>,
     pub rustdesk: Arc<Mutex<()>>,
     pub vnc: Arc<Mutex<()>>,
     pub rtsp: Arc<Mutex<()>>,
@@ -52,6 +54,7 @@ impl ConfigApplyLocks {
             otg: Arc::new(Mutex::new(())),
             audio: Arc::new(Mutex::new(())),
             atx: Arc::new(Mutex::new(())),
+            switch: Arc::new(Mutex::new(())),
             rustdesk: Arc::new(Mutex::new(())),
             vnc: Arc::new(Mutex::new(())),
             rtsp: Arc::new(Mutex::new(())),
@@ -76,6 +79,7 @@ pub struct AppState {
     #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
+    pub switch: Arc<RwLock<Option<SwitchController>>>,
     pub audio: Arc<AudioController>,
     #[cfg(unix)]
     pub uac_playback: Arc<RwLock<Option<crate::audio::uac::UacPlayback>>>,
@@ -107,6 +111,7 @@ impl AppState {
         computer_use: Arc<ComputerUseManager>,
         #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
+        switch: Option<SwitchController>,
         audio: Arc<AudioController>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
@@ -153,6 +158,7 @@ impl AppState {
             #[cfg(unix)]
             msd,
             atx: Arc::new(RwLock::new(atx)),
+            switch: Arc::new(RwLock::new(switch)),
             audio,
             usb,
             remote_access,
