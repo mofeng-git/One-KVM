@@ -11,6 +11,7 @@ categories = ["embedded", "network-programming"]
 
 [features]
 default = ["desktop"]
+rkmpp = ["hwcodec/rkmpp"]
 desktop = [
     "dep:tokio",
     "dep:tokio-util",

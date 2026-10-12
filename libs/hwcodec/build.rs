@@ -154,7 +154,7 @@ mod ffmpeg {
             let include_dir = Path::new(&custom_lib_path).join("include");
             let avcodec_lib = lib_dir.join("libavcodec.a");
 
-            if avcodec_lib.exists() {
+            if avcodec_lib.exists() && use_static {
                 println!("cargo:info=Using custom FFmpeg from {}", custom_lib_path);
                 println!("cargo:rustc-link-search=native={}", lib_dir.display());
                 builder.include(&include_dir);
@@ -171,7 +171,7 @@ mod ffmpeg {
                     println!("cargo:rustc-link-lib=va-drm");
                     println!("cargo:rustc-link-lib=va-x11"); // Required for vaGetDisplay
                     println!("cargo:rustc-link-lib=mfx");
-                } else {
+                } else if std::env::var_os("CARGO_FEATURE_RKMPP").is_some() {
                     for lib in ["rockchip_mpp", "rga"] {
                         if !lib_dir.join(format!("lib{lib}.a")).exists() {
                             panic!("missing static library: lib{lib}.a");
@@ -400,8 +400,7 @@ mod ffmpeg {
         // RKMPP decode only exists on ARM builds where FFmpeg is compiled with RKMPP support.
         // Avoid compiling this file on x86/x64 where `AV_HWDEVICE_TYPE_RKMPP` doesn't exist.
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
-            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        let enable_rkmpp = std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             builder.file(ffmpeg_ram_dir.join("ffmpeg_ram_decode.cpp"));
             if enable_rkmpp {
@@ -459,8 +458,7 @@ mod ffmpeg {
             .unwrap();
 
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
-            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        let enable_rkmpp = std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             // Include RGA headers for NV16->NV12 conversion (RGA im2d API)
             let rga_sys_dirs = [

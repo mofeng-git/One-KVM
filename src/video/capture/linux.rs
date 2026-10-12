@@ -3,7 +3,7 @@
 use std::fs::File;
 use std::io;
 use std::os::fd::AsFd;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(feature = "rkmpp")]
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -31,7 +31,7 @@ use crate::video::device::VideoControlMode;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::signal::SignalStatus;
 
-#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(any(test, feature = "rkmpp"))]
 #[path = "dmabuf_layout.rs"]
 mod dmabuf_layout;
 
@@ -79,7 +79,7 @@ pub struct CaptureStream {
     bridge_kind: Option<CsiBridgeKind>,
     native_hdmirx_state: Option<NativeHdmirxState>,
     native_hdmirx_next_state_check: Option<Instant>,
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     dma_layout_bytes: Option<usize>,
 }
 
@@ -333,7 +333,7 @@ impl CaptureStream {
             mappings.push(plane_maps);
         }
 
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(feature = "rkmpp")]
         let dma_layout_bytes = PixelFormat::from_v4l2r(actual_fmt.pixelformat).and_then(|format| {
             dmabuf_layout::DmaCaptureLayout {
                 native_hdmi: is_native_hdmirx,
@@ -364,7 +364,7 @@ impl CaptureStream {
             bridge_kind: bridge.kind,
             native_hdmirx_state,
             native_hdmirx_next_state_check,
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(feature = "rkmpp")]
             dma_layout_bytes,
         };
 
@@ -491,7 +491,7 @@ impl CaptureStream {
 
     /// Native HDMI NV12/BGR24 and single-planar USB UVC YUYV/NV12/RGB24/MJPEG.
     /// Actual EXPBUF/import support is probed separately; failure retains copy.
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     pub(crate) fn supports_rkmpp_dmabuf(&self) -> bool {
         self.dma_layout_bytes.is_some_and(|minimum| {
             (2..=16).contains(&self.mappings.len())
@@ -502,7 +502,7 @@ impl CaptureStream {
         })
     }
 
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     pub(crate) fn export_dmabufs(&self) -> io::Result<Vec<(OwnedFd, usize)>> {
         if !self.supports_rkmpp_dmabuf() {
             return Err(io::Error::new(
@@ -524,7 +524,7 @@ impl CaptureStream {
     /// Run a synchronous consumer while a buffer is dequeued. QBUF occurs only
     /// after the callback returns, including its error path. Consumers must end
     /// hardware access before returning; see hwcodec::rkmpp_dmabuf::encode.
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     pub(crate) fn with_next_dmabuf<T>(
         &mut self,
         consume: impl FnOnce(usize, usize, Option<OwnedFd>) -> T,
@@ -843,17 +843,17 @@ impl CaptureStream {
     }
 }
 
-#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(any(test, feature = "rkmpp"))]
 struct BufferReturn<F: FnOnce() -> io::Result<()>>(Option<F>);
 
-#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(any(test, feature = "rkmpp"))]
 impl<F: FnOnce() -> io::Result<()>> BufferReturn<F> {
     fn finish(mut self) -> io::Result<()> {
         self.0.take().expect("capture lease already returned")()
     }
 }
 
-#[cfg(any(test, target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(any(test, feature = "rkmpp"))]
 impl<F: FnOnce() -> io::Result<()>> Drop for BufferReturn<F> {
     fn drop(&mut self) {
         if let Some(return_buffer) = self.0.take() {

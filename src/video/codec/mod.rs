@@ -17,7 +17,7 @@ pub mod video_codec;
 pub mod vp8;
 pub mod vp9;
 
-#[cfg(all(feature = "desktop", any(target_arch = "aarch64", target_arch = "arm")))]
+#[cfg(all(feature = "desktop", feature = "rkmpp"))]
 pub mod mjpeg_rkmpp;
 
 pub use convert::{MjpegToNv12Decoder, PixelConverter, Yuv420pBuffer};

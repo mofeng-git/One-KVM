@@ -4,14 +4,14 @@ use std::io;
 
 #[cfg(any(
     test,
-    all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm"))
+    all(target_os = "linux", feature = "rkmpp")
 ))]
 use crate::video::device::VideoControlMode;
 use crate::video::signal::SignalStatus;
 
 #[cfg(any(
     test,
-    all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm"))
+    all(target_os = "linux", feature = "rkmpp")
 ))]
 pub(crate) fn capture_recovery_status(
     control_mode: VideoControlMode,

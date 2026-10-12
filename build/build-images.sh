@@ -18,6 +18,10 @@ ARCH_MAP=(
 # Build for specific architecture using cross
 build_arch() {
     local rust_target="$1"
+    local feature_args=()
+    case "$rust_target" in
+        aarch64-*|armv7-*) feature_args=(--features rkmpp) ;;
+    esac
 
     case "${CHINAMIRRO:-}" in
         1|true|TRUE|yes|YES|on|ON)
@@ -40,13 +44,13 @@ build_arch() {
                 CARGO_NET_GIT_FETCH_WITH_CLI=true \
                 RUSTUP_DIST_SERVER="$rust_dist" \
                 RUSTUP_UPDATE_ROOT="$rust_root" \
-                cross build --release --target "$rust_target"
+                cross build --release --target "$rust_target" "${feature_args[@]}"
             return
             ;;
     esac
 
     echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
-    cross build --release --target "$rust_target"
+    cross build --release --target "$rust_target" "${feature_args[@]}"
 }
 
 # Main

@@ -268,14 +268,18 @@ build_for_platform() {
     if [ "$BUILD_BINARY" = true ]; then
         echo_info "Building binary with cross..."
         cd "$PROJECT_ROOT"
-        cross build --release --target "$target"
+        local feature_args=()
+        case "$target" in
+            aarch64-*|armv7-*) feature_args=(--features rkmpp) ;;
+        esac
+        cross build --release --target "$target" "${feature_args[@]}"
     fi
 
     # Check binary exists
     local binary="$PROJECT_ROOT/target/$target/release/one-kvm"
     if [ ! -f "$binary" ]; then
         echo_error "Binary not found: $binary"
-        echo_error "Build it first: cross build --release --target $target"
+        echo_error "Build it first: ./build/build-images.sh"
         exit 1
     fi
 
