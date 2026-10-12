@@ -142,6 +142,7 @@ export default {
     networkErrorDesc: '无法连接到服务器，请检查网络连接。',
   },
   nav: {
+    openwrtSystemManagement: 'OpenWRT 系统管理',
     logout: '退出登录',
   },
   auth: {

@@ -276,6 +276,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
         .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
 
+    let user_routes = user_routes.route(
+        "/system/openwrt",
+        get(super::openwrt_system::redirect_handler),
+    );
+
     #[cfg(unix)]
     let user_routes = {
         user_routes

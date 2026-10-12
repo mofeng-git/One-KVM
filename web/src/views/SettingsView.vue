@@ -196,6 +196,7 @@ const SETTINGS_SECTION_ID_SET = new Set<string>(SETTINGS_SECTION_IDS)
 
 const navGroups = computed(() => [
   {
+    id: 'software',
     title: t('settings.software'),
     items: [
       { id: 'appearance', label: t('settings.appearance'), icon: Sun },
@@ -205,6 +206,7 @@ const navGroups = computed(() => [
     ]
   },
   {
+    id: 'system',
     title: t('settings.system'),
     items: [
       { id: 'video', label: t('settings.video'), icon: Monitor },
@@ -215,6 +217,7 @@ const navGroups = computed(() => [
     ]
   },
   {
+    id: 'extensions',
     title: t('settings.extensions'),
     items: [
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
@@ -2764,7 +2767,7 @@ watch(isWindows, () => {
           <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
         </SidebarHeader>
         <SidebarContent class="px-3 pb-6 md:pb-10">
-          <SidebarGroup v-for="group in navGroups" :key="group.title" class="px-0 py-1">
+          <SidebarGroup v-for="group in navGroups" :key="group.id" class="px-0 py-1">
             <SidebarGroupLabel class="uppercase">{{ group.title }}</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in group.items" :key="item.id">
@@ -2776,6 +2779,15 @@ watch(isWindows, () => {
                 >
                   <component :is="item.icon" />
                   <span>{{ item.label }}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem v-if="systemStore.openwrtSystem && group.id === 'extensions'">
+                <SidebarMenuButton as-child :tooltip="t('nav.openwrtSystemManagement')" class="h-8 px-3 text-foreground">
+                  <a href="/api/system/openwrt" target="_blank" rel="noopener noreferrer" :title="t('nav.openwrtSystemManagement')">
+                    <Server aria-hidden="true" />
+                    <span class="min-w-0 flex-1 truncate">{{ t('nav.openwrtSystemManagement') }}</span>
+                    <ExternalLink class="!size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

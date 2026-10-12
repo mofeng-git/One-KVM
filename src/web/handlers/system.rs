@@ -19,6 +19,7 @@ pub async fn health_check() -> Json<HealthResponse> {
 pub struct SystemInfo {
     pub version: &'static str,
     pub initialized: bool,
+    pub openwrt_system: bool,
     pub platform: PlatformCapabilities,
     pub capabilities: Capabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,6 +67,7 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
     Json(SystemInfo {
         version: env!("CARGO_PKG_VERSION"),
         initialized: config.initialized,
+        openwrt_system: crate::web::openwrt_system::enabled(),
         platform: platform.clone(),
         capabilities: Capabilities {
             video: CapabilityInfo {

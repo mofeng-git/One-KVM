@@ -138,6 +138,7 @@ export const systemApi = {
     request<{
       version: string
       initialized: boolean
+      openwrt_system: boolean
       platform: PlatformCapabilities
       capabilities: {
         video: { available: boolean; backend?: string; reason?: string }

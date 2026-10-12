@@ -1,6 +1,7 @@
 mod audio_ws;
 mod error;
 mod handlers;
+pub mod openwrt_system;
 mod routes;
 pub(crate) mod state;
 mod static_files;

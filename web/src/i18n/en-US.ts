@@ -142,6 +142,7 @@ export default {
     networkErrorDesc: 'Unable to connect to server. Please check your connection.',
   },
   nav: {
+    openwrtSystemManagement: 'OpenWRT System Management',
     logout: 'Logout',
   },
   auth: {
