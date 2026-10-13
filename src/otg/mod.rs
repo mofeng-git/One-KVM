@@ -14,6 +14,10 @@ pub mod manager;
 pub mod msd;
 #[cfg(unix)]
 pub mod network;
+#[cfg(unix)]
+mod network_backend;
+#[cfg(unix)]
+mod netifd_bridge;
 pub mod report_desc;
 pub mod self_check;
 #[cfg(unix)]

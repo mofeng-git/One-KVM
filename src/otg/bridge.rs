@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use super::netifd_bridge;
+use super::network_backend::{current_backend, NetworkBackend};
 use crate::error::{AppError, Result};
 
 const BRIDGE_IF: &str = "okvm-br0";
@@ -104,11 +106,24 @@ impl TransactionProfiles {
 
 #[derive(Debug, Clone)]
 pub struct NetworkBridgeRuntime {
-    journal: BridgeJournal,
+    journal: RuntimeJournal,
+}
+
+#[derive(Debug, Clone)]
+enum RuntimeJournal {
+    NetworkManager(BridgeJournal),
+    Netifd(netifd_bridge::Journal),
 }
 
 impl NetworkBridgeRuntime {
     pub fn activate(requested: &str, usb_interface: &str) -> Result<Self> {
+        if current_backend().map_err(AppError::Config)? == NetworkBackend::Netifd {
+            let interfaces = list_netifd_interfaces()?;
+            let selected = select_bridge_candidate(&interfaces, requested)?;
+            return netifd_bridge::activate(selected, usb_interface).map(|journal| Self {
+                journal: RuntimeJournal::Netifd(journal),
+            });
+        }
         ensure_command("nmcli")?;
         ensure_command("ip")?;
 
@@ -321,16 +336,23 @@ impl NetworkBridgeRuntime {
         })();
 
         match result {
-            Ok(_address) => Ok(Self { journal }),
+            Ok(_address) => Ok(Self {
+                journal: RuntimeJournal::NetworkManager(journal),
+            }),
             Err(error) => Err(restore_or_combine(&journal, error)),
         }
     }
 
     pub fn deactivate(&self) -> Result<()> {
-        restore_from_journal(&self.journal)
+        // Use the backend recorded at activation, even if the environment changes.
+        match &self.journal {
+            RuntimeJournal::NetworkManager(journal) => restore_from_journal(journal),
+            RuntimeJournal::Netifd(journal) => netifd_bridge::deactivate(journal),
+        }
     }
 
     pub fn recover_stale_transaction() -> Result<()> {
+        netifd_bridge::recover()?;
         let value = match fs::read_to_string(JOURNAL_PATH) {
             Ok(value) => value,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -340,6 +362,7 @@ impl NetworkBridgeRuntime {
                 )))
             }
         };
+        ensure_command("nmcli")?;
         match serde_json::from_str::<BridgeJournal>(&value) {
             Ok(journal) if journal.version == JOURNAL_VERSION => restore_from_journal(&journal),
             Ok(journal) => Err(AppError::Config(format!(
@@ -354,8 +377,90 @@ impl NetworkBridgeRuntime {
 }
 
 pub fn list_network_interfaces() -> Result<Vec<NetworkInterfaceInfo>> {
+    if current_backend().map_err(AppError::Config)? == NetworkBackend::Netifd {
+        return list_netifd_interfaces();
+    }
     let devices = enumerate_network_manager_devices()?;
     Ok(bridge_candidates(devices, is_physical_network_interface))
+}
+
+fn list_netifd_interfaces() -> Result<Vec<NetworkInterfaceInfo>> {
+    let output = run_command("ubus", &["call", "network.interface", "dump"])?;
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| AppError::Internal(format!("Invalid netifd interface dump: {error}")))?;
+    parse_netifd_interfaces(&value)
+}
+
+fn parse_netifd_interfaces(value: &serde_json::Value) -> Result<Vec<NetworkInterfaceInfo>> {
+    parse_netifd_interfaces_with_check(value, netifd_bridge::bridgeable_device)
+}
+
+fn parse_netifd_interfaces_with_check(
+    value: &serde_json::Value,
+    bridgeable: impl Fn(&str) -> bool,
+) -> Result<Vec<NetworkInterfaceInfo>> {
+    let interfaces = value
+        .get("interface")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| AppError::Internal("netifd dump is missing interface array".to_string()))?;
+    Ok(interfaces
+        .iter()
+        .filter_map(|interface| {
+            let logical_name = interface.get("interface")?.as_str()?;
+            let name = interface
+                .get("l3_device")
+                .or_else(|| interface.get("device"))?
+                .as_str()?;
+            if name == "lo" {
+                return None;
+            }
+            let up = interface
+                .get("up")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let addresses: Vec<String> = interface
+                .get("ipv4-address")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|address| {
+                    let ip = address.get("address")?.as_str()?;
+                    let mask = address.get("mask")?.as_u64()?;
+                    Some(format!("{ip}/{mask}"))
+                })
+                .collect();
+            let has_default_route = interface
+                .get("route")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .any(|route| {
+                    route.get("target").and_then(serde_json::Value::as_str) == Some("0.0.0.0")
+                        && route.get("mask").and_then(serde_json::Value::as_u64) == Some(0)
+                });
+            let reason = if !up {
+                Some("Network interface is disconnected".to_string())
+            } else if !matches!(interface.get("proto").and_then(serde_json::Value::as_str), Some("dhcp" | "static")) {
+                Some("OTG bridging supports DHCP and static Ethernet uplinks".to_string())
+            } else if !bridgeable(name) {
+                Some("OTG uplink must be Ethernet or an existing bridge; ordinary Wi-Fi clients cannot be bridged".to_string())
+            } else if addresses.is_empty() {
+                Some("OTG bridging requires an IPv4 uplink".to_string())
+            } else {
+                None
+            };
+            Some(NetworkInterfaceInfo {
+                name: name.to_string(),
+                interface_type: "netifd".to_string(),
+                state: if up { "connected" } else { "disconnected" }.to_string(),
+                connection: logical_name.to_string(),
+                addresses,
+                has_default_route,
+                bridge_supported: reason.is_none(),
+                reason,
+            })
+        })
+        .collect())
 }
 
 fn enumerate_network_manager_devices() -> Result<Vec<NetworkManagerDevice>> {
@@ -440,10 +545,11 @@ fn select_bridge_candidate<'a>(
     if requested.trim().is_empty() {
         return interfaces
             .iter()
+            .filter(|item| item.bridge_supported)
             .max_by_key(|item| item.has_default_route)
             .ok_or_else(|| {
                 AppError::Config(
-                    "No connected physical NetworkManager Ethernet interface is available for OTG bridging"
+                    "No connected Ethernet interface or supported bridge is available for OTG bridging"
                         .to_string(),
                 )
             });
@@ -451,10 +557,15 @@ fn select_bridge_candidate<'a>(
 
     interfaces
         .iter()
-        .find(|item| item.name == requested)
+        .find(|item| item.name == requested && item.bridge_supported)
         .ok_or_else(|| {
             AppError::Config(format!(
-                "Network interface {requested} is not a connected physical NetworkManager Ethernet interface"
+                "Network interface {requested} does not support OTG bridging: {}",
+                interfaces
+                    .iter()
+                    .find(|item| item.name == requested)
+                    .and_then(|item| item.reason.as_deref())
+                    .unwrap_or("interface unavailable")
             ))
         })
 }
@@ -759,7 +870,7 @@ fn connection_value(connection: &str, property: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn first_ipv4_address(interface: &str) -> Option<String> {
+pub(super) fn first_ipv4_address(interface: &str) -> Option<String> {
     ipv4_addresses(interface).into_iter().next()
 }
 
@@ -783,7 +894,7 @@ fn ipv4_addresses(interface: &str) -> Vec<String> {
         .collect()
 }
 
-fn default_route(interface: &str) -> Option<String> {
+pub(super) fn default_route(interface: &str) -> Option<String> {
     let output = Command::new("ip")
         .args(["-4", "route", "show", "default", "dev", interface])
         .output()
@@ -801,7 +912,7 @@ fn gateway_from_route(route: &str) -> Option<&str> {
         .find_map(|part| (part[0] == "via").then_some(part[1]))
 }
 
-fn ensure_command(name: &str) -> Result<()> {
+pub(super) fn ensure_command(name: &str) -> Result<()> {
     let status = Command::new(name).arg("--version").output();
     if status.is_err() {
         return Err(AppError::BadRequest(format!(
@@ -815,7 +926,7 @@ fn run_nmcli(args: &[&str]) -> Result<Output> {
     run_command("nmcli", args)
 }
 
-fn run_command(command: &str, args: &[&str]) -> Result<Output> {
+pub(super) fn run_command(command: &str, args: &[&str]) -> Result<Output> {
     let output = Command::new(command)
         .env("LC_ALL", "C")
         .args(args)
@@ -841,6 +952,49 @@ fn run_command(command: &str, args: &[&str]) -> Result<Output> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn netifd_dump_preserves_logical_name_addresses_and_default_route() {
+        let dump = serde_json::json!({"interface": [
+            {"interface": "loopback", "l3_device": "lo", "up": true},
+            {"interface": "lan", "l3_device": "br-lan", "up": true, "proto": "dhcp",
+             "ipv4-address": [{"address": "192.0.2.5", "mask": 24}],
+             "route": [{"target": "0.0.0.0", "mask": 0}]},
+            {"interface": "offline", "device": "eth1", "up": false}
+        ]});
+        let result = parse_netifd_interfaces_with_check(&dump, |_| true).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "br-lan");
+        assert_eq!(result[0].connection, "lan");
+        assert_eq!(result[0].addresses, vec!["192.0.2.5/24"]);
+        assert!(result[0].has_default_route);
+        assert!(result[0].bridge_supported);
+        assert!(result[0].reason.is_none());
+        assert_eq!(result[1].state, "disconnected");
+        assert!(!result[1].has_default_route);
+    }
+
+    #[test]
+    fn malformed_netifd_dump_fails_and_incomplete_entries_are_skipped() {
+        assert!(parse_netifd_interfaces(&serde_json::json!({})).is_err());
+        assert!(parse_netifd_interfaces(&serde_json::json!({"interface": {}})).is_err());
+        let dump = serde_json::json!({"interface": [{"interface": "pending"}, {}]});
+        assert!(parse_netifd_interfaces(&dump).unwrap().is_empty());
+    }
+
+    #[test]
+    fn netifd_selection_skips_wifi_ppp_and_ipv6_only_uplinks() {
+        let dump = serde_json::json!({"interface": [
+            {"interface":"wifi", "l3_device":"wlan0", "up":true, "proto":"dhcp", "ipv4-address":[{"address":"192.0.2.6","mask":24}], "route":[{"target":"0.0.0.0","mask":0}]},
+            {"interface":"wan", "l3_device":"pppoe-wan", "up":true, "proto":"pppoe"},
+            {"interface":"lan6", "l3_device":"eth1", "up":true, "proto":"static"},
+            {"interface":"lan", "l3_device":"eth0", "up":true, "proto":"dhcp", "ipv4-address":[{"address":"192.0.2.5","mask":24}]}
+        ]});
+        let interfaces = parse_netifd_interfaces_with_check(&dump, |name| name.starts_with("eth")).unwrap();
+        assert_eq!(select_bridge_candidate(&interfaces, "").unwrap().name, "eth0");
+        assert!(select_bridge_candidate(&interfaces, "wlan0").is_err());
+        assert!(select_bridge_candidate(&interfaces, "eth1").is_err());
+    }
 
     fn device(
         name: &str,
@@ -994,6 +1148,6 @@ mod tests {
         let error = select_bridge_candidate(&[], "").unwrap_err();
 
         assert!(matches!(error, AppError::Config(_)));
-        assert!(error.to_string().contains("connected physical"));
+        assert!(error.to_string().contains("connected Ethernet"));
     }
 }

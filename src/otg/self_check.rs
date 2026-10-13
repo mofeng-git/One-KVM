@@ -570,6 +570,8 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                         })
                         .is_some_and(|name| {
                             name == "okvm-br0" || name == config.otg_network.bridge_interface
+                                || (config.otg_network.bridge_interface.is_empty()
+                                    && std::path::Path::new("/sys/class/net").join(name).join("bridge").is_dir())
                         });
                     push_otg_check(
                         &mut checks,
