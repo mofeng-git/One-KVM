@@ -38,16 +38,23 @@ For more information, see the [One-KVM Rust documentation](https://docs.one-kvm.
 
 | Area | Capabilities |
 |------|----------------|
-| Video capture | HDMI USB / MIPI CSI / RK3588 HDMI IN; MJPEG and WebRTC (H.264 / H.265 / VP8 / VP9) |
-| Video encoding | VAAPI / QSV / RKMPP / V4L2 M2M hardware paths, with software fallback |
-| Keyboard & mouse | USB OTG HID or CH340 + CH9329 HID; absolute / relative mouse |
-| Virtual media | USB mass storage; ISO/IMG mount and Ventoy-style virtual USB |
-| ATX power | GPIO or USB relay; power control |
-| Audio | ALSA capture + Opus (HTTP / WebRTC) |
+| Video capture & streaming | USB HDMI capture cards, MIPI CSI, and RK3588 HDMI IN; MJPEG / WebRTC (H.264 / H.265 / VP8 / VP9) video streams |
+| Video encoding | VAAPI / QSV / NVENC / AMF / RKMPP / V4L2 M2M hardware encoding, with software fallback |
+| Keyboard & mouse | USB OTG HID, CH340 + CH9329 serial HID, and Bluetooth HID; absolute / relative mouse over USB or serial, relative mouse over Bluetooth |
+| Virtual media | Mount ISO / IMG images through USB mass storage; virtual CD-ROM, virtual USB drive, and Ventoy multi-image boot |
+| ATX power | GPIO, USB HID / serial relays for power on/off, forced shutdown, and reset; GPIO can sense power and disk activity LEDs |
+| Wake-on-LAN | WOL with network interface selection and wake history |
+| Audio streaming | Linux ALSA / Windows WASAPI capture with Opus encoding; stream audio from the controlled computer over WebSocket / WebRTC |
+| USB microphone | Forward browser microphone audio to the controlled computer through USB OTG UAC |
+| USB network sharing | NCM / ECM / RNDIS virtual adapters bridge the controlled computer to a wired network over USB |
+| Remote client access | Built-in RustDesk and VNC services; RustDesk ID server / direct IP modes and VNC Tight JPEG / H.264 encoding |
+| RTSP video | H.264 / H.265 RTSP streams with username and password authentication |
+
+Feature availability depends on the platform, hardware, and drivers.
 
 ## Installation
 
-Release artifacts are on [GitHub Releases](https://github.com/mofeng-git/One-KVM/releases). Below are short paths for common setups. For **system requirements, hardware, Docker env vars, USB OTG**, and full troubleshooting, see the [One-KVM documentation](https://docs.one-kvm.cn/) (Chinese; use a translator if needed).
+Release artifacts are on [GitHub Releases](https://github.com/mofeng-git/One-KVM/releases). Below are brief steps for common installation methods. For full details on **system requirements, hardware preparation, Docker environment variables, and USB OTG**, see the [One-KVM Rust documentation](https://docs.one-kvm.cn/).
 
 ### Debian / Ubuntu (.deb)
 
@@ -102,7 +109,7 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 ### Thanks
 
 <details>
-<summary><strong>Supporter list</strong></summary>
+<summary><strong>Click to view the supporter list</strong></summary>
 
 - 浩龙的电子嵌入式之路
 
@@ -226,11 +233,107 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 
 - 故人。
 
+- WindowsHao
+
+- 爱发电用户_d4f8b
+
+- 爱发电用户_59f5a
+
+- 爱发电用户_96f28
+
+- 孤星赏月
+
+- t316161070
+
+- 爱发电用户_f5gW
+
+- 爱发电用户_5fb5c
+
+- 爱发电用户_86d54
+
+- 爱发电用户_maRx
+
+- nb
+
+- 爱发电用户_0aa4a
+
+- 爱发电用户_f75a7
+
+- 爱发电用户_b4646
+
+- n1k0
+
+- Yeskf
+
+- 魔力回旋彪
+
+- 泡面
+
+- 中看台的杰森
+
+- LWF
+
+- 爱发电用户_b38fb
+
+- 丨拒绝啦丶
+
+- 爱发电用户_rGYn
+
+- 爱发电用户_XU9y
+
+- 爱发电用户_ec19b
+
+- 爱发电用户_A4dE
+
+- 爱发电用户_eYRC
+
+- Aleo
+
+- 淼
+
+- 爱发电用户_5d06d
+
+- Ghost_chu
+
+- 爱发电用户_1fa21
+
+- 爱发电用户_a7072
+
+- 爱发电用户_9HrC
+
+- 飒歼外寒
+
+- Resucdueff
+
+- Gentisan
+
+- 爱发电用户_MGAx
+
+- 爱发电用户_bce93
+
+- 爱发电用户_60f87
+
+- Bottling3748
+
+- 爱发电用户_7cbeb
+
+- 爱发电用户_6c721
+
+- 哦哦哦哦
+
+- 盒子先生
+
+- 似水流年
+
+- chnxan
+
 - ......
 
 </details>
 
 ### Sponsors
+
+This project is supported by the following sponsors:
 
 **File hosting**
 
@@ -240,12 +343,12 @@ One-KVM builds on many great open-source projects; a lot of time goes into testi
 
 - **[林枫云](https://www.dkdun.cn)** — project server sponsorship
 
-![林枫云](https://docs.one-kvm.cn/img/36076FEFF0898A80EBD5756D28F4076C.png)
+  <img height="128" alt="林枫云" src="https://docs.one-kvm.cn/img/36076FEFF0898A80EBD5756D28F4076C.png" />
 
-林枫云 offers premium network routes, high-frequency game servers, and high-bandwidth servers in China and abroad.
+  林枫云 offers premium network routes, high-frequency game servers, and high-bandwidth servers in China and abroad.
 
 - **[Beta Network](https://my.beita.cc/?ref=github_onekvm)** — project server sponsorship
 
-![BTBT](https://github.com/user-attachments/assets/c442d5f5-d72f-4a07-b9f4-400a6a0c3f1e)
+  <img height="128" alt="BTBT" src="https://github.com/user-attachments/assets/c442d5f5-d72f-4a07-b9f4-400a6a0c3f1e" />
 
-Remote computers, consumer GPU servers, and dedicated physical machines with fully automated online delivery.
+  Remote computers, consumer GPU servers, and dedicated physical machines with fully automated online delivery.
