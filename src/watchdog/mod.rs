@@ -14,6 +14,8 @@ mod platform {
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
     use std::path::{Path, PathBuf};
 
+    // Request arguments use c_ulong on glibc and c_int on musl. Cast at the
+    // call sites to preserve the kernel command's low 32 bits on either libc.
     const WDIOC_GETSUPPORT: libc::c_ulong = 0x8028_5700;
     const WDIOC_SETOPTIONS: libc::c_ulong = 0x8004_5704;
     const WDIOC_KEEPALIVE: libc::c_ulong = 0x8004_5705;
@@ -54,7 +56,7 @@ mod platform {
             let supports_magic_close = unsafe {
                 libc::ioctl(
                     std::os::fd::AsRawFd::as_raw_fd(&file),
-                    WDIOC_GETSUPPORT,
+                    WDIOC_GETSUPPORT as _,
                     &mut info,
                 ) == 0
                     && info.options & WDIOF_MAGICCLOSE != 0
@@ -109,7 +111,7 @@ mod platform {
             let result = unsafe {
                 libc::ioctl(
                     std::os::fd::AsRawFd::as_raw_fd(&self.file),
-                    WDIOC_KEEPALIVE,
+                    WDIOC_KEEPALIVE as _,
                     0,
                 )
             };
@@ -125,7 +127,7 @@ mod platform {
             let result = unsafe {
                 libc::ioctl(
                     std::os::fd::AsRawFd::as_raw_fd(&self.file),
-                    WDIOC_GETTIMEOUT,
+                    WDIOC_GETTIMEOUT as _,
                     &mut timeout,
                 )
             };
@@ -152,7 +154,7 @@ mod platform {
             let result = unsafe {
                 libc::ioctl(
                     std::os::fd::AsRawFd::as_raw_fd(&self.file),
-                    WDIOC_SETOPTIONS,
+                    WDIOC_SETOPTIONS as _,
                     &mut option,
                 )
             };
