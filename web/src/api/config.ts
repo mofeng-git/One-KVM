@@ -19,6 +19,8 @@ import type {
   AtxConfig,
   AtxConfigUpdate,
   AtxDevices,
+  SwitchConfig,
+  SwitchConfigUpdate,
   AudioConfig,
   AudioConfigUpdate,
   ExtensionsStatus,
@@ -165,6 +167,18 @@ export const atxConfigApi = {
 
   getWolHistory: (limit = 5) =>
     request<WolHistoryResponse>(`/atx/wol/history?limit=${Math.max(1, Math.min(50, limit))}`),
+}
+
+export const switchConfigApi = {
+  get: () => request<SwitchConfig>('/config/switch'),
+
+  update: (config: SwitchConfigUpdate) =>
+    request<SwitchConfig>('/config/switch', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  listDevices: () => request<string[]>('/devices/switch'),
 }
 
 export const audioConfigApi = {

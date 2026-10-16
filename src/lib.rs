@@ -46,6 +46,8 @@ pub mod stream;
 #[cfg(feature = "desktop")]
 pub mod stream_encoder;
 #[cfg(feature = "desktop")]
+pub mod switch;
+#[cfg(feature = "desktop")]
 pub mod update;
 #[cfg(feature = "desktop")]
 pub mod utils;

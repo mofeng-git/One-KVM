@@ -10,6 +10,7 @@ mod computer_use;
 mod hid;
 mod otg_network;
 mod stream;
+mod switch;
 mod uac;
 mod watchdog;
 mod web;
@@ -20,6 +21,7 @@ pub use computer_use::*;
 pub use hid::*;
 pub use otg_network::*;
 pub use stream::*;
+pub use switch::*;
 pub use uac::*;
 pub use watchdog::*;
 pub use web::*;
@@ -36,6 +38,7 @@ pub struct AppConfig {
     pub otg_network: OtgNetworkConfig,
     pub msd: MsdConfig,
     pub atx: AtxConfig,
+    pub switch: SwitchConfig,
     pub audio: AudioConfig,
     pub stream: StreamConfig,
     pub web: WebConfig,
@@ -60,6 +63,7 @@ impl AppConfig {
             self.hid.mouse_absolute = false;
         }
         self.atx.normalize();
+        self.switch.normalize();
     }
 
     pub fn apply_platform_defaults(&mut self) {
