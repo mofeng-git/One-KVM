@@ -260,6 +260,11 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchMsdState() {
     try {
+      if (!platform.value) await fetchSystemInfo()
+      if (!platform.value?.msd.available) {
+        msd.value = null
+        return null
+      }
       const result = await msdApi.status()
       msd.value = {
         available: result.available,
@@ -306,12 +311,13 @@ export const useSystemStore = defineStore('system', () => {
     error.value = null
 
     try {
+      const systemInfoRequest = fetchSystemInfo()
       await Promise.all([
-        fetchSystemInfo(),
+        systemInfoRequest,
         fetchStreamState().catch(() => null),
         fetchHidState().catch(() => null),
         fetchAtxState().catch(() => null),
-        fetchMsdState().catch(() => null),
+        systemInfoRequest.then(() => fetchMsdState()).catch(() => null),
       ])
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch states'

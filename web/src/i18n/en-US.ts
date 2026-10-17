@@ -742,6 +742,7 @@ export default {
     httpsManualRedirectDesc: 'HTTPS with a self-signed certificate requires browser approval. Click the link and choose "Proceed" on the security warning.',
     onlineUpgrade: 'Online Upgrade',
     onlineUpgradeDesc: 'Check and upgrade One-KVM',
+    onlineUpgradeUnsupported: 'Online upgrades are not supported on this platform. Download the new version and replace the program manually.',
     updateChannel: 'Update Channel',
     currentVersion: 'Current Version',
     latestVersion: 'Latest Version',

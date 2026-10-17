@@ -172,6 +172,10 @@ const consoleLayoutOptions: Array<{
 const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
+const otgSupported = computed(() => systemStore.platform?.otg.available === true)
+const msdSupported = computed(() => systemStore.platform?.msd.available === true)
+const usbResetSupported = computed(() => systemStore.platform?.mode === 'linux')
+const onlineUpgradeSupported = computed(() => systemStore.platform?.mode === 'linux')
 
 const activeSection = ref<SettingsSectionId>('appearance')
 const loading = ref(false)
@@ -903,6 +907,7 @@ function otgCheckHint(item: OtgSelfCheckItem): string {
 }
 
 async function runOtgSelfCheck() {
+  if (!otgSupported.value) return
   otgSelfCheckLoading.value = true
   otgSelfCheckError.value = ''
   try {
@@ -988,6 +993,10 @@ const usbResetTarget = ref<import('@/api').UsbDeviceInfo | null>(null)
 const usbResetLoading = ref(false)
 
 async function fetchUsbDevices() {
+  if (!usbResetSupported.value) {
+    usbDevices.value = []
+    return
+  }
   usbDevicesLoading.value = true
   usbDevicesError.value = ''
   try {
@@ -1000,7 +1009,7 @@ async function fetchUsbDevices() {
 }
 
 async function confirmUsbReset() {
-  if (!usbResetTarget.value) return
+  if (!usbResetSupported.value || !usbResetTarget.value) return
   usbResetLoading.value = true
   try {
     await usbApi.resetDevice(usbResetTarget.value.bus_num, usbResetTarget.value.dev_num)
@@ -1521,7 +1530,9 @@ async function saveConfig() {
     saveError.value = error instanceof Error ? error.message : t('api.operationFailedDesc')
     if (activeSection.value === 'hid') {
       await loadConfig().catch(() => undefined)
-      otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
+      otgNetworkStatus.value = otgSupported.value
+        ? await otgNetworkApi.status().catch(() => null)
+        : null
     }
   } finally {
     loading.value = false
@@ -1543,15 +1554,17 @@ async function loadConfig() {
       configStore.refreshVideo(),
       configStore.refreshStream(),
       configStore.refreshHid(),
-      configStore.refreshMsd(),
-      otgNetworkApi.get().catch(() => ({
+      msdSupported.value ? configStore.refreshMsd() : Promise.resolve(null),
+      otgSupported.value ? otgNetworkApi.get().catch(() => ({
         enabled: false,
         driver_mode: 'ncm' as const,
         bridge_interface: '',
         host_mac: '',
         device_mac: '',
-      })),
-      uacApi.get().catch(() => ({ enabled: false, sample_rate: 48000, channels: 2 })),
+      })) : Promise.resolve(null),
+      otgSupported.value
+        ? uacApi.get().catch(() => ({ enabled: false, sample_rate: 48000, channels: 2 }))
+        : Promise.resolve(null),
     ])
 
     config.value = {
@@ -1572,14 +1585,14 @@ async function loadConfig() {
         consumer: hid.otg_functions?.consumer ?? true,
       } as OtgHidFunctions,
       hid_otg_keyboard_leds: hid.otg_keyboard_leds ?? false,
-      msd_enabled: msd.enabled || false,
-      msd_dir: msd.msd_dir || '',
-      msd_flash_inquiry_string: msd.flash_inquiry_string || 'One-KVM Virtual Flash',
-      msd_cdrom_inquiry_string: msd.cdrom_inquiry_string || 'One-KVM Virtual CD-ROM',
-      otg_network_enabled: otgNetwork.enabled,
-      otg_network_driver: otgNetwork.driver_mode,
-      uac_enabled: uac.enabled,
-      otg_network_interface: otgNetwork.bridge_interface,
+      msd_enabled: msd?.enabled || false,
+      msd_dir: msd?.msd_dir || '',
+      msd_flash_inquiry_string: msd?.flash_inquiry_string || 'One-KVM Virtual Flash',
+      msd_cdrom_inquiry_string: msd?.cdrom_inquiry_string || 'One-KVM Virtual CD-ROM',
+      otg_network_enabled: otgNetwork?.enabled ?? false,
+      otg_network_driver: otgNetwork?.driver_mode ?? 'ncm',
+      uac_enabled: uac?.enabled ?? false,
+      otg_network_interface: otgNetwork?.bridge_interface ?? '',
       encoder_backend: stream.encoder || 'auto',
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
@@ -1607,7 +1620,9 @@ async function loadConfig() {
     } else {
       clearCh9329DescriptorState()
     }
-    otgNetworkStatus.value = await otgNetworkApi.status().catch(() => null)
+    otgNetworkStatus.value = otgSupported.value
+      ? await otgNetworkApi.status().catch(() => null)
+      : null
     await nextTick()
     hidFeatureBaseline.value = hidFeatureSnapshot()
   } catch {
@@ -1623,6 +1638,11 @@ async function loadDeviceConfig() {
 
 async function loadOtgNetworkInterfaces() {
   otgNetworkInterfacesError.value = ''
+  if (!otgSupported.value) {
+    otgNetworkInterfaces.value = []
+    otgNetworkInterfacesLoaded.value = false
+    return
+  }
   try {
     otgNetworkInterfaces.value = await otgNetworkApi.interfaces()
     otgNetworkInterfacesLoaded.value = true
@@ -2331,6 +2351,7 @@ function startUpdatePolling() {
 }
 
 async function startOnlineUpgrade() {
+  if (!onlineUpgradeSupported.value) return
   try {
     updateSawRestarting.value = false
     updateSawRequestFailure.value = false
@@ -3478,7 +3499,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card v-if="otgSupported">
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
                   <CardTitle>{{ t('settings.otgSelfCheck.title') }}</CardTitle>
@@ -3691,7 +3712,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card v-if="usbResetSupported">
               <CardHeader class="flex flex-row items-start justify-between space-y-0">
                 <div class="space-y-1.5">
                   <CardTitle>{{ t('settings.usbDevices.title') }}</CardTitle>
@@ -3766,7 +3787,7 @@ watch(isWindows, () => {
             </Card>
 
             <!-- USB Reset Confirmation Dialog -->
-            <AlertDialog :open="usbResetTarget != null">
+            <AlertDialog v-if="usbResetSupported" :open="usbResetTarget != null">
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>{{ t('settings.usbDevices.resetConfirmTitle') }}</AlertDialogTitle>
@@ -5375,7 +5396,10 @@ watch(isWindows, () => {
                   </div>
                 </div>
 
-                <div class="flex justify-end gap-2">
+                <p v-if="!onlineUpgradeSupported" class="text-sm text-muted-foreground">
+                  {{ t('settings.onlineUpgradeUnsupported') }}
+                </p>
+                <div v-else class="flex justify-end gap-2">
                   <Button
                     :disabled="updateRunning || !updateOverview?.upgrade_available"
                     @click="startOnlineUpgrade"

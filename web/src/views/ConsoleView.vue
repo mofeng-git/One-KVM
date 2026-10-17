@@ -86,7 +86,8 @@ const unifiedAudio = getUnifiedAudio()
 const microphone = getMicrophone()
 const uacEnabled = ref(false)
 const microphoneTransferEnabled = computed(() => (
-  uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
+  systemStore.platform?.otg.available === true
+  && uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
 ))
 const videoSession = useVideoSession()
 
@@ -3124,6 +3125,11 @@ function handleToggleMouseMode() {
 
 async function refreshUacAvailability() {
   try {
+    if (!systemStore.platform) await systemStore.fetchSystemInfo()
+    if (!systemStore.platform?.otg.available) {
+      uacEnabled.value = false
+      return
+    }
     const uacConfig = await uacApi.get()
     uacEnabled.value = uacConfig.enabled
   } catch {

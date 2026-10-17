@@ -699,7 +699,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
           <div v-else-if="step === 3" key="step3" class="space-y-4">
             <h3 class="text-lg font-medium text-center">{{ t('setup.stepHid') }}</h3>
 
-            <HidDriverForm v-model="hidSelection" @valid="hidSelectionValid = $event" />
+            <HidDriverForm v-model="hidSelection" :platform="platform" @valid="hidSelectionValid = $event" />
           </div>
 
           <!-- Step 4: Extensions Settings -->

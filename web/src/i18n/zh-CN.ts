@@ -741,6 +741,7 @@ export default {
     httpsManualRedirectDesc: 'HTTPS 自签名证书需要在浏览器中手动接受，点击链接后在安全警告页选择"继续访问"即可。',
     onlineUpgrade: '在线升级',
     onlineUpgradeDesc: '检查并升级 One-KVM',
+    onlineUpgradeUnsupported: '当前平台暂不支持在线升级，请下载新版本并手动替换程序。',
     updateChannel: '升级通道',
     currentVersion: '当前版本',
     latestVersion: '最新版本',
