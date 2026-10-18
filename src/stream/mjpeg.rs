@@ -24,6 +24,25 @@ use crate::video::VideoFrame;
 
 pub type ClientId = String;
 
+#[cfg(feature = "desktop")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RawFrameFingerprint {
+    resolution: crate::video::format::Resolution,
+    format: PixelFormat,
+    stride: u32,
+    online: bool,
+    len: usize,
+    hash: u64,
+    quality: u32,
+}
+
+#[cfg(feature = "desktop")]
+struct JpegEncoderState {
+    encoder: JpegEncoder,
+    last_input: Option<RawFrameFingerprint>,
+    last_frame: Option<VideoFrame>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ClientSession {
     pub id: ClientId,
@@ -115,7 +134,7 @@ pub struct MjpegStreamHandler {
     dropped_same_frames: AtomicU64,
     max_drop_same_frames: AtomicU64,
     #[cfg(feature = "desktop")]
-    jpeg_encoder: ParkingMutex<Option<JpegEncoder>>,
+    jpeg_encoder: ParkingMutex<Option<JpegEncoderState>>,
     jpeg_quality: AtomicU64,
 }
 
@@ -219,24 +238,43 @@ impl MjpegStreamHandler {
         let resolution = frame.resolution;
         let sequence = self.sequence.load(Ordering::Relaxed);
         let desired_quality = self.jpeg_quality.load(Ordering::Relaxed) as u32;
+        // Keep only a fingerprint and the encoded output, not a second raw
+        // frame. Unchanged input can reuse JPEG bytes even for forced refreshes.
+        let fingerprint = RawFrameFingerprint {
+            resolution,
+            format: frame.format,
+            stride: frame.stride,
+            online: frame.online,
+            len: frame.len(),
+            hash: frame.get_hash(),
+            quality: desired_quality,
+        };
 
         let mut encoder_guard = self.jpeg_encoder.lock();
-        let encoder = encoder_guard.get_or_insert_with(|| {
+        if encoder_guard.is_none() {
             let config = EncoderConfig::jpeg(resolution, desired_quality);
-            match JpegEncoder::new(config) {
-                Ok(enc) => {
-                    debug!(
-                        "Created JPEG encoder for MJPEG stream: {}x{} (q={})",
-                        resolution.width, resolution.height, desired_quality
-                    );
-                    enc
-                }
-                Err(e) => {
-                    warn!("Failed to create JPEG encoder: {}", e);
-                    panic!("Failed to create JPEG encoder");
-                }
+            let encoder = JpegEncoder::new(config)
+                .map_err(|e| format!("Failed to create JPEG encoder: {}", e))?;
+            debug!(
+                "Created JPEG encoder for MJPEG stream: {}x{} (q={})",
+                resolution.width, resolution.height, desired_quality
+            );
+            *encoder_guard = Some(JpegEncoderState {
+                encoder,
+                last_input: None,
+                last_frame: None,
+            });
+        }
+        let state = encoder_guard.as_mut().expect("JPEG encoder initialized");
+        if state.last_input == Some(fingerprint) {
+            if let Some(mut cached) = state.last_frame.clone() {
+                cached.sequence = sequence;
+                cached.capture_ts = frame.capture_ts;
+                cached.online = frame.online;
+                return Ok(cached);
             }
-        });
+        }
+        let encoder = &mut state.encoder;
 
         if encoder.config().resolution != resolution {
             debug!(
@@ -285,13 +323,12 @@ impl MjpegStreamHandler {
             }
         };
 
-        Ok(VideoFrame::new(
-            encoded.data,
-            resolution,
-            PixelFormat::Mjpeg,
-            0,
-            sequence,
-        ))
+        let mut jpeg = VideoFrame::new(encoded.data, resolution, PixelFormat::Mjpeg, 0, sequence);
+        jpeg.capture_ts = frame.capture_ts;
+        jpeg.online = frame.online;
+        state.last_input = Some(fingerprint);
+        state.last_frame = Some(jpeg.clone());
+        Ok(jpeg)
     }
 
     pub fn set_offline(&self) {
@@ -549,6 +586,91 @@ mod tests {
     use super::*;
     use crate::video::{format::Resolution, PixelFormat};
     use bytes::Bytes;
+
+    #[cfg(feature = "desktop")]
+    fn raw_frame(resolution: Resolution, sequence: u64) -> VideoFrame {
+        VideoFrame::new(
+            Bytes::from(vec![
+                128;
+                resolution.width as usize
+                    * resolution.height as usize
+                    * 3
+                    / 2
+            ]),
+            resolution,
+            PixelFormat::Nv12,
+            resolution.width,
+            sequence,
+        )
+    }
+
+    #[cfg(feature = "desktop")]
+    #[test]
+    fn raw_cache_reuses_bytes_but_invalidates_on_input_and_quality_changes() {
+        let handler = Arc::new(MjpegStreamHandler::with_drop_limit(0));
+        let _guard = ClientGuard::new("raw-test".into(), handler.clone());
+        let resolution = Resolution::new(64, 32);
+        handler.update_frame(raw_frame(resolution, 1));
+        let first = handler.current_frame().unwrap();
+        let next_input = raw_frame(resolution, 2);
+        let capture_ts = next_input.capture_ts;
+        handler.update_frame(next_input);
+        let repeated = handler.current_frame().unwrap();
+        assert_eq!(first.data().as_ptr(), repeated.data().as_ptr());
+        assert_ne!(first.sequence, repeated.sequence);
+        assert_eq!(repeated.capture_ts, capture_ts);
+
+        handler.set_jpeg_quality(40);
+        handler.update_frame(raw_frame(resolution, 3));
+        let changed_quality = handler.current_frame().unwrap();
+        assert_ne!(changed_quality.data().as_ptr(), repeated.data().as_ptr());
+        let mut data = raw_frame(resolution, 4).data().to_vec();
+        data[321] = 255; // A small change away from the fast sample positions.
+        handler.update_frame(VideoFrame::new(
+            Bytes::from(data),
+            resolution,
+            PixelFormat::Nv12,
+            resolution.width,
+            4,
+        ));
+        let changed_pixels = handler.current_frame().unwrap();
+        assert_ne!(
+            changed_pixels.data().as_ptr(),
+            changed_quality.data().as_ptr()
+        );
+
+        let resized = Resolution::new(32, 64);
+        handler.update_frame(raw_frame(resized, 5));
+        let changed_resolution = handler.current_frame().unwrap();
+        assert_eq!(changed_resolution.resolution, resized);
+        assert_ne!(
+            changed_resolution.data().as_ptr(),
+            changed_pixels.data().as_ptr()
+        );
+    }
+
+    #[cfg(feature = "desktop")]
+    #[test]
+    fn raw_duplicates_skip_publication_but_forced_refresh_reuses_jpeg() {
+        let handler = Arc::new(MjpegStreamHandler::new());
+        let _guard = ClientGuard::new("raw-refresh-test".into(), handler.clone());
+        let mut notifications = handler.subscribe();
+        let resolution = Resolution::new(64, 32);
+        handler.update_frame(raw_frame(resolution, 1));
+        let first = handler.current_frame().unwrap();
+        notifications.try_recv().unwrap();
+        handler.update_frame(raw_frame(resolution, 2));
+        assert!(matches!(
+            notifications.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+        *handler.last_frame_ts.write() = Some(Instant::now() - Duration::from_secs(2));
+        handler.update_frame(raw_frame(resolution, 3));
+        notifications.try_recv().unwrap();
+        let refresh = handler.current_frame().unwrap();
+        assert_ne!(refresh.sequence, first.sequence);
+        assert_eq!(refresh.data().as_ptr(), first.data().as_ptr());
+    }
 
     #[tokio::test]
     async fn test_stream_handler() {

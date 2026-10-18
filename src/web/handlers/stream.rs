@@ -470,122 +470,8 @@ pub async fn mjpeg_stream(
         .filter(|id| !id.is_empty() && id.len() <= 64) // Validate: non-empty, max 64 chars
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    // Create RAII guard - this will automatically register and unregister the client
-    let guard = Arc::new(crate::stream::mjpeg::ClientGuard::new(
-        client_id.clone(),
-        handler.clone(),
-    ));
-
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(1);
-
-    let guard_clone = guard.clone();
-    let handler_clone = handler.clone();
-    tokio::spawn(async move {
-        let _guard = guard_clone; // Keep guard alive
-        let mut notify_rx = handler_clone.subscribe();
-        let mut last_seq = 0u64;
-        let mut timeout_count = 0;
-
-        // Send initial frame if available
-        if let Some(frame) = handler_clone.current_frame() {
-            if frame.is_valid_jpeg() {
-                let data = create_mjpeg_part(frame.data());
-                // send() blocks until receiver is ready (backpressure)
-                if tx.send(data).await.is_ok() {
-                    // FPS recording moved to async_stream after yield
-                    last_seq = frame.sequence;
-                } else {
-                    return; // Receiver closed
-                }
-            }
-        }
-
-        loop {
-            // Check if stream went offline (e.g., during config change)
-            if !handler_clone.is_online() {
-                break;
-            }
-
-            // Wait for new frame notification with timeout
-            let result =
-                tokio::time::timeout(std::time::Duration::from_secs(5), notify_rx.recv()).await;
-
-            match result {
-                Ok(Ok(())) => {
-                    // Check online status after receiving notification
-                    // set_offline() sends a notification, so we need to check here
-                    if !handler_clone.is_online() {
-                        break;
-                    }
-                    timeout_count = 0;
-                    if let Some(frame) = handler_clone.current_frame() {
-                        // Use != instead of > to handle sequence reset when capturer restarts
-                        // (e.g., after video config change, new capturer starts from seq=0)
-                        if frame.sequence != last_seq && frame.is_valid_jpeg() {
-                            let data = create_mjpeg_part(frame.data());
-                            if tx.send(data).await.is_ok() {
-                                last_seq = frame.sequence;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                }
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
-                    break;
-                }
-                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
-                    // Receiver was too slow - skip missed frames and jump to latest
-                    if !handler_clone.is_online() {
-                        break;
-                    }
-                    timeout_count = 0;
-
-                    if let Some(frame) = handler_clone.current_frame() {
-                        if frame.is_valid_jpeg() {
-                            // Send current frame immediately and reset sequence tracking
-                            if tx.send(create_mjpeg_part(frame.data())).await.is_ok() {
-                                last_seq = frame.sequence;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(_) => {
-                    // Timeout - check if still online
-                    timeout_count += 1;
-                    if timeout_count > 6 || !handler_clone.is_online() {
-                        break;
-                    }
-                    // Send last frame again to keep connection alive
-                    let Some(frame) = handler_clone.current_frame() else {
-                        continue;
-                    };
-
-                    if frame.is_valid_jpeg()
-                        && tx.send(create_mjpeg_part(frame.data())).await.is_err()
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
-    // Create stream that receives from channel and forwards to the HTTP
-    // body. Record FPS *before* yield so the final frame of a session
-    // still gets counted (after-yield code in async_stream! only runs
-    // when the consumer polls again, which never happens for the last
-    // frame of a closing connection).
-    let handler_for_stream = handler.clone();
-    let guard_for_stream = guard.clone();
-    let body_stream = async_stream::stream! {
-        while let Some(data) = rx.recv().await {
-            handler_for_stream.record_frame_sent(guard_for_stream.id());
-            yield Ok::<bytes::Bytes, std::io::Error>(data);
-        }
-    };
+    let guard = crate::stream::mjpeg::ClientGuard::new(client_id, handler.clone());
+    let body_stream = crate::stream::mjpeg_http::body_stream(handler, guard);
 
     Response::builder()
         .status(StatusCode::OK)
@@ -610,30 +496,11 @@ pub async fn snapshot(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/jpeg")
             .header(header::CACHE_CONTROL, "no-cache")
-            .body(Body::from(frame.data_bytes()))
+            .body(Body::from(frame.owned_data_bytes()))
             .unwrap(),
         _ => Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
             .body(Body::from("No frame available"))
             .unwrap(),
     }
-}
-
-/// Create MJPEG multipart frame bytes
-fn create_mjpeg_part(jpeg_data: &[u8]) -> bytes::Bytes {
-    use bytes::{BufMut, BytesMut};
-
-    let mut buf = BytesMut::with_capacity(128 + jpeg_data.len());
-
-    // Write boundary and headers
-    buf.put_slice(b"--frame\r\n");
-    buf.put_slice(b"Content-Type: image/jpeg\r\n");
-    buf.put_slice(format!("Content-Length: {}\r\n", jpeg_data.len()).as_bytes());
-    buf.put_slice(b"\r\n");
-
-    // Write JPEG data
-    buf.put_slice(jpeg_data);
-    buf.put_slice(b"\r\n");
-
-    buf.freeze()
 }

@@ -1,6 +1,7 @@
 //! MJPEG multipart streaming and WebSocket HID (for MJPEG mode).
 
 pub mod mjpeg;
+pub(crate) mod mjpeg_http;
 #[cfg(feature = "desktop")]
 pub mod ws_hid;
 
