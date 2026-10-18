@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CanonicalKey } from '@/types/generated'
+import { CanonicalKey } from '@/types/generated'
 import { Badge } from '@/components/ui/badge'
 import { Kbd } from '@/components/ui/kbd'
 import { Separator } from '@/components/ui/separator'
@@ -12,6 +12,7 @@ const props = defineProps<{
   numLock?: boolean
   scrollLock?: boolean
   keyboardLedEnabled?: boolean
+  keyboardLockDisabled?: boolean
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
   compact?: boolean
@@ -19,7 +20,17 @@ const props = defineProps<{
   minimal?: boolean
 }>()
 
+const emit = defineEmits<{
+  toggleLock: [key: CanonicalKey.CapsLock | CanonicalKey.NumLock | CanonicalKey.ScrollLock]
+}>()
+
 const { t } = useI18n()
+
+const lockButtons = computed(() => [
+  { key: CanonicalKey.CapsLock, label: t('infobar.caps'), active: props.capsLock },
+  { key: CanonicalKey.NumLock, label: t('infobar.num'), active: props.numLock },
+  { key: CanonicalKey.ScrollLock, label: t('infobar.scroll'), active: props.scrollLock },
+] as const)
 
 const keyNameMap: Record<string, string> = {
   MetaLeft: 'Win', MetaRight: 'Win',
@@ -49,14 +60,24 @@ const keysDisplay = computed(() => {
     <div :class="compact ? '' : 'sm:hidden'">
       <div class="flex items-center justify-between gap-3 text-xs px-2 h-7">
         <div v-if="keyboardLedEnabled && !minimal" class="flex items-center gap-1">
-          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
-            <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Caps
-          </Badge>
-          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
-            <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Num
-          </Badge>
-          <Badge variant="outline" class="h-5 gap-1 px-1 text-xs text-foreground">
-            <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />Scroll
+          <Badge
+            v-for="lock in lockButtons"
+            :key="lock.key"
+            as="button"
+            type="button"
+            variant="outline"
+            class="h-5 gap-1 px-1 text-xs text-foreground cursor-pointer hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="keyboardLockDisabled || pressedKeys?.includes(lock.key)"
+            :aria-pressed="!!lock.active"
+            :aria-label="t('infobar.toggleLock', { key: lock.key })"
+            :title="t('infobar.toggleLock', { key: lock.key })"
+            @mousedown.prevent
+            @keydown.stop
+            @keyup.stop
+            @click="emit('toggleLock', lock.key)"
+          >
+            <span class="size-1.5 rounded-full" :class="lock.active ? 'bg-status-active' : 'bg-muted-foreground/30'" />
+            {{ lock.label }}
           </Badge>
         </div>
         <div v-else-if="!minimal" class="text-xs text-muted-foreground">
@@ -89,17 +110,24 @@ const keysDisplay = computed(() => {
         <div class="flex items-center shrink-0">
           <Separator orientation="vertical" class="h-5" />
           <template v-if="keyboardLedEnabled">
-            <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="capsLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
-              {{ t('infobar.caps') }}
-            </Badge>
-            <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="numLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
-              {{ t('infobar.num') }}
-            </Badge>
-            <Badge variant="outline" class="mx-1 gap-1.5 text-foreground">
-              <span class="size-1.5 rounded-full" :class="scrollLock ? 'bg-status-active' : 'bg-muted-foreground/30'" />
-              {{ t('infobar.scroll') }}
+            <Badge
+              v-for="lock in lockButtons"
+              :key="lock.key"
+              as="button"
+              type="button"
+              variant="outline"
+              class="mx-1 gap-1.5 text-foreground cursor-pointer hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="keyboardLockDisabled || pressedKeys?.includes(lock.key)"
+              :aria-pressed="!!lock.active"
+              :aria-label="t('infobar.toggleLock', { key: lock.key })"
+              :title="t('infobar.toggleLock', { key: lock.key })"
+              @mousedown.prevent
+              @keydown.stop
+              @keyup.stop
+              @click="emit('toggleLock', lock.key)"
+            >
+              <span class="size-1.5 rounded-full" :class="lock.active ? 'bg-status-active' : 'bg-muted-foreground/30'" />
+              {{ lock.label }}
             </Badge>
           </template>
           <div v-else class="px-3 py-1 text-muted-foreground/60">

@@ -179,6 +179,7 @@ const keyboardLed = computed(() => ({
   scrollLock: systemStore.hid?.ledState.scrollLock ?? false,
 }))
 const keyboardLedEnabled = computed(() => systemStore.hid?.keyboardLedsEnabled ?? false)
+const keyboardLockPending = ref(false)
 const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 })
@@ -2210,7 +2211,7 @@ async function handleWol(mac: string) {
 function handleHidError(_error: any, _operation: string) {
 }
 
-function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
+async function transmitKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
@@ -2220,7 +2221,30 @@ function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: nu
     const sent = webrtc.sendKeyboard(event)
     if (sent) return
   }
-  hidApi.keyboard(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
+  await hidApi.keyboard(type, key, modifier)
+}
+
+function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
+  transmitKeyboardEvent(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
+}
+
+async function toggleKeyboardLock(key: CanonicalKey.CapsLock | CanonicalKey.NumLock | CanonicalKey.ScrollLock) {
+  if (!keyboardLedEnabled.value || hidStatus.value !== 'connected'
+    || keyboardLockPending.value || pressedKeys.value.includes(key)) return
+
+  keyboardLockPending.value = true
+  try {
+    try {
+      await transmitKeyboardEvent('down', key, activeModifierMask.value)
+      await new Promise(resolve => setTimeout(resolve, 100))
+    } finally {
+      await transmitKeyboardEvent('up', key, activeModifierMask.value)
+    }
+  } catch {
+    toast.error(t('infobar.toggleLockFailed'))
+  } finally {
+    keyboardLockPending.value = false
+  }
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
@@ -3650,8 +3674,10 @@ onUnmounted(() => {
       :num-lock="keyboardLed.numLock"
       :scroll-lock="keyboardLed.scrollLock"
       :keyboard-led-enabled="keyboardLedEnabled"
+      :keyboard-lock-disabled="hidStatus !== 'connected' || keyboardLockPending"
       :mouse-position="mousePosition"
       :debug-mode="false"
+      @toggle-lock="toggleKeyboardLock"
     />
     <StatsSheet
       v-if="showConnectionStats"

@@ -293,6 +293,8 @@ export default {
     num: 'Num',
     scroll: 'Scroll',
     keyboardLedUnavailable: '键盘状态灯功能未开启或不支持',
+    toggleLock: '切换 {key}',
+    toggleLockFailed: '切换键盘锁定状态失败',
   },
   paste: {
     title: '粘贴文本',

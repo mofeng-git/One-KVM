@@ -293,6 +293,8 @@ export default {
     num: 'Num',
     scroll: 'Scroll',
     keyboardLedUnavailable: 'Keyboard LED status is disabled or unsupported',
+    toggleLock: 'Toggle {key}',
+    toggleLockFailed: 'Failed to toggle keyboard lock',
   },
   paste: {
     title: 'Paste Text',
