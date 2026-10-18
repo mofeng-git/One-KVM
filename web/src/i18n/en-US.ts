@@ -1136,15 +1136,14 @@ export default {
       openInNewTab: 'Open in New Tab',
       shell: 'Shell',
     },
-    gostc: {
-      title: 'GOSTC NAT Traversal',
-      desc: 'NAT traversal via GOSTC',
-      addr: 'Server Address',
-      addrPlaceholder: 'Hostname or IP (required)',
-      addrRequired: 'Enter the GOSTC server address',
-      key: 'Client Key',
-      keyRequired: 'Enter the GOSTC client key',
-      tls: 'Enable TLS',
+    easyfrp: {
+      title: 'EasyFrp NAT Traversal',
+      desc: 'Connect to a tunnel service with the EasyFrp client',
+      urls: 'Client Connection URLs',
+      urlsPlaceholder: 'wss://example.com/client-key',
+      urlsHint: 'One full URL per line. Supports ws, wss, http, https and txt. Copy client URLs from the EasyFrp dashboard.',
+      urlsRequired: 'Enter an EasyFrp client connection URL',
+      urlsInvalid: 'Enter valid ws/wss/http/https/txt URLs with a client key path',
     },
     easytier: {
       title: 'Easytier Network',

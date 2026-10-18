@@ -8,10 +8,10 @@ use typeshare::typeshare;
 
 use crate::error::{AppError, Result};
 use crate::extensions::{
-    validate_easytier_config, validate_extension_config, validate_frpc_config,
-    validate_gostc_config, EasytierConfig, EasytierConfigMode, EasytierInfo, ExtensionId,
-    ExtensionInfo, ExtensionLogs, ExtensionsStatus, FrpProxyType, FrpcConfig, FrpcConfigMode,
-    FrpcInfo, GostcConfig, GostcInfo, TtydConfig, TtydInfo,
+    validate_easyfrp_config, validate_easytier_config, validate_extension_config,
+    validate_frpc_config, EasyfrpConfig, EasyfrpInfo, EasytierConfig, EasytierConfigMode,
+    EasytierInfo, ExtensionId, ExtensionInfo, ExtensionLogs, ExtensionsStatus, FrpProxyType,
+    FrpcConfig, FrpcConfigMode, FrpcInfo, TtydConfig, TtydInfo,
 };
 use crate::state::AppState;
 
@@ -29,10 +29,10 @@ pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<Extensi
             status: mgr.status(ExtensionId::Ttyd).await,
             config: config.extensions.ttyd.clone(),
         },
-        gostc: GostcInfo {
-            available: mgr.check_available(ExtensionId::Gostc),
-            status: mgr.status(ExtensionId::Gostc).await,
-            config: config.extensions.gostc.clone(),
+        easyfrp: EasyfrpInfo {
+            available: mgr.check_available(ExtensionId::Easyfrp),
+            status: mgr.status(ExtensionId::Easyfrp).await,
+            config: config.extensions.easyfrp.clone(),
         },
         easytier: EasytierInfo {
             available: mgr.check_available(ExtensionId::Easytier),
@@ -134,11 +134,9 @@ pub struct TtydConfigUpdate {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct GostcConfigUpdate {
+pub struct EasyfrpConfigUpdate {
     pub enabled: Option<bool>,
-    pub addr: Option<String>,
-    pub key: Option<String>,
-    pub tls: Option<bool>,
+    pub control_urls: Option<Vec<String>>,
 }
 
 #[typeshare]
@@ -209,52 +207,46 @@ pub async fn update_ttyd_config(
     Ok(Json(new_config.extensions.ttyd.clone()))
 }
 
-pub async fn update_gostc_config(
+pub async fn update_easyfrp_config(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<GostcConfigUpdate>,
-) -> Result<Json<GostcConfig>> {
+    Json(req): Json<EasyfrpConfigUpdate>,
+) -> Result<Json<EasyfrpConfig>> {
     let current_config = state.config.get();
-    let was_enabled = current_config.extensions.gostc.enabled;
-    let mut next_gostc = current_config.extensions.gostc.clone();
+    let was_enabled = current_config.extensions.easyfrp.enabled;
+    let mut next_easyfrp = current_config.extensions.easyfrp.clone();
 
     if let Some(enabled) = req.enabled {
-        next_gostc.enabled = enabled;
+        next_easyfrp.enabled = enabled;
     }
-    if let Some(ref addr) = req.addr {
-        next_gostc.addr = addr.clone();
-    }
-    if let Some(ref key) = req.key {
-        next_gostc.key = key.clone();
-    }
-    if let Some(tls) = req.tls {
-        next_gostc.tls = tls;
+    if let Some(ref urls) = req.control_urls {
+        next_easyfrp.control_urls = urls.iter().map(|url| url.trim().to_string()).collect();
     }
 
-    if next_gostc.enabled {
-        bad_request(validate_gostc_config(&next_gostc))?;
+    if next_easyfrp.enabled {
+        bad_request(validate_easyfrp_config(&next_easyfrp))?;
     }
 
     state
         .config
         .update(|config| {
-            config.extensions.gostc = next_gostc.clone();
+            config.extensions.easyfrp = next_easyfrp.clone();
         })
         .await?;
 
     let new_config = state.config.get();
-    let is_enabled = new_config.extensions.gostc.enabled;
+    let is_enabled = new_config.extensions.easyfrp.enabled;
 
     if was_enabled && !is_enabled {
-        state.extensions.stop(ExtensionId::Gostc).await.ok();
-    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Gostc) {
+        state.extensions.stop(ExtensionId::Easyfrp).await.ok();
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Easyfrp) {
         state
             .extensions
-            .start(ExtensionId::Gostc, &new_config.extensions)
+            .start(ExtensionId::Easyfrp, &new_config.extensions)
             .await
             .ok();
     }
 
-    Ok(Json(new_config.extensions.gostc.clone()))
+    Ok(Json(new_config.extensions.easyfrp.clone()))
 }
 
 pub async fn update_easytier_config(

@@ -11,6 +11,6 @@ pub use manager::TTYD_SOCKET_PATH;
 pub use manager::TTYD_TCP_ADDR;
 pub use types::*;
 pub(crate) use validation::{
-    validate_easytier_config, validate_extension_config, validate_frpc_config,
-    validate_gostc_config,
+    validate_easyfrp_config, validate_easytier_config, validate_extension_config,
+    validate_frpc_config,
 };

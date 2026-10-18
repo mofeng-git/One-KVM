@@ -196,11 +196,9 @@ export interface TtydConfig {
 	shell: string;
 }
 
-export interface GostcConfig {
+export interface EasyfrpConfig {
 	enabled: boolean;
-	addr: string;
-	key: string;
-	tls: boolean;
+	control_urls: string[];
 }
 
 export enum EasytierConfigMode {
@@ -252,7 +250,7 @@ export interface FrpcConfig {
 
 export interface ExtensionsConfig {
 	ttyd: TtydConfig;
-	gostc: GostcConfig;
+	easyfrp: EasyfrpConfig;
 	easytier: EasytierConfig;
 	frpc: FrpcConfig;
 }
@@ -489,7 +487,7 @@ export interface ExtensionInfo {
 
 export enum ExtensionId {
 	Ttyd = "ttyd",
-	Gostc = "gostc",
+	Easyfrp = "easyfrp",
 	Easytier = "easytier",
 	Frpc = "frpc",
 }
@@ -505,10 +503,10 @@ export interface TtydInfo {
 	config: TtydConfig;
 }
 
-export interface GostcInfo {
+export interface EasyfrpInfo {
 	available: boolean;
 	status: ExtensionStatus;
-	config: GostcConfig;
+	config: EasyfrpConfig;
 }
 
 export interface FrpcInfo {
@@ -519,7 +517,7 @@ export interface FrpcInfo {
 
 export interface ExtensionsStatus {
 	ttyd: TtydInfo;
-	gostc: GostcInfo;
+	easyfrp: EasyfrpInfo;
 	easytier: EasytierInfo;
 	frpc: FrpcInfo;
 }
@@ -541,11 +539,9 @@ export interface FrpcConfigUpdate {
 	custom_toml?: string;
 }
 
-export interface GostcConfigUpdate {
+export interface EasyfrpConfigUpdate {
 	enabled?: boolean;
-	addr?: string;
-	key?: string;
-	tls?: boolean;
+	control_urls?: string[];
 }
 
 /** OTG USB device descriptor configuration update */

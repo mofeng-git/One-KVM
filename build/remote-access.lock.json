@@ -1,0 +1,74 @@
+{
+  "tools": {
+    "easyfrp": {
+      "version": "v3.1.1",
+      "binaries": [
+        "easyfrpc"
+      ],
+      "assets": {
+        "arm": {
+          "archive": "easyfrpc_linux_arm_7.tar.gz",
+          "url": "https://github.com/SianHH/easyfrp/releases/download/v3.1.1/easyfrpc_linux_arm_7.tar.gz",
+          "sha256": "98fa5c95a01295b59043d2869251a63249d286813b66544389f80d6fa3b07ae6"
+        },
+        "aarch64": {
+          "archive": "easyfrpc_linux_arm64_v8.0.tar.gz",
+          "url": "https://github.com/SianHH/easyfrp/releases/download/v3.1.1/easyfrpc_linux_arm64_v8.0.tar.gz",
+          "sha256": "cbd6c21fcd4d1921ee86879a4e90f1abffeb49324cbf8b31b1fc4581523b34d9"
+        },
+        "x86_64": {
+          "archive": "easyfrpc_linux_amd64_v1.tar.gz",
+          "url": "https://github.com/SianHH/easyfrp/releases/download/v3.1.1/easyfrpc_linux_amd64_v1.tar.gz",
+          "sha256": "e744618a57305c3a6a866cc2e08ca09da22dad1cd1a4aa5216ab10ebf7ba16ec"
+        }
+      }
+    },
+    "easytier": {
+      "version": "v2.6.4",
+      "binaries": [
+        "easytier-core",
+        "easytier-cli"
+      ],
+      "assets": {
+        "arm": {
+          "archive": "easytier-linux-armv7hf-v2.6.4.zip",
+          "url": "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-linux-armv7hf-v2.6.4.zip",
+          "sha256": "af0186ce95ffbe90b0e9dc8df0e9a01563f59e94ea52212651950c34dc35ac37"
+        },
+        "aarch64": {
+          "archive": "easytier-linux-aarch64-v2.6.4.zip",
+          "url": "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-linux-aarch64-v2.6.4.zip",
+          "sha256": "f533ec25a7ea714e09f645615012200278058525795cc3bb690ff011aec1a70f"
+        },
+        "x86_64": {
+          "archive": "easytier-linux-x86_64-v2.6.4.zip",
+          "url": "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-linux-x86_64-v2.6.4.zip",
+          "sha256": "61b659eaedba658fa66fe47d17e1426cdd77e5d02fa15fed447bb4357c09dfd6"
+        }
+      }
+    },
+    "frp": {
+      "version": "v0.71.1",
+      "binaries": [
+        "frpc"
+      ],
+      "assets": {
+        "arm": {
+          "archive": "frp_0.71.1_linux_arm_hf.tar.gz",
+          "url": "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_arm_hf.tar.gz",
+          "sha256": "a40116f15f2a05b7001f985f1f1ccb2570e2aa41329b06de76a82e71495786db"
+        },
+        "aarch64": {
+          "archive": "frp_0.71.1_linux_arm64.tar.gz",
+          "url": "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_arm64.tar.gz",
+          "sha256": "8edf590b0c396fa42f9c147121a76af83cfc2002b08f5aef0ea1008c43482019"
+        },
+        "x86_64": {
+          "archive": "frp_0.71.1_linux_amd64.tar.gz",
+          "url": "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_amd64.tar.gz",
+          "sha256": "1d9875210972a5d1a62b2dc4c48df45ab0af05d3ca1b5e494a014428259df803"
+        }
+      }
+    }
+  }
+}

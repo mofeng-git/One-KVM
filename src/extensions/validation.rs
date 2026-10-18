@@ -1,8 +1,8 @@
 use toml_edit::DocumentMut;
 
 use super::types::{
-    EasytierConfig, EasytierConfigMode, ExtensionId, ExtensionsConfig, FrpProxyType, FrpcConfig,
-    FrpcConfigMode, GostcConfig,
+    EasyfrpConfig, EasytierConfig, EasytierConfigMode, ExtensionId, ExtensionsConfig, FrpProxyType,
+    FrpcConfig, FrpcConfigMode,
 };
 
 pub(crate) fn validate_extension_config(
@@ -11,15 +11,36 @@ pub(crate) fn validate_extension_config(
 ) -> Result<(), String> {
     match id {
         ExtensionId::Ttyd => Ok(()),
-        ExtensionId::Gostc => validate_gostc_config(&config.gostc),
+        ExtensionId::Easyfrp => validate_easyfrp_config(&config.easyfrp),
         ExtensionId::Easytier => validate_easytier_config(&config.easytier),
         ExtensionId::Frpc => validate_frpc_config(&config.frpc),
     }
 }
 
-pub(crate) fn validate_gostc_config(config: &GostcConfig) -> Result<(), String> {
-    require_non_empty(config.addr.trim(), "GOSTC server address is required")?;
-    require_non_empty(config.key.as_str(), "GOSTC client key is required")
+pub(crate) fn validate_easyfrp_config(config: &EasyfrpConfig) -> Result<(), String> {
+    if config.control_urls.is_empty() {
+        return Err("EasyFrp control URL is required".to_string());
+    }
+    for value in &config.control_urls {
+        let value = value.trim();
+        if value.chars().any(char::is_whitespace) {
+            return Err("EasyFrp control URL must not contain whitespace".to_string());
+        }
+        let url =
+            reqwest::Url::parse(value).map_err(|_| "EasyFrp control URL is invalid".to_string())?;
+        if !matches!(url.scheme(), "ws" | "wss" | "http" | "https" | "txt")
+            || url.host_str().is_none()
+            || url.path().trim_matches('/').is_empty()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(
+                "EasyFrp requires a ws/wss/http/https/txt URL with a client key path".to_string(),
+            );
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_easytier_config(config: &EasytierConfig) -> Result<(), String> {
@@ -79,6 +100,36 @@ fn validate_full_toml(extension_name: &str, config: &str) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn easyfrp_accepts_documented_control_protocols() {
+        for scheme in ["ws", "wss", "http", "https", "txt"] {
+            let config = EasyfrpConfig {
+                enabled: true,
+                control_urls: vec![format!("{scheme}://example.com/client-key")],
+            };
+            assert!(validate_easyfrp_config(&config).is_ok());
+        }
+    }
+
+    #[test]
+    fn easyfrp_rejects_missing_keys_and_non_connection_arguments() {
+        for urls in [
+            vec![],
+            vec![""],
+            vec!["--help"],
+            vec!["wss://example.com/"],
+            vec!["file:///tmp/config"],
+            vec!["wss://example.com/key with spaces"],
+            vec!["wss://example.com/key", "invalid"],
+        ] {
+            let config = EasyfrpConfig {
+                enabled: true,
+                control_urls: urls.into_iter().map(str::to_string).collect(),
+            };
+            assert!(validate_easyfrp_config(&config).is_err());
+        }
+    }
 
     #[test]
     fn validates_easytier_full_configuration() {

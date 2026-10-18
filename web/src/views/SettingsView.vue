@@ -434,13 +434,13 @@ const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
 const extensionLogs = ref<Record<string, string[]>>({
   ttyd: [],
-  gostc: [],
+  easyfrp: [],
   easytier: [],
   frpc: [],
 })
 const showLogs = ref<Record<string, boolean>>({
   ttyd: false,
-  gostc: false,
+  easyfrp: false,
   easytier: false,
   frpc: false,
 })
@@ -449,7 +449,7 @@ const showTerminalDialog = ref(false)
 
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
-  gostc: { enabled: false, addr: '', key: '', tls: true },
+  easyfrp: { enabled: false, control_urls: [] as string[] },
   easytier: {
     enabled: false,
     config_mode: EasytierConfigMode.Quick,
@@ -477,9 +477,27 @@ const extConfig = ref({
   },
 })
 
-const gostcValidationMessage = computed(() => {
-  if (!extConfig.value.gostc.addr?.trim()) return t('extensions.gostc.addrRequired')
-  if (!extConfig.value.gostc.key) return t('extensions.gostc.keyRequired')
+const easyfrpUrlsText = computed({
+  get: () => extConfig.value.easyfrp.control_urls.join('\n'),
+  set: (value: string) => {
+    extConfig.value.easyfrp.control_urls = value.split(/\r?\n/).map(url => url.trim()).filter(Boolean)
+  },
+})
+
+const easyfrpValidationMessage = computed(() => {
+  const urls = extConfig.value.easyfrp.control_urls
+  if (urls.length === 0) return t('extensions.easyfrp.urlsRequired')
+  for (const value of urls) {
+    try {
+      const url = new URL(value)
+      if (/\s/.test(value) || !['ws:', 'wss:', 'http:', 'https:', 'txt:'].includes(url.protocol)
+        || !url.hostname || !url.pathname.replace(/\//g, '') || url.username || url.password || url.hash) {
+        return t('extensions.easyfrp.urlsInvalid')
+      }
+    } catch {
+      return t('extensions.easyfrp.urlsInvalid')
+    }
+  }
   return ''
 })
 
@@ -1698,7 +1716,7 @@ async function loadExtensions() {
         enabled: ttyd.enabled,
         shell: ttyd.shell,
       }
-      extConfig.value.gostc = { ...extensions.value.gostc.config }
+      extConfig.value.easyfrp = { ...extensions.value.easyfrp.config }
       const easytier = extensions.value.easytier.config
       extConfig.value.easytier = {
         enabled: easytier.enabled,
@@ -1733,7 +1751,7 @@ async function loadExtensions() {
   }
 }
 
-type ExtensionConfigId = 'ttyd' | 'gostc' | 'easytier' | 'frpc'
+type ExtensionConfigId = 'ttyd' | 'easyfrp' | 'easytier' | 'frpc'
 type ValidatedExtensionConfigId = Exclude<ExtensionConfigId, 'ttyd'>
 
 async function startExtension(id: ExtensionConfigId) {
@@ -1774,8 +1792,8 @@ async function saveExtensionConfig(id: ExtensionConfigId) {
   try {
     if (id === 'ttyd') {
       await extensionsApi.updateTtyd(extConfig.value.ttyd)
-    } else if (id === 'gostc') {
-      await extensionsApi.updateGostc(extConfig.value.gostc)
+    } else if (id === 'easyfrp') {
+      await extensionsApi.updateEasyfrp(extConfig.value.easyfrp)
     } else if (id === 'easytier') {
       await extensionsApi.updateEasytier(extConfig.value.easytier)
     } else if (id === 'frpc') {
@@ -2052,8 +2070,8 @@ function showValidationError(message: string): boolean {
 
 function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
   let message = ''
-  if (id === 'gostc') {
-    message = gostcValidationMessage.value
+  if (id === 'easyfrp') {
+    message = easyfrpValidationMessage.value
   } else if (id === 'easytier') {
     message = easytierValidationMessage.value
   } else {
@@ -4430,31 +4448,31 @@ watch(isWindows, () => {
               <CardHeader>
                 <div class="flex items-center justify-between">
                   <div class="space-y-1.5">
-                    <CardTitle>{{ t('extensions.gostc.title') }}</CardTitle>
-                    <CardDescription>{{ t('extensions.gostc.desc') }}</CardDescription>
+                    <CardTitle>{{ t('extensions.easyfrp.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.easyfrp.desc') }}</CardDescription>
                   </div>
-                  <Badge :variant="extensions?.gostc?.available ? 'default' : 'destructive'">
-                    {{ extensions?.gostc?.available ? t('extensions.available') : t('extensions.unavailable') }}
+                  <Badge :variant="extensions?.easyfrp?.available ? 'default' : 'destructive'">
+                    {{ extensions?.easyfrp?.available ? t('extensions.available') : t('extensions.unavailable') }}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div v-if="!extensions?.gostc?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'gostc.exe' : '/usr/bin/gostc' }) }}
+                <div v-if="!extensions?.easyfrp?.available" class="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+                  {{ t('extensions.binaryNotFound', { path: isWindows ? 'easyfrpc.exe' : '/usr/bin/easyfrpc' }) }}
                 </div>
                 <template v-else>
                   <!-- Status and controls -->
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                      <div :class="['size-2 rounded-full', getExtStatusClass(extensions?.gostc?.status)]" />
-                      <span class="text-sm">{{ getExtStatusText(extensions?.gostc?.status) }}</span>
+                      <div :class="['size-2 rounded-full', getExtStatusClass(extensions?.easyfrp?.status)]" />
+                      <span class="text-sm">{{ getExtStatusText(extensions?.easyfrp?.status) }}</span>
                     </div>
                     <div class="flex gap-2">
                       <Button
-                        v-if="!isExtRunning(extensions?.gostc?.status)"
+                        v-if="!isExtRunning(extensions?.easyfrp?.status)"
                         size="sm"
-                        @click="startExtension('gostc')"
-                        :disabled="extensionsLoading || !!gostcValidationMessage"
+                        @click="startExtension('easyfrp')"
+                        :disabled="extensionsLoading || !!easyfrpValidationMessage"
                       >
                         <Play class="size-4 mr-1" />
                         {{ t('extensions.start') }}
@@ -4463,7 +4481,7 @@ watch(isWindows, () => {
                         v-else
                         size="sm"
                         variant="outline"
-                        @click="stopExtension('gostc')"
+                        @click="stopExtension('easyfrp')"
                         :disabled="extensionsLoading"
                       >
                         <Square class="size-4 mr-1" />
@@ -4476,36 +4494,24 @@ watch(isWindows, () => {
                   <div class="grid gap-4">
                     <div class="flex items-center justify-between">
                       <Label>{{ t('extensions.autoStart') }}</Label>
-                      <Switch v-model="extConfig.gostc.enabled" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                      <Switch v-model="extConfig.easyfrp.enabled" :disabled="isExtRunning(extensions?.easyfrp?.status)" />
                     </div>
                     <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
+                      <Label class="sm:text-right">{{ t('extensions.easyfrp.urls') }}</Label>
                       <div class="sm:col-span-3 space-y-1">
-                        <Input v-model="extConfig.gostc.addr" :placeholder="t('extensions.gostc.addrPlaceholder')" :disabled="isExtRunning(extensions?.gostc?.status)" />
-                        <p v-if="extConfig.gostc.enabled && !extConfig.gostc.addr?.trim()" class="text-xs text-destructive">{{ t('extensions.gostc.addrRequired') }}</p>
-                      </div>
-                    </div>
-                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
-                      <div class="sm:col-span-3 space-y-1">
-                        <Input v-model="extConfig.gostc.key" type="password" autocomplete="off" :disabled="isExtRunning(extensions?.gostc?.status)" />
-                        <p v-if="extConfig.gostc.enabled && !extConfig.gostc.key" class="text-xs text-destructive">{{ t('extensions.gostc.keyRequired') }}</p>
-                      </div>
-                    </div>
-                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.gostc.tls') }}</Label>
-                      <div class="sm:col-span-3">
-                        <Switch v-model="extConfig.gostc.tls" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                        <Textarea v-model="easyfrpUrlsText" :rows="3" autocomplete="off" :spellcheck="false" :placeholder="t('extensions.easyfrp.urlsPlaceholder')" :disabled="isExtRunning(extensions?.easyfrp?.status)" />
+                        <p class="text-xs text-muted-foreground">{{ t('extensions.easyfrp.urlsHint') }}</p>
+                        <p v-if="extConfig.easyfrp.enabled && easyfrpValidationMessage" class="text-xs text-destructive">{{ easyfrpValidationMessage }}</p>
                       </div>
                     </div>
                   </div>
                   <!-- Logs -->
                   <div class="space-y-2">
-                    <Collapsible v-model:open="showLogs.gostc" @update:open="open => open && refreshExtensionLogs('gostc')">
-                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.gostc ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
+                    <Collapsible v-model:open="showLogs.easyfrp" @update:open="open => open && refreshExtensionLogs('easyfrp')">
+                      <CollapsibleTrigger as-child><Button type="button" variant="ghost" size="sm" class="gap-2 text-muted-foreground"><ChevronRight :class="['size-4 transition-transform', showLogs.easyfrp ? 'rotate-90' : '']" />{{ t('extensions.viewLogs') }}</Button></CollapsibleTrigger>
                       <CollapsibleContent class="space-y-2 pt-2">
-                      <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.gostc || []).join('\n') || t('extensions.noLogs') }}</pre>
-                      <Button variant="ghost" size="sm" @click="refreshExtensionLogs('gostc')">
+                      <pre class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono">{{ (extensionLogs.easyfrp || []).join('\n') || t('extensions.noLogs') }}</pre>
+                      <Button variant="ghost" size="sm" @click="refreshExtensionLogs('easyfrp')">
                         <RefreshCw class="size-3 mr-1" />
                         {{ t('common.refresh') }}
                       </Button>
@@ -4514,8 +4520,8 @@ watch(isWindows, () => {
                   </div>
                 </template>
               </CardContent>
-              <CardFooter v-if="extensions?.gostc?.available" class="border-t pt-4 justify-end">
-                <Button :disabled="loading || isExtRunning(extensions?.gostc?.status)" @click="saveExtensionConfig('gostc')">
+              <CardFooter v-if="extensions?.easyfrp?.available" class="border-t pt-4 justify-end">
+                <Button :disabled="loading || isExtRunning(extensions?.easyfrp?.status)" @click="saveExtensionConfig('easyfrp')">
                   <Loader2 v-if="loading" class="size-4 mr-2 animate-spin" /><Check v-else-if="saved" class="size-4 mr-2" /><Save v-else class="size-4 mr-2" />{{ loading ? t('actionbar.applying') : saved ? t('common.success') : t('common.save') }}
                 </Button>
               </CardFooter>

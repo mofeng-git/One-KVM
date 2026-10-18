@@ -1135,15 +1135,14 @@ export default {
       openInNewTab: '在新标签页打开',
       shell: 'Shell',
     },
-    gostc: {
-      title: 'GOSTC 内网穿透',
-      desc: '通过 GOSTC 实现内网穿透',
-      addr: '服务器地址',
-      addrPlaceholder: '主机名或 IP（必填）',
-      addrRequired: '请填写 GOSTC 服务器地址',
-      key: '客户端密钥',
-      keyRequired: '请填写 GOSTC 客户端密钥',
-      tls: '启用 TLS',
+    easyfrp: {
+      title: 'EasyFrp 内网穿透',
+      desc: '使用 EasyFrp 客户端连接穿透服务',
+      urls: '客户端连接 URL',
+      urlsPlaceholder: 'wss://example.com/client-key',
+      urlsHint: '每行一个完整连接 URL，支持 ws、wss、http、https、txt。请从 EasyFrp 管理端复制客户端地址。',
+      urlsRequired: '请填写 EasyFrp 客户端连接 URL',
+      urlsInvalid: '请填写带客户端密钥路径的有效 ws/wss/http/https/txt URL',
     },
     easytier: {
       title: 'Easytier 组网',
