@@ -6,7 +6,6 @@ use tokio::sync::broadcast;
 use crate::atx::AtxController;
 use crate::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
-use crate::computer_use::ComputerUseManager;
 use crate::config::{self, AppConfig, ConfigStore};
 use crate::db::{open_database_pool, DatabasePool};
 use crate::events::EventBus;
@@ -152,7 +151,6 @@ impl RuntimeBuilder {
             );
         }
 
-        let computer_use = ComputerUseManager::new(config_store.clone(), hid.clone());
         let state = AppState::new(
             db,
             config_store.clone(),
@@ -164,7 +162,6 @@ impl RuntimeBuilder {
             stream_manager,
             webrtc,
             hid,
-            computer_use,
             #[cfg(unix)]
             msd,
             atx,

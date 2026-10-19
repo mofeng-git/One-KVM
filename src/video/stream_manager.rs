@@ -732,6 +732,22 @@ impl VideoStreamManager {
         }
     }
 
+    pub(crate) async fn snapshot_pipeline(
+        &self,
+    ) -> Result<Arc<crate::video::pipeline::SharedVideoPipeline>> {
+        // Preserve a running pipeline's negotiated/source-following geometry.
+        // Syncing the MJPEG configuration on every snapshot could restart WebRTC viewers.
+        if self.webrtc_streamer.get_pipeline_config().await.is_none() {
+            if self.streamer.state().await == StreamerState::Uninitialized {
+                self.streamer.init_auto().await?;
+            }
+            self.sync_webrtc_capture_source("for snapshot").await;
+        }
+        self.webrtc_streamer
+            .ensure_video_pipeline_for_external()
+            .await
+    }
+
     /// Get the current video encoding configuration from the shared pipeline
     pub async fn get_encoding_config(
         &self,

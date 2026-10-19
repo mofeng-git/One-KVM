@@ -27,9 +27,9 @@ impl ConfigStore {
     }
 
     pub async fn load(&self) -> Result<()> {
-        let (mut config, removed_legacy_totp) = Self::load_config(&self.pool).await?;
+        let (mut config, removed_legacy_fields) = Self::load_config(&self.pool).await?;
         config.enforce_invariants();
-        if removed_legacy_totp {
+        if removed_legacy_fields {
             Self::save_config_to_db(&self.pool, &config).await?;
         }
         self.cache.store(Arc::new(config));
@@ -46,7 +46,9 @@ impl ConfigStore {
             Some((json,)) => {
                 let mut value: serde_json::Value =
                     serde_json::from_str(&json).map_err(|e| AppError::Config(e.to_string()))?;
-                let mut removed = false;
+                let mut removed = value
+                    .as_object_mut()
+                    .is_some_and(|object| object.remove("computer_use").is_some());
                 if let Some(auth) = value
                     .get_mut("auth")
                     .and_then(|value| value.as_object_mut())
@@ -173,6 +175,60 @@ mod tests {
         let config = store2.get();
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
+    }
+
+    #[tokio::test]
+    async fn mcp_key_remains_readable_after_config_reload() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("mcp-key.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        let key = crate::mcp::generate_key();
+        store
+            .update(|config| {
+                config.mcp.enabled = true;
+                config.mcp.api_key_hash = Some(crate::mcp::hash_key(&key));
+                config.mcp.api_key = Some(key.clone());
+            })
+            .await
+            .unwrap();
+        let reloaded = ConfigStore::new(db.clone_pool());
+        reloaded.load().await.unwrap();
+        assert_eq!(reloaded.get().mcp.api_key.as_deref(), Some(key.as_str()));
+        assert_eq!(
+            reloaded.get().mcp.api_key_hash,
+            store.get().mcp.api_key_hash
+        );
+    }
+
+    #[tokio::test]
+    async fn loading_legacy_agent_cleans_persisted_model_credentials() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("legacy-agent.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let value =
+            serde_json::json!({"computer_use":{"enabled":true,"api_key":"legacy-model-secret"}});
+        sqlx::query("INSERT INTO config (key, value) VALUES ('app_config', ?1)")
+            .bind(value.to_string())
+            .execute(db.pool())
+            .await
+            .unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        assert!(!store.get().mcp.enabled);
+        assert!(store.get().mcp.api_key_hash.is_none());
+        let (persisted,): (String,) =
+            sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
+        assert!(!persisted.contains("legacy-model-secret"));
+        assert!(!persisted.contains("computer_use"));
     }
 
     #[tokio::test]

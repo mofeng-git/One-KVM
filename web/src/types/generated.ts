@@ -185,12 +185,6 @@ export interface WebConfig {
 	ssl_key_path?: string;
 }
 
-export interface ComputerUseConfig {
-	enabled: boolean;
-	base_url: string;
-	model: string;
-}
-
 export interface TtydConfig {
 	enabled: boolean;
 	shell: string;
@@ -329,7 +323,7 @@ export interface AppConfig {
 	audio: AudioConfig;
 	stream: StreamConfig;
 	web: WebConfig;
-	computer_use: ComputerUseConfig;
+	mcp: McpConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
 	vnc: VncConfig;
@@ -403,58 +397,6 @@ export interface Ch9329DescriptorState {
 	product_enabled: boolean;
 	serial_enabled: boolean;
 	config_mode_available: boolean;
-}
-
-export interface ComputerUseConfigResponse {
-	enabled: boolean;
-	base_url: string;
-	model: string;
-	api_key_configured: boolean;
-	api_key_source: string;
-}
-
-export interface ComputerUseConfigUpdate {
-	enabled?: boolean;
-	base_url?: string;
-	model?: string;
-	api_key?: string;
-	clear_api_key?: boolean;
-}
-
-export interface ComputerUsePoint {
-	x: number;
-	y: number;
-}
-
-export interface ComputerUseScreenshot {
-	data_url: string;
-	width: number;
-	height: number;
-}
-
-export enum ComputerUseSessionStatus {
-	Idle = "idle",
-	WaitingScreenshot = "waiting_screenshot",
-	Thinking = "thinking",
-	Executing = "executing",
-	Completed = "completed",
-	Failed = "failed",
-	Stopped = "stopped",
-}
-
-export interface ComputerUseSessionSummary {
-	id?: string;
-	status: ComputerUseSessionStatus;
-	prompt?: string;
-	step: number;
-	last_error?: string;
-	final_message?: string;
-}
-
-export interface ComputerUseStartRequest {
-	prompt: string;
-	continue_conversation?: boolean;
-	client_id: string;
 }
 
 export interface EasytierConfigUpdate {
@@ -898,8 +840,8 @@ export enum CanonicalKey {
 	MetaRight = "MetaRight",
 }
 
-export enum ComputerUseButton {
-	Left = "left",
-	Middle = "middle",
-	Right = "right",
+
+export interface McpConfig {
+	enabled: boolean;
+	requests_per_second: number;
 }

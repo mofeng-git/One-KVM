@@ -2,12 +2,6 @@ import { request, uploadRequest, ApiError } from './request'
 import type {
   CanonicalKey,
   Ch9329DescriptorState,
-  ComputerUseButton,
-  ComputerUseConfigResponse,
-  ComputerUseConfigUpdate,
-  ComputerUseSessionStatus,
-  ComputerUseSessionSummary,
-  ComputerUseStartRequest,
 } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 import type { StreamSignalReason, StreamState } from '@/types/websocket'
@@ -508,48 +502,17 @@ export const hidApi = {
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
-export type ComputerUseStatus = ComputerUseSessionStatus
-
-export type ComputerUseAction =
-  | { type: 'click'; x: number; y: number; button?: ComputerUseButton }
-  | { type: 'double_click'; x: number; y: number; button?: ComputerUseButton }
-  | { type: 'move'; x: number; y: number }
-  | { type: 'drag'; path: Array<{ x: number; y: number }>; button?: ComputerUseButton }
-  | { type: 'scroll'; x: number; y: number; dx?: number; dy?: number }
-  | { type: 'type'; text: string }
-  | { type: 'keypress'; keys: string[] }
-  | { type: 'wait'; ms: number }
-  | { type: 'screenshot' }
-
-export type ComputerUseConversationMessage =
-  | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string }
-
-export type ComputerUseConfig = ComputerUseConfigResponse
-
-export type ComputerUseSession = ComputerUseSessionSummary
-
-export const computerUseApi = {
-  config: () => request<ComputerUseConfig>('/config/computer-use'),
-
-  updateConfig: (data: ComputerUseConfigUpdate) =>
-    request<ComputerUseConfig>('/config/computer-use', {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
-
-  session: () => request<ComputerUseSession>('/computer-use/session'),
-
-  start: (data: ComputerUseStartRequest) =>
-    request<ComputerUseSession>('/computer-use/session', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  stop: () =>
-    request<ComputerUseSession>('/computer-use/session/stop', {
-      method: 'POST',
-    }),
+export interface McpConfig {
+  enabled: boolean
+  requests_per_second: number
+  api_key_configured: boolean
+  endpoint: string
+  api_key?: string
+}
+export const mcpApi = {
+  config: () => request<McpConfig>('/config/mcp'),
+  updateConfig: (data: { enabled?: boolean; requests_per_second?: number; regenerate_api_key?: boolean }) =>
+    request<McpConfig>('/config/mcp', { method: 'PATCH', body: JSON.stringify(data) }),
 }
 
 export const atxApi = {
@@ -884,13 +847,6 @@ export type {
   StreamMode,
   EncoderType,
   BitratePreset,
-  ComputerUseButton,
-  ComputerUseConfigResponse,
-  ComputerUseConfigUpdate,
-  ComputerUseScreenshot,
-  ComputerUseSessionStatus,
-  ComputerUseSessionSummary,
-  ComputerUseStartRequest,
 } from '@/types/generated'
 
 export const audioApi = {

@@ -6,8 +6,8 @@ pub use crate::rustdesk::config::RustDeskConfig;
 
 mod atx;
 mod common;
-mod computer_use;
 mod hid;
+mod mcp;
 mod otg_network;
 mod stream;
 mod uac;
@@ -16,8 +16,8 @@ mod web;
 
 pub use atx::*;
 pub use common::*;
-pub use computer_use::*;
 pub use hid::*;
+pub use mcp::*;
 pub use otg_network::*;
 pub use stream::*;
 pub use uac::*;
@@ -39,7 +39,7 @@ pub struct AppConfig {
     pub audio: AudioConfig,
     pub stream: StreamConfig,
     pub web: WebConfig,
-    pub computer_use: ComputerUseConfig,
+    pub mcp: McpConfig,
     pub extensions: ExtensionsConfig,
     pub rustdesk: RustDeskConfig,
     pub vnc: VncConfig,
@@ -60,6 +60,7 @@ impl AppConfig {
             self.hid.mouse_absolute = false;
         }
         self.atx.normalize();
+        self.mcp.requests_per_second = self.mcp.requests_per_second.clamp(1, 100);
     }
 
     pub fn apply_platform_defaults(&mut self) {

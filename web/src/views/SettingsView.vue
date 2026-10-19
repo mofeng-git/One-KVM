@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import McpSettingsCard from '@/components/McpSettingsCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
 import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
@@ -192,6 +193,7 @@ const SETTINGS_SECTION_IDS = [
   'other',
   'ext-ttyd',
   'third-party-access',
+  'mcp',
   'ext-remote-access',
   'about',
 ] as const
@@ -225,6 +227,7 @@ const navGroups = computed(() => [
     title: t('settings.extensions'),
     items: [
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
+      { id: 'mcp', label: t('mcp.title'), icon: Bot },
       { id: 'third-party-access', label: t('extensions.thirdPartyAccess.title'), icon: ScreenShare },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
     ]
@@ -2942,18 +2945,13 @@ watch(isWindows, () => {
                   </Label>
                   <Switch id="feature-web-terminal" v-model="featureVisibility.webTerminal" />
                 </div>
-                <div class="flex items-center justify-between gap-4 px-3 py-3">
-                  <Label for="feature-computer-use" class="flex min-w-0 items-center gap-2 font-normal">
-                    <Bot class="size-4 shrink-0 text-muted-foreground" />
-                    <span class="truncate">{{ t('settings.computerUseAgent') }}</span>
-                  </Label>
-                  <Switch id="feature-computer-use" v-model="featureVisibility.computerUse" />
-                </div>
               </CardContent>
             </Card>
           </div>
 
           <!-- Account Section -->
+          <McpSettingsCard v-if="activeSection === 'mcp'" />
+
           <div v-show="activeSection === 'account'" class="space-y-4">
             <Card>
               <CardHeader>

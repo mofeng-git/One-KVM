@@ -39,10 +39,7 @@ use super::mjpeg_admission::{MjpegAdmissionPolicy, MjpegAdmissionStage, MjpegDro
 #[path = "dmabuf.rs"]
 mod dmabuf;
 
-#[cfg(any(
-    test,
-    all(target_os = "linux", feature = "rkmpp")
-))]
+#[cfg(any(test, all(target_os = "linux", feature = "rkmpp")))]
 fn rkmpp_dma_eligible(
     backend: Option<EncoderBackend>,
     codec: VideoEncoderType,
@@ -524,6 +521,7 @@ struct CachedH26xParameterSets {
 
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
+    pub(crate) snapshot_slot: crate::video::snapshot::SnapshotSlot,
     config: RwLock<SharedVideoPipelineConfig>,
     subscribers: ParkingRwLock<Vec<Arc<VideoSubscriber>>>,
     stats: ParkingMutex<SharedVideoPipelineStats>,
@@ -588,6 +586,7 @@ impl SharedVideoPipeline {
         let (h264_profile_tx, h264_profile_rx) = watch::channel(None);
 
         let pipeline = Arc::new(Self {
+            snapshot_slot: Default::default(),
             config: RwLock::new(config),
             subscribers: ParkingRwLock::new(Vec::new()),
             stats: ParkingMutex::new(SharedVideoPipelineStats::default()),
@@ -1698,6 +1697,15 @@ impl SharedVideoPipeline {
 
                     owned.truncate(frame_size);
                     capture_sequence = capture_sequence.wrapping_add(1);
+                    if pipeline.snapshot_slot.pending() {
+                        pipeline.snapshot_slot.publish(&VideoFrame::from_vec(
+                            owned.clone(),
+                            resolution,
+                            pixel_format,
+                            stride,
+                            capture_sequence,
+                        ));
+                    }
 
                     if parallel_mjpeg_decode
                         && pixel_format == PixelFormat::Mjpeg
@@ -2079,7 +2087,10 @@ impl SharedVideoPipeline {
     }
 }
 
-fn compact_strided_frame_for_encoder(frame: &VideoFrame, data: &[u8]) -> Result<Option<Vec<u8>>> {
+pub(crate) fn compact_strided_frame_for_encoder(
+    frame: &VideoFrame,
+    data: &[u8],
+) -> Result<Option<Vec<u8>>> {
     let width = frame.resolution.width as usize;
     let height = frame.resolution.height as usize;
     let stride = frame.stride as usize;

@@ -7,9 +7,9 @@ mod account;
 mod atx_api;
 mod audio_api;
 mod auth;
-mod computer_use;
 mod hid_api;
 mod inventory;
+mod mcp;
 #[cfg(unix)]
 mod msd_api;
 mod setup;
@@ -22,9 +22,9 @@ pub use account::*;
 pub use atx_api::*;
 pub use audio_api::*;
 pub use auth::*;
-pub use computer_use::*;
 pub use hid_api::*;
 pub use inventory::*;
+pub use mcp::*;
 #[cfg(unix)]
 pub use msd_api::*;
 pub use setup::*;

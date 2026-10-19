@@ -256,6 +256,22 @@ fn run(
         }
 
         let capture = active.as_mut().expect("opened capture");
+        if pipeline.snapshot_slot.pending() {
+            let mut raw = Vec::new();
+            if let Ok(meta) = capture.stream.next_into(&mut raw) {
+                raw.truncate(meta.bytes_used);
+                if meta.bytes_used >= MIN_CAPTURE_FRAME_SIZE {
+                    pipeline.snapshot_slot.publish(&VideoFrame::from_vec(
+                        raw,
+                        capture.stream.resolution(),
+                        capture.stream.format(),
+                        capture.stream.stride(),
+                        meta.sequence,
+                    ));
+                }
+            }
+            continue;
+        }
         let reservations = pipeline.reserve_outputs();
         let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
             match capture.encoder.as_mut().expect("active encoder") {

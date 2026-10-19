@@ -206,18 +206,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/watchdog",
             patch(handlers::config::update_watchdog_config),
         )
-        .route("/config/computer-use", get(handlers::computer_use_config))
         .route(
-            "/config/computer-use",
-            patch(handlers::computer_use_update_config),
+            "/config/mcp",
+            get(handlers::mcp_config).patch(handlers::mcp_update_config),
         )
-        .route("/computer-use/session", get(handlers::computer_use_session))
-        .route("/computer-use/session", post(handlers::computer_use_start))
-        .route(
-            "/computer-use/session/stop",
-            post(handlers::computer_use_stop),
-        )
-        .route("/ws/computer-use", any(handlers::computer_use_ws))
         // Auth configuration
         .route("/config/auth", get(handlers::config::get_auth_config))
         .route("/config/auth", patch(handlers::config::update_auth_config))
@@ -382,6 +374,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Main router
     let main_router = Router::new()
         .nest("/api", api_routes)
+        .merge(crate::mcp::router(state.mcp.clone(), state.config.clone()))
         .merge(static_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)

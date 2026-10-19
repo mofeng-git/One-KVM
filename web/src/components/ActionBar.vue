@@ -38,7 +38,6 @@ import {
   BarChart3,
   Terminal,
   MoreHorizontal,
-  Bot,
   ChevronUp,
   ChevronDown,
   Keyboard,
@@ -73,7 +72,6 @@ const props = defineProps<{
   showPower?: boolean
   atxEnabled?: boolean
   showTerminal?: boolean
-  showComputerUse?: boolean
   showPasteText?: boolean
   showMic?: boolean
   scaleMode?: VideoScaleMode
@@ -111,7 +109,6 @@ const emit = defineEmits<{
   (e: 'reset'): void
   (e: 'wol', macAddress: string): void
   (e: 'openTerminal'): void
-  (e: 'openComputerUse'): void
 }>()
 
 const pasteOpen = ref(false)
@@ -166,7 +163,7 @@ let layoutResizeObserver: ResizeObserver | null = null
 
 type CollapsibleItem =
   | 'msd' | 'atx' | 'paste'
-  | 'stats' | 'terminal' | 'settings' | 'ai'
+  | 'stats' | 'terminal' | 'settings'
 
 interface ItemSpec {
   id: CollapsibleItem
@@ -180,7 +177,6 @@ const ITEM_SPECS: ItemSpec[] = [
   { id: 'stats',     side: 'right' },
   { id: 'terminal',  side: 'right' },
   { id: 'settings',  side: 'right' },
-  { id: 'ai',        side: 'right' },
 ]
 
 const measuredWidths = ref<Map<CollapsibleItem, { icon: number; label: number }>>(new Map())
@@ -256,7 +252,7 @@ watch(locale, () => {
   void measureLayout()
 })
 
-watch([() => props.layout, () => props.showComputerUse, floatingCollapsed, minimalDisplayControls], () => {
+watch([() => props.layout, floatingCollapsed, minimalDisplayControls], () => {
   // Layout changes can move this bar while its portal based controls are open.
   // Close every transient surface first so no old portal remains attached to
   // the document after the new layout is painted.
@@ -296,7 +292,6 @@ const collapsibleItems = computed(() => {
     if (item.id === 'paste' && !showPasteText.value) return false
     if (item.id === 'stats' && !showStats.value) return false
     if (item.id === 'terminal' && props.showTerminal === false) return false
-    if (item.id === 'ai' && props.showComputerUse === false) return false
     return true
   })
   return items
@@ -309,7 +304,7 @@ const visibleSet = computed(() => {
   if (isSidebarLayout.value) {
     // Reserve More and a gap between the two groups before assigning vertical slots.
     let available = barHeight.value - coreHeight.value - fixedHeight.value - actionHeight.value - 16
-    const priority: CollapsibleItem[] = ['paste', 'settings', 'msd', 'atx', 'stats', 'terminal', 'ai']
+    const priority: CollapsibleItem[] = ['paste', 'settings', 'msd', 'atx', 'stats', 'terminal']
     for (const id of priority) {
       if (!collapsibleItems.value.some(item => item.id === id)) continue
       if (available < actionHeight.value) break
@@ -567,26 +562,7 @@ const hasRightOverflow = computed(() => {
           </TooltipProvider>
         </div>
 
-        <!-- Computer Use - Optional -->
-        <TooltipProvider v-if="isVisible('ai')">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-8 gap-1.5 text-xs"
-                :aria-label="t('computerUse.title')"
-                @click="emit('openComputerUse')"
-              >
-                <Bot class="size-3.5 sm:size-4" />
-                <span v-if="visibleSet.get('ai') === 'label'">AI</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{{ t('computerUse.title') }}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+
 
         <!-- Settings - Adaptive -->
         <div v-if="isVisible('settings')">
@@ -659,10 +635,6 @@ const hasRightOverflow = computed(() => {
             >
               <Terminal class="size-4 mr-2" />
               {{ t('actionbar.webTerminal') }}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem v-if="!isFloatingLayout && props.showComputerUse !== false && !isVisible('ai')" @click="openFromOverflow(() => emit('openComputerUse'))">
-              <Bot class="size-4 mr-2" />{{ t('computerUse.title') }}
             </DropdownMenuItem>
 
             <!-- Settings -->
@@ -752,8 +724,6 @@ const hasRightOverflow = computed(() => {
       <!-- Settings -->
       <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" /></Button>
       <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" />{{ t('actionbar.settings') }}</Button>
-      <Button data-measure="ai-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Bot class="size-4" /></Button>
-      <Button data-measure="ai-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Bot class="size-4" />AI</Button>
     </div>
   </div>
 </template>

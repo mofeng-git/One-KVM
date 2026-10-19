@@ -9,6 +9,28 @@ use crate::error::{AppError, Result};
 
 const MAGIC_PACKET_SIZE: usize = 102;
 
+/// Validate and normalize the MAC formats accepted by the web and MCP APIs.
+pub fn normalize_wol_mac_address(mac_address: &str) -> Result<String> {
+    let normalized = mac_address.trim().replace('-', ":");
+    let normalized = if normalized.len() == 12 && normalized.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        normalized
+            .as_bytes()
+            .chunks(2)
+            .map(|b| std::str::from_utf8(b).unwrap())
+            .collect::<Vec<_>>()
+            .join(":")
+    } else {
+        normalized
+    };
+    let mac = parse_mac_address(&normalized)?;
+    Ok(mac
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(":"))
+}
+
 fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     let mac = mac.trim().to_uppercase();
     let parts: Vec<&str> = if mac.contains(':') {
@@ -137,6 +159,17 @@ mod tests {
         assert!(parse_mac_address("invalid").is_err());
         assert!(parse_mac_address("AA:BB:CC:DD:EE").is_err());
         assert!(parse_mac_address("AA:BB:CC:DD:EE:GG").is_err());
+    }
+
+    #[test]
+    fn normalizes_web_and_mcp_mac_formats() {
+        for value in [" aa-bb-cc-dd-ee-ff ", "aabbccddeeff", "AA:BB:CC:DD:EE:FF"] {
+            assert_eq!(
+                normalize_wol_mac_address(value).unwrap(),
+                "AA:BB:CC:DD:EE:FF"
+            );
+        }
+        assert!(normalize_wol_mac_address("invalid").is_err());
     }
 
     #[test]

@@ -11,14 +11,12 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
-import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout } from '@/composables/useConsoleLayout'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { getMicrophone } from '@/composables/useMicrophone'
-import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi, uacApi } from '@/api'
-import type { ComputerUseScreenshot, ComputerUseSession } from '@/api'
+import { streamApi, hidApi, atxApi, atxConfigApi, authApi, uacApi } from '@/api'
 import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
@@ -40,9 +38,7 @@ import ConsoleStatusSummary, { type ConsoleStatusItem } from '@/components/Conso
 import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
-import ComputerUseSheet from '@/components/ComputerUseSheet.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
-import type { ComputerUseTimelineItem, NewComputerUseTimelineItem } from '@/types/computerUseTimeline'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
@@ -119,11 +115,6 @@ function setVideoRotation(rotation: VideoRotation) {
   videoRotation.value = rotation
   localStorage.setItem('videoRotation', String(rotation))
 }
-const computerUseOpen = ref(false)
-const computerUseSession = ref<ComputerUseSession | null>(null)
-const computerUseTimeline = ref<ComputerUseTimelineItem[]>([])
-const computerUseConversationStarted = ref(false)
-let computerUseTimelineSeq = 0
 
 const videoRef = ref<HTMLImageElement | null>(null)
 const webrtcVideoRef = ref<HTMLVideoElement | null>(null)
@@ -165,11 +156,6 @@ interface ClientStat {
 const clientsStats = ref<Record<string, ClientStat>>({})
 
 const myClientId = generateUUID()
-
-const computerUseSocket = useComputerUseSocket({
-  onMessage: handleComputerUseMessage,
-  onScreenshotRequested: captureComputerUseFrame,
-})
 
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
 const pressedKeys = ref<CanonicalKey[]>([])
@@ -262,7 +248,6 @@ provideConsoleAppearance(consoleLayout)
 const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
 const showPower = computed(() => featureVisibility.value.power)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
-const showComputerUse = computed(() => featureVisibility.value.computerUse)
 const showPasteText = computed(() => featureVisibility.value.pasteText)
 
 const videoStatus = computed<ConnectionStatus>(() => {
@@ -749,7 +734,6 @@ watch(videoLoading, (loading) => {
   if (loading) clearVideoSourceSize()
 })
 
-const computerUsePanelVisible = computed(() => computerUseOpen.value && !isFullscreen.value)
 
 const showMsdStatusCard = computed(() => {
   return !!(systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329')
@@ -813,140 +797,6 @@ async function captureFrameOverlay() {
   }
 }
 
-async function captureComputerUseFrame(): Promise<ComputerUseScreenshot | null> {
-  try {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-
-    const MAX_WIDTH = 1920
-
-    if (videoMode.value === 'mjpeg') {
-      const img = videoRef.value
-      if (!img || !img.naturalWidth || !img.naturalHeight) return null
-
-      const scale = Math.min(1, MAX_WIDTH / img.naturalWidth)
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-    } else {
-      const video = webrtcVideoRef.value
-      if (!video || !video.videoWidth || !video.videoHeight) return null
-
-      const scale = Math.min(1, MAX_WIDTH / video.videoWidth)
-      canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
-      canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    }
-
-    return {
-      data_url: canvas.toDataURL('image/jpeg', 0.82),
-      width: canvas.width,
-      height: canvas.height,
-    }
-  } catch (err) {
-    console.error('[ComputerUse] Failed to capture frame:', err)
-    return null
-  }
-}
-
-function handleComputerUseMessage(message: ComputerUseServerMessage) {
-  switch (message.type) {
-    case 'session_updated':
-      computerUseSession.value = message.session
-      if (message.session.last_error) {
-        pushComputerUseTimeline({ type: 'error', text: message.session.last_error })
-      }
-      if (message.session.final_message) {
-        pushComputerUseTimeline({ type: 'assistant', text: message.session.final_message })
-      }
-      break
-    case 'screenshot_captured':
-      pushComputerUseTimeline({ type: 'screenshot', screenshot: message.screenshot })
-      break
-    case 'actions_executed':
-      pushComputerUseTimeline({ type: 'actions_executed', actions: message.actions })
-      break
-    case 'step_started':
-      pushComputerUseTimeline({ type: 'reasoning', text: '', completed: false, failed: false })
-      break
-    case 'reasoning_delta': {
-      const last = computerUseTimeline.value[computerUseTimeline.value.length - 1]
-      if (last?.type === 'reasoning' && !last.completed) {
-        last.text += message.delta
-      } else {
-        pushComputerUseTimeline({ type: 'reasoning', text: message.delta, completed: false, failed: false })
-      }
-      break
-    }
-    case 'reasoning_completed': {
-      for (let index = computerUseTimeline.value.length - 1; index >= 0; index -= 1) {
-        const item = computerUseTimeline.value[index]
-        if (item?.type !== 'reasoning' || item.completed) continue
-        if (!message.failed && !item.text) {
-          computerUseTimeline.value.splice(index, 1)
-        } else {
-          item.completed = true
-          item.failed = message.failed
-        }
-        break
-      }
-      break
-    }
-    case 'error':
-      pushComputerUseTimeline({ type: 'error', text: message.message })
-      toast.error(t('computerUse.errors.taskFailed'), { description: message.message })
-      break
-  }
-}
-
-function pushComputerUseTimeline(item: NewComputerUseTimelineItem) {
-  const last = computerUseTimeline.value[computerUseTimeline.value.length - 1]
-  if (last?.type === item.type) {
-    if ('text' in last && 'text' in item && last.text === item.text) return
-    if (last.type === 'actions_executed' && item.type === 'actions_executed' && JSON.stringify(last.actions) === JSON.stringify(item.actions)) return
-  }
-  computerUseTimeline.value.push({
-    id: `${Date.now()}-${computerUseTimelineSeq++}`,
-    ...item,
-  } as ComputerUseTimelineItem)
-}
-
-function clearComputerUseTimeline() {
-  computerUseTimeline.value = []
-  computerUseConversationStarted.value = false
-}
-
-async function openComputerUse() {
-  if (!showComputerUse.value) return
-  computerUseOpen.value = true
-  await computerUseSocket.connect().catch(() => {})
-  computerUseSession.value = await computerUseApi.session().catch(() => computerUseSession.value)
-}
-
-async function startComputerUse(prompt: string) {
-  try {
-    await computerUseSocket.connect()
-    pushComputerUseTimeline({ type: 'user', text: prompt })
-    computerUseSession.value = await computerUseApi.start({
-      prompt,
-      continue_conversation: computerUseConversationStarted.value,
-      client_id: computerUseSocket.clientId,
-    })
-    computerUseConversationStarted.value = true
-  } catch (err: any) {
-    pushComputerUseTimeline({ type: 'error', text: err?.message ?? t('computerUse.errors.startFailed') })
-    toast.error(t('computerUse.errors.startFailed'), { description: err?.message })
-  }
-}
-
-async function stopComputerUse() {
-  try {
-    computerUseSession.value = await computerUseApi.stop()
-  } catch (err: any) {
-    toast.error(t('computerUse.errors.stopFailed'), { description: err?.message })
-  }
-}
 
 function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise<boolean> {
   return new Promise((resolve) => {
@@ -2004,9 +1854,6 @@ watch(showTerminal, (visible) => {
   if (!visible) showTerminalDialog.value = false
 })
 
-watch(showComputerUse, (visible) => {
-  if (!visible) computerUseOpen.value = false
-})
 
 watch(() => webrtc.audioTrack.value, async (track) => {
   videoDebugLog('WebRTC audio track ref changed', {
@@ -3299,10 +3146,10 @@ onUnmounted(() => {
               :show-stats="showConnectionStats"
               :show-terminal="showTerminal"
               :terminal-running="!!ttydStatus?.running"
-              :show-computer-use="showComputerUse"
+
               @open-stats="openStatsSheet"
               @open-terminal="openTerminal"
-              @open-computer-use="openComputerUse"
+
             />
             <div v-if="consoleLayout === 'current'" class="hidden md:flex items-center gap-2">
               <StatusCard
@@ -3397,7 +3244,7 @@ onUnmounted(() => {
         :show-power="showPower"
         :atx-enabled="systemStore.atx?.available === true"
         :show-terminal="showTerminal"
-        :show-computer-use="showComputerUse"
+
         :show-paste-text="showPasteText"
         :show-mic="microphoneTransferEnabled"
         :scale-mode="videoScaleMode"
@@ -3414,7 +3261,7 @@ onUnmounted(() => {
         @reset="handleReset"
         @wol="handleWol"
         @open-terminal="openTerminal"
-        @open-computer-use="openComputerUse"
+
       />
     </div>
     <div
@@ -3425,7 +3272,6 @@ onUnmounted(() => {
       <div class="relative flex h-full w-full min-w-0 items-stretch gap-3">
         <div
           class="flex min-w-0 flex-1 items-center justify-center transition-all duration-300"
-          :class="{ 'md:pr-1': computerUsePanelVisible }"
         >
         <div
           ref="videoWorkspaceRef"
@@ -3635,17 +3481,7 @@ onUnmounted(() => {
           </div>
         </div>
         </div>
-        <ComputerUseSheet
-          v-if="showComputerUse"
-          v-model:open="computerUseOpen"
-          :connected="computerUseSocket.connected.value"
-          :ws-error="computerUseSocket.error.value"
-          :session="computerUseSession"
-          :timeline="computerUseTimeline"
-          @start="startComputerUse"
-          @stop="stopComputerUse"
-          @clear="clearComputerUseTimeline"
-        />
+
       </div>
     </div>
     <Teleport :to="virtualKeyboardAttached ? '#keyboard-anchor' : 'body'" :disabled="virtualKeyboardAttached">

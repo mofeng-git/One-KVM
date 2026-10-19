@@ -120,6 +120,10 @@ enum QueuedHidEvent {
     Mouse(MouseEvent),
     Consumer(ConsumerEvent),
     Reset,
+    Confirmed(
+        Box<QueuedHidEvent>,
+        tokio::sync::oneshot::Sender<Result<()>>,
+    ),
 }
 
 pub struct HidController {
@@ -311,6 +315,36 @@ impl HidController {
             ));
         }
         self.enqueue_event(QueuedHidEvent::Consumer(event)).await
+    }
+
+    /// MCP uses acknowledged events so timing starts after the hardware send.
+    pub async fn send_keyboard_confirmed(&self, event: KeyboardEvent) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Keyboard(event)).await
+    }
+
+    pub async fn send_mouse_confirmed(&self, event: MouseEvent) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Mouse(event)).await
+    }
+
+    pub async fn reset_confirmed(&self) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Reset).await
+    }
+
+    async fn send_confirmed(&self, event: QueuedHidEvent) -> Result<()> {
+        if !self.backend_available.load(Ordering::Acquire) {
+            return Err(AppError::ServiceUnavailable(
+                "HID backend not available".into(),
+            ));
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.enqueue_event(QueuedHidEvent::Confirmed(Box::new(event), tx))
+            .await?;
+        tokio::time::timeout(Duration::from_secs(3), rx)
+            .await
+            .map_err(|_| AppError::ServiceUnavailable("HID hardware send timed out".into()))?
+            .map_err(|_| {
+                AppError::ServiceUnavailable("HID event discarded before sending".into())
+            })?
     }
 
     pub async fn bluetooth_status(&self) -> Result<serde_json::Value> {
@@ -625,6 +659,18 @@ impl HidController {
     }
 }
 
+#[cfg(test)]
+pub(crate) async fn test_controller(backend: Arc<dyn HidBackend>) -> Arc<HidController> {
+    #[cfg(unix)]
+    let controller = Arc::new(HidController::new(HidBackendType::None, None));
+    #[cfg(not(unix))]
+    let controller = Arc::new(HidController::new(HidBackendType::None));
+    *controller.backend.write().await = Some(backend);
+    controller.sync_runtime_state_from_backend().await;
+    controller.start_event_worker().await;
+    controller
+}
+
 async fn apply_backend_runtime_state(
     backend_type: &Arc<RwLock<HidBackendType>>,
     runtime_state: &Arc<RwLock<HidRuntimeState>>,
@@ -645,35 +691,34 @@ async fn process_hid_event(
     event: QueuedHidEvent,
     backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
 ) {
-    let backend_opt = backend.read().await.clone();
-    let backend = match backend_opt {
-        Some(b) => b,
-        None => return,
+    let (event, reply) = match event {
+        QueuedHidEvent::Confirmed(event, reply) => (*event, Some(reply)),
+        event => (event, None),
     };
-
-    let backend_for_send = backend.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        futures::executor::block_on(async move {
-            match event {
-                QueuedHidEvent::Keyboard(ev) => backend_for_send.send_keyboard(ev).await,
-                QueuedHidEvent::Mouse(ev) => backend_for_send.send_mouse(ev).await,
-                QueuedHidEvent::Consumer(ev) => backend_for_send.send_consumer(ev).await,
-                QueuedHidEvent::Reset => backend_for_send.reset().await,
-            }
+    let backend = backend.read().await.clone();
+    let result = match backend {
+        Some(backend) => tokio::task::spawn_blocking(move || {
+            futures::executor::block_on(async move {
+                match event {
+                    QueuedHidEvent::Keyboard(ev) => backend.send_keyboard(ev).await,
+                    QueuedHidEvent::Mouse(ev) => backend.send_mouse(ev).await,
+                    QueuedHidEvent::Consumer(ev) => backend.send_consumer(ev).await,
+                    QueuedHidEvent::Reset => backend.reset().await,
+                    QueuedHidEvent::Confirmed(..) => unreachable!("nested confirmed HID event"),
+                }
+            })
         })
-    })
-    .await;
-
-    let result = match result {
-        Ok(r) => r,
-        Err(_) => return,
+        .await
+        .unwrap_or_else(|_| Err(AppError::ServiceUnavailable("HID worker failed".into()))),
+        None => Err(AppError::ServiceUnavailable(
+            "HID backend not available".into(),
+        )),
     };
-
-    match result {
-        Ok(_) => {}
-        Err(e) => {
-            warn!("HID event processing failed: {}", e);
-        }
+    if let Err(error) = &result {
+        warn!("HID event processing failed: {}", error);
+    }
+    if let Some(reply) = reply {
+        let _ = reply.send(result);
     }
 }
 

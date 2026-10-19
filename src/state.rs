@@ -4,7 +4,6 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use crate::atx::AtxController;
 use crate::audio::AudioController;
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
-use crate::computer_use::ComputerUseManager;
 use crate::config::ConfigStore;
 use crate::db::DatabasePool;
 #[cfg(unix)]
@@ -15,6 +14,7 @@ use crate::events::{
 };
 use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
+use crate::mcp::{McpHardware, McpService};
 #[cfg(unix)]
 use crate::msd::MsdController;
 #[cfg(unix)]
@@ -72,7 +72,7 @@ pub struct AppState {
     pub stream_manager: Arc<VideoStreamManager>,
     pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
-    pub computer_use: Arc<ComputerUseManager>,
+    pub mcp: Arc<McpService>,
     #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
     pub atx: Arc<RwLock<Option<AtxController>>>,
@@ -104,7 +104,6 @@ impl AppState {
         stream_manager: Arc<VideoStreamManager>,
         webrtc: Arc<WebRtcStreamer>,
         hid: Arc<HidController>,
-        computer_use: Arc<ComputerUseManager>,
         #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
@@ -138,6 +137,23 @@ impl AppState {
             data_dir.clone(),
         );
 
+        let atx = Arc::new(RwLock::new(atx));
+        let config_apply_locks = ConfigApplyLocks::new();
+        let hardware = McpHardware {
+            config: config.clone(),
+            atx: atx.clone(),
+            wol_history: db.wol_history(),
+            #[cfg(unix)]
+            msd: msd.clone(),
+            #[cfg(unix)]
+            otg_lock: config_apply_locks.otg.clone(),
+        };
+        let mcp = McpService::new(
+            config.clone(),
+            hid.clone(),
+            stream_manager.clone(),
+            hardware,
+        );
         Arc::new(Self {
             db,
             config,
@@ -149,10 +165,10 @@ impl AppState {
             stream_manager,
             webrtc,
             hid,
-            computer_use,
+            mcp,
             #[cfg(unix)]
             msd,
-            atx: Arc::new(RwLock::new(atx)),
+            atx,
             audio,
             usb,
             remote_access,
@@ -163,7 +179,7 @@ impl AppState {
             watchdog: Arc::new(WatchdogController::new()),
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
-            config_apply_locks: ConfigApplyLocks::new(),
+            config_apply_locks,
             data_dir,
             #[cfg(unix)]
             uac_playback,

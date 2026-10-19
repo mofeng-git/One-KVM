@@ -165,6 +165,7 @@ impl StreamerState {
 pub struct Streamer {
     config: RwLock<StreamerConfig>,
     mjpeg_handler: Arc<MjpegStreamHandler>,
+    pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
     current_device: RwLock<Option<VideoDeviceInfo>>,
     state: RwLock<StreamerState>,
     start_lock: tokio::sync::Mutex<()>,
@@ -197,6 +198,7 @@ impl Streamer {
         Arc::new(Self {
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
@@ -221,6 +223,7 @@ impl Streamer {
         Arc::new(Self {
             config: RwLock::new(config),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
@@ -1236,6 +1239,7 @@ impl Streamer {
                     });
                 }
 
+                self.snapshot_slot.publish(&frame);
                 self.mjpeg_handler.update_frame(frame);
 
                 fps_frame_count += 1;
@@ -1534,6 +1538,7 @@ impl Default for Streamer {
         Self {
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
