@@ -8,7 +8,7 @@ import { useSystemStore } from '@/stores/system'
 import { request } from '@/api/request'
 import type { HidConfig, MsdConfig } from '@/types/generated'
 import { useHidConnection } from '@/composables/useHidConnection'
-import { deviceRequest, matchesSelection, selectionFrom, type HidSelection } from '@/lib/hidGuide'
+import { deviceRequest, matchesSelection, selectionFrom, supportsOtgFunctions, type HidSelection } from '@/lib/hidGuide'
 import HidDriverForm from './HidDriverForm.vue'
 import HidWiringDiagram from './HidWiringDiagram.vue'
 import HidDeviceOverview from './HidDeviceOverview.vue'
@@ -127,7 +127,7 @@ async function load() {
     if (!systemStore.platform) await systemStore.fetchSystemInfo()
     await refreshHid()
     draft.value = selectionFrom(store.hid)
-    if (otgSupported.value && store.hid?.backend === 'otg') {
+    if (otgSupported.value && supportsOtgFunctions(store.hid?.backend)) {
       const [msd, network, audio] = await Promise.all([refreshMsd(), readConfig<{ enabled: boolean }>('/config/otg-network'), readConfig<{ enabled: boolean }>('/config/uac')])
       disabledUsb.value = [msd.enabled ? t('hidGuide.msd') : '', network.enabled ? t('hidGuide.network') : '', audio.enabled ? t('hidGuide.audio') : ''].filter(Boolean)
     }
@@ -162,7 +162,7 @@ onMounted(load)
           </template>
           <p v-if="connectionTimedOut && !ready && draft.backend !== 'bluetooth'" class="text-sm text-warning">{{ t('hidGuide.connectionTimeout') }}</p>
         </template>
-        <p v-if="!applied && store.hid?.backend === 'otg' && draft.backend !== 'otg' && disabledUsb.length" class="text-sm text-warning">{{ t('hidGuide.disableUsb', { functions: disabledUsb.join('、') }) }}</p>
+        <p v-if="!applied && supportsOtgFunctions(store.hid?.backend) && !supportsOtgFunctions(draft.backend) && disabledUsb.length" class="text-sm text-warning">{{ t('hidGuide.disableUsb', { functions: disabledUsb.join('、') }) }}</p>
         <p v-if="!applied && draft.backend === 'bluetooth'" class="text-sm text-warning">{{ t('hidGuide.resetWarning') }}</p>
         <p v-if="error" role="alert" class="text-sm text-destructive break-words">{{ error }}</p>
         <DialogFooter class="gap-2">

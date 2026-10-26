@@ -37,6 +37,27 @@ pub enum HidBackendType {
     None,
 }
 
+impl From<&crate::config::HidConfig> for HidBackendType {
+    fn from(config: &crate::config::HidConfig) -> Self {
+        use crate::config::HidBackend;
+        match config.backend {
+            HidBackend::Otg => Self::Otg {
+                macos_drag: config.mouse_macos_drag,
+            },
+            HidBackend::Ch9329 | HidBackend::Ch9329Otg => Self::Ch9329 {
+                port: config.ch9329_port.clone(),
+                baud_rate: config.ch9329_baudrate,
+                hybrid_mouse: config.ch9329_hybrid_mouse,
+                macos_drag: config.mouse_macos_drag,
+            },
+            HidBackend::Bluetooth => Self::Bluetooth {
+                config: config.bluetooth.clone(),
+            },
+            HidBackend::None => Self::None,
+        }
+    }
+}
+
 impl HidBackendType {
     pub fn name_str(&self) -> &str {
         match self {

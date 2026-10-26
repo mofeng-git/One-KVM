@@ -164,7 +164,7 @@ export const systemApi = {
     video_width?: number
     video_height?: number
     video_fps?: number
-    hid_backend?: 'otg' | 'ch9329' | 'bluetooth' | 'none'
+    hid_backend?: 'otg' | 'ch9329' | 'ch9329_otg' | 'bluetooth' | 'none'
     hid_bluetooth?: { adapter: string; name: string }
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
@@ -411,6 +411,8 @@ export const hidApi = {
     request<{
       available: boolean
       backend: string
+      configured_backend: string
+      otg?: import('@/lib/hidGuide').OtgDeviceStatus
       initialized: boolean
       online: boolean
       supports_absolute_mouse: boolean

@@ -56,9 +56,35 @@ impl BluetoothHidConfig {
 pub enum HidBackend {
     Otg,
     Ch9329,
+    #[serde(rename = "ch9329_otg")]
+    Ch9329Otg,
     Bluetooth,
     #[default]
     None,
+}
+
+impl HidBackend {
+    pub fn uses_ch9329(&self) -> bool {
+        matches!(self, Self::Ch9329 | Self::Ch9329Otg)
+    }
+
+    pub fn uses_otg_hid(&self) -> bool {
+        matches!(self, Self::Otg)
+    }
+
+    pub fn supports_otg_functions(&self) -> bool {
+        matches!(self, Self::Otg | Self::Ch9329Otg)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Otg => "otg",
+            Self::Ch9329 => "ch9329",
+            Self::Ch9329Otg => "ch9329_otg",
+            Self::Bluetooth => "bluetooth",
+            Self::None => "none",
+        }
+    }
 }
 
 #[typeshare]
@@ -141,6 +167,15 @@ pub struct OtgHidFunctions {
 }
 
 impl OtgHidFunctions {
+    pub fn disabled() -> Self {
+        Self {
+            keyboard: false,
+            mouse_relative: false,
+            mouse_absolute: false,
+            consumer: false,
+        }
+    }
+
     pub fn full() -> Self {
         Self {
             keyboard: true,
@@ -264,15 +299,49 @@ impl HidConfig {
     }
 
     pub fn effective_otg_keyboard_leds(&self) -> bool {
-        self.otg_keyboard_leds && self.effective_otg_functions().keyboard
+        self.otg_keyboard_leds && self.constrained_otg_functions().keyboard
     }
 
     pub fn constrained_otg_functions(&self) -> OtgHidFunctions {
-        self.effective_otg_functions()
+        if self.backend.uses_otg_hid() {
+            self.effective_otg_functions()
+        } else {
+            OtgHidFunctions::disabled()
+        }
+    }
+
+    pub fn validate_platform(&self) -> crate::error::Result<()> {
+        if self.backend == HidBackend::Ch9329Otg && !cfg!(target_os = "linux") {
+            return Err(crate::error::AppError::BadRequest(
+                "CH9329 + OTG requires Linux with a USB device controller".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_composite_selection(&self) -> crate::error::Result<()> {
+        if self.backend != HidBackend::Ch9329Otg {
+            return Ok(());
+        }
+        if self.ch9329_port.trim().is_empty()
+            || ![9600, 19200, 38400, 57600, 115200].contains(&self.ch9329_baudrate)
+        {
+            return Err(crate::error::AppError::BadRequest(
+                "CH9329 + OTG requires a serial port and a supported baudrate".into(),
+            ));
+        }
+        if !self.otg_udc.as_ref().is_some_and(|udc| {
+            !udc.trim().is_empty() && !udc.contains('/') && udc != "." && udc != ".."
+        }) {
+            return Err(crate::error::AppError::BadRequest(
+                "CH9329 + OTG requires an explicit USB device controller".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub fn validate_otg_functions(&self) -> crate::error::Result<()> {
-        if self.backend != HidBackend::Otg {
+        if !self.backend.uses_otg_hid() {
             return Ok(());
         }
 
@@ -293,7 +362,7 @@ impl HidConfig {
 
     #[inline]
     pub fn resolved_otg_udc(&self) -> Option<String> {
-        if self.backend != HidBackend::Otg {
+        if !self.backend.supports_otg_functions() {
             return None;
         }
         self.otg_udc
@@ -301,6 +370,9 @@ impl HidConfig {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .or_else(|| {
+                if !self.backend.uses_otg_hid() {
+                    return None;
+                }
                 #[cfg(unix)]
                 {
                     crate::otg::OtgGadgetManager::find_udc()
@@ -316,6 +388,53 @@ impl HidConfig {
 #[cfg(test)]
 mod bluetooth_tests {
     use super::*;
+    #[test]
+    fn composite_mode_preserves_usb_functions_and_saved_otg_profile() {
+        let mut config = crate::config::AppConfig::default();
+        config.hid.backend = HidBackend::Ch9329Otg;
+        config.hid.otg_profile = OtgHidProfile::LegacyKeyboard;
+        config.hid.otg_keyboard_leds = true;
+        config.hid.mouse_macos_drag = true;
+        config.msd.enabled = true;
+        config.otg_network.enabled = true;
+        config.uac.enabled = true;
+        config.enforce_invariants();
+        assert!(config.msd.enabled && config.otg_network.enabled && config.uac.enabled);
+        assert!(config.hid.constrained_otg_functions().is_empty());
+        assert!(!config.hid.effective_otg_keyboard_leds());
+        assert!(config.hid.validate_otg_functions().is_ok());
+        let saved = serde_json::to_value(&config.hid).unwrap();
+        assert_eq!(saved["backend"], "ch9329_otg");
+        assert_eq!(saved["otg_profile"], "legacy_keyboard");
+        config.hid = serde_json::from_value(saved).unwrap();
+        config.hid.backend = HidBackend::Otg;
+        assert!(config.hid.constrained_otg_functions().keyboard);
+        assert!(config.hid.effective_otg_keyboard_leds());
+        config.hid.backend = HidBackend::Ch9329;
+        config.enforce_invariants();
+        assert!(!config.msd.enabled && !config.otg_network.enabled && !config.uac.enabled);
+    }
+
+    #[test]
+    fn composite_selection_requires_both_devices_without_auto_udc_fallback() {
+        let mut config = HidConfig {
+            backend: HidBackend::Ch9329Otg,
+            ..Default::default()
+        };
+        assert!(config.validate_composite_selection().is_err());
+        assert!(config.resolved_otg_udc().is_none());
+        config.otg_udc = Some("test.udc".into());
+        assert!(config.validate_composite_selection().is_ok());
+        assert_eq!(config.resolved_otg_udc().as_deref(), Some("test.udc"));
+        for udc in ["", "../other", "/sys/class/udc/test", ".."] {
+            config.otg_udc = Some(udc.into());
+            assert!(config.validate_composite_selection().is_err());
+        }
+        config.otg_udc = Some("test.udc".into());
+        config.ch9329_port.clear();
+        assert!(config.validate_composite_selection().is_err());
+    }
+
     #[test]
     fn mouse_compatibility_defaults_alias_and_otg_validation() {
         let defaults: HidConfig = serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();

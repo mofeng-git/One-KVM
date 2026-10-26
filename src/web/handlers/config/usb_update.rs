@@ -47,6 +47,21 @@ where
     let requested_ch9329_descriptor = stage_update(&mut staged_config)?;
 
     staged_config.enforce_invariants();
+    staged_config.hid.validate_platform()?;
+    staged_config.hid.validate_composite_selection()?;
+    #[cfg(unix)]
+    if staged_config.hid.backend == HidBackend::Ch9329Otg
+        && (old_config.hid.backend != staged_config.hid.backend
+            || old_config.hid.otg_udc != staged_config.hid.otg_udc)
+        && !crate::otg::list_udc_devices()
+            .iter()
+            .any(|udc| Some(udc) == staged_config.hid.otg_udc.as_ref())
+    {
+        return Err(AppError::BadRequest(
+            "Selected USB device controller is missing".into(),
+        ));
+    }
+    super::atx::validate_serial_device_conflict(&staged_config.atx, &staged_config.hid)?;
     staged_config.hid.validate_otg_functions()?;
 
     #[cfg(unix)]
@@ -179,7 +194,7 @@ where
         }
 
         let descriptor_was_applied = if let Some(ref descriptor) = requested_ch9329_descriptor {
-            if staged_config.hid.backend == HidBackend::Ch9329 {
+            if staged_config.hid.backend.uses_ch9329() {
                 match state.hid.apply_ch9329_descriptor(descriptor).await {
                     Ok(actual) => {
                         staged_config.hid.ch9329_descriptor = actual.descriptor;
@@ -250,7 +265,7 @@ async fn rollback_after_failure(
     {
         rollback_errors.push(format!("runtime rollback failed: {error}"));
     }
-    if restore_descriptor && old_config.hid.backend == HidBackend::Ch9329 {
+    if restore_descriptor && old_config.hid.backend.uses_ch9329() {
         if let Err(error) = state
             .hid
             .apply_ch9329_descriptor(&old_config.hid.ch9329_descriptor)
@@ -275,6 +290,31 @@ mod tests {
     use super::*;
     use crate::config::HidBackend;
     use crate::web::handlers::config::types::Ch9329DescriptorConfigUpdate;
+
+    #[cfg(unix)]
+    #[test]
+    fn composite_advanced_features_can_be_submitted_in_one_usb_transaction() {
+        let request: super::super::types::OtgConfigUpdate = serde_json::from_value(serde_json::json!({
+            "hid": { "backend": "ch9329_otg", "ch9329_port": "/dev/ttyUSB1", "otg_udc": "test.udc" },
+            "msd": { "enabled": true },
+            "network": { "enabled": true },
+            "uac": { "enabled": true, "sample_rate": 48000, "channels": 2 }
+        })).unwrap();
+        let mut config = AppConfig::default();
+        stage_hid_config_update(&mut config.hid, request.hid.as_ref().unwrap()).unwrap();
+        request.msd.as_ref().unwrap().apply_to(&mut config.msd);
+        request
+            .network
+            .as_ref()
+            .unwrap()
+            .apply_to(&mut config.otg_network);
+        config.uac = request.uac.unwrap();
+        config.enforce_invariants();
+        assert!(config.msd.enabled && config.otg_network.enabled && config.uac.enabled);
+        assert!(config.hid.constrained_otg_functions().is_empty());
+        assert_eq!(config.hid.ch9329_port, "/dev/ttyUSB1");
+        assert_eq!(config.hid.otg_udc.as_deref(), Some("test.udc"));
+    }
 
     fn hid_update() -> HidConfigUpdate {
         HidConfigUpdate {

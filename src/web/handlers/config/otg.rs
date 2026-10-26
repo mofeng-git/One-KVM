@@ -2,7 +2,7 @@ use axum::{extract::State, Json};
 use serde::Serialize;
 use typeshare::typeshare;
 
-use crate::config::{HidConfig, MsdConfig, OtgNetworkConfig};
+use crate::config::{HidConfig, MsdConfig, OtgNetworkConfig, UacConfig};
 use crate::error::Result;
 use crate::otg::OtgNetworkStatus;
 use crate::web::state::UsbApiState;
@@ -16,6 +16,7 @@ pub struct OtgConfigResponse {
     pub hid: HidConfig,
     pub msd: MsdConfig,
     pub network: OtgNetworkConfig,
+    pub uac: UacConfig,
     pub status: OtgNetworkStatus,
 }
 
@@ -48,6 +49,10 @@ pub(super) async fn update_otg_config_inner(
         if let Some(ref update) = request.network {
             update.apply_to(&mut staged.otg_network);
         }
+        if let Some(ref uac) = request.uac {
+            uac.validate()?;
+            staged.uac = uac.clone();
+        }
 
         Ok(requested_ch9329_descriptor)
     })
@@ -57,6 +62,7 @@ pub(super) async fn update_otg_config_inner(
         hid: staged_config.hid,
         msd: staged_config.msd,
         network: staged_config.otg_network,
+        uac: staged_config.uac,
         status: state.otg.network_status().await,
     })
 }

@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 use crate::atx::AtxController;
 use crate::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
-use crate::config::{self, AppConfig, ConfigStore};
+use crate::config::{AppConfig, ConfigStore};
 use crate::db::{open_database_pool, DatabasePool};
 use crate::events::EventBus;
 use crate::extensions::ExtensionManager;
@@ -81,6 +81,7 @@ impl RuntimeBuilder {
             web_overrides,
         } = self;
         let (db, config_store, mut config) = load_runtime_config(&data_dir).await?;
+        config.hid.validate_platform()?;
         web_overrides.apply(&mut config);
 
         let sessions = SessionStore::new(config.auth.session_timeout_secs as i64);
@@ -400,26 +401,13 @@ async fn build_otg(config: &AppConfig) -> Arc<OtgService> {
         .await
     {
         tracing::warn!("Failed to apply OTG config: {}", error);
+        service.mark_degraded(error.to_string()).await;
     }
     service
 }
 
 fn hid_backend_type(config: &AppConfig) -> HidBackendType {
-    match config.hid.backend {
-        config::HidBackend::Otg => HidBackendType::Otg {
-            macos_drag: config.hid.mouse_macos_drag,
-        },
-        config::HidBackend::Ch9329 => HidBackendType::Ch9329 {
-            port: config.hid.ch9329_port.clone(),
-            baud_rate: config.hid.ch9329_baudrate,
-            hybrid_mouse: config.hid.ch9329_hybrid_mouse,
-            macos_drag: config.hid.mouse_macos_drag,
-        },
-        config::HidBackend::None => HidBackendType::None,
-        config::HidBackend::Bluetooth => HidBackendType::Bluetooth {
-            config: config.hid.bluetooth.clone(),
-        },
-    }
+    HidBackendType::from(&config.hid)
 }
 
 #[cfg(unix)]

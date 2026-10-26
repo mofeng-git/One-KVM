@@ -767,6 +767,60 @@ fn merge_pending_move(pending: &mut Option<MouseEvent>, event: MouseEvent) {
 #[cfg(test)]
 mod queue_tests {
     use super::*;
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn composite_otg_updates_and_rollback_preserve_hid_instance() {
+        let mut old = crate::config::AppConfig::default();
+        old.hid.backend = crate::config::HidBackend::Ch9329;
+        old.enforce_invariants();
+        let otg = Arc::new(OtgService::new());
+        let controller = Arc::new(HidController::new(
+            HidBackendType::from(&old.hid),
+            Some(otg.clone()),
+        ));
+        let pressed = Arc::new(AtomicBool::new(true));
+        let (runtime, _) = tokio::sync::watch::channel(());
+        let backend: Arc<dyn HidBackend> = Arc::new(TestBackend {
+            pressed: pressed.clone(),
+            reset_done: Arc::new(tokio::sync::Notify::new()),
+            runtime,
+        });
+        *controller.backend.write().await = Some(backend.clone());
+        let data = tempfile::tempdir().unwrap();
+        let coordinator = crate::runtime::UsbCoordinator::new(
+            controller.clone(),
+            otg,
+            Arc::new(RwLock::new(None)),
+            Arc::new(RwLock::new(None)),
+            Arc::new(EventBus::new()),
+            data.path().into(),
+        );
+        let mut new = old.clone();
+        new.hid.backend = crate::config::HidBackend::Ch9329Otg;
+        new.hid.otg_udc = Some("test.udc".into());
+        new.hid.otg_descriptor.product = "Advanced USB".into();
+        new.hid.otg_keyboard_leds = true;
+        coordinator.apply_config(&old, &new).await.unwrap();
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+        coordinator.apply_config(&new, &old).await.unwrap();
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+        assert!(pressed.load(Ordering::Acquire));
+        // Invalid OTG configuration must not touch the healthy input backend.
+        new.uac.enabled = true;
+        new.uac.sample_rate = 8000;
+        assert!(coordinator.apply_config(&old, &new).await.is_err());
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+    }
+
     #[tokio::test]
     async fn screen_resolution_updates_backend_and_retains_valid_dimensions() {
         #[cfg(unix)]

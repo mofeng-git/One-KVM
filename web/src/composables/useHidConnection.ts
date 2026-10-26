@@ -1,5 +1,6 @@
 import { ref, watch, onMounted, onUnmounted, onDeactivated, onActivated, type Ref } from 'vue'
 import type { hidApi } from '@/api'
+import { runtimeBackend } from '@/lib/hidGuide'
 import { request } from '@/api/request'
 import type { BluetoothStatus } from '@/types/bluetooth'
 export function useHidConnection(active: Ref<boolean>, backend: Ref<string | undefined>) {
@@ -26,8 +27,8 @@ export function useHidConnection(active: Ref<boolean>, backend: Ref<string | und
       if (hidResult.status === 'rejected') throw hidResult.reason
       if (btResult.status === 'rejected') throw btResult.reason
       const hid = hidResult.value, bt = btResult.value
-      status.value = hid.backend === backend.value ? hid : null
-      bluetooth.value = hid.backend === backend.value ? bt : null
+      status.value = hid.backend === runtimeBackend(backend.value) ? hid : null
+      bluetooth.value = hid.backend === runtimeBackend(backend.value) ? bt : null
       error.value = ''
     } catch (e) {
       if (own !== generation) return

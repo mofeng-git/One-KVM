@@ -149,8 +149,11 @@ fn detect_libcomposite_available(gadget_root: &std::path::Path) -> bool {
 
 /// OTG self-check status for troubleshooting USB gadget issues
 pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
-    let hid_backend_is_otg = matches!(config.hid.backend, crate::config::HidBackend::Otg);
-    let gadget_expected = hid_backend_is_otg || config.msd.enabled || config.otg_network.enabled;
+    let hid_backend_is_otg = config.hid.backend.uses_otg_hid();
+    let gadget_expected = hid_backend_is_otg
+        || config.msd.enabled
+        || config.otg_network.enabled
+        || config.uac.enabled;
     let mut checks = Vec::new();
 
     let build_response = |checks: Vec<OtgSelfCheckItem>,
@@ -173,7 +176,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             overall_ok: error_count == 0,
             error_count,
             warning_count,
-            hid_backend: format!("{:?}", config.hid.backend).to_lowercase(),
+            hid_backend: config.hid.backend.as_str().to_string(),
             selected_udc,
             bound_udc,
             udc_state,
@@ -415,7 +418,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                 OtgSelfCheckLevel::Warn
             },
             "Check one-kvm gadget presence",
-            Some("Enable OTG HID, MSD, or USB Ethernet to create the one-kvm gadget"),
+            Some("Enable OTG HID, MSD, USB Ethernet, or USB audio to create the one-kvm gadget"),
             Some(one_kvm_path.display().to_string()),
         );
     }
@@ -459,7 +462,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                 false,
                 OtgSelfCheckLevel::Warn,
                 "Check one-kvm UDC binding",
-                Some("Ensure HID/MSD is enabled and initialized successfully"),
+                Some("Ensure an OTG function is enabled and initialized successfully"),
                 Some(one_kvm_udc_path.display().to_string()),
             );
         } else {
@@ -494,18 +497,19 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
             })
             .cloned()
             .collect::<Vec<_>>();
-        if hid_functions.is_empty() {
+        let hid_functions_ok = hid_backend_is_otg != hid_functions.is_empty();
+        if !hid_functions_ok {
             push_otg_check(
                 &mut checks,
                 "hid_functions_present",
                 false,
-                if hid_backend_is_otg {
-                    OtgSelfCheckLevel::Error
+                OtgSelfCheckLevel::Error,
+                "Check OTG HID function selection",
+                Some(if hid_backend_is_otg {
+                    "Check OTG HID config and enable at least one HID function"
                 } else {
-                    OtgSelfCheckLevel::Warn
-                },
-                "Check HID function creation",
-                Some("Check OTG HID config and enable at least one HID function"),
+                    "OTG HID must be disabled when input is handled by another backend"
+                }),
                 Some(functions_path.display().to_string()),
             );
         } else {
@@ -514,7 +518,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                 "hid_functions_present",
                 true,
                 OtgSelfCheckLevel::Info,
-                "Check HID function creation",
+                "Check OTG HID function selection",
                 None::<String>,
                 Some(functions_path.display().to_string()),
             );
@@ -569,9 +573,13 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
                                 .map(|name| name.to_string_lossy().to_string())
                         })
                         .is_some_and(|name| {
-                            name == "okvm-br0" || name == config.otg_network.bridge_interface
+                            name == "okvm-br0"
+                                || name == config.otg_network.bridge_interface
                                 || (config.otg_network.bridge_interface.is_empty()
-                                    && std::path::Path::new("/sys/class/net").join(name).join("bridge").is_dir())
+                                    && std::path::Path::new("/sys/class/net")
+                                        .join(name)
+                                        .join("bridge")
+                                        .is_dir())
                         });
                     push_otg_check(
                         &mut checks,
@@ -843,7 +851,7 @@ pub fn run(config: &crate::config::AppConfig) -> OtgSelfCheckResponse {
         overall_ok: error_count == 0,
         error_count,
         warning_count,
-        hid_backend: format!("{:?}", config.hid.backend).to_lowercase(),
+        hid_backend: config.hid.backend.as_str().to_string(),
         selected_udc,
         bound_udc,
         udc_state,

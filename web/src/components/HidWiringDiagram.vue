@@ -8,7 +8,27 @@ const { t } = useI18n()
 </script>
 <template>
   <figure v-if="backend !== 'none'" class="wiring-diagram rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-    <svg viewBox="0 0 460 184" class="block w-full text-foreground" role="img" :aria-label="t(`hidGuide.wiring_${backend}`)">
+    <svg v-if="backend === 'ch9329_otg'" viewBox="0 0 480 190" class="block w-full text-foreground" role="img" :aria-label="t('hidGuide.wiring_ch9329_otg')">
+      <g fill="none" stroke="currentColor" stroke-width="1.2">
+        <rect x="8" y="51" width="112" height="100" rx="8" />
+        <rect x="174" y="24" width="112" height="35" rx="6" />
+        <rect x="332" y="19" width="140" height="151" rx="8" />
+      </g>
+      <g fill="currentColor" text-anchor="middle" font-size="12">
+        <text x="64" y="80">One-KVM</text>
+        <text x="230" y="46">CH9329</text>
+        <text x="402" y="43">{{ t('hidGuide.kvmSwitch') }}</text>
+        <text x="402" y="84">{{ t('hidGuide.dedicatedHidPort') }}</text>
+        <text x="402" y="143">{{ t('hidGuide.generalUsbPort') }}</text>
+        <text x="146" y="33">UART</text>
+        <text x="229" y="127">OTG USB</text>
+      </g>
+      <g class="connection" fill="none" stroke="currentColor" stroke-linejoin="round">
+        <path d="M120 90h22V42h32m112 0h20v35h26m-8-5 8 5-8 5" />
+        <path d="M120 136h212m-8-5 8 5-8 5" />
+      </g>
+    </svg>
+    <svg v-else viewBox="0 0 460 184" class="block w-full text-foreground" role="img" :aria-label="t(`hidGuide.wiring_${backend}`)">
       <!-- A faint ground plane anchors the perspective without shadows or filters. -->
       <g fill="none" stroke="currentColor" stroke-width=".65" opacity=".07" aria-hidden="true">
         <path d="m7 87 101-46 75 38-101 46Zm270-5 98-45 79 39-98 46M31 99l101-46m-77 58 101-46M302 94l98-45m-71 58 98-45" />

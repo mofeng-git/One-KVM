@@ -1,6 +1,15 @@
 import type { HidConfig, HidConfigUpdate } from '../types/generated'
 import type { BluetoothStatus } from '../types/bluetooth'
-export type Driver = 'otg' | 'ch9329' | 'bluetooth' | 'none'
+export type Driver = 'otg' | 'ch9329' | 'ch9329_otg' | 'bluetooth' | 'none'
+export function usesCh9329(backend?: string): boolean {
+  return backend === 'ch9329' || backend === 'ch9329_otg'
+}
+export function supportsOtgFunctions(backend?: string): boolean {
+  return backend === 'otg' || backend === 'ch9329_otg'
+}
+export function runtimeBackend(backend?: string): string | undefined {
+  return backend === 'ch9329_otg' ? 'ch9329' : backend
+}
 export interface HidSelection {
   backend: Driver; otg_udc: string; ch9329_port: string; ch9329_baudrate: number
   bluetooth: { adapter: string; name: string }
@@ -11,7 +20,7 @@ export function selectionFrom(hid?: HidConfig | null): HidSelection {
     bluetooth: { adapter: hid?.bluetooth.adapter ?? '', name: hid?.bluetooth.name ?? 'One-KVM HID' } }
 }
 export function selectDevice(saved: string, candidates: string[]): string {
-  return candidates.includes(saved) ? saved : candidates.length === 1 ? candidates[0]! : ''
+  return saved || (candidates.length === 1 ? candidates[0]! : '')
 }
 export function validName(name: string): boolean {
   const length = new TextEncoder().encode(name).length
@@ -21,6 +30,7 @@ export function deviceRequest(draft: HidSelection): HidConfigUpdate {
   const backend = draft.backend as HidConfigUpdate['backend']
   switch (draft.backend) {
     case 'otg': return { backend, otg_udc: draft.otg_udc }
+    case 'ch9329_otg': return { backend, otg_udc: draft.otg_udc, ch9329_port: draft.ch9329_port, ch9329_baudrate: draft.ch9329_baudrate }
     case 'ch9329': return { backend, ch9329_port: draft.ch9329_port, ch9329_baudrate: draft.ch9329_baudrate }
     case 'bluetooth': return { backend, bluetooth: { ...draft.bluetooth }, bluetooth_reset_pairing: true }
     case 'none': return { backend }
@@ -30,6 +40,7 @@ export function matchesSelection(hid: HidConfig, draft: HidSelection): boolean {
   if (hid.backend !== draft.backend) return false
   switch (draft.backend) {
     case 'otg': return hid.otg_udc === draft.otg_udc
+    case 'ch9329_otg': return hid.otg_udc === draft.otg_udc && hid.ch9329_port === draft.ch9329_port && hid.ch9329_baudrate === draft.ch9329_baudrate
     case 'ch9329': return hid.ch9329_port === draft.ch9329_port && hid.ch9329_baudrate === draft.ch9329_baudrate
     case 'bluetooth': return hid.bluetooth.adapter === draft.bluetooth.adapter && hid.bluetooth.name === draft.bluetooth.name
     case 'none': return true
@@ -43,7 +54,25 @@ export function bluetoothStage(status: BluetoothStatus | null): string {
   if (status.pairing_seconds > 0) return 'pairing'
   return status.initialized ? 'waiting' : 'initializing'
 }
+export interface OtgDeviceStatus {
+  enabled: boolean
+  health: 'healthy' | 'applying' | 'degraded'
+  gadget_active: boolean
+  udc: string | null
+  udc_state: string | null
+  error: string | null
+}
+export function otgDeviceStage(status?: OtgDeviceStatus | null): string {
+  if (!status) return 'unknown'
+  if (!status.enabled) return 'otgInactive'
+  if (status.health === 'applying') return 'initializing'
+  if (status.health === 'degraded' || status.error) return 'unknown'
+  if (!status.gadget_active) return 'unknown'
+  return status.udc_state === 'configured' ? 'otgConfigured' : 'otgWaiting'
+}
 export interface HidDeviceStatus {
+  otg?: OtgDeviceStatus | null
+  configured_backend?: string
   backend: string; online: boolean; error?: string | null; error_code?: string | null
 }
 export function hidDeviceError(status?: HidDeviceStatus | null): string | null {

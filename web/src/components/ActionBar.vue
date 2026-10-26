@@ -58,11 +58,7 @@ const systemStore = useSystemStore()
 
 const overflowMenuOpen = ref(false)
 
-const hidBackend = computed(() => (systemStore.hid?.backend ?? '').toLowerCase())
-const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
-const showMsd = computed(() => {
-  return !!systemStore.msd?.available && !isCh9329Backend.value
-})
+const showMsd = computed(() => !!systemStore.msd?.available)
 const props = defineProps<{
   layout?: ConsoleLayout
   mouseMode?: 'absolute' | 'relative'

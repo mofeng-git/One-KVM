@@ -51,7 +51,7 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn enforce_invariants(&mut self) {
-        if self.hid.backend != HidBackend::Otg {
+        if !self.hid.backend.supports_otg_functions() {
             self.msd.enabled = false;
             self.otg_network.enabled = false;
             self.uac.enabled = false;

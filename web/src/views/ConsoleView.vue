@@ -736,7 +736,7 @@ watch(videoLoading, (loading) => {
 
 
 const showMsdStatusCard = computed(() => {
-  return !!(systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329')
+  return !!(systemStore.msd?.available)
 })
 
 const hidHoverAlign = computed<'start' | 'end'>(() => {

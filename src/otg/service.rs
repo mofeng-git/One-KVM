@@ -8,8 +8,7 @@ use super::bridge::NetworkBridgeRuntime;
 use super::manager::{wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager};
 use super::msd::{MsdFunction, MsdInquiryStrings, MsdLunConfig};
 use crate::config::{
-    HidBackend, HidConfig, MsdConfig, OtgDescriptorConfig, OtgHidFunctions, OtgNetworkConfig,
-    UacConfig,
+    HidConfig, MsdConfig, OtgDescriptorConfig, OtgHidFunctions, OtgNetworkConfig, UacConfig,
 };
 use crate::error::{AppError, Result};
 
@@ -37,6 +36,17 @@ pub enum OtgRuntimeHealth {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct OtgNetworkStatus {
     pub health: OtgRuntimeHealth,
+    pub error: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OtgRuntimeStatus {
+    pub enabled: bool,
+    pub health: OtgRuntimeHealth,
+    pub gadget_active: bool,
+    pub udc: Option<String>,
+    pub udc_state: Option<String>,
     pub error: Option<String>,
 }
 
@@ -93,7 +103,7 @@ impl OtgDesiredState {
         network.validate()?;
         uac.validate()?;
         msd.validate()?;
-        let hid_functions = if hid.backend == HidBackend::Otg {
+        let hid_functions = if hid.backend.uses_otg_hid() {
             let functions = hid.constrained_otg_functions();
             Some(functions)
         } else {
@@ -107,7 +117,13 @@ impl OtgDesiredState {
                 .as_ref()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .or_else(OtgGadgetManager::find_udc)
+                .or_else(|| {
+                    if hid.backend.uses_ch9329() {
+                        None
+                    } else {
+                        OtgGadgetManager::find_udc()
+                    }
+                })
         } else {
             None
         };
@@ -245,6 +261,25 @@ impl OtgService {
         let state = self.state.read().await;
         OtgNetworkStatus {
             health: state.health,
+            error: state.error.clone(),
+        }
+    }
+
+    pub async fn runtime_status(&self, enabled: bool) -> OtgRuntimeStatus {
+        let state = self.state.read().await;
+        let udc_state = state.configured_udc.as_ref().and_then(|udc| {
+            // Only UDC names, never a path supplied through a configuration file.
+            if udc.contains('/') || udc == "." || udc == ".." {
+                return None;
+            }
+            crate::utils::read_trimmed(&PathBuf::from(format!("/sys/class/udc/{udc}/state")))
+        });
+        OtgRuntimeStatus {
+            enabled,
+            health: state.health,
+            gadget_active: state.gadget_active,
+            udc: state.configured_udc.clone(),
+            udc_state,
             error: state.error.clone(),
         }
     }
@@ -687,6 +722,38 @@ impl From<&OtgDescriptorConfig> for GadgetDescriptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::HidBackend;
+
+    #[test]
+    fn composite_gadget_supports_every_advanced_function_combination_without_hid() {
+        let hid = HidConfig {
+            backend: HidBackend::Ch9329Otg,
+            otg_udc: Some("test.udc".into()),
+            otg_keyboard_leds: true,
+            ..Default::default()
+        };
+        for mask in 0..8 {
+            let msd = MsdConfig {
+                enabled: mask & 1 != 0,
+                ..Default::default()
+            };
+            let network = OtgNetworkConfig {
+                enabled: mask & 2 != 0,
+                ..Default::default()
+            };
+            let uac = UacConfig {
+                enabled: mask & 4 != 0,
+                ..Default::default()
+            };
+            let desired = OtgDesiredState::from_config(&hid, &msd, &network, &uac).unwrap();
+            assert!(!desired.hid_enabled());
+            assert!(!desired.keyboard_leds);
+            assert_eq!(desired.msd_enabled, msd.enabled);
+            assert_eq!(desired.network_enabled(), network.enabled);
+            assert_eq!(desired.uac.enabled, uac.enabled);
+            assert_eq!(desired.udc.is_some(), mask != 0);
+        }
+    }
 
     #[test]
     fn service_new_and_availability_probe() {

@@ -387,10 +387,11 @@ async function handleSetup() {
 
   const hid = hidSelection.value
   setupData.hid_backend = hid.backend
-  if (hid.backend === 'ch9329') {
+  if (hid.backend === 'ch9329' || hid.backend === 'ch9329_otg') {
     setupData.hid_ch9329_port = hid.ch9329_port
     setupData.hid_ch9329_baudrate = hid.ch9329_baudrate
-  } else if (hid.backend === 'otg') {
+  }
+  if (hid.backend === 'otg' || hid.backend === 'ch9329_otg') {
     setupData.hid_otg_udc = hid.otg_udc
   } else if (hid.backend === 'bluetooth') {
     setupData.hid_bluetooth = { ...hid.bluetooth }

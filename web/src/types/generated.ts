@@ -25,6 +25,7 @@ export interface BluetoothHidConfig {
 export enum HidBackend {
 	Otg = "otg",
 	Ch9329 = "ch9329",
+	Ch9329Otg = "ch9329_otg",
 	Bluetooth = "bluetooth",
 	None = "none",
 }
@@ -548,7 +549,17 @@ export interface OtgNetworkStatus {
 	error?: string;
 }
 
+export interface OtgRuntimeStatus {
+	enabled: boolean;
+	health: OtgRuntimeHealth;
+	gadget_active: boolean;
+	udc?: string;
+	udc_state?: string;
+	error?: string;
+}
+
 export interface OtgConfigResponse {
+	uac: UacConfig;
 	hid: HidConfig;
 	msd: MsdConfig;
 	network: OtgNetworkConfig;
@@ -564,6 +575,7 @@ export interface OtgNetworkConfigUpdate {
 }
 
 export interface OtgConfigUpdate {
+	uac?: UacConfig;
 	hid?: HidConfigUpdate;
 	msd?: MsdConfigUpdate;
 	network?: OtgNetworkConfigUpdate;

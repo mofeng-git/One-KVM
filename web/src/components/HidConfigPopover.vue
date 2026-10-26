@@ -17,6 +17,7 @@ import { MousePointer, Move, Loader2 } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 import { useConfigStore } from '@/stores/config'
 import { HidBackend, OtgHidProfile } from '@/types/generated'
+import { usesCh9329 } from '@/lib/hidGuide'
 
 const props = defineProps<{
   open: boolean
@@ -66,7 +67,7 @@ watch(showCursor, (newValue, oldValue) => {
 const buttonText = computed(() => t('actionbar.hidConfig'))
 const hidSaving = ref(false)
 const hidControlsDisabled = computed(() => hidSaving.value || configStore.hidLoading || !configStore.hid)
-const supportsLinuxCompatibility = computed(() => configStore.hid?.backend === HidBackend.Ch9329)
+const supportsLinuxCompatibility = computed(() => usesCh9329(configStore.hid?.backend))
 const supportsMacosCompatibility = computed(() =>
   supportsLinuxCompatibility.value || configStore.hid?.backend === HidBackend.Otg
 )

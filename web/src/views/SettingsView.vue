@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usesCh9329, supportsOtgFunctions } from '@/lib/hidGuide'
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
 import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
@@ -1152,7 +1153,7 @@ function clearCh9329DescriptorState() {
 }
 
 const isCh9329DescriptorSourceCurrent = computed(() => {
-  if (config.value.hid_backend !== 'ch9329') return false
+  if (!usesCh9329(config.value.hid_backend)) return false
   const source = ch9329DescriptorSource.value
   if (!source) return false
   const current = currentCh9329DescriptorSource()
@@ -1160,7 +1161,7 @@ const isCh9329DescriptorSourceCurrent = computed(() => {
 })
 
 async function loadCh9329Descriptor() {
-  if (config.value.hid_backend !== 'ch9329') return
+  if (!usesCh9329(config.value.hid_backend)) return
   const source = currentCh9329DescriptorSource()
   ch9329DescriptorLoading.value = true
   ch9329DescriptorLoaded.value = false
@@ -1182,14 +1183,14 @@ async function loadCh9329Descriptor() {
 }
 
 const isCh9329DescriptorValid = computed(() => {
-  if (config.value.hid_backend !== 'ch9329') return true
+  if (!usesCh9329(config.value.hid_backend)) return true
   return utf8ByteLength(ch9329Manufacturer.value) <= 23
     && utf8ByteLength(ch9329Product.value) <= 23
     && utf8ByteLength(ch9329SerialNumber.value) <= 23
 })
 
 const canEditCh9329Descriptor = computed(() =>
-  config.value.hid_backend === 'ch9329'
+  usesCh9329(config.value.hid_backend)
   && ch9329DescriptorLoaded.value
   && isCh9329DescriptorSourceCurrent.value
   && !ch9329DescriptorLoading.value
@@ -1268,7 +1269,7 @@ const atxDevices = ref<AtxDevices>({
 })
 
 const ch9329ReservedSerialDevice = computed(() => {
-  if (config.value.hid_backend !== 'ch9329') return ''
+  if (!usesCh9329(config.value.hid_backend)) return ''
   return config.value.hid_serial_device.trim()
 })
 
@@ -1492,7 +1493,7 @@ async function saveConfig() {
         return
       }
       const hidUpdate: HidConfigUpdate = {}
-      if (config.value.hid_backend === 'ch9329' && isCh9329DescriptorDirty.value) {
+      if (usesCh9329(config.value.hid_backend) && isCh9329DescriptorDirty.value) {
         hidUpdate.ch9329_descriptor = {
           vendor_id: parseInt(ch9329VendorIdHex.value, 16) || 0x1a86,
           product_id: parseInt(ch9329ProductIdHex.value, 16) || 0xe129,
@@ -1501,7 +1502,7 @@ async function saveConfig() {
           serial_number: ch9329SerialNumber.value || '',
         }
       }
-      if (config.value.hid_backend === 'otg') {
+      if (supportsOtgFunctions(config.value.hid_backend)) {
         hidUpdate.otg_descriptor = {
           vendor_id: parseInt(otgVendorIdHex.value, 16) || 0x1d6b,
           product_id: parseInt(otgProductIdHex.value, 16) || 0x0104,
@@ -1509,12 +1510,14 @@ async function saveConfig() {
           product: otgProduct.value || 'One-KVM USB Device',
           serial_number: otgSerialNumber.value || undefined,
         }
-        hidUpdate.otg_profile = 'custom' as OtgHidProfile
-        hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
-        hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
+        if (config.value.hid_backend === 'otg') {
+          hidUpdate.otg_profile = 'custom' as OtgHidProfile
+          hidUpdate.otg_functions = { ...config.value.hid_otg_functions }
+          hidUpdate.otg_keyboard_leds = config.value.hid_otg_keyboard_leds
+        }
       }
-      if (configStore.hid?.backend === 'otg') {
-        const otgEnabled = config.value.hid_backend === 'otg'
+      if (supportsOtgFunctions(configStore.hid?.backend)) {
+        const otgEnabled = supportsOtgFunctions(config.value.hid_backend)
         const response = await configStore.updateOtg({
           hid: hidUpdate,
           msd: {
@@ -1528,15 +1531,14 @@ async function saveConfig() {
             driver_mode: config.value.otg_network_driver as any,
             bridge_interface: config.value.otg_network_interface,
           },
+          uac: {
+            enabled: otgEnabled && config.value.uac_enabled,
+            sample_rate: 48000,
+            channels: 2,
+          },
         })
         otgNetworkStatus.value = response.status
-
-        await uacApi.update({
-          enabled: otgEnabled && config.value.uac_enabled,
-          sample_rate: 48000,
-          channels: 2,
-        })
-      } else if (configStore.hid?.backend === 'ch9329') {
+      } else if (usesCh9329(configStore.hid?.backend)) {
         await configStore.updateHid(hidUpdate)
       }
       await loadConfig()
@@ -1632,11 +1634,11 @@ async function loadConfig() {
       otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
     }
     if (hid.ch9329_descriptor) {
-      if (hid.backend !== 'ch9329') {
+      if (!usesCh9329(hid.backend)) {
         applyCh9329DescriptorForm(hid.ch9329_descriptor, true)
       }
     }
-    if (hid.backend === 'ch9329') {
+    if (usesCh9329(hid.backend)) {
       await loadCh9329Descriptor()
     } else {
       clearCh9329DescriptorState()
@@ -2773,7 +2775,7 @@ watch(updateChannel, async () => {
 watch(() => config.value.hid_backend, () => {
   otgSelfCheckResult.value = null
   otgSelfCheckError.value = ''
-  if (config.value.hid_backend === 'ch9329') {
+  if (usesCh9329(config.value.hid_backend)) {
     void loadCh9329Descriptor()
   } else {
     clearCh9329DescriptorState()
@@ -2783,7 +2785,7 @@ watch(() => config.value.hid_backend, () => {
 watch(
   () => [config.value.hid_serial_device, config.value.hid_serial_baudrate],
   () => {
-    if (config.value.hid_backend === 'ch9329' && !isCh9329DescriptorSourceCurrent.value) {
+    if (usesCh9329(config.value.hid_backend) && !isCh9329DescriptorSourceCurrent.value) {
       clearCh9329DescriptorState()
     }
   },
@@ -3170,10 +3172,10 @@ watch(isWindows, () => {
           <!-- HID Section -->
           <div v-show="activeSection === 'hid'" class="space-y-4">
             <HidDeviceSettings :active="activeSection === 'hid'" :dirty="hidFeaturesDirty" @applied="loadConfig" @discard="loadConfig" />
-            <Card v-if="configStore.hid?.backend === 'otg' || configStore.hid?.backend === 'ch9329'">
+            <Card v-if="supportsOtgFunctions(configStore.hid?.backend) || usesCh9329(configStore.hid?.backend)">
               <CardHeader><CardTitle>{{ t('hidGuide.features') }}</CardTitle></CardHeader>
               <CardContent class="space-y-4">
-                <template v-if="config.hid_backend === 'ch9329'">
+                <template v-if="usesCh9329(config.hid_backend)">
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
@@ -3261,7 +3263,7 @@ watch(isWindows, () => {
                 </template>
 
                 <!-- OTG Descriptor Settings -->
-                <template v-if="config.hid_backend === 'otg'">
+                <template v-if="supportsOtgFunctions(config.hid_backend)">
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
@@ -3323,10 +3325,10 @@ watch(isWindows, () => {
                   <Separator class="my-4" />
                   <div class="space-y-4">
                     <div>
-                      <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
+                      <h4 class="text-sm font-medium">{{ t(config.hid_backend === 'otg' ? 'settings.otgHidProfile' : 'hidGuide.advancedFunctions') }}</h4>
                     </div>
                     <div class="space-y-3">
-                      <div class="grid gap-3 md:grid-cols-2">
+                      <div v-if="config.hid_backend === 'otg'" class="grid gap-3 md:grid-cols-2">
                         <div class="space-y-3 rounded-md border border-border/60 p-3">
                           <div class="flex items-center justify-between gap-4">
                             <div>
@@ -3364,12 +3366,12 @@ watch(isWindows, () => {
                             <Switch v-model="config.hid_otg_functions.mouse_absolute" />
                           </div>
                           <p v-if="hasMacosDragInterfaceConflict" class="text-xs text-warning">{{ t('settings.mouseMacosDragRequiresBoth') }}</p>
-                          <Separator />
-                          <div class="flex items-center justify-between gap-4">
-                            <Label>{{ t('settings.uacMic') }}</Label>
-                            <Switch v-model="config.uac_enabled" />
-                          </div>
+
                         </div>
+                      </div>
+                      <div class="flex items-center justify-between gap-4 rounded-md border border-border/60 p-3">
+                        <Label>{{ t('settings.uacMic') }}</Label>
+                        <Switch v-model="config.uac_enabled" />
                       </div>
                       <div class="space-y-3 rounded-md border border-border/60 p-3">
                         <div class="flex items-center justify-between gap-4">
@@ -3466,7 +3468,7 @@ watch(isWindows, () => {
                         </p>
                       </div>
                     </div>
-                    <p class="text-xs text-warning">
+                    <p v-if="config.hid_backend === 'otg'" class="text-xs text-warning">
                       {{ t('settings.otgProfileWarning') }}
                     </p>
                   </div>
@@ -5419,7 +5421,7 @@ watch(isWindows, () => {
           </div>
 
           <!-- Save Button (sticky) -->
-          <div v-if="activeSection === 'video' || (activeSection === 'hid' && ['otg', 'ch9329'].includes(configStore.hid?.backend ?? ''))" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div v-if="activeSection === 'video' || (activeSection === 'hid' && (supportsOtgFunctions(configStore.hid?.backend) || usesCh9329(configStore.hid?.backend)))" class="sticky bottom-0 pt-3 sm:pt-4 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t -mx-3 px-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <div class="flex items-center justify-between gap-2 sm:gap-3">
               <p v-if="activeSection === 'hid' && !isHidFunctionSelectionValid" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
@@ -5433,7 +5435,7 @@ watch(isWindows, () => {
                 <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329StringLengthWarning') }}</span>
               </p>
-              <p v-else-if="activeSection === 'hid' && config.hid_backend === 'ch9329' && ch9329DescriptorLoading" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
+              <p v-else-if="activeSection === 'hid' && usesCh9329(config.hid_backend) && ch9329DescriptorLoading" class="flex min-w-0 items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle class="size-3.5 shrink-0" />
                 <span class="truncate">{{ t('settings.ch9329DescriptorLoading') }}</span>
               </p>
