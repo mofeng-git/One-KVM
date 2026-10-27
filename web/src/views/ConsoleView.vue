@@ -3036,9 +3036,6 @@ function handleToggleMouseMode() {
   accumulatedDelta = { x: 0, y: 0 }
   lastMousePosition.value = { x: 0, y: 0 }
   mousePosition.value = { x: 0, y: 0 }
-
-  if (mouseMode.value === 'relative') {
-  }
 }
 
 async function refreshUacAvailability() {

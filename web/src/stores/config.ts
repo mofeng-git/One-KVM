@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { createConfigResource, createRequestState } from '@/lib/configResource'
 import {
   authConfigApi,
   atxConfigApi,
@@ -15,488 +15,88 @@ import {
   webConfigApi,
 } from '@/api'
 import type {
-  AtxConfig,
   AtxConfigUpdate,
-  AudioConfig,
   AudioConfigUpdate,
-  AuthConfig,
   AuthConfigUpdate,
-  HidConfig,
   HidConfigUpdate,
-  MsdConfig,
   MsdConfigUpdate,
   OtgConfigResponse,
   OtgConfigUpdate,
-  StreamConfigResponse,
   StreamConfigUpdate,
-  VideoConfig,
   VideoConfigUpdate,
 } from '@/types/generated'
 import type {
-  RtspConfigResponse as ApiRtspConfigResponse,
   RtspConfigUpdate as ApiRtspConfigUpdate,
-  RtspStatusResponse as ApiRtspStatusResponse,
-  RustDeskConfigResponse as ApiRustDeskConfigResponse,
   RustDeskConfigUpdate as ApiRustDeskConfigUpdate,
-  RustDeskStatusResponse as ApiRustDeskStatusResponse,
-  RustDeskPasswordResponse as ApiRustDeskPasswordResponse,
-  VncConfigResponse as ApiVncConfigResponse,
   VncConfigUpdate as ApiVncConfigUpdate,
-  VncStatusResponse as ApiVncStatusResponse,
-  WebConfig,
   WebConfigUpdate,
 } from '@/api'
 
-function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  return 'Unknown error'
-}
-
 export const useConfigStore = defineStore('config', () => {
-  const auth = ref<AuthConfig | null>(null)
-  const video = ref<VideoConfig | null>(null)
-  const audio = ref<AudioConfig | null>(null)
-  const hid = ref<HidConfig | null>(null)
-  const msd = ref<MsdConfig | null>(null)
-  const stream = ref<StreamConfigResponse | null>(null)
-  const web = ref<WebConfig | null>(null)
-  const atx = ref<AtxConfig | null>(null)
-  const rtspConfig = ref<ApiRtspConfigResponse | null>(null)
-  const rtspStatus = ref<ApiRtspStatusResponse | null>(null)
-  const vncConfig = ref<ApiVncConfigResponse | null>(null)
-  const vncStatus = ref<ApiVncStatusResponse | null>(null)
-  const rustdeskConfig = ref<ApiRustDeskConfigResponse | null>(null)
-  const rustdeskStatus = ref<ApiRustDeskStatusResponse | null>(null)
-  const rustdeskPassword = ref<ApiRustDeskPasswordResponse | null>(null)
+  const {
+    data: auth, loading: authLoading, error: authError,
+    refresh: refreshAuth, ensure: ensureAuth,
+  } = createConfigResource(authConfigApi.get)
+  const {
+    data: video, loading: videoLoading, error: videoError,
+    refresh: refreshVideo, ensure: ensureVideo,
+  } = createConfigResource(videoConfigApi.get)
+  const {
+    data: audio, loading: audioLoading, error: audioError,
+    refresh: refreshAudio, ensure: ensureAudio,
+  } = createConfigResource(audioConfigApi.get)
+  const {
+    data: hid, loading: hidLoading, error: hidError,
+    refresh: refreshHid, ensure: ensureHid,
+  } = createConfigResource(hidConfigApi.get)
+  const {
+    data: msd, loading: msdLoading, error: msdError,
+    refresh: refreshMsd, ensure: ensureMsd,
+  } = createConfigResource(msdConfigApi.get)
+  const {
+    data: stream, loading: streamLoading, error: streamError,
+    refresh: refreshStream, ensure: ensureStream,
+  } = createConfigResource(streamConfigApi.get)
+  const {
+    data: web, loading: webLoading, error: webError,
+    refresh: refreshWeb, ensure: ensureWeb,
+  } = createConfigResource(webConfigApi.get)
+  const {
+    data: atx, loading: atxLoading, error: atxError,
+    refresh: refreshAtx, ensure: ensureAtx,
+  } = createConfigResource(atxConfigApi.get)
 
-  const authLoading = ref(false)
-  const videoLoading = ref(false)
-  const audioLoading = ref(false)
-  const hidLoading = ref(false)
-  const msdLoading = ref(false)
-  const streamLoading = ref(false)
-  const webLoading = ref(false)
-  const atxLoading = ref(false)
-  const rtspLoading = ref(false)
-  const vncLoading = ref(false)
-  const rustdeskLoading = ref(false)
+  const rtspRequests = createRequestState()
+  const { loading: rtspLoading, error: rtspError } = rtspRequests
+  const { data: rtspConfig, refresh: refreshRtspConfig, ensure: ensureRtspConfig } =
+    createConfigResource(rtspConfigApi.get, rtspRequests)
+  const { data: rtspStatus, refresh: refreshRtspStatus } = createConfigResource(
+    rtspConfigApi.getStatus, rtspRequests, (response) => {
+      rtspConfig.value = response.config
+    },
+  )
 
-  const authError = ref<string | null>(null)
-  const videoError = ref<string | null>(null)
-  const audioError = ref<string | null>(null)
-  const hidError = ref<string | null>(null)
-  const msdError = ref<string | null>(null)
-  const streamError = ref<string | null>(null)
-  const webError = ref<string | null>(null)
-  const atxError = ref<string | null>(null)
-  const rtspError = ref<string | null>(null)
-  const vncError = ref<string | null>(null)
-  const rustdeskError = ref<string | null>(null)
+  const vncRequests = createRequestState()
+  const { loading: vncLoading, error: vncError } = vncRequests
+  const { data: vncConfig, refresh: refreshVncConfig, ensure: ensureVncConfig } =
+    createConfigResource(vncConfigApi.get, vncRequests)
+  const { data: vncStatus, refresh: refreshVncStatus } = createConfigResource(
+    vncConfigApi.getStatus, vncRequests, (response) => {
+      vncConfig.value = response.config
+    },
+  )
 
-  let authPromise: Promise<AuthConfig> | null = null
-  let videoPromise: Promise<VideoConfig> | null = null
-  let audioPromise: Promise<AudioConfig> | null = null
-  let hidPromise: Promise<HidConfig> | null = null
-  let msdPromise: Promise<MsdConfig> | null = null
-  let streamPromise: Promise<StreamConfigResponse> | null = null
-  let webPromise: Promise<WebConfig> | null = null
-  let atxPromise: Promise<AtxConfig> | null = null
-  let rtspPromise: Promise<ApiRtspConfigResponse> | null = null
-  let rtspStatusPromise: Promise<ApiRtspStatusResponse> | null = null
-  let vncPromise: Promise<ApiVncConfigResponse> | null = null
-  let vncStatusPromise: Promise<ApiVncStatusResponse> | null = null
-  let rustdeskPromise: Promise<ApiRustDeskConfigResponse> | null = null
-  let rustdeskStatusPromise: Promise<ApiRustDeskStatusResponse> | null = null
-  let rustdeskPasswordPromise: Promise<ApiRustDeskPasswordResponse> | null = null
-
-  async function refreshAuth() {
-    if (authLoading.value && authPromise) return authPromise
-    authLoading.value = true
-    authError.value = null
-    const request = authConfigApi.get()
-      .then((response) => {
-        auth.value = response
-        return response
-      })
-      .catch((error) => {
-        authError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        authLoading.value = false
-        authPromise = null
-      })
-
-    authPromise = request
-    return request
-  }
-
-  async function refreshVideo() {
-    if (videoLoading.value && videoPromise) return videoPromise
-    videoLoading.value = true
-    videoError.value = null
-    const request = videoConfigApi.get()
-      .then((response) => {
-        video.value = response
-        return response
-      })
-      .catch((error) => {
-        videoError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        videoLoading.value = false
-        videoPromise = null
-      })
-
-    videoPromise = request
-    return request
-  }
-
-  async function refreshAudio() {
-    if (audioLoading.value && audioPromise) return audioPromise
-    audioLoading.value = true
-    audioError.value = null
-    const request = audioConfigApi.get()
-      .then((response) => {
-        audio.value = response
-        return response
-      })
-      .catch((error) => {
-        audioError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        audioLoading.value = false
-        audioPromise = null
-      })
-
-    audioPromise = request
-    return request
-  }
-
-  async function refreshHid() {
-    if (hidLoading.value && hidPromise) return hidPromise
-    hidLoading.value = true
-    hidError.value = null
-    const request = hidConfigApi.get()
-      .then((response) => {
-        hid.value = response
-        return response
-      })
-      .catch((error) => {
-        hidError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        hidLoading.value = false
-        hidPromise = null
-      })
-
-    hidPromise = request
-    return request
-  }
-
-  async function refreshMsd() {
-    if (msdLoading.value && msdPromise) return msdPromise
-    msdLoading.value = true
-    msdError.value = null
-    const request = msdConfigApi.get()
-      .then((response) => {
-        msd.value = response
-        return response
-      })
-      .catch((error) => {
-        msdError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        msdLoading.value = false
-        msdPromise = null
-      })
-
-    msdPromise = request
-    return request
-  }
-
-  async function refreshStream() {
-    if (streamLoading.value && streamPromise) return streamPromise
-    streamLoading.value = true
-    streamError.value = null
-    const request = streamConfigApi.get()
-      .then((response) => {
-        stream.value = response
-        return response
-      })
-      .catch((error) => {
-        streamError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        streamLoading.value = false
-        streamPromise = null
-      })
-
-    streamPromise = request
-    return request
-  }
-
-  async function refreshWeb() {
-    if (webLoading.value && webPromise) return webPromise
-    webLoading.value = true
-    webError.value = null
-    const request = webConfigApi.get()
-      .then((response) => {
-        web.value = response
-        return response
-      })
-      .catch((error) => {
-        webError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        webLoading.value = false
-        webPromise = null
-      })
-
-    webPromise = request
-    return request
-  }
-
-  async function refreshAtx() {
-    if (atxLoading.value && atxPromise) return atxPromise
-    atxLoading.value = true
-    atxError.value = null
-    const request = atxConfigApi.get()
-      .then((response) => {
-        atx.value = response
-        return response
-      })
-      .catch((error) => {
-        atxError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        atxLoading.value = false
-        atxPromise = null
-      })
-
-    atxPromise = request
-    return request
-  }
-
-  async function refreshRtspConfig() {
-    if (rtspLoading.value && rtspPromise) return rtspPromise
-    rtspLoading.value = true
-    rtspError.value = null
-    const request = rtspConfigApi.get()
-      .then((response) => {
-        rtspConfig.value = response
-        return response
-      })
-      .catch((error) => {
-        rtspError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        rtspLoading.value = false
-        rtspPromise = null
-      })
-
-    rtspPromise = request
-    return request
-  }
-
-  async function refreshRtspStatus() {
-    if (rtspLoading.value && rtspStatusPromise) return rtspStatusPromise
-    rtspLoading.value = true
-    rtspError.value = null
-    const request = rtspConfigApi.getStatus()
-      .then((response) => {
-        rtspStatus.value = response
-        rtspConfig.value = response.config
-        return response
-      })
-      .catch((error) => {
-        rtspError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        rtspLoading.value = false
-        rtspStatusPromise = null
-      })
-
-    rtspStatusPromise = request
-    return request
-  }
-
-  async function refreshVncConfig() {
-    if (vncLoading.value && vncPromise) return vncPromise
-    vncLoading.value = true
-    vncError.value = null
-    const request = vncConfigApi.get()
-      .then((response) => {
-        vncConfig.value = response
-        return response
-      })
-      .catch((error) => {
-        vncError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        vncLoading.value = false
-        vncPromise = null
-      })
-
-    vncPromise = request
-    return request
-  }
-
-  async function refreshVncStatus() {
-    if (vncLoading.value && vncStatusPromise) return vncStatusPromise
-    vncLoading.value = true
-    vncError.value = null
-    const request = vncConfigApi.getStatus()
-      .then((response) => {
-        vncStatus.value = response
-        vncConfig.value = response.config
-        return response
-      })
-      .catch((error) => {
-        vncError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        vncLoading.value = false
-        vncStatusPromise = null
-      })
-
-    vncStatusPromise = request
-    return request
-  }
-
-  async function refreshRustdeskConfig() {
-    if (rustdeskLoading.value && rustdeskPromise) return rustdeskPromise
-    rustdeskLoading.value = true
-    rustdeskError.value = null
-    const request = rustdeskConfigApi.get()
-      .then((response) => {
-        rustdeskConfig.value = response
-        return response
-      })
-      .catch((error) => {
-        rustdeskError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        rustdeskLoading.value = false
-        rustdeskPromise = null
-      })
-
-    rustdeskPromise = request
-    return request
-  }
-
-  async function refreshRustdeskStatus() {
-    if (rustdeskLoading.value && rustdeskStatusPromise) return rustdeskStatusPromise
-    rustdeskLoading.value = true
-    rustdeskError.value = null
-    const request = rustdeskConfigApi.getStatus()
-      .then((response) => {
-        rustdeskStatus.value = response
-        rustdeskConfig.value = response.config
-        return response
-      })
-      .catch((error) => {
-        rustdeskError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        rustdeskLoading.value = false
-        rustdeskStatusPromise = null
-      })
-
-    rustdeskStatusPromise = request
-    return request
-  }
-
-  async function refreshRustdeskPassword() {
-    if (rustdeskLoading.value && rustdeskPasswordPromise) return rustdeskPasswordPromise
-    rustdeskLoading.value = true
-    rustdeskError.value = null
-    const request = rustdeskConfigApi.getPassword()
-      .then((response) => {
-        rustdeskPassword.value = response
-        return response
-      })
-      .catch((error) => {
-        rustdeskError.value = normalizeErrorMessage(error)
-        throw error
-      })
-      .finally(() => {
-        rustdeskLoading.value = false
-        rustdeskPasswordPromise = null
-      })
-
-    rustdeskPasswordPromise = request
-    return request
-  }
-
-  function ensureAuth() {
-    if (auth.value) return Promise.resolve(auth.value)
-    return refreshAuth()
-  }
-
-  function ensureVideo() {
-    if (video.value) return Promise.resolve(video.value)
-    return refreshVideo()
-  }
-
-  function ensureAudio() {
-    if (audio.value) return Promise.resolve(audio.value)
-    return refreshAudio()
-  }
-
-  function ensureHid() {
-    if (hid.value) return Promise.resolve(hid.value)
-    return refreshHid()
-  }
-
-  function ensureMsd() {
-    if (msd.value) return Promise.resolve(msd.value)
-    return refreshMsd()
-  }
-
-  function ensureStream() {
-    if (stream.value) return Promise.resolve(stream.value)
-    return refreshStream()
-  }
-
-  function ensureWeb() {
-    if (web.value) return Promise.resolve(web.value)
-    return refreshWeb()
-  }
-
-  function ensureAtx() {
-    if (atx.value) return Promise.resolve(atx.value)
-    return refreshAtx()
-  }
-
-  function ensureRtspConfig() {
-    if (rtspConfig.value) return Promise.resolve(rtspConfig.value)
-    return refreshRtspConfig()
-  }
-
-  function ensureVncConfig() {
-    if (vncConfig.value) return Promise.resolve(vncConfig.value)
-    return refreshVncConfig()
-  }
-
-  function ensureRustdeskConfig() {
-    if (rustdeskConfig.value) return Promise.resolve(rustdeskConfig.value)
-    return refreshRustdeskConfig()
-  }
+  const rustdeskRequests = createRequestState()
+  const { loading: rustdeskLoading, error: rustdeskError } = rustdeskRequests
+  const { data: rustdeskConfig, refresh: refreshRustdeskConfig, ensure: ensureRustdeskConfig } =
+    createConfigResource(rustdeskConfigApi.get, rustdeskRequests)
+  const { data: rustdeskStatus, refresh: refreshRustdeskStatus } = createConfigResource(
+    rustdeskConfigApi.getStatus, rustdeskRequests, (response) => {
+      rustdeskConfig.value = response.config
+    },
+  )
+  const { data: rustdeskPassword, refresh: refreshRustdeskPassword } =
+    createConfigResource(rustdeskConfigApi.getPassword, rustdeskRequests)
 
   async function updateAuth(update: AuthConfigUpdate) {
     const response = await authConfigApi.update(update)

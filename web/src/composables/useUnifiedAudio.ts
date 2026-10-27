@@ -1,19 +1,10 @@
 // Manages audio playback across different video modes (MJPEG/WebSocket and H264/WebRTC)
 // Provides a single interface for volume control and audio source switching
 
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch } from 'vue'
 import { getAudioPlayer } from './useAudioPlayer'
 
 export type AudioMode = 'ws' | 'webrtc'
-
-export interface UnifiedAudioState {
-  audioMode: Ref<AudioMode>
-  volume: Ref<number>
-  muted: Ref<boolean>
-  connected: Ref<boolean>
-  playing: Ref<boolean>
-  error: Ref<string | null>
-}
 
 export function useUnifiedAudio() {
   const audioMode = ref<AudioMode>('ws')

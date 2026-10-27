@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { authApi, systemApi, type AuthLoginResponse } from '@/api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -10,8 +10,6 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   let pendingUsername: string | null = null
-
-  const isLoggedIn = computed(() => isAuthenticated.value && user.value !== null)
 
   async function checkSetupStatus() {
     try {
@@ -136,7 +134,6 @@ export const useAuthStore = defineStore('auth', () => {
     needsSetup,
     loading,
     error,
-    isLoggedIn,
     checkSetupStatus,
     checkAuth,
     beginLogin,
