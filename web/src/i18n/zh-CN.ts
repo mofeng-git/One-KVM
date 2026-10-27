@@ -1,4 +1,6 @@
+import { settingsUiZh } from './settings-ui'
 export default {
+  settingsUi: settingsUiZh,
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG 复合模式',
     compositeHelp: 'CH9329 负责键盘和鼠标，OTG 负责虚拟磁盘、USB 网络和 USB 音频。高级功能需在各自设置中启用。',
@@ -12,6 +14,7 @@ export default {
     otgInactive: '未启用',
     otgConfigured: '主机已配置 USB',
     otgWaiting: '已绑定，等待主机连接',
+
     missingDevice: '原设备 {device} 已不可用，请检查当前选择。',
     connectionTimeout: '等待连接超时，请检查数据线及被控机 USB 端口。可稍后连接或重新配置。',
     "deviceTitle": "驱动与设备",
@@ -633,7 +636,7 @@ export default {
     videoSubtitle: '配置采集设备、视频编码器与 WebRTC 信令服务器',
     hidSubtitle: '配置 HID 后端、设备、描述符与 USB Gadget 功能',
     atxSubtitle: '配置远程电源控制硬件与网络唤醒',
-    environmentSubtitle: '查看设备信息与系统级运行环境',
+    environmentSubtitle: '诊断 USB OTG 与视频编码环境',
     otherSubtitle: '其他系统硬件控制与 USB 设备维护',
     aboutSubtitle: '在线升级与版本信息',
     extTtydSubtitle: '在浏览器中打开本机 Shell 终端',
@@ -641,7 +644,7 @@ export default {
     extRemoteAccessSubtitle: '通过内网穿透服务实现远程访问',
     extFrpcSubtitle: '通过 FRP 客户端实现内网穿透',
     watchdog: {
-      title: '硬件 Watchdog',
+      title: '硬件看门狗',
       description: '硬件 Watchdog 可在系统死机或程序退出时自动触发硬件复位信号',
       status: {
         running: '运行中',

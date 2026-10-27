@@ -1,0 +1,46 @@
+export const settingsUiZh = {
+  watchdogAutoReset: '启用自动复位',
+  mcpRate: '请求频率（次/秒）',
+  help: '查看提示',
+  back: '返回控制台',
+  saveCapture: '保存采集设置',
+  saveEncoder: '保存编码设置',
+  saveConnection: '保存连接设置',
+  project: '项目主页',
+  featuresHelp:
+    'USB 功能会按当前驱动与设备能力提供。修改后只保存本卡片配置，设备可能重新识别 USB 连接。',
+  identifiers: '高级设备标识',
+  identifiersHelp: 'VID、PID、厂商和产品名称决定被控机识别到的设备信息。修改后可能需要重新连接。',
+  applyDriver: '应用驱动',
+  saveFeaturesFirst: '请先保存或放弃功能配置，再切换驱动。',
+  discardFeatures: '放弃功能更改',
+  driverHelp: '选择驱动及对应设备，然后应用。应用驱动会重新建立键鼠连接。',
+  driverApplied: '驱动配置已应用',
+  saveFailed: '保存失败，输入已保留，请检查后重试。',
+  saveDone: '设置已保存',
+  checkUpdates: '检查更新',
+}
+export const settingsUiEn = {
+  watchdogAutoReset: 'Enable automatic recovery',
+  mcpRate: 'Requests per second',
+  help: 'Show help',
+  back: 'Back to console',
+  saveCapture: 'Save capture',
+  saveEncoder: 'Save encoder',
+  saveConnection: 'Save connection',
+  project: 'Project',
+  featuresHelp:
+    'Available USB functions depend on the driver and hardware. Saving applies only this card and may reconnect the USB device.',
+  identifiers: 'Advanced device identity',
+  identifiersHelp:
+    'VID, PID, manufacturer and product names identify the device to the target computer. Changes may require reconnection.',
+  applyDriver: 'Apply driver',
+  saveFeaturesFirst: 'Save or discard function changes before switching drivers.',
+  discardFeatures: 'Discard function changes',
+  driverHelp:
+    'Select a driver and its device, then apply. Applying re-establishes the keyboard and mouse connection.',
+  driverApplied: 'Driver configuration applied',
+  saveFailed: 'Could not save. Your input is preserved; check it and try again.',
+  saveDone: 'Settings saved',
+  checkUpdates: 'Check for updates',
+}

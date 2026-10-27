@@ -4,12 +4,18 @@ import { useI18n } from 'vue-i18n'
 import QrcodeVue from 'qrcode.vue'
 import { authApi } from '@/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import CardTitle from './SettingsCardTitle.vue'
 import { AlertTriangle, KeyRound, Loader2, ShieldCheck, ShieldOff } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -84,7 +90,8 @@ function normalizeCode(value: string) {
 
 function localizedError(error: unknown) {
   const raw = error instanceof Error ? error.message : ''
-  if (raw.includes('Current password is incorrect')) return t('settings.totp.currentPasswordIncorrect')
+  if (raw.includes('Current password is incorrect'))
+    return t('settings.totp.currentPasswordIncorrect')
   if (raw.includes('Invalid TOTP code')) return t('settings.totp.invalidCode')
   if (raw.includes('enrollment expired')) return t('settings.totp.enrollmentExpired')
   if (raw.includes('Too many attempts')) return t('settings.totp.rateLimited')
@@ -215,29 +222,25 @@ onUnmounted(() => {
 
 <template>
   <Card>
-    <CardHeader class="flex flex-row items-start justify-between gap-4 space-y-0">
-      <div class="space-y-1.5">
-        <CardTitle>{{ t('settings.totp.title') }}</CardTitle>
-        <CardDescription>{{ t('settings.totp.description') }}</CardDescription>
-      </div>
-      <Badge :variant="enabled ? 'default' : 'secondary'">
-        {{ enabled ? t('common.enabled') : t('common.disabled') }}
-      </Badge>
-    </CardHeader>
+    <CardHeader class="settings-card-heading"
+      ><CardTitle :help="t('settings.totp.description')">{{ t('settings.totp.title') }}</CardTitle>
+      <div class="settings-card-actions">
+        <Button v-if="!enabled" :disabled="statusLoading" @click="enrollmentOpen = true">
+          <ShieldCheck class="size-4" />
+          {{ t('settings.totp.enable') }}
+        </Button>
+        <Button v-else variant="destructive" :disabled="statusLoading" @click="disableOpen = true">
+          <ShieldOff class="size-4" />
+          {{ t('settings.totp.disable') }}
+        </Button>
+      </div></CardHeader
+    >
     <CardContent class="space-y-4">
-      <div class="grid gap-3 text-sm sm:grid-cols-2">
-        <div class="space-y-1">
-          <p class="text-xs text-muted-foreground">{{ t('settings.totp.serverTime') }}</p>
-          <p class="font-mono">{{ serverTime }} UTC</p>
-        </div>
-        <div class="space-y-1">
-          <p class="text-xs text-muted-foreground">{{ t('settings.totp.localTime') }}</p>
-          <p class="font-mono">{{ localTime }}</p>
-        </div>
+      <p class="text-sm text-muted-foreground">{{ t('settings.totp.description') }}</p>
+      <div v-if="clockDriftWarning" class="space-y-1 text-sm text-muted-foreground">
+        <p>{{ serverTime }} UTC · {{ localTime }}</p>
+        <p>{{ t('settings.totp.clockOffset', { seconds: clockOffsetSeconds }) }}</p>
       </div>
-      <p class="text-xs text-muted-foreground">
-        {{ t('settings.totp.clockOffset', { seconds: clockOffsetSeconds }) }}
-      </p>
       <Alert v-if="clockDriftWarning" variant="destructive">
         <AlertTriangle />
         <AlertDescription>{{ t('settings.totp.clockDriftWarning') }}</AlertDescription>
@@ -247,16 +250,6 @@ onUnmounted(() => {
         <AlertDescription>{{ statusError }}</AlertDescription>
       </Alert>
     </CardContent>
-    <CardFooter class="border-t pt-4 justify-end">
-      <Button v-if="!enabled" :disabled="statusLoading" @click="enrollmentOpen = true">
-        <ShieldCheck class="size-4" />
-        {{ t('settings.totp.enable') }}
-      </Button>
-      <Button v-else variant="destructive" :disabled="statusLoading" @click="disableOpen = true">
-        <ShieldOff class="size-4" />
-        {{ t('settings.totp.disable') }}
-      </Button>
-    </CardFooter>
   </Card>
 
   <Dialog v-model:open="enrollmentOpen">
@@ -268,7 +261,12 @@ onUnmounted(() => {
       <div v-if="enrollmentStep === 'password'" class="space-y-4">
         <div class="space-y-2">
           <Label for="totp-enrollment-password">{{ t('settings.currentPassword') }}</Label>
-          <Input id="totp-enrollment-password" v-model="enrollmentPassword" type="password" autocomplete="current-password" />
+          <Input
+            id="totp-enrollment-password"
+            v-model="enrollmentPassword"
+            type="password"
+            autocomplete="current-password"
+          />
         </div>
       </div>
       <div v-else class="space-y-4">
@@ -283,8 +281,18 @@ onUnmounted(() => {
         <div class="space-y-2">
           <Label for="totp-enrollment-code">{{ t('auth.totpCode') }}</Label>
           <div class="relative">
-            <KeyRound class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input id="totp-enrollment-code" v-model="enrollmentCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="pl-10 font-mono" @input="enrollmentCode = normalizeCode(enrollmentCode)" />
+            <KeyRound
+              class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              id="totp-enrollment-code"
+              v-model="enrollmentCode"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              class="pl-10 font-mono"
+              @input="enrollmentCode = normalizeCode(enrollmentCode)"
+            />
           </div>
         </div>
       </div>
@@ -294,8 +302,14 @@ onUnmounted(() => {
         <AlertDescription>{{ enrollmentError }}</AlertDescription>
       </Alert>
       <DialogFooter>
-        <Button variant="outline" :disabled="enrollmentLoading" @click="enrollmentOpen = false">{{ t('common.cancel') }}</Button>
-        <Button v-if="enrollmentStep === 'password'" :disabled="enrollmentLoading" @click="beginEnrollment">
+        <Button variant="outline" :disabled="enrollmentLoading" @click="enrollmentOpen = false">{{
+          t('common.cancel')
+        }}</Button>
+        <Button
+          v-if="enrollmentStep === 'password'"
+          :disabled="enrollmentLoading"
+          @click="beginEnrollment"
+        >
           <Loader2 v-if="enrollmentLoading" class="size-4 animate-spin" />
           {{ t('common.next') }}
         </Button>
@@ -315,11 +329,24 @@ onUnmounted(() => {
       <div class="space-y-4">
         <div class="space-y-2">
           <Label for="totp-disable-password">{{ t('settings.currentPassword') }}</Label>
-          <Input id="totp-disable-password" v-model="disablePassword" type="password" autocomplete="current-password" />
+          <Input
+            id="totp-disable-password"
+            v-model="disablePassword"
+            type="password"
+            autocomplete="current-password"
+          />
         </div>
         <div class="space-y-2">
           <Label for="totp-disable-code">{{ t('auth.totpCode') }}</Label>
-          <Input id="totp-disable-code" v-model="disableCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="font-mono" @input="disableCode = normalizeCode(disableCode)" />
+          <Input
+            id="totp-disable-code"
+            v-model="disableCode"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            class="font-mono"
+            @input="disableCode = normalizeCode(disableCode)"
+          />
         </div>
         <Alert v-if="disableError" variant="destructive">
           <AlertTriangle />
@@ -327,7 +354,9 @@ onUnmounted(() => {
         </Alert>
       </div>
       <DialogFooter>
-        <Button variant="outline" :disabled="disableLoading" @click="disableOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="outline" :disabled="disableLoading" @click="disableOpen = false">{{
+          t('common.cancel')
+        }}</Button>
         <Button variant="destructive" :disabled="disableLoading" @click="disableTotp">
           <Loader2 v-if="disableLoading" class="size-4 animate-spin" />
           {{ t('settings.totp.disable') }}

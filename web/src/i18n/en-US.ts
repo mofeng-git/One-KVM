@@ -1,4 +1,6 @@
+import { settingsUiEn } from './settings-ui'
 export default {
+  settingsUi: settingsUiEn,
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG composite mode',
     compositeHelp: 'CH9329 handles keyboard and mouse. OTG provides virtual media, USB networking and USB audio. Enable advanced functions in their settings.',
@@ -12,6 +14,7 @@ export default {
     otgInactive: 'Not enabled',
     otgConfigured: 'USB configured by host',
     otgWaiting: 'Bound, waiting for host',
+
     missingDevice: 'The previous device {device} is unavailable. Check the current selection.',
     connectionTimeout: 'Connection timed out. Check the data cable and the controlled computer’s USB port. You can connect later or reconfigure.',
     "deviceTitle": "Driver and device",
@@ -634,7 +637,7 @@ export default {
     videoSubtitle: 'Configure capture device, video encoder and WebRTC ICE servers',
     hidSubtitle: 'Configure the HID backend, device, descriptors, and USB gadget functions',
     atxSubtitle: 'Configure remote power control hardware and Wake-on-LAN',
-    environmentSubtitle: 'View device information and system runtime diagnostics',
+    environmentSubtitle: 'Diagnose USB OTG and video encoding',
     otherSubtitle: 'Additional hardware controls and USB device maintenance',
     aboutSubtitle: 'Online upgrade and version information',
     extTtydSubtitle: 'Open a host Shell terminal in the browser',
@@ -642,7 +645,7 @@ export default {
     extRemoteAccessSubtitle: 'Remote access through NAT-traversal services',
     extFrpcSubtitle: 'NAT traversal through the FRP client',
     watchdog: {
-      title: 'Hardware Watchdog',
+      title: 'Hardware watchdog',
       description: 'The hardware watchdog can trigger a hardware reset if the system hangs or the process exits',
       status: {
         running: 'Running',

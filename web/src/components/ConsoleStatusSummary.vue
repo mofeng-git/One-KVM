@@ -48,7 +48,7 @@ function dotClass(status: ConsoleStatusItem['status']) {
       <Button
         variant="ghost"
         size="sm"
-        class="min-w-0 shrink gap-1.5 px-2 text-xs"
+        class="console-status-summary min-w-0 shrink gap-1.5 px-2 text-xs"
         :class="hasError ? 'text-destructive' : issues.length ? 'text-warning' : ''"
         :aria-label="`${t('statusCard.connectionDetails')}: ${summary}`"
         :title="summary"
@@ -56,7 +56,7 @@ function dotClass(status: ConsoleStatusItem['status']) {
         <AlertCircle v-if="hasError" class="size-3.5 shrink-0" />
         <Info v-else-if="issues.length" class="size-3.5 shrink-0" />
         <span v-else class="size-2 shrink-0 rounded-full bg-status-active" />
-        <span class="truncate" role="status">{{ summary }}</span>
+        <span class="console-status-summary__label truncate" role="status">{{ summary }}</span>
         <span v-if="showVideoInfo && !issues.length" class="hidden text-muted-foreground md:inline">{{ videoInfo }}</span>
         <ChevronDown class="size-3 shrink-0" />
       </Button>

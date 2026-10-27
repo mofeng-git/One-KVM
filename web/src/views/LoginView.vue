@@ -120,8 +120,8 @@ function returnToPassword(keepError = false) {
 </script>
 
 <template>
-  <div class="min-h-screen min-h-dvh flex items-center justify-center dot-grid-bg p-4">
-    <Card class="relative w-full max-w-sm">
+  <div class="login-page min-h-screen min-h-dvh flex items-center justify-center dot-grid-bg p-4">
+    <Card class="login-card relative w-full max-w-sm">
       <div class="absolute top-4 right-4">
         <LanguageToggleButton />
       </div>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import type { VideoRotation, VideoScaleMode } from '@/composables/useVideoScaling'
 import { Button } from '@/components/ui/button'
@@ -33,7 +32,6 @@ import {
 import {
   ClipboardPaste,
   HardDrive,
-  Settings,
   Power,
   BarChart3,
   Terminal,
@@ -53,7 +51,6 @@ import VideoDisplayControls from '@/components/VideoDisplayControls.vue'
 import type { ConsoleLayout } from '@/composables/useConsoleLayout'
 
 const { t, locale } = useI18n()
-const router = useRouter()
 const systemStore = useSystemStore()
 
 const overflowMenuOpen = ref(false)
@@ -72,6 +69,10 @@ const props = defineProps<{
   showMic?: boolean
   scaleMode?: VideoScaleMode
   sourceSizeAvailable?: boolean
+  keyboardVisible?: boolean
+  fullscreen?: boolean
+  statsOpen?: boolean
+  terminalOpen?: boolean
 }>()
 const isSidebarLayout = computed(() => props.layout === 'sidebar')
 const isFloatingLayout = computed(() => props.layout === 'floating')
@@ -159,7 +160,7 @@ let layoutResizeObserver: ResizeObserver | null = null
 
 type CollapsibleItem =
   | 'msd' | 'atx' | 'paste'
-  | 'stats' | 'terminal' | 'settings'
+  | 'stats' | 'terminal'
 
 interface ItemSpec {
   id: CollapsibleItem
@@ -172,7 +173,6 @@ const ITEM_SPECS: ItemSpec[] = [
   { id: 'paste',     side: 'left' },
   { id: 'stats',     side: 'right' },
   { id: 'terminal',  side: 'right' },
-  { id: 'settings',  side: 'right' },
 ]
 
 const measuredWidths = ref<Map<CollapsibleItem, { icon: number; label: number }>>(new Map())
@@ -300,7 +300,7 @@ const visibleSet = computed(() => {
   if (isSidebarLayout.value) {
     // Reserve More and a gap between the two groups before assigning vertical slots.
     let available = barHeight.value - coreHeight.value - fixedHeight.value - actionHeight.value - 16
-    const priority: CollapsibleItem[] = ['paste', 'settings', 'msd', 'atx', 'stats', 'terminal']
+    const priority: CollapsibleItem[] = ['paste', 'msd', 'atx', 'stats', 'terminal']
     for (const id of priority) {
       if (!collapsibleItems.value.some(item => item.id === id)) continue
       if (available < actionHeight.value) break
@@ -365,7 +365,7 @@ const hasRightOverflow = computed(() => {
       :aria-expanded="false"
       @click="setFloatingCollapsed(false)"
     >
-      <ChevronDown class="size-4" />{{ t('actionbar.expandToolbar') }}
+      <ChevronDown class="size-4" /><span class="hidden sm:inline">{{ t('actionbar.expandToolbar') }}</span>
     </Button>
     <div
       v-show="!isFloatingLayout || !floatingCollapsed"
@@ -424,6 +424,8 @@ const hasRightOverflow = computed(() => {
                   size="sm"
                   class="h-8 gap-1.5 text-xs"
                   :aria-label="t('actionbar.virtualMedia')"
+                  aria-haspopup="dialog"
+                  :aria-expanded="msdDialogOpen"
                   :title="t('actionbar.virtualMedia')"
                   @click="msdDialogOpen = true"
                 >
@@ -512,6 +514,8 @@ const hasRightOverflow = computed(() => {
           :text-only-scale="isSidebarLayout"
           :scale-mode="props.scaleMode"
           :source-size-available="props.sourceSizeAvailable"
+          :keyboard-visible="props.keyboardVisible"
+          :fullscreen="props.fullscreen"
           @toggle-fullscreen="emit('toggleFullscreen')"
           @update:scale-mode="emit('update:scaleMode', $event)"
           @toggle-virtual-keyboard="emit('toggleVirtualKeyboard')"
@@ -522,7 +526,7 @@ const hasRightOverflow = computed(() => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" :aria-label="t('actionbar.stats')" @click="emit('toggleStats')">
+                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" :aria-label="t('actionbar.stats')" :aria-pressed="!!props.statsOpen" @click="emit('toggleStats')">
                   <BarChart3 class="size-4" />
                   <span v-if="visibleSet.get('stats') === 'label'">{{ t('actionbar.stats') }}</span>
                 </Button>
@@ -545,6 +549,7 @@ const hasRightOverflow = computed(() => {
                   class="h-8 gap-1.5 text-xs"
                   :disabled="!props.ttydRunning"
                   :aria-label="t('actionbar.webTerminal')"
+                  :aria-pressed="!!props.terminalOpen"
                   @click="emit('openTerminal')"
                 >
                   <Terminal class="size-4" />
@@ -553,25 +558,6 @@ const hasRightOverflow = computed(() => {
               </TooltipTrigger>
               <TooltipContent>
                 <p>{{ t('extensions.ttyd.title') }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-
-
-        <!-- Settings - Adaptive -->
-        <div v-if="isVisible('settings')">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" :aria-label="t('actionbar.settings')" @click="router.push('/settings')">
-                  <Settings class="size-4" />
-                  <span v-if="visibleSet.get('settings') === 'label'">{{ t('actionbar.settings') }}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ t('actionbar.settingsTip') }}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -631,12 +617,6 @@ const hasRightOverflow = computed(() => {
             >
               <Terminal class="size-4 mr-2" />
               {{ t('actionbar.webTerminal') }}
-            </DropdownMenuItem>
-
-            <!-- Settings -->
-            <DropdownMenuItem v-if="!isFloatingLayout && !isVisible('settings')" @click="openFromOverflow(() => router.push('/settings'))">
-              <Settings class="size-4 mr-2" />
-              {{ t('actionbar.settings') }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -700,7 +680,7 @@ const hasRightOverflow = computed(() => {
 
   <!-- Hidden measurement container: renders each collapsible button in both
        icon-only and with-label forms so we can read their real offsetWidth. -->
-  <div ref="measureRef" aria-hidden="true" class="fixed pointer-events-none" style="visibility: hidden; top: -9999px; left: -9999px; white-space: nowrap;">
+  <div ref="measureRef" aria-hidden="true" class="console-action-measure fixed pointer-events-none" style="visibility: hidden; top: -9999px; left: -9999px; white-space: nowrap;">
     <div class="flex items-center gap-0.5 sm:gap-1.5 px-2 sm:px-4 py-1 sm:py-1.5">
       <!-- MSD -->
       <Button data-measure="msd-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><HardDrive class="size-4" /></Button>
@@ -717,9 +697,6 @@ const hasRightOverflow = computed(() => {
       <!-- Web Terminal -->
       <Button data-measure="terminal-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="size-4" /></Button>
       <Button data-measure="terminal-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Terminal class="size-4" />{{ t('actionbar.webTerminal') }}</Button>
-      <!-- Settings -->
-      <Button data-measure="settings-icon" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" /></Button>
-      <Button data-measure="settings-label" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"><Settings class="size-4" />{{ t('actionbar.settings') }}</Button>
     </div>
   </div>
 </template>
@@ -765,17 +742,11 @@ const hasRightOverflow = computed(() => {
   gap: 0;
   overflow: hidden;
   padding-inline: 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: 10px;
 }
 
 .console-action-bar--sidebar :deep(button > span) {
   display: none;
-}
-
-.console-action-bar--sidebar :deep([data-fixed-action][aria-hidden='true']) {
-  width: 1.5rem;
-  height: 1px;
-  margin: 0.35rem auto;
 }
 
 .console-action-bar--sidebar .console-action-bar__inner {
@@ -799,10 +770,6 @@ const hasRightOverflow = computed(() => {
   padding-inline: 10px;
   flex-shrink: 0;
   border-radius: 10px;
-}
-
-.console-action-bar--floating .console-action-bar__inner :deep(button[aria-expanded='true']) {
-  background: var(--accent);
 }
 
 @media (max-width: 639px) {

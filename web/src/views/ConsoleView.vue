@@ -68,6 +68,7 @@ import {
   ChevronDown,
   KeyRound,
   Loader2,
+  Settings,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -3103,8 +3104,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative h-screen h-dvh flex flex-col bg-background">
-    <header class="shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
+  <div class="console-page relative h-screen h-dvh flex flex-col bg-background">
+    <header class="console-header shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
       <div class="px-2 sm:px-4">
         <div class="console-header__row h-10 sm:h-14 flex items-center justify-between">
           <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-6">
@@ -3146,6 +3147,8 @@ onUnmounted(() => {
               :show-stats="showConnectionStats"
               :show-terminal="showTerminal"
               :terminal-running="!!ttydStatus?.running"
+              :stats-open="statsSheetOpen"
+              :terminal-open="showTerminalDialog"
 
               @open-stats="openStatsSheet"
               @open-terminal="openTerminal"
@@ -3194,6 +3197,16 @@ onUnmounted(() => {
               <Moon v-else class="size-4" />
             </Button>
             <LanguageToggleButton class="size-8 hidden md:flex" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="console-settings-button"
+              :aria-label="t('actionbar.settings')"
+              :title="t('actionbar.settings')"
+              @click="router.push('/settings')"
+            >
+              <Settings class="size-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 px-2 sm:px-3">
@@ -3249,6 +3262,10 @@ onUnmounted(() => {
         :show-mic="microphoneTransferEnabled"
         :scale-mode="videoScaleMode"
         :source-size-available="sourceSizeAvailable"
+        :keyboard-visible="virtualKeyboardVisible"
+        :fullscreen="isFullscreen"
+        :stats-open="statsSheetOpen"
+        :terminal-open="showTerminalDialog"
         @toggle-fullscreen="toggleFullscreen"
         @update:scale-mode="setVideoScaleMode"
         @toggle-stats="openStatsSheet"
@@ -3498,6 +3515,7 @@ onUnmounted(() => {
     </Teleport>
     <div id="keyboard-anchor"></div>
     <InfoBar
+      class="console-info-bar"
       v-if="consoleLayout !== 'floating' || pressedKeys.length > 0 || isPointerLocked"
       :compact="consoleLayout !== 'current'"
       :captured="isPointerLocked"

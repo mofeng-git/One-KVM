@@ -5,7 +5,13 @@ import type { VideoDevice, VideoFormat, VideoResolution } from '@/api'
 import { formatFpsLabel } from '@/lib/fps'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const props = defineProps<{
   device?: VideoDevice
@@ -66,7 +72,10 @@ const { t } = useI18n()
     </div>
 
     <div v-else class="flex items-center justify-between gap-3" role="status">
-      <div class="flex min-w-0 items-center gap-2 text-muted-foreground" :class="compact ? 'text-xs' : 'text-sm'">
+      <div
+        class="flex min-w-0 items-center gap-2 text-muted-foreground"
+        :class="compact ? 'text-xs' : 'text-sm'"
+      >
         <AlertTriangle class="size-4 shrink-0" />
         <span>{{ t('videoInput.unavailable') }}</span>
       </div>
@@ -85,14 +94,28 @@ const { t } = useI18n()
   </template>
 
   <template v-else-if="device">
-    <div class="space-y-2">
-      <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{ t('videoInput.format') }}</Label>
-      <Select :model-value="format" @update:model-value="value => emit('update:format', String(value))">
-        <SelectTrigger :size="compact ? 'sm' : 'default'" class="w-full" :class="compact ? 'text-xs' : undefined">
+    <div class="settings-field space-y-2">
+      <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{
+        t('videoInput.format')
+      }}</Label>
+      <Select
+        :model-value="format"
+        @update:model-value="(value) => emit('update:format', String(value))"
+      >
+        <SelectTrigger
+          :size="compact ? 'sm' : 'default'"
+          class="w-full"
+          :class="compact ? 'text-xs' : undefined"
+        >
           <SelectValue :placeholder="t('videoInput.selectFormat')" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="item in formats" :key="item.format" :value="item.format" :disabled="item.disabled">
+          <SelectItem
+            v-for="item in formats"
+            :key="item.format"
+            :value="item.format"
+            :disabled="item.disabled"
+          >
             {{ item.description || item.format }}
           </SelectItem>
         </SelectContent>
@@ -100,24 +123,46 @@ const { t } = useI18n()
     </div>
 
     <div :class="resolutionFpsInline ? 'grid grid-cols-2 gap-3' : 'space-y-4'">
-      <div class="space-y-2">
-        <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{ t('videoInput.resolution') }}</Label>
-        <Select :model-value="resolution" @update:model-value="value => emit('update:resolution', String(value))">
-          <SelectTrigger :size="compact ? 'sm' : 'default'" class="w-full" :class="compact ? 'text-xs' : undefined">
+      <div class="settings-field space-y-2">
+        <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{
+          t('videoInput.resolution')
+        }}</Label>
+        <Select
+          :model-value="resolution"
+          @update:model-value="(value) => emit('update:resolution', String(value))"
+        >
+          <SelectTrigger
+            :size="compact ? 'sm' : 'default'"
+            class="w-full"
+            :class="compact ? 'text-xs' : undefined"
+          >
             <SelectValue :placeholder="t('videoInput.selectResolution')" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem v-for="item in resolutions" :key="`${item.width}x${item.height}`" :value="`${item.width}x${item.height}`">
+            <SelectItem
+              v-for="item in resolutions"
+              :key="`${item.width}x${item.height}`"
+              :value="`${item.width}x${item.height}`"
+            >
               {{ item.width }}x{{ item.height }}
             </SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div class="space-y-2">
-        <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{ t('videoInput.frameRate') }}</Label>
-        <Select :model-value="fps === null ? '' : String(fps)" @update:model-value="value => emit('update:fps', Number(value))">
-          <SelectTrigger :size="compact ? 'sm' : 'default'" class="w-full" :class="compact ? 'text-xs' : undefined">
+      <div class="settings-field space-y-2">
+        <Label :class="compact ? 'text-xs text-muted-foreground' : undefined">{{
+          t('videoInput.frameRate')
+        }}</Label>
+        <Select
+          :model-value="fps === null ? '' : String(fps)"
+          @update:model-value="(value) => emit('update:fps', Number(value))"
+        >
+          <SelectTrigger
+            :size="compact ? 'sm' : 'default'"
+            class="w-full"
+            :class="compact ? 'text-xs' : undefined"
+          >
             <SelectValue :placeholder="t('videoInput.selectFps')" />
           </SelectTrigger>
           <SelectContent>
