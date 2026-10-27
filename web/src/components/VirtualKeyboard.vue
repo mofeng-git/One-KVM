@@ -12,7 +12,6 @@ import {
   consumerKeys,
   latchingKeys,
   modifiers,
-  updateModifierMaskForKey,
   type KeyName,
   type ConsumerKeyName,
 } from '@/lib/keyboardMappings'
@@ -29,6 +28,7 @@ const props = defineProps<{
   capsLock?: boolean
   pressedKeys?: CanonicalKey[]
   consumerEnabled?: boolean
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,7 +88,6 @@ const getBottomRow = () =>
 const keyboardLayout = {
   main: {
     default: [
-      'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
       'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 PrintScreen ScrollLock Pause',
       'Backquote Digit1 Digit2 Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 Digit0 Minus Equal Backspace Insert Home PageUp',
       'Tab KeyQ KeyW KeyE KeyR KeyT KeyY KeyU KeyI KeyO KeyP BracketLeft BracketRight Backslash Delete End PageDown',
@@ -97,7 +96,6 @@ const keyboardLayout = {
       'ControlLeft MetaLeft AltLeft Space AltRight MetaRight ContextMenu ControlRight ArrowLeft ArrowDown ArrowRight',
     ],
     shift: [
-      'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
       'Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 PrintScreen ScrollLock Pause',
       '(Backquote) (Digit1) (Digit2) (Digit3) (Digit4) (Digit5) (Digit6) (Digit7) (Digit8) (Digit9) (Digit0) (Minus) (Equal) Backspace Insert Home PageUp',
       'Tab (KeyQ) (KeyW) (KeyE) (KeyR) (KeyT) (KeyY) (KeyU) (KeyI) (KeyO) (KeyP) (BracketLeft) (BracketRight) (Backslash) Delete End PageDown',
@@ -142,10 +140,6 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
     : selectedOs.value === 'mac' ? '⌘ Cmd' : 'Meta'
 
   return {
-    CtrlAltDelete: 'Ctrl+Alt+Del',
-    AltMetaEscape: 'Alt+Meta+Esc',
-    CtrlAltBackspace: 'Ctrl+Alt+Bksp',
-
     ControlLeft: 'Ctrl',
     ControlRight: 'Ctrl',
     ShiftLeft: 'Shift',
@@ -258,6 +252,7 @@ const keyDisplayMap = computed<Record<string, string>>(() => {
 })
 
 async function onMediaKeyPress(key: string) {
+  if (props.disabled) return
   if (key in consumerKeys) {
     const usage = consumerKeys[key as ConsumerKeyName]
     try {
@@ -293,26 +288,7 @@ function updateKeyboardLayout() {
 }
 
 async function onKeyDown(key: string) {
-  if (key === 'CtrlAltDelete') {
-    await executeMacro([
-      { keys: ['Delete'], modifiers: ['ControlLeft', 'AltLeft'] },
-    ])
-    return
-  }
-
-  if (key === 'AltMetaEscape') {
-    await executeMacro([
-      { keys: ['Escape'], modifiers: ['AltLeft', 'MetaLeft'] },
-    ])
-    return
-  }
-
-  if (key === 'CtrlAltBackspace') {
-    await executeMacro([
-      { keys: ['Backspace'], modifiers: ['ControlLeft', 'AltLeft'] },
-    ])
-    return
-  }
+  if (props.disabled) return
 
   const cleanKey = key.replace(/[()]/g, '')
 
@@ -377,54 +353,9 @@ async function sendKeyPress(keyCode: CanonicalKey, press: boolean, modifierMask:
   }
 }
 
-interface MacroStep {
-  keys: string[]
-  modifiers: string[]
-}
-
-async function executeMacro(steps: MacroStep[]) {
-  let macroModifierMask = pressedModifiers.value & 0xff
-
-  for (const step of steps) {
-    for (const mod of step.modifiers) {
-      if (mod in keys) {
-        const modHid = keys[mod as KeyName]
-        macroModifierMask = updateModifierMaskForKey(macroModifierMask, modHid, true)
-        await sendKeyPress(modHid, true, macroModifierMask)
-      }
-    }
-
-    for (const key of step.keys) {
-      if (key in keys) {
-        await sendKeyPress(keys[key as KeyName], true, macroModifierMask)
-      }
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    for (const key of step.keys) {
-      if (key in keys) {
-        await sendKeyPress(keys[key as KeyName], false, macroModifierMask)
-      }
-    }
-
-    for (const mod of step.modifiers) {
-      if (mod in keys) {
-        const modHid = keys[mod as KeyName]
-        macroModifierMask = updateModifierMaskForKey(macroModifierMask, modHid, false)
-        await sendKeyPress(modHid, false, macroModifierMask)
-      }
-    }
-  }
-}
-
 function updateKeyboardButtonTheme() {
   const downKeys = keyNamesForDownKeys.value.join(' ')
   const buttonTheme = [
-    {
-      class: 'combination-key',
-      buttons: 'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
-    },
     {
       class: 'down-key',
       buttons: downKeys,
@@ -460,12 +391,6 @@ function initKeyboards() {
     theme: 'hg-theme-default hg-layout-default vkb-keyboard',
     onKeyPress: onKeyDown,
     onKeyReleased: onKeyUp,
-    buttonTheme: [
-      {
-        class: 'combination-key',
-        buttons: 'CtrlAltDelete AltMetaEscape CtrlAltBackspace',
-      },
-    ],
     disableButtonHold: true,
     preventMouseDownDefault: true,
     preventMouseUpDefault: true,
@@ -559,7 +484,7 @@ watch(() => props.attached, (value) => {
 
 onMounted(() => {
   const savedOs = localStorage.getItem('vkb-os-layout') as KeyboardOsType | null
-  if (savedOs && ['windows', 'mac', 'android'].includes(savedOs)) {
+  if (savedOs && ['windows', 'linux', 'mac', 'android'].includes(savedOs)) {
     selectedOs.value = savedOs
   }
 
@@ -617,7 +542,7 @@ onUnmounted(() => {
           </Button>
           <div class="vkb-os-selector">
             <Button
-              v-for="os in (['windows', 'mac', 'android'] as KeyboardOsType[])"
+              v-for="os in (['windows', 'linux', 'mac', 'android'] as KeyboardOsType[])"
               :key="os"
               class="vkb-os-btn"
               variant="ghost"
@@ -625,7 +550,7 @@ onUnmounted(() => {
               :class="{ 'vkb-os-btn--active': selectedOs === os }"
               @click.stop="switchOsLayout(os)"
             >
-              {{ os === 'windows' ? 'Win' : os === 'mac' ? 'Mac' : 'Android' }}
+              {{ os === 'windows' ? 'Win' : os === 'linux' ? 'Linux' : os === 'mac' ? 'Mac' : 'Android' }}
             </Button>
           </div>
         </div>
@@ -702,15 +627,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Combination/macro keys */
-.vkb .simple-keyboard .hg-button.combination-key {
-  font-size: 10px;
-  height: 28px;
-  min-width: auto !important;
-  max-width: fit-content !important;
-  flex-grow: 0 !important;
-  padding: 0 8px;
-}
 
 /* Pressed keys */
 .vkb .simple-keyboard .hg-button.down-key {
@@ -735,15 +651,8 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
-/* First row (macros) - left aligned */
+/* Function row spacing */
 .kb-main-container .hg-row:first-child {
-  justify-content: flex-start !important;
-  margin-bottom: 8px;
-  gap: 4px;
-}
-
-/* Second row (function keys) spacing */
-.kb-main-container .hg-row:nth-child(2) {
   margin-bottom: 8px;
 }
 
@@ -1119,11 +1028,6 @@ html.dark .hg-theme-default .hg-button.down-key,
     min-width: 0;
   }
 
-  .vkb .simple-keyboard .hg-button.combination-key {
-    font-size: 9px;
-    height: 24px;
-    padding: 0 6px;
-  }
 
   .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"],
   .vkb .simple-keyboard .hg-button[data-skbtn="Tab"],
@@ -1182,11 +1086,6 @@ html.dark .hg-theme-default .hg-button.down-key,
     border-radius: 4px;
   }
 
-  .vkb .simple-keyboard .hg-button.combination-key {
-    font-size: 8px;
-    height: 22px;
-    padding: 0 4px;
-  }
 
   .vkb .simple-keyboard .hg-button[data-skbtn="Insert"],
   .vkb .simple-keyboard .hg-button[data-skbtn="Delete"],
@@ -1234,10 +1133,6 @@ html.dark .hg-theme-default .hg-button.down-key,
   font-size: 12px;
 }
 
-.vkb--floating :deep(.simple-keyboard .hg-button.combination-key) {
-  height: 26px;
-  font-size: 10px;
-}
 
 /* Animation */
 .keyboard-fade-enter-active,

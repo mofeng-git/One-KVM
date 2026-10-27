@@ -48,6 +48,8 @@ import HidConfigPopover from '@/components/HidConfigPopover.vue'
 import AudioConfigPopover from '@/components/AudioConfigPopover.vue'
 import MsdDialog from '@/components/MsdDialog.vue'
 import VideoDisplayControls from '@/components/VideoDisplayControls.vue'
+import KeyboardShortcutsPopover from '@/components/KeyboardShortcutsPopover.vue'
+import type { KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import type { ConsoleLayout } from '@/composables/useConsoleLayout'
 
 const { t, locale } = useI18n()
@@ -73,6 +75,9 @@ const props = defineProps<{
   fullscreen?: boolean
   statsOpen?: boolean
   terminalOpen?: boolean
+  shortcutsReady?: boolean
+  shortcutInputBusy?: boolean
+  shortcutBusy?: boolean
 }>()
 const isSidebarLayout = computed(() => props.layout === 'sidebar')
 const isFloatingLayout = computed(() => props.layout === 'floating')
@@ -106,6 +111,8 @@ const emit = defineEmits<{
   (e: 'reset'): void
   (e: 'wol', macAddress: string): void
   (e: 'openTerminal'): void
+  (e: 'executeShortcut', shortcut: KeyboardShortcut): void
+  (e: 'cancelShortcut'): void
 }>()
 
 const pasteOpen = ref(false)
@@ -114,6 +121,7 @@ const videoPopoverOpen = ref(false)
 const hidPopoverOpen = ref(false)
 const audioPopoverOpen = ref(false)
 const msdDialogOpen = ref(false)
+const shortcutsOpen = ref(false)
 
 const mobileAtxOpen = ref(false)
 const mobilePasteOpen = ref(false)
@@ -259,6 +267,7 @@ watch([() => props.layout, floatingCollapsed, minimalDisplayControls], () => {
   hidPopoverOpen.value = false
   audioPopoverOpen.value = false
   msdDialogOpen.value = false
+  shortcutsOpen.value = false
   mobileAtxOpen.value = false
   mobilePasteOpen.value = false
   void observeLayout()
@@ -519,6 +528,16 @@ const hasRightOverflow = computed(() => {
           @toggle-fullscreen="emit('toggleFullscreen')"
           @update:scale-mode="emit('update:scaleMode', $event)"
           @toggle-virtual-keyboard="emit('toggleVirtualKeyboard')"
+        />
+
+        <KeyboardShortcutsPopover
+          v-model:open="shortcutsOpen"
+          :ready="props.shortcutsReady === true"
+          :input-busy="props.shortcutInputBusy"
+          :busy="props.shortcutBusy"
+          :side="isSidebarLayout ? 'right' : 'bottom'"
+          @execute="emit('executeShortcut', $event)"
+          @cancel="emit('cancelShortcut')"
         />
 
         <!-- Connection Stats - Adaptive -->

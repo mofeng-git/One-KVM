@@ -20,6 +20,7 @@ import { streamApi, hidApi, atxApi, atxConfigApi, authApi, uacApi } from '@/api'
 import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
+import { executeKeyboardShortcut, type KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import { toast } from 'vue-sonner'
 import { cn, generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
@@ -167,6 +168,8 @@ const keyboardLed = computed(() => ({
 }))
 const keyboardLedEnabled = computed(() => systemStore.hid?.keyboardLedsEnabled ?? false)
 const keyboardLockPending = ref(false)
+const shortcutBusy = ref(false)
+let shortcutController: AbortController | null = null
 const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 })
@@ -2076,9 +2079,53 @@ function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: nu
   transmitKeyboardEvent(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
 }
 
+function cancelShortcut() {
+  shortcutController?.abort()
+}
+
+async function executeShortcut(shortcut: KeyboardShortcut) {
+  if (shortcutBusy.value || !isConsoleActive.value || hidStatus.value !== 'connected') return
+  if (pressedKeys.value.length || activeModifierMask.value || keyboardLockPending.value) {
+    toast.info(t('shortcuts.releaseKeys'))
+    return
+  }
+  const controller = new AbortController()
+  shortcutController = controller
+  shortcutBusy.value = true
+  // Unlike the low-latency WebRTC channel (limited retransmissions), WebSocket
+  // delivers the whole chord reliably and in order, independent of video mode.
+  try {
+    await executeKeyboardShortcut(shortcut, async (type, key, modifier) => {
+      if (type === 'down' && hidStatus.value !== 'connected') throw new Error('HID disconnected')
+      const event: HidKeyboardEvent = { type: type === 'down' ? 'keydown' : 'keyup', key, modifier }
+      await hidWs.sendKeyboard(event)
+    }, {
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (isConsoleActive.value) toast.info(t('shortcuts.stopped'))
+    } else {
+      console.error('[Shortcuts] Send failed:', error)
+      toast.error(t('shortcuts.failed'))
+    }
+  } finally {
+    shortcutController = null
+    shortcutBusy.value = false
+  }
+}
+
+watch(hidStatus, status => {
+  if (status !== 'connected') shortcutController?.abort(new Error('HID disconnected'))
+}, { flush: 'sync' })
+watch([hidWs.connected, hidWs.networkError, hidWs.hidUnavailable], ([connected, error, unavailable]) => {
+  if (!connected || error || unavailable) shortcutController?.abort(new Error('HID WebSocket disconnected'))
+}, { flush: 'sync' })
+watch([videoMode, consoleLayout], cancelShortcut, { flush: 'sync' })
+
 async function toggleKeyboardLock(key: CanonicalKey.CapsLock | CanonicalKey.NumLock | CanonicalKey.ScrollLock) {
   if (!keyboardLedEnabled.value || hidStatus.value !== 'connected'
-    || keyboardLockPending.value || pressedKeys.value.includes(key)) return
+    || shortcutBusy.value || keyboardLockPending.value || pressedKeys.value.includes(key)) return
 
   keyboardLockPending.value = true
   try {
@@ -2127,6 +2174,8 @@ function shouldBlockKey(e: KeyboardEvent): boolean {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (shortcutBusy.value || document.querySelector('[data-keyboard-shortcuts]')
+    || (e.target instanceof Element && e.target.closest('[data-shortcut-surface]'))) return
   const container = videoContainerRef.value
   if (!container) return
 
@@ -2156,20 +2205,16 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 function handleKeyUp(e: KeyboardEvent) {
-  const container = videoContainerRef.value
-  if (!container) return
-
-  if (!isFullscreen.value && !container.contains(document.activeElement)) return
-
-  if (shouldBlockKey(e)) {
+  if (shortcutBusy.value) return
+  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
+  // A local Tab/Enter can move focus before keyup. Only release keys whose
+  // keydown was actually forwarded; do release them after focus moves away.
+  if (canonicalKey === undefined || !pressedKeys.value.includes(canonicalKey)) return
+  const localShortcut = document.querySelector('[data-keyboard-shortcuts]')
+    || (e.target instanceof Element && e.target.closest('[data-shortcut-surface]'))
+  if (!localShortcut && shouldBlockKey(e)) {
     e.preventDefault()
     e.stopPropagation()
-  }
-
-  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
-  if (canonicalKey === undefined) {
-    console.warn(`[HID] Unmapped key up: code=${e.code}, key=${e.key}`)
-    return
   }
 
   pressedKeys.value = pressedKeys.value.filter(k => k !== canonicalKey)
@@ -2837,6 +2882,7 @@ function handleFullscreenChange() {
 }
 
 function handleBlur() {
+  cancelShortcut()
   resetTouchInput()
   pressedKeys.value = []
   activeModifierMask.value = 0
@@ -3266,6 +3312,11 @@ onUnmounted(() => {
         :fullscreen="isFullscreen"
         :stats-open="statsSheetOpen"
         :terminal-open="showTerminalDialog"
+        :shortcuts-ready="isConsoleActive && hidStatus === 'connected' && hidWs.connected.value && !hidWs.networkError.value && !hidWs.hidUnavailable.value"
+        :shortcut-input-busy="pressedKeys.length > 0 || activeModifierMask !== 0 || keyboardLockPending"
+        :shortcut-busy="shortcutBusy"
+        @execute-shortcut="executeShortcut"
+        @cancel-shortcut="cancelShortcut"
         @toggle-fullscreen="toggleFullscreen"
         @update:scale-mode="setVideoScaleMode"
         @toggle-stats="openStatsSheet"
@@ -3509,6 +3560,7 @@ onUnmounted(() => {
         :caps-lock="keyboardLed.capsLock"
         :pressed-keys="pressedKeys"
         :consumer-enabled="virtualKeyboardConsumerEnabled"
+        :disabled="shortcutBusy"
         @key-down="handleVirtualKeyDown"
         @key-up="handleVirtualKeyUp"
       />
@@ -3528,7 +3580,7 @@ onUnmounted(() => {
       :num-lock="keyboardLed.numLock"
       :scroll-lock="keyboardLed.scrollLock"
       :keyboard-led-enabled="keyboardLedEnabled"
-      :keyboard-lock-disabled="hidStatus !== 'connected' || keyboardLockPending"
+      :keyboard-lock-disabled="hidStatus !== 'connected' || keyboardLockPending || shortcutBusy"
       :mouse-position="mousePosition"
       :debug-mode="false"
       @toggle-lock="toggleKeyboardLock"
