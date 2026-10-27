@@ -52,6 +52,8 @@ impl UsbCoordinator {
 
     pub async fn apply_config(&self, old_config: &AppConfig, new_config: &AppConfig) -> Result<()> {
         new_config.hid.validate_platform()?;
+        // Also runs for config-only updates and rollback; never forces a USB reload.
+        self.hid.configure_jiggler(&new_config.hid);
         #[cfg(unix)]
         {
             let transitioning_away_from_otg = old_config.hid.backend == HidBackend::Otg
@@ -317,6 +319,32 @@ fn hid_otg_config_changed(old: &HidConfig, new: &HidConfig) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jiggler_preferences_do_not_reload_hid_or_change_usb_descriptors() {
+        let old = AppConfig::default();
+        let mut new = old.clone();
+        new.hid.jiggler.enabled = true;
+        new.hid.jiggler.interval_secs = 120;
+        assert!(!hid_requires_reload(&old.hid, &new.hid));
+        #[cfg(unix)]
+        assert_eq!(
+            crate::otg::service::OtgDesiredState::from_config(
+                &old.hid,
+                &old.msd,
+                &old.otg_network,
+                &old.uac
+            )
+            .unwrap(),
+            crate::otg::service::OtgDesiredState::from_config(
+                &new.hid,
+                &new.msd,
+                &new.otg_network,
+                &new.uac
+            )
+            .unwrap()
+        );
+    }
 
     #[test]
     fn composite_otg_preferences_do_not_reload_ch9329_but_input_changes_do() {

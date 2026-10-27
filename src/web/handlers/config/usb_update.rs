@@ -12,15 +12,24 @@ pub(super) fn stage_hid_config_update(
     update.validate()?;
 
     let old_descriptor = staged_hid.ch9329_descriptor.clone();
-    update.apply_to(staged_hid);
+    let mut updated_hid = staged_hid.clone();
+    update.apply_to(&mut updated_hid);
+    if update.jiggler.as_ref().and_then(|update| update.enabled) == Some(true)
+        && !updated_hid.has_mouse()
+    {
+        return Err(crate::error::AppError::BadRequest(
+            "Mouse jiggler requires a configured mouse interface".into(),
+        ));
+    }
 
     let requested_descriptor = update
         .ch9329_descriptor
         .as_ref()
-        .map(|_| staged_hid.ch9329_descriptor.clone());
+        .map(|_| updated_hid.ch9329_descriptor.clone());
     if requested_descriptor.is_some() {
-        staged_hid.ch9329_descriptor = old_descriptor;
+        updated_hid.ch9329_descriptor = old_descriptor;
     }
+    *staged_hid = updated_hid;
 
     Ok(requested_descriptor)
 }
@@ -318,6 +327,7 @@ mod tests {
 
     fn hid_update() -> HidConfigUpdate {
         HidConfigUpdate {
+            jiggler: None,
             bluetooth_reset_pairing: None,
             bluetooth: None,
             backend: None,
@@ -333,6 +343,52 @@ mod tests {
             otg_keyboard_leds: None,
             mouse_absolute: None,
         }
+    }
+
+    #[test]
+    fn jiggler_partial_updates_validate_and_preserve_other_preferences() {
+        let mut hid = HidConfig::default();
+        hid.backend = HidBackend::Ch9329;
+        for (request, enabled, interval) in [
+            (serde_json::json!({"jiggler":{"enabled":true}}), true, 60),
+            (
+                serde_json::json!({"jiggler":{"interval_secs":120}}),
+                true,
+                120,
+            ),
+            (serde_json::json!({"jiggler":{"enabled":false}}), false, 120),
+            (serde_json::json!({"mouse_absolute":false}), false, 120),
+        ] {
+            let update: HidConfigUpdate = serde_json::from_value(request).unwrap();
+            stage_hid_config_update(&mut hid, &update).unwrap();
+            assert_eq!(hid.jiggler.enabled, enabled);
+            assert_eq!(hid.jiggler.interval_secs, interval);
+            assert_eq!(hid.backend, HidBackend::Ch9329);
+        }
+        for interval in [0, 9, 3601] {
+            let update: HidConfigUpdate =
+                serde_json::from_value(serde_json::json!({"jiggler":{"interval_secs":interval}}))
+                    .unwrap();
+            assert!(stage_hid_config_update(&mut hid, &update).is_err());
+            assert_eq!(hid.jiggler.interval_secs, 120);
+        }
+        for interval in [
+            serde_json::json!(-1),
+            serde_json::json!(10.5),
+            serde_json::json!("60"),
+        ] {
+            assert!(serde_json::from_value::<HidConfigUpdate>(
+                serde_json::json!({"jiggler":{"interval_secs":interval}})
+            )
+            .is_err());
+        }
+        hid.backend = HidBackend::None;
+        let enable: HidConfigUpdate =
+            serde_json::from_value(serde_json::json!({"jiggler":{"enabled":true}})).unwrap();
+        assert!(stage_hid_config_update(&mut hid, &enable).is_err());
+        let disable: HidConfigUpdate =
+            serde_json::from_value(serde_json::json!({"jiggler":{"enabled":false}})).unwrap();
+        assert!(stage_hid_config_update(&mut hid, &disable).is_ok());
     }
 
     #[test]

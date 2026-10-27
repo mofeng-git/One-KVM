@@ -145,6 +145,32 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
+    async fn jiggler_defaults_and_preferences_survive_restart() {
+        let defaults: crate::config::HidConfig =
+            serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();
+        assert!(!defaults.jiggler.enabled);
+        assert_eq!(defaults.jiggler.interval_secs, 60);
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("jiggler.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        store
+            .update(|config| {
+                config.hid.jiggler.enabled = true;
+                config.hid.jiggler.interval_secs = 120;
+            })
+            .await
+            .unwrap();
+        let reloaded = ConfigStore::new(db.clone_pool());
+        reloaded.load().await.unwrap();
+        assert!(reloaded.get().hid.jiggler.enabled);
+        assert_eq!(reloaded.get().hid.jiggler.interval_secs, 120);
+    }
+
+    #[tokio::test]
     async fn test_config_store() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");

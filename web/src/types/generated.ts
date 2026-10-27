@@ -61,7 +61,13 @@ export interface Ch9329DescriptorConfig {
 	serial_number?: string;
 }
 
+export interface MouseJigglerConfig {
+	enabled: boolean;
+	interval_secs: number;
+}
+
 export interface HidConfig {
+	jiggler: MouseJigglerConfig;
 	bluetooth: BluetoothHidConfig;
 	backend: HidBackend;
 	otg_udc?: string;
@@ -503,7 +509,13 @@ export interface OtgHidFunctionsUpdate {
 	consumer?: boolean;
 }
 
+export interface MouseJigglerConfigUpdate {
+	enabled?: boolean;
+	interval_secs?: number;
+}
+
 export interface HidConfigUpdate {
+	jiggler?: MouseJigglerConfigUpdate;
 	bluetooth_reset_pairing?: boolean;
 	bluetooth?: BluetoothHidConfig;
 	backend?: HidBackend;

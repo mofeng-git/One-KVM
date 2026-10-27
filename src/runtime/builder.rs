@@ -107,6 +107,7 @@ impl RuntimeBuilder {
         #[cfg(target_os = "linux")]
         hid.set_bond_store(config_store.hid_bonds());
         hid.set_event_bus(events.clone()).await;
+        hid.configure_jiggler(&config.hid);
         hid.set_screen_resolution(video_resolution.width, video_resolution.height)
             .await;
         if let Err(error) = hid.init().await {

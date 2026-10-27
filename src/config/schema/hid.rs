@@ -249,7 +249,36 @@ impl OtgHidProfile {
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+pub struct MouseJigglerConfig {
+    pub enabled: bool,
+    pub interval_secs: u32,
+}
+
+impl Default for MouseJigglerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secs: 60,
+        }
+    }
+}
+
+impl MouseJigglerConfig {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if !(10..=3600).contains(&self.interval_secs) {
+            return Err(crate::error::AppError::BadRequest(
+                "Mouse jiggler interval must be an integer between 10 and 3600 seconds".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct HidConfig {
+    pub jiggler: MouseJigglerConfig,
     pub bluetooth: BluetoothHidConfig,
     pub backend: HidBackend,
     pub otg_udc: Option<String>,
@@ -276,6 +305,7 @@ pub struct HidConfig {
 impl Default for HidConfig {
     fn default() -> Self {
         Self {
+            jiggler: MouseJigglerConfig::default(),
             backend: HidBackend::None,
             bluetooth: BluetoothHidConfig::default(),
             otg_udc: None,
@@ -294,6 +324,17 @@ impl Default for HidConfig {
 }
 
 impl HidConfig {
+    pub fn has_mouse(&self) -> bool {
+        match self.backend {
+            HidBackend::None => false,
+            HidBackend::Otg => {
+                let functions = self.effective_otg_functions();
+                functions.mouse_relative || functions.mouse_absolute
+            }
+            _ => true,
+        }
+    }
+
     pub fn effective_otg_functions(&self) -> OtgHidFunctions {
         self.otg_profile.resolve_functions(&self.otg_functions)
     }
@@ -311,6 +352,7 @@ impl HidConfig {
     }
 
     pub fn validate_platform(&self) -> crate::error::Result<()> {
+        self.jiggler.validate()?;
         if self.backend == HidBackend::Ch9329Otg && !cfg!(target_os = "linux") {
             return Err(crate::error::AppError::BadRequest(
                 "CH9329 + OTG requires Linux with a USB device controller".into(),

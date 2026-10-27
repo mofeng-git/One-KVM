@@ -8,6 +8,7 @@ mod ch9329_proto;
 pub mod consumer;
 pub mod datachannel;
 mod factory;
+mod jiggler;
 pub mod keyboard;
 mod macos_drag;
 #[cfg(unix)]
@@ -141,6 +142,8 @@ pub struct HidController {
     backend_available: Arc<AtomicBool>,
     reset_requested: Arc<AtomicBool>,
     screen_resolution: parking_lot::RwLock<(u32, u32)>,
+    jiggler: Arc<parking_lot::Mutex<jiggler::JigglerState>>,
+    jiggler_changed: Arc<tokio::sync::Notify>,
 }
 
 impl HidController {
@@ -164,6 +167,8 @@ impl HidController {
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
             screen_resolution: parking_lot::RwLock::new((1920, 1080)),
+            jiggler: Arc::new(parking_lot::Mutex::new(jiggler::JigglerState::default())),
+            jiggler_changed: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -187,6 +192,8 @@ impl HidController {
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
             screen_resolution: parking_lot::RwLock::new((1920, 1080)),
+            jiggler: Arc::new(parking_lot::Mutex::new(jiggler::JigglerState::default())),
+            jiggler_changed: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -235,6 +242,9 @@ impl HidController {
 
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down HID controller");
+        self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
+        self.jiggler_changed.notify_one();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -265,6 +275,7 @@ impl HidController {
 
         info!("Preparing OTG HID backend for gadget rebuild");
         self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -403,6 +414,14 @@ impl HidController {
         self.runtime_state.read().await.clone()
     }
 
+    /// Jiggler preferences are independent of USB descriptors and device reloads.
+    pub fn configure_jiggler(&self, config: &crate::config::HidConfig) {
+        self.jiggler
+            .lock()
+            .configure(config, std::time::Instant::now());
+        self.jiggler_changed.notify_one();
+    }
+
     async fn ch9329_backend(&self) -> Result<Arc<dyn HidBackend>> {
         if !matches!(
             *self.backend_type.read().await,
@@ -436,6 +455,7 @@ impl HidController {
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {
         info!("Reloading HID backend: {:?}", new_backend_type);
         self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -544,13 +564,53 @@ impl HidController {
         let pending_move = self.pending_move.clone();
         let pending_move_flag = self.pending_move_flag.clone();
         let reset_requested = self.reset_requested.clone();
+        let jiggler = self.jiggler.clone();
+        let jiggler_changed = self.jiggler_changed.clone();
+        let backend_available = self.backend_available.clone();
 
         let handle = tokio::spawn(async move {
             let mut rx = rx;
+            let mut next_poll = tokio::time::Instant::now();
             loop {
-                let event = match rx.recv().await {
-                    Some(ev) => ev,
-                    None => break,
+                let delay = jiggler.lock().delay();
+                let event = tokio::select! {
+                    biased;
+                    event = rx.recv() => match event {
+                        Some(event) => event,
+                        None => break,
+                    },
+                    _ = jiggler_changed.notified() => continue,
+                    _ = tokio::time::sleep_until(next_poll), if delay.is_some() => {
+                        // Synthetic motion is sent by this same worker, outside the
+                        // coalescing queue, so opposite movements cannot cancel out.
+                        let active_backend = backend.read().await.clone();
+                        let snapshot = active_backend.as_ref().map(|backend| backend.runtime_snapshot());
+                        let ready = backend_available.load(Ordering::Acquire)
+                            && snapshot.as_ref().is_some_and(|state| state.initialized && state.online);
+                        let resolution = snapshot.and_then(|state| state.screen_resolution).unwrap_or((1920, 1080));
+                        let movement = jiggler.lock().tick(ready, resolution, std::time::Instant::now());
+                        if let (Some((event, generation)), Some(active_backend)) = (movement, active_backend) {
+                            let state = jiggler.clone();
+                            let available = backend_available.clone();
+                            let result = tokio::task::spawn_blocking(move || {
+                                // Check again after dispatch to the blocking pool:
+                                // real input, shutdown or a config change may win.
+                                if !available.load(Ordering::Acquire) || !state.lock().valid(generation) {
+                                    return Ok(());
+                                }
+                                futures::executor::block_on(active_backend.send_mouse(event))
+                            }).await;
+                            if !matches!(result, Ok(Ok(()))) {
+                                jiggler.lock().failed(generation, std::time::Instant::now());
+                                warn!("Mouse jiggler movement failed: {:?}", result);
+                            }
+                        }
+                        // Keep an absolute deadline: periodic backend status
+                        // notifications must not restart the timer indefinitely.
+                        next_poll = tokio::time::Instant::now()
+                            + jiggler.lock().delay().unwrap_or(Duration::from_secs(1));
+                        continue;
+                    }
                 };
 
                 if reset_requested.swap(false, Ordering::AcqRel) {
@@ -559,15 +619,16 @@ impl HidController {
                     while rx.try_recv().is_ok() {}
                     *pending_move.lock() = None;
                     pending_move_flag.store(false, Ordering::Release);
-                    process_hid_event(QueuedHidEvent::Reset, &backend).await;
+                    process_hid_event(QueuedHidEvent::Reset, &backend, &jiggler).await;
                     continue;
                 }
-                process_hid_event(event, &backend).await;
+                process_hid_event(event, &backend, &jiggler).await;
 
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
                     let move_event = { pending_move.lock().take() };
                     if let Some(move_event) = move_event {
-                        process_hid_event(QueuedHidEvent::Mouse(move_event), &backend).await;
+                        process_hid_event(QueuedHidEvent::Mouse(move_event), &backend, &jiggler)
+                            .await;
                     }
                 }
             }
@@ -589,6 +650,8 @@ impl HidController {
         let events = self.events.clone();
         let backend_available = self.backend_available.clone();
         let backend_type = self.backend_type.clone();
+        let jiggler = self.jiggler.clone();
+        let jiggler_changed = self.jiggler_changed.clone();
 
         let handle = tokio::spawn(async move {
             loop {
@@ -604,6 +667,11 @@ impl HidController {
                     Some(backend.as_ref()),
                 )
                 .await;
+                let state = runtime_state.read().await;
+                if !state.initialized || !state.online {
+                    jiggler.lock().suspend();
+                }
+                jiggler_changed.notify_one();
             }
         });
 
@@ -617,6 +685,7 @@ impl HidController {
     }
 
     fn enqueue_mouse_move(&self, event: MouseEvent) -> Result<()> {
+        self.jiggler.lock().activity(std::time::Instant::now());
         match self.hid_tx.try_send(QueuedHidEvent::Mouse(event.clone())) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(_)) => {
@@ -631,6 +700,8 @@ impl HidController {
     }
 
     async fn enqueue_event(&self, event: QueuedHidEvent) -> Result<()> {
+        self.jiggler.lock().activity(std::time::Instant::now());
+        self.jiggler_changed.notify_one();
         match self.hid_tx.try_send(event) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(ev)) => {
@@ -690,11 +761,23 @@ async fn apply_backend_runtime_state(
 async fn process_hid_event(
     event: QueuedHidEvent,
     backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
+    jiggler: &Arc<parking_lot::Mutex<jiggler::JigglerState>>,
 ) {
     let (event, reply) = match event {
         QueuedHidEvent::Confirmed(event, reply) => (*event, Some(reply)),
         event => (event, None),
     };
+    {
+        let mut state = jiggler.lock();
+        let now = std::time::Instant::now();
+        match &event {
+            QueuedHidEvent::Keyboard(event) => state.keyboard(event, now),
+            QueuedHidEvent::Mouse(event) => state.mouse(event, now),
+            QueuedHidEvent::Consumer(event) => state.consumer(event.usage, now),
+            QueuedHidEvent::Reset => state.reset(now),
+            QueuedHidEvent::Confirmed(..) => unreachable!("nested confirmed HID event"),
+        }
+    }
     let backend = backend.read().await.clone();
     let result = match backend {
         Some(backend) => tokio::task::spawn_blocking(move || {
