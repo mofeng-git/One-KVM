@@ -26,6 +26,7 @@ pub struct SystemInfo {
     pub disk_space: Option<DiskSpaceInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_info: Option<DeviceInfo>,
+    pub host: crate::diagnostics::HostInfo,
 }
 
 #[derive(Serialize)]
@@ -112,5 +113,6 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
         },
         disk_space,
         device_info,
+        host: crate::diagnostics::get_host_info(&config.msd.msd_dir_path()),
     })
 }

@@ -9,7 +9,7 @@ pub fn get_disk_space(path: &std::path::Path) -> Result<DiskSpaceInfo> {
     let block_size = stat.block_size() as u64;
     let total = stat.blocks() as u64 * block_size;
     let available = stat.blocks_available() as u64 * block_size;
-    let used = total - available;
+    let used = total.saturating_sub(stat.blocks_free() as u64 * block_size);
 
     Ok(DiskSpaceInfo {
         total,

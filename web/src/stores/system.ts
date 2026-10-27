@@ -1,3 +1,4 @@
+import type { HostInfo } from '@/api'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type DiskMode, type MountedMedia, type PlatformCapabilities } from '@/api'
@@ -166,6 +167,7 @@ export const useSystemStore = defineStore('system', () => {
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
   const deviceInfo = ref<DeviceInfo | null>(null)
+  const hostInfo = ref<HostInfo | null>(null)
   const stream = ref<StreamState | null>(null)
   const hid = ref<HidState | null>(null)
   const atx = ref<AtxState | null>(null)
@@ -189,6 +191,7 @@ export const useSystemStore = defineStore('system', () => {
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
       deviceInfo.value = info.device_info ?? null
+      hostInfo.value = info.host ?? null
       return info
     } catch (e) {
       console.error('Failed to fetch system info:', e)
@@ -455,6 +458,7 @@ export const useSystemStore = defineStore('system', () => {
     capabilities,
     diskSpace,
     deviceInfo,
+    hostInfo,
     stream,
     hid,
     atx,

@@ -93,6 +93,18 @@ export interface NetworkAddress {
   ip: string
 }
 
+export interface HostInfo {
+  operating_system: string
+  architecture: string
+  kernel: string | null
+  cpu_count: number
+  storage: {
+    system: { total: number; used: number; available: number } | null
+    msd: { total: number; used: number; available: number } | null
+    shared_partition: boolean | null
+  }
+}
+
 export interface DeviceInfo {
   hostname: string
   cpu_model: string
@@ -148,6 +160,7 @@ export const systemApi = {
         available: number
         used: number
       }
+      host?: HostInfo
       device_info?: DeviceInfo
     }>('/info'),
 
@@ -186,6 +199,12 @@ export const systemApi = {
     request<{ success: boolean; message?: string }>('/system/restart', {
       method: 'POST',
     }),
+
+  hostPower: (action: 'reboot' | 'poweroff') =>
+    request<{ success: boolean; message?: string }>(`/system/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmed: true }),
+    }, { toastOnError: false }),
 }
 
 export type UpdateChannel = 'stable' | 'beta'

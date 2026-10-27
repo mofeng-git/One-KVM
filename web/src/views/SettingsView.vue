@@ -3,6 +3,8 @@ import { usesCh9329, supportsOtgFunctions } from '@/lib/hidGuide'
 import '@/styles/settings.css'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import SidebarMenuButton from '@/components/SettingsSidebarButton.vue'
+import AboutSystemCards from '@/components/AboutSystemCards.vue'
+import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
@@ -4033,6 +4035,7 @@ watch(isWindows, () => {
           </div>
 
           <div v-show="activeSection === 'other'" class="space-y-4">
+            <SystemDeviceControls />
             <Card>
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('settings.watchdog.description')">{{
@@ -6433,6 +6436,7 @@ watch(isWindows, () => {
 
           <!-- About: usage, host identity and one upgrade card. -->
           <div v-show="activeSection === 'about'" class="space-y-4">
+            <AboutSystemCards :active="activeSection === 'about'" />
             <Card class="update-card">
               <CardHeader
                 ><CardTitle :help="t('settings.onlineUpgradeDesc')">{{

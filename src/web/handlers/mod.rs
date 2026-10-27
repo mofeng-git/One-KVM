@@ -8,6 +8,7 @@ mod atx_api;
 mod audio_api;
 mod auth;
 mod hid_api;
+mod host_power;
 mod inventory;
 mod mcp;
 #[cfg(unix)]
@@ -23,6 +24,7 @@ pub use atx_api::*;
 pub use audio_api::*;
 pub use auth::*;
 pub use hid_api::*;
+pub use host_power::*;
 pub use inventory::*;
 pub use mcp::*;
 #[cfg(unix)]

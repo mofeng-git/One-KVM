@@ -221,6 +221,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         // System control
         .route("/system/restart", post(handlers::system_restart))
+        .route("/system/reboot", post(handlers::host_reboot))
+        .route("/system/poweroff", post(handlers::host_poweroff))
         .route("/update/overview", get(handlers::update_overview))
         .route("/update/upgrade", post(handlers::update_upgrade))
         .route("/update/status", get(handlers::update_status))
