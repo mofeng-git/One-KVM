@@ -26,7 +26,7 @@ use super::bytes_codec::{read_frame_with_limit, write_frame_vectored};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_events_in_code_space, convert_mouse_event, mouse_type};
+use super::hid_adapter::{convert_key_events_in_code_space, mouse_type, MouseEventAdapter};
 use super::keyboard_mapping::KeyboardCodeSpace;
 use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{
@@ -203,6 +203,8 @@ pub struct Connection {
     negotiated_codec: Option<VideoEncoderType>,
     /// Input event throttler to prevent HID device EAGAIN errors
     input_throttler: InputThrottler,
+    /// Fractional trackpad wheel state belongs to this session only.
+    mouse_event_adapter: MouseEventAdapter,
     /// Last measured round-trip delay in milliseconds (for TestDelay responses)
     last_delay: u32,
     /// Time when we last sent a TestDelay to the client (for RTT calculation)
@@ -289,6 +291,7 @@ impl Connection {
             dec_seqnum: 0,
             negotiated_codec: None,
             input_throttler: InputThrottler::new(),
+            mouse_event_adapter: MouseEventAdapter::default(),
             last_delay: 0,
             last_test_delay_sent: None,
             last_caps_lock: false,
@@ -1414,33 +1417,41 @@ impl Connection {
         // that was waiting for the next HID poll interval.
         if !is_pure_move {
             if let Some(pending) = self.pending_mouse_move.take() {
-                self.send_mouse_event_to_hid(&pending).await;
+                if self.send_mouse_event_to_hid(&pending).await {
+                    self.input_throttler.mark_mouse_sent();
+                }
             }
         }
 
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
-        self.send_mouse_event_to_hid(me).await;
-        if self.hid.is_some() {
-            // Mark that we sent a mouse event (for non-move events)
-            if !is_pure_move {
-                self.input_throttler.mark_mouse_sent();
-            }
+        let attempted = self.send_mouse_event_to_hid(me).await;
+        // Fractional trackpad packets that emit no HID report must not delay moves.
+        // Keep the existing throttling behavior for other event types.
+        if self.hid.is_some() && !is_pure_move && (event_type != mouse_type::TRACKPAD || attempted)
+        {
+            self.input_throttler.mark_mouse_sent();
         }
 
         Ok(())
     }
 
-    async fn send_mouse_event_to_hid(&self, event: &MouseEvent) {
-        let mouse_events = convert_mouse_event(event, self.screen_width, self.screen_height);
+    /// Returns whether at least one HID report was attempted, including failed sends.
+    async fn send_mouse_event_to_hid(&mut self, event: &MouseEvent) -> bool {
+        let mouse_events =
+            self.mouse_event_adapter
+                .convert(event, self.screen_width, self.screen_height);
+        let has_events = !mouse_events.is_empty();
         if let Some(ref hid) = self.hid {
             for mouse_event in mouse_events {
                 if let Err(error) = hid.send_mouse(mouse_event).await {
                     warn!("Failed to send mouse event: {}", error);
                 }
             }
+            has_events
         } else {
             debug!("HID controller not available, skipping mouse event");
+            false
         }
     }
 

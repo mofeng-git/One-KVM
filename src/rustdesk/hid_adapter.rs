@@ -5,6 +5,7 @@ use crate::hid::{
     CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton,
     MouseEvent as OneKvmMouseEvent, MouseEventType,
 };
+use std::time::{Duration, Instant};
 use tracing::debug;
 
 pub mod mouse_type {
@@ -22,6 +23,68 @@ pub mod mouse_button {
     pub const WHEEL: i32 = 0x04;
     pub const BACK: i32 = 0x08;
     pub const FORWARD: i32 = 0x10;
+}
+
+const TRACKPAD_UNITS_PER_WHEEL_STEP: i64 = 120;
+const TRACKPAD_IDLE_RESET: Duration = Duration::from_millis(250);
+
+/// Per-session conversion of fractional RustDesk trackpad deltas to USB wheel steps.
+#[derive(Default)]
+pub(super) struct MouseEventAdapter {
+    trackpad_remainder: i64,
+    last_vertical_event: Option<Instant>,
+}
+
+impl MouseEventAdapter {
+    pub(super) fn convert(
+        &mut self,
+        event: &MouseEvent,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Vec<OneKvmMouseEvent> {
+        self.convert_at(event, screen_width, screen_height, Instant::now())
+    }
+
+    fn convert_at(
+        &mut self,
+        event: &MouseEvent,
+        screen_width: u32,
+        screen_height: u32,
+        now: Instant,
+    ) -> Vec<OneKvmMouseEvent> {
+        if event.mask & 0x07 != mouse_type::TRACKPAD {
+            return convert_mouse_event(event, screen_width, screen_height);
+        }
+        // The USB mouse descriptor supports vertical wheel reports only.
+        if event.y == 0 {
+            return Vec::new();
+        }
+
+        let delta = i64::from(event.y);
+        let idle = self
+            .last_vertical_event
+            .is_some_and(|last| now.saturating_duration_since(last) >= TRACKPAD_IDLE_RESET);
+        if idle
+            || (self.trackpad_remainder != 0 && self.trackpad_remainder.signum() != delta.signum())
+        {
+            self.trackpad_remainder = 0;
+        }
+        self.last_vertical_event = Some(now);
+
+        // One-KVM advertises Windows compatibility. RustDesk sends TRACKPAD in
+        // Windows wheel units (120 per notch), whereas WHEEL already uses steps.
+        // Preserve the direction: the client has already applied its reverse setting.
+        let total = self.trackpad_remainder + delta;
+        let steps = total / TRACKPAD_UNITS_PER_WHEEL_STEP;
+        self.trackpad_remainder = total % TRACKPAD_UNITS_PER_WHEEL_STEP;
+        if steps == 0 {
+            Vec::new()
+        } else {
+            // One bounded HID report; discard pathological excess instead of
+            // retaining a backlog that would scroll long after the gesture ends.
+            vec![OneKvmMouseEvent::scroll(steps.clamp(-127, 127) as i8)]
+        }
+    }
 }
 
 pub fn convert_mouse_event(
@@ -318,6 +381,147 @@ mod tests {
 
     fn map_chr(code: u32, down: bool) -> KeyEvent {
         key_event(KeyboardMode::Map, ke_union::Union::Chr(code), down)
+    }
+
+    fn scroll_event(event_type: i32, x: i32, y: i32) -> MouseEvent {
+        let mut event = MouseEvent::new();
+        event.mask = event_type;
+        event.x = x;
+        event.y = y;
+        event
+    }
+
+    fn trackpad_steps(adapter: &mut MouseEventAdapter, y: i32, now: Instant) -> i32 {
+        adapter
+            .convert_at(&scroll_event(mouse_type::TRACKPAD, 0, y), 640, 480, now)
+            .into_iter()
+            .map(|event| {
+                assert_eq!(event.event_type, MouseEventType::Scroll);
+                i32::from(event.scroll)
+            })
+            .sum()
+    }
+
+    #[test]
+    fn trackpad_accumulates_fractional_steps_independently_of_packet_size() {
+        let now = Instant::now();
+        for direction in [-1, 1] {
+            let mut split = MouseEventAdapter::default();
+            assert_eq!(trackpad_steps(&mut split, 60 * direction, now), 0);
+            assert_eq!(trackpad_steps(&mut split, 60 * direction, now), direction);
+            let mut whole = MouseEventAdapter::default();
+            assert_eq!(trackpad_steps(&mut whole, 120 * direction, now), direction);
+            assert_eq!(
+                trackpad_steps(&mut whole, 360 * direction, now),
+                3 * direction
+            );
+            let mut tiny = MouseEventAdapter::default();
+            let total: i32 = (0..360)
+                .map(|_| trackpad_steps(&mut tiny, direction, now))
+                .sum();
+            assert_eq!(total, 3 * direction);
+        }
+    }
+
+    #[test]
+    fn trackpad_horizontal_and_zero_scroll_do_not_generate_vertical_reports() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+        for x in [0, 120, -120] {
+            assert!(adapter
+                .convert_at(&scroll_event(mouse_type::TRACKPAD, x, 0), 640, 480, now)
+                .is_empty());
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
+    }
+
+    #[test]
+    fn trackpad_remainder_does_not_cross_sessions_or_idle_gaps() {
+        let now = Instant::now();
+        let mut first = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut first, 60, now), 0);
+        let mut second = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut second, 60, now), 0);
+        assert_eq!(trackpad_steps(&mut first, 60, now), 1);
+        // A new connection gets a fresh adapter, including when reconnecting.
+        first = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut first, 60, now), 0);
+        assert_eq!(
+            trackpad_steps(&mut first, 60, now + Duration::from_millis(250)),
+            0
+        );
+        assert_eq!(
+            trackpad_steps(&mut first, 60, now + Duration::from_millis(280)),
+            1
+        );
+    }
+
+    #[test]
+    fn trackpad_direction_change_discards_old_fraction() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 119, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, -60, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, -60, now), -1);
+        assert_eq!(trackpad_steps(&mut adapter, -119, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, 120, now), 1);
+    }
+
+    #[test]
+    fn trackpad_extreme_deltas_are_bounded_without_a_future_backlog() {
+        let now = Instant::now();
+        for delta in [i32::MIN, i32::MAX] {
+            let mut adapter = MouseEventAdapter::default();
+            assert_eq!(
+                trackpad_steps(&mut adapter, delta, now),
+                127 * delta.signum()
+            );
+            assert!(adapter.trackpad_remainder.abs() < 120);
+            assert_eq!(trackpad_steps(&mut adapter, delta.signum(), now), 0);
+        }
+    }
+
+    #[test]
+    fn wheel_steps_remain_immediate_and_do_not_use_trackpad_remainder() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+        for y in [-120, -1, 1, 120] {
+            let events = adapter.convert_at(&scroll_event(mouse_type::WHEEL, 0, y), 640, 480, now);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].scroll, y.signum() as i8);
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
+    }
+
+    #[test]
+    fn trackpad_accumulation_does_not_change_pointer_or_button_events() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+
+        let events = adapter.convert(&scroll_event(mouse_type::MOVE, 320, 240), 640, 480);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
+        assert_eq!((events[0].x, events[0].y), (16383, 16383));
+
+        let events = adapter.convert(&scroll_event(mouse_type::MOVE_RELATIVE, -12, 8), 640, 480);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Move);
+        assert_eq!((events[0].x, events[0].y), (-12, 8));
+
+        for (kind, expected) in [
+            (mouse_type::DOWN, MouseEventType::Down),
+            (mouse_type::UP, MouseEventType::Up),
+        ] {
+            let event = scroll_event((mouse_button::LEFT << 3) | kind, 0, 0);
+            let events = adapter.convert(&event, 640, 480);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].event_type, expected);
+            assert_eq!(events[0].button, Some(MouseButton::Left));
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
     }
 
     #[test]
