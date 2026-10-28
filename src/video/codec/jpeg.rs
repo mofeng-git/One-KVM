@@ -33,14 +33,6 @@ pub struct JpegEncoder {
 impl JpegEncoder {
     /// Create a new JPEG encoder
     pub fn new(config: EncoderConfig) -> Result<Self> {
-        let resolution = config.resolution;
-        let width = resolution.width as usize;
-        let height = resolution.height as usize;
-        // I420: Y = width*height, U = width*height/4, V = width*height/4
-        let i420_size = width * height * 3 / 2;
-        let max_uv_plane_size = width * height;
-        let bgra_size = width * height * 4;
-
         let mut compressor = turbojpeg::Compressor::new().map_err(|e| {
             AppError::VideoError(format!("Failed to create turbojpeg compressor: {}", e))
         })?;
@@ -52,10 +44,16 @@ impl JpegEncoder {
         Ok(Self {
             config,
             compressor,
-            i420_buffer: vec![0u8; i420_size],
-            uv_split_buffer: vec![0u8; max_uv_plane_size * 2],
-            bgra_buffer: vec![0u8; bgra_size],
+            i420_buffer: Vec::new(),
+            uv_split_buffer: Vec::new(),
+            bgra_buffer: Vec::new(),
         })
+    }
+
+    fn ensure_i420_buffer(&mut self) {
+        let size =
+            self.config.resolution.width as usize * self.config.resolution.height as usize * 3 / 2;
+        self.i420_buffer.resize(size, 0);
     }
 
     /// Create with specific quality
@@ -146,6 +144,7 @@ impl JpegEncoder {
         }
 
         // Convert YUYV to I420 using libyuv (SIMD accelerated)
+        self.ensure_i420_buffer();
         libyuv::yuy2_to_i420(data, &mut self.i420_buffer, width as i32, height as i32)
             .map_err(|e| AppError::VideoError(format!("libyuv YUYV→I420 failed: {}", e)))?;
 
@@ -166,6 +165,7 @@ impl JpegEncoder {
             )));
         }
 
+        self.ensure_i420_buffer();
         // Reuse bgra_buffer as scratch for the swapped YUYV data.
         if self.bgra_buffer.len() < expected_size {
             self.bgra_buffer.resize(expected_size, 0);
@@ -202,6 +202,7 @@ impl JpegEncoder {
         }
 
         // Convert NV12 to I420 using libyuv (SIMD accelerated)
+        self.ensure_i420_buffer();
         libyuv::nv12_to_i420(data, &mut self.i420_buffer, width as i32, height as i32)
             .map_err(|e| AppError::VideoError(format!("libyuv NV12→I420 failed: {}", e)))?;
 
@@ -224,6 +225,8 @@ impl JpegEncoder {
             )));
         }
 
+        self.ensure_i420_buffer();
+        self.uv_split_buffer.resize(y_size, 0);
         let src_uv = &data[y_size..expected_size];
         let chroma_plane_size = y_size / 2;
         let (u_plane_422, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
@@ -273,6 +276,8 @@ impl JpegEncoder {
             )));
         }
 
+        self.uv_split_buffer.resize(y_size * 2, 0);
+        self.bgra_buffer.resize(y_size * 4, 0);
         let src_uv = &data[y_size..expected_size];
         let chroma_plane_size = y_size;
         let (u_plane_444, rest) = self.uv_split_buffer.split_at_mut(chroma_plane_size);
@@ -318,6 +323,7 @@ impl JpegEncoder {
         }
 
         // Convert RGB24 to I420 using libyuv (SIMD accelerated)
+        self.ensure_i420_buffer();
         libyuv::rgb24_to_i420(data, &mut self.i420_buffer, width as i32, height as i32)
             .map_err(|e| AppError::VideoError(format!("libyuv RGB24→I420 failed: {}", e)))?;
 
@@ -340,6 +346,7 @@ impl JpegEncoder {
 
         // Convert BGR24 to I420 using libyuv (SIMD accelerated)
         // Note: libyuv's RAWToI420 is BGR24 → I420
+        self.ensure_i420_buffer();
         libyuv::bgr24_to_i420(data, &mut self.i420_buffer, width as i32, height as i32)
             .map_err(|e| AppError::VideoError(format!("libyuv BGR24→I420 failed: {}", e)))?;
 
@@ -395,10 +402,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_i420_buffer_size() {
-        // 1920x1080 I420 = 1920*1080 + 960*540 + 960*540 = 3110400 bytes
-        let config = EncoderConfig::jpeg(Resolution::HD1080, 80);
-        let encoder = JpegEncoder::new(config).unwrap();
-        assert_eq!(encoder.i420_buffer.len(), 1920 * 1080 * 3 / 2);
+    fn scratch_buffers_are_allocated_only_for_the_formats_that_use_them() {
+        let resolution = Resolution::new(64, 32);
+        let pixels = 64 * 32;
+        let mut encoder = JpegEncoder::new(EncoderConfig::jpeg(resolution, 80)).unwrap();
+        assert!(encoder.i420_buffer.is_empty());
+        assert!(encoder.uv_split_buffer.is_empty());
+        assert!(encoder.bgra_buffer.is_empty());
+        encoder.encode_yuyv(&vec![128; pixels * 2], 0).unwrap();
+        encoder.encode_nv12(&vec![128; pixels * 3 / 2], 1).unwrap();
+        encoder.encode_rgb(&vec![128; pixels * 3], 2).unwrap();
+        encoder.encode_bgr(&vec![128; pixels * 3], 3).unwrap();
+        assert_eq!(encoder.i420_buffer.len(), pixels * 3 / 2);
+        assert!(encoder.uv_split_buffer.is_empty());
+        assert!(encoder.bgra_buffer.is_empty());
+
+        encoder.encode_yvyu(&vec![128; pixels * 2], 4).unwrap();
+        assert_eq!(encoder.bgra_buffer.len(), pixels * 2);
+        encoder.encode_nv16(&vec![128; pixels * 2], 5).unwrap();
+        assert_eq!(encoder.uv_split_buffer.len(), pixels);
+        encoder.encode_nv24(&vec![128; pixels * 3], 6).unwrap();
+        assert_eq!(encoder.uv_split_buffer.len(), pixels * 2);
+        assert_eq!(encoder.bgra_buffer.len(), pixels * 4);
+
+        let mut nv24 = JpegEncoder::new(EncoderConfig::jpeg(resolution, 80)).unwrap();
+        nv24.encode_nv24(&vec![128; pixels * 3], 0).unwrap();
+        assert!(nv24.i420_buffer.is_empty());
     }
 }

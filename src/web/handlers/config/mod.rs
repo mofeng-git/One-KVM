@@ -1,4 +1,3 @@
-pub(crate) mod apply;
 mod types;
 
 mod atx;
@@ -60,7 +59,8 @@ use crate::state::AppState;
 
 fn sanitize_config_for_api(config: &mut AppConfig) {
     config.stream.turn_password = None;
-    config.computer_use.api_key = None;
+    config.mcp.api_key_hash = None;
+    config.mcp.api_key = None;
 
     config.rustdesk.device_password.clear();
     config.rustdesk.relay_key = None;

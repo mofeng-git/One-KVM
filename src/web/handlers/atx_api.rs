@@ -135,30 +135,12 @@ pub struct WolHistoryResponse {
     pub history: Vec<WolHistoryEntry>,
 }
 
-fn normalize_wol_mac_address(mac_address: &str) -> String {
-    let normalized = mac_address.trim().to_uppercase().replace('-', ":");
-
-    if normalized.len() == 12 && normalized.chars().all(|c| c.is_ascii_hexdigit()) {
-        let mut mac_with_separator = String::with_capacity(17);
-        for (index, chunk) in normalized.as_bytes().chunks(2).enumerate() {
-            if index > 0 {
-                mac_with_separator.push(':');
-            }
-            mac_with_separator.push(chunk[0] as char);
-            mac_with_separator.push(chunk[1] as char);
-        }
-        mac_with_separator
-    } else {
-        normalized
-    }
-}
-
 /// Send Wake-on-LAN magic packet
 pub async fn atx_wol(
     State(state): State<Arc<AppState>>,
     Json(req): Json<WolRequest>,
 ) -> Result<Json<LoginResponse>> {
-    let mac_address = normalize_wol_mac_address(&req.mac_address);
+    let mac_address = crate::atx::normalize_wol_mac_address(&req.mac_address)?;
 
     // Get WOL interface from config
     let config = state.config.get();

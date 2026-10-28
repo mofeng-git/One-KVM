@@ -26,7 +26,7 @@ use super::bytes_codec::{read_frame_with_limit, write_frame_vectored};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_events_in_code_space, convert_mouse_event, mouse_type};
+use super::hid_adapter::{convert_key_events_in_code_space, mouse_type, MouseEventAdapter};
 use super::keyboard_mapping::KeyboardCodeSpace;
 use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{
@@ -43,6 +43,8 @@ const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 
 /// Default mouse event throttle interval (16ms ≈ 60Hz)
 const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
+/// Bound accumulated relative input so one flush cannot create an excessive HID burst.
+const MAX_PENDING_RELATIVE_DELTA: i64 = 4096;
 
 /// Limit work retained for unauthenticated peers.
 const MAX_CONNECTIONS: usize = 8;
@@ -203,6 +205,8 @@ pub struct Connection {
     negotiated_codec: Option<VideoEncoderType>,
     /// Input event throttler to prevent HID device EAGAIN errors
     input_throttler: InputThrottler,
+    /// Fractional trackpad wheel state belongs to this session only.
+    mouse_event_adapter: MouseEventAdapter,
     /// Last measured round-trip delay in milliseconds (for TestDelay responses)
     last_delay: u32,
     /// Time when we last sent a TestDelay to the client (for RTT calculation)
@@ -211,7 +215,7 @@ pub struct Connection {
     last_caps_lock: bool,
     /// Whether relative mouse mode is currently active for this connection
     relative_mouse_active: bool,
-    /// Latest throttled move; flushed on the next HID interval.
+    /// Latest absolute position or accumulated relative movement, flushed on the next HID interval.
     pending_mouse_move: Option<MouseEvent>,
     /// Server-configured RustDesk video codec.
     configured_codec: VideoEncoderType,
@@ -289,6 +293,7 @@ impl Connection {
             dec_seqnum: 0,
             negotiated_codec: None,
             input_throttler: InputThrottler::new(),
+            mouse_event_adapter: MouseEventAdapter::default(),
             last_delay: 0,
             last_test_delay_sent: None,
             last_caps_lock: false,
@@ -423,10 +428,7 @@ impl Connection {
                 }
 
                 _ = mouse_flush_interval.tick(), if self.pending_mouse_move.is_some() => {
-                    if let Some(mouse_event) = self.pending_mouse_move.take() {
-                        self.send_mouse_event_to_hid(&mouse_event).await;
-                        self.input_throttler.mark_mouse_sent();
-                    }
+                    self.flush_pending_mouse_move().await;
                 }
 
                 _ = &mut handshake_deadline, if self.state() != ConnectionState::Active => {
@@ -1403,44 +1405,76 @@ impl Connection {
         // Check if this is a pure move event (no button/scroll)
         let is_pure_move = event_type == mouse_type::MOVE || is_relative_move;
 
-        // For pure move events, apply throttling
-        if is_pure_move && !self.input_throttler.should_send_mouse_move() {
-            // Coalesce moves instead of losing the final pointer position.
-            self.pending_mouse_move = Some(me.clone());
+        if is_pure_move {
+            self.queue_mouse_move(me);
+            if self.input_throttler.should_send_mouse_move() {
+                self.flush_pending_mouse_move().await;
+            }
             return Ok(());
         }
 
         // Preserve input ordering when a button/scroll event follows a move
         // that was waiting for the next HID poll interval.
-        if !is_pure_move {
-            if let Some(pending) = self.pending_mouse_move.take() {
-                self.send_mouse_event_to_hid(&pending).await;
-            }
-        }
+        self.flush_pending_mouse_move().await;
 
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
-        self.send_mouse_event_to_hid(me).await;
-        if self.hid.is_some() {
-            // Mark that we sent a mouse event (for non-move events)
-            if !is_pure_move {
-                self.input_throttler.mark_mouse_sent();
-            }
+        let attempted = self.send_mouse_event_to_hid(me).await;
+        // Fractional trackpad packets that emit no HID report must not delay moves.
+        // Keep the existing throttling behavior for other event types.
+        if self.hid.is_some() && (event_type != mouse_type::TRACKPAD || attempted) {
+            self.input_throttler.mark_mouse_sent();
         }
 
         Ok(())
     }
 
-    async fn send_mouse_event_to_hid(&self, event: &MouseEvent) {
-        let mouse_events = convert_mouse_event(event, self.screen_width, self.screen_height);
+    fn queue_mouse_move(&mut self, event: &MouseEvent) {
+        let mut next = event.clone();
+        if event.mask & 0x07 == mouse_type::MOVE_RELATIVE {
+            let previous = self
+                .pending_mouse_move
+                .as_ref()
+                .filter(|pending| pending.mask & 0x07 == mouse_type::MOVE_RELATIVE);
+            let (x, y) = previous
+                .map(|pending| (pending.x, pending.y))
+                .unwrap_or_default();
+            next.x = (i64::from(x) + i64::from(event.x))
+                .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA)
+                as i32;
+            next.y = (i64::from(y) + i64::from(event.y))
+                .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA)
+                as i32;
+        }
+        // Absolute coordinates replace the previous sample. Changing modes also
+        // replaces it: absolute coordinates and relative deltas cannot be added.
+        self.pending_mouse_move = Some(next);
+    }
+
+    async fn flush_pending_mouse_move(&mut self) {
+        if let Some(pending) = self.pending_mouse_move.take() {
+            if self.send_mouse_event_to_hid(&pending).await {
+                self.input_throttler.mark_mouse_sent();
+            }
+        }
+    }
+
+    /// Returns whether at least one HID report was attempted, including failed sends.
+    async fn send_mouse_event_to_hid(&mut self, event: &MouseEvent) -> bool {
+        let mouse_events =
+            self.mouse_event_adapter
+                .convert(event, self.screen_width, self.screen_height);
+        let has_events = !mouse_events.is_empty();
         if let Some(ref hid) = self.hid {
             for mouse_event in mouse_events {
                 if let Err(error) = hid.send_mouse(mouse_event).await {
                     warn!("Failed to send mouse event: {}", error);
                 }
             }
+            has_events
         } else {
             debug!("HID controller not available, skipping mouse event");
+            false
         }
     }
 
@@ -2095,6 +2129,150 @@ async fn run_audio_streaming(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hid::test_support::RecordingBackend;
+
+    fn mouse_event(kind: i32, x: i32, y: i32) -> MouseEvent {
+        let mut event = MouseEvent::new();
+        event.mask = kind;
+        event.x = x;
+        event.y = y;
+        event
+    }
+
+    #[test]
+    fn pending_mouse_motion_accumulates_relative_and_replaces_absolute() {
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 100, -20));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 80, 30));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (180, 10));
+
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE, 320, 240));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE, 640, 480));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (640, 480));
+
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 12, -8));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (12, -8));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, i32::MAX, i32::MIN));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (4096, -4096));
+    }
+
+    #[tokio::test]
+    async fn immediate_relative_move_includes_pending_delta_and_clears_it() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 30, -10));
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::MOVE_RELATIVE, 20, 5))
+            .await
+            .unwrap();
+        assert!(connection.pending_mouse_move.is_none());
+        backend.wait_for_events(1).await;
+        let events = backend.events.lock();
+        assert_eq!(events.len(), 1);
+        assert_eq!((events[0].x, events[0].y), (50, -5));
+    }
+
+    #[tokio::test]
+    async fn pending_relative_motion_is_delivered_before_mouse_buttons() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.input_throttler.mouse_interval = Duration::from_secs(60);
+        connection.input_throttler.mark_mouse_sent();
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::MOVE_RELATIVE, 300, -260))
+            .await
+            .unwrap();
+        assert!(connection.pending_mouse_move.is_some());
+        for kind in [mouse_type::DOWN, mouse_type::UP] {
+            connection
+                .handle_mouse_event(&mouse_event(
+                    kind | (super::super::hid_adapter::mouse_button::LEFT << 3),
+                    0,
+                    0,
+                ))
+                .await
+                .unwrap();
+        }
+        assert!(connection.pending_mouse_move.is_none());
+        backend.wait_for_events(5).await;
+        let events = backend.events.lock();
+        assert_eq!(events[..3].iter().map(|event| event.x).sum::<i32>(), 300);
+        assert_eq!(events[..3].iter().map(|event| event.y).sum::<i32>(), -260);
+        assert!(events[..3]
+            .iter()
+            .all(|event| event.event_type == crate::hid::MouseEventType::Move));
+        assert_eq!(events[3].event_type, crate::hid::MouseEventType::Down);
+        assert_eq!(events[4].event_type, crate::hid::MouseEventType::Up);
+    }
+
+    #[tokio::test]
+    async fn fractional_trackpad_input_does_not_restart_mouse_throttle() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        let previous = Instant::now() - Duration::from_millis(10);
+        connection.input_throttler.last_mouse_time = previous;
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::TRACKPAD, 0, 60))
+            .await
+            .unwrap();
+        assert_eq!(connection.input_throttler.last_mouse_time, previous);
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::TRACKPAD, 0, 60))
+            .await
+            .unwrap();
+        assert!(connection.input_throttler.last_mouse_time > previous);
+        backend.wait_for_events(1).await;
+        assert_eq!(backend.events.lock()[0].scroll, 1);
+    }
+
+    #[tokio::test]
+    async fn connection_timer_delivers_final_relative_move_without_more_input() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.input_throttler.mouse_interval = Duration::from_secs(60);
+        connection.input_throttler.mark_mouse_sent();
+        let state = connection.state.clone();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let client = tokio::spawn(async move { TcpStream::connect(address).await.unwrap() });
+        let (stream, peer) = listener.accept().await.unwrap();
+        let mut client = client.await.unwrap();
+        let server = tokio::spawn(async move { connection.handle_tcp(stream, peer).await });
+        read_frame_with_limit(&mut client, MAX_UNAUTHENTICATED_PACKET_LENGTH)
+            .await
+            .unwrap();
+        // Authentication is covered separately; exercise the real socket input
+        // loop and flush timer without starting unrelated media pipelines.
+        *state.write() = ConnectionState::Active;
+        let mut message = HbbMessage::new();
+        message.union = Some(message::Union::MouseEvent(mouse_event(
+            mouse_type::MOVE_RELATIVE,
+            10,
+            -5,
+        )));
+        super::super::bytes_codec::write_frame(&mut client, &message.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        // No subsequent packet or button event is needed to deliver this move.
+        backend.wait_for_events(1).await;
+        let events = backend.events.lock().clone();
+        assert_eq!(events.len(), 1);
+        assert_eq!((events[0].x, events[0].y), (10, -5));
+        drop(client);
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
 
     fn connection(mode: ConnectionMode) -> Connection {
         crypto::init().expect("crypto should initialize");

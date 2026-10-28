@@ -10,7 +10,7 @@ pub fn capabilities() -> PlatformCapabilities {
         encoder: FeatureCapability::available([
             "software", "vaapi", "nvenc", "qsv", "amf", "rkmpp", "v4l2m2m",
         ]),
-        hid: FeatureCapability::available(["otg", "ch9329", "none"]),
+        hid: FeatureCapability::available(["otg", "ch9329", "ch9329_otg", "bluetooth", "none"]),
         atx: FeatureCapability::available(["gpio", "usb_relay", "serial", "wol", "none"]),
         msd: FeatureCapability::available(["configfs"]),
         otg: FeatureCapability::available(["configfs"]),

@@ -51,23 +51,32 @@ impl UsbCoordinator {
     }
 
     pub async fn apply_config(&self, old_config: &AppConfig, new_config: &AppConfig) -> Result<()> {
+        new_config.hid.validate_platform()?;
+        // Also runs for config-only updates and rollback; never forces a USB reload.
+        self.hid.configure_jiggler(&new_config.hid);
         #[cfg(unix)]
         {
             let transitioning_away_from_otg = old_config.hid.backend == HidBackend::Otg
                 && new_config.hid.backend != HidBackend::Otg;
-            let hid_unchanged = old_config.hid == new_config.hid;
-            let gadget_rebuilt = old_config.msd != new_config.msd
-                || old_config.otg_network != new_config.otg_network
-                || old_config.uac != new_config.uac
-                || old_config.hid.otg_udc != new_config.hid.otg_udc
-                || old_config.hid.otg_descriptor != new_config.hid.otg_descriptor
-                || old_config.hid.backend != new_config.hid.backend
-                || old_config.hid.constrained_otg_functions()
-                    != new_config.hid.constrained_otg_functions()
-                || old_config.hid.effective_otg_keyboard_leds()
-                    != new_config.hid.effective_otg_keyboard_leds();
+            let hid_unchanged = !hid_requires_reload(&old_config.hid, &new_config.hid);
+            let gadget_rebuilt = crate::otg::service::OtgDesiredState::from_config(
+                &old_config.hid,
+                &old_config.msd,
+                &old_config.otg_network,
+                &old_config.uac,
+            )? != crate::otg::service::OtgDesiredState::from_config(
+                &new_config.hid,
+                &new_config.msd,
+                &new_config.otg_network,
+                &new_config.uac,
+            )?;
             let restart_uac =
                 old_config.uac != new_config.uac || (new_config.uac.enabled && gadget_rebuilt);
+
+            if gadget_rebuilt {
+                // This is a no-op for CH9329, including the composite mode.
+                self.hid.prepare_otg_rebuild().await?;
+            }
 
             if restart_uac {
                 let playback = self.uac_playback.write().await.take();
@@ -167,29 +176,11 @@ impl UsbCoordinator {
         uac_config: &UacConfig,
         options: ConfigApplyOptions,
     ) -> Result<()> {
+        new_config.validate_platform()?;
         new_config.validate_otg_functions()?;
         new_config.bluetooth.validate()?;
 
-        let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
-        let hid_functions_changed =
-            old_config.constrained_otg_functions() != new_config.constrained_otg_functions();
-        let keyboard_leds_changed =
-            old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds();
-        let mouse_compatibility_changed = old_config.ch9329_hybrid_mouse
-            != new_config.ch9329_hybrid_mouse
-            || old_config.mouse_macos_drag != new_config.mouse_macos_drag;
-
-        if old_config.backend == new_config.backend
-            && old_config.ch9329_port == new_config.ch9329_port
-            && old_config.ch9329_baudrate == new_config.ch9329_baudrate
-            && old_config.bluetooth == new_config.bluetooth
-            && !mouse_compatibility_changed
-            && old_config.otg_udc == new_config.otg_udc
-            && !descriptor_changed
-            && !hid_functions_changed
-            && !keyboard_leds_changed
-            && !options.force
-        {
+        if !hid_requires_reload(old_config, new_config) && !options.force {
             tracing::info!("HID config unchanged, skipping reload");
             return Ok(());
         }
@@ -256,7 +247,7 @@ impl UsbCoordinator {
         options: ConfigApplyOptions,
     ) -> Result<()> {
         let old_enabled = old_config.enabled;
-        let new_enabled = new_config.enabled && hid_config.backend == HidBackend::Otg;
+        let new_enabled = new_config.enabled && hid_config.backend.supports_otg_functions();
         let directory_changed = old_config.msd_dir != new_config.msd_dir;
         let inquiry_changed = old_config.flash_inquiry_string != new_config.flash_inquiry_string
             || old_config.cdrom_inquiry_string != new_config.cdrom_inquiry_string;
@@ -309,28 +300,98 @@ impl UsbCoordinator {
 }
 
 fn hid_backend_type(config: &HidConfig) -> HidBackendType {
-    match config.backend {
-        HidBackend::Otg => HidBackendType::Otg {
-            macos_drag: config.mouse_macos_drag,
-        },
-        HidBackend::Ch9329 => HidBackendType::Ch9329 {
-            port: config.ch9329_port.clone(),
-            baud_rate: config.ch9329_baudrate,
-            hybrid_mouse: config.ch9329_hybrid_mouse,
-            macos_drag: config.mouse_macos_drag,
-        },
-        HidBackend::None => HidBackendType::None,
-        HidBackend::Bluetooth => HidBackendType::Bluetooth {
-            config: config.bluetooth.clone(),
-        },
-    }
+    HidBackendType::from(config)
 }
 
-fn hid_otg_config_changed(old_config: &HidConfig, new_config: &HidConfig) -> bool {
-    old_config.backend == HidBackend::Otg
-        || new_config.backend == HidBackend::Otg
-        || old_config.otg_udc != new_config.otg_udc
-        || old_config.otg_descriptor != new_config.otg_descriptor
-        || old_config.constrained_otg_functions() != new_config.constrained_otg_functions()
-        || old_config.effective_otg_keyboard_leds() != new_config.effective_otg_keyboard_leds()
+fn hid_requires_reload(old: &HidConfig, new: &HidConfig) -> bool {
+    HidBackendType::from(old) != HidBackendType::from(new)
+        || (new.backend.uses_otg_hid() && hid_otg_config_changed(old, new))
+}
+
+fn hid_otg_config_changed(old: &HidConfig, new: &HidConfig) -> bool {
+    old.backend.uses_otg_hid() != new.backend.uses_otg_hid()
+        || old.otg_udc != new.otg_udc
+        || old.otg_descriptor != new.otg_descriptor
+        || old.constrained_otg_functions() != new.constrained_otg_functions()
+        || old.effective_otg_keyboard_leds() != new.effective_otg_keyboard_leds()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jiggler_preferences_do_not_reload_hid_or_change_usb_descriptors() {
+        let old = AppConfig::default();
+        let mut new = old.clone();
+        new.hid.jiggler.enabled = true;
+        new.hid.jiggler.interval_secs = 120;
+        assert!(!hid_requires_reload(&old.hid, &new.hid));
+        #[cfg(unix)]
+        assert_eq!(
+            crate::otg::service::OtgDesiredState::from_config(
+                &old.hid,
+                &old.msd,
+                &old.otg_network,
+                &old.uac
+            )
+            .unwrap(),
+            crate::otg::service::OtgDesiredState::from_config(
+                &new.hid,
+                &new.msd,
+                &new.otg_network,
+                &new.uac
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn composite_otg_preferences_do_not_reload_ch9329_but_input_changes_do() {
+        let old = HidConfig {
+            backend: HidBackend::Ch9329Otg,
+            otg_udc: Some("first.udc".into()),
+            ..Default::default()
+        };
+        let mut new = old.clone();
+        new.otg_udc = Some("second.udc".into());
+        new.otg_descriptor.product = "Advanced USB".into();
+        new.otg_keyboard_leds = !old.otg_keyboard_leds;
+        new.otg_profile = crate::config::OtgHidProfile::LegacyKeyboard;
+        assert!(!hid_requires_reload(&old, &new));
+        assert!(!hid_requires_reload(&new, &old));
+
+        let input_changes: [fn(&mut HidConfig); 4] = [
+            |hid: &mut HidConfig| hid.ch9329_port.push('1'),
+            |hid: &mut HidConfig| hid.ch9329_baudrate = 115200,
+            |hid: &mut HidConfig| hid.ch9329_hybrid_mouse = !hid.ch9329_hybrid_mouse,
+            |hid: &mut HidConfig| hid.mouse_macos_drag = !hid.mouse_macos_drag,
+        ];
+        for change in input_changes {
+            let mut changed = old.clone();
+            change(&mut changed);
+            assert!(hid_requires_reload(&old, &changed));
+            assert!(hid_requires_reload(&changed, &old));
+        }
+    }
+
+    #[test]
+    fn composite_mode_switch_only_reloads_when_input_driver_changes() {
+        let composite = HidConfig {
+            backend: HidBackend::Ch9329Otg,
+            otg_udc: Some("test.udc".into()),
+            ..Default::default()
+        };
+        for (backend, reload) in [
+            (HidBackend::Ch9329, false),
+            (HidBackend::Otg, true),
+            (HidBackend::Bluetooth, true),
+            (HidBackend::None, true),
+        ] {
+            let mut other = composite.clone();
+            other.backend = backend;
+            assert_eq!(hid_requires_reload(&composite, &other), reload);
+            assert_eq!(hid_requires_reload(&other, &composite), reload);
+        }
+    }
 }

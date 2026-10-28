@@ -206,18 +206,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/watchdog",
             patch(handlers::config::update_watchdog_config),
         )
-        .route("/config/computer-use", get(handlers::computer_use_config))
         .route(
-            "/config/computer-use",
-            patch(handlers::computer_use_update_config),
+            "/config/mcp",
+            get(handlers::mcp_config).patch(handlers::mcp_update_config),
         )
-        .route("/computer-use/session", get(handlers::computer_use_session))
-        .route("/computer-use/session", post(handlers::computer_use_start))
-        .route(
-            "/computer-use/session/stop",
-            post(handlers::computer_use_stop),
-        )
-        .route("/ws/computer-use", any(handlers::computer_use_ws))
         // Auth configuration
         .route("/config/auth", get(handlers::config::get_auth_config))
         .route("/config/auth", patch(handlers::config::update_auth_config))
@@ -229,6 +221,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         // System control
         .route("/system/restart", post(handlers::system_restart))
+        .route("/system/reboot", post(handlers::host_reboot))
+        .route("/system/poweroff", post(handlers::host_poweroff))
         .route("/update/overview", get(handlers::update_overview))
         .route("/update/upgrade", post(handlers::update_upgrade))
         .route("/update/status", get(handlers::update_status))
@@ -259,8 +253,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             patch(handlers::extensions::update_ttyd_config),
         )
         .route(
-            "/extensions/gostc/config",
-            patch(handlers::extensions::update_gostc_config),
+            "/extensions/easyfrp/config",
+            patch(handlers::extensions::update_easyfrp_config),
         )
         .route(
             "/extensions/easytier/config",
@@ -275,6 +269,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal/", get(handlers::terminal::terminal_index))
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
         .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
+
+    let user_routes = user_routes.route(
+        "/system/openwrt",
+        get(super::openwrt_system::redirect_handler),
+    );
 
     #[cfg(unix)]
     let user_routes = {
@@ -377,6 +376,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Main router
     let main_router = Router::new()
         .nest("/api", api_routes)
+        .merge(crate::mcp::router(state.mcp.clone(), state.config.clone()))
         .merge(static_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)

@@ -4,6 +4,9 @@ use serde::Serialize;
 
 use crate::error::Result;
 
+mod host;
+pub use host::{get_host_info, HostInfo};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DeviceInfo {
     pub hostname: String,

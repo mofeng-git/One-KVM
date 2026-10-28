@@ -1,6 +1,6 @@
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useSystemStore } from '@/stores/system'
+import { useSystemStore, type DeviceInfoEvent } from '@/stores/system'
 import type { StreamDeviceLostEventData, StreamStateChangedEventData } from '@/types/websocket'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
@@ -17,14 +17,14 @@ export interface ConsoleEventHandlers {
   onStreamDeviceLost?: (data: StreamDeviceLostEventData) => void
   onStreamReconnecting?: (data: { device: string; attempt: number }) => void
   onStreamRecovered?: (data: { device: string }) => void
-  onDeviceInfo?: (data: any) => void
+  onDeviceInfo?: (data: DeviceInfoEvent) => void
 }
 
 export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   const { t } = useI18n()
   const systemStore = useSystemStore()
   const { on, off, connect } = useWebSocket()
-  const noop = () => {}
+  let subscribed = false
 
   function handleStreamDeviceLost(data: StreamDeviceLostEventData) {
     const audioLost = isAudioStreamDeviceLostPayload(data)
@@ -41,53 +41,44 @@ export function useConsoleEvents(handlers: ConsoleEventHandlers) {
     handlers.onStreamDeviceLost?.(data)
   }
 
-  function handleStreamReconnecting(data: { device: string; attempt: number }) {
-    handlers.onStreamReconnecting?.(data)
-  }
-
-  function handleStreamRecovered(_data: { device: string }) {
+  function handleStreamRecovered(data: { device: string }) {
     if (systemStore.stream) {
       systemStore.stream.online = true
     }
-    handlers.onStreamRecovered?.(_data)
+    handlers.onStreamRecovered?.(data)
   }
 
-  function handleStreamStateChangedForward(data: StreamStateChangedEventData) {
-    handlers.onStreamStateChanged?.(data)
-  }
+  // Keep registration and cleanup together so every subscription is removed.
+  const subscriptions = [
+    ['stream.config_changing', handlers.onStreamConfigChanging],
+    ['stream.config_applied', handlers.onStreamConfigApplied],
+    ['stream.stats_update', handlers.onStreamStatsUpdate],
+    ['stream.mode_changed', handlers.onStreamModeChanged],
+    ['stream.mode_switching', handlers.onStreamModeSwitching],
+    ['stream.mode_ready', handlers.onStreamModeReady],
+    ['stream.webrtc_ready', handlers.onWebRTCReady],
+    ['stream.state_changed', handlers.onStreamStateChanged],
+    ['stream.device_lost', handleStreamDeviceLost],
+    ['stream.reconnecting', handlers.onStreamReconnecting],
+    ['stream.recovered', handleStreamRecovered],
+    ['system.device_info', handlers.onDeviceInfo],
+  ] as const
 
   function subscribe() {
-    on('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
-    on('stream.config_applied', handlers.onStreamConfigApplied ?? noop)
-    on('stream.stats_update', handlers.onStreamStatsUpdate ?? noop)
-    on('stream.mode_changed', handlers.onStreamModeChanged ?? noop)
-    on('stream.mode_switching', handlers.onStreamModeSwitching ?? noop)
-    on('stream.mode_ready', handlers.onStreamModeReady ?? noop)
-    on('stream.webrtc_ready', handlers.onWebRTCReady ?? noop)
-    on('stream.state_changed', handleStreamStateChangedForward)
-    on('stream.device_lost', handleStreamDeviceLost)
-    on('stream.reconnecting', handleStreamReconnecting)
-    on('stream.recovered', handleStreamRecovered)
-
-    on('system.device_info', handlers.onDeviceInfo ?? noop)
-
+    if (subscribed) return
+    subscribed = true
+    for (const [event, handler] of subscriptions) {
+      if (handler) on(event, handler)
+    }
     connect()
   }
 
   function unsubscribe() {
-    off('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
-    off('stream.config_applied', handlers.onStreamConfigApplied ?? noop)
-    off('stream.stats_update', handlers.onStreamStatsUpdate ?? noop)
-    off('stream.mode_changed', handlers.onStreamModeChanged ?? noop)
-    off('stream.mode_switching', handlers.onStreamModeSwitching ?? noop)
-    off('stream.mode_ready', handlers.onStreamModeReady ?? noop)
-    off('stream.webrtc_ready', handlers.onWebRTCReady ?? noop)
-    off('stream.state_changed', handleStreamStateChangedForward)
-    off('stream.device_lost', handleStreamDeviceLost)
-    off('stream.reconnecting', handleStreamReconnecting)
-    off('stream.recovered', handleStreamRecovered)
-
-    off('system.device_info', handlers.onDeviceInfo ?? noop)
+    if (!subscribed) return
+    subscribed = false
+    for (const [event, handler] of subscriptions) {
+      if (handler) off(event, handler)
+    }
   }
 
   return {

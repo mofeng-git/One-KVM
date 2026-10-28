@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -34,7 +34,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vite": "^7.3.6",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "3.3.6"
   },
   "overrides": {
     "defu": "^6.1.5",

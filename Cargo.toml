@@ -1,6 +1,6 @@
 [package]
 name = "one-kvm"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 authors = ["SilentWind"]
 description = "A open and lightweight IP-KVM solution written in Rust"
@@ -11,10 +11,12 @@ categories = ["embedded", "network-programming"]
 
 [features]
 default = ["desktop"]
+rkmpp = ["hwcodec/rkmpp"]
 desktop = [
     "dep:tokio",
     "dep:tokio-util",
     "dep:axum",
+    "dep:rmcp",
     "dep:axum-extra",
     "dep:tower-http",
     "dep:sqlx",
@@ -81,7 +83,9 @@ tokio-util = { version = "0.7", features = ["rt"], optional = true }
 # Web framework
 axum = { version = "0.8", features = ["ws", "multipart", "tokio"], optional = true }
 axum-extra = { version = "0.12", features = ["cookie"], optional = true }
-tower-http = { version = "0.6", features = ["cors", "trace", "set-header"], optional = true }
+tower-http = { version = "0.6", features = ["cors", "trace", "set-header", "limit"], optional = true }
+
+rmcp = { version = "3.5.1", default-features = false, features = ["server", "macros", "schemars", "transport-streamable-http-server"], optional = true }
 
 # Database - Use bundled SQLite for static linking
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite-bundled"], optional = true }

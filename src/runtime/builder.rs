@@ -6,8 +6,7 @@ use tokio::sync::broadcast;
 use crate::atx::AtxController;
 use crate::audio::{AudioController, AudioControllerConfig, AudioQuality};
 use crate::auth::{SessionStore, TwoFactorService, UserStore};
-use crate::computer_use::ComputerUseManager;
-use crate::config::{self, AppConfig, ConfigStore};
+use crate::config::{AppConfig, ConfigStore};
 use crate::db::{open_database_pool, DatabasePool};
 use crate::events::EventBus;
 use crate::extensions::ExtensionManager;
@@ -82,6 +81,7 @@ impl RuntimeBuilder {
             web_overrides,
         } = self;
         let (db, config_store, mut config) = load_runtime_config(&data_dir).await?;
+        config.hid.validate_platform()?;
         web_overrides.apply(&mut config);
 
         let sessions = SessionStore::new(config.auth.session_timeout_secs as i64);
@@ -107,6 +107,7 @@ impl RuntimeBuilder {
         #[cfg(target_os = "linux")]
         hid.set_bond_store(config_store.hid_bonds());
         hid.set_event_bus(events.clone()).await;
+        hid.configure_jiggler(&config.hid);
         hid.set_screen_resolution(video_resolution.width, video_resolution.height)
             .await;
         if let Err(error) = hid.init().await {
@@ -152,7 +153,6 @@ impl RuntimeBuilder {
             );
         }
 
-        let computer_use = ComputerUseManager::new(config_store.clone(), hid.clone());
         let state = AppState::new(
             db,
             config_store.clone(),
@@ -164,7 +164,6 @@ impl RuntimeBuilder {
             stream_manager,
             webrtc,
             hid,
-            computer_use,
             #[cfg(unix)]
             msd,
             atx,
@@ -403,26 +402,13 @@ async fn build_otg(config: &AppConfig) -> Arc<OtgService> {
         .await
     {
         tracing::warn!("Failed to apply OTG config: {}", error);
+        service.mark_degraded(error.to_string()).await;
     }
     service
 }
 
 fn hid_backend_type(config: &AppConfig) -> HidBackendType {
-    match config.hid.backend {
-        config::HidBackend::Otg => HidBackendType::Otg {
-            macos_drag: config.hid.mouse_macos_drag,
-        },
-        config::HidBackend::Ch9329 => HidBackendType::Ch9329 {
-            port: config.hid.ch9329_port.clone(),
-            baud_rate: config.hid.ch9329_baudrate,
-            hybrid_mouse: config.hid.ch9329_hybrid_mouse,
-            macos_drag: config.hid.mouse_macos_drag,
-        },
-        config::HidBackend::None => HidBackendType::None,
-        config::HidBackend::Bluetooth => HidBackendType::Bluetooth {
-            config: config.hid.bluetooth.clone(),
-        },
-    }
+    HidBackendType::from(&config.hid)
 }
 
 #[cfg(unix)]

@@ -11,17 +11,16 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
-import { useComputerUseSocket, type ComputerUseServerMessage } from '@/composables/useComputerUseSocket'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout } from '@/composables/useConsoleLayout'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { getMicrophone } from '@/composables/useMicrophone'
-import { streamApi, hidApi, atxApi, atxConfigApi, authApi, computerUseApi, uacApi } from '@/api'
-import type { ComputerUseScreenshot, ComputerUseSession } from '@/api'
+import { streamApi, hidApi, atxApi, atxConfigApi, authApi, uacApi } from '@/api'
 import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
+import { executeKeyboardShortcut, type KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import { toast } from 'vue-sonner'
 import { cn, generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
@@ -40,9 +39,7 @@ import ConsoleStatusSummary, { type ConsoleStatusItem } from '@/components/Conso
 import InfoBar from '@/components/InfoBar.vue'
 import VirtualKeyboard from '@/components/VirtualKeyboard.vue'
 import StatsSheet from '@/components/StatsSheet.vue'
-import ComputerUseSheet from '@/components/ComputerUseSheet.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
-import type { ComputerUseTimelineItem, NewComputerUseTimelineItem } from '@/types/computerUseTimeline'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
@@ -72,6 +69,7 @@ import {
   ChevronDown,
   KeyRound,
   Loader2,
+  Settings,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -86,7 +84,8 @@ const unifiedAudio = getUnifiedAudio()
 const microphone = getMicrophone()
 const uacEnabled = ref(false)
 const microphoneTransferEnabled = computed(() => (
-  uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
+  systemStore.platform?.otg.available === true
+  && uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
 ))
 const videoSession = useVideoSession()
 
@@ -118,11 +117,6 @@ function setVideoRotation(rotation: VideoRotation) {
   videoRotation.value = rotation
   localStorage.setItem('videoRotation', String(rotation))
 }
-const computerUseOpen = ref(false)
-const computerUseSession = ref<ComputerUseSession | null>(null)
-const computerUseTimeline = ref<ComputerUseTimelineItem[]>([])
-const computerUseConversationStarted = ref(false)
-let computerUseTimelineSeq = 0
 
 const videoRef = ref<HTMLImageElement | null>(null)
 const webrtcVideoRef = ref<HTMLVideoElement | null>(null)
@@ -165,11 +159,6 @@ const clientsStats = ref<Record<string, ClientStat>>({})
 
 const myClientId = generateUUID()
 
-const computerUseSocket = useComputerUseSocket({
-  onMessage: handleComputerUseMessage,
-  onScreenshotRequested: captureComputerUseFrame,
-})
-
 const mouseMode = ref<'absolute' | 'relative'>('absolute')
 const pressedKeys = ref<CanonicalKey[]>([])
 const keyboardLed = computed(() => ({
@@ -178,6 +167,9 @@ const keyboardLed = computed(() => ({
   scrollLock: systemStore.hid?.ledState.scrollLock ?? false,
 }))
 const keyboardLedEnabled = computed(() => systemStore.hid?.keyboardLedsEnabled ?? false)
+const keyboardLockPending = ref(false)
+const shortcutBusy = ref(false)
+let shortcutController: AbortController | null = null
 const activeModifierMask = ref(0)
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 })
@@ -260,7 +252,6 @@ provideConsoleAppearance(consoleLayout)
 const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
 const showPower = computed(() => featureVisibility.value.power)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
-const showComputerUse = computed(() => featureVisibility.value.computerUse)
 const showPasteText = computed(() => featureVisibility.value.pasteText)
 
 const videoStatus = computed<ConnectionStatus>(() => {
@@ -747,10 +738,9 @@ watch(videoLoading, (loading) => {
   if (loading) clearVideoSourceSize()
 })
 
-const computerUsePanelVisible = computed(() => computerUseOpen.value && !isFullscreen.value)
 
 const showMsdStatusCard = computed(() => {
-  return !!(systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329')
+  return !!(systemStore.msd?.available)
 })
 
 const hidHoverAlign = computed<'start' | 'end'>(() => {
@@ -811,140 +801,6 @@ async function captureFrameOverlay() {
   }
 }
 
-async function captureComputerUseFrame(): Promise<ComputerUseScreenshot | null> {
-  try {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-
-    const MAX_WIDTH = 1920
-
-    if (videoMode.value === 'mjpeg') {
-      const img = videoRef.value
-      if (!img || !img.naturalWidth || !img.naturalHeight) return null
-
-      const scale = Math.min(1, MAX_WIDTH / img.naturalWidth)
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-    } else {
-      const video = webrtcVideoRef.value
-      if (!video || !video.videoWidth || !video.videoHeight) return null
-
-      const scale = Math.min(1, MAX_WIDTH / video.videoWidth)
-      canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
-      canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    }
-
-    return {
-      data_url: canvas.toDataURL('image/jpeg', 0.82),
-      width: canvas.width,
-      height: canvas.height,
-    }
-  } catch (err) {
-    console.error('[ComputerUse] Failed to capture frame:', err)
-    return null
-  }
-}
-
-function handleComputerUseMessage(message: ComputerUseServerMessage) {
-  switch (message.type) {
-    case 'session_updated':
-      computerUseSession.value = message.session
-      if (message.session.last_error) {
-        pushComputerUseTimeline({ type: 'error', text: message.session.last_error })
-      }
-      if (message.session.final_message) {
-        pushComputerUseTimeline({ type: 'assistant', text: message.session.final_message })
-      }
-      break
-    case 'screenshot_captured':
-      pushComputerUseTimeline({ type: 'screenshot', screenshot: message.screenshot })
-      break
-    case 'actions_executed':
-      pushComputerUseTimeline({ type: 'actions_executed', actions: message.actions })
-      break
-    case 'step_started':
-      pushComputerUseTimeline({ type: 'reasoning', text: '', completed: false, failed: false })
-      break
-    case 'reasoning_delta': {
-      const last = computerUseTimeline.value[computerUseTimeline.value.length - 1]
-      if (last?.type === 'reasoning' && !last.completed) {
-        last.text += message.delta
-      } else {
-        pushComputerUseTimeline({ type: 'reasoning', text: message.delta, completed: false, failed: false })
-      }
-      break
-    }
-    case 'reasoning_completed': {
-      for (let index = computerUseTimeline.value.length - 1; index >= 0; index -= 1) {
-        const item = computerUseTimeline.value[index]
-        if (item?.type !== 'reasoning' || item.completed) continue
-        if (!message.failed && !item.text) {
-          computerUseTimeline.value.splice(index, 1)
-        } else {
-          item.completed = true
-          item.failed = message.failed
-        }
-        break
-      }
-      break
-    }
-    case 'error':
-      pushComputerUseTimeline({ type: 'error', text: message.message })
-      toast.error(t('computerUse.errors.taskFailed'), { description: message.message })
-      break
-  }
-}
-
-function pushComputerUseTimeline(item: NewComputerUseTimelineItem) {
-  const last = computerUseTimeline.value[computerUseTimeline.value.length - 1]
-  if (last?.type === item.type) {
-    if ('text' in last && 'text' in item && last.text === item.text) return
-    if (last.type === 'actions_executed' && item.type === 'actions_executed' && JSON.stringify(last.actions) === JSON.stringify(item.actions)) return
-  }
-  computerUseTimeline.value.push({
-    id: `${Date.now()}-${computerUseTimelineSeq++}`,
-    ...item,
-  } as ComputerUseTimelineItem)
-}
-
-function clearComputerUseTimeline() {
-  computerUseTimeline.value = []
-  computerUseConversationStarted.value = false
-}
-
-async function openComputerUse() {
-  if (!showComputerUse.value) return
-  computerUseOpen.value = true
-  await computerUseSocket.connect().catch(() => {})
-  computerUseSession.value = await computerUseApi.session().catch(() => computerUseSession.value)
-}
-
-async function startComputerUse(prompt: string) {
-  try {
-    await computerUseSocket.connect()
-    pushComputerUseTimeline({ type: 'user', text: prompt })
-    computerUseSession.value = await computerUseApi.start({
-      prompt,
-      continue_conversation: computerUseConversationStarted.value,
-      client_id: computerUseSocket.clientId,
-    })
-    computerUseConversationStarted.value = true
-  } catch (err: any) {
-    pushComputerUseTimeline({ type: 'error', text: err?.message ?? t('computerUse.errors.startFailed') })
-    toast.error(t('computerUse.errors.startFailed'), { description: err?.message })
-  }
-}
-
-async function stopComputerUse() {
-  try {
-    computerUseSession.value = await computerUseApi.stop()
-  } catch (err: any) {
-    toast.error(t('computerUse.errors.stopFailed'), { description: err?.message })
-  }
-}
 
 function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise<boolean> {
   return new Promise((resolve) => {
@@ -2002,9 +1858,6 @@ watch(showTerminal, (visible) => {
   if (!visible) showTerminalDialog.value = false
 })
 
-watch(showComputerUse, (visible) => {
-  if (!visible) computerUseOpen.value = false
-})
 
 watch(() => webrtc.audioTrack.value, async (track) => {
   videoDebugLog('WebRTC audio track ref changed', {
@@ -2209,7 +2062,7 @@ async function handleWol(mac: string) {
 function handleHidError(_error: any, _operation: string) {
 }
 
-function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
+async function transmitKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
@@ -2219,7 +2072,74 @@ function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: nu
     const sent = webrtc.sendKeyboard(event)
     if (sent) return
   }
-  hidApi.keyboard(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
+  await hidApi.keyboard(type, key, modifier)
+}
+
+function sendKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
+  transmitKeyboardEvent(type, key, modifier).catch(err => handleHidError(err, `keyboard ${type}`))
+}
+
+function cancelShortcut() {
+  shortcutController?.abort()
+}
+
+async function executeShortcut(shortcut: KeyboardShortcut) {
+  if (shortcutBusy.value || !isConsoleActive.value || hidStatus.value !== 'connected') return
+  if (pressedKeys.value.length || activeModifierMask.value || keyboardLockPending.value) {
+    toast.info(t('shortcuts.releaseKeys'))
+    return
+  }
+  const controller = new AbortController()
+  shortcutController = controller
+  shortcutBusy.value = true
+  // Unlike the low-latency WebRTC channel (limited retransmissions), WebSocket
+  // delivers the whole chord reliably and in order, independent of video mode.
+  try {
+    await executeKeyboardShortcut(shortcut, async (type, key, modifier) => {
+      if (type === 'down' && hidStatus.value !== 'connected') throw new Error('HID disconnected')
+      const event: HidKeyboardEvent = { type: type === 'down' ? 'keydown' : 'keyup', key, modifier }
+      await hidWs.sendKeyboard(event)
+    }, {
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (isConsoleActive.value) toast.info(t('shortcuts.stopped'))
+    } else {
+      console.error('[Shortcuts] Send failed:', error)
+      toast.error(t('shortcuts.failed'))
+    }
+  } finally {
+    shortcutController = null
+    shortcutBusy.value = false
+  }
+}
+
+watch(hidStatus, status => {
+  if (status !== 'connected') shortcutController?.abort(new Error('HID disconnected'))
+}, { flush: 'sync' })
+watch([hidWs.connected, hidWs.networkError, hidWs.hidUnavailable], ([connected, error, unavailable]) => {
+  if (!connected || error || unavailable) shortcutController?.abort(new Error('HID WebSocket disconnected'))
+}, { flush: 'sync' })
+watch([videoMode, consoleLayout], cancelShortcut, { flush: 'sync' })
+
+async function toggleKeyboardLock(key: CanonicalKey.CapsLock | CanonicalKey.NumLock | CanonicalKey.ScrollLock) {
+  if (!keyboardLedEnabled.value || hidStatus.value !== 'connected'
+    || shortcutBusy.value || keyboardLockPending.value || pressedKeys.value.includes(key)) return
+
+  keyboardLockPending.value = true
+  try {
+    try {
+      await transmitKeyboardEvent('down', key, activeModifierMask.value)
+      await new Promise(resolve => setTimeout(resolve, 100))
+    } finally {
+      await transmitKeyboardEvent('up', key, activeModifierMask.value)
+    }
+  } catch {
+    toast.error(t('infobar.toggleLockFailed'))
+  } finally {
+    keyboardLockPending.value = false
+  }
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
@@ -2254,6 +2174,8 @@ function shouldBlockKey(e: KeyboardEvent): boolean {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (shortcutBusy.value || document.querySelector('[data-keyboard-shortcuts]')
+    || (e.target instanceof Element && e.target.closest('[data-shortcut-surface]'))) return
   const container = videoContainerRef.value
   if (!container) return
 
@@ -2283,20 +2205,16 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 function handleKeyUp(e: KeyboardEvent) {
-  const container = videoContainerRef.value
-  if (!container) return
-
-  if (!isFullscreen.value && !container.contains(document.activeElement)) return
-
-  if (shouldBlockKey(e)) {
+  if (shortcutBusy.value) return
+  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
+  // A local Tab/Enter can move focus before keyup. Only release keys whose
+  // keydown was actually forwarded; do release them after focus moves away.
+  if (canonicalKey === undefined || !pressedKeys.value.includes(canonicalKey)) return
+  const localShortcut = document.querySelector('[data-keyboard-shortcuts]')
+    || (e.target instanceof Element && e.target.closest('[data-shortcut-surface]'))
+  if (!localShortcut && shouldBlockKey(e)) {
     e.preventDefault()
     e.stopPropagation()
-  }
-
-  const canonicalKey = keyboardEventToCanonicalKey(e.code, e.key)
-  if (canonicalKey === undefined) {
-    console.warn(`[HID] Unmapped key up: code=${e.code}, key=${e.key}`)
-    return
   }
 
   pressedKeys.value = pressedKeys.value.filter(k => k !== canonicalKey)
@@ -2964,6 +2882,7 @@ function handleFullscreenChange() {
 }
 
 function handleBlur() {
+  cancelShortcut()
   resetTouchInput()
   pressedKeys.value = []
   activeModifierMask.value = 0
@@ -3117,13 +3036,15 @@ function handleToggleMouseMode() {
   accumulatedDelta = { x: 0, y: 0 }
   lastMousePosition.value = { x: 0, y: 0 }
   mousePosition.value = { x: 0, y: 0 }
-
-  if (mouseMode.value === 'relative') {
-  }
 }
 
 async function refreshUacAvailability() {
   try {
+    if (!systemStore.platform) await systemStore.fetchSystemInfo()
+    if (!systemStore.platform?.otg.available) {
+      uacEnabled.value = false
+      return
+    }
     const uacConfig = await uacApi.get()
     uacEnabled.value = uacConfig.enabled
   } catch {
@@ -3226,8 +3147,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative h-screen h-dvh flex flex-col bg-background">
-    <header class="shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
+  <div class="console-page relative h-screen h-dvh flex flex-col bg-background">
+    <header class="console-header shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
       <div class="px-2 sm:px-4">
         <div class="console-header__row h-10 sm:h-14 flex items-center justify-between">
           <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-6">
@@ -3269,10 +3190,12 @@ onUnmounted(() => {
               :show-stats="showConnectionStats"
               :show-terminal="showTerminal"
               :terminal-running="!!ttydStatus?.running"
-              :show-computer-use="showComputerUse"
+              :stats-open="statsSheetOpen"
+              :terminal-open="showTerminalDialog"
+
               @open-stats="openStatsSheet"
               @open-terminal="openTerminal"
-              @open-computer-use="openComputerUse"
+
             />
             <div v-if="consoleLayout === 'current'" class="hidden md:flex items-center gap-2">
               <StatusCard
@@ -3317,6 +3240,16 @@ onUnmounted(() => {
               <Moon v-else class="size-4" />
             </Button>
             <LanguageToggleButton class="size-8 hidden md:flex" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="console-settings-button"
+              :aria-label="t('actionbar.settings')"
+              :title="t('actionbar.settings')"
+              @click="router.push('/settings')"
+            >
+              <Settings class="size-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="outline" size="sm" class="gap-1 sm:gap-1.5 px-2 sm:px-3">
@@ -3367,11 +3300,20 @@ onUnmounted(() => {
         :show-power="showPower"
         :atx-enabled="systemStore.atx?.available === true"
         :show-terminal="showTerminal"
-        :show-computer-use="showComputerUse"
+
         :show-paste-text="showPasteText"
         :show-mic="microphoneTransferEnabled"
         :scale-mode="videoScaleMode"
         :source-size-available="sourceSizeAvailable"
+        :keyboard-visible="virtualKeyboardVisible"
+        :fullscreen="isFullscreen"
+        :stats-open="statsSheetOpen"
+        :terminal-open="showTerminalDialog"
+        :shortcuts-ready="isConsoleActive && hidStatus === 'connected' && hidWs.connected.value && !hidWs.networkError.value && !hidWs.hidUnavailable.value"
+        :shortcut-input-busy="pressedKeys.length > 0 || activeModifierMask !== 0 || keyboardLockPending"
+        :shortcut-busy="shortcutBusy"
+        @execute-shortcut="executeShortcut"
+        @cancel-shortcut="cancelShortcut"
         @toggle-fullscreen="toggleFullscreen"
         @update:scale-mode="setVideoScaleMode"
         @toggle-stats="openStatsSheet"
@@ -3384,7 +3326,7 @@ onUnmounted(() => {
         @reset="handleReset"
         @wol="handleWol"
         @open-terminal="openTerminal"
-        @open-computer-use="openComputerUse"
+
       />
     </div>
     <div
@@ -3395,7 +3337,6 @@ onUnmounted(() => {
       <div class="relative flex h-full w-full min-w-0 items-stretch gap-3">
         <div
           class="flex min-w-0 flex-1 items-center justify-center transition-all duration-300"
-          :class="{ 'md:pr-1': computerUsePanelVisible }"
         >
         <div
           ref="videoWorkspaceRef"
@@ -3605,17 +3546,7 @@ onUnmounted(() => {
           </div>
         </div>
         </div>
-        <ComputerUseSheet
-          v-if="showComputerUse"
-          v-model:open="computerUseOpen"
-          :connected="computerUseSocket.connected.value"
-          :ws-error="computerUseSocket.error.value"
-          :session="computerUseSession"
-          :timeline="computerUseTimeline"
-          @start="startComputerUse"
-          @stop="stopComputerUse"
-          @clear="clearComputerUseTimeline"
-        />
+
       </div>
     </div>
     <Teleport :to="virtualKeyboardAttached ? '#keyboard-anchor' : 'body'" :disabled="virtualKeyboardAttached">
@@ -3626,12 +3557,14 @@ onUnmounted(() => {
         :caps-lock="keyboardLed.capsLock"
         :pressed-keys="pressedKeys"
         :consumer-enabled="virtualKeyboardConsumerEnabled"
+        :disabled="shortcutBusy"
         @key-down="handleVirtualKeyDown"
         @key-up="handleVirtualKeyUp"
       />
     </Teleport>
     <div id="keyboard-anchor"></div>
     <InfoBar
+      class="console-info-bar"
       v-if="consoleLayout !== 'floating' || pressedKeys.length > 0 || isPointerLocked"
       :compact="consoleLayout !== 'current'"
       :captured="isPointerLocked"
@@ -3644,8 +3577,10 @@ onUnmounted(() => {
       :num-lock="keyboardLed.numLock"
       :scroll-lock="keyboardLed.scrollLock"
       :keyboard-led-enabled="keyboardLedEnabled"
+      :keyboard-lock-disabled="hidStatus !== 'connected' || keyboardLockPending || shortcutBusy"
       :mouse-position="mousePosition"
       :debug-mode="false"
+      @toggle-lock="toggleKeyboardLock"
     />
     <StatsSheet
       v-if="showConnectionStats"

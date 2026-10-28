@@ -181,7 +181,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <div class="p-4 space-y-4">
-    <h3 class="font-semibold text-sm">{{ t('paste.title') }}</h3>
+    <h3 class="text-sm font-medium">{{ t('paste.title') }}</h3>
 
     <Textarea
       id="paste-text"

@@ -69,6 +69,8 @@ impl SetupRequest {
         if let Some(enabled) = self.hid_otg_keyboard_leds {
             hid.otg_keyboard_leds = enabled;
         }
+        hid.validate_platform()?;
+        hid.validate_composite_selection()?;
         hid.bluetooth.validate()?;
         hid.validate_otg_functions()?;
         Ok(hid)
@@ -303,6 +305,21 @@ mod tests {
         assert_eq!(hid.otg_udc.as_deref(), Some("fe800000.usb"));
         assert_eq!(hid.otg_profile, OtgHidProfile::FullNoConsumer);
         assert!(hid.effective_otg_keyboard_leds());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn setup_applies_composite_selection_to_both_usb_paths() {
+        let req = request(json!({
+            "hid_backend": "ch9329_otg", "hid_ch9329_port": "/dev/ttyUSB2",
+            "hid_ch9329_baudrate": 115200, "hid_otg_udc": "test.udc"
+        }));
+        let hid = req.hid_config(&HidConfig::default()).unwrap();
+        assert_eq!(hid.backend, HidBackend::Ch9329Otg);
+        assert_eq!(hid.ch9329_port, "/dev/ttyUSB2");
+        assert_eq!(hid.ch9329_baudrate, 115200);
+        assert_eq!(hid.otg_udc.as_deref(), Some("test.udc"));
+        assert!(hid.constrained_otg_functions().is_empty());
     }
 
     #[test]

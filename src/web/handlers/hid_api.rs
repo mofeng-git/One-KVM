@@ -11,6 +11,9 @@ pub struct Ch9329DescriptorQuery {
 pub struct HidStatus {
     pub available: bool,
     pub backend: String,
+    pub configured_backend: String,
+    #[cfg(unix)]
+    pub otg: crate::otg::service::OtgRuntimeStatus,
     pub initialized: bool,
     pub online: bool,
     pub supports_absolute_mouse: bool,
@@ -34,9 +37,21 @@ pub async fn hid_otg_self_check(
 /// Get HID status
 pub async fn hid_status(State(state): State<Arc<AppState>>) -> Json<HidStatus> {
     let hid = state.hid.snapshot().await;
+    let config = state.config.get();
     Json(HidStatus {
         available: hid.available,
         backend: hid.backend,
+        configured_backend: config.hid.backend.as_str().to_string(),
+        #[cfg(unix)]
+        otg: state
+            .otg_service
+            .runtime_status(
+                config.hid.backend.uses_otg_hid()
+                    || config.msd.enabled
+                    || config.otg_network.enabled
+                    || config.uac.enabled,
+            )
+            .await,
         initialized: hid.initialized,
         online: hid.online,
         supports_absolute_mouse: hid.supports_absolute_mouse,

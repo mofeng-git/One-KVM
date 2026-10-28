@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 
 use super::protected_config::ProtectedConfigFile;
 use super::types::*;
-use super::validation::{validate_easytier_config, validate_frpc_config, validate_gostc_config};
+use super::validation::{validate_easyfrp_config, validate_easytier_config, validate_frpc_config};
 use crate::events::EventBus;
 
 const LOG_BUFFER_SIZE: usize = 200;
@@ -82,8 +82,8 @@ impl ExtensionManager {
     fn is_enabled_for_config(id: ExtensionId, config: &ExtensionsConfig) -> bool {
         match id {
             ExtensionId::Ttyd => config.ttyd.enabled,
-            ExtensionId::Gostc => {
-                config.gostc.enabled && validate_gostc_config(&config.gostc).is_ok()
+            ExtensionId::Easyfrp => {
+                config.easyfrp.enabled && validate_easyfrp_config(&config.easyfrp).is_ok()
             }
             ExtensionId::Easytier => {
                 config.easytier.enabled && validate_easytier_config(&config.easytier).is_ok()
@@ -144,12 +144,7 @@ impl ExtensionManager {
 
         let launch = self.build_launch(id, config).await?;
 
-        tracing::info!(
-            "Starting extension {}: {} {}",
-            id,
-            id.binary_path().display(),
-            launch.args.join(" ")
-        );
+        tracing::info!("Starting extension {}: {}", id, id.binary_path().display());
 
         let mut child = Command::new(id.binary_path())
             .args(&launch.args)
@@ -272,17 +267,12 @@ impl ExtensionManager {
                 args
             }
 
-            ExtensionId::Gostc => {
-                let c = &config.gostc;
-                validate_gostc_config(c)?;
+            ExtensionId::Easyfrp => {
+                let c = &config.easyfrp;
+                validate_easyfrp_config(c)?;
 
-                // gostc defaults to TLS, so disabling it must be explicit.
-                let mut args = vec![format!("--tls={}", c.tls)];
-
-                args.extend(["-addr".to_string(), c.addr.trim().to_string()]);
-
-                args.extend(["-key".to_string(), c.key.clone()]);
-
+                let mut args = vec!["control".to_string()];
+                args.extend(c.control_urls.iter().map(|url| url.trim().to_string()));
                 args
             }
 
@@ -579,6 +569,27 @@ impl ExtensionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn easyfrp_launch_uses_control_urls_as_separate_arguments() {
+        let mut config = ExtensionsConfig::default();
+        config.easyfrp.control_urls = vec![
+            "wss://example.com/key-one".to_string(),
+            "txt://example.net/key-two".to_string(),
+        ];
+        let launch = ExtensionManager::new()
+            .build_launch(ExtensionId::Easyfrp, &config)
+            .await
+            .unwrap();
+        assert_eq!(
+            launch.args,
+            [
+                "control",
+                "wss://example.com/key-one",
+                "txt://example.net/key-two"
+            ]
+        );
+    }
 
     #[tokio::test]
     async fn easytier_launch_revalidates_full_configuration() {

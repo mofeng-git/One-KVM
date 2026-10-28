@@ -2,12 +2,6 @@ import { request, uploadRequest, ApiError } from './request'
 import type {
   CanonicalKey,
   Ch9329DescriptorState,
-  ComputerUseButton,
-  ComputerUseConfigResponse,
-  ComputerUseConfigUpdate,
-  ComputerUseSessionStatus,
-  ComputerUseSessionSummary,
-  ComputerUseStartRequest,
 } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 import type { StreamSignalReason, StreamState } from '@/types/websocket'
@@ -99,6 +93,18 @@ export interface NetworkAddress {
   ip: string
 }
 
+export interface HostInfo {
+  operating_system: string
+  architecture: string
+  kernel: string | null
+  cpu_count: number
+  storage: {
+    system: { total: number; used: number; available: number } | null
+    msd: { total: number; used: number; available: number } | null
+    shared_partition: boolean | null
+  }
+}
+
 export interface DeviceInfo {
   hostname: string
   cpu_model: string
@@ -138,6 +144,7 @@ export const systemApi = {
     request<{
       version: string
       initialized: boolean
+      openwrt_system: boolean
       platform: PlatformCapabilities
       capabilities: {
         video: { available: boolean; backend?: string; reason?: string }
@@ -153,6 +160,7 @@ export const systemApi = {
         available: number
         used: number
       }
+      host?: HostInfo
       device_info?: DeviceInfo
     }>('/info'),
 
@@ -169,7 +177,7 @@ export const systemApi = {
     video_width?: number
     video_height?: number
     video_fps?: number
-    hid_backend?: 'otg' | 'ch9329' | 'bluetooth' | 'none'
+    hid_backend?: 'otg' | 'ch9329' | 'ch9329_otg' | 'bluetooth' | 'none'
     hid_bluetooth?: { adapter: string; name: string }
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
@@ -191,6 +199,12 @@ export const systemApi = {
     request<{ success: boolean; message?: string }>('/system/restart', {
       method: 'POST',
     }),
+
+  hostPower: (action: 'reboot' | 'poweroff') =>
+    request<{ success: boolean; message?: string }>(`/system/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmed: true }),
+    }, { toastOnError: false }),
 }
 
 export type UpdateChannel = 'stable' | 'beta'
@@ -416,6 +430,8 @@ export const hidApi = {
     request<{
       available: boolean
       backend: string
+      configured_backend: string
+      otg?: import('@/lib/hidGuide').OtgDeviceStatus
       initialized: boolean
       online: boolean
       supports_absolute_mouse: boolean
@@ -507,48 +523,17 @@ export const hidApi = {
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
-export type ComputerUseStatus = ComputerUseSessionStatus
-
-export type ComputerUseAction =
-  | { type: 'click'; x: number; y: number; button?: ComputerUseButton }
-  | { type: 'double_click'; x: number; y: number; button?: ComputerUseButton }
-  | { type: 'move'; x: number; y: number }
-  | { type: 'drag'; path: Array<{ x: number; y: number }>; button?: ComputerUseButton }
-  | { type: 'scroll'; x: number; y: number; dx?: number; dy?: number }
-  | { type: 'type'; text: string }
-  | { type: 'keypress'; keys: string[] }
-  | { type: 'wait'; ms: number }
-  | { type: 'screenshot' }
-
-export type ComputerUseConversationMessage =
-  | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string }
-
-export type ComputerUseConfig = ComputerUseConfigResponse
-
-export type ComputerUseSession = ComputerUseSessionSummary
-
-export const computerUseApi = {
-  config: () => request<ComputerUseConfig>('/config/computer-use'),
-
-  updateConfig: (data: ComputerUseConfigUpdate) =>
-    request<ComputerUseConfig>('/config/computer-use', {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
-
-  session: () => request<ComputerUseSession>('/computer-use/session'),
-
-  start: (data: ComputerUseStartRequest) =>
-    request<ComputerUseSession>('/computer-use/session', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  stop: () =>
-    request<ComputerUseSession>('/computer-use/session/stop', {
-      method: 'POST',
-    }),
+export interface McpConfig {
+  enabled: boolean
+  requests_per_second: number
+  api_key_configured: boolean
+  endpoint: string
+  api_key?: string
+}
+export const mcpApi = {
+  config: () => request<McpConfig>('/config/mcp'),
+  updateConfig: (data: { enabled?: boolean; requests_per_second?: number; regenerate_api_key?: boolean }) =>
+    request<McpConfig>('/config/mcp', { method: 'PATCH', body: JSON.stringify(data) }),
 }
 
 export const atxApi = {
@@ -883,13 +868,6 @@ export type {
   StreamMode,
   EncoderType,
   BitratePreset,
-  ComputerUseButton,
-  ComputerUseConfigResponse,
-  ComputerUseConfigUpdate,
-  ComputerUseScreenshot,
-  ComputerUseSessionStatus,
-  ComputerUseSessionSummary,
-  ComputerUseStartRequest,
 } from '@/types/generated'
 
 export const audioApi = {

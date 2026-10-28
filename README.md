@@ -37,13 +37,20 @@
 **核心功能**
 
 | 功能 | 能力说明 |
-|------|------|
-| 视频采集 | HDMI USB /MIPI CSI/RK3588 HDMI IN 采集支持，提供 MJPEG / WebRTC（H.264/H.265/VP8/VP9） 视频流|
-| 视频编码 | VAAPI/QSV/RKMPP/V4L2M2M 硬件编码支持，以及软件编码兜底 |
-| 键鼠控制 | USB OTG HID 或 CH340 + CH9329 HID，支持绝对/相对鼠标模式 |
-| 虚拟媒体 | USB Mass Storage，支持 ISO/IMG 镜像挂载和 Ventoy 虚拟U盘模式 |
-| ATX 电源控制 | GPIO/USB 继电器，支持电源控制 |
-| 音频传输 | ALSA 采集 + Opus 编码（HTTP/WebRTC） |
+|------|----------|
+| 视频采集与传输 | 支持 USB HDMI 采集卡、MIPI CSI 和 RK3588 HDMI IN，提供 MJPEG / WebRTC（H.264 / H.265 / VP8 / VP9）视频流 |
+| 视频编码 | 支持 VAAPI / QSV / NVENC / AMF / RKMPP / V4L2 M2M 硬件编码，以及软件编码兜底 |
+| 键鼠控制 | 支持 USB OTG HID、CH340 + CH9329 串口 HID 和蓝牙 HID；USB / 串口支持绝对与相对鼠标模式，蓝牙支持相对鼠标模式 |
+| 虚拟媒体 | 通过 USB Mass Storage 挂载 ISO / IMG 镜像，支持虚拟光驱、虚拟 U 盘和 Ventoy 多镜像启动 |
+| ATX 电源控制 | 支持 GPIO、USB HID / 串口继电器，实现开关机、强制关机和重启；GPIO 可检测电源与硬盘活动指示灯 |
+| 网络唤醒 | 支持 Wake-on-LAN（WOL），可选择发送网卡并保存唤醒历史 |
+| 音频传输 | 支持 Linux ALSA / Windows WASAPI 采集与 Opus 编码，通过 WebSocket / WebRTC 传输被控机音频 |
+| USB 麦克风 | 通过 USB OTG UAC 将浏览器麦克风音频传入被控机 |
+| USB 网络共享 | 支持 NCM / ECM / RNDIS 虚拟网卡，将被控机通过 USB 桥接到有线网络 |
+| 远程客户端接入 | 内置 RustDesk 与 VNC 服务；RustDesk 支持 ID 服务与 IP 直连，VNC 支持 Tight JPEG / H.264 |
+| RTSP 视频流 | 提供 H.264 / H.265 RTSP 视频流，支持用户名与密码认证 |
+
+具体功能可用性取决于运行平台、硬件与驱动。
 
 ## 安装使用
 
@@ -219,6 +226,100 @@ One-KVM 已上架飞牛 **应用市场**，在 NAS 上直接搜索安装即可�
 - 爱发电用户_d4f8b
 
 - 故人。
+
+- WindowsHao
+
+- 爱发电用户_d4f8b
+
+- 爱发电用户_59f5a
+
+- 爱发电用户_96f28
+
+- 孤星赏月
+
+- t316161070
+
+- 爱发电用户_f5gW
+
+- 爱发电用户_5fb5c
+
+- 爱发电用户_86d54
+
+- 爱发电用户_maRx
+
+- nb
+
+- 爱发电用户_0aa4a
+
+- 爱发电用户_f75a7
+
+- 爱发电用户_b4646
+
+- n1k0
+
+- Yeskf
+
+- 魔力回旋彪
+
+- 泡面
+
+- 中看台的杰森
+
+- LWF
+
+- 爱发电用户_b38fb
+
+- 丨拒绝啦丶
+
+- 爱发电用户_rGYn
+
+- 爱发电用户_XU9y
+
+- 爱发电用户_ec19b
+
+- 爱发电用户_A4dE
+
+- 爱发电用户_eYRC
+
+- Aleo
+
+- 淼
+
+- 爱发电用户_5d06d
+
+- Ghost_chu
+
+- 爱发电用户_1fa21
+
+- 爱发电用户_a7072
+
+- 爱发电用户_9HrC
+
+- 飒歼外寒
+
+- Resucdueff
+
+- Gentisan
+
+- 爱发电用户_MGAx
+
+- 爱发电用户_bce93
+
+- 爱发电用户_60f87
+
+- Bottling3748
+
+- 爱发电用户_7cbeb
+
+- 爱发电用户_6c721
+
+- 哦哦哦哦
+
+- 盒子先生
+
+- 似水流年
+
+- chnxan
 
 - ......
 

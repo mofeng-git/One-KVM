@@ -2,9 +2,9 @@ use axum::{extract::State, Json};
 use std::sync::Arc;
 
 use crate::error::Result;
+use crate::runtime::{apply_stream_config, try_apply_lock, ConfigApplyOptions};
 use crate::state::AppState;
 
-use super::apply::{apply_stream_config, try_apply_lock, ConfigApplyOptions};
 use super::types::{StreamConfigResponse, StreamConfigUpdate};
 
 pub async fn get_stream_config(State(state): State<Arc<AppState>>) -> Json<StreamConfigResponse> {

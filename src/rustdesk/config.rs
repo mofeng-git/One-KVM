@@ -103,12 +103,6 @@ impl RustDeskConfig {
         (*new_uuid.as_bytes(), true)
     }
 
-    pub fn get_uuid_bytes(&self) -> Option<[u8; 16]> {
-        self.uuid
-            .as_ref()
-            .and_then(|s| uuid::Uuid::parse_str(s).ok().map(|u| *u.as_bytes()))
-    }
-
     pub fn rendezvous_addr(&self) -> String {
         let server = &self.rendezvous_server;
         if server.is_empty() {

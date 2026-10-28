@@ -10,16 +10,10 @@ use thiserror::Error;
 pub enum CryptoError {
     #[error("Failed to initialize sodiumoxide")]
     InitError,
-    #[error("Encryption failed")]
-    EncryptionFailed,
     #[error("Decryption failed")]
     DecryptionFailed,
     #[error("Invalid key length")]
     InvalidKeyLength,
-    #[error("Invalid nonce")]
-    InvalidNonce,
-    #[error("Signature verification failed")]
-    SignatureVerificationFailed,
     #[error("Key conversion failed")]
     KeyConversionFailed,
 }
@@ -103,39 +97,6 @@ pub fn decrypt_box(
         .map_err(|_| CryptoError::DecryptionFailed)
 }
 
-pub fn encrypt_with_key(data: &[u8], key: &secretbox::Key) -> (secretbox::Nonce, Vec<u8>) {
-    let nonce = secretbox::gen_nonce();
-    let ciphertext = secretbox::seal(data, &nonce, key);
-    (nonce, ciphertext)
-}
-
-pub fn decrypt_with_key(
-    ciphertext: &[u8],
-    nonce: &secretbox::Nonce,
-    key: &secretbox::Key,
-) -> Result<Vec<u8>, CryptoError> {
-    secretbox::open(ciphertext, nonce, key).map_err(|_| CryptoError::DecryptionFailed)
-}
-
-pub fn precompute_key(
-    their_public_key: &PublicKey,
-    our_secret_key: &SecretKey,
-) -> box_::PrecomputedKey {
-    box_::precompute(their_public_key, our_secret_key)
-}
-
-pub fn symmetric_key_from_slice(key: &[u8]) -> Result<secretbox::Key, CryptoError> {
-    secretbox::Key::from_slice(key).ok_or(CryptoError::InvalidKeyLength)
-}
-
-pub fn nonce_from_slice(bytes: &[u8]) -> Result<Nonce, CryptoError> {
-    Nonce::from_slice(bytes).ok_or(CryptoError::InvalidNonce)
-}
-
-pub fn public_key_from_slice(bytes: &[u8]) -> Result<PublicKey, CryptoError> {
-    PublicKey::from_slice(bytes).ok_or(CryptoError::InvalidKeyLength)
-}
-
 pub fn hash_password(password: &str, salt: &str) -> Vec<u8> {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -180,26 +141,6 @@ pub fn decrypt_symmetric_key(
         .map_err(|_| CryptoError::DecryptionFailed)?;
 
     secretbox::Key::from_slice(&key_bytes).ok_or(CryptoError::InvalidKeyLength)
-}
-
-pub fn encrypt_message(data: &[u8], key: &secretbox::Key, nonce_counter: u64) -> Vec<u8> {
-    let mut nonce_bytes = [0u8; secretbox::NONCEBYTES];
-    nonce_bytes[..8].copy_from_slice(&nonce_counter.to_le_bytes());
-    let nonce = secretbox::Nonce(nonce_bytes);
-
-    secretbox::seal(data, &nonce, key)
-}
-
-pub fn decrypt_message(
-    ciphertext: &[u8],
-    key: &secretbox::Key,
-    nonce_counter: u64,
-) -> Result<Vec<u8>, CryptoError> {
-    let mut nonce_bytes = [0u8; secretbox::NONCEBYTES];
-    nonce_bytes[..8].copy_from_slice(&nonce_counter.to_le_bytes());
-    let nonce = secretbox::Nonce(nonce_bytes);
-
-    secretbox::open(ciphertext, &nonce, key).map_err(|_| CryptoError::DecryptionFailed)
 }
 
 #[derive(Clone)]
@@ -271,13 +212,6 @@ impl SigningKeyPair {
     pub fn to_curve25519_sk(&self) -> Result<SecretKey, CryptoError> {
         ed25519::to_curve25519_sk(&self.secret_key).map_err(|_| CryptoError::KeyConversionFailed)
     }
-}
-
-pub fn verify_signed(
-    signed_message: &[u8],
-    public_key: &sign::PublicKey,
-) -> Result<Vec<u8>, CryptoError> {
-    sign::verify(signed_message, public_key).map_err(|_| CryptoError::SignatureVerificationFailed)
 }
 
 #[cfg(test)]

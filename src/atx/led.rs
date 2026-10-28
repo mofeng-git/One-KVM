@@ -101,12 +101,6 @@ impl LedSensor {
     }
 }
 
-impl Drop for LedSensor {
-    fn drop(&mut self) {
-        *self.handle.lock().unwrap() = None;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

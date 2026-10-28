@@ -254,10 +254,3 @@ body {
     min-height: 44px;
   }
 }
-
-[data-console-layout][data-slot="computer-use-panel"] {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--console-surface-radius);
-  box-shadow: var(--console-surface-shadow);
-}

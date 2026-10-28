@@ -4,16 +4,20 @@ import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useConfigStore } from '@/stores/config'
+import { useSystemStore } from '@/stores/system'
 import { request } from '@/api/request'
 import type { HidConfig, MsdConfig } from '@/types/generated'
 import { useHidConnection } from '@/composables/useHidConnection'
-import { deviceRequest, matchesSelection, selectionFrom, type HidSelection } from '@/lib/hidGuide'
+import { deviceRequest, matchesSelection, selectionFrom, supportsOtgFunctions, type HidSelection } from '@/lib/hidGuide'
 import HidDriverForm from './HidDriverForm.vue'
 import HidWiringDiagram from './HidWiringDiagram.vue'
 import HidDeviceOverview from './HidDeviceOverview.vue'
 const props = defineProps<{ dirty?: boolean }>()
 const emit = defineEmits<{ close: []; applied: []; discard: [] }>()
 const { t } = useI18n(), store = useConfigStore()
+const systemStore = useSystemStore()
+const otgSupported = computed(() => systemStore.platform?.otg.available === true)
+const msdSupported = computed(() => systemStore.platform?.msd.available === true)
 const draft = ref<HidSelection>(selectionFrom(store.hid))
 const valid = ref(false), busy = ref(false), error = ref(''), applied = ref(false), loaded = ref(false)
 const acknowledged = ref(!props.dirty), uncertain = ref(false)
@@ -52,7 +56,12 @@ async function refreshMsd() {
   return msd
 }
 async function refreshConfigs() {
-  const results = await Promise.allSettled([refreshHid(), refreshMsd(), readConfig<{ enabled: boolean }>('/config/otg-network'), readConfig<{ enabled: boolean }>('/config/uac')])
+  const requests: Promise<unknown>[] = [refreshHid()]
+  if (msdSupported.value) requests.push(refreshMsd())
+  if (otgSupported.value) {
+    requests.push(readConfig<{ enabled: boolean }>('/config/otg-network'), readConfig<{ enabled: boolean }>('/config/uac'))
+  }
+  const results = await Promise.allSettled(requests)
   emit('applied')
   const failure = results.find(r => r.status === 'rejected')
   if (failure?.status === 'rejected') throw failure.reason
@@ -115,9 +124,10 @@ async function close() {
 async function load() {
   loaded.value = false; error.value = ''
   try {
+    if (!systemStore.platform) await systemStore.fetchSystemInfo()
     await refreshHid()
     draft.value = selectionFrom(store.hid)
-    if (store.hid?.backend === 'otg') {
+    if (otgSupported.value && supportsOtgFunctions(store.hid?.backend)) {
       const [msd, network, audio] = await Promise.all([refreshMsd(), readConfig<{ enabled: boolean }>('/config/otg-network'), readConfig<{ enabled: boolean }>('/config/uac')])
       disabledUsb.value = [msd.enabled ? t('hidGuide.msd') : '', network.enabled ? t('hidGuide.network') : '', audio.enabled ? t('hidGuide.audio') : ''].filter(Boolean)
     }
@@ -141,7 +151,7 @@ onMounted(load)
         </div>
       </div>
       <template v-else>
-        <HidDriverForm v-if="!applied" v-model="draft" :locked="busy || !loaded" @valid="valid = $event" />
+        <HidDriverForm v-if="!applied" v-model="draft" :platform="systemStore.platform" :locked="busy || !loaded" @valid="valid = $event" />
         <template v-else>
           <HidWiringDiagram :backend="draft.backend" />
           <HidDeviceOverview :hid="store.hid" :status="status" :bluetooth="bluetooth" :error="statusError" />
@@ -152,7 +162,7 @@ onMounted(load)
           </template>
           <p v-if="connectionTimedOut && !ready && draft.backend !== 'bluetooth'" class="text-sm text-warning">{{ t('hidGuide.connectionTimeout') }}</p>
         </template>
-        <p v-if="!applied && store.hid?.backend === 'otg' && draft.backend !== 'otg' && disabledUsb.length" class="text-sm text-warning">{{ t('hidGuide.disableUsb', { functions: disabledUsb.join('、') }) }}</p>
+        <p v-if="!applied && supportsOtgFunctions(store.hid?.backend) && !supportsOtgFunctions(draft.backend) && disabledUsb.length" class="text-sm text-warning">{{ t('hidGuide.disableUsb', { functions: disabledUsb.join('、') }) }}</p>
         <p v-if="!applied && draft.backend === 'bluetooth'" class="text-sm text-warning">{{ t('hidGuide.resetWarning') }}</p>
         <p v-if="error" role="alert" class="text-sm text-destructive break-words">{{ error }}</p>
         <DialogFooter class="gap-2">

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
 import {
   Popover,
   PopoverContent,
@@ -17,6 +18,7 @@ import { MousePointer, Move, Loader2 } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 import { useConfigStore } from '@/stores/config'
 import { HidBackend, OtgHidProfile } from '@/types/generated'
+import { usesCh9329 } from '@/lib/hidGuide'
 
 const props = defineProps<{
   open: boolean
@@ -66,7 +68,54 @@ watch(showCursor, (newValue, oldValue) => {
 const buttonText = computed(() => t('actionbar.hidConfig'))
 const hidSaving = ref(false)
 const hidControlsDisabled = computed(() => hidSaving.value || configStore.hidLoading || !configStore.hid)
-const supportsLinuxCompatibility = computed(() => configStore.hid?.backend === HidBackend.Ch9329)
+const jigglerEnabled = computed(() => configStore.hid?.jiggler?.enabled ?? false)
+const jigglerInterval = ref<string | number>(60)
+const jigglerIntervalInvalid = ref(false)
+const hasMouseInterface = computed(() => {
+  const hid = configStore.hid
+  if (!hid || hid.backend === HidBackend.None) return false
+  if (hid.backend !== HidBackend.Otg) return true
+  if (hid.otg_profile === OtgHidProfile.LegacyKeyboard) return false
+  if (hid.otg_profile === OtgHidProfile.Custom) {
+    return !!(hid.otg_functions?.mouse_relative || hid.otg_functions?.mouse_absolute)
+  }
+  return true
+})
+
+watch(() => [configStore.hid?.jiggler?.interval_secs, configStore.hid?.jiggler?.enabled] as const, ([interval]) => {
+  jigglerInterval.value = interval ?? 60
+  jigglerIntervalInvalid.value = false
+}, { immediate: true })
+
+async function saveJiggler(update: { enabled?: boolean; interval_secs?: number }) {
+  if (hidControlsDisabled.value) return
+  hidSaving.value = true
+  try {
+    await configStore.updateHid({ jiggler: update })
+  } catch (error) {
+    toast.error(t('config.updateFailed'), {
+      description: error instanceof Error ? error.message : undefined,
+    })
+    await configStore.refreshHid().catch(() => undefined)
+    jigglerInterval.value = configStore.hid?.jiggler?.interval_secs ?? 60
+  } finally {
+    hidSaving.value = false
+  }
+}
+
+function toggleJiggler(enabled: boolean) {
+  if (enabled && !hasMouseInterface.value) return
+  void saveJiggler({ enabled })
+}
+
+function saveJigglerInterval() {
+  if (hidControlsDisabled.value || !jigglerEnabled.value) return
+  const interval = Number(jigglerInterval.value)
+  jigglerIntervalInvalid.value = !Number.isInteger(interval) || interval < 10 || interval > 3600
+  if (jigglerIntervalInvalid.value || interval === configStore.hid?.jiggler?.interval_secs) return
+  void saveJiggler({ interval_secs: interval })
+}
+const supportsLinuxCompatibility = computed(() => usesCh9329(configStore.hid?.backend))
 const supportsMacosCompatibility = computed(() =>
   supportsLinuxCompatibility.value || configStore.hid?.backend === HidBackend.Otg
 )
@@ -139,6 +188,8 @@ watch(() => props.open, (open) => {
   mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
   showCursor.value = localStorage.getItem('hidShowCursor') !== 'false'
   if (!hidSaving.value) void configStore.refreshHid().catch(() => undefined)
+  jigglerInterval.value = configStore.hid?.jiggler?.interval_secs ?? 60
+  jigglerIntervalInvalid.value = false
 })
 </script>
 
@@ -159,7 +210,7 @@ watch(() => props.open, (open) => {
     </PopoverTrigger>
     <PopoverContent
       @open-auto-focus="focusConsolePanel"
-      class="console-config-panel w-[min(320px,92vw)] p-3"
+      class="console-config-panel w-[min(320px,92vw)] max-h-(--reka-popover-content-available-height) overflow-y-auto p-3"
       align="start"
       :side="props.side ?? 'bottom'"
     >
@@ -230,6 +281,45 @@ watch(() => props.open, (open) => {
             <Label class="text-xs text-muted-foreground">{{ t('actionbar.showCursor') }}</Label>
             <Switch v-model="showCursor" />
           </div>
+
+          <div class="space-y-2" :aria-busy="hidSaving">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-mouse-jiggler" class="text-xs text-muted-foreground">{{ t('actionbar.mouseJiggler') }}</Label>
+                <HelpTooltip :content="t('actionbar.mouseJigglerHelp')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-mouse-jiggler"
+                :model-value="jigglerEnabled"
+                :disabled="hidControlsDisabled || (!hasMouseInterface && !jigglerEnabled)"
+                @update:model-value="toggleJiggler"
+              />
+            </div>
+            <div v-if="jigglerEnabled" class="flex items-center justify-between gap-3">
+              <Label for="hid-jiggler-interval" class="text-xs text-muted-foreground">{{ t('actionbar.jigglerInterval') }}</Label>
+              <div class="flex items-center gap-2">
+                <Input
+                  id="hid-jiggler-interval"
+                  v-model="jigglerInterval"
+                  type="number" min="10" max="3600" step="1" size="sm"
+                  class="w-20 text-xs"
+                  :disabled="hidControlsDisabled"
+                  :aria-invalid="jigglerIntervalInvalid"
+                  :aria-describedby="jigglerIntervalInvalid ? 'hid-jiggler-interval-error' : undefined"
+                  @input="jigglerIntervalInvalid = false"
+                  @blur="saveJigglerInterval"
+                  @keydown.enter.prevent="saveJigglerInterval"
+                />
+                <span class="text-xs text-muted-foreground">{{ t('actionbar.jigglerSeconds') }}</span>
+              </div>
+            </div>
+            <p v-if="jigglerEnabled && jigglerIntervalInvalid" id="hid-jiggler-interval-error" role="alert" class="text-xs text-destructive">{{ t('actionbar.jigglerIntervalInvalid') }}</p>
+            <p v-if="!hasMouseInterface && configStore.hid" class="text-xs text-muted-foreground">{{ t('actionbar.jigglerNoMouse') }}</p>
+          </div>
+          <p v-if="hidSaving" role="status" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 class="size-3 shrink-0 animate-spin" />
+            {{ t('actionbar.applying') }}
+          </p>
         </div>
 
         <template v-if="supportsMacosCompatibility">
@@ -264,10 +354,6 @@ watch(() => props.open, (open) => {
             </div>
 
             <p v-if="macosDragRequiresInterfaces" class="text-xs text-warning">{{ t('actionbar.macosDragRequiresBoth') }}</p>
-            <p v-if="hidSaving" role="status" class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 class="size-3 shrink-0 animate-spin" />
-              {{ t('actionbar.applying') }}
-            </p>
           </div>
         </template>
       </div>

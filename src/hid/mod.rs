@@ -8,6 +8,7 @@ mod ch9329_proto;
 pub mod consumer;
 pub mod datachannel;
 mod factory;
+mod jiggler;
 pub mod keyboard;
 mod macos_drag;
 #[cfg(unix)]
@@ -120,6 +121,10 @@ enum QueuedHidEvent {
     Mouse(MouseEvent),
     Consumer(ConsumerEvent),
     Reset,
+    Confirmed(
+        Box<QueuedHidEvent>,
+        tokio::sync::oneshot::Sender<Result<()>>,
+    ),
 }
 
 pub struct HidController {
@@ -137,6 +142,8 @@ pub struct HidController {
     backend_available: Arc<AtomicBool>,
     reset_requested: Arc<AtomicBool>,
     screen_resolution: parking_lot::RwLock<(u32, u32)>,
+    jiggler: Arc<parking_lot::Mutex<jiggler::JigglerState>>,
+    jiggler_changed: Arc<tokio::sync::Notify>,
 }
 
 impl HidController {
@@ -160,6 +167,8 @@ impl HidController {
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
             screen_resolution: parking_lot::RwLock::new((1920, 1080)),
+            jiggler: Arc::new(parking_lot::Mutex::new(jiggler::JigglerState::default())),
+            jiggler_changed: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -183,6 +192,8 @@ impl HidController {
             backend_available: Arc::new(AtomicBool::new(false)),
             reset_requested: Arc::new(AtomicBool::new(false)),
             screen_resolution: parking_lot::RwLock::new((1920, 1080)),
+            jiggler: Arc::new(parking_lot::Mutex::new(jiggler::JigglerState::default())),
+            jiggler_changed: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -231,6 +242,9 @@ impl HidController {
 
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down HID controller");
+        self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
+        self.jiggler_changed.notify_one();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -261,6 +275,7 @@ impl HidController {
 
         info!("Preparing OTG HID backend for gadget rebuild");
         self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -311,6 +326,36 @@ impl HidController {
             ));
         }
         self.enqueue_event(QueuedHidEvent::Consumer(event)).await
+    }
+
+    /// MCP uses acknowledged events so timing starts after the hardware send.
+    pub async fn send_keyboard_confirmed(&self, event: KeyboardEvent) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Keyboard(event)).await
+    }
+
+    pub async fn send_mouse_confirmed(&self, event: MouseEvent) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Mouse(event)).await
+    }
+
+    pub async fn reset_confirmed(&self) -> Result<()> {
+        self.send_confirmed(QueuedHidEvent::Reset).await
+    }
+
+    async fn send_confirmed(&self, event: QueuedHidEvent) -> Result<()> {
+        if !self.backend_available.load(Ordering::Acquire) {
+            return Err(AppError::ServiceUnavailable(
+                "HID backend not available".into(),
+            ));
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.enqueue_event(QueuedHidEvent::Confirmed(Box::new(event), tx))
+            .await?;
+        tokio::time::timeout(Duration::from_secs(3), rx)
+            .await
+            .map_err(|_| AppError::ServiceUnavailable("HID hardware send timed out".into()))?
+            .map_err(|_| {
+                AppError::ServiceUnavailable("HID event discarded before sending".into())
+            })?
     }
 
     pub async fn bluetooth_status(&self) -> Result<serde_json::Value> {
@@ -369,6 +414,14 @@ impl HidController {
         self.runtime_state.read().await.clone()
     }
 
+    /// Jiggler preferences are independent of USB descriptors and device reloads.
+    pub fn configure_jiggler(&self, config: &crate::config::HidConfig) {
+        self.jiggler
+            .lock()
+            .configure(config, std::time::Instant::now());
+        self.jiggler_changed.notify_one();
+    }
+
     async fn ch9329_backend(&self) -> Result<Arc<dyn HidBackend>> {
         if !matches!(
             *self.backend_type.read().await,
@@ -402,6 +455,7 @@ impl HidController {
     pub async fn reload(&self, new_backend_type: HidBackendType) -> Result<()> {
         info!("Reloading HID backend: {:?}", new_backend_type);
         self.backend_available.store(false, Ordering::Release);
+        self.jiggler.lock().suspend();
         self.stop_runtime_worker().await;
 
         if let Some(backend) = self.backend.write().await.take() {
@@ -510,13 +564,53 @@ impl HidController {
         let pending_move = self.pending_move.clone();
         let pending_move_flag = self.pending_move_flag.clone();
         let reset_requested = self.reset_requested.clone();
+        let jiggler = self.jiggler.clone();
+        let jiggler_changed = self.jiggler_changed.clone();
+        let backend_available = self.backend_available.clone();
 
         let handle = tokio::spawn(async move {
             let mut rx = rx;
+            let mut next_poll = tokio::time::Instant::now();
             loop {
-                let event = match rx.recv().await {
-                    Some(ev) => ev,
-                    None => break,
+                let delay = jiggler.lock().delay();
+                let event = tokio::select! {
+                    biased;
+                    event = rx.recv() => match event {
+                        Some(event) => event,
+                        None => break,
+                    },
+                    _ = jiggler_changed.notified() => continue,
+                    _ = tokio::time::sleep_until(next_poll), if delay.is_some() => {
+                        // Synthetic motion is sent by this same worker, outside the
+                        // coalescing queue, so opposite movements cannot cancel out.
+                        let active_backend = backend.read().await.clone();
+                        let snapshot = active_backend.as_ref().map(|backend| backend.runtime_snapshot());
+                        let ready = backend_available.load(Ordering::Acquire)
+                            && snapshot.as_ref().is_some_and(|state| state.initialized && state.online);
+                        let resolution = snapshot.and_then(|state| state.screen_resolution).unwrap_or((1920, 1080));
+                        let movement = jiggler.lock().tick(ready, resolution, std::time::Instant::now());
+                        if let (Some((event, generation)), Some(active_backend)) = (movement, active_backend) {
+                            let state = jiggler.clone();
+                            let available = backend_available.clone();
+                            let result = tokio::task::spawn_blocking(move || {
+                                // Check again after dispatch to the blocking pool:
+                                // real input, shutdown or a config change may win.
+                                if !available.load(Ordering::Acquire) || !state.lock().valid(generation) {
+                                    return Ok(());
+                                }
+                                futures::executor::block_on(active_backend.send_mouse(event))
+                            }).await;
+                            if !matches!(result, Ok(Ok(()))) {
+                                jiggler.lock().failed(generation, std::time::Instant::now());
+                                warn!("Mouse jiggler movement failed: {:?}", result);
+                            }
+                        }
+                        // Keep an absolute deadline: periodic backend status
+                        // notifications must not restart the timer indefinitely.
+                        next_poll = tokio::time::Instant::now()
+                            + jiggler.lock().delay().unwrap_or(Duration::from_secs(1));
+                        continue;
+                    }
                 };
 
                 if reset_requested.swap(false, Ordering::AcqRel) {
@@ -525,15 +619,16 @@ impl HidController {
                     while rx.try_recv().is_ok() {}
                     *pending_move.lock() = None;
                     pending_move_flag.store(false, Ordering::Release);
-                    process_hid_event(QueuedHidEvent::Reset, &backend).await;
+                    process_hid_event(QueuedHidEvent::Reset, &backend, &jiggler).await;
                     continue;
                 }
-                process_hid_event(event, &backend).await;
+                process_hid_event(event, &backend, &jiggler).await;
 
                 if pending_move_flag.swap(false, Ordering::AcqRel) {
                     let move_event = { pending_move.lock().take() };
                     if let Some(move_event) = move_event {
-                        process_hid_event(QueuedHidEvent::Mouse(move_event), &backend).await;
+                        process_hid_event(QueuedHidEvent::Mouse(move_event), &backend, &jiggler)
+                            .await;
                     }
                 }
             }
@@ -555,6 +650,8 @@ impl HidController {
         let events = self.events.clone();
         let backend_available = self.backend_available.clone();
         let backend_type = self.backend_type.clone();
+        let jiggler = self.jiggler.clone();
+        let jiggler_changed = self.jiggler_changed.clone();
 
         let handle = tokio::spawn(async move {
             loop {
@@ -570,6 +667,11 @@ impl HidController {
                     Some(backend.as_ref()),
                 )
                 .await;
+                let state = runtime_state.read().await;
+                if !state.initialized || !state.online {
+                    jiggler.lock().suspend();
+                }
+                jiggler_changed.notify_one();
             }
         });
 
@@ -583,6 +685,7 @@ impl HidController {
     }
 
     fn enqueue_mouse_move(&self, event: MouseEvent) -> Result<()> {
+        self.jiggler.lock().activity(std::time::Instant::now());
         match self.hid_tx.try_send(QueuedHidEvent::Mouse(event.clone())) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(_)) => {
@@ -597,6 +700,8 @@ impl HidController {
     }
 
     async fn enqueue_event(&self, event: QueuedHidEvent) -> Result<()> {
+        self.jiggler.lock().activity(std::time::Instant::now());
+        self.jiggler_changed.notify_one();
         match self.hid_tx.try_send(event) {
             Ok(_) => Ok(()),
             Err(mpsc::error::TrySendError::Full(ev)) => {
@@ -625,6 +730,85 @@ impl HidController {
     }
 }
 
+#[cfg(test)]
+pub(crate) async fn test_controller(backend: Arc<dyn HidBackend>) -> Arc<HidController> {
+    #[cfg(unix)]
+    let controller = Arc::new(HidController::new(HidBackendType::None, None));
+    #[cfg(not(unix))]
+    let controller = Arc::new(HidController::new(HidBackendType::None));
+    *controller.backend.write().await = Some(backend);
+    controller.sync_runtime_state_from_backend().await;
+    controller.start_event_worker().await;
+    controller
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    pub(crate) struct RecordingBackend {
+        pub events: parking_lot::Mutex<Vec<MouseEvent>>,
+        changed: tokio::sync::Notify,
+        runtime: tokio::sync::watch::Sender<()>,
+    }
+
+    impl RecordingBackend {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self {
+                events: parking_lot::Mutex::new(Vec::new()),
+                changed: tokio::sync::Notify::new(),
+                runtime: tokio::sync::watch::channel(()).0,
+            })
+        }
+
+        pub async fn wait_for_events(&self, count: usize) {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let changed = self.changed.notified();
+                    if self.events.lock().len() >= count {
+                        return;
+                    }
+                    changed.await;
+                }
+            })
+            .await
+            .expect("HID worker should deliver mouse events");
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HidBackend for RecordingBackend {
+        async fn init(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn send_keyboard(&self, _: KeyboardEvent) -> Result<()> {
+            Ok(())
+        }
+        async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
+            self.events.lock().push(event);
+            self.changed.notify_one();
+            Ok(())
+        }
+        async fn reset(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+        fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+            HidBackendRuntimeSnapshot {
+                initialized: true,
+                online: true,
+                supports_absolute_mouse: true,
+                ..Default::default()
+            }
+        }
+        fn subscribe_runtime(&self) -> tokio::sync::watch::Receiver<()> {
+            self.runtime.subscribe()
+        }
+    }
+}
+
 async fn apply_backend_runtime_state(
     backend_type: &Arc<RwLock<HidBackendType>>,
     runtime_state: &Arc<RwLock<HidRuntimeState>>,
@@ -644,35 +828,74 @@ async fn apply_backend_runtime_state(
 async fn process_hid_event(
     event: QueuedHidEvent,
     backend: &Arc<RwLock<Option<Arc<dyn HidBackend>>>>,
+    jiggler: &Arc<parking_lot::Mutex<jiggler::JigglerState>>,
 ) {
-    let backend_opt = backend.read().await.clone();
-    let backend = match backend_opt {
-        Some(b) => b,
-        None => return,
+    let (event, reply) = match event {
+        QueuedHidEvent::Confirmed(event, reply) => (*event, Some(reply)),
+        event => (event, None),
     };
-
-    let backend_for_send = backend.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        futures::executor::block_on(async move {
-            match event {
-                QueuedHidEvent::Keyboard(ev) => backend_for_send.send_keyboard(ev).await,
-                QueuedHidEvent::Mouse(ev) => backend_for_send.send_mouse(ev).await,
-                QueuedHidEvent::Consumer(ev) => backend_for_send.send_consumer(ev).await,
-                QueuedHidEvent::Reset => backend_for_send.reset().await,
-            }
+    {
+        let mut state = jiggler.lock();
+        let now = std::time::Instant::now();
+        match &event {
+            QueuedHidEvent::Keyboard(event) => state.keyboard(event, now),
+            QueuedHidEvent::Mouse(event) => state.mouse(event, now),
+            QueuedHidEvent::Consumer(event) => state.consumer(event.usage, now),
+            QueuedHidEvent::Reset => state.reset(now),
+            QueuedHidEvent::Confirmed(..) => unreachable!("nested confirmed HID event"),
+        }
+    }
+    let backend = backend.read().await.clone();
+    let result = match backend {
+        Some(backend) => tokio::task::spawn_blocking(move || {
+            futures::executor::block_on(async move {
+                match event {
+                    QueuedHidEvent::Keyboard(ev) => backend.send_keyboard(ev).await,
+                    QueuedHidEvent::Mouse(ev) => send_mouse_to_backend(backend.as_ref(), ev).await,
+                    QueuedHidEvent::Consumer(ev) => backend.send_consumer(ev).await,
+                    QueuedHidEvent::Reset => backend.reset().await,
+                    QueuedHidEvent::Confirmed(..) => unreachable!("nested confirmed HID event"),
+                }
+            })
         })
-    })
-    .await;
-
-    let result = match result {
-        Ok(r) => r,
-        Err(_) => return,
+        .await
+        .unwrap_or_else(|_| Err(AppError::ServiceUnavailable("HID worker failed".into()))),
+        None => Err(AppError::ServiceUnavailable(
+            "HID backend not available".into(),
+        )),
     };
+    if let Err(error) = &result {
+        warn!("HID event processing failed: {}", error);
+    }
+    if let Some(reply) = reply {
+        let _ = reply.send(result);
+    }
+}
 
-    match result {
-        Ok(_) => {}
-        Err(e) => {
-            warn!("HID event processing failed: {}", e);
+async fn send_mouse_to_backend(backend: &dyn HidBackend, event: MouseEvent) -> Result<()> {
+    if event.event_type != MouseEventType::Move {
+        return backend.send_mouse(event).await;
+    }
+
+    // Split after queue coalescing, otherwise a full queue could merge small
+    // reports back into a delta that OTG/CH9329 would truncate to signed 8-bit.
+    // Match the pending queue's bound to keep work finite for arbitrary callers.
+    let mut x = event.x.clamp(-32767, 32767);
+    let mut y = event.y.clamp(-32767, 32767);
+    loop {
+        let dx = x.clamp(-127, 127);
+        let dy = y.clamp(-127, 127);
+        backend
+            .send_mouse(MouseEvent {
+                x: dx,
+                y: dy,
+                ..event.clone()
+            })
+            .await?;
+        x -= dx;
+        y -= dy;
+        if x == 0 && y == 0 {
+            return Ok(());
         }
     }
 }
@@ -722,6 +945,140 @@ fn merge_pending_move(pending: &mut Option<MouseEvent>, event: MouseEvent) {
 #[cfg(test)]
 mod queue_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn large_relative_motion_is_split_at_the_backend() {
+        let backend = test_support::RecordingBackend::new();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_rel(300, -260))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        let deltas: Vec<_> = events.iter().map(|event| (event.x, event.y)).collect();
+        assert_eq!(deltas, [(127, -127), (127, -127), (46, -6)]);
+    }
+
+    #[tokio::test]
+    async fn backend_split_is_bounded_and_preserves_non_relative_events() {
+        let backend = test_support::RecordingBackend::new();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_rel(i32::MAX, i32::MIN))
+            .await
+            .unwrap();
+        {
+            let events = backend.events.lock();
+            assert_eq!(events.len(), 259);
+            assert_eq!(events.iter().map(|event| event.x).sum::<i32>(), 32767);
+            assert_eq!(events.iter().map(|event| event.y).sum::<i32>(), -32767);
+        }
+        backend.events.lock().clear();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_abs(30000, 20000))
+            .await
+            .unwrap();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::scroll(-2))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        assert_eq!(events.len(), 2);
+        assert_eq!((events[0].x, events[0].y), (30000, 20000));
+        assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
+        assert_eq!(events[1].scroll, -2);
+    }
+
+    #[tokio::test]
+    async fn congested_queue_splits_accumulated_relative_motion_without_loss() {
+        #[cfg(unix)]
+        let controller = HidController::new(HidBackendType::None, None);
+        #[cfg(not(unix))]
+        let controller = HidController::new(HidBackendType::None);
+        let backend = test_support::RecordingBackend::new();
+        *controller.backend.write().await = Some(backend.clone());
+        controller.sync_runtime_state_from_backend().await;
+        // Keep the worker stopped so saturation does not depend on scheduling.
+        for _ in 0..HID_EVENT_QUEUE_CAPACITY {
+            controller
+                .send_mouse(MouseEvent::move_rel(0, 0))
+                .await
+                .unwrap();
+        }
+        controller
+            .send_mouse(MouseEvent::move_rel(100, -20))
+            .await
+            .unwrap();
+        controller
+            .send_mouse(MouseEvent::move_rel(80, 30))
+            .await
+            .unwrap();
+        controller.start_event_worker().await;
+        controller
+            .send_mouse_confirmed(MouseEvent::scroll(1))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        let moves: Vec<_> = events
+            .iter()
+            .filter(|event| event.event_type == MouseEventType::Move)
+            .collect();
+        assert!(moves
+            .iter()
+            .all(|event| event.x.abs() <= 127 && event.y.abs() <= 127));
+        assert_eq!(moves.iter().map(|event| event.x).sum::<i32>(), 180);
+        assert_eq!(moves.iter().map(|event| event.y).sum::<i32>(), 10);
+        assert_eq!(events.last().unwrap().event_type, MouseEventType::Scroll);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn composite_otg_updates_and_rollback_preserve_hid_instance() {
+        let mut old = crate::config::AppConfig::default();
+        old.hid.backend = crate::config::HidBackend::Ch9329;
+        old.enforce_invariants();
+        let otg = Arc::new(OtgService::new());
+        let controller = Arc::new(HidController::new(
+            HidBackendType::from(&old.hid),
+            Some(otg.clone()),
+        ));
+        let pressed = Arc::new(AtomicBool::new(true));
+        let (runtime, _) = tokio::sync::watch::channel(());
+        let backend: Arc<dyn HidBackend> = Arc::new(TestBackend {
+            pressed: pressed.clone(),
+            reset_done: Arc::new(tokio::sync::Notify::new()),
+            runtime,
+        });
+        *controller.backend.write().await = Some(backend.clone());
+        let data = tempfile::tempdir().unwrap();
+        let coordinator = crate::runtime::UsbCoordinator::new(
+            controller.clone(),
+            otg,
+            Arc::new(RwLock::new(None)),
+            Arc::new(RwLock::new(None)),
+            Arc::new(EventBus::new()),
+            data.path().into(),
+        );
+        let mut new = old.clone();
+        new.hid.backend = crate::config::HidBackend::Ch9329Otg;
+        new.hid.otg_udc = Some("test.udc".into());
+        new.hid.otg_descriptor.product = "Advanced USB".into();
+        new.hid.otg_keyboard_leds = true;
+        coordinator.apply_config(&old, &new).await.unwrap();
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+        coordinator.apply_config(&new, &old).await.unwrap();
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+        assert!(pressed.load(Ordering::Acquire));
+        // Invalid OTG configuration must not touch the healthy input backend.
+        new.uac.enabled = true;
+        new.uac.sample_rate = 8000;
+        assert!(coordinator.apply_config(&old, &new).await.is_err());
+        assert!(Arc::ptr_eq(
+            controller.backend.read().await.as_ref().unwrap(),
+            &backend
+        ));
+    }
+
     #[tokio::test]
     async fn screen_resolution_updates_backend_and_retains_valid_dimensions() {
         #[cfg(unix)]

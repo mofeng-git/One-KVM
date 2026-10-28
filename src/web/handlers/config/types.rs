@@ -31,10 +31,6 @@ pub struct AuthConfigUpdate {
 }
 
 impl AuthConfigUpdate {
-    pub fn validate(&self) -> crate::error::Result<()> {
-        Ok(())
-    }
-
     pub fn apply_to(&self, config: &mut AuthConfig) {
         if let Some(allow_multiple) = self.single_user_allow_multiple_sessions {
             config.single_user_allow_multiple_sessions = allow_multiple;
@@ -401,7 +397,26 @@ impl Ch9329DescriptorConfigUpdate {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct MouseJigglerConfigUpdate {
+    pub enabled: Option<bool>,
+    pub interval_secs: Option<u32>,
+}
+
+impl MouseJigglerConfigUpdate {
+    fn apply_to(&self, config: &mut MouseJigglerConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(interval) = self.interval_secs {
+            config.interval_secs = interval;
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
+    pub jiggler: Option<MouseJigglerConfigUpdate>,
     /// Request-only; never persisted or replayed during startup.
     pub bluetooth_reset_pairing: Option<bool>,
     pub bluetooth: Option<crate::config::BluetoothHidConfig>,
@@ -427,10 +442,16 @@ pub struct OtgConfigUpdate {
     pub hid: Option<HidConfigUpdate>,
     pub msd: Option<MsdConfigUpdate>,
     pub network: Option<OtgNetworkConfigUpdate>,
+    pub uac: Option<crate::config::UacConfig>,
 }
 
 impl HidConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(update) = &self.jiggler {
+            let mut config = MouseJigglerConfig::default();
+            update.apply_to(&mut config);
+            config.validate()?;
+        }
         if let Some(config) = &self.bluetooth {
             config.validate()?;
         }
@@ -452,6 +473,9 @@ impl HidConfigUpdate {
     }
 
     pub fn apply_to(&self, config: &mut HidConfig) {
+        if let Some(update) = &self.jiggler {
+            update.apply_to(&mut config.jiggler);
+        }
         if let Some(bluetooth) = &self.bluetooth {
             config.bluetooth = bluetooth.clone();
         }

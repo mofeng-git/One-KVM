@@ -2,12 +2,12 @@
 pub mod capture;
 pub mod common;
 pub mod ffmpeg;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"))]
+#[cfg(feature = "rkmpp")]
 pub mod ffmpeg_hw;
 pub mod ffmpeg_ram;
 #[cfg(all(
     target_os = "linux",
-    any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")
+    feature = "rkmpp"
 ))]
 pub mod rkmpp_dmabuf;
 

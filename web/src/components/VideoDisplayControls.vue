@@ -15,6 +15,8 @@ const props = defineProps<{
   textOnlyScale?: boolean
   scaleMode?: VideoScaleMode
   sourceSizeAvailable?: boolean
+  keyboardVisible?: boolean
+  fullscreen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +43,7 @@ function toggleScaleMode() {
           size="sm"
           class="size-8 p-0 text-xs sm:w-auto sm:gap-1.5 sm:px-2"
           :aria-label="t('actionbar.fullscreen')"
+          :aria-pressed="!!props.fullscreen"
           @click="emit('toggleFullscreen')"
         >
           <Maximize class="size-3.5 sm:size-4" />
@@ -86,6 +89,7 @@ function toggleScaleMode() {
           size="sm"
           class="size-8 p-0 text-xs sm:w-auto sm:gap-1.5 sm:px-2"
           :aria-label="t('actionbar.keyboard')"
+          :aria-pressed="!!props.keyboardVisible"
           @click="emit('toggleVirtualKeyboard')"
         >
           <Keyboard class="size-3.5 sm:size-4" />
@@ -98,10 +102,4 @@ function toggleScaleMode() {
     </Tooltip>
   </TooltipProvider>
 
-  <div
-    v-if="!minimal"
-    data-fixed-action
-    aria-hidden="true"
-    class="mx-2 h-5 w-px shrink-0 self-center bg-border"
-  />
 </template>

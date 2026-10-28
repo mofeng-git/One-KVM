@@ -150,7 +150,8 @@ const statusBadgeText = computed(() => {
         variant="outline"
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'h-auto flex-col items-start gap-0.5 text-left',
+          'console-status-card h-auto flex-col items-start gap-0.5 text-left',
+          compact && 'console-status-card--compact',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
           status === 'error' && 'border-destructive/50'
         )"
@@ -239,7 +240,8 @@ const statusBadgeText = computed(() => {
         variant="outline"
         :aria-label="`${title}: ${quickInfo || subtitle || statusText}`"
         :class="cn(
-          'h-auto flex-col items-start gap-0.5 text-left',
+          'console-status-card h-auto flex-col items-start gap-0.5 text-left',
+          compact && 'console-status-card--compact',
           compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-sm min-w-[100px]',
           status === 'error' && 'border-destructive/50'
         )"

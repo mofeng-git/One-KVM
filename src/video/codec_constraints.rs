@@ -36,10 +36,6 @@ impl ThirdPartyCodecLock {
             ThirdPartyCodecLock::Mjpeg => "mjpeg",
         }
     }
-
-    fn compatible_with(self, other: Self) -> bool {
-        self == other
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -152,13 +148,6 @@ pub fn rtsp_codec_to_video_codec(codec: RtspCodec) -> VideoCodecType {
     }
 }
 
-pub fn vnc_encoding_to_video_codec(encoding: VncEncoding) -> Option<VideoCodecType> {
-    match encoding {
-        VncEncoding::TightJpeg => None,
-        VncEncoding::H264 => Some(VideoCodecType::H264),
-    }
-}
-
 fn rustdesk_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
     if config.rustdesk.enabled {
         return Some(ThirdPartySourceLock {
@@ -204,7 +193,7 @@ pub fn validate_third_party_codec_compatibility(config: &AppConfig) -> Result<()
     let locks = third_party_locks(config);
     if let Some(first) = locks.first() {
         for item in locks.iter().skip(1) {
-            if !first.lock.compatible_with(item.lock) {
+            if first.lock != item.lock {
                 return Err(AppError::BadRequest(format!(
                     "{} codec {} conflicts with {} codec {}; choose a compatible codec or stop the running service first",
                     item.source,
@@ -287,15 +276,6 @@ pub fn encoder_codec_to_id(codec: VideoEncoderType) -> &'static str {
         VideoEncoderType::H265 => "h265",
         VideoEncoderType::VP8 => "vp8",
         VideoEncoderType::VP9 => "vp9",
-    }
-}
-
-pub fn video_codec_to_encoder_codec(codec: VideoCodecType) -> VideoEncoderType {
-    match codec {
-        VideoCodecType::H264 => VideoEncoderType::H264,
-        VideoCodecType::H265 => VideoEncoderType::H265,
-        VideoCodecType::VP8 => VideoEncoderType::VP8,
-        VideoCodecType::VP9 => VideoEncoderType::VP9,
     }
 }
 

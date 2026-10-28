@@ -1,9 +1,6 @@
-//! MJPEG multipart streaming and WebSocket HID (for MJPEG mode).
+//! MJPEG multipart streaming.
 
 pub mod mjpeg;
-#[cfg(feature = "desktop")]
-pub mod ws_hid;
+pub(crate) mod mjpeg_http;
 
 pub use mjpeg::{ClientGuard, MjpegStreamHandler};
-#[cfg(feature = "desktop")]
-pub use ws_hid::WsHidHandler;

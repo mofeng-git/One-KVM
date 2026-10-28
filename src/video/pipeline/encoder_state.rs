@@ -8,7 +8,7 @@ use crate::video::codec::vp8::{VP8Config, VP8Encoder};
 use crate::video::codec::vp9::{VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use bytes::Bytes;
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(feature = "rkmpp")]
 use hwcodec::ffmpeg_hw::{
     last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline,
 };
@@ -22,9 +22,9 @@ pub(super) struct EncoderThreadState {
     pub(super) nv12_converter: Option<Nv12Converter>,
     pub(super) yuv420p_converter: Option<PixelConverter>,
     pub(super) encoder_needs_yuv420p: bool,
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     pub(super) ffmpeg_hw_pipeline: Option<HwMjpegH26xPipeline>,
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     pub(super) ffmpeg_hw_enabled: bool,
     pub(super) fps: u32,
     pub(super) codec: VideoEncoderType,
@@ -347,9 +347,9 @@ pub(super) fn build_encoder_state(
         }
     };
 
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     let is_rkmpp_encoder = selected_codec_name.contains("rkmpp");
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    #[cfg(feature = "rkmpp")]
     if needs_mjpeg_decode
         && is_rkmpp_encoder
         && matches!(
@@ -389,9 +389,9 @@ pub(super) fn build_encoder_state(
             nv12_converter: None,
             yuv420p_converter: None,
             encoder_needs_yuv420p: false,
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(feature = "rkmpp")]
             ffmpeg_hw_pipeline: Some(pipeline),
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(feature = "rkmpp")]
             ffmpeg_hw_enabled: true,
             fps: config.fps,
             codec: config.output_codec,
@@ -573,9 +573,9 @@ pub(super) fn build_encoder_state(
         nv12_converter,
         yuv420p_converter,
         encoder_needs_yuv420p: needs_yuv420p,
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(feature = "rkmpp")]
         ffmpeg_hw_pipeline: None,
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(feature = "rkmpp")]
         ffmpeg_hw_enabled: false,
         fps: config.fps,
         codec: config.output_codec,

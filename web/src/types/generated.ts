@@ -25,6 +25,7 @@ export interface BluetoothHidConfig {
 export enum HidBackend {
 	Otg = "otg",
 	Ch9329 = "ch9329",
+	Ch9329Otg = "ch9329_otg",
 	Bluetooth = "bluetooth",
 	None = "none",
 }
@@ -60,7 +61,13 @@ export interface Ch9329DescriptorConfig {
 	serial_number?: string;
 }
 
+export interface MouseJigglerConfig {
+	enabled: boolean;
+	interval_secs: number;
+}
+
 export interface HidConfig {
+	jiggler: MouseJigglerConfig;
 	bluetooth: BluetoothHidConfig;
 	backend: HidBackend;
 	otg_udc?: string;
@@ -185,22 +192,14 @@ export interface WebConfig {
 	ssl_key_path?: string;
 }
 
-export interface ComputerUseConfig {
-	enabled: boolean;
-	base_url: string;
-	model: string;
-}
-
 export interface TtydConfig {
 	enabled: boolean;
 	shell: string;
 }
 
-export interface GostcConfig {
+export interface EasyfrpConfig {
 	enabled: boolean;
-	addr: string;
-	key: string;
-	tls: boolean;
+	control_urls: string[];
 }
 
 export enum EasytierConfigMode {
@@ -252,7 +251,7 @@ export interface FrpcConfig {
 
 export interface ExtensionsConfig {
 	ttyd: TtydConfig;
-	gostc: GostcConfig;
+	easyfrp: EasyfrpConfig;
 	easytier: EasytierConfig;
 	frpc: FrpcConfig;
 }
@@ -331,7 +330,7 @@ export interface AppConfig {
 	audio: AudioConfig;
 	stream: StreamConfig;
 	web: WebConfig;
-	computer_use: ComputerUseConfig;
+	mcp: McpConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
 	vnc: VncConfig;
@@ -407,58 +406,6 @@ export interface Ch9329DescriptorState {
 	config_mode_available: boolean;
 }
 
-export interface ComputerUseConfigResponse {
-	enabled: boolean;
-	base_url: string;
-	model: string;
-	api_key_configured: boolean;
-	api_key_source: string;
-}
-
-export interface ComputerUseConfigUpdate {
-	enabled?: boolean;
-	base_url?: string;
-	model?: string;
-	api_key?: string;
-	clear_api_key?: boolean;
-}
-
-export interface ComputerUsePoint {
-	x: number;
-	y: number;
-}
-
-export interface ComputerUseScreenshot {
-	data_url: string;
-	width: number;
-	height: number;
-}
-
-export enum ComputerUseSessionStatus {
-	Idle = "idle",
-	WaitingScreenshot = "waiting_screenshot",
-	Thinking = "thinking",
-	Executing = "executing",
-	Completed = "completed",
-	Failed = "failed",
-	Stopped = "stopped",
-}
-
-export interface ComputerUseSessionSummary {
-	id?: string;
-	status: ComputerUseSessionStatus;
-	prompt?: string;
-	step: number;
-	last_error?: string;
-	final_message?: string;
-}
-
-export interface ComputerUseStartRequest {
-	prompt: string;
-	continue_conversation?: boolean;
-	client_id: string;
-}
-
 export interface EasytierConfigUpdate {
 	enabled?: boolean;
 	config_mode?: EasytierConfigMode;
@@ -489,7 +436,7 @@ export interface ExtensionInfo {
 
 export enum ExtensionId {
 	Ttyd = "ttyd",
-	Gostc = "gostc",
+	Easyfrp = "easyfrp",
 	Easytier = "easytier",
 	Frpc = "frpc",
 }
@@ -505,10 +452,10 @@ export interface TtydInfo {
 	config: TtydConfig;
 }
 
-export interface GostcInfo {
+export interface EasyfrpInfo {
 	available: boolean;
 	status: ExtensionStatus;
-	config: GostcConfig;
+	config: EasyfrpConfig;
 }
 
 export interface FrpcInfo {
@@ -519,7 +466,7 @@ export interface FrpcInfo {
 
 export interface ExtensionsStatus {
 	ttyd: TtydInfo;
-	gostc: GostcInfo;
+	easyfrp: EasyfrpInfo;
 	easytier: EasytierInfo;
 	frpc: FrpcInfo;
 }
@@ -541,11 +488,9 @@ export interface FrpcConfigUpdate {
 	custom_toml?: string;
 }
 
-export interface GostcConfigUpdate {
+export interface EasyfrpConfigUpdate {
 	enabled?: boolean;
-	addr?: string;
-	key?: string;
-	tls?: boolean;
+	control_urls?: string[];
 }
 
 /** OTG USB device descriptor configuration update */
@@ -564,7 +509,13 @@ export interface OtgHidFunctionsUpdate {
 	consumer?: boolean;
 }
 
+export interface MouseJigglerConfigUpdate {
+	enabled?: boolean;
+	interval_secs?: number;
+}
+
 export interface HidConfigUpdate {
+	jiggler?: MouseJigglerConfigUpdate;
 	bluetooth_reset_pairing?: boolean;
 	bluetooth?: BluetoothHidConfig;
 	backend?: HidBackend;
@@ -610,7 +561,17 @@ export interface OtgNetworkStatus {
 	error?: string;
 }
 
+export interface OtgRuntimeStatus {
+	enabled: boolean;
+	health: OtgRuntimeHealth;
+	gadget_active: boolean;
+	udc?: string;
+	udc_state?: string;
+	error?: string;
+}
+
 export interface OtgConfigResponse {
+	uac: UacConfig;
 	hid: HidConfig;
 	msd: MsdConfig;
 	network: OtgNetworkConfig;
@@ -626,6 +587,7 @@ export interface OtgNetworkConfigUpdate {
 }
 
 export interface OtgConfigUpdate {
+	uac?: UacConfig;
 	hid?: HidConfigUpdate;
 	msd?: MsdConfigUpdate;
 	network?: OtgNetworkConfigUpdate;
@@ -902,8 +864,8 @@ export enum CanonicalKey {
 	MetaRight = "MetaRight",
 }
 
-export enum ComputerUseButton {
-	Left = "left",
-	Middle = "middle",
-	Right = "right",
+
+export interface McpConfig {
+	enabled: boolean;
+	requests_per_second: number;
 }

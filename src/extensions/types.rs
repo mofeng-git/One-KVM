@@ -8,7 +8,7 @@ use super::software;
 #[serde(rename_all = "lowercase")]
 pub enum ExtensionId {
     Ttyd,
-    Gostc,
+    Easyfrp,
     Easytier,
     Frpc,
 }
@@ -19,7 +19,7 @@ impl ExtensionId {
     }
 
     pub fn all() -> &'static [ExtensionId] {
-        &[Self::Ttyd, Self::Gostc, Self::Easytier, Self::Frpc]
+        &[Self::Ttyd, Self::Easyfrp, Self::Easytier, Self::Frpc]
     }
 }
 
@@ -27,7 +27,7 @@ impl std::fmt::Display for ExtensionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Ttyd => write!(f, "ttyd"),
-            Self::Gostc => write!(f, "gostc"),
+            Self::Easyfrp => write!(f, "easyfrp"),
             Self::Easytier => write!(f, "easytier"),
             Self::Frpc => write!(f, "frpc"),
         }
@@ -40,7 +40,7 @@ impl std::str::FromStr for ExtensionId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "ttyd" => Ok(Self::Ttyd),
-            "gostc" => Ok(Self::Gostc),
+            "easyfrp" => Ok(Self::Easyfrp),
             "easytier" => Ok(Self::Easytier),
             "frpc" => Ok(Self::Frpc),
             _ => Err(format!("Unknown extension: {}", s)),
@@ -81,25 +81,11 @@ impl Default for TtydConfig {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub struct GostcConfig {
+pub struct EasyfrpConfig {
     pub enabled: bool,
-    pub addr: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub key: String,
-    pub tls: bool,
-}
-
-impl Default for GostcConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            addr: String::new(),
-            key: String::new(),
-            tls: true,
-        }
-    }
+    pub control_urls: Vec<String>,
 }
 
 #[typeshare]
@@ -217,7 +203,7 @@ impl Default for FrpcConfig {
 #[serde(default)]
 pub struct ExtensionsConfig {
     pub ttyd: TtydConfig,
-    pub gostc: GostcConfig,
+    pub easyfrp: EasyfrpConfig,
     pub easytier: EasytierConfig,
     pub frpc: FrpcConfig,
 }
@@ -239,10 +225,10 @@ pub struct TtydInfo {
 
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GostcInfo {
+pub struct EasyfrpInfo {
     pub available: bool,
     pub status: ExtensionStatus,
-    pub config: GostcConfig,
+    pub config: EasyfrpConfig,
 }
 
 #[typeshare]
@@ -265,7 +251,7 @@ pub struct FrpcInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionsStatus {
     pub ttyd: TtydInfo,
-    pub gostc: GostcInfo,
+    pub easyfrp: EasyfrpInfo,
     pub easytier: EasytierInfo,
     pub frpc: FrpcInfo,
 }
@@ -279,7 +265,17 @@ pub struct ExtensionLogs {
 
 #[cfg(test)]
 mod tests {
-    use super::{EasytierConfig, EasytierConfigMode};
+    use super::{EasytierConfig, EasytierConfigMode, ExtensionsConfig};
+
+    #[test]
+    fn replacing_legacy_gostc_requires_new_easyfrp_configuration() {
+        let config: ExtensionsConfig = serde_json::from_str(
+            r#"{"gostc":{"enabled":true,"addr":"old.example.com","key":"old-key","tls":true}}"#,
+        )
+        .unwrap();
+        assert!(!config.easyfrp.enabled);
+        assert!(config.easyfrp.control_urls.is_empty());
+    }
 
     #[test]
     fn legacy_easytier_config_defaults_to_quick_mode() {

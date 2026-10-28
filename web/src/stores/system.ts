@@ -1,3 +1,4 @@
+import type { HostInfo } from '@/api'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type DiskMode, type MountedMedia, type PlatformCapabilities } from '@/api'
@@ -161,10 +162,12 @@ export interface DeviceInfoEvent {
 
 export const useSystemStore = defineStore('system', () => {
   const version = ref<string>('')
+  const openwrtSystem = ref(false)
   const platform = ref<PlatformCapabilities | null>(null)
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
   const deviceInfo = ref<DeviceInfo | null>(null)
+  const hostInfo = ref<HostInfo | null>(null)
   const stream = ref<StreamState | null>(null)
   const hid = ref<HidState | null>(null)
   const atx = ref<AtxState | null>(null)
@@ -183,10 +186,12 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const info = await systemApi.info()
       version.value = info.version
+      openwrtSystem.value = info.openwrt_system === true
       platform.value = info.platform
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
       deviceInfo.value = info.device_info ?? null
+      hostInfo.value = info.host ?? null
       return info
     } catch (e) {
       console.error('Failed to fetch system info:', e)
@@ -258,6 +263,11 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchMsdState() {
     try {
+      if (!platform.value) await fetchSystemInfo()
+      if (!platform.value?.msd.available) {
+        msd.value = null
+        return null
+      }
       const result = await msdApi.status()
       msd.value = {
         available: result.available,
@@ -304,12 +314,13 @@ export const useSystemStore = defineStore('system', () => {
     error.value = null
 
     try {
+      const systemInfoRequest = fetchSystemInfo()
       await Promise.all([
-        fetchSystemInfo(),
+        systemInfoRequest,
         fetchStreamState().catch(() => null),
         fetchHidState().catch(() => null),
         fetchAtxState().catch(() => null),
-        fetchMsdState().catch(() => null),
+        systemInfoRequest.then(() => fetchMsdState()).catch(() => null),
       ])
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch states'
@@ -442,10 +453,12 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     version,
+    openwrtSystem,
     platform,
     capabilities,
     diskSpace,
     deviceInfo,
+    hostInfo,
     stream,
     hid,
     atx,

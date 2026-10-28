@@ -35,14 +35,11 @@ use super::encoder_state::{build_encoder_state, should_parallel_decode_mjpeg, En
 use super::frame_mailbox::{FrameMailbox, PublishResult};
 use super::mjpeg_admission::{MjpegAdmissionPolicy, MjpegAdmissionStage, MjpegDropReason};
 
-#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+#[cfg(all(target_os = "linux", feature = "rkmpp"))]
 #[path = "dmabuf.rs"]
 mod dmabuf;
 
-#[cfg(any(
-    test,
-    all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm"))
-))]
+#[cfg(any(test, all(target_os = "linux", feature = "rkmpp")))]
 fn rkmpp_dma_eligible(
     backend: Option<EncoderBackend>,
     codec: VideoEncoderType,
@@ -269,7 +266,7 @@ fn spawn_mjpeg_decode_workers(
     senders
 }
 
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+#[cfg(feature = "rkmpp")]
 use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
 /// Encoded video frame for distribution
@@ -524,6 +521,7 @@ struct CachedH26xParameterSets {
 
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
+    pub(crate) snapshot_slot: crate::video::snapshot::SnapshotSlot,
     config: RwLock<SharedVideoPipelineConfig>,
     subscribers: ParkingRwLock<Vec<Arc<VideoSubscriber>>>,
     stats: ParkingMutex<SharedVideoPipelineStats>,
@@ -588,6 +586,7 @@ impl SharedVideoPipeline {
         let (h264_profile_tx, h264_profile_rx) = watch::channel(None);
 
         let pipeline = Arc::new(Self {
+            snapshot_slot: Default::default(),
             config: RwLock::new(config),
             subscribers: ParkingRwLock::new(Vec::new()),
             stats: ParkingMutex::new(SharedVideoPipelineStats::default()),
@@ -726,7 +725,7 @@ impl SharedVideoPipeline {
         match cmd {
             PipelineCmd::SetBitrate { preset } => {
                 let bitrate_kbps = preset.bitrate_kbps();
-                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                #[cfg(feature = "rkmpp")]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
@@ -1154,7 +1153,7 @@ impl SharedVideoPipeline {
             Err(e) => return Err(e),
         };
 
-        #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+        #[cfg(all(target_os = "linux", feature = "rkmpp"))]
         if dmabuf::eligible(&config) {
             if let Some(stream) = preopened.as_ref().filter(|s| s.supports_rkmpp_dmabuf()) {
                 match dmabuf::prepare(stream, &config) {
@@ -1698,6 +1697,15 @@ impl SharedVideoPipeline {
 
                     owned.truncate(frame_size);
                     capture_sequence = capture_sequence.wrapping_add(1);
+                    if pipeline.snapshot_slot.pending() {
+                        pipeline.snapshot_slot.publish(&VideoFrame::from_vec(
+                            owned.clone(),
+                            resolution,
+                            pixel_format,
+                            stride,
+                            capture_sequence,
+                        ));
+                    }
 
                     if parallel_mjpeg_decode
                         && pixel_format == PixelFormat::Mjpeg
@@ -1817,7 +1825,7 @@ impl SharedVideoPipeline {
 
         let pts_ms = self.pts_ms();
 
-        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        #[cfg(feature = "rkmpp")]
         if state.ffmpeg_hw_enabled {
             if input_format != PixelFormat::Mjpeg {
                 return Err(AppError::VideoError(
@@ -2079,7 +2087,10 @@ impl SharedVideoPipeline {
     }
 }
 
-fn compact_strided_frame_for_encoder(frame: &VideoFrame, data: &[u8]) -> Result<Option<Vec<u8>>> {
+pub(crate) fn compact_strided_frame_for_encoder(
+    frame: &VideoFrame,
+    data: &[u8],
+) -> Result<Option<Vec<u8>>> {
     let width = frame.resolution.width as usize;
     let height = frame.resolution.height as usize;
     let stride = frame.stride as usize;
@@ -2527,9 +2538,9 @@ mod tests {
             nv12_converter: None,
             yuv420p_converter: None,
             encoder_needs_yuv420p: false,
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(feature = "rkmpp")]
             ffmpeg_hw_pipeline: None,
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            #[cfg(feature = "rkmpp")]
             ffmpeg_hw_enabled: false,
             fps: 30,
             codec: VideoEncoderType::H264,

@@ -2,11 +2,11 @@ use axum::{extract::State, Json};
 use std::sync::Arc;
 
 use crate::atx::AtxDriverType;
-use crate::config::{AtxConfig, HidBackend, HidConfig};
+use crate::config::{AtxConfig, HidConfig};
 use crate::error::{AppError, Result};
+use crate::runtime::{apply_atx_config, try_apply_lock};
 use crate::state::AppState;
 
-use super::apply::{apply_atx_config, try_apply_lock};
 use super::types::AtxConfigUpdate;
 
 pub async fn get_atx_config(State(state): State<Arc<AppState>>) -> Json<AtxConfig> {
@@ -17,12 +17,13 @@ pub async fn update_atx_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AtxConfigUpdate>,
 ) -> Result<Json<AtxConfig>> {
+    let _usb_guard = try_apply_lock(&state.config_apply_locks.otg, "otg")?;
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.atx, "atx")?;
     let current_config = state.config.get();
     let old_atx_config = current_config.atx.clone();
 
     req.validate_with_current(&old_atx_config)?;
 
-    let _apply_guard = try_apply_lock(&state.config_apply_locks.atx, "atx")?;
     let mut merged_atx_config = old_atx_config.clone();
     req.apply_to(&mut merged_atx_config);
     validate_windows_atx_backends(&merged_atx_config)?;
@@ -37,7 +38,7 @@ pub async fn update_atx_config(
 
     let new_atx_config = state.config.get().atx.clone();
 
-    apply_atx_config(&state, &old_atx_config, &new_atx_config).await?;
+    apply_atx_config(&state, &new_atx_config).await?;
 
     Ok(Json(new_atx_config))
 }
@@ -56,8 +57,8 @@ fn validate_windows_atx_backends(atx: &AtxConfig) -> Result<()> {
     Ok(())
 }
 
-fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<()> {
-    if hid.backend != HidBackend::Ch9329 {
+pub(super) fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<()> {
+    if !hid.backend.uses_ch9329() {
         return Ok(());
     }
     let reserved = hid.ch9329_port.trim();
@@ -78,6 +79,7 @@ fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::HidBackend;
 
     #[test]
     fn test_validate_serial_device_conflict_rejects_ch9329_overlap() {
@@ -89,6 +91,8 @@ mod tests {
         hid.backend = HidBackend::Ch9329;
         hid.ch9329_port = "/dev/ttyUSB0".to_string();
 
+        assert!(validate_serial_device_conflict(&atx, &hid).is_err());
+        hid.backend = HidBackend::Ch9329Otg;
         assert!(validate_serial_device_conflict(&atx, &hid).is_err());
     }
 

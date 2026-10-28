@@ -5,7 +5,7 @@ use super::ExtensionId;
 pub fn default_binary_path(id: ExtensionId) -> &'static str {
     match id {
         ExtensionId::Ttyd => "ttyd.win32.exe",
-        ExtensionId::Gostc => "gostc.exe",
+        ExtensionId::Easyfrp => "easyfrpc.exe",
         ExtensionId::Easytier => "easytier-core.exe",
         ExtensionId::Frpc => "frpc.exe",
     }

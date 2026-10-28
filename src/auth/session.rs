@@ -92,13 +92,6 @@ impl SessionStore {
         Ok(())
     }
 
-    pub async fn cleanup_expired(&self) -> Result<u64> {
-        let mut guard = self.inner.write().await;
-        let before = guard.len();
-        guard.retain(|_, s| !s.is_expired());
-        Ok((before - guard.len()) as u64)
-    }
-
     pub async fn delete_all(&self) -> Result<u64> {
         let mut guard = self.inner.write().await;
         let n = guard.len() as u64;

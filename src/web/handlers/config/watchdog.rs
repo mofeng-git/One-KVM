@@ -5,8 +5,8 @@ use axum::{extract::State, Json};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 
-use super::apply::try_apply_lock;
 use super::types::{WatchdogConfigResponse, WatchdogConfigUpdate};
+use crate::runtime::try_apply_lock;
 
 async fn response(state: &AppState) -> WatchdogConfigResponse {
     let runtime = state.watchdog.status().await;
