@@ -15,7 +15,6 @@ pub async fn update_auth_config(
     State(state): State<Arc<AppState>>,
     Json(update): Json<AuthConfigUpdate>,
 ) -> Result<Json<AuthConfig>> {
-    update.validate()?;
     state
         .config
         .update(|config| {

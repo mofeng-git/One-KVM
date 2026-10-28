@@ -263,10 +263,6 @@ impl Streamer {
         }
     }
 
-    pub fn set_next_retry_ms(&self, ms: u64) {
-        self.next_retry_ms.store(ms, Ordering::Relaxed);
-    }
-
     /// Set event bus for broadcasting state changes
     pub async fn set_event_bus(&self, events: Arc<EventBus>) {
         *self.events.write().await = Some(events);
@@ -292,12 +288,6 @@ impl Streamer {
     /// Get current device info
     pub async fn current_device(&self) -> Option<VideoDeviceInfo> {
         self.current_device.read().await.clone()
-    }
-
-    /// Get current video configuration (format, resolution, fps)
-    pub async fn current_video_config(&self) -> (PixelFormat, Resolution, u32) {
-        let config = self.config.read().await;
-        (config.format, config.resolution, config.fps)
     }
 
     /// Get current capture configuration for direct pipelines

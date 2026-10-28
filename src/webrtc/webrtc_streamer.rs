@@ -811,24 +811,6 @@ impl WebRtcStreamer {
         });
     }
 
-    /// Clear direct capture device configuration
-    pub async fn clear_capture_device(&self) {
-        *self.capture_device.write().await = None;
-    }
-
-    /// Prepare for configuration change
-    ///
-    /// This stops the encoding pipeline and closes all sessions.
-    pub async fn prepare_for_config_change(&self) {
-        self.close_all_sessions().await;
-        if let Err(error) = self.stop_video_pipeline_and_release().await {
-            warn!(
-                "Failed to release video pipeline for config change: {}",
-                error
-            );
-        }
-    }
-
     // === Configuration ===
 
     /// Update video configuration

@@ -1,59 +1,26 @@
 //! Variable-length TCP framing (RustDesk wire format).
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::BytesMut;
 use std::io::{self, IoSlice};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const MAX_PACKET_LENGTH: usize = 0x3FFFFFFF;
 
-pub fn encode_frame(data: &[u8]) -> io::Result<Vec<u8>> {
-    let len = data.len();
-    let mut buf = Vec::with_capacity(len + 4);
-
-    if len <= 0x3F {
-        buf.push((len << 2) as u8);
-    } else if len <= 0x3FFF {
-        let h = ((len << 2) as u16) | 0x1;
-        buf.extend_from_slice(&h.to_le_bytes());
-    } else if len <= 0x3FFFFF {
-        let h = ((len << 2) as u32) | 0x2;
-        buf.push((h & 0xFF) as u8);
-        buf.push(((h >> 8) & 0xFF) as u8);
-        buf.push(((h >> 16) & 0xFF) as u8);
-    } else if len <= MAX_PACKET_LENGTH {
-        let h = ((len << 2) as u32) | 0x3;
-        buf.extend_from_slice(&h.to_le_bytes());
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Message too large",
-        ));
-    }
-
-    buf.extend_from_slice(data);
-    Ok(buf)
-}
-
-fn decode_header(first_byte: u8, header_bytes: &[u8]) -> (usize, usize) {
-    let head_len = ((first_byte & 0x3) + 1) as usize;
-
-    let mut n = first_byte as usize;
-    if head_len > 1 && !header_bytes.is_empty() {
-        n |= (header_bytes[0] as usize) << 8;
-    }
-    if head_len > 2 && header_bytes.len() >= 2 {
-        n |= (header_bytes[1] as usize) << 16;
-    }
-    if head_len > 3 && header_bytes.len() >= 3 {
-        n |= (header_bytes[2] as usize) << 24;
-    }
-
-    let msg_len = n >> 2;
-    (head_len, msg_len)
-}
-
-pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<BytesMut> {
-    read_frame_with_limit(reader, MAX_PACKET_LENGTH).await
+fn encode_header(len: usize) -> io::Result<([u8; 4], usize)> {
+    let header_len = match len {
+        0..=0x3F => 1,
+        0x40..=0x3FFF => 2,
+        0x4000..=0x3FFFFF => 3,
+        0x400000..=MAX_PACKET_LENGTH => 4,
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Message too large",
+            ));
+        }
+    };
+    let header = (((len as u32) << 2) | (header_len as u32 - 1)).to_le_bytes();
+    Ok((header, header_len))
 }
 
 /// Read one framed message while enforcing a caller-selected allocation limit.
@@ -65,17 +32,11 @@ pub async fn read_frame_with_limit<R: AsyncRead + Unpin>(
     reader: &mut R,
     max_packet_length: usize,
 ) -> io::Result<BytesMut> {
-    let mut first_byte = [0u8; 1];
-    reader.read_exact(&mut first_byte).await?;
-
-    let head_len = ((first_byte[0] & 0x3) + 1) as usize;
-
-    let mut header_rest = [0u8; 3];
-    if head_len > 1 {
-        reader.read_exact(&mut header_rest[..head_len - 1]).await?;
-    }
-
-    let (_, msg_len) = decode_header(first_byte[0], &header_rest);
+    let mut header = [0u8; 4];
+    reader.read_exact(&mut header[..1]).await?;
+    let header_len = ((header[0] & 0x3) + 1) as usize;
+    reader.read_exact(&mut header[1..header_len]).await?;
+    let msg_len = (u32::from_le_bytes(header) >> 2) as usize;
 
     if msg_len > max_packet_length {
         return Err(io::Error::new(
@@ -92,8 +53,7 @@ pub async fn read_frame_with_limit<R: AsyncRead + Unpin>(
 }
 
 pub async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, data: &[u8]) -> io::Result<()> {
-    let frame = encode_frame(data)?;
-    writer.write_all(&frame).await?;
+    write_frame_vectored(writer, data).await?;
     writer.flush().await?;
     Ok(())
 }
@@ -104,29 +64,7 @@ pub async fn write_frame_vectored<W: AsyncWrite + Unpin>(
     writer: &mut W,
     data: &[u8],
 ) -> io::Result<()> {
-    let len = data.len();
-    let mut header = [0u8; 4];
-    let header_len = if len <= 0x3F {
-        header[0] = (len << 2) as u8;
-        1
-    } else if len <= 0x3FFF {
-        header[..2].copy_from_slice(&(((len << 2) as u16) | 0x1).to_le_bytes());
-        2
-    } else if len <= 0x3FFFFF {
-        let value = ((len << 2) as u32) | 0x2;
-        header[0] = (value & 0xFF) as u8;
-        header[1] = ((value >> 8) & 0xFF) as u8;
-        header[2] = ((value >> 16) & 0xFF) as u8;
-        3
-    } else if len <= MAX_PACKET_LENGTH {
-        header.copy_from_slice(&(((len << 2) as u32) | 0x3).to_le_bytes());
-        4
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Message too large",
-        ));
-    };
+    let (header, header_len) = encode_header(data.len())?;
 
     let slices = [IoSlice::new(&header[..header_len]), IoSlice::new(data)];
     let written = writer.write_vectored(&slices).await?;
@@ -145,212 +83,146 @@ pub async fn write_frame_vectored<W: AsyncWrite + Unpin>(
     Ok(())
 }
 
-pub async fn write_frame_buffered<W: AsyncWrite + Unpin>(
-    writer: &mut W,
-    data: &[u8],
-    buf: &mut BytesMut,
-) -> io::Result<()> {
-    buf.clear();
-    encode_frame_into(data, buf)?;
-    writer.write_all(buf).await?;
-    writer.flush().await?;
-    Ok(())
-}
-
-pub fn encode_frame_into(data: &[u8], buf: &mut BytesMut) -> io::Result<()> {
-    let len = data.len();
-
-    buf.reserve(4 + len);
-
-    if len <= 0x3F {
-        buf.put_u8((len << 2) as u8);
-    } else if len <= 0x3FFF {
-        buf.put_u16_le(((len << 2) as u16) | 0x1);
-    } else if len <= 0x3FFFFF {
-        let h = ((len << 2) as u32) | 0x2;
-        buf.put_u8((h & 0xFF) as u8);
-        buf.put_u8(((h >> 8) & 0xFF) as u8);
-        buf.put_u8(((h >> 16) & 0xFF) as u8);
-    } else if len <= MAX_PACKET_LENGTH {
-        buf.put_u32_le(((len << 2) as u32) | 0x3);
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Message too large",
-        ));
-    }
-
-    buf.extend_from_slice(data);
-    Ok(())
-}
-
-/// Stateful decoder for `Framed`.
-#[derive(Debug, Clone, Copy)]
-pub struct BytesCodec {
-    state: DecodeState,
-    max_packet_length: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum DecodeState {
-    Head,
-    Data(usize),
-}
-
-impl Default for BytesCodec {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BytesCodec {
-    pub fn new() -> Self {
-        Self {
-            state: DecodeState::Head,
-            max_packet_length: MAX_PACKET_LENGTH,
-        }
-    }
-
-    pub fn set_max_packet_length(&mut self, n: usize) {
-        self.max_packet_length = n;
-    }
-
-    pub fn decode(&mut self, src: &mut BytesMut) -> io::Result<Option<BytesMut>> {
-        let n = match self.state {
-            DecodeState::Head => match self.decode_head(src)? {
-                Some(n) => {
-                    self.state = DecodeState::Data(n);
-                    n
-                }
-                None => return Ok(None),
-            },
-            DecodeState::Data(n) => n,
-        };
-
-        match self.decode_data(n, src)? {
-            Some(data) => {
-                self.state = DecodeState::Head;
-                Ok(Some(data))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn decode_head(&mut self, src: &mut BytesMut) -> io::Result<Option<usize>> {
-        if src.is_empty() {
-            return Ok(None);
-        }
-
-        let head_len = ((src[0] & 0x3) + 1) as usize;
-        if src.len() < head_len {
-            return Ok(None);
-        }
-
-        let mut n = src[0] as usize;
-        if head_len > 1 {
-            n |= (src[1] as usize) << 8;
-        }
-        if head_len > 2 {
-            n |= (src[2] as usize) << 16;
-        }
-        if head_len > 3 {
-            n |= (src[3] as usize) << 24;
-        }
-        n >>= 2;
-
-        if n > self.max_packet_length {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Message too large",
-            ));
-        }
-
-        src.advance(head_len);
-        Ok(Some(n))
-    }
-
-    fn decode_data(&self, n: usize, src: &mut BytesMut) -> io::Result<Option<BytesMut>> {
-        if src.len() < n {
-            return Ok(None);
-        }
-        Ok(Some(src.split_to(n)))
-    }
-
-    pub fn encode(&mut self, data: Bytes, buf: &mut BytesMut) -> io::Result<()> {
-        let len = data.len();
-
-        if len <= 0x3F {
-            buf.put_u8((len << 2) as u8);
-        } else if len <= 0x3FFF {
-            buf.put_u16_le(((len << 2) as u16) | 0x1);
-        } else if len <= 0x3FFFFF {
-            let h = ((len << 2) as u32) | 0x2;
-            buf.put_u16_le((h & 0xFFFF) as u16);
-            buf.put_u8((h >> 16) as u8);
-        } else if len <= MAX_PACKET_LENGTH {
-            buf.put_u32_le(((len << 2) as u32) | 0x3);
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Message too large",
-            ));
-        }
-
-        buf.extend(data);
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
 
-    #[test]
-    fn test_encode_decode_small() {
-        let data = vec![1u8; 63];
-        let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 63 + 1);
+    struct ShortWriter {
+        bytes: Vec<u8>,
+        max_write: usize,
+    }
 
-        let mut codec = BytesCodec::new();
-        let mut buf = BytesMut::from(&encoded[..]);
-        let decoded = codec.decode(&mut buf).unwrap().unwrap();
-        assert_eq!(decoded.len(), 63);
+    impl AsyncWrite for ShortWriter {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            let len = buf.len().min(self.max_write);
+            self.bytes.extend_from_slice(&buf[..len]);
+            Poll::Ready(Ok(len))
+        }
+
+        fn poll_write_vectored(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            bufs: &[IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            let mut written = 0;
+            for buf in bufs {
+                let len = buf.len().min(self.max_write - written);
+                self.bytes.extend_from_slice(&buf[..len]);
+                written += len;
+            }
+            Poll::Ready(Ok(written))
+        }
+
+        fn is_write_vectored(&self) -> bool {
+            true
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
     }
 
     #[test]
-    fn test_encode_decode_medium() {
-        let data = vec![2u8; 1000];
-        let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 1000 + 2);
-
-        let mut codec = BytesCodec::new();
-        let mut buf = BytesMut::from(&encoded[..]);
-        let decoded = codec.decode(&mut buf).unwrap().unwrap();
-        assert_eq!(decoded.len(), 1000);
+    fn header_boundaries_match_wire_format() {
+        for (len, expected) in [
+            (0, &[0x00][..]),
+            (63, &[0xfc][..]),
+            (64, &[0x01, 0x01][..]),
+            (16383, &[0xfd, 0xff][..]),
+            (16384, &[0x02, 0x00, 0x01][..]),
+            (4194303, &[0xfe, 0xff, 0xff][..]),
+            (4194304, &[0x03, 0x00, 0x00, 0x01][..]),
+            (MAX_PACKET_LENGTH, &[0xff, 0xff, 0xff, 0xff][..]),
+        ] {
+            let (header, header_len) = encode_header(len).unwrap();
+            assert_eq!(&header[..header_len], expected, "payload length {len}");
+        }
+        assert_eq!(
+            encode_header(MAX_PACKET_LENGTH + 1).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 
-    #[test]
-    fn test_encode_decode_large() {
-        let data = vec![3u8; 100000];
-        let encoded = encode_frame(&data).unwrap();
-        assert_eq!(encoded.len(), 100000 + 3);
-
-        let mut codec = BytesCodec::new();
-        let mut buf = BytesMut::from(&encoded[..]);
-        let decoded = codec.decode(&mut buf).unwrap().unwrap();
-        assert_eq!(decoded.len(), 100000);
+    #[tokio::test]
+    async fn frame_round_trips_at_header_boundaries() {
+        for len in [0, 63, 64, 16383, 16384, 4194303, 4194304] {
+            let payload = vec![0x5a; len];
+            let mut encoded = Vec::new();
+            write_frame(&mut encoded, &payload).await.unwrap();
+            let mut reader = encoded.as_slice();
+            let decoded = read_frame_with_limit(&mut reader, len).await.unwrap();
+            assert_eq!(decoded.as_ref(), payload.as_slice());
+            assert!(reader.is_empty());
+        }
     }
 
     #[tokio::test]
     async fn read_limit_rejects_length_before_allocating_payload() {
-        let encoded = encode_frame(&vec![0u8; 1024]).unwrap();
-        let (mut writer, mut reader) = tokio::io::duplex(encoded.len());
-        tokio::spawn(async move {
-            writer.write_all(&encoded).await.unwrap();
-        });
-
+        // A 1024-byte length header with no payload must fail the limit check,
+        // rather than attempt to read the missing payload and return EOF.
+        let mut reader = &[0x01, 0x10][..];
         let error = read_frame_with_limit(&mut reader, 128).await.unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
+    async fn truncated_frames_return_unexpected_eof() {
+        for bytes in [
+            &[0x03][..],
+            &[0x03, 0x00][..],
+            &[0x03, 0x00, 0x00][..],
+            &[0x08, 0x5a][..],
+        ] {
+            let mut reader = bytes;
+            let error = read_frame_with_limit(&mut reader, 1024).await.unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        }
+    }
+
+    #[tokio::test]
+    async fn consecutive_frames_preserve_message_boundaries() {
+        let mut reader = &[0x08, 0x11, 0x22, 0x00, 0x04, 0x33][..];
+        for expected in [&[0x11, 0x22][..], &[][..], &[0x33][..]] {
+            let frame = read_frame_with_limit(&mut reader, 2).await.unwrap();
+            assert_eq!(frame.as_ref(), expected);
+        }
+        assert!(reader.is_empty());
+    }
+
+    #[tokio::test]
+    async fn vectored_writer_completes_partial_header_and_payload_writes() {
+        let payload = vec![0x5a; 16384];
+        for max_write in [1, 2, 3, 4, 1024] {
+            let mut writer = ShortWriter {
+                bytes: Vec::new(),
+                max_write,
+            };
+            write_frame_vectored(&mut writer, &payload).await.unwrap();
+            assert_eq!(&writer.bytes[..3], &[0x02, 0x00, 0x01]);
+            assert_eq!(&writer.bytes[3..], payload.as_slice());
+        }
+    }
+
+    #[tokio::test]
+    async fn vectored_writer_reports_zero_writes() {
+        let mut writer = ShortWriter {
+            bytes: Vec::new(),
+            max_write: 0,
+        };
+        let error = write_frame_vectored(&mut writer, b"payload")
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::WriteZero);
     }
 
     #[tokio::test]

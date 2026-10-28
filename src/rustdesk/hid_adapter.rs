@@ -220,10 +220,6 @@ pub(super) fn convert_key_events_in_code_space(
     }
 }
 
-pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
-    convert_key_events(event).into_iter().next()
-}
-
 #[derive(Debug, Clone, Copy)]
 struct KeyMapping {
     key: CanonicalKey,

@@ -414,14 +414,6 @@ impl MjpegStreamHandler {
         self.auto_pause_config.read().clone()
     }
 
-    pub fn set_auto_pause_config(&self, config: AutoPauseConfig) {
-        info!(
-            "Auto-pause config updated: enabled={}, delay={}s, timeout={}s",
-            config.enabled, config.shutdown_delay_secs, config.client_timeout_secs
-        );
-        *self.auto_pause_config.write() = config;
-    }
-
     pub fn current_frame(&self) -> Option<VideoFrame> {
         (**self.current_frame.load()).clone()
     }
@@ -430,19 +422,11 @@ impl MjpegStreamHandler {
         self.frame_notify.subscribe()
     }
 
-    pub fn disconnect_all_clients(&self) {
-        self.disconnect_clients_matching(|_| true);
-    }
-
     pub fn disconnect_non_vnc_clients(&self) {
-        self.disconnect_clients_matching(|id| !id.starts_with("vnc-"));
-    }
-
-    fn disconnect_clients_matching(&self, should_disconnect: impl Fn(&str) -> bool) {
         let count = {
             let mut clients = self.clients.write();
             let before = clients.len();
-            clients.retain(|id, _| !should_disconnect(id));
+            clients.retain(|id, _| id.starts_with("vnc-"));
             before - clients.len()
         };
         let remaining = self.client_count();

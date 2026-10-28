@@ -211,19 +211,6 @@ impl VideoStreamManager {
         Ok(())
     }
 
-    /// Switch streaming mode
-    ///
-    /// This will:
-    /// 1. Acquire switching lock (prevent concurrent switches)
-    /// 2. Notify clients of the mode change
-    /// 3. Stop the current mode
-    /// 4. Start the new mode (ensuring video capture runs for WebRTC)
-    /// 5. Update configuration
-    pub async fn switch_mode(self: &Arc<Self>, new_mode: StreamMode) -> Result<()> {
-        let _ = self.switch_mode_transaction(new_mode).await?;
-        Ok(())
-    }
-
     /// Switch streaming mode with a transaction ID for correlating events
     ///
     /// If a switch is already in progress, returns `accepted=false` with the
@@ -614,16 +601,6 @@ impl VideoStreamManager {
         }
     }
 
-    /// Get MJPEG client count
-    pub fn mjpeg_client_count(&self) -> u64 {
-        self.streamer.mjpeg_handler().client_count()
-    }
-
-    /// Get WebRTC session count
-    pub async fn webrtc_session_count(&self) -> usize {
-        self.webrtc_streamer.session_count().await
-    }
-
     /// Set HID controller for WebRTC DataChannel
     pub async fn set_hid_controller(&self, hid: Arc<HidController>) {
         self.webrtc_streamer.set_hid_controller(hid).await;
@@ -632,11 +609,6 @@ impl VideoStreamManager {
     /// Set audio enabled state for WebRTC
     pub async fn set_webrtc_audio_enabled(&self, enabled: bool) -> Result<()> {
         self.webrtc_streamer.set_audio_enabled(enabled).await
-    }
-
-    /// Check if WebRTC audio is enabled
-    pub async fn is_webrtc_audio_enabled(&self) -> bool {
-        self.webrtc_streamer.is_audio_enabled().await
     }
 
     /// Reconnect audio sources for all WebRTC sessions

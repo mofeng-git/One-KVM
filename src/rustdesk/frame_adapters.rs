@@ -3,7 +3,7 @@ use protobuf::Message as ProtobufMessage;
 
 use super::protocol::hbb::message::{
     message as msg_union, misc as misc_union, video_frame as vf_union, AudioFormat, AudioFrame,
-    CursorData, CursorPosition, EncodedVideoFrame, EncodedVideoFrames, Message, Misc, VideoFrame,
+    CursorData, EncodedVideoFrame, EncodedVideoFrames, Message, Misc, VideoFrame,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,18 +13,6 @@ pub enum VideoCodec {
     VP8,
     VP9,
     AV1,
-}
-
-impl VideoCodec {
-    pub fn to_codec_id(self) -> i32 {
-        match self {
-            VideoCodec::H264 => 0,
-            VideoCodec::H265 => 1,
-            VideoCodec::VP8 => 2,
-            VideoCodec::VP9 => 3,
-            VideoCodec::AV1 => 4,
-        }
-    }
 }
 
 pub struct VideoFrameAdapter {
@@ -40,10 +28,6 @@ impl VideoFrameAdapter {
             seq: 0,
             timestamp_base: 0,
         }
-    }
-
-    pub fn set_codec(&mut self, codec: VideoCodec) {
-        self.codec = codec;
     }
 
     pub fn encode_frame_from_bytes(
@@ -93,15 +77,6 @@ impl VideoFrameAdapter {
     ) -> Bytes {
         let msg = self.encode_frame_from_bytes(data, is_keyframe, timestamp_ms);
         Bytes::from(msg.write_to_bytes().unwrap_or_default())
-    }
-
-    pub fn encode_frame_bytes(
-        &mut self,
-        data: &[u8],
-        is_keyframe: bool,
-        timestamp_ms: u64,
-    ) -> Bytes {
-        self.encode_frame_bytes_zero_copy(Bytes::copy_from_slice(data), is_keyframe, timestamp_ms)
     }
 
     pub fn seq(&self) -> u32 {
@@ -183,16 +158,6 @@ impl CursorAdapter {
 
         let mut msg = Message::new();
         msg.union = Some(msg_union::Union::CursorData(cursor));
-        msg
-    }
-
-    pub fn encode_position(x: i32, y: i32) -> Message {
-        let mut pos = CursorPosition::new();
-        pos.x = x;
-        pos.y = y;
-
-        let mut msg = Message::new();
-        msg.union = Some(msg_union::Union::CursorPosition(pos));
         msg
     }
 }

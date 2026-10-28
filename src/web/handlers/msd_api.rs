@@ -1,5 +1,5 @@
-use super::config::apply::try_apply_lock;
 use super::*;
+use crate::runtime::try_apply_lock;
 
 use crate::msd::{
     DiskModeRequest, DownloadProgress, DriveFile, DriveFileAccess, DriveInfo, DriveInitRequest,

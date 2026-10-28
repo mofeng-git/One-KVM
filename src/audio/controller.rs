@@ -269,22 +269,6 @@ impl AudioController {
             .map(|s| s.subscribe_opus())
     }
 
-    pub async fn set_enabled(&self, enabled: bool) -> Result<()> {
-        let _operation = self.operation.lock().await;
-        self.recovery.cancel();
-        {
-            let mut config = self.config.write().await;
-            config.enabled = enabled;
-        }
-
-        if !enabled && self.is_streaming().await {
-            self.stop_streaming_inner().await?;
-        }
-
-        info!("Audio enabled: {}", enabled);
-        Ok(())
-    }
-
     pub async fn update_config(&self, new_config: AudioControllerConfig) -> Result<()> {
         let _operation = self.operation.lock().await;
         self.recovery.cancel();

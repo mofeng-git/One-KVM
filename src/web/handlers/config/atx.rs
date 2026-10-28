@@ -4,9 +4,9 @@ use std::sync::Arc;
 use crate::atx::AtxDriverType;
 use crate::config::{AtxConfig, HidConfig};
 use crate::error::{AppError, Result};
+use crate::runtime::{apply_atx_config, try_apply_lock};
 use crate::state::AppState;
 
-use super::apply::{apply_atx_config, try_apply_lock};
 use super::types::AtxConfigUpdate;
 
 pub async fn get_atx_config(State(state): State<Arc<AppState>>) -> Json<AtxConfig> {
@@ -38,7 +38,7 @@ pub async fn update_atx_config(
 
     let new_atx_config = state.config.get().atx.clone();
 
-    apply_atx_config(&state, &old_atx_config, &new_atx_config).await?;
+    apply_atx_config(&state, &new_atx_config).await?;
 
     Ok(Json(new_atx_config))
 }

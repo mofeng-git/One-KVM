@@ -940,7 +940,6 @@ impl Drop for CaptureStream {
 struct DvTimingsMode {
     width: u32,
     height: u32,
-    #[allow(dead_code)]
     fps: Option<f64>,
     signature: Option<DvTimingsSignature>,
 }

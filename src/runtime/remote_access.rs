@@ -219,7 +219,7 @@ impl RemoteAccessCoordinator {
                 tracing::info!("RustDesk service stopped");
             }
             *self.rustdesk.write().await = None;
-        } else if !options.preserve_service_state && new_config.enabled {
+        } else if !options.preserve_service_state {
             match current {
                 None => {
                     tracing::info!("Initializing RustDesk service...");
@@ -258,7 +258,7 @@ impl RemoteAccessCoordinator {
                     credentials_to_save = service.save_credentials();
                 }
             }
-        } else if options.preserve_service_state && need_restart {
+        } else if need_restart {
             if let Some(service) = current {
                 let mut runtime_config = new_config.clone();
                 runtime_config.enabled = true;
@@ -336,7 +336,7 @@ impl RemoteAccessCoordinator {
                 service.stop().await?;
             }
             *self.vnc.write().await = None;
-        } else if !options.preserve_service_state && new_config.enabled {
+        } else if !options.preserve_service_state {
             match current {
                 None => {
                     let service = Arc::new(VncService::new(
@@ -360,7 +360,7 @@ impl RemoteAccessCoordinator {
                     }
                 }
             }
-        } else if options.preserve_service_state && need_restart {
+        } else if need_restart {
             if let Some(service) = current {
                 let mut runtime_config = new_config.clone();
                 runtime_config.enabled = true;
@@ -399,7 +399,7 @@ impl RemoteAccessCoordinator {
                 })?;
             }
             *self.rtsp.write().await = None;
-        } else if !options.preserve_service_state && new_config.enabled {
+        } else if !options.preserve_service_state {
             match current {
                 None => {
                     let service = Arc::new(RtspService::new(
@@ -422,7 +422,7 @@ impl RemoteAccessCoordinator {
                     }
                 }
             }
-        } else if options.preserve_service_state && need_restart {
+        } else if need_restart {
             if let Some(service) = current {
                 let mut runtime_config = new_config.clone();
                 runtime_config.enabled = true;

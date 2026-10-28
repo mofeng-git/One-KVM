@@ -12,7 +12,7 @@ pub mod webrtc_streamer;
 
 pub use config::WebRtcConfig;
 pub use rtp::OpusAudioTrack;
-pub use signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer, SignalingMessage};
+pub use signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 pub use universal_session::{UniversalSession, UniversalSessionConfig, UniversalSessionInfo};
 pub use video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec};
 pub use webrtc_streamer::{SessionInfo, WebRtcStreamer, WebRtcStreamerConfig, WebRtcStreamerStats};

@@ -520,11 +520,6 @@ impl RustDeskService {
         }
         None
     }
-
-    #[deprecated(note = "Use save_credentials instead")]
-    pub fn save_keypair(&self) {
-        let _ = self.save_credentials();
-    }
 }
 
 async fn wait_for_service_task(mut handle: JoinHandle<()>, task_name: &str) {

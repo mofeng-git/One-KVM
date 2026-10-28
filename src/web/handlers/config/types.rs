@@ -31,10 +31,6 @@ pub struct AuthConfigUpdate {
 }
 
 impl AuthConfigUpdate {
-    pub fn validate(&self) -> crate::error::Result<()> {
-        Ok(())
-    }
-
     pub fn apply_to(&self, config: &mut AuthConfig) {
         if let Some(allow_multiple) = self.single_user_allow_multiple_sessions {
             config.single_user_allow_multiple_sessions = allow_multiple;

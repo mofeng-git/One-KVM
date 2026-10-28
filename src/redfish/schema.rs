@@ -33,25 +33,9 @@ impl Status {
         }
     }
 
-    pub fn enabled_health(health: &str) -> Self {
-        Self {
-            state: "Enabled".to_string(),
-            health: health.to_string(),
-            health_rollup: None,
-        }
-    }
-
     pub fn disabled_ok() -> Self {
         Self {
             state: "Disabled".to_string(),
-            health: "OK".to_string(),
-            health_rollup: None,
-        }
-    }
-
-    pub fn offline_ok() -> Self {
-        Self {
-            state: "Offline".to_string(),
             health: "OK".to_string(),
             health_rollup: None,
         }
@@ -621,16 +605,6 @@ impl RedfishError {
             error: RedfishErrorBody {
                 code: "Base.1.18.ActionNotSupported".to_string(),
                 message: format!("Action '{}' is not supported", action),
-                extended_info: vec![],
-            },
-        }
-    }
-
-    pub fn property_missing(property: &str) -> Self {
-        Self {
-            error: RedfishErrorBody {
-                code: "Base.1.18.PropertyMissing".to_string(),
-                message: format!("Property '{}' is required", property),
                 extended_info: vec![],
             },
         }
