@@ -742,6 +742,73 @@ pub(crate) async fn test_controller(backend: Arc<dyn HidBackend>) -> Arc<HidCont
     controller
 }
 
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    pub(crate) struct RecordingBackend {
+        pub events: parking_lot::Mutex<Vec<MouseEvent>>,
+        changed: tokio::sync::Notify,
+        runtime: tokio::sync::watch::Sender<()>,
+    }
+
+    impl RecordingBackend {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self {
+                events: parking_lot::Mutex::new(Vec::new()),
+                changed: tokio::sync::Notify::new(),
+                runtime: tokio::sync::watch::channel(()).0,
+            })
+        }
+
+        pub async fn wait_for_events(&self, count: usize) {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let changed = self.changed.notified();
+                    if self.events.lock().len() >= count {
+                        return;
+                    }
+                    changed.await;
+                }
+            })
+            .await
+            .expect("HID worker should deliver mouse events");
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HidBackend for RecordingBackend {
+        async fn init(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn send_keyboard(&self, _: KeyboardEvent) -> Result<()> {
+            Ok(())
+        }
+        async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
+            self.events.lock().push(event);
+            self.changed.notify_one();
+            Ok(())
+        }
+        async fn reset(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+        fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+            HidBackendRuntimeSnapshot {
+                initialized: true,
+                online: true,
+                supports_absolute_mouse: true,
+                ..Default::default()
+            }
+        }
+        fn subscribe_runtime(&self) -> tokio::sync::watch::Receiver<()> {
+            self.runtime.subscribe()
+        }
+    }
+}
+
 async fn apply_backend_runtime_state(
     backend_type: &Arc<RwLock<HidBackendType>>,
     runtime_state: &Arc<RwLock<HidRuntimeState>>,
@@ -784,7 +851,7 @@ async fn process_hid_event(
             futures::executor::block_on(async move {
                 match event {
                     QueuedHidEvent::Keyboard(ev) => backend.send_keyboard(ev).await,
-                    QueuedHidEvent::Mouse(ev) => backend.send_mouse(ev).await,
+                    QueuedHidEvent::Mouse(ev) => send_mouse_to_backend(backend.as_ref(), ev).await,
                     QueuedHidEvent::Consumer(ev) => backend.send_consumer(ev).await,
                     QueuedHidEvent::Reset => backend.reset().await,
                     QueuedHidEvent::Confirmed(..) => unreachable!("nested confirmed HID event"),
@@ -802,6 +869,34 @@ async fn process_hid_event(
     }
     if let Some(reply) = reply {
         let _ = reply.send(result);
+    }
+}
+
+async fn send_mouse_to_backend(backend: &dyn HidBackend, event: MouseEvent) -> Result<()> {
+    if event.event_type != MouseEventType::Move {
+        return backend.send_mouse(event).await;
+    }
+
+    // Split after queue coalescing, otherwise a full queue could merge small
+    // reports back into a delta that OTG/CH9329 would truncate to signed 8-bit.
+    // Match the pending queue's bound to keep work finite for arbitrary callers.
+    let mut x = event.x.clamp(-32767, 32767);
+    let mut y = event.y.clamp(-32767, 32767);
+    loop {
+        let dx = x.clamp(-127, 127);
+        let dy = y.clamp(-127, 127);
+        backend
+            .send_mouse(MouseEvent {
+                x: dx,
+                y: dy,
+                ..event.clone()
+            })
+            .await?;
+        x -= dx;
+        y -= dy;
+        if x == 0 && y == 0 {
+            return Ok(());
+        }
     }
 }
 
@@ -850,6 +945,86 @@ fn merge_pending_move(pending: &mut Option<MouseEvent>, event: MouseEvent) {
 #[cfg(test)]
 mod queue_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn large_relative_motion_is_split_at_the_backend() {
+        let backend = test_support::RecordingBackend::new();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_rel(300, -260))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        let deltas: Vec<_> = events.iter().map(|event| (event.x, event.y)).collect();
+        assert_eq!(deltas, [(127, -127), (127, -127), (46, -6)]);
+    }
+
+    #[tokio::test]
+    async fn backend_split_is_bounded_and_preserves_non_relative_events() {
+        let backend = test_support::RecordingBackend::new();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_rel(i32::MAX, i32::MIN))
+            .await
+            .unwrap();
+        {
+            let events = backend.events.lock();
+            assert_eq!(events.len(), 259);
+            assert_eq!(events.iter().map(|event| event.x).sum::<i32>(), 32767);
+            assert_eq!(events.iter().map(|event| event.y).sum::<i32>(), -32767);
+        }
+        backend.events.lock().clear();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::move_abs(30000, 20000))
+            .await
+            .unwrap();
+        send_mouse_to_backend(backend.as_ref(), MouseEvent::scroll(-2))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        assert_eq!(events.len(), 2);
+        assert_eq!((events[0].x, events[0].y), (30000, 20000));
+        assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
+        assert_eq!(events[1].scroll, -2);
+    }
+
+    #[tokio::test]
+    async fn congested_queue_splits_accumulated_relative_motion_without_loss() {
+        #[cfg(unix)]
+        let controller = HidController::new(HidBackendType::None, None);
+        #[cfg(not(unix))]
+        let controller = HidController::new(HidBackendType::None);
+        let backend = test_support::RecordingBackend::new();
+        *controller.backend.write().await = Some(backend.clone());
+        controller.sync_runtime_state_from_backend().await;
+        // Keep the worker stopped so saturation does not depend on scheduling.
+        for _ in 0..HID_EVENT_QUEUE_CAPACITY {
+            controller
+                .send_mouse(MouseEvent::move_rel(0, 0))
+                .await
+                .unwrap();
+        }
+        controller
+            .send_mouse(MouseEvent::move_rel(100, -20))
+            .await
+            .unwrap();
+        controller
+            .send_mouse(MouseEvent::move_rel(80, 30))
+            .await
+            .unwrap();
+        controller.start_event_worker().await;
+        controller
+            .send_mouse_confirmed(MouseEvent::scroll(1))
+            .await
+            .unwrap();
+        let events = backend.events.lock();
+        let moves: Vec<_> = events
+            .iter()
+            .filter(|event| event.event_type == MouseEventType::Move)
+            .collect();
+        assert!(moves
+            .iter()
+            .all(|event| event.x.abs() <= 127 && event.y.abs() <= 127));
+        assert_eq!(moves.iter().map(|event| event.x).sum::<i32>(), 180);
+        assert_eq!(moves.iter().map(|event| event.y).sum::<i32>(), 10);
+        assert_eq!(events.last().unwrap().event_type, MouseEventType::Scroll);
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn composite_otg_updates_and_rollback_preserve_hid_instance() {
