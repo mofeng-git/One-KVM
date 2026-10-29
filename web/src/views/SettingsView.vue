@@ -3045,23 +3045,29 @@ watch(isWindows, () => {
                     <h4 class="text-sm font-medium">{{ t('settings.otgHidProfile') }}</h4>
                   </div>
                   <div class="space-y-3">
-                    <div v-if="config.hid_backend === 'otg'" class="grid gap-3 md:grid-cols-2">
-                      <div class="space-y-3 rounded-md border border-border/60 p-3">
-                        <div class="settings-toggle flex items-center justify-between gap-4">
+                    <div
+                      class="grid gap-3"
+                      :class="{ 'md:grid-cols-2': config.hid_backend === 'otg' }"
+                    >
+                      <div
+                        v-if="config.hid_backend === 'otg'"
+                        class="space-y-3 rounded-md border border-border/60 p-3"
+                      >
+                        <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionKeyboard') }}</Label>
                           </div>
                           <Switch v-model="config.hid_otg_functions.keyboard" />
                         </div>
                         <Separator />
-                        <div class="settings-toggle flex items-center justify-between gap-4">
+                        <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgFunctionConsumer') }}</Label>
                           </div>
                           <Switch v-model="config.hid_otg_functions.consumer" />
                         </div>
                         <Separator />
-                        <div class="settings-toggle flex items-center justify-between gap-4">
+                        <div class="flex items-center justify-between gap-4">
                           <div>
                             <Label>{{ t('settings.otgKeyboardLeds') }}</Label>
                           </div>
@@ -3072,31 +3078,33 @@ watch(isWindows, () => {
                         </div>
                       </div>
                       <div class="space-y-3 rounded-md border border-border/60 p-3">
-                        <div class="settings-toggle flex items-center justify-between gap-4">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
+                        <template v-if="config.hid_backend === 'otg'">
+                          <div class="flex items-center justify-between gap-4">
+                            <div>
+                              <Label>{{ t('settings.otgFunctionMouseRelative') }}</Label>
+                            </div>
+                            <Switch v-model="config.hid_otg_functions.mouse_relative" />
                           </div>
-                          <Switch v-model="config.hid_otg_functions.mouse_relative" />
-                        </div>
-                        <Separator />
-                        <div class="settings-toggle flex items-center justify-between gap-4">
-                          <div>
-                            <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
+                          <Separator />
+                          <div class="flex items-center justify-between gap-4">
+                            <div>
+                              <Label>{{ t('settings.otgFunctionMouseAbsolute') }}</Label>
+                            </div>
+                            <Switch v-model="config.hid_otg_functions.mouse_absolute" />
                           </div>
-                          <Switch v-model="config.hid_otg_functions.mouse_absolute" />
+                          <p v-if="hasMacosDragInterfaceConflict" class="text-xs text-warning">
+                            {{ t('settings.mouseMacosDragRequiresBoth') }}
+                          </p>
+                          <Separator />
+                        </template>
+                        <div class="flex items-center justify-between gap-4">
+                          <Label>{{ t('settings.uacMic') }}</Label>
+                          <Switch v-model="config.uac_enabled" />
                         </div>
-                        <p v-if="hasMacosDragInterfaceConflict" class="text-xs text-warning">
-                          {{ t('settings.mouseMacosDragRequiresBoth') }}
-                        </p>
-
                       </div>
                     </div>
-                    <div class="settings-toggle flex items-center justify-between gap-4 border-b pb-5">
-                      <Label>{{ t('settings.uacMic') }}</Label>
-                      <Switch v-model="config.uac_enabled" />
-                    </div>
                     <div class="space-y-3 rounded-md border border-border/60 p-3">
-                      <div class="settings-toggle flex items-center justify-between gap-4">
+                      <div class="flex items-center justify-between gap-4">
                         <div>
                           <Label>{{ t('settings.otgFunctionMsd') }}</Label>
                         </div>
@@ -3104,7 +3112,7 @@ watch(isWindows, () => {
                       </div>
                       <fieldset :disabled="!config.msd_enabled" class="space-y-4">
                         <Separator />
-                        <div class="settings-field space-y-2">
+                        <div class="space-y-2">
                           <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
                           <Input
                             id="msd-dir"
@@ -3112,7 +3120,7 @@ watch(isWindows, () => {
                             placeholder="/etc/one-kvm/msd"
                           />
                         </div>
-                        <div class="settings-field space-y-2">
+                        <div class="space-y-2">
                           <Label for="msd-flash-inquiry-string">{{
                             t('settings.msdFlashInquiryString')
                           }}</Label>
@@ -3123,7 +3131,7 @@ watch(isWindows, () => {
                             maxlength="28"
                           />
                         </div>
-                        <div class="settings-field space-y-2">
+                        <div class="space-y-2">
                           <Label for="msd-cdrom-inquiry-string">{{
                             t('settings.msdCdromInquiryString')
                           }}</Label>
@@ -3137,7 +3145,7 @@ watch(isWindows, () => {
                       </fieldset>
                     </div>
                     <div class="space-y-3 rounded-md border border-border/60 p-3">
-                      <div class="settings-toggle flex items-center justify-between gap-4">
+                      <div class="flex items-center justify-between gap-4">
                         <div>
                           <Label>{{ t('settings.otgNetwork') }}</Label>
                         </div>
@@ -3145,8 +3153,8 @@ watch(isWindows, () => {
                       </div>
                       <fieldset :disabled="!config.otg_network_enabled" class="space-y-4">
                         <Separator />
-                        <div class="settings-field-list grid gap-4 sm:grid-cols-2">
-                          <div class="settings-field space-y-2">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                          <div class="space-y-2">
                             <Label for="otg-network-driver">{{
                               t('settings.otgNetworkDriver')
                             }}</Label>
@@ -3161,7 +3169,7 @@ watch(isWindows, () => {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div class="settings-field space-y-2">
+                          <div class="space-y-2">
                             <Label for="otg-network-interface">{{
                               t('settings.otgNetworkInterface')
                             }}</Label>
