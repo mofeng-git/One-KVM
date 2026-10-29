@@ -454,16 +454,6 @@
   flex-direction: column;
   gap: 14px;
 }
-.settings-page .hid-feature-card [data-slot='card-content'] .rounded-md.border:not([data-slot]) {
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 20px;
-}
-.settings-page .hid-feature-card [data-slot='card-content'] .md\:grid-cols-2 {
-  grid-template-columns: 1fr;
-}
 .settings-page .hid-feature-card [data-slot='card-content'] > .space-y-4 > div:first-child {
   display: none;
 }
