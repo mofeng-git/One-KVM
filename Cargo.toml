@@ -210,6 +210,8 @@ windows-sys = { version = "0.61", features = [
 protobuf-codegen = "3.7"
 
 [patch.crates-io]
+# ALSA 0.11.0 uses timespec literals that fail on 32-bit musl time64.
+alsa = { path = "vendor/alsa" }
 dtls = { path = "libs/dtls" }
 
 [profile.release]
