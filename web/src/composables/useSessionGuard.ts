@@ -32,6 +32,8 @@ export function startSessionWatch(intervalMs = 5000) {
       const res = await fetch('/api/auth/check', { credentials: 'include' })
       if (res.status === 401) {
         const text = (await res.text()).toLowerCase()
+        // 请求期间可能已经跳到登录页，这里再判一次，避免登录页还在弹窗
+        if (window.location.pathname.startsWith('/login')) return
         notifySessionEnd(text.includes('logged in elsewhere') ? 'taken_over' : 'expired')
       }
     } catch {

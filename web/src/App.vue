@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import 'vue-sonner/style.css'
 import '@/sonner-overrides.css'
-import { computed, KeepAlive, onMounted } from 'vue'
+import { computed, KeepAlive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { Toaster } from '@/components/ui/sonner'
@@ -23,15 +23,22 @@ const toasterToastOptions = computed(() => ({
 }))
 
 const router = useRouter()
+const route = useRoute()
+const isLoginPage = computed(() => route.path.startsWith('/login'))
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const { isDark } = useTheme()
 const { sessionEndReason, clearSessionEnd } = useSessionGuard()
 startSessionWatch()
+// 一进入登录页就清掉弹窗状态，避免重复提示
+watch(isLoginPage, (onLogin) => {
+  if (onLogin) clearSessionEnd()
+}, { immediate: true })
 
 function goToLogin() {
   clearSessionEnd()
-  router.push('/login')
+  // 会话已被服务端作废：整页跳到登录页，顺便清掉所有内存态，避免任何守卫把用户弹回控制台
+  window.location.href = '/login'
 }
 onMounted(async () => {
   try {
@@ -61,7 +68,7 @@ onMounted(async () => {
     <component :is="Component" v-if="route.name !== 'Console' || !authStore.isAuthenticated" />
   </RouterView>
   <div
-    v-if="sessionEndReason"
+    v-if="sessionEndReason && !isLoginPage"
     class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
   >
     <div class="w-full max-w-sm rounded-xl border bg-background p-5 shadow-2xl">
