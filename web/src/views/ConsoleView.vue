@@ -43,7 +43,6 @@ import TerminalDialog from '@/components/TerminalDialog.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -144,7 +143,6 @@ const {
   containerStyle: videoContainerStyle,
   contentStyle: videoContentStyle,
   updateSourceSize: updateVideoSourceSize,
-  clearSourceSize: clearVideoSourceSize,
   setScaleMode: setVideoScaleMode,
 } = useVideoScaling({ rotation: videoRotation })
 
@@ -733,11 +731,6 @@ function handleWebRTCVideoResize() {
   if (!video) return
   updateVideoSourceSize(video.videoWidth, video.videoHeight)
 }
-
-watch(videoLoading, (loading) => {
-  if (loading) clearVideoSourceSize()
-})
-
 
 const showMsdStatusCard = computed(() => {
   return !!(systemStore.msd?.available)
@@ -3443,19 +3436,22 @@ onUnmounted(() => {
           </div>
           <Transition name="fade">
             <div
-              v-if="videoLoading && !showSignalOverlay && !videoError"
-              class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300"
+              v-if="videoLoading && !videoError"
+              class="kvm-connect absolute inset-0 flex flex-col items-center justify-center overflow-hidden px-6 text-center transition-opacity duration-300"
             >
-              <div class="absolute inset-0 overflow-hidden pointer-events-none">
-                <div class="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-pulse" style="top: 50%; animation-duration: 1.5s;" />
+              <div class="kvm-connect-grid" aria-hidden="true" />
+              <div class="kvm-connect-halo" aria-hidden="true" />
+
+              <div class="kvm-connect-badge">
+                <span class="kvm-connect-ring" aria-hidden="true" />
+                <BrandMark size="lg" class="size-8 sm:size-11" />
               </div>
 
-              <Spinner class="size-10 sm:size-16 text-white mb-2 sm:mb-4" />
-              <p class="text-white/90 text-sm sm:text-lg font-medium text-center px-4 flex items-baseline justify-center gap-2 flex-wrap">
+              <p class="relative z-[1] flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-sm font-medium tracking-wide text-white/85 sm:text-lg">
                 <span>{{ webrtcLoadingMessage }}</span>
                 <span
                   v-if="connectProgress"
-                  class="text-white/55 text-xs sm:text-sm font-normal tabular-nums"
+                  class="text-white/45 text-xs sm:text-sm font-normal tabular-nums"
                   :aria-label="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
                 >
                   {{ connectProgress.current }}/{{ connectProgress.total }}
@@ -3463,7 +3459,7 @@ onUnmounted(() => {
               </p>
               <div
                 v-if="connectProgress"
-                class="mt-2 sm:mt-3 flex items-center gap-1"
+                class="relative z-[1] mt-2 sm:mt-3 flex items-center gap-1"
                 role="progressbar"
                 :aria-valuenow="connectProgress.current"
                 :aria-valuemin="0"
@@ -3474,21 +3470,21 @@ onUnmounted(() => {
                   v-for="i in connectProgress.total"
                   :key="i"
                   :class="cn(
-                    'h-1 w-4 sm:w-6 rounded-full transition-colors duration-300',
+                    'h-1 rounded-full transition-all duration-300',
                     i <= connectProgress.current
-                      ? 'bg-primary'
-                      : 'bg-white/15',
+                      ? 'w-6 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.55)] sm:w-8'
+                      : 'w-3 bg-white/15 sm:w-4',
                   )"
                 />
               </div>
-              <p class="text-white/50 text-xs sm:text-sm mt-1 sm:mt-2">
+              <p class="relative z-[1] text-white/35 text-[11px] sm:text-xs mt-2">
                 {{ t('console.pleaseWait') }}
               </p>
             </div>
           </Transition>
           <Transition name="fade">
             <div
-              v-if="showSignalOverlay && !videoError"
+              v-if="showSignalOverlay && !videoError && !videoLoading"
               class="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 transition-opacity duration-300 pointer-events-none"
               :class="{
                 'bg-black/80 backdrop-blur-sm': signalOverlayInfo.tone === 'error',
