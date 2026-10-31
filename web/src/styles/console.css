@@ -5,10 +5,16 @@
   --console-workspace: color-mix(in srgb, var(--background) 97%, var(--foreground) 3%);
 }
 
+/* 控制台背景保留原版的点阵底纹，只换底色；铺满整个工作区，而不是只铺视频画布 */
 .login-page.dot-grid-bg,
 .console-page .dot-grid-bg {
   background-color: var(--console-workspace);
-  background-image: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
 }
 
 .login-card {
@@ -142,11 +148,8 @@
    参考 JetKVM：不铺黑底，直接用界面底色 + 细网格，中间一个转圈 + 一行浅色文字。
    仅在 videoLoading 期间覆盖在视频区上，正常播放不显示。 */
 .kvm-connect {
-  background-color: var(--console-workspace);
-  background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px);
-  background-size: 24px 24px;
+  /* 不画自己的底纹：露出工作区那层原版点阵，连接中/出错时和整页背景是连续的一张图 */
+  background-color: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

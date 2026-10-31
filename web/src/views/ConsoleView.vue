@@ -3358,7 +3358,7 @@ onUnmounted(() => {
           >
             <div
               ref="videoContainerRef"
-              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-[var(--console-workspace)] touch-none"
+              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-transparent touch-none"
               :style="videoContainerStyle"
               tabindex="0"
               @mouseleave="handleMouseLeaveVideo"
