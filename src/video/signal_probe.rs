@@ -19,7 +19,18 @@ use std::time::Duration;
 
 const DEFAULT_REGISTER: u16 = 0x1F87;
 const DEFAULT_LOCKED_VALUE: u8 = 1;
-const POLL_INTERVAL: Duration = Duration::from_millis(200);
+const POLL_INTERVAL: Duration = Duration::from_millis(1000);
+
+/// 轮询间隔：同一条 USB 设备上每多一次控制传输，就多一次挤占等时传输的机会。
+/// 默认 1000ms，可用 ONE_KVM_SIGNAL_POLL_MS 覆盖（100..=10000）。
+fn poll_interval() -> Duration {
+    std::env::var("ONE_KVM_SIGNAL_POLL_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| (100..=10_000).contains(value))
+        .map(Duration::from_millis)
+        .unwrap_or(POLL_INTERVAL)
+}
 
 pub struct SignalProbe {
     locked: Arc<AtomicBool>,
@@ -262,7 +273,7 @@ mod imp {
                     }
                     if config.mode == ProbeMode::Off {
                         locked.store(true, Ordering::Relaxed);
-                        std::thread::sleep(POLL_INTERVAL);
+                        std::thread::sleep(poll_interval());
                         continue;
                     }
                     if fd.is_none() {
@@ -335,7 +346,7 @@ mod imp {
                             }
                         }
                     }
-                    std::thread::sleep(POLL_INTERVAL);
+                    std::thread::sleep(poll_interval());
                 }
             })
             .ok()?;

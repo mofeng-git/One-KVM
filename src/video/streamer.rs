@@ -28,7 +28,7 @@ use crate::video::capture::status::{
     CaptureIoErrorKind,
 };
 use crate::video::capture::{
-    BridgeContext, CaptureReadError, CaptureStream, DEFAULT_CAPTURE_BUFFER_COUNT,
+    BridgeContext, CaptureReadError, CaptureStream,
 };
 use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 
@@ -792,7 +792,7 @@ impl Streamer {
         const MAX_RETRIES: u32 = 5;
         const RETRY_DELAY_MS: u64 = 200;
         const IDLE_STOP_DELAY_SECS: u64 = 5;
-        const BUFFER_COUNT: u32 = DEFAULT_CAPTURE_BUFFER_COUNT;
+        let buffer_count = crate::video::capture::capture_buffer_count();
         let handle = tokio::runtime::Handle::current();
         let mut last_state = StreamerState::Streaming;
 
@@ -907,7 +907,7 @@ impl Streamer {
                     config.resolution,
                     config.format,
                     config.fps,
-                    BUFFER_COUNT,
+                    buffer_count,
                     Duration::from_secs(2),
                     bridge_ctx.clone(),
                     control_mode,
@@ -1015,7 +1015,7 @@ impl Streamer {
                 resolution.width, resolution.height, pixel_format, stride
             );
 
-            let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
+            let buffer_pool = Arc::new(FrameBufferPool::new(buffer_count.max(4) as usize));
             // Preserve the no-signal state across an outer-loop re-open.  This
             // makes the first recovered frame transition the handler back
             // online and publish Streaming instead of silently inheriting the

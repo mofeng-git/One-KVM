@@ -361,7 +361,7 @@ impl WebRtcStreamer {
                 current_capture
                     .as_ref()
                     .map(|capture| capture.buffer_count)
-                    .unwrap_or(DEFAULT_CAPTURE_BUFFER_COUNT),
+                    .unwrap_or_else(crate::video::capture::capture_buffer_count),
             )
         };
 
@@ -802,7 +802,7 @@ impl WebRtcStreamer {
         );
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
-            buffer_count: DEFAULT_CAPTURE_BUFFER_COUNT,
+            buffer_count: crate::video::capture::capture_buffer_count(),
             jpeg_quality,
             subdev_path,
             bridge_kind,
