@@ -1185,6 +1185,25 @@ impl Streamer {
                 }
 
                 owned.truncate(frame_size);
+                // 无信号时用彩条替换画面（MJPEG/HTTP 推流路径）
+                if !crate::video::signal_probe::hdmi_locked() {
+                    let (bw, bh) = (resolution.width as usize, resolution.height as usize);
+                    match pixel_format {
+                        PixelFormat::Yuyv => {
+                            let bars = crate::video::test_pattern::cached_yuyv_bars(bw, bh);
+                            let n = bars.len().min(owned.len());
+                            owned[..n].copy_from_slice(&bars[..n]);
+                        }
+                        PixelFormat::Mjpeg => {
+                            let jpg = crate::video::test_pattern::cached_jpeg_bars(bw, bh);
+                            if !jpg.is_empty() {
+                                owned.clear();
+                                owned.extend_from_slice(&jpg);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 let frame = VideoFrame::from_pooled(
                     Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
                     resolution,

@@ -1744,15 +1744,23 @@ impl SharedVideoPipeline {
                     owned.truncate(frame_size);
                     // 无 HDMI 链路时用彩条替换画面：链路状态直接读采集卡寄存器，
                     // 与被控机输出黑色画面无关，不会误判。
-                    if pixel_format == PixelFormat::Yuyv
-                        && !crate::video::signal_probe::hdmi_locked()
-                    {
-                        let bars = crate::video::test_pattern::cached_yuyv_bars(
-                            resolution.width as usize,
-                            resolution.height as usize,
-                        );
-                        let n = bars.len().min(owned.len());
-                        owned[..n].copy_from_slice(&bars[..n]);
+                    if !crate::video::signal_probe::hdmi_locked() {
+                        let (bw, bh) = (resolution.width as usize, resolution.height as usize);
+                        match pixel_format {
+                            PixelFormat::Yuyv => {
+                                let bars = crate::video::test_pattern::cached_yuyv_bars(bw, bh);
+                                let n = bars.len().min(owned.len());
+                                owned[..n].copy_from_slice(&bars[..n]);
+                            }
+                            PixelFormat::Mjpeg => {
+                                let jpg = crate::video::test_pattern::cached_jpeg_bars(bw, bh);
+                                if !jpg.is_empty() {
+                                    owned.clear();
+                                    owned.extend_from_slice(&jpg);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                     capture_sequence = capture_sequence.wrapping_add(1);
                     if pipeline.snapshot_slot.pending() {
