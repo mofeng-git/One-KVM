@@ -153,7 +153,11 @@ mod imp {
             let mut parts = ids.split(':');
             let vid = parts.next().and_then(parse_hex_u16);
             let pid = parts.next().and_then(parse_hex_u16);
-            let vid_match = cfg.vid.map(|want| vid == Some(want)).unwrap_or(true);
+            // 未指定 VID 时只匹配 MacroSilicon 家族（345F / 534D），避免误绑到键盘等其它 HID
+            let vid_match = match cfg.vid {
+                Some(want) => vid == Some(want),
+                None => matches!(vid, Some(0x345F) | Some(0x534D)),
+            };
             let pid_match = cfg.pid.map(|want| pid == Some(want)).unwrap_or(true);
             if vid_match && pid_match {
                 return Some(format!("/dev/hidraw{i}"));

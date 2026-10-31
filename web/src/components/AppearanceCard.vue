@@ -16,8 +16,6 @@ const busy = ref<'bg' | 'ns' | null>(null)
 
 // 无信号检测：参数来自逆向，用户自行填写
 const detectEnabled = ref(true)
-const vid = ref('345f')
-const pid = ref('')
 const register = ref('0x1F87')
 const lockedValue = ref(1)
 
@@ -35,8 +33,6 @@ function syncFromSettings() {
   const signal = (settings.value as Record<string, any>).signal || {}
   const preset = (signal.preset as string) || 'auto'
   detectEnabled.value = preset !== 'off'
-  if (signal.vid) vid.value = signal.vid
-  if (signal.pid !== undefined) pid.value = signal.pid || ''
   if (signal.register) register.value = signal.register
   if (typeof signal.locked_value === 'number') lockedValue.value = signal.locked_value
 }
@@ -60,8 +56,6 @@ async function save() {
         signal: detectEnabled.value
           ? {
               preset: 'custom',
-              vid: vid.value || null,
-              pid: pid.value || null,
               register: register.value || null,
               locked_value: lockedValue.value,
             }
@@ -183,15 +177,7 @@ async function pick(event: Event, target: 'bg' | 'ns') {
           </div>
         </div>
 
-        <div v-if="detectEnabled" class="grid gap-2 sm:grid-cols-4">
-          <label class="text-xs">
-            VID
-            <input v-model="vid" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
-          </label>
-          <label class="text-xs">
-            PID（空=任意）
-            <input v-model="pid" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
-          </label>
+        <div v-if="detectEnabled" class="grid gap-2 sm:grid-cols-2">
           <label class="text-xs">
             寄存器
             <input v-model="register" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
