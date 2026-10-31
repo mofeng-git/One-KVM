@@ -183,11 +183,10 @@ impl RuntimeBuilder {
         let extension_config = config_store.get();
         extensions.start_enabled(&extension_config.extensions).await;
 
-        // Tailscale 是常驻守护进程 + CLI，走自己的应用逻辑（开机按配置自动上线）
+        // Tailscale 改为手动启动：配置有误（例如登录服务器不可达/下发路由）时，
+        // 开机自动上线会让设备在局域网里失联，无法再进界面修改。
         if extension_config.extensions.tailscale.enabled {
-            if let Err(error) = crate::tailscale::apply(&extension_config.extensions.tailscale).await {
-                tracing::warn!("启动 Tailscale 失败: {error}");
-            }
+            tracing::info!("Tailscale 已启用，等待手动启动（设置 → 远程访问）");
         }
 
         state.publish_device_info().await;

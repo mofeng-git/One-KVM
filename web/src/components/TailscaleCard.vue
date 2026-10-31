@@ -162,7 +162,7 @@ onUnmounted(() => {
           <RefreshCw class="size-4 mr-1" />
           刷新
         </Button>
-        <div class="settings-save-action">
+        <div v-if="!status?.running" class="settings-save-action">
           <Button size="sm" :disabled="busy" @click="save()">
             {{ t('common.save') }}
           </Button>
@@ -182,7 +182,7 @@ onUnmounted(() => {
         设备上没有 /usr/bin/tailscale，请先在镜像里安装 tailscale。
       </p>
 
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div v-if="!status?.running" class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1">
           <Label class="text-xs">Auth Key（留空则生成登录链接）</Label>
           <Input v-model="authKey" type="password" placeholder="tskey-auth-..." />

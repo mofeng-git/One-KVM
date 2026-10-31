@@ -182,9 +182,12 @@ pub async fn apply(config: &TailscaleConfig) -> Result<(), String> {
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
+    // 不要 --accept-routes：被 tailnet 下发默认路由后，设备会在局域网里失联。
+    // 也不要接受 DNS，避免改掉 /etc/resolv.conf。
     let mut args = vec![
         "up".to_string(),
-        "--accept-routes".to_string(),
+        "--accept-routes=false".to_string(),
+        "--accept-dns=false".to_string(),
         "--reset".to_string(),
     ];
 
