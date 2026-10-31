@@ -14,16 +14,36 @@ const noSignalImage = ref<string | null>(null)
 const saving = ref(false)
 const busy = ref<'bg' | 'ns' | null>(null)
 
+const signalPreset = ref<'auto' | 'off' | 'custom'>('auto')
+const signalVid = ref('345f')
+const signalPid = ref('')
+const signalRegister = ref('0x1F87')
+const signalLockedValue = ref(1)
+const signalRead = ref<{ ok: boolean; node?: string; raw?: number; error?: string } | null>(null)
+const reading = ref(false)
+
 const styles: Array<{ id: 'minimal' | 'branded' | 'custom'; label: string }> = [
   { id: 'minimal', label: '精简（点阵 + 转圈）' },
   { id: 'branded', label: '品牌（深色 + Logo）' },
   { id: 'custom', label: '自定义背景' },
 ]
 
+const presets: Array<{ id: 'auto' | 'off' | 'custom'; label: string }> = [
+  { id: 'auto', label: '自动（MacroSilicon 0x1F87）' },
+  { id: 'off', label: '关闭（从不显示）' },
+  { id: 'custom', label: '自定义' },
+]
+
 function syncFromSettings() {
   loadingStyle.value = (settings.value.loading_style as typeof loadingStyle.value) || 'minimal'
   background.value = settings.value.loading_background || null
   noSignalImage.value = settings.value.no_signal_image || null
+  const signal = (settings.value as Record<string, any>).signal || {}
+  signalPreset.value = (signal.preset as typeof signalPreset.value) || 'auto'
+  signalVid.value = signal.vid || '345f'
+  signalPid.value = signal.pid || ''
+  signalRegister.value = signal.register || '0x1F87'
+  signalLockedValue.value = typeof signal.locked_value === 'number' ? signal.locked_value : 1
 }
 
 onMounted(async () => {
@@ -42,6 +62,13 @@ async function save() {
         loading_style: loadingStyle.value,
         loading_background: background.value,
         no_signal_image: noSignalImage.value,
+        signal: {
+          preset: signalPreset.value,
+          vid: signalVid.value || null,
+          pid: signalPid.value || null,
+          register: signalRegister.value || null,
+          locked_value: signalLockedValue.value,
+        },
       }),
     })
     if (!res.ok) throw new Error(await res.text())
@@ -51,6 +78,19 @@ async function save() {
     toast.error('保存失败', { description: String(error) })
   } finally {
     saving.value = false
+  }
+}
+
+async function readSignal() {
+  reading.value = true
+  signalRead.value = null
+  try {
+    const res = await fetch('/api/signal/read', { credentials: 'include' })
+    signalRead.value = await res.json()
+  } catch (error) {
+    signalRead.value = { ok: false, error: String(error) }
+  } finally {
+    reading.value = false
   }
 }
 
@@ -126,12 +166,7 @@ async function pick(event: Event, target: 'bg' | 'ns') {
             {{ busy === 'bg' ? '处理中…' : '选择图片' }}
           </label>
           <Button v-if="background" size="sm" variant="ghost" @click="background = null">清除</Button>
-          <img
-            v-if="background"
-            :src="background"
-            alt=""
-            class="h-12 w-20 rounded border object-cover"
-          />
+          <img v-if="background" :src="background" alt="" class="h-12 w-20 rounded border object-cover" />
         </div>
       </div>
 
@@ -149,16 +184,59 @@ async function pick(event: Event, target: 'bg' | 'ns') {
             {{ busy === 'ns' ? '处理中…' : '选择图片' }}
           </label>
           <Button v-if="noSignalImage" size="sm" variant="ghost" @click="noSignalImage = null">清除</Button>
-          <img
-            v-if="noSignalImage"
-            :src="noSignalImage"
-            alt=""
-            class="h-12 w-20 rounded border object-cover"
-          />
+          <img v-if="noSignalImage" :src="noSignalImage" alt="" class="h-12 w-20 rounded border object-cover" />
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="space-y-2 border-t pt-4">
+        <p class="text-sm font-medium">无信号检测（什么时候出彩条）</p>
+        <p class="text-xs text-muted-foreground">
+          采集卡没有 HDMI 信号时靠读取芯片寄存器判断。不同型号/固件的寄存器取值不一样，
+          换卡后可以点“读取一次”看看实际读数。
+        </p>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <Button
+            v-for="item in presets"
+            :key="item.id"
+            size="sm"
+            class="justify-center"
+            :variant="signalPreset === item.id ? 'default' : 'outline'"
+            @click="signalPreset = item.id"
+          >{{ item.label }}</Button>
+        </div>
+        <div v-if="signalPreset === 'custom'" class="grid gap-2 sm:grid-cols-4">
+          <label class="text-xs">
+            VID
+            <input v-model="signalVid" class="mt-1 w-full rounded border px-2 py-1 font-mono text-sm" />
+          </label>
+          <label class="text-xs">
+            PID（空=任意）
+            <input v-model="signalPid" class="mt-1 w-full rounded border px-2 py-1 font-mono text-sm" />
+          </label>
+          <label class="text-xs">
+            寄存器
+            <input v-model="signalRegister" class="mt-1 w-full rounded border px-2 py-1 font-mono text-sm" />
+          </label>
+          <label class="text-xs">
+            有信号时的读数
+            <input v-model.number="signalLockedValue" type="number" class="mt-1 w-full rounded border px-2 py-1 font-mono text-sm" />
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <Button size="sm" variant="outline" :disabled="reading" @click="readSignal()">
+            {{ reading ? '读取中…' : '读取一次' }}
+          </Button>
+          <span v-if="signalRead" class="text-xs">
+            <template v-if="signalRead.ok">
+              {{ signalRead.node }} · 0x{{ (signalRead.raw ?? 0).toString(16).toUpperCase().padStart(2, '0') }}
+              <span class="text-muted-foreground">（十进制 {{ signalRead.raw }}）</span>
+            </template>
+            <template v-else>{{ signalRead.error }}</template>
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 border-t pt-4">
         <Button size="sm" :disabled="saving" @click="save()">
           {{ saving ? '保存中…' : '保存' }}
         </Button>

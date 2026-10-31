@@ -11,6 +11,19 @@ const PATH: &str = "/etc/one-kvm/appearance.json";
 /// 单张图片 data URL 上限（约 1.5MB 原图），防止把内存撑爆
 pub const MAX_IMAGE_CHARS: usize = 2 * 1024 * 1024;
 
+/// 无信号检测（彩条触发条件）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SignalProbeSettings {
+    /// auto（默认） | off | custom
+    pub preset: Option<String>,
+    pub vid: Option<String>,
+    pub pid: Option<String>,
+    pub register: Option<String>,
+    /// 有信号时寄存器的读数
+    pub locked_value: Option<u32>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppearanceSettings {
@@ -20,6 +33,8 @@ pub struct AppearanceSettings {
     pub loading_background: Option<String>,
     /// data:image/jpeg;base64,... —— 无信号时整帧显示
     pub no_signal_image: Option<String>,
+    /// 无信号检测设置
+    pub signal: Option<SignalProbeSettings>,
 }
 
 static CACHE: OnceLock<RwLock<Arc<AppearanceSettings>>> = OnceLock::new();

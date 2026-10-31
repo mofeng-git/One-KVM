@@ -7,6 +7,14 @@ pub async fn get_appearance() -> Json<crate::appearance::AppearanceSettings> {
     Json((*crate::appearance::current()).clone())
 }
 
+/// 按当前设置读一次链路寄存器，供设置页"读取一次"用
+pub async fn read_signal() -> Json<serde_json::Value> {
+    match crate::video::signal_probe::read_once() {
+        Ok((node, raw)) => Json(serde_json::json!({"ok": true, "node": node, "raw": raw})),
+        Err(error) => Json(serde_json::json!({"ok": false, "error": error})),
+    }
+}
+
 pub async fn put_appearance(
     Json(req): Json<crate::appearance::AppearanceSettings>,
 ) -> Result<Json<crate::appearance::AppearanceSettings>, (StatusCode, String)> {

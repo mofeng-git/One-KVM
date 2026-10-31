@@ -2629,8 +2629,6 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <AppearanceCard />
-
             <Card>
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('settings.consoleLayoutDesc')">{{
@@ -2667,6 +2665,8 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
             </Card>
+
+            <AppearanceCard />
 
             <Card>
               <CardHeader class="settings-card-heading"
