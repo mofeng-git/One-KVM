@@ -8,6 +8,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { Toaster } from '@/components/ui/sonner'
 import { useTheme } from '@/composables/useTheme'
+import { startSessionWatch, useSessionGuard } from '@/composables/useSessionGuard'
+import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
 
@@ -24,6 +26,13 @@ const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const { isDark } = useTheme()
+const { sessionEndReason, clearSessionEnd } = useSessionGuard()
+startSessionWatch()
+
+function goToLogin() {
+  clearSessionEnd()
+  router.push('/login')
+}
 onMounted(async () => {
   try {
     await authStore.checkSetupStatus()
@@ -51,6 +60,26 @@ onMounted(async () => {
     </KeepAlive>
     <component :is="Component" v-if="route.name !== 'Console' || !authStore.isAuthenticated" />
   </RouterView>
+  <div
+    v-if="sessionEndReason"
+    class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+  >
+    <div class="w-full max-w-sm rounded-xl border bg-background p-5 shadow-2xl">
+      <h2 class="text-base font-semibold">
+        {{ sessionEndReason === 'taken_over'
+          ? t('auth.sessionTakenOver')
+          : t('auth.sessionExpiredTitle') }}
+      </h2>
+      <p class="mt-2 text-sm leading-6 text-muted-foreground">
+        {{ sessionEndReason === 'taken_over'
+          ? t('auth.sessionTakenOverDesc')
+          : t('auth.sessionExpiredDesc') }}
+      </p>
+      <div class="mt-4 flex justify-end">
+        <Button size="sm" @click="goToLogin()">{{ t('auth.signInAgain') }}</Button>
+      </div>
+    </div>
+  </div>
   <Toaster
     rich-colors
     close-button
