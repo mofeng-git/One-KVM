@@ -30,6 +30,11 @@ export function startSessionWatch(intervalMs = 5000) {
     if (window.location.pathname.startsWith('/login')) return
     try {
       const res = await fetch('/api/auth/check', { credentials: 'include' })
+      // 会话恢复正常（重新登录成功）就自动收起弹窗
+      if (res.ok) {
+        if (sessionEndReason.value) sessionEndReason.value = null
+        return
+      }
       if (res.status === 401) {
         const text = (await res.text()).toLowerCase()
         // 请求期间可能已经跳到登录页，这里再判一次，避免登录页还在弹窗
