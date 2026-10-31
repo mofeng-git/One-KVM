@@ -2314,12 +2314,101 @@ function rotateRelativeDelta(dx: number, dy: number) {
   }
 }
 
+// Some capture cards fit a non-16:9 source into the 1080p frame and add black
+// bars. Absolute mouse coordinates are normalized over the whole frame, so they
+// land offset by the bar width. Detect the real content rect and remap into it.
+const videoContentRect = ref<{ left: number; top: number; right: number; bottom: number } | null>(null)
+let contentProbeKey = ''
+let contentProbeAt = 0
+let contentProbeCanvas: HTMLCanvasElement | null = null
+
+function probeVideoContentRect() {
+  const element = getActiveVideoElement()
+  if (!element) return
+
+  const width = (element as HTMLVideoElement).videoWidth || (element as HTMLImageElement).naturalWidth
+  const height = (element as HTMLVideoElement).videoHeight || (element as HTMLImageElement).naturalHeight
+  if (!width || !height) return
+
+  const key = `${width}x${height}`
+  const now = performance.now()
+  if (key === contentProbeKey && now - contentProbeAt < 1500) return
+  contentProbeKey = key
+  contentProbeAt = now
+
+  const sampleW = 96
+  const sampleH = 54
+  try {
+    const canvas = contentProbeCanvas ?? (contentProbeCanvas = document.createElement('canvas'))
+    canvas.width = sampleW
+    canvas.height = sampleH
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return
+    ctx.drawImage(element as CanvasImageSource, 0, 0, sampleW, sampleH)
+    const { data } = ctx.getImageData(0, 0, sampleW, sampleH)
+
+    let left = sampleW
+    let right = -1
+    let top = sampleH
+    let bottom = -1
+    for (let y = 0; y < sampleH; y++) {
+      for (let x = 0; x < sampleW; x++) {
+        const index = (y * sampleW + x) * 4
+        // 平均亮度 > 30 才算内容，黑边在 5 以下
+        const r = data[index] ?? 0
+        const g = data[index + 1] ?? 0
+        const b = data[index + 2] ?? 0
+        if (r + g + b <= 90) continue
+        if (x < left) left = x
+        if (x > right) right = x
+        if (y < top) top = y
+        if (y > bottom) bottom = y
+      }
+    }
+
+    if (right < 0) {
+      videoContentRect.value = null
+      return
+    }
+
+    const rect = {
+      left: left / sampleW,
+      top: top / sampleH,
+      right: (right + 1) / sampleW,
+      bottom: (bottom + 1) / sampleH,
+    }
+    // 内容区太小说明多半是误判（黑屏、画面本身较暗），宁可退回整帧
+    const plausible
+      = rect.left <= 0.35 && rect.right >= 0.65 && rect.top <= 0.35 && rect.bottom >= 0.65
+    videoContentRect.value = plausible ? rect : null
+  }
+  catch {
+    videoContentRect.value = null
+  }
+}
+
+function getVideoContentRect() {
+  if (videoRotation.value === 90 || videoRotation.value === 270) return null
+  probeVideoContentRect()
+  return videoContentRect.value
+}
+
 function getAbsoluteMousePosition(e: MouseEvent) {
   const rect = getRenderedVideoRect()
   if (!rect) return null
 
-  const normalizedX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-  const normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+  let normalizedX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  let normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+
+  const content = getVideoContentRect()
+  if (content) {
+    const spanX = content.right - content.left
+    const spanY = content.bottom - content.top
+    if (spanX > 0 && spanY > 0) {
+      normalizedX = Math.max(0, Math.min(1, (normalizedX - content.left) / spanX))
+      normalizedY = Math.max(0, Math.min(1, (normalizedY - content.top) / spanY))
+    }
+  }
 
   const sourcePosition = rotateAbsolutePosition(normalizedX, normalizedY)
   return {
