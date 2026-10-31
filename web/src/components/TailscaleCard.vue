@@ -31,6 +31,8 @@ const config = ref<TsConfig>({ enabled: false })
 const authKey = ref('')
 const loginServer = ref('')
 const hostname = ref('')
+const configMode = ref<'quick' | 'full'>('quick')
+const extraArgs = ref('')
 const busy = ref(false)
 const loadError = ref('')
 let timer: number | undefined
@@ -82,6 +84,8 @@ async function load() {
     config.value = data.config
     loginServer.value = data.config.login_server || ''
     hostname.value = data.config.hostname || ''
+    configMode.value = data.config.config_mode === 'full' ? 'full' : 'quick'
+    extraArgs.value = data.config.extra_args || ''
   }
   catch (error) {
     loadError.value = `读取失败：${String(error)}`
@@ -115,6 +119,8 @@ async function start() {
     auth_key: authKey.value.trim() || undefined,
     login_server: loginServer.value.trim(),
     hostname: hostname.value.trim(),
+    config_mode: configMode.value,
+    extra_args: extraArgs.value.trim(),
   })
   authKey.value = ''
 }
@@ -128,6 +134,8 @@ async function save() {
     auth_key: authKey.value.trim() || undefined,
     login_server: loginServer.value.trim(),
     hostname: hostname.value.trim(),
+    config_mode: configMode.value,
+    extra_args: extraArgs.value.trim(),
   })
   authKey.value = ''
   toast.success(t('common.save'))
@@ -195,18 +203,40 @@ onUnmounted(() => {
         设备上没有 /usr/bin/tailscale，请先在镜像里安装 tailscale。
       </p>
 
-      <div v-if="!status?.running" class="grid gap-3 sm:grid-cols-2">
-        <div class="space-y-1">
-          <Label class="text-xs">Auth Key（留空则生成登录链接）</Label>
-          <Input v-model="authKey" type="password" placeholder="tskey-auth-..." />
+      <div v-if="!status?.running" class="space-y-3">
+        <div class="flex gap-2">
+          <Button
+            size="sm"
+            :variant="configMode === 'quick' ? 'default' : 'outline'"
+            @click="configMode = 'quick'"
+          >快速配置</Button>
+          <Button
+            size="sm"
+            :variant="configMode === 'full' ? 'default' : 'outline'"
+            @click="configMode = 'full'"
+          >完整配置</Button>
         </div>
-        <div class="space-y-1">
-          <Label class="text-xs">登录服务器（自建 Headscale 时填）</Label>
-          <Input v-model="loginServer" placeholder="https://headscale.example.com" />
-        </div>
-        <div class="space-y-1">
-          <Label class="text-xs">主机名（可选）</Label>
-          <Input v-model="hostname" :placeholder="status?.hostname || 'one-kvm'" />
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="space-y-1">
+            <Label class="text-xs">登录服务器（自建 Headscale 时填）</Label>
+            <Input v-model="loginServer" placeholder="https://headscale.example.com" />
+          </div>
+          <div class="space-y-1">
+            <Label class="text-xs">Auth Key（留空则生成登录链接）</Label>
+            <Input v-model="authKey" type="password" placeholder="tskey-auth-..." />
+          </div>
+          <div class="space-y-1">
+            <Label class="text-xs">主机名（可选）</Label>
+            <Input v-model="hostname" :placeholder="status?.hostname || 'one-kvm'" />
+          </div>
+          <div v-if="configMode === 'full'" class="space-y-1 sm:col-span-2">
+            <Label class="text-xs">额外参数（原样追加到 tailscale up）</Label>
+            <Input v-model="extraArgs" placeholder="--advertise-routes=192.168.6.0/24" />
+            <p class="text-xs text-destructive">
+              不要填 --accept-routes：接受 tailnet 下发的路由会让设备在局域网里失联。
+            </p>
+          </div>
         </div>
       </div>
 

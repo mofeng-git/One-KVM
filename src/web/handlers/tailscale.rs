@@ -17,6 +17,8 @@ pub struct TailscaleConfigUpdate {
     pub auth_key: Option<String>,
     pub login_server: Option<String>,
     pub hostname: Option<String>,
+    pub config_mode: Option<String>,
+    pub extra_args: Option<String>,
 }
 
 /// GET /api/extensions/tailscale
@@ -51,6 +53,12 @@ pub async fn update_tailscale_config(
     }
     if let Some(hostname) = req.hostname {
         next.hostname = hostname.trim().to_string();
+    }
+    if let Some(config_mode) = req.config_mode {
+        next.config_mode = config_mode.trim().to_lowercase();
+    }
+    if let Some(extra_args) = req.extra_args {
+        next.extra_args = extra_args.trim().to_string();
     }
 
     state

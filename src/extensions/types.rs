@@ -245,6 +245,12 @@ pub struct TailscaleConfig {
     /// 在 tailnet 里显示的主机名，留空用默认
     #[serde(skip_serializing_if = "String::is_empty")]
     pub hostname: String,
+    /// quick（默认）| full：full 时可额外填 `tailscale up` 参数
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub config_mode: String,
+    /// 额外参数（原样追加到 tailscale up 后面）
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub extra_args: String,
 }
 
 impl Default for TailscaleConfig {
@@ -254,6 +260,8 @@ impl Default for TailscaleConfig {
             auth_key: String::new(),
             login_server: String::new(),
             hostname: String::new(),
+            config_mode: String::new(),
+            extra_args: String::new(),
         }
     }
 }

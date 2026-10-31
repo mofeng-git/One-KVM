@@ -200,6 +200,13 @@ pub async fn apply(config: &TailscaleConfig) -> Result<(), String> {
         args.push(config.login_server.trim().to_string());
     }
 
+    // 完整配置模式下的额外参数（原样追加，注意不要写 --accept-routes）
+    for extra in config.extra_args.split_whitespace() {
+        if !extra.is_empty() {
+            args.push(extra.to_string());
+        }
+    }
+
     if !config.auth_key.trim().is_empty() {
         args.push("--authkey".to_string());
         args.push(config.auth_key.trim().to_string());
