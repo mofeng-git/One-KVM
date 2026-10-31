@@ -17,6 +17,29 @@
 //! ```
 
 use bytes::Bytes;
+
+// ---- 临时性能埋点（ONE_KVM_PROFILE=1 开启）----
+static PROF_CAP_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_CAP_N: AtomicU64 = AtomicU64::new(0);
+static PROF_ENC_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_ENC_N: AtomicU64 = AtomicU64::new(0);
+static PROF_PREP_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_PREP_N: AtomicU64 = AtomicU64::new(0);
+
+fn profiling() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ONE_KVM_PROFILE").as_deref() == Ok("1"))
+}
+
+fn prof_log(label: &str, ns: &AtomicU64, n: &AtomicU64, elapsed: std::time::Duration) {
+    ns.fetch_add(elapsed.as_nanos() as u64, Ordering::Relaxed);
+    let count = n.fetch_add(1, Ordering::Relaxed) + 1;
+    if count % 60 == 0 {
+        let total = ns.swap(0, Ordering::Relaxed);
+        tracing::info!("[PROF] {} avg={:.2}ms/frame", label, total as f64 / 60.0 / 1e6);
+    }
+}
+
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::HashMap;
@@ -1277,7 +1300,15 @@ impl SharedVideoPipeline {
                     pipeline
                         .encoded_input_frames
                         .fetch_add(1, Ordering::Relaxed);
+                    let prof_enc_t = if profiling() {
+                        Some(std::time::Instant::now())
+                    } else {
+                        None
+                    };
                     let encode_result = pipeline.encode_frame_sync(&mut encoder_state, &frame);
+                    if let Some(t) = prof_enc_t {
+                        prof_log("encode", &PROF_ENC_NS, &PROF_ENC_N, t.elapsed());
+                    }
 
                     match encode_result {
                         Ok(encoded_frames) => {
@@ -1566,10 +1597,18 @@ impl SharedVideoPipeline {
                     }
 
                     let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
+                    let prof_cap_t = if profiling() {
+                        Some(std::time::Instant::now())
+                    } else {
+                        None
+                    };
                     let next_result = stream
                         .as_mut()
                         .expect("stream is Some above")
                         .next_into(&mut owned);
+                    if let Some(t) = prof_cap_t {
+                        prof_log("capture", &PROF_CAP_NS, &PROF_CAP_N, t.elapsed());
+                    }
                     let meta = match next_result {
                         Ok(meta) => {
                             consecutive_timeouts = 0;
@@ -1886,6 +1925,11 @@ impl SharedVideoPipeline {
             return Ok(Vec::new());
         }
 
+        let prof_prep_t = if profiling() {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
         let decoded_buf = if input_format.is_compressed() {
             let decoder = state
                 .mjpeg_decoder
@@ -1924,6 +1968,14 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
+        if let Some(t) = prof_prep_t {
+            prof_log("prep", &PROF_PREP_NS, &PROF_PREP_N, t.elapsed());
+        }
+        let prof_enc2_t = if profiling() {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
         let encode_result = if needs_yuv420p {
             // Software encoder with direct input conversion to YUV420P
             if let Some(conv) = state.yuv420p_converter.as_mut() {
@@ -1953,6 +2005,9 @@ impl SharedVideoPipeline {
             }
         };
 
+        if let Some(t) = prof_enc2_t {
+            prof_log("encode_raw", &PROF_ENC_NS, &PROF_ENC_N, t.elapsed());
+        }
         match encode_result {
             Ok(frames) => {
                 if frames.is_empty() {

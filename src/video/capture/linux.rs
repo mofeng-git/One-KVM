@@ -527,6 +527,7 @@ impl CaptureStream {
     #[cfg(feature = "rkmpp")]
     pub(crate) fn with_next_dmabuf<T>(
         &mut self,
+        overlay: Option<&[u8]>,
         consume: impl FnOnce(usize, usize, Option<OwnedFd>) -> T,
     ) -> std::result::Result<(CaptureMeta, T), CaptureReadError> {
         let buffer = self.dequeue_buffer()?;
@@ -537,6 +538,13 @@ impl CaptureStream {
                 io::Error::new(io::ErrorKind::InvalidData, "Invalid capture buffer index").into(),
             );
         }
+        // 无信号时把彩条写进这块采集缓冲（DMA 路径同样要看得到提示）
+        if let Some(data) = overlay {
+            let plane = &mut self.mappings[index][0];
+            let n = data.len().min(plane.len());
+            plane[..n].copy_from_slice(&data[..n]);
+        }
+
         let expected = self.expected_capture_bytes();
         let mapped_size = self.mappings[index][0].len();
         let native_hdmi = self.native_hdmirx_state.is_some();

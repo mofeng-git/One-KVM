@@ -21,7 +21,7 @@ pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
     // 实测两条路径在 1080p30 下的 CPU 基本相同（76% 左右），拷贝路径不亏。
     // 需要试 DMA 时可设 ONE_KVM_RKMPP_DMABUF_YUYV=1 打开。
     if config.input_format == PixelFormat::Yuyv
-        && std::env::var("ONE_KVM_RKMPP_DMABUF_YUYV").as_deref() != Ok("1")
+        && std::env::var("ONE_KVM_RKMPP_DMABUF_YUYV").as_deref() == Ok("0")
     {
         return false;
     }
@@ -283,6 +283,14 @@ fn run(
             }
             continue;
         }
+        let overlay = if !crate::video::signal_probe::hdmi_locked() {
+            Some(crate::video::test_pattern::cached_yuyv_bars(
+                config.resolution.width as usize,
+                config.resolution.height as usize,
+            ))
+        } else {
+            None
+        };
         let reservations = pipeline.reserve_outputs();
         fps_cap += 1;
         let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
@@ -290,7 +298,7 @@ fn run(
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(_) => capture
                     .stream
-                    .with_next_dmabuf(|_, _, _| ())
+                    .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), |_, _, _| ())
                     .map(|_| Ok(Vec::new())),
                 CaptureEncoder::Copy(_) => {
                     let mut raw = buffer_pool.take(0);
@@ -305,7 +313,7 @@ fn run(
                     let pts = pipeline.pts_ms();
                     capture
                         .stream
-                        .with_next_dmabuf(|index, bytes_used, fresh_fd| {
+                        .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), |index, bytes_used, fresh_fd| {
                             let keyframe =
                                 pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
                             // The callback holds the dequeue lease until native encode
