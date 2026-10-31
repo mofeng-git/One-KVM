@@ -227,8 +227,8 @@ async function pick(event: Event, target: 'bg' | 'ns') {
         </div>
       </section>
 
-      <!-- 两张图 -->
-      <section class="grid gap-4 sm:grid-cols-2">
+      <!-- 两张图：只在「自定义背景」样式下出现 -->
+      <section v-if="loadingStyle === 'custom'" class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-2">
           <p class="text-sm font-medium">自定义背景</p>
           <p class="text-xs text-muted-foreground">「自定义背景」样式下作为刷新/连接时的底图</p>
@@ -266,40 +266,36 @@ async function pick(event: Event, target: 'bg' | 'ns') {
         </div>
 
         <template v-if="detectEnabled">
-          <div class="space-y-2">
-            <p class="text-xs text-muted-foreground">先选采集卡型号</p>
-            <div class="grid grid-cols-3 gap-2 sm:grid-cols-7">
-              <Button
-                v-for="model in chipModels"
-                :key="model.id"
-                size="sm"
-                class="justify-center"
-                :variant="modelId === model.id ? 'default' : 'outline'"
-                @click="modelId = model.id; applyModel()"
-              >{{ model.label }}</Button>
-            </div>
-          </div>
-
-          <div v-if="modelPresets.length" class="space-y-2">
-            <p class="text-xs text-muted-foreground">再选检测值</p>
-            <div class="space-y-1">
-              <label
-                v-for="(preset, index) in modelPresets"
-                :key="preset.register + preset.lockedValue"
-                class="flex items-center gap-2 text-sm"
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="text-xs">
+              采集卡型号
+              <select
+                v-model="modelId"
+                class="mt-1 w-full rounded border bg-transparent px-2 py-1.5 text-sm"
+                @change="applyModel()"
               >
-                <input v-model.number="presetIndex" type="radio" :value="index" @change="applyPreset()" />
-                {{ preset.label }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="customMode" type="radio" :value="true" />
-                自定义（手动填下面的值）
-              </label>
-            </div>
+                <option v-for="model in chipModels" :key="model.id" :value="model.id">
+                  {{ model.label }}
+                </option>
+              </select>
+            </label>
+            <label class="text-xs">
+              检测值
+              <select
+                v-if="modelPresets.length"
+                v-model.number="presetIndex"
+                class="mt-1 w-full rounded border bg-transparent px-2 py-1.5 text-sm"
+                @change="applyPreset()"
+              >
+                <option v-for="(preset, index) in modelPresets" :key="preset.register + preset.lockedValue" :value="index">
+                  {{ preset.label }}
+                </option>
+              </select>
+              <select v-else class="mt-1 w-full rounded border bg-transparent px-2 py-1.5 text-sm" disabled>
+                <option>暂无数据（可手动填写下面的值）</option>
+              </select>
+            </label>
           </div>
-          <p v-else class="text-xs text-muted-foreground">
-            该型号暂无已验证参数，请点“读取一次”并手动填写（插拔 HDMI 各读一次对比）。
-          </p>
 
           <div class="grid gap-2 sm:grid-cols-4">
             <label class="text-xs">
