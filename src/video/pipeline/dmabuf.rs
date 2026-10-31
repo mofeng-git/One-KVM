@@ -17,6 +17,14 @@ pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
     {
         return false;
     }
+    // YUYV 默认走拷贝路径：无信号彩条需要在采集帧上叠加，DMA 路径拿不到可写映射；
+    // 实测两条路径在 1080p30 下的 CPU 基本相同（76% 左右），拷贝路径不亏。
+    // 需要试 DMA 时可设 ONE_KVM_RKMPP_DMABUF_YUYV=1 打开。
+    if config.input_format == PixelFormat::Yuyv
+        && std::env::var("ONE_KVM_RKMPP_DMABUF_YUYV").as_deref() != Ok("1")
+    {
+        return false;
+    }
     let registry = EncoderRegistry::global();
     let selected = match config.encoder_backend {
         Some(backend) => registry.encoder_with_backend(config.output_codec, backend),
@@ -152,6 +160,9 @@ fn run(
     let mut idle_since: Option<Instant> = None;
     let buffer_pool = Arc::new(FrameBufferPool::new(2)); // allocated only on fallback
     let mut fps_frames = 0u32;
+    let mut fps_cap = 0u32;
+    let mut fps_drop_nores = 0u32;
+    let mut fps_errs = 0u32;
     let mut fps_start = Instant::now();
     let errors = LogThrottler::with_secs(5);
 
@@ -273,7 +284,9 @@ fn run(
             continue;
         }
         let reservations = pipeline.reserve_outputs();
+        fps_cap += 1;
         let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
+            fps_drop_nores += 1;
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(_) => capture
                     .stream
@@ -364,6 +377,7 @@ fn run(
                 );
             }
             Ok(Err(error)) => {
+                fps_errs += 1;
                 if matches!(capture.encoder, Some(CaptureEncoder::Dma(_))) {
                     warn!("RKMPP DMA encode failed; disabling DMA for this pipeline and using copy encoder: {}", error);
                     capture.fallback(&config)?;
@@ -417,9 +431,17 @@ fn run(
             }
         }
         if fps_start.elapsed() >= Duration::from_secs(1) {
-            pipeline.stats.lock().current_fps =
-                fps_frames as f32 / fps_start.elapsed().as_secs_f32();
+            let secs = fps_start.elapsed().as_secs_f32();
+            let fps = fps_frames as f32 / secs;
+            pipeline.stats.lock().current_fps = fps;
+            debug!(
+                "[DMA-STATS] enc_fps={:.1} cap_loops={} encoded={} drop_nores={} errs={}",
+                fps, fps_cap, fps_frames, fps_drop_nores, fps_errs
+            );
             fps_frames = 0;
+            fps_cap = 0;
+            fps_drop_nores = 0;
+            fps_errs = 0;
             fps_start = Instant::now();
         }
     }

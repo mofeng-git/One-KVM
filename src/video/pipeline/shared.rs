@@ -673,7 +673,14 @@ impl SharedVideoPipeline {
 
     /// Subscribe to encoded frames
     pub fn subscribe(&self) -> EncodedVideoFrameReceiver {
-        let (tx, rx) = mpsc::channel(1);
+        // 容量 1 会让 DMA 编码路径在消费端稍有抖动时整帧丢弃（实测帧率减半），
+        // 这里放宽到 3 帧，兼顾平滑度与延迟。
+        let depth: usize = std::env::var("ONE_KVM_FRAME_QUEUE")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(3)
+            .clamp(1, 8);
+        let (tx, rx) = mpsc::channel(depth);
         if let Some(frame) = self.bootstrap_frame.read().clone() {
             let batch: EncodedBatch = vec![frame].into();
             let _ = tx.try_send(batch);
@@ -1696,6 +1703,18 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
+                    // 无 HDMI 链路时用彩条替换画面：链路状态直接读采集卡寄存器，
+                    // 与被控机输出黑色画面无关，不会误判。
+                    if pixel_format == PixelFormat::Yuyv
+                        && !crate::video::signal_probe::hdmi_locked()
+                    {
+                        let bars = crate::video::test_pattern::cached_yuyv_bars(
+                            resolution.width as usize,
+                            resolution.height as usize,
+                        );
+                        let n = bars.len().min(owned.len());
+                        owned[..n].copy_from_slice(&bars[..n]);
+                    }
                     capture_sequence = capture_sequence.wrapping_add(1);
                     if pipeline.snapshot_slot.pending() {
                         pipeline.snapshot_slot.publish(&VideoFrame::from_vec(
