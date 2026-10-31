@@ -154,3 +154,29 @@
     animation-duration: 3s;
   }
 }
+
+/* 面板进出：参考 JetKVM 的 slideUpFade（轻微上浮 + 淡入） */
+.kvm-fade-enter-active {
+  transition: opacity 0.45s ease-out, transform 0.45s ease-out;
+}
+
+.kvm-fade-leave-active {
+  transition: opacity 0.28s ease-in, transform 0.28s ease-in;
+}
+
+.kvm-fade-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.kvm-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-fade-enter-active,
+  .kvm-fade-leave-active {
+    transition-duration: 0.01s;
+  }
+}

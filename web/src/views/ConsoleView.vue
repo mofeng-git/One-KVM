@@ -1328,8 +1328,22 @@ function handleStreamStateChanged(data: StreamStateChangedEventData) {
 }
 
 const showSignalOverlay = computed(() => streamSignalState.value !== 'ok')
-// 无信号时后端还在出彩条帧，用半透明卡片盖在彩条上；其余状态没有画面，直接铺整块状态底板
-const isNoSignalOverlay = computed(() => streamSignalState.value === 'no_signal')
+// 只有「采集卡正常、只是没 HDMI 信号」时后端还在出彩条帧，才用半透明卡片盖在彩条上；
+// 采集本身出问题（UVC 超时 / USB 传输错误）时根本没有画面，直接铺整块状态底板。
+const NO_FRAME_REASONS = ['uvc_capture_stall', 'uvc_usb_error']
+const isNoSignalOverlay = computed(() => (
+  streamSignalState.value === 'no_signal'
+  && !NO_FRAME_REASONS.includes(streamSignalReason.value ?? '')
+))
+
+// 只有真正有画面时才把 video/img 淡入（JetKVM 的做法：opacity 0→1 过渡）；
+// 连接中 / 出错 / 采集本身坏掉时保持透明，露出界面底色而不是黑块。
+// 无信号但彩条还在流的情况除外——彩条本身就是要给人看的画面。
+const videoFrameReady = computed(() => {
+  if (videoLoading.value || videoError.value) return false
+  if (streamSignalState.value === 'ok') return true
+  return isNoSignalOverlay.value
+})
 
 const signalOverlayInfo = computed(() => {
   const reason = streamSignalReason.value
@@ -3344,7 +3358,7 @@ onUnmounted(() => {
           >
             <div
               ref="videoContainerRef"
-              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-black touch-none"
+              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-[var(--console-workspace)] touch-none"
               :style="videoContainerStyle"
               tabindex="0"
               @mouseleave="handleMouseLeaveVideo"
@@ -3363,7 +3377,8 @@ onUnmounted(() => {
                   v-show="videoMode === 'mjpeg'"
                   ref="videoRef"
                   :src="mjpegUrl"
-                  class="size-full object-contain pointer-events-none select-none"
+                  class="size-full object-contain pointer-events-none select-none transition-opacity ease-out"
+                  :class="videoFrameReady ? 'opacity-100 duration-700' : 'opacity-0 duration-150'"
                   :alt="t('console.videoAlt')"
                   draggable="false"
                   @load="handleVideoLoad"
@@ -3372,7 +3387,8 @@ onUnmounted(() => {
                 <video
                   v-show="videoMode !== 'mjpeg'"
                   ref="webrtcVideoRef"
-                  class="size-full object-contain pointer-events-none"
+                  class="size-full object-contain pointer-events-none transition-opacity ease-out"
+                  :class="videoFrameReady ? 'opacity-100 duration-700' : 'opacity-0 duration-150'"
                   autoplay
                   playsinline
                   @loadedmetadata="handleWebRTCVideoResize"
@@ -3437,7 +3453,7 @@ onUnmounted(() => {
               </g>
             </svg>
           </div>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
               v-if="videoLoading && !videoError"
               class="kvm-connect absolute inset-0 flex flex-col items-center justify-center gap-y-1 px-4 text-center transition-opacity duration-300"
@@ -3465,7 +3481,7 @@ onUnmounted(() => {
               </p>
             </div>
           </Transition>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
               v-if="showSignalOverlay && !videoError && !videoLoading && signalOverlayInfo.title"
               class="absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300 pointer-events-none"
@@ -3495,7 +3511,7 @@ onUnmounted(() => {
               </div>
             </div>
           </Transition>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
               v-if="videoError && !videoLoading"
               class="kvm-connect absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300"
