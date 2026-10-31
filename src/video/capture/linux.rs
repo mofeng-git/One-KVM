@@ -75,6 +75,8 @@ pub struct CaptureStream {
     stride: u32,
     timeout: Duration,
     mappings: Vec<Vec<PlaneMapping>>,
+    #[cfg(feature = "rkmpp")]
+    dmabuf_cache: Option<Vec<OwnedFd>>,
     subdev_fd: Option<File>,
     bridge_kind: Option<CsiBridgeKind>,
     native_hdmirx_state: Option<NativeHdmirxState>,
@@ -360,6 +362,8 @@ impl CaptureStream {
             stride,
             timeout,
             mappings,
+            #[cfg(feature = "rkmpp")]
+            dmabuf_cache: None,
             subdev_fd: subdev_fd_opt,
             bridge_kind: bridge.kind,
             native_hdmirx_state,
@@ -538,6 +542,23 @@ impl CaptureStream {
                 io::Error::new(io::ErrorKind::InvalidData, "Invalid capture buffer index").into(),
             );
         }
+        // dma-buf 导出复用：打开时导出一次，之后每帧只 dup，省掉每帧一次 EXPBUF。
+        // 老 BSP 若出现画面异常，可设 ONE_KVM_DMABUF_REUSE=0 回到每帧重新导出。
+        let cached_fd = if self.native_hdmirx_state.is_none()
+            && std::env::var("ONE_KVM_DMABUF_REUSE").as_deref() != Ok("0")
+        {
+            if self.dmabuf_cache.is_none() {
+                if let Ok(list) = self.export_dmabufs() {
+                    self.dmabuf_cache = Some(list.into_iter().map(|(fd, _)| fd).collect());
+                }
+            }
+            self.dmabuf_cache
+                .as_ref()
+                .and_then(|fds| fds.get(index))
+                .and_then(|fd| fd.try_clone().ok())
+        } else {
+            None
+        };
         // 无信号时把彩条写进这块采集缓冲（DMA 路径同样要看得到提示）
         if let Some(data) = overlay {
             let plane = &mut self.mappings[index][0];
@@ -596,7 +617,9 @@ impl CaptureStream {
         // cache DMA attachments without usable per-frame CPU-access sync hooks.
         // A fresh export object forces a fresh device mapping of this completed
         // frame. Reuse the actual capture allocation, not a stale attachment.
-        let fresh_fd = if !native_hdmi {
+        let fresh_fd = if let Some(fd) = cached_fd {
+            Some(fd)
+        } else if !native_hdmi {
             Some(
                 ioctl::expbuf(
                     &self.fd,
