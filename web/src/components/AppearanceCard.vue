@@ -150,7 +150,7 @@ async function pick(event: Event, target: 'bg' | 'ns') {
         </div>
         <div class="space-y-2">
           <p class="text-sm font-medium">无信号画面</p>
-          <p class="text-xs text-muted-foreground">没信号时替代彩条（Web / RTSP / VNC 一致）</p>
+          <p class="text-xs text-muted-foreground">没信号时替代彩条（Web / RTSP / VNC / RustDesk 一致）</p>
           <div class="flex items-center gap-2">
             <label class="cursor-pointer rounded-md border px-3 py-1.5 text-sm" :class="busy === 'ns' ? 'opacity-60' : ''">
               <input type="file" accept="image/*" class="hidden" @change="pick($event, 'ns')" />
