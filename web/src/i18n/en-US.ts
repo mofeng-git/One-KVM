@@ -212,6 +212,11 @@ export default {
     passwordTooShort: 'Password must be at least 4 characters',
     sessionExpired: 'Session expired',
     loggedInElsewhere: 'Logged in elsewhere',
+    sessionTakenOver: 'Session taken over',
+    sessionTakenOverDesc: 'Your account signed in on another device, so this session ended. Sign in again to take this device back.',
+    sessionExpiredTitle: 'Session expired',
+    sessionExpiredDesc: 'Your login has timed out. Please sign in again.',
+    signInAgain: 'Sign in again',
     forgotPassword: 'Forgot password',
     forgotPasswordHint:
       'Forgot your password? On the host running One-KVM, open a terminal and run one-kvm user set-password, then enter and confirm the new password when prompted.',

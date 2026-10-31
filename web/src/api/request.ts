@@ -1,5 +1,6 @@
 import { toast } from 'vue-sonner'
 import i18n from '@/i18n'
+import { notifySessionEnd } from '@/composables/useSessionGuard'
 
 const API_BASE = '/api'
 
@@ -203,6 +204,11 @@ export async function request<T>(
     // Handle HTTP errors (in case backend returns non-2xx)
     if (!response.ok) {
       const { message, code } = getErrorDetails(data, `HTTP ${response.status}`)
+      if (isAuthenticationIssue(response.status, message)) {
+        notifySessionEnd(
+          message.toLowerCase().includes('logged in elsewhere') ? 'taken_over' : 'expired',
+        )
+      }
       if (toastOnError && shouldShowToast(toastKey) && !isAuthenticationIssue(response.status, message)) {
         toast.error(errorTitle, {
           description: message,

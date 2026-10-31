@@ -212,6 +212,11 @@ export default {
     passwordTooShort: '密码至少需要4个字符',
     sessionExpired: '会话已过期',
     loggedInElsewhere: '已在别处登录',
+    sessionTakenOver: '会话已被接管',
+    sessionTakenOverDesc: '你的账号已在其他设备登录，当前会话已失效。重新登录会把这台设备接管回来。',
+    sessionExpiredTitle: '会话已过期',
+    sessionExpiredDesc: '登录状态已超时，请重新登录。',
+    signInAgain: '重新登录',
     forgotPassword: '忘记密码',
     forgotPasswordHint:
       '忘记密码？在运行本服务的设备上打开终端，执行 one-kvm user set-password，按提示输入并确认新密码即可重置。',
