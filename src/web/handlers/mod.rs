@@ -1,6 +1,7 @@
 pub mod config;
 pub mod devices;
 pub mod extensions;
+pub mod tailscale;
 pub mod terminal;
 
 mod account;

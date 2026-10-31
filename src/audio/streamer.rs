@@ -122,7 +122,8 @@ impl AudioStreamer {
     pub fn subscribe_opus(&self) -> mpsc::Receiver<Arc<OpusFrame>> {
         // Keep latency bounded for real-time consumers. Slow receivers lose
         // new frames instead of accumulating seconds of stale audio.
-        let (tx, rx) = mpsc::channel::<Arc<OpusFrame>>(4);
+        // 20ms 一帧：容量 16 ≈ 320ms，给 WebRTC 发送线程留出抖动余量。
+        let (tx, rx) = mpsc::channel::<Arc<OpusFrame>>(16);
         self.opus_subscribers.lock().unwrap().push(tx);
         rx
     }
@@ -303,7 +304,16 @@ impl AudioStreamer {
     ) {
         let mut subscribers = subscribers.lock().unwrap();
         subscribers.retain(|subscriber| match subscriber.try_send(frame.clone()) {
-            Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => true,
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                use std::sync::atomic::{AtomicU64, Ordering};
+                static DROPPED: AtomicU64 = AtomicU64::new(0);
+                let dropped = DROPPED.fetch_add(1, Ordering::Relaxed) + 1;
+                if dropped % 50 == 1 {
+                    warn!("Audio subscriber queue full: dropped {} opus frames total", dropped);
+                }
+                true
+            }
             Err(mpsc::error::TrySendError::Closed(_)) => false,
         });
     }
