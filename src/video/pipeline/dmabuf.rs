@@ -298,7 +298,7 @@ fn run(
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(_) => capture
                     .stream
-                    .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), |_, _, _| ())
+                    .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), None, |_, _, _| ())
                     .map(|_| Ok(Vec::new())),
                 CaptureEncoder::Copy(_) => {
                     let mut raw = buffer_pool.take(0);
@@ -311,17 +311,26 @@ fn run(
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(encoder) => {
                     let pts = pipeline.pts_ms();
+                    let mut skip_fn = |plane: &[u8]| {
+                        !pipeline.keyframe_requested.load(Ordering::Acquire)
+                            && pipeline.should_skip_static_frame(
+                                plane,
+                                config.resolution.width,
+                                config.resolution.height,
+                            )
+                    };
                     capture
                         .stream
-                        .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), |index, bytes_used, fresh_fd| {
+                        .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), Some(&mut skip_fn as &mut dyn FnMut(&[u8]) -> bool), |index, bytes_used, fresh_fd| {
                             let keyframe =
                                 pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
                             // The callback holds the dequeue lease until native encode
                             // completes (or destroys MPP on error), before QBUF.
                             unsafe { encoder.encode(index, bytes_used, fresh_fd, pts, keyframe) }
                         })
-                        .map(|(_, packet)| {
-                            packet
+                        .map(|(_, packet)| match packet {
+                            None => Ok(Vec::new()),
+                            Some(packet) => packet
                                 .map(|packet| {
                                     let data = Bytes::from(packet);
                                     let is_keyframe = match config.output_codec {
@@ -351,7 +360,7 @@ fn run(
                                         codec: config.output_codec,
                                     }]
                                 })
-                                .map_err(AppError::VideoError)
+                                .map_err(AppError::VideoError),
                         })
                 }
                 CaptureEncoder::Copy(encoder) => {

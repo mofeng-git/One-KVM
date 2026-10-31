@@ -529,11 +529,15 @@ impl CaptureStream {
     /// after the callback returns, including its error path. Consumers must end
     /// hardware access before returning; see hwcodec::rkmpp_dmabuf::encode.
     #[cfg(feature = "rkmpp")]
+    /// # 参数
+    /// - `skip_if`：静态帧判定。返回 true 时这一帧不交给编码器，
+    ///   直接把采集缓冲还回队列，返回 `(meta, None)`。
     pub(crate) fn with_next_dmabuf<T>(
         &mut self,
         overlay: Option<&[u8]>,
+        skip_if: Option<&mut dyn FnMut(&[u8]) -> bool>,
         consume: impl FnOnce(usize, usize, Option<OwnedFd>) -> T,
-    ) -> std::result::Result<(CaptureMeta, T), CaptureReadError> {
+    ) -> std::result::Result<(CaptureMeta, Option<T>), CaptureReadError> {
         let buffer = self.dequeue_buffer()?;
         let index = buffer.as_v4l2_buffer().index as usize;
         let sequence = buffer.as_v4l2_buffer().sequence as u64;
@@ -564,6 +568,26 @@ impl CaptureStream {
             let plane = &mut self.mappings[index][0];
             let n = data.len().min(plane.len());
             plane[..n].copy_from_slice(&data[..n]);
+        }
+
+        // 静态画面：内容和上一帧一模一样就不做导出/编码，缓冲直接还队列。
+        if let Some(skip) = skip_if {
+            let plane_len = self.mappings[index][0].len();
+            let skip_now = {
+                let plane: &[u8] = &self.mappings[index][0];
+                skip(plane)
+            };
+            if skip_now {
+                self.queue_buffer(index as u32)
+                    .map_err(|e| io::Error::other(e.to_string()))?;
+                return Ok((
+                    CaptureMeta {
+                        bytes_used: plane_len,
+                        sequence,
+                    },
+                    None,
+                ));
+            }
         }
 
         let expected = self.expected_capture_bytes();
@@ -645,7 +669,7 @@ impl CaptureStream {
                 bytes_used,
                 sequence,
             },
-            output,
+            Some(output),
         ))
     }
 
