@@ -35,6 +35,12 @@ const busy = ref(false)
 const loadError = ref('')
 let timer: number | undefined
 
+// 连接成功后显示「已连接到 <控制服务器>」
+const controlServerText = computed(() => {
+  const server = loginServer.value.trim() || config.value.login_server?.trim()
+  return server || 'controlplane.tailscale.com'
+})
+
 const stateText = computed(() => {
   const s = status.value
   if (!s) return '读取中…'
@@ -172,8 +178,15 @@ onUnmounted(() => {
     <CardContent class="space-y-4">
       <div class="text-sm">
         <span class="text-muted-foreground">状态：</span>
-        <span class="font-medium">{{ stateText }}</span>
-        <span v-if="status?.ip" class="ml-3 font-mono text-muted-foreground">{{ status.ip }}</span>
+        <template v-if="status?.running">
+          <span class="font-medium">已连接到</span>
+          <span class="ml-1 font-mono">{{ controlServerText }}</span>
+          <template v-if="status.ip">
+            <span class="ml-3 text-muted-foreground">ip地址：</span>
+            <span class="font-mono">{{ status.ip }}</span>
+          </template>
+        </template>
+        <span v-else class="font-medium">{{ stateText }}</span>
       </div>
 
       <p v-if="loadError" class="text-xs text-destructive">{{ loadError }}</p>
