@@ -21,7 +21,7 @@ const lockedValue = ref(1)
 
 const loadingStyles = [
   { id: 'minimal', label: '精简（点阵 + 转圈）' },
-  { id: 'branded', label: '品牌（深色 + Logo）' },
+  { id: 'branded', label: '经典（深色 + Logo）' },
   { id: 'custom', label: '自定义背景' },
 ] as const
 
