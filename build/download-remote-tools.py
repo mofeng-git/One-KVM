@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch the pinned EasyFrp, EasyTier and frp clients for full Docker images."""
+"""Fetch the pinned GOSTC, EasyFrp, EasyTier and frp clients for full Docker images."""
 import argparse
 import hashlib
 import json

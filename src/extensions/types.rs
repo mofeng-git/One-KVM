@@ -8,6 +8,7 @@ use super::software;
 #[serde(rename_all = "lowercase")]
 pub enum ExtensionId {
     Ttyd,
+    Gostc,
     Easyfrp,
     Easytier,
     Frpc,
@@ -19,7 +20,13 @@ impl ExtensionId {
     }
 
     pub fn all() -> &'static [ExtensionId] {
-        &[Self::Ttyd, Self::Easyfrp, Self::Easytier, Self::Frpc]
+        &[
+            Self::Ttyd,
+            Self::Gostc,
+            Self::Easyfrp,
+            Self::Easytier,
+            Self::Frpc,
+        ]
     }
 }
 
@@ -27,6 +34,7 @@ impl std::fmt::Display for ExtensionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Ttyd => write!(f, "ttyd"),
+            Self::Gostc => write!(f, "gostc"),
             Self::Easyfrp => write!(f, "easyfrp"),
             Self::Easytier => write!(f, "easytier"),
             Self::Frpc => write!(f, "frpc"),
@@ -40,6 +48,7 @@ impl std::str::FromStr for ExtensionId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "ttyd" => Ok(Self::Ttyd),
+            "gostc" => Ok(Self::Gostc),
             "easyfrp" => Ok(Self::Easyfrp),
             "easytier" => Ok(Self::Easytier),
             "frpc" => Ok(Self::Frpc),
@@ -76,6 +85,28 @@ impl Default for TtydConfig {
         Self {
             enabled: false,
             shell: software::default_ttyd_shell().to_string(),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GostcConfig {
+    pub enabled: bool,
+    pub addr: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub key: String,
+    pub tls: bool,
+}
+
+impl Default for GostcConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            addr: String::new(),
+            key: String::new(),
+            tls: true,
         }
     }
 }
@@ -203,6 +234,7 @@ impl Default for FrpcConfig {
 #[serde(default)]
 pub struct ExtensionsConfig {
     pub ttyd: TtydConfig,
+    pub gostc: GostcConfig,
     pub easyfrp: EasyfrpConfig,
     pub easytier: EasytierConfig,
     pub frpc: FrpcConfig,
@@ -221,6 +253,14 @@ pub struct TtydInfo {
     pub available: bool,
     pub status: ExtensionStatus,
     pub config: TtydConfig,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GostcInfo {
+    pub available: bool,
+    pub status: ExtensionStatus,
+    pub config: GostcConfig,
 }
 
 #[typeshare]
@@ -251,6 +291,7 @@ pub struct FrpcInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionsStatus {
     pub ttyd: TtydInfo,
+    pub gostc: GostcInfo,
     pub easyfrp: EasyfrpInfo,
     pub easytier: EasytierInfo,
     pub frpc: FrpcInfo,
@@ -268,11 +309,43 @@ mod tests {
     use super::{EasytierConfig, EasytierConfigMode, ExtensionsConfig};
 
     #[test]
-    fn replacing_legacy_gostc_requires_new_easyfrp_configuration() {
+    fn existing_easyfrp_config_leaves_gostc_disabled_with_tls_default() {
+        let config: ExtensionsConfig = serde_json::from_str(
+            r#"{"easyfrp":{"enabled":true,"control_urls":["wss://example.com/key"]}}"#,
+        )
+        .unwrap();
+        assert!(!config.gostc.enabled);
+        assert!(config.gostc.tls);
+        assert!(config.easyfrp.enabled);
+        assert_eq!(config.easyfrp.control_urls, ["wss://example.com/key"]);
+    }
+
+    #[test]
+    fn gostc_and_easyfrp_configs_round_trip_independently() {
+        let config: ExtensionsConfig = serde_json::from_str(
+            r#"{"gostc":{"enabled":true,"addr":"old.example.com","key":"old-key","tls":false},"easyfrp":{"enabled":true,"control_urls":["wss://example.com/new-key"]}}"#,
+        ).unwrap();
+        let saved = serde_json::to_string(&config).unwrap();
+        let restored: ExtensionsConfig = serde_json::from_str(&saved).unwrap();
+        assert!(restored.gostc.enabled);
+        assert!(!restored.gostc.tls);
+        assert_eq!(restored.gostc.key, "old-key");
+        assert!(restored.easyfrp.enabled);
+        assert_eq!(restored.easyfrp.control_urls, ["wss://example.com/new-key"]);
+    }
+
+    #[test]
+    fn legacy_gostc_configuration_is_preserved_independently_of_easyfrp() {
         let config: ExtensionsConfig = serde_json::from_str(
             r#"{"gostc":{"enabled":true,"addr":"old.example.com","key":"old-key","tls":true}}"#,
         )
         .unwrap();
+        assert!(config.gostc.enabled);
+        assert_eq!(config.gostc.addr, "old.example.com");
+        assert_eq!(config.gostc.key, "old-key");
+        assert!(config.gostc.tls);
+        let saved = serde_json::to_value(&config).unwrap();
+        assert_eq!(saved["gostc"]["key"], "old-key");
         assert!(!config.easyfrp.enabled);
         assert!(config.easyfrp.control_urls.is_empty());
     }

@@ -1,5 +1,28 @@
 {
   "tools": {
+    "gostc": {
+      "version": "v2.0.9",
+      "binaries": [
+        "gostc"
+      ],
+      "assets": {
+        "arm": {
+          "archive": "gostc_linux_arm_7.tar.gz",
+          "url": "https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_arm_7.tar.gz",
+          "sha256": "abca04c0503245ad5238d4482111b4a0ca2959daf460cd2abba47f3fce292a6b"
+        },
+        "aarch64": {
+          "archive": "gostc_linux_arm64_v8.0.tar.gz",
+          "url": "https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_arm64_v8.0.tar.gz",
+          "sha256": "2a100487a4f3ccd27ad82132c4f8e6ac253c9696428f0d3fd4c53170e1c3682e"
+        },
+        "x86_64": {
+          "archive": "gostc_linux_amd64_v1.tar.gz",
+          "url": "https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_amd64_v1.tar.gz",
+          "sha256": "6285506b54bfece2af2636ceacd4e40fefb28fcfbe1b7ba072854b08166549d7"
+        }
+      }
+    },
     "easyfrp": {
       "version": "v3.1.1",
       "binaries": [

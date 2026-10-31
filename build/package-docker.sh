@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
             echo "  # Build for current platform and load locally"
             echo "  $0 --platform linux/arm64 --load"
             echo ""
-            echo "  # Build full image (includes EasyFrp + EasyTier + frpc)"
+            echo "  # Build full image (includes GOSTC + EasyFrp + EasyTier + frpc)"
             echo "  $0 --variant full --platform linux/arm64 --load"
             echo ""
             echo "  # Build and push single platform"

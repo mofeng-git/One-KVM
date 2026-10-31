@@ -197,6 +197,13 @@ export interface TtydConfig {
 	shell: string;
 }
 
+export interface GostcConfig {
+	enabled: boolean;
+	addr: string;
+	key: string;
+	tls: boolean;
+}
+
 export interface EasyfrpConfig {
 	enabled: boolean;
 	control_urls: string[];
@@ -251,6 +258,7 @@ export interface FrpcConfig {
 
 export interface ExtensionsConfig {
 	ttyd: TtydConfig;
+	gostc: GostcConfig;
 	easyfrp: EasyfrpConfig;
 	easytier: EasytierConfig;
 	frpc: FrpcConfig;
@@ -436,6 +444,7 @@ export interface ExtensionInfo {
 
 export enum ExtensionId {
 	Ttyd = "ttyd",
+	Gostc = "gostc",
 	Easyfrp = "easyfrp",
 	Easytier = "easytier",
 	Frpc = "frpc",
@@ -452,6 +461,12 @@ export interface TtydInfo {
 	config: TtydConfig;
 }
 
+export interface GostcInfo {
+	available: boolean;
+	status: ExtensionStatus;
+	config: GostcConfig;
+}
+
 export interface EasyfrpInfo {
 	available: boolean;
 	status: ExtensionStatus;
@@ -466,6 +481,7 @@ export interface FrpcInfo {
 
 export interface ExtensionsStatus {
 	ttyd: TtydInfo;
+	gostc: GostcInfo;
 	easyfrp: EasyfrpInfo;
 	easytier: EasytierInfo;
 	frpc: FrpcInfo;
@@ -486,6 +502,13 @@ export interface FrpcConfigUpdate {
 	secret_key?: string;
 	tls?: boolean;
 	custom_toml?: string;
+}
+
+export interface GostcConfigUpdate {
+	enabled?: boolean;
+	addr?: string;
+	key?: string;
+	tls?: boolean;
 }
 
 export interface EasyfrpConfigUpdate {

@@ -26,6 +26,8 @@ import type {
   ExtensionLogs,
   TtydConfig,
   TtydConfigUpdate,
+  GostcConfig,
+  GostcConfigUpdate,
   EasyfrpConfig,
   EasyfrpConfigUpdate,
   EasytierConfig,
@@ -197,6 +199,12 @@ export const extensionsApi = {
 
   updateTtyd: (config: TtydConfigUpdate) =>
     request<TtydConfig>('/extensions/ttyd/config', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  updateGostc: (config: GostcConfigUpdate) =>
+    request<GostcConfig>('/extensions/gostc/config', {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),

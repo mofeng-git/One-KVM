@@ -2,7 +2,7 @@ use toml_edit::DocumentMut;
 
 use super::types::{
     EasyfrpConfig, EasytierConfig, EasytierConfigMode, ExtensionId, ExtensionsConfig, FrpProxyType,
-    FrpcConfig, FrpcConfigMode,
+    FrpcConfig, FrpcConfigMode, GostcConfig,
 };
 
 pub(crate) fn validate_extension_config(
@@ -11,10 +11,16 @@ pub(crate) fn validate_extension_config(
 ) -> Result<(), String> {
     match id {
         ExtensionId::Ttyd => Ok(()),
+        ExtensionId::Gostc => validate_gostc_config(&config.gostc),
         ExtensionId::Easyfrp => validate_easyfrp_config(&config.easyfrp),
         ExtensionId::Easytier => validate_easytier_config(&config.easytier),
         ExtensionId::Frpc => validate_frpc_config(&config.frpc),
     }
+}
+
+pub(crate) fn validate_gostc_config(config: &GostcConfig) -> Result<(), String> {
+    require_non_empty(config.addr.trim(), "GOSTC server address is required")?;
+    require_non_empty(config.key.as_str(), "GOSTC client key is required")
 }
 
 pub(crate) fn validate_easyfrp_config(config: &EasyfrpConfig) -> Result<(), String> {
@@ -100,6 +106,18 @@ fn validate_full_toml(extension_name: &str, config: &str) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gostc_requires_both_address_and_key() {
+        let mut config = GostcConfig::default();
+        assert!(validate_gostc_config(&config).is_err());
+        config.addr = "example.com".to_string();
+        assert!(validate_gostc_config(&config).is_err());
+        config.key = "client-key".to_string();
+        assert!(validate_gostc_config(&config).is_ok());
+        config.addr = " \t ".to_string();
+        assert!(validate_gostc_config(&config).is_err());
+    }
 
     #[test]
     fn easyfrp_accepts_documented_control_protocols() {
