@@ -69,6 +69,7 @@ import {
   KeyRound,
   Loader2,
   Settings,
+  TriangleAlert,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -1327,6 +1328,8 @@ function handleStreamStateChanged(data: StreamStateChangedEventData) {
 }
 
 const showSignalOverlay = computed(() => streamSignalState.value !== 'ok')
+// 无信号时后端还在出彩条帧，用半透明卡片盖在彩条上；其余状态没有画面，直接铺整块状态底板
+const isNoSignalOverlay = computed(() => streamSignalState.value === 'no_signal')
 
 const signalOverlayInfo = computed(() => {
   const reason = streamSignalReason.value
@@ -3464,54 +3467,55 @@ onUnmounted(() => {
           </Transition>
           <Transition name="fade">
             <div
-              v-if="showSignalOverlay && !videoError && !videoLoading"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 transition-opacity duration-300 pointer-events-none"
-              :class="{
-                'bg-black/80 backdrop-blur-sm': signalOverlayInfo.tone === 'error',
-                'bg-black/70 backdrop-blur-sm': signalOverlayInfo.tone !== 'error',
-              }"
+              v-if="showSignalOverlay && !videoError && !videoLoading && signalOverlayInfo.title"
+              class="absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300 pointer-events-none"
+              :class="{ 'kvm-connect': !isNoSignalOverlay }"
             >
-              <MonitorOff
-                class="size-10 sm:size-16"
-                :class="{
-                  'text-slate-200': signalOverlayInfo.tone === 'info',
-                  'text-red-300': signalOverlayInfo.tone === 'error',
-                }"
-              />
-              <div class="text-center max-w-md">
-                <p
-                  class="font-semibold text-sm sm:text-lg text-white"
-                >{{ signalOverlayInfo.title }}</p>
-                <p
-                  class="text-xs sm:text-sm mt-1 sm:mt-2"
-                  :class="{
-                    'text-slate-200/80': signalOverlayInfo.tone === 'info',
-                    'text-red-100/80': signalOverlayInfo.tone === 'error',
-                  }"
-                >{{ signalOverlayInfo.detail }}</p>
-                <p
-                  v-if="signalOverlayInfo.hint"
-                  class="text-[11px] sm:text-xs mt-2 text-white/50"
-                >{{ signalOverlayInfo.hint }}</p>
+              <div
+                class="w-full max-w-md"
+                :class="isNoSignalOverlay
+                  ? 'rounded-xl border border-slate-900/10 bg-white/90 p-5 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/85'
+                  : ''"
+              >
+                <MonitorOff
+                  class="size-8 sm:size-9"
+                  :class="signalOverlayInfo.tone === 'error'
+                    ? 'text-red-500 dark:text-red-400'
+                    : 'text-slate-400 dark:text-slate-500'"
+                />
+                <p class="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">
+                  {{ signalOverlayInfo.title }}
+                </p>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  {{ signalOverlayInfo.detail }}
+                </p>
+                <p v-if="signalOverlayInfo.hint" class="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {{ signalOverlayInfo.hint }}
+                </p>
               </div>
             </div>
           </Transition>
           <Transition name="fade">
             <div
               v-if="videoError && !videoLoading"
-              class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-white gap-4 transition-opacity duration-300 p-4"
+              class="kvm-connect absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300"
             >
-              <MonitorOff class="size-10 sm:size-16 text-slate-400" />
-              <div class="text-center max-w-md px-2">
-                <p class="font-medium text-sm sm:text-lg mb-1 sm:mb-2">{{ t('console.connectionFailed') }}</p>
-                <p class="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">{{ t('console.connectionFailedDesc') }}</p>
-                <div v-if="videoErrorMessage" class="bg-slate-800/60 rounded-lg p-3 text-left">
-                  <p class="text-xs text-slate-400 mb-1">{{ t('console.errorDetails') }}:</p>
-                  <p class="text-sm text-slate-300 font-mono break-all">{{ videoErrorMessage }}</p>
+              <div class="w-full max-w-md">
+                <TriangleAlert class="size-8 text-amber-500 sm:size-9 dark:text-amber-400" />
+                <p class="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">
+                  {{ t('console.connectionFailed') }}
+                </p>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  {{ t('console.connectionFailedDesc') }}
+                </p>
+                <div
+                  v-if="videoErrorMessage"
+                  class="mt-3 rounded-lg border border-slate-900/10 bg-black/[0.03] p-3 dark:border-white/10 dark:bg-white/5"
+                >
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('console.errorDetails') }}</p>
+                  <p class="mt-1 font-mono text-xs break-all text-slate-700 dark:text-slate-300">{{ videoErrorMessage }}</p>
                 </div>
-              </div>
-              <div class="flex gap-2">
-                <Button variant="secondary" size="sm" @click="reloadPage">
+                <Button variant="secondary" size="sm" class="mt-4" @click="reloadPage">
                   <RefreshCw class="size-4 mr-2" />
                   {{ t('console.reconnect') }}
                 </Button>
