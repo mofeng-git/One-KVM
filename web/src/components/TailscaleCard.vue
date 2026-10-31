@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Play, RefreshCw, Square } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+
+const { t } = useI18n()
 
 interface TsStatus {
   installed: boolean
@@ -28,15 +32,15 @@ const authKey = ref('')
 const loginServer = ref('')
 const hostname = ref('')
 const busy = ref(false)
-let timer: number | undefined
-
-const loaded = ref(false)
 const loadError = ref('')
+let timer: number | undefined
 
 const stateText = computed(() => {
   const s = status.value
   if (!s) return '读取中…'
   if (!s.installed) return '未安装'
+  // 开关关闭时守护进程可能还在跑（只是下线），统一显示未连接
+  if (!config.value.enabled) return '未连接'
   switch (s.state) {
     case 'Running':
       return '已连接'
@@ -46,7 +50,10 @@ const stateText = computed(() => {
       return '启动中'
     case 'Stopped':
     case 'NoState':
+    case 'daemon_stopped':
       return '未连接'
+    case 'error':
+      return '读取状态失败'
     default:
       return s.state
   }
@@ -60,19 +67,18 @@ async function load() {
       return
     }
     if (!res.ok) {
-      loadError.value = '读取失败（HTTP ' + res.status + '）'
+      loadError.value = `读取失败（HTTP ${res.status}）`
       return
     }
     const data = await res.json()
     loadError.value = ''
-    loaded.value = true
     status.value = data.status
     config.value = data.config
     loginServer.value = data.config.login_server || ''
     hostname.value = data.config.hostname || ''
   }
   catch (error) {
-    loadError.value = '读取失败：' + String(error)
+    loadError.value = `读取失败：${String(error)}`
   }
 }
 
@@ -90,14 +96,14 @@ async function patch(body: Record<string, unknown>) {
     await load()
   }
   catch (error) {
-    toast.error('操作失败', { description: String(error) })
+    toast.error(t('common.save') + '失败', { description: String(error) })
   }
   finally {
     busy.value = false
   }
 }
 
-async function enable() {
+async function start() {
   await patch({
     enabled: true,
     auth_key: authKey.value.trim() || undefined,
@@ -107,8 +113,18 @@ async function enable() {
   authKey.value = ''
 }
 
-async function disable() {
+async function stop() {
   await patch({ enabled: false })
+}
+
+async function save() {
+  await patch({
+    auth_key: authKey.value.trim() || undefined,
+    login_server: loginServer.value.trim(),
+    hostname: hostname.value.trim(),
+  })
+  authKey.value = ''
+  toast.success(t('common.save'))
 }
 
 function openLogin() {
@@ -131,19 +147,33 @@ onUnmounted(() => {
   <Card>
     <CardHeader class="settings-card-heading">
       <CardTitle>Tailscale</CardTitle>
+      <div class="settings-card-actions">
+        <div v-if="status?.installed !== false" class="settings-service-actions">
+          <Button variant="outline" size="sm" :disabled="busy || config.enabled" @click="start()">
+            <Play class="size-4 mr-1" />
+            {{ t('extensions.start') }}
+          </Button>
+          <Button variant="outline" size="sm" :disabled="busy || !config.enabled" @click="stop()">
+            <Square class="size-4 mr-1" />
+            {{ t('extensions.stop') }}
+          </Button>
+        </div>
+        <Button variant="ghost" size="sm" :disabled="busy" @click="load()">
+          <RefreshCw class="size-4 mr-1" />
+          刷新
+        </Button>
+        <div class="settings-save-action">
+          <Button size="sm" :disabled="busy" @click="save()">
+            {{ t('common.save') }}
+          </Button>
+        </div>
+      </div>
     </CardHeader>
     <CardContent class="space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="text-sm">
-          <span class="text-muted-foreground">状态：</span>
-          <span class="font-medium">{{ stateText }}</span>
-          <span v-if="status?.ip" class="ml-3 font-mono text-muted-foreground">{{ status.ip }}</span>
-        </div>
-        <div class="flex gap-2">
-          <Button size="sm" :disabled="busy || config.enabled" @click="enable()">启用</Button>
-          <Button size="sm" variant="outline" :disabled="busy || !config.enabled" @click="disable()">关闭</Button>
-          <Button size="sm" variant="ghost" :disabled="busy" @click="load()">刷新</Button>
-        </div>
+      <div class="text-sm">
+        <span class="text-muted-foreground">状态：</span>
+        <span class="font-medium">{{ stateText }}</span>
+        <span v-if="status?.ip" class="ml-3 font-mono text-muted-foreground">{{ status.ip }}</span>
       </div>
 
       <p v-if="loadError" class="text-xs text-destructive">{{ loadError }}</p>
@@ -152,7 +182,7 @@ onUnmounted(() => {
         设备上没有 /usr/bin/tailscale，请先在镜像里安装 tailscale。
       </p>
 
-      <div v-if="config.enabled" class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1">
           <Label class="text-xs">Auth Key（留空则生成登录链接）</Label>
           <Input v-model="authKey" type="password" placeholder="tskey-auth-..." />
@@ -164,11 +194,6 @@ onUnmounted(() => {
         <div class="space-y-1">
           <Label class="text-xs">主机名（可选）</Label>
           <Input v-model="hostname" :placeholder="status?.hostname || 'one-kvm'" />
-        </div>
-        <div class="flex items-end">
-          <Button size="sm" variant="outline" :disabled="busy" @click="patch({ auth_key: authKey.trim() || undefined, login_server: loginServer.trim(), hostname: hostname.trim() })">
-            保存认证信息
-          </Button>
         </div>
       </div>
 

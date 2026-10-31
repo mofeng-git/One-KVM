@@ -183,6 +183,13 @@ impl RuntimeBuilder {
         let extension_config = config_store.get();
         extensions.start_enabled(&extension_config.extensions).await;
 
+        // Tailscale 是常驻守护进程 + CLI，走自己的应用逻辑（开机按配置自动上线）
+        if extension_config.extensions.tailscale.enabled {
+            if let Err(error) = crate::tailscale::apply(&extension_config.extensions.tailscale).await {
+                tracing::warn!("启动 Tailscale 失败: {error}");
+            }
+        }
+
         state.publish_device_info().await;
         let supervisor = RuntimeSupervisor::start(state.clone(), events, extensions, config_store);
 

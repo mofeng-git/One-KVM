@@ -103,7 +103,14 @@ pub async fn status() -> TailscaleStatus {
                 status.login_url = login_url();
             }
         }
-        Err(error) => status.state = format!("error: {error}"),
+        Err(error) => {
+            if error.contains("failed to connect to local tailscaled") {
+                status.state = "daemon_stopped".to_string();
+            } else {
+                status.state = "error".to_string();
+                tracing::warn!("读取 Tailscale 状态失败: {error}");
+            }
+        }
     }
 
     status
@@ -149,11 +156,8 @@ pub async fn apply(config: &TailscaleConfig) -> Result<(), String> {
     }
 
     if !config.enabled {
+        // 只下线，不停止守护进程：停掉后连状态都读不到，开关就会来回抽风
         let _ = run(&["down"]).await;
-        let _ = Command::new("systemctl")
-            .args(["stop", "tailscaled"])
-            .status()
-            .await;
         set_login_url(None);
         return Ok(());
     }

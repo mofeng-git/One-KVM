@@ -232,6 +232,7 @@ impl Default for FrpcConfig {
 /// Tailscale：委托系统 tailscaled 服务，one-kvm 只保存开关和认证信息
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TailscaleConfig {
     pub enabled: bool,
     /// 认证密钥（Auth Key）。留空则改走登录链接流程。
