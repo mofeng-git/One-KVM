@@ -30,6 +30,9 @@ const hostname = ref('')
 const busy = ref(false)
 let timer: number | undefined
 
+const loaded = ref(false)
+const loadError = ref('')
+
 const stateText = computed(() => {
   const s = status.value
   if (!s) return '读取中…'
@@ -52,15 +55,24 @@ const stateText = computed(() => {
 async function load() {
   try {
     const res = await fetch('/api/extensions/tailscale', { credentials: 'include' })
-    if (!res.ok) return
+    if (res.status === 401) {
+      loadError.value = '登录状态已过期，请重新登录'
+      return
+    }
+    if (!res.ok) {
+      loadError.value = '读取失败（HTTP ' + res.status + '）'
+      return
+    }
     const data = await res.json()
+    loadError.value = ''
+    loaded.value = true
     status.value = data.status
     config.value = data.config
     loginServer.value = data.config.login_server || ''
     hostname.value = data.config.hostname || ''
   }
-  catch {
-    // 忽略：设备可能还没升级到这个版本
+  catch (error) {
+    loadError.value = '读取失败：' + String(error)
   }
 }
 
@@ -128,10 +140,13 @@ onUnmounted(() => {
           <span v-if="status?.ip" class="ml-3 font-mono text-muted-foreground">{{ status.ip }}</span>
         </div>
         <div class="flex gap-2">
-          <Button size="sm" :disabled="busy || !status?.installed || config.enabled" @click="enable()">启用</Button>
+          <Button size="sm" :disabled="busy || config.enabled" @click="enable()">启用</Button>
           <Button size="sm" variant="outline" :disabled="busy || !config.enabled" @click="disable()">关闭</Button>
+          <Button size="sm" variant="ghost" :disabled="busy" @click="load()">刷新</Button>
         </div>
       </div>
+
+      <p v-if="loadError" class="text-xs text-destructive">{{ loadError }}</p>
 
       <p v-if="status && !status.installed" class="text-xs text-destructive">
         设备上没有 /usr/bin/tailscale，请先在镜像里安装 tailscale。
