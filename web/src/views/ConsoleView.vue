@@ -3480,10 +3480,12 @@ onUnmounted(() => {
               :class="loadingOverlayClasses"
               :style="loadingOverlayStyle"
             >
+              <div v-if="loadingStyle === 'branded'" class="kvm-connect-halo" aria-hidden="true" />
               <div v-if="loadingStyle === 'branded'" class="kvm-connect-badge">
+                <span class="kvm-connect-ring" aria-hidden="true" />
                 <BrandMark size="lg" class="size-9 sm:size-10" />
               </div>
-              <div class="mb-1 flex size-12 items-center justify-center">
+              <div v-else class="mb-1 flex size-12 items-center justify-center">
                 <Spinner
                   class="size-8"
                   :class="loadingOnDark ? 'text-white/90' : 'text-blue-800 dark:text-blue-200'"
@@ -3503,7 +3505,8 @@ onUnmounted(() => {
             <div
               v-if="showSignalOverlay && !videoError && !videoLoading && signalOverlayInfo.title"
               class="absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300 pointer-events-none"
-              :class="{ 'kvm-connect': !isNoSignalOverlay }"
+              :class="[{ 'kvm-connect': !isNoSignalOverlay }, isNoSignalOverlay ? {} : loadingOverlayClasses]"
+              :style="isNoSignalOverlay ? undefined : loadingOverlayStyle"
             >
               <div
                 class="w-full max-w-md"
@@ -3533,21 +3536,41 @@ onUnmounted(() => {
             <div
               v-if="videoError && !videoLoading"
               class="kvm-connect absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300"
+              :class="loadingOverlayClasses"
+              :style="loadingOverlayStyle"
             >
               <div class="w-full max-w-md">
-                <TriangleAlert class="size-8 text-amber-500 sm:size-9 dark:text-amber-400" />
-                <p class="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">
+                <TriangleAlert
+                  class="size-8 sm:size-9"
+                  :class="loadingOnDark ? 'text-amber-300' : 'text-amber-500 dark:text-amber-400'"
+                />
+                <p
+                  class="mt-3 text-lg font-semibold sm:text-xl"
+                  :class="loadingOnDark ? 'text-white' : 'text-slate-900 dark:text-slate-100'"
+                >
                   {{ t('console.connectionFailed') }}
                 </p>
-                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                <p
+                  class="mt-2 text-sm leading-6"
+                  :class="loadingOnDark ? 'text-white/75' : 'text-slate-600 dark:text-slate-300'"
+                >
                   {{ t('console.connectionFailedDesc') }}
                 </p>
                 <div
                   v-if="videoErrorMessage"
-                  class="mt-3 rounded-lg border border-slate-900/10 bg-black/[0.03] p-3 dark:border-white/10 dark:bg-white/5"
+                  class="mt-3 rounded-lg border p-3"
+                  :class="loadingOnDark
+                    ? 'border-white/15 bg-white/10'
+                    : 'border-slate-900/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/5'"
                 >
-                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ t('console.errorDetails') }}</p>
-                  <p class="mt-1 font-mono text-xs break-all text-slate-700 dark:text-slate-300">{{ videoErrorMessage }}</p>
+                  <p
+                    class="text-xs"
+                    :class="loadingOnDark ? 'text-white/60' : 'text-slate-500 dark:text-slate-400'"
+                  >{{ t('console.errorDetails') }}</p>
+                  <p
+                    class="mt-1 font-mono text-xs break-all"
+                    :class="loadingOnDark ? 'text-white/85' : 'text-slate-700 dark:text-slate-300'"
+                  >{{ videoErrorMessage }}</p>
                 </div>
                 <Button variant="secondary" size="sm" class="mt-4" @click="reloadPage">
                   <RefreshCw class="size-4 mr-2" />

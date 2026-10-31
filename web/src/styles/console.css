@@ -221,3 +221,61 @@
   background: rgb(255 255 255 / 6%);
   box-shadow: 0 12px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
 }
+
+/* 品牌加载样式：徽标外一圈旋转弧 + 呼吸光晕（最早那版） */
+.kvm-connect-halo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: min(62vw, 460px);
+  height: min(62vw, 460px);
+  margin: auto;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(59 130 246 / 24%) 0%, rgb(59 130 246 / 6%) 42%, transparent 68%);
+  filter: blur(6px);
+  pointer-events: none;
+  animation: kvm-connect-breathe 4.5s ease-in-out infinite;
+}
+
+.kvm-connect-ring {
+  position: absolute;
+  inset: -11px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 55deg,
+    rgb(96 165 250 / 85%) 130deg,
+    transparent 205deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: kvm-connect-spin 1.6s linear infinite;
+}
+
+@keyframes kvm-connect-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes kvm-connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-connect-halo,
+  .kvm-connect-ring {
+    animation: none;
+  }
+}
