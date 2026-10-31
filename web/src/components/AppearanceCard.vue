@@ -49,7 +49,13 @@ const register = ref('0x1F87')
 const lockedValue = ref(1)
 const vid = ref('345f')
 const pid = ref('')
-const readResult = ref<{ ok: boolean; node?: string; raw?: number; error?: string } | null>(null)
+const readResult = ref<{
+  ok: boolean
+  node?: string
+  values?: number[]
+  distinct?: Array<{ value: number; count: number }>
+  error?: string
+} | null>(null)
 const reading = ref(false)
 
 const currentModel = computed<ChipModel>(() => chipModels.find(m => m.id === modelId.value) ?? chipModels[0]!)
@@ -156,7 +162,7 @@ async function readSignal() {
   reading.value = true
   readResult.value = null
   try {
-    const res = await fetch('/api/signal/read', { credentials: 'include' })
+    const res = await fetch('/api/signal/sample', { credentials: 'include' })
     readResult.value = await res.json()
   } catch (error) {
     readResult.value = { ok: false, error: String(error) }
@@ -164,6 +170,18 @@ async function readSignal() {
     reading.value = false
   }
 }
+
+function hex(value: number) {
+  return '0x' + value.toString(16).toUpperCase().padStart(2, '0')
+}
+
+const readSummary = computed(() => {
+  const result = readResult.value
+  if (!result?.ok || !result.distinct) return ''
+  const parts = result.distinct.map(item => `${hex(item.value)} ×${item.count}`)
+  const stable = result.distinct.length === 1
+  return `${parts.join(' / ')}　${stable ? '（稳定）' : '（不稳定，不能用作判据）'}`
+})
 
 function downscale(file: File, maxWidth: number, quality: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -318,12 +336,11 @@ async function pick(event: Event, target: 'bg' | 'ns') {
 
           <div class="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="outline" :disabled="reading" @click="readSignal()">
-              {{ reading ? '读取中…' : '读取一次' }}
+              {{ reading ? '读取中…' : '连续读取 10 次' }}
             </Button>
             <span v-if="readResult" class="text-xs">
               <template v-if="readResult.ok">
-                {{ readResult.node }} · 0x{{ (readResult.raw ?? 0).toString(16).toUpperCase().padStart(2, '0') }}
-                <span class="text-muted-foreground">（十进制 {{ readResult.raw }}）</span>
+                {{ readResult.node }} · {{ readSummary }}
               </template>
               <template v-else>{{ readResult.error }}</template>
             </span>

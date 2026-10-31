@@ -57,6 +57,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(handlers::get_appearance).put(handlers::put_appearance),
         )
         .route("/signal/read", get(handlers::read_signal))
+        .route("/signal/sample", get(handlers::sample_signal))
         .route("/auth/logout", post(handlers::logout))
         .route("/auth/check", get(handlers::auth_check))
         .route("/auth/password", post(handlers::change_password))

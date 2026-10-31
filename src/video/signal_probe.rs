@@ -67,6 +67,11 @@ pub fn read_once() -> Result<(String, u8), String> {
     imp::read_once()
 }
 
+/// 连续读多次，用于判断这个寄存器是否稳定（设置页"读取 10 次"用）。
+pub fn read_sample(count: usize) -> Result<(String, Vec<u8>), String> {
+    imp::read_sample(count)
+}
+
 /// 解析后的探针配置
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ProbeConfig {
@@ -179,6 +184,29 @@ mod imp {
             return Err(std::io::Error::last_os_error());
         }
         Ok(get[4])
+    }
+
+    pub(super) fn read_sample(count: usize) -> Result<(String, Vec<u8>), String> {
+        let cfg = current_config();
+        if cfg.mode == ProbeMode::Off {
+            return Err("当前设置为“关闭检测”".to_string());
+        }
+        let node = find_node(&cfg)
+            .ok_or_else(|| format!("没有找到匹配的 HID 设备（vid={:04X?}）", cfg.vid))?;
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .open(&node)
+            .map_err(|e| format!("打开 {node} 失败: {e}"))?;
+        let mut values = Vec::with_capacity(count);
+        for _ in 0..count.clamp(1, 50) {
+            match read_register(&file, cfg.register) {
+                Ok(v) => values.push(v),
+                Err(e) => return Err(format!("读寄存器 0x{:04X} 失败: {e}", cfg.register)),
+            }
+            std::thread::sleep(Duration::from_millis(60));
+        }
+        Ok((node, values))
     }
 
     pub(super) fn read_once() -> Result<(String, u8), String> {
@@ -312,6 +340,10 @@ mod imp {
     }
 
     pub(super) fn read_once() -> Result<(String, u8), String> {
+        Err("仅支持 Linux".to_string())
+    }
+
+    pub(super) fn read_sample(_count: usize) -> Result<(String, Vec<u8>), String> {
         Err("仅支持 Linux".to_string())
     }
 }

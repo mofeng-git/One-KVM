@@ -15,6 +15,28 @@ pub async fn read_signal() -> Json<serde_json::Value> {
     }
 }
 
+/// 连续读 10 次，返回取值分布，用来判断寄存器是否稳定
+pub async fn sample_signal() -> Json<serde_json::Value> {
+    match crate::video::signal_probe::read_sample(10) {
+        Ok((node, values)) => {
+            let mut counts: Vec<(u8, usize)> = Vec::new();
+            for value in &values {
+                match counts.iter_mut().find(|(v, _)| v == value) {
+                    Some((_, n)) => *n += 1,
+                    None => counts.push((*value, 1)),
+                }
+            }
+            Json(serde_json::json!({
+                "ok": true,
+                "node": node,
+                "values": values,
+                "distinct": counts.iter().map(|(v, n)| serde_json::json!({"value": v, "count": n})).collect::<Vec<_>>(),
+            }))
+        }
+        Err(error) => Json(serde_json::json!({"ok": false, "error": error})),
+    }
+}
+
 pub async fn put_appearance(
     Json(req): Json<crate::appearance::AppearanceSettings>,
 ) -> Result<Json<crate::appearance::AppearanceSettings>, (StatusCode, String)> {
