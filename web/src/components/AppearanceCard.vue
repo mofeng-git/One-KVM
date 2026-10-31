@@ -18,6 +18,8 @@ const busy = ref<'bg' | 'ns' | null>(null)
 const detectEnabled = ref(true)
 const register = ref('0x1F87')
 const lockedValue = ref(1)
+// 非零即视为有信号（像素时钟类判据）
+const nonzero = ref(false)
 
 const loadingStyles = [
   { id: 'minimal', label: '精简（点阵 + 转圈）' },
@@ -35,6 +37,7 @@ function syncFromSettings() {
   detectEnabled.value = preset !== 'off'
   if (signal.register) register.value = signal.register
   if (typeof signal.locked_value === 'number') lockedValue.value = signal.locked_value
+  nonzero.value = !!signal.nonzero
 }
 
 onMounted(async () => {
@@ -58,6 +61,7 @@ async function save() {
               preset: 'custom',
               register: register.value || null,
               locked_value: lockedValue.value,
+              nonzero: nonzero.value,
             }
           : { preset: 'off' },
       }),
@@ -177,14 +181,20 @@ async function pick(event: Event, target: 'bg' | 'ns') {
           </div>
         </div>
 
-        <div v-if="detectEnabled" class="grid gap-2 sm:grid-cols-2">
-          <label class="text-xs">
-            寄存器
-            <input v-model="register" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
-          </label>
-          <label class="text-xs">
-            有信号时的读数
-            <input v-model.number="lockedValue" type="number" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
+        <div v-if="detectEnabled" class="space-y-2">
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label class="text-xs">
+              寄存器
+              <input v-model="register" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
+            </label>
+            <label v-if="!nonzero" class="text-xs">
+              有信号时的读数
+              <input v-model.number="lockedValue" type="number" class="mt-1 w-full rounded border bg-transparent px-2 py-1 font-mono text-sm" />
+            </label>
+          </div>
+          <label class="flex items-center gap-2 text-xs">
+            <input v-model="nonzero" type="checkbox" class="h-4 w-4" />
+            <span>非零即视为有信号（像素时钟类判据，换分辨率不会误判）</span>
           </label>
         </div>
         <p v-else class="text-xs text-muted-foreground">已关闭：任何情况下都不会显示彩条/无信号画面。</p>

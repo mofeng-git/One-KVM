@@ -80,6 +80,8 @@ pub(crate) struct ProbeConfig {
     pub pid: Option<u16>,
     pub register: u16,
     pub locked_value: u8,
+    /// 非零即视为有信号
+    pub nonzero: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,6 +121,7 @@ pub(crate) fn current_config() -> ProbeConfig {
             .locked_value
             .map(|v| v as u8)
             .unwrap_or(DEFAULT_LOCKED_VALUE),
+        nonzero: signal.nonzero.unwrap_or(false),
     }
 }
 
@@ -285,7 +288,12 @@ mod imp {
                                 }
                                 if config.mode == ProbeMode::Custom {
                                     // 自定义模式：等于设定值就是"有信号"
-                                    locked.store(value == config.locked_value, Ordering::Relaxed);
+                                    let has_signal = if config.nonzero {
+                                        value != 0
+                                    } else {
+                                        value == config.locked_value
+                                    };
+                                    locked.store(has_signal, Ordering::Relaxed);
                                     invalid = 0;
                                 } else {
                                     // auto 模式：只认 0/1

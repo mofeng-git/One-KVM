@@ -22,6 +22,8 @@ pub struct SignalProbeSettings {
     pub register: Option<String>,
     /// 有信号时寄存器的读数
     pub locked_value: Option<u32>,
+    /// 非零即视为有信号（像素时钟类判据，换分辨率不会误判）
+    pub nonzero: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
