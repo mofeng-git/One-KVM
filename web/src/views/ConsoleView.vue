@@ -22,7 +22,7 @@ import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
 import { executeKeyboardShortcut, type KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import { toast } from 'vue-sonner'
-import { cn, generateUUID } from '@/lib/utils'
+import { generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
 import { getHidStatus } from '@/lib/hidStatus'
 import { videoDebugLog } from '@/lib/debugLog'
@@ -3437,48 +3437,28 @@ onUnmounted(() => {
           <Transition name="fade">
             <div
               v-if="videoLoading && !videoError"
-              class="kvm-connect absolute inset-0 flex flex-col items-center justify-center overflow-hidden px-6 text-center transition-opacity duration-300"
+              class="kvm-connect absolute inset-0 flex flex-col items-center justify-center gap-y-1 px-4 text-center transition-opacity duration-300"
             >
-              <div class="kvm-connect-grid" aria-hidden="true" />
-              <div class="kvm-connect-halo" aria-hidden="true" />
-
-              <div class="kvm-connect-badge">
-                <span class="kvm-connect-ring" aria-hidden="true" />
-                <BrandMark size="lg" class="size-8 sm:size-11" />
+              <div class="flex size-12 items-center justify-center">
+                <svg
+                  class="size-8 shrink-0 animate-spin p-0.5 text-blue-800 dark:text-blue-200"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  role="status"
+                  aria-label="Loading"
+                >
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
               </div>
-
-              <p class="relative z-[1] flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-sm font-medium tracking-wide text-white/85 sm:text-lg">
-                <span>{{ webrtcLoadingMessage }}</span>
+              <p class="text-sm text-slate-600 dark:text-slate-300">
+                {{ webrtcLoadingMessage }}
                 <span
                   v-if="connectProgress"
-                  class="text-white/45 text-xs sm:text-sm font-normal tabular-nums"
+                  class="ml-1 tabular-nums text-slate-400 dark:text-slate-500"
                   :aria-label="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
-                >
-                  {{ connectProgress.current }}/{{ connectProgress.total }}
-                </span>
-              </p>
-              <div
-                v-if="connectProgress"
-                class="relative z-[1] mt-2 sm:mt-3 flex items-center gap-1"
-                role="progressbar"
-                :aria-valuenow="connectProgress.current"
-                :aria-valuemin="0"
-                :aria-valuemax="connectProgress.total"
-                :aria-valuetext="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
-              >
-                <span
-                  v-for="i in connectProgress.total"
-                  :key="i"
-                  :class="cn(
-                    'h-1 rounded-full transition-all duration-300',
-                    i <= connectProgress.current
-                      ? 'w-6 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.55)] sm:w-8'
-                      : 'w-3 bg-white/15 sm:w-4',
-                  )"
-                />
-              </div>
-              <p class="relative z-[1] text-white/35 text-[11px] sm:text-xs mt-2">
-                {{ t('console.pleaseWait') }}
+                >{{ connectProgress.current }}/{{ connectProgress.total }}</span>
               </p>
             </div>
           </Transition>
