@@ -233,9 +233,6 @@ onUnmounted(() => {
           <div v-if="configMode === 'full'" class="space-y-1 sm:col-span-2">
             <Label class="text-xs">额外参数（原样追加到 tailscale up）</Label>
             <Input v-model="extraArgs" placeholder="--advertise-routes=192.168.6.0/24" />
-            <p class="text-xs text-destructive">
-              不要填 --accept-routes：接受 tailnet 下发的路由会让设备在局域网里失联。
-            </p>
           </div>
         </div>
       </div>
