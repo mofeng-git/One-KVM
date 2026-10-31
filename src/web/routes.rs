@@ -52,6 +52,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Authenticated routes (all logged-in users)
     let user_routes = Router::new()
         .route("/info", get(handlers::system_info))
+        .route(
+            "/appearance",
+            get(handlers::get_appearance).put(handlers::put_appearance),
+        )
         .route("/auth/logout", post(handlers::logout))
         .route("/auth/check", get(handlers::auth_check))
         .route("/auth/password", post(handlers::change_password))

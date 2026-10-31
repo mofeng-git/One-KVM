@@ -11,6 +11,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
+import { useAppearance } from '@/composables/useAppearance'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout } from '@/composables/useConsoleLayout'
@@ -89,6 +90,8 @@ const microphoneTransferEnabled = computed(() => (
   && uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
 ))
 const videoSession = useVideoSession()
+const { settings: appearance, load: loadAppearance } = useAppearance()
+void loadAppearance()
 
 const consoleEvents = useConsoleEvents({
   onStreamConfigChanging: handleStreamConfigChanging,
@@ -1340,6 +1343,22 @@ const isNoSignalOverlay = computed(() => (
 // 只有真正有画面时才把 video/img 淡入（JetKVM 的做法：opacity 0→1 过渡）；
 // 连接中 / 出错 / 采集本身坏掉时保持透明，露出界面底色而不是黑块。
 // 无信号但彩条还在流的情况除外——彩条本身就是要给人看的画面。
+const loadingStyle = computed(() => (appearance.value.loading_style as string) || 'minimal')
+const loadingBackground = computed(() => appearance.value.loading_background || '')
+const loadingOnDark = computed(() => (
+  loadingStyle.value === 'branded'
+  || (loadingStyle.value === 'custom' && !!loadingBackground.value)
+))
+const loadingOverlayClasses = computed(() => ({
+  'kvm-connect--branded': loadingStyle.value === 'branded',
+  'kvm-connect--image': loadingStyle.value === 'custom' && !!loadingBackground.value,
+}))
+const loadingOverlayStyle = computed(() => (
+  loadingStyle.value === 'custom' && loadingBackground.value
+    ? { backgroundImage: `url("${loadingBackground.value}")` }
+    : undefined
+))
+
 const videoFrameReady = computed(() => {
   if (videoLoading.value || videoError.value) return false
   if (streamSignalState.value === 'ok') return true
@@ -3458,11 +3477,19 @@ onUnmounted(() => {
             <div
               v-if="videoLoading && !videoError"
               class="kvm-connect absolute inset-0 flex flex-col items-center justify-center gap-y-1 px-4 text-center transition-opacity duration-300"
+              :class="loadingOverlayClasses"
+              :style="loadingOverlayStyle"
             >
-              <div class="mb-1 flex size-12 items-center justify-center">
-                <Spinner class="size-8 text-blue-800 dark:text-blue-200" />
+              <div v-if="loadingStyle === 'branded'" class="kvm-connect-badge">
+                <BrandMark size="lg" class="size-9 sm:size-10" />
               </div>
-              <p class="text-sm text-slate-600 dark:text-slate-300">
+              <div class="mb-1 flex size-12 items-center justify-center">
+                <Spinner
+                  class="size-8"
+                  :class="loadingOnDark ? 'text-white/90' : 'text-blue-800 dark:text-blue-200'"
+                />
+              </div>
+              <p class="text-sm" :class="loadingOnDark ? 'text-white/85' : 'text-slate-600 dark:text-slate-300'">
                 {{ webrtcLoadingMessage }}
                 <span
                   v-if="connectProgress"

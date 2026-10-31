@@ -284,7 +284,7 @@ fn run(
             continue;
         }
         let overlay = if !crate::video::signal_probe::hdmi_locked() {
-            Some(crate::video::test_pattern::cached_yuyv_bars(
+            Some(crate::video::test_pattern::cached_no_signal_yuyv(
                 config.resolution.width as usize,
                 config.resolution.height as usize,
             ))

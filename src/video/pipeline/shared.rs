@@ -1846,12 +1846,12 @@ impl SharedVideoPipeline {
                         let (bw, bh) = (resolution.width as usize, resolution.height as usize);
                         match pixel_format {
                             PixelFormat::Yuyv => {
-                                let bars = crate::video::test_pattern::cached_yuyv_bars(bw, bh);
+                                let bars = crate::video::test_pattern::cached_no_signal_yuyv(bw, bh);
                                 let n = bars.len().min(owned.len());
                                 owned[..n].copy_from_slice(&bars[..n]);
                             }
                             PixelFormat::Mjpeg => {
-                                let jpg = crate::video::test_pattern::cached_jpeg_bars(bw, bh);
+                                let jpg = crate::video::test_pattern::cached_no_signal_jpeg(bw, bh);
                                 if !jpg.is_empty() {
                                     owned.clear();
                                     owned.extend_from_slice(&jpg);

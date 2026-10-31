@@ -183,3 +183,41 @@
     transition-duration: 0.01s;
   }
 }
+
+/* 加载画面：品牌版 / 自定义背景版 */
+.kvm-connect--branded {
+  background: radial-gradient(115% 85% at 50% 0%, #18222f 0%, #0d141c 55%, #070a0e 100%);
+  isolation: isolate;
+}
+
+.kvm-connect--image {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  isolation: isolate;
+}
+
+.kvm-connect--image::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: rgb(7 10 14 / 45%);
+}
+
+.kvm-connect--branded > *,
+.kvm-connect--image > * {
+  position: relative;
+  z-index: 1;
+}
+
+.kvm-connect-badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 20px;
+  background: rgb(255 255 255 / 6%);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
+}
