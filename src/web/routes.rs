@@ -249,6 +249,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(handlers::extensions::get_extension_logs),
         )
         .route(
+            "/extensions/tailscale",
+            get(handlers::tailscale::get_tailscale),
+        )
+        .route(
+            "/extensions/tailscale/config",
+            patch(handlers::tailscale::update_tailscale_config),
+        )
+        .route(
             "/extensions/ttyd/config",
             patch(handlers::extensions::update_ttyd_config),
         )

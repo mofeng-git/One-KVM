@@ -39,6 +39,7 @@ pub mod rtsp;
 pub mod runtime;
 #[cfg(feature = "desktop")]
 pub mod rustdesk;
+pub mod tailscale;
 #[cfg(feature = "desktop")]
 pub mod state;
 #[cfg(feature = "desktop")]

@@ -229,6 +229,43 @@ impl Default for FrpcConfig {
     }
 }
 
+/// Tailscale：委托系统 tailscaled 服务，one-kvm 只保存开关和认证信息
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TailscaleConfig {
+    pub enabled: bool,
+    /// 认证密钥（Auth Key）。留空则改走登录链接流程。
+    #[typeshare(skip)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub auth_key: String,
+    /// 自建 Headscale 的登录服务器，留空用官方
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub login_server: String,
+    /// 在 tailnet 里显示的主机名，留空用默认
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub hostname: String,
+    /// quick（默认）| full：full 时可额外填 `tailscale up` 参数
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub config_mode: String,
+    /// 额外参数（原样追加到 tailscale up 后面）
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub extra_args: String,
+}
+
+impl Default for TailscaleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auth_key: String::new(),
+            login_server: String::new(),
+            hostname: String::new(),
+            config_mode: String::new(),
+            extra_args: String::new(),
+        }
+    }
+}
+
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -238,6 +275,7 @@ pub struct ExtensionsConfig {
     pub easyfrp: EasyfrpConfig,
     pub easytier: EasytierConfig,
     pub frpc: FrpcConfig,
+    pub tailscale: TailscaleConfig,
 }
 
 #[typeshare]

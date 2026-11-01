@@ -2,6 +2,7 @@
 import { usesCh9329, supportsOtgFunctions } from '@/lib/hidGuide'
 import '@/styles/settings.css'
 import CardTitle from '@/components/SettingsCardTitle.vue'
+import TailscaleCard from '@/components/TailscaleCard.vue'
 import SidebarMenuButton from '@/components/SettingsSidebarButton.vue'
 import AboutSystemCards from '@/components/AboutSystemCards.vue'
 import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
@@ -5260,6 +5261,8 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
             <!-- FRPC -->
+            <TailscaleCard />
+
             <Card>
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.frpc.desc')">{{

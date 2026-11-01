@@ -183,6 +183,12 @@ impl RuntimeBuilder {
         let extension_config = config_store.get();
         extensions.start_enabled(&extension_config.extensions).await;
 
+        // Tailscale 改为手动启动：配置有误（例如登录服务器不可达/下发路由）时，
+        // 开机自动上线会让设备在局域网里失联，无法再进界面修改。
+        if extension_config.extensions.tailscale.enabled {
+            tracing::info!("Tailscale 已启用，等待手动启动（设置 → 远程访问）");
+        }
+
         state.publish_device_info().await;
         let supervisor = RuntimeSupervisor::start(state.clone(), events, extensions, config_store);
 
