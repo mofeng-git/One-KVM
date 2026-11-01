@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// 75% 彩条（BT.601 limited range）的 YUV 值
-const BARS: [(u8, u8, u8); 7] = [
+/// 8 段彩条（BT.601 limited range）的 YUV 值，与采集卡无信号时的原生输出一致
+const BARS: [(u8, u8, u8); 8] = [
     (180, 128, 128), // 白
     (161, 44, 142),  // 黄
     (131, 156, 44),  // 青
@@ -12,6 +12,7 @@ const BARS: [(u8, u8, u8); 7] = [
     (84, 184, 198),  // 品红
     (65, 100, 212),  // 红
     (35, 212, 114),  // 蓝
+    (16, 128, 128),  // 黑
 ];
 
 /// 生成一帧 YUYV(4:2:2) 彩条。宽高需为偶数。
@@ -25,7 +26,7 @@ pub fn yuyv_bars(width: usize, height: usize) -> Vec<u8> {
     // 先按 x 预计算每列属于第几条
     let mut col_bar = vec![0usize; width];
     for (x, slot) in col_bar.iter_mut().enumerate() {
-        *slot = (x * 7 / width).min(6);
+        *slot = (x * BARS.len() / width).min(BARS.len() - 1);
     }
 
     for y in 0..height {
