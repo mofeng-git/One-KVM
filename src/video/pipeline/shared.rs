@@ -17,6 +17,29 @@
 //! ```
 
 use bytes::Bytes;
+
+// ---- 临时性能埋点（ONE_KVM_PROFILE=1 开启）----
+static PROF_CAP_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_CAP_N: AtomicU64 = AtomicU64::new(0);
+static PROF_ENC_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_ENC_N: AtomicU64 = AtomicU64::new(0);
+static PROF_PREP_NS: AtomicU64 = AtomicU64::new(0);
+static PROF_PREP_N: AtomicU64 = AtomicU64::new(0);
+
+fn profiling() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ONE_KVM_PROFILE").as_deref() == Ok("1"))
+}
+
+fn prof_log(label: &str, ns: &AtomicU64, n: &AtomicU64, elapsed: std::time::Duration) {
+    ns.fetch_add(elapsed.as_nanos() as u64, Ordering::Relaxed);
+    let count = n.fetch_add(1, Ordering::Relaxed) + 1;
+    if count % 60 == 0 {
+        let total = ns.swap(0, Ordering::Relaxed);
+        tracing::info!("[PROF] {} avg={:.2}ms/frame", label, total as f64 / 60.0 / 1e6);
+    }
+}
+
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::HashMap;
@@ -567,6 +590,90 @@ pub struct SharedVideoPipeline {
     device_lost_reason: ParkingMutex<Option<String>>,
     state_notifier: ParkingRwLock<Option<Arc<dyn Fn(PipelineStateNotification) + Send + Sync>>>,
     last_state_notification: ParkingMutex<Option<PipelineStateNotification>>,
+    /// 静态画面去重（ONE_KVM_SKIP_STATIC=1 开启）
+    static_skip: ParkingMutex<StaticSkipState>,
+    static_skip_enabled: AtomicBool,
+    static_skip_interval: std::time::Duration,
+    static_frames_skipped: AtomicU64,
+}
+
+/// 上一帧的指纹与真正编码的时间点
+struct StaticSkipState {
+    valid: bool,
+    hash: u64,
+    width: u32,
+    height: u32,
+    last_encoded: std::time::Instant,
+}
+
+impl StaticSkipState {
+    fn new() -> Self {
+        Self {
+            valid: false,
+            hash: 0,
+            width: 0,
+            height: 0,
+            last_encoded: std::time::Instant::now(),
+        }
+    }
+}
+
+/// 采样步长：每 N 行取一整行参与哈希（1 = 整帧）。
+/// 静止画面判定用，越小越准、越贵；默认 4（1/4 数据量）。
+fn static_skip_rows() -> usize {
+    static ROWS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *ROWS.get_or_init(|| {
+        std::env::var("ONE_KVM_SKIP_ROWS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(4)
+            .clamp(1, 64)
+    })
+}
+
+fn fnv_update(mut hash: u64, data: &[u8]) -> u64 {
+    let mut chunks = data.chunks_exact(8);
+    for chunk in &mut chunks {
+        let word = u64::from_le_bytes([
+            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+        ]);
+        hash ^= word;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    for &byte in chunks.remainder() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// 64 位 FNV-1a 指纹（按行采样，避免整帧 4MB 全扫）
+fn frame_hash(data: &[u8], height: u32) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let step = static_skip_rows();
+    let rows = height.max(1) as usize;
+    if step <= 1 || rows <= 1 || data.len() < rows {
+        return fnv_update(hash, data);
+    }
+    let row_len = data.len() / rows;
+    if row_len == 0 {
+        return fnv_update(hash, data);
+    }
+    let mut row = 0usize;
+    while row < rows {
+        let start = row * row_len;
+        let end = (start + row_len).min(data.len());
+        hash = fnv_update(hash, &data[start..end]);
+        // 末行补齐，避免漏掉最后一部分数据
+        if row + step >= rows {
+            let tail = rows * row_len;
+            if tail < data.len() {
+                hash = fnv_update(hash, &data[tail..]);
+            }
+        }
+        row += step;
+    }
+    hash
 }
 
 impl SharedVideoPipeline {
@@ -624,6 +731,22 @@ impl SharedVideoPipeline {
             device_lost_reason: ParkingMutex::new(None),
             state_notifier: ParkingRwLock::new(None),
             last_state_notification: ParkingMutex::new(None),
+            static_skip: ParkingMutex::new(StaticSkipState::new()),
+            // 默认开启：画面不变就不重复编码发送，省带宽也省 CPU。
+            // 需要关闭时设 ONE_KVM_SKIP_STATIC=0（也接受 false/off）。
+            static_skip_enabled: AtomicBool::new(
+                std::env::var("ONE_KVM_SKIP_STATIC")
+                    .map(|v| !matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off"))
+                    .unwrap_or(true),
+            ),
+            static_skip_interval: std::time::Duration::from_millis(
+                std::env::var("ONE_KVM_SKIP_STATIC_MS")
+                    .ok()
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(1000)
+                    .clamp(100, 10_000),
+            ),
+            static_frames_skipped: AtomicU64::new(0),
         });
 
         Ok(pipeline)
@@ -673,7 +796,14 @@ impl SharedVideoPipeline {
 
     /// Subscribe to encoded frames
     pub fn subscribe(&self) -> EncodedVideoFrameReceiver {
-        let (tx, rx) = mpsc::channel(1);
+        // 容量 1 会让 DMA 编码路径在消费端稍有抖动时整帧丢弃（实测帧率减半），
+        // 这里放宽到 3 帧，兼顾平滑度与延迟。
+        let depth: usize = std::env::var("ONE_KVM_FRAME_QUEUE")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(3)
+            .clamp(1, 8);
+        let (tx, rx) = mpsc::channel(depth);
         if let Some(frame) = self.bootstrap_frame.read().clone() {
             let batch: EncodedBatch = vec![frame].into();
             let _ = tx.try_send(batch);
@@ -1270,7 +1400,15 @@ impl SharedVideoPipeline {
                     pipeline
                         .encoded_input_frames
                         .fetch_add(1, Ordering::Relaxed);
+                    let prof_enc_t = if profiling() {
+                        Some(std::time::Instant::now())
+                    } else {
+                        None
+                    };
                     let encode_result = pipeline.encode_frame_sync(&mut encoder_state, &frame);
+                    if let Some(t) = prof_enc_t {
+                        prof_log("encode", &PROF_ENC_NS, &PROF_ENC_N, t.elapsed());
+                    }
 
                     match encode_result {
                         Ok(encoded_frames) => {
@@ -1559,10 +1697,18 @@ impl SharedVideoPipeline {
                     }
 
                     let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
+                    let prof_cap_t = if profiling() {
+                        Some(std::time::Instant::now())
+                    } else {
+                        None
+                    };
                     let next_result = stream
                         .as_mut()
                         .expect("stream is Some above")
                         .next_into(&mut owned);
+                    if let Some(t) = prof_cap_t {
+                        prof_log("capture", &PROF_CAP_NS, &PROF_CAP_N, t.elapsed());
+                    }
                     let meta = match next_result {
                         Ok(meta) => {
                             consecutive_timeouts = 0;
@@ -1696,6 +1842,26 @@ impl SharedVideoPipeline {
                     }
 
                     owned.truncate(frame_size);
+                    // 无 HDMI 链路时用彩条替换画面：链路状态直接读采集卡寄存器，
+                    // 与被控机输出黑色画面无关，不会误判。
+                    if !crate::video::signal_probe::hdmi_locked() {
+                        let (bw, bh) = (resolution.width as usize, resolution.height as usize);
+                        match pixel_format {
+                            PixelFormat::Yuyv => {
+                                let bars = crate::video::test_pattern::cached_no_signal_yuyv(bw, bh);
+                                let n = bars.len().min(owned.len());
+                                owned[..n].copy_from_slice(&bars[..n]);
+                            }
+                            PixelFormat::Mjpeg => {
+                                let jpg = crate::video::test_pattern::cached_no_signal_jpeg(bw, bh);
+                                if !jpg.is_empty() {
+                                    owned.clear();
+                                    owned.extend_from_slice(&jpg);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
                     capture_sequence = capture_sequence.wrapping_add(1);
                     if pipeline.snapshot_slot.pending() {
                         pipeline.snapshot_slot.publish(&VideoFrame::from_vec(
@@ -1813,11 +1979,63 @@ impl SharedVideoPipeline {
     }
 
     /// Encode a single frame (synchronous, no async locks)
+    /// 画面与上一帧完全相同、且距上次真正编码已超过间隔 -> true（跳过编码）。
+    pub(crate) fn should_skip_static_frame(&self, data: &[u8], width: u32, height: u32) -> bool {
+        if !self.static_skip_enabled.load(Ordering::Relaxed) || data.len() < 1024 {
+            return false;
+        }
+        let hash = frame_hash(data, height);
+        let now = Instant::now();
+        let mut state = self.static_skip.lock();
+        if !state.valid || state.width != width || state.height != height {
+            state.valid = true;
+            state.hash = hash;
+            state.width = width;
+            state.height = height;
+            state.last_encoded = now;
+            return false;
+        }
+        let skip = state.hash == hash
+            && now.duration_since(state.last_encoded) < self.static_skip_interval;
+        if std::env::var("ONE_KVM_SKIP_DEBUG").as_deref() == Ok("1") {
+            static DBG_N: AtomicU64 = AtomicU64::new(0);
+            let n = DBG_N.fetch_add(1, Ordering::Relaxed) + 1;
+            if n % 120 == 0 {
+                tracing::info!(
+                    "[SKIP] calls={} hash={:016x} prev={:016x} since_last={}ms skip={}",
+                    n,
+                    hash,
+                    state.hash,
+                    now.duration_since(state.last_encoded).as_millis(),
+                    skip
+                );
+            }
+        }
+        if skip {
+            return true;
+        }
+        state.hash = hash;
+        state.last_encoded = now;
+        false
+    }
+
     fn encode_frame_sync(
         &self,
         state: &mut EncoderThreadState,
         frame: &VideoFrame,
     ) -> Result<Vec<EncodedVideoFrame>> {
+        // 静态画面跳过：内容没变就不编码、不发送，客户端保持上一帧。
+        // 需要关键帧（新客户端接入/恢复）时绝不跳过。
+        if !self.keyframe_requested.load(Ordering::Acquire)
+            && self.should_skip_static_frame(
+                frame.data(),
+                frame.resolution.width,
+                frame.resolution.height,
+            )
+        {
+            self.static_frames_skipped.fetch_add(1, Ordering::Relaxed);
+            return Ok(Vec::new());
+        }
         let fps = state.fps;
         let codec = state.codec;
         let input_format = state.input_format;
@@ -1867,6 +2085,11 @@ impl SharedVideoPipeline {
             return Ok(Vec::new());
         }
 
+        let prof_prep_t = if profiling() {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
         let decoded_buf = if input_format.is_compressed() {
             let decoder = state
                 .mjpeg_decoder
@@ -1905,6 +2128,14 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
+        if let Some(t) = prof_prep_t {
+            prof_log("prep", &PROF_PREP_NS, &PROF_PREP_N, t.elapsed());
+        }
+        let prof_enc2_t = if profiling() {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
         let encode_result = if needs_yuv420p {
             // Software encoder with direct input conversion to YUV420P
             if let Some(conv) = state.yuv420p_converter.as_mut() {
@@ -1934,6 +2165,9 @@ impl SharedVideoPipeline {
             }
         };
 
+        if let Some(t) = prof_enc2_t {
+            prof_log("encode_raw", &PROF_ENC_NS, &PROF_ENC_N, t.elapsed());
+        }
         match encode_result {
             Ok(frames) => {
                 if frames.is_empty() {

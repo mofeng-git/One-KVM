@@ -10,10 +10,36 @@ export interface VideoSize {
   height: number
 }
 
+// 记住上一帧的分辨率：刷新页面时先用它铺好画面尺寸，
+// 避免等首帧期间先出现一整块撑满工作区的黑框再突然缩回。
+const SIZE_STORAGE_KEY = 'kvmLastSourceSize'
+
+function readStoredSize(): VideoSize | null {
+  try {
+    const raw = sessionStorage.getItem(SIZE_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<VideoSize> | null
+    if (!parsed || !Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return null
+    const width = Math.round(parsed.width as number)
+    const height = Math.round(parsed.height as number)
+    return width > 0 && height > 0 ? { width, height } : null
+  } catch {
+    return null
+  }
+}
+
+function storeSize(size: VideoSize) {
+  try {
+    sessionStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(size))
+  } catch {
+    // sessionStorage 不可用时忽略，仅影响刷新后的首屏尺寸
+  }
+}
+
 export function useVideoScaling(options: { rotation?: Readonly<Ref<VideoRotation>> } = {}) {
   const workspaceRef = ref<HTMLDivElement | null>(null)
   const scaleMode = ref<VideoScaleMode>('fit')
-  const sourceSize = ref<VideoSize | null>(null)
+  const sourceSize = ref<VideoSize | null>(readStoredSize())
   const rotation = options.rotation ?? ref<VideoRotation>(0)
   const { width: workspaceWidth, height: workspaceHeight } = useElementSize(workspaceRef)
 
@@ -86,6 +112,7 @@ export function useVideoScaling(options: { rotation?: Readonly<Ref<VideoRotation
     const nextSize = { width: Math.round(width), height: Math.round(height) }
     if (sourceSize.value?.width === nextSize.width && sourceSize.value.height === nextSize.height) return
     sourceSize.value = nextSize
+    storeSize(nextSize)
   }
 
   function clearSourceSize() {

@@ -4,6 +4,7 @@ pub mod extensions;
 pub mod terminal;
 
 mod account;
+mod appearance;
 mod atx_api;
 mod audio_api;
 mod auth;
@@ -20,6 +21,7 @@ mod update_api;
 mod webrtc;
 
 pub use account::*;
+pub use appearance::*;
 pub use atx_api::*;
 pub use audio_api::*;
 pub use auth::*;

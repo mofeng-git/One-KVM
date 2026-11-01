@@ -17,6 +17,14 @@ pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
     {
         return false;
     }
+    // YUYV 默认走拷贝路径：无信号彩条需要在采集帧上叠加，DMA 路径拿不到可写映射；
+    // 实测两条路径在 1080p30 下的 CPU 基本相同（76% 左右），拷贝路径不亏。
+    // 需要试 DMA 时可设 ONE_KVM_RKMPP_DMABUF_YUYV=1 打开。
+    if config.input_format == PixelFormat::Yuyv
+        && std::env::var("ONE_KVM_RKMPP_DMABUF_YUYV").as_deref() == Ok("0")
+    {
+        return false;
+    }
     let registry = EncoderRegistry::global();
     let selected = match config.encoder_backend {
         Some(backend) => registry.encoder_with_backend(config.output_codec, backend),
@@ -152,6 +160,9 @@ fn run(
     let mut idle_since: Option<Instant> = None;
     let buffer_pool = Arc::new(FrameBufferPool::new(2)); // allocated only on fallback
     let mut fps_frames = 0u32;
+    let mut fps_cap = 0u32;
+    let mut fps_drop_nores = 0u32;
+    let mut fps_errs = 0u32;
     let mut fps_start = Instant::now();
     let errors = LogThrottler::with_secs(5);
 
@@ -272,12 +283,22 @@ fn run(
             }
             continue;
         }
+        let overlay = if !crate::video::signal_probe::hdmi_locked() {
+            Some(crate::video::test_pattern::cached_no_signal_yuyv(
+                config.resolution.width as usize,
+                config.resolution.height as usize,
+            ))
+        } else {
+            None
+        };
         let reservations = pipeline.reserve_outputs();
+        fps_cap += 1;
         let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
+            fps_drop_nores += 1;
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(_) => capture
                     .stream
-                    .with_next_dmabuf(|_, _, _| ())
+                    .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), None, |_, _, _| ())
                     .map(|_| Ok(Vec::new())),
                 CaptureEncoder::Copy(_) => {
                     let mut raw = buffer_pool.take(0);
@@ -290,17 +311,26 @@ fn run(
             match capture.encoder.as_mut().expect("active encoder") {
                 CaptureEncoder::Dma(encoder) => {
                     let pts = pipeline.pts_ms();
+                    let mut skip_fn = |plane: &[u8]| {
+                        !pipeline.keyframe_requested.load(Ordering::Acquire)
+                            && pipeline.should_skip_static_frame(
+                                plane,
+                                config.resolution.width,
+                                config.resolution.height,
+                            )
+                    };
                     capture
                         .stream
-                        .with_next_dmabuf(|index, bytes_used, fresh_fd| {
+                        .with_next_dmabuf(overlay.as_ref().map(|v| v.as_slice()), Some(&mut skip_fn as &mut dyn FnMut(&[u8]) -> bool), |index, bytes_used, fresh_fd| {
                             let keyframe =
                                 pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
                             // The callback holds the dequeue lease until native encode
                             // completes (or destroys MPP on error), before QBUF.
                             unsafe { encoder.encode(index, bytes_used, fresh_fd, pts, keyframe) }
                         })
-                        .map(|(_, packet)| {
-                            packet
+                        .map(|(_, packet)| match packet {
+                            None => Ok(Vec::new()),
+                            Some(packet) => packet
                                 .map(|packet| {
                                     let data = Bytes::from(packet);
                                     let is_keyframe = match config.output_codec {
@@ -330,7 +360,7 @@ fn run(
                                         codec: config.output_codec,
                                     }]
                                 })
-                                .map_err(AppError::VideoError)
+                                .map_err(AppError::VideoError),
                         })
                 }
                 CaptureEncoder::Copy(encoder) => {
@@ -364,6 +394,7 @@ fn run(
                 );
             }
             Ok(Err(error)) => {
+                fps_errs += 1;
                 if matches!(capture.encoder, Some(CaptureEncoder::Dma(_))) {
                     warn!("RKMPP DMA encode failed; disabling DMA for this pipeline and using copy encoder: {}", error);
                     capture.fallback(&config)?;
@@ -417,9 +448,17 @@ fn run(
             }
         }
         if fps_start.elapsed() >= Duration::from_secs(1) {
-            pipeline.stats.lock().current_fps =
-                fps_frames as f32 / fps_start.elapsed().as_secs_f32();
+            let secs = fps_start.elapsed().as_secs_f32();
+            let fps = fps_frames as f32 / secs;
+            pipeline.stats.lock().current_fps = fps;
+            debug!(
+                "[DMA-STATS] enc_fps={:.1} cap_loops={} encoded={} drop_nores={} errs={}",
+                fps, fps_cap, fps_frames, fps_drop_nores, fps_errs
+            );
             fps_frames = 0;
+            fps_cap = 0;
+            fps_drop_nores = 0;
+            fps_errs = 0;
             fps_start = Instant::now();
         }
     }

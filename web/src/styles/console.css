@@ -5,10 +5,16 @@
   --console-workspace: color-mix(in srgb, var(--background) 97%, var(--foreground) 3%);
 }
 
+/* 控制台背景保留原版的点阵底纹，只换底色；铺满整个工作区，而不是只铺视频画布 */
 .login-page.dot-grid-bg,
 .console-page .dot-grid-bg {
   background-color: var(--console-workspace);
-  background-image: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
 }
 
 .login-card {
@@ -136,4 +142,140 @@
 [data-console-layout] button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+/* ── 连接中画面 ─────────────────────────────────────────────────────
+   参考 JetKVM：不铺黑底，直接用界面底色 + 细网格，中间一个转圈 + 一行浅色文字。
+   仅在 videoLoading 期间覆盖在视频区上，正常播放不显示。 */
+.kvm-connect {
+  /* 不画自己的底纹：露出工作区那层原版点阵，连接中/出错时和整页背景是连续的一张图 */
+  background-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-connect svg.animate-spin {
+    animation-duration: 3s;
+  }
+}
+
+/* 面板进出：参考 JetKVM 的 slideUpFade（轻微上浮 + 淡入） */
+.kvm-fade-enter-active {
+  transition: opacity 0.45s ease-out, transform 0.45s ease-out;
+}
+
+.kvm-fade-leave-active {
+  transition: opacity 0.28s ease-in, transform 0.28s ease-in;
+}
+
+.kvm-fade-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.kvm-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-fade-enter-active,
+  .kvm-fade-leave-active {
+    transition-duration: 0.01s;
+  }
+}
+
+/* 加载画面：品牌版 / 自定义背景版 */
+.kvm-connect--branded {
+  background: radial-gradient(115% 85% at 50% 0%, #18222f 0%, #0d141c 55%, #070a0e 100%);
+  isolation: isolate;
+}
+
+.kvm-connect--image {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  isolation: isolate;
+}
+
+.kvm-connect--image::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: rgb(7 10 14 / 45%);
+}
+
+.kvm-connect--branded > *,
+.kvm-connect--image > * {
+  position: relative;
+  z-index: 1;
+}
+
+.kvm-connect-badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 20px;
+  background: rgb(255 255 255 / 6%);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+/* 品牌加载样式：徽标外一圈旋转弧 + 呼吸光晕（最早那版） */
+.kvm-connect-halo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: min(62vw, 460px);
+  height: min(62vw, 460px);
+  margin: auto;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(59 130 246 / 24%) 0%, rgb(59 130 246 / 6%) 42%, transparent 68%);
+  filter: blur(6px);
+  pointer-events: none;
+  animation: kvm-connect-breathe 4.5s ease-in-out infinite;
+}
+
+.kvm-connect-ring {
+  position: absolute;
+  inset: -11px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 55deg,
+    rgb(96 165 250 / 85%) 130deg,
+    transparent 205deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: kvm-connect-spin 1.6s linear infinite;
+}
+
+@keyframes kvm-connect-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes kvm-connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-connect-halo,
+  .kvm-connect-ring {
+    animation: none;
+  }
 }

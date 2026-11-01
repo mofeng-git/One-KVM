@@ -11,6 +11,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
+import { useAppearance } from '@/composables/useAppearance'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout } from '@/composables/useConsoleLayout'
@@ -22,7 +23,7 @@ import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
 import { executeKeyboardShortcut, type KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import { toast } from 'vue-sonner'
-import { cn, generateUUID } from '@/lib/utils'
+import { generateUUID } from '@/lib/utils'
 import { formatFpsValue } from '@/lib/fps'
 import { getHidStatus } from '@/lib/hidStatus'
 import { videoDebugLog } from '@/lib/debugLog'
@@ -70,6 +71,7 @@ import {
   KeyRound,
   Loader2,
   Settings,
+  TriangleAlert,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -88,6 +90,8 @@ const microphoneTransferEnabled = computed(() => (
   && uacEnabled.value && configStore.hid?.backend === HidBackend.Otg
 ))
 const videoSession = useVideoSession()
+const { settings: appearance, load: loadAppearance } = useAppearance()
+void loadAppearance()
 
 const consoleEvents = useConsoleEvents({
   onStreamConfigChanging: handleStreamConfigChanging,
@@ -144,7 +148,6 @@ const {
   containerStyle: videoContainerStyle,
   contentStyle: videoContentStyle,
   updateSourceSize: updateVideoSourceSize,
-  clearSourceSize: clearVideoSourceSize,
   setScaleMode: setVideoScaleMode,
 } = useVideoScaling({ rotation: videoRotation })
 
@@ -733,11 +736,6 @@ function handleWebRTCVideoResize() {
   if (!video) return
   updateVideoSourceSize(video.videoWidth, video.videoHeight)
 }
-
-watch(videoLoading, (loading) => {
-  if (loading) clearVideoSourceSize()
-})
-
 
 const showMsdStatusCard = computed(() => {
   return !!(systemStore.msd?.available)
@@ -1334,6 +1332,38 @@ function handleStreamStateChanged(data: StreamStateChangedEventData) {
 }
 
 const showSignalOverlay = computed(() => streamSignalState.value !== 'ok')
+// 只有「采集卡正常、只是没 HDMI 信号」时后端还在出彩条帧，才用半透明卡片盖在彩条上；
+// 采集本身出问题（UVC 超时 / USB 传输错误）时根本没有画面，直接铺整块状态底板。
+const NO_FRAME_REASONS = ['uvc_capture_stall', 'uvc_usb_error']
+const isNoSignalOverlay = computed(() => (
+  streamSignalState.value === 'no_signal'
+  && !NO_FRAME_REASONS.includes(streamSignalReason.value ?? '')
+))
+
+// 只有真正有画面时才把 video/img 淡入（JetKVM 的做法：opacity 0→1 过渡）；
+// 连接中 / 出错 / 采集本身坏掉时保持透明，露出界面底色而不是黑块。
+// 无信号但彩条还在流的情况除外——彩条本身就是要给人看的画面。
+const loadingStyle = computed(() => (appearance.value.loading_style as string) || 'minimal')
+const loadingBackground = computed(() => appearance.value.loading_background || '')
+const loadingOnDark = computed(() => (
+  loadingStyle.value === 'branded'
+  || (loadingStyle.value === 'custom' && !!loadingBackground.value)
+))
+const loadingOverlayClasses = computed(() => ({
+  'kvm-connect--branded': loadingStyle.value === 'branded',
+  'kvm-connect--image': loadingStyle.value === 'custom' && !!loadingBackground.value,
+}))
+const loadingOverlayStyle = computed(() => (
+  loadingStyle.value === 'custom' && loadingBackground.value
+    ? { backgroundImage: `url("${loadingBackground.value}")` }
+    : undefined
+))
+
+const videoFrameReady = computed(() => {
+  if (videoLoading.value || videoError.value) return false
+  if (streamSignalState.value === 'ok') return true
+  return isNoSignalOverlay.value
+})
 
 const signalOverlayInfo = computed(() => {
   const reason = streamSignalReason.value
@@ -3348,7 +3378,7 @@ onUnmounted(() => {
           >
             <div
               ref="videoContainerRef"
-              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-black touch-none"
+              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-transparent touch-none"
               :style="videoContainerStyle"
               tabindex="0"
               @mouseleave="handleMouseLeaveVideo"
@@ -3367,7 +3397,8 @@ onUnmounted(() => {
                   v-show="videoMode === 'mjpeg'"
                   ref="videoRef"
                   :src="mjpegUrl"
-                  class="size-full object-contain pointer-events-none select-none"
+                  class="size-full object-contain pointer-events-none select-none transition-opacity ease-out"
+                  :class="videoFrameReady ? 'opacity-100 duration-700' : 'opacity-0 duration-150'"
                   :alt="t('console.videoAlt')"
                   draggable="false"
                   @load="handleVideoLoad"
@@ -3376,7 +3407,8 @@ onUnmounted(() => {
                 <video
                   v-show="videoMode !== 'mjpeg'"
                   ref="webrtcVideoRef"
-                  class="size-full object-contain pointer-events-none"
+                  class="size-full object-contain pointer-events-none transition-opacity ease-out"
+                  :class="videoFrameReady ? 'opacity-100 duration-700' : 'opacity-0 duration-150'"
                   autoplay
                   playsinline
                   @loadedmetadata="handleWebRTCVideoResize"
@@ -3441,101 +3473,106 @@ onUnmounted(() => {
               </g>
             </svg>
           </div>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
-              v-if="videoLoading && !showSignalOverlay && !videoError"
-              class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300"
+              v-if="videoLoading && !videoError"
+              class="kvm-connect absolute inset-0 flex flex-col items-center justify-center gap-y-1 px-4 text-center transition-opacity duration-300"
+              :class="loadingOverlayClasses"
+              :style="loadingOverlayStyle"
             >
-              <div class="absolute inset-0 overflow-hidden pointer-events-none">
-                <div class="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-pulse" style="top: 50%; animation-duration: 1.5s;" />
+              <div v-if="loadingStyle === 'branded'" class="kvm-connect-halo" aria-hidden="true" />
+              <div v-if="loadingStyle === 'branded'" class="kvm-connect-badge">
+                <span class="kvm-connect-ring" aria-hidden="true" />
+                <BrandMark size="lg" class="size-9 sm:size-10" />
               </div>
-
-              <Spinner class="size-10 sm:size-16 text-white mb-2 sm:mb-4" />
-              <p class="text-white/90 text-sm sm:text-lg font-medium text-center px-4 flex items-baseline justify-center gap-2 flex-wrap">
-                <span>{{ webrtcLoadingMessage }}</span>
-                <span
-                  v-if="connectProgress"
-                  class="text-white/55 text-xs sm:text-sm font-normal tabular-nums"
-                  :aria-label="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
-                >
-                  {{ connectProgress.current }}/{{ connectProgress.total }}
-                </span>
-              </p>
-              <div
-                v-if="connectProgress"
-                class="mt-2 sm:mt-3 flex items-center gap-1"
-                role="progressbar"
-                :aria-valuenow="connectProgress.current"
-                :aria-valuemin="0"
-                :aria-valuemax="connectProgress.total"
-                :aria-valuetext="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
-              >
-                <span
-                  v-for="i in connectProgress.total"
-                  :key="i"
-                  :class="cn(
-                    'h-1 w-4 sm:w-6 rounded-full transition-colors duration-300',
-                    i <= connectProgress.current
-                      ? 'bg-primary'
-                      : 'bg-white/15',
-                  )"
+              <div v-else class="mb-1 flex size-12 items-center justify-center">
+                <Spinner
+                  class="size-8"
+                  :class="loadingOnDark ? 'text-white/90' : 'text-blue-800 dark:text-blue-200'"
                 />
               </div>
-              <p class="text-white/50 text-xs sm:text-sm mt-1 sm:mt-2">
-                {{ t('console.pleaseWait') }}
+              <p class="text-sm" :class="loadingOnDark ? 'text-white/85' : 'text-slate-600 dark:text-slate-300'">
+                {{ webrtcLoadingMessage }}
+                <span
+                  v-if="connectProgress"
+                  class="ml-1 tabular-nums text-slate-400 dark:text-slate-500"
+                  :aria-label="t('console.stepProgress', { current: connectProgress.current, total: connectProgress.total })"
+                >{{ connectProgress.current }}/{{ connectProgress.total }}</span>
               </p>
             </div>
           </Transition>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
-              v-if="showSignalOverlay && !videoError"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 transition-opacity duration-300 pointer-events-none"
-              :class="{
-                'bg-black/80 backdrop-blur-sm': signalOverlayInfo.tone === 'error',
-                'bg-black/70 backdrop-blur-sm': signalOverlayInfo.tone !== 'error',
-              }"
+              v-if="showSignalOverlay && !videoError && !videoLoading && signalOverlayInfo.title"
+              class="absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300 pointer-events-none"
+              :class="[{ 'kvm-connect': !isNoSignalOverlay }, isNoSignalOverlay ? {} : loadingOverlayClasses]"
+              :style="isNoSignalOverlay ? undefined : loadingOverlayStyle"
             >
-              <MonitorOff
-                class="size-10 sm:size-16"
-                :class="{
-                  'text-slate-200': signalOverlayInfo.tone === 'info',
-                  'text-red-300': signalOverlayInfo.tone === 'error',
-                }"
-              />
-              <div class="text-center max-w-md">
-                <p
-                  class="font-semibold text-sm sm:text-lg text-white"
-                >{{ signalOverlayInfo.title }}</p>
-                <p
-                  class="text-xs sm:text-sm mt-1 sm:mt-2"
-                  :class="{
-                    'text-slate-200/80': signalOverlayInfo.tone === 'info',
-                    'text-red-100/80': signalOverlayInfo.tone === 'error',
-                  }"
-                >{{ signalOverlayInfo.detail }}</p>
-                <p
-                  v-if="signalOverlayInfo.hint"
-                  class="text-[11px] sm:text-xs mt-2 text-white/50"
-                >{{ signalOverlayInfo.hint }}</p>
+              <div
+                class="w-full max-w-md"
+                :class="isNoSignalOverlay
+                  ? 'rounded-xl border border-slate-900/10 bg-white/90 p-5 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/85'
+                  : ''"
+              >
+                <MonitorOff
+                  class="size-8 sm:size-9"
+                  :class="signalOverlayInfo.tone === 'error'
+                    ? 'text-red-500 dark:text-red-400'
+                    : 'text-slate-400 dark:text-slate-500'"
+                />
+                <p class="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">
+                  {{ signalOverlayInfo.title }}
+                </p>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  {{ signalOverlayInfo.detail }}
+                </p>
+                <p v-if="signalOverlayInfo.hint" class="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {{ signalOverlayInfo.hint }}
+                </p>
               </div>
             </div>
           </Transition>
-          <Transition name="fade">
+          <Transition name="kvm-fade">
             <div
               v-if="videoError && !videoLoading"
-              class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-white gap-4 transition-opacity duration-300 p-4"
+              class="kvm-connect absolute inset-0 flex items-center justify-center p-4 transition-opacity duration-300"
+              :class="loadingOverlayClasses"
+              :style="loadingOverlayStyle"
             >
-              <MonitorOff class="size-10 sm:size-16 text-slate-400" />
-              <div class="text-center max-w-md px-2">
-                <p class="font-medium text-sm sm:text-lg mb-1 sm:mb-2">{{ t('console.connectionFailed') }}</p>
-                <p class="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">{{ t('console.connectionFailedDesc') }}</p>
-                <div v-if="videoErrorMessage" class="bg-slate-800/60 rounded-lg p-3 text-left">
-                  <p class="text-xs text-slate-400 mb-1">{{ t('console.errorDetails') }}:</p>
-                  <p class="text-sm text-slate-300 font-mono break-all">{{ videoErrorMessage }}</p>
+              <div class="w-full max-w-md">
+                <TriangleAlert
+                  class="size-8 sm:size-9"
+                  :class="loadingOnDark ? 'text-amber-300' : 'text-amber-500 dark:text-amber-400'"
+                />
+                <p
+                  class="mt-3 text-lg font-semibold sm:text-xl"
+                  :class="loadingOnDark ? 'text-white' : 'text-slate-900 dark:text-slate-100'"
+                >
+                  {{ t('console.connectionFailed') }}
+                </p>
+                <p
+                  class="mt-2 text-sm leading-6"
+                  :class="loadingOnDark ? 'text-white/75' : 'text-slate-600 dark:text-slate-300'"
+                >
+                  {{ t('console.connectionFailedDesc') }}
+                </p>
+                <div
+                  v-if="videoErrorMessage"
+                  class="mt-3 rounded-lg border p-3"
+                  :class="loadingOnDark
+                    ? 'border-white/15 bg-white/10'
+                    : 'border-slate-900/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/5'"
+                >
+                  <p
+                    class="text-xs"
+                    :class="loadingOnDark ? 'text-white/60' : 'text-slate-500 dark:text-slate-400'"
+                  >{{ t('console.errorDetails') }}</p>
+                  <p
+                    class="mt-1 font-mono text-xs break-all"
+                    :class="loadingOnDark ? 'text-white/85' : 'text-slate-700 dark:text-slate-300'"
+                  >{{ videoErrorMessage }}</p>
                 </div>
-              </div>
-              <div class="flex gap-2">
-                <Button variant="secondary" size="sm" @click="reloadPage">
+                <Button variant="secondary" size="sm" class="mt-4" @click="reloadPage">
                   <RefreshCw class="size-4 mr-2" />
                   {{ t('console.reconnect') }}
                 </Button>

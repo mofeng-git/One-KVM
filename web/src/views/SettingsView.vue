@@ -7,6 +7,7 @@ import AboutSystemCards from '@/components/AboutSystemCards.vue'
 import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
+import AppearanceCard from '@/components/AppearanceCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
 import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
@@ -2664,6 +2665,8 @@ watch(isWindows, () => {
                 </div>
               </CardContent>
             </Card>
+
+            <AppearanceCard />
 
             <Card>
               <CardHeader class="settings-card-heading"

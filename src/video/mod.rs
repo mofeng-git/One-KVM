@@ -12,6 +12,8 @@ pub mod frame;
 pub mod pipeline;
 pub mod recovery;
 pub mod signal;
+pub mod signal_probe;
+pub mod test_pattern;
 #[cfg(feature = "desktop")]
 pub mod snapshot;
 #[cfg(feature = "desktop")]
