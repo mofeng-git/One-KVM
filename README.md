@@ -69,7 +69,7 @@ sudo apt install ./one-kvm_0.x.x_<arch>.deb
 
 ### 使用 Docker
 
-镜像分为 **one-kvm**（One-KVM 主程序 + ttyd）与 **one-kvm-full**（另含 gostc、easytier-core 等可选扩展），按需选用。
+镜像分为 **one-kvm**（One-KVM 主程序 + ttyd）与 **one-kvm-full**（另含 gostc、easyfrpc、easytier-core、easytier-cli、frpc 等可选扩展），按需选用。
 
 ```bash
 docker run --name one-kvm -itd \

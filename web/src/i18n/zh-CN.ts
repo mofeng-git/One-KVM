@@ -1127,6 +1127,17 @@ export default {
       openInNewTab: '在新标签页打开',
       shell: 'Shell',
     },
+    gostc: {
+      title: 'GOSTC 内网穿透',
+      desc: '通过 GOSTC 实现内网穿透',
+      addr: '服务器地址',
+      addrPlaceholder: '主机名或 IP（必填）',
+      addrRequired: '请填写 GOSTC 服务器地址',
+      key: '客户端密钥',
+      keyPlaceholder: '客户端密钥（必填）',
+      keyRequired: '请填写 GOSTC 客户端密钥',
+      tls: '启用 TLS',
+    },
     easyfrp: {
       title: 'EasyFrp 内网穿透',
       desc: '使用 EasyFrp 客户端连接穿透服务',

@@ -253,6 +253,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             patch(handlers::extensions::update_ttyd_config),
         )
         .route(
+            "/extensions/gostc/config",
+            patch(handlers::extensions::update_gostc_config),
+        )
+        .route(
             "/extensions/easyfrp/config",
             patch(handlers::extensions::update_easyfrp_config),
         )

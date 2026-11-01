@@ -9,7 +9,9 @@ use tokio::sync::RwLock;
 
 use super::protected_config::ProtectedConfigFile;
 use super::types::*;
-use super::validation::{validate_easyfrp_config, validate_easytier_config, validate_frpc_config};
+use super::validation::{
+    validate_easyfrp_config, validate_easytier_config, validate_frpc_config, validate_gostc_config,
+};
 use crate::events::EventBus;
 
 const LOG_BUFFER_SIZE: usize = 200;
@@ -82,6 +84,9 @@ impl ExtensionManager {
     fn is_enabled_for_config(id: ExtensionId, config: &ExtensionsConfig) -> bool {
         match id {
             ExtensionId::Ttyd => config.ttyd.enabled,
+            ExtensionId::Gostc => {
+                config.gostc.enabled && validate_gostc_config(&config.gostc).is_ok()
+            }
             ExtensionId::Easyfrp => {
                 config.easyfrp.enabled && validate_easyfrp_config(&config.easyfrp).is_ok()
             }
@@ -264,6 +269,20 @@ impl ExtensionManager {
                 let mut args = Self::build_ttyd_listen_args().await?;
 
                 args.push(c.shell.clone());
+                args
+            }
+
+            ExtensionId::Gostc => {
+                let c = &config.gostc;
+                validate_gostc_config(c)?;
+
+                // gostc defaults to TLS, so disabling it must be explicit.
+                let mut args = vec![format!("--tls={}", c.tls)];
+
+                args.extend(["-addr".to_string(), c.addr.trim().to_string()]);
+
+                args.extend(["-key".to_string(), c.key.clone()]);
+
                 args
             }
 
@@ -569,6 +588,54 @@ impl ExtensionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn gostc_launch_explicitly_sets_tls_and_preserves_key_argument() {
+        let mut config = ExtensionsConfig::default();
+        config.gostc.addr = " example.com:443 ".to_string();
+        config.gostc.key = "key with spaces".to_string();
+        for tls in [true, false] {
+            config.gostc.tls = tls;
+            let launch = ExtensionManager::new()
+                .build_launch(ExtensionId::Gostc, &config)
+                .await
+                .unwrap();
+            assert_eq!(
+                launch.args,
+                [
+                    format!("--tls={tls}"),
+                    "-addr".to_string(),
+                    "example.com:443".to_string(),
+                    "-key".to_string(),
+                    "key with spaces".to_string(),
+                ]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn gostc_invalid_config_cannot_launch_or_autostart() {
+        let mut config = ExtensionsConfig::default();
+        config.gostc.enabled = true;
+        assert!(!ExtensionManager::is_enabled_for_config(
+            ExtensionId::Gostc,
+            &config
+        ));
+        assert!(ExtensionManager::new()
+            .build_launch(ExtensionId::Gostc, &config)
+            .await
+            .is_err());
+        config.gostc.addr = "example.com".to_string();
+        config.gostc.key = "client-key".to_string();
+        assert!(ExtensionManager::is_enabled_for_config(
+            ExtensionId::Gostc,
+            &config
+        ));
+        assert!(!ExtensionManager::is_enabled_for_config(
+            ExtensionId::Easyfrp,
+            &config
+        ));
+    }
 
     #[tokio::test]
     async fn easyfrp_launch_uses_control_urls_as_separate_arguments() {

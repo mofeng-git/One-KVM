@@ -72,7 +72,7 @@ Replace the version and architecture in the filename with your actual file name.
 Images:
 
 - **one-kvm** — main app + ttyd  
-- **one-kvm-full** — same plus optional extras (e.g. gostc, easytier-core)
+- **one-kvm-full** — same plus optional extras (gostc, easyfrpc, easytier-core, easytier-cli, frpc)
 
 Example:
 

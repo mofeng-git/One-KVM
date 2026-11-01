@@ -446,12 +446,14 @@ const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
 const extensionLogs = ref<Record<string, string[]>>({
   ttyd: [],
+  gostc: [],
   easyfrp: [],
   easytier: [],
   frpc: [],
 })
 const showLogs = ref<Record<string, boolean>>({
   ttyd: false,
+  gostc: false,
   easyfrp: false,
   easytier: false,
   frpc: false,
@@ -461,6 +463,7 @@ const showTerminalDialog = ref(false)
 
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
+  gostc: { enabled: false, addr: '', key: '', tls: true },
   easyfrp: { enabled: false, control_urls: [] as string[] },
   easytier: {
     enabled: false,
@@ -487,6 +490,12 @@ const extConfig = ref({
     tls: true,
     custom_toml: '',
   },
+})
+
+const gostcValidationMessage = computed(() => {
+  if (!extConfig.value.gostc.addr.trim()) return t('extensions.gostc.addrRequired')
+  if (!extConfig.value.gostc.key) return t('extensions.gostc.keyRequired')
+  return ''
 })
 
 const easyfrpUrlsText = computed({
@@ -1771,6 +1780,11 @@ async function loadExtensions(only?: ExtensionConfigId) {
           enabled: ttyd.enabled,
           shell: ttyd.shell,
         }
+      if (!only || only === 'gostc')
+        extConfig.value.gostc = {
+          ...extensions.value.gostc.config,
+          key: extensions.value.gostc.config.key || '',
+        }
       if (!only || only === 'easyfrp')
         extConfig.value.easyfrp = { ...extensions.value.easyfrp.config }
       const easytier = extensions.value.easytier.config
@@ -1809,11 +1823,12 @@ async function loadExtensions(only?: ExtensionConfigId) {
   }
 }
 
-type ExtensionConfigId = 'ttyd' | 'easyfrp' | 'easytier' | 'frpc'
+type ExtensionConfigId = 'ttyd' | 'gostc' | 'easyfrp' | 'easytier' | 'frpc'
 type ValidatedExtensionConfigId = Exclude<ExtensionConfigId, 'ttyd'>
 
 const extensionBusy = ref<Record<ExtensionConfigId, boolean>>({
   ttyd: false,
+  gostc: false,
   easyfrp: false,
   easytier: false,
   frpc: false,
@@ -1855,6 +1870,8 @@ async function refreshExtensionLogs(id: ExtensionConfigId) {
 async function persistExtensionConfig(id: ExtensionConfigId) {
   if (id === 'ttyd') {
     await extensionsApi.updateTtyd(extConfig.value.ttyd)
+  } else if (id === 'gostc') {
+    await extensionsApi.updateGostc(extConfig.value.gostc)
   } else if (id === 'easyfrp') {
     await extensionsApi.updateEasyfrp(extConfig.value.easyfrp)
   } else if (id === 'easytier') {
@@ -2084,7 +2101,9 @@ function showValidationError(message: string): boolean {
 
 function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
   let message = ''
-  if (id === 'easyfrp') {
+  if (id === 'gostc') {
+    message = gostcValidationMessage.value
+  } else if (id === 'easyfrp') {
     message = easyfrpValidationMessage.value
   } else if (id === 'easytier') {
     message = easytierValidationMessage.value
@@ -4747,6 +4766,162 @@ watch(isWindows, () => {
 
           <!-- Remote Access Section -->
           <div v-show="activeSection === 'ext-remote-access'" class="settings-section-services">
+            <Card>
+              <CardHeader class="settings-card-heading"
+                ><CardTitle :help="t('extensions.gostc.desc')">{{
+                  t('extensions.gostc.title')
+                }}</CardTitle>
+                <div class="settings-card-actions">
+                  <div class="settings-service-actions" v-if="extensions?.gostc?.available">
+                    <Button
+                      variant="outline"
+                      :aria-label="t('extensions.start') + ' ' + t('extensions.gostc.title')"
+                      :disabled="
+                        extensionsLoading ||
+                        !!gostcValidationMessage ||
+                        isExtRunning(extensions?.gostc?.status) ||
+                        extensionBusy.gostc
+                      "
+                      size="sm"
+                      @click="startExtension('gostc')"
+                    >
+                      <Play class="size-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      :aria-label="t('extensions.stop') + ' ' + t('extensions.gostc.title')"
+                      :disabled="
+                        extensionsLoading ||
+                        !isExtRunning(extensions?.gostc?.status) ||
+                        extensionBusy.gostc
+                      "
+                      size="sm"
+                      variant="outline"
+                      @click="stopExtension('gostc')"
+                    >
+                      <Square class="size-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
+                  </div>
+                  <div class="settings-save-action" v-if="extensions?.gostc?.available">
+                    <Button
+                      :disabled="
+                        loading ||
+                        isExtRunning(extensions?.gostc?.status) ||
+                        extensionBusy.gostc
+                      "
+                      @click="saveExtensionConfig('gostc')"
+                    >
+                      <Loader2 v-if="extensionBusy.gostc" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
+                    </Button>
+                  </div>
+                </div></CardHeader
+              >
+              <CardContent class="space-y-4">
+                <div
+                  v-if="!extensions?.gostc?.available"
+                  class="text-sm text-muted-foreground bg-muted p-3 rounded-md"
+                >
+                  {{
+                    t('extensions.binaryNotFound', {
+                      path: isWindows ? 'gostc.exe' : '/usr/bin/gostc',
+                    })
+                  }}
+                </div>
+                <template v-else>
+                  <!-- Status and controls -->
+
+                  <!-- Config -->
+                  <div class="settings-field-list grid gap-4">
+                    <div class="settings-toggle flex items-center justify-between">
+                      <Label>{{ t('extensions.autoStart') }}</Label>
+                      <Switch
+                        v-model="extConfig.gostc.enabled"
+                        :disabled="isExtRunning(extensions?.gostc?.status)"
+                      />
+                    </div>
+                    <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
+                      <div class="sm:col-span-3 space-y-1">
+                        <Input
+                          v-model="extConfig.gostc.addr"
+                          type="text"
+                          autocomplete="off"
+                          :placeholder="t('extensions.gostc.addrPlaceholder')"
+                          :disabled="isExtRunning(extensions?.gostc?.status)"
+                        />
+                        <p
+                          v-if="extConfig.gostc.enabled && !extConfig.gostc.addr.trim()"
+                          class="text-xs text-destructive"
+                        >
+                          {{ t('extensions.gostc.addrRequired') }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
+                      <div class="sm:col-span-3 space-y-1">
+                        <Input
+                          v-model="extConfig.gostc.key"
+                          type="password"
+                          autocomplete="off"
+                          :placeholder="t('extensions.gostc.keyPlaceholder')"
+                          :disabled="isExtRunning(extensions?.gostc?.status)"
+                        />
+                        <p
+                          v-if="extConfig.gostc.enabled && !extConfig.gostc.key"
+                          class="text-xs text-destructive"
+                        >
+                          {{ t('extensions.gostc.keyRequired') }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="settings-toggle flex items-center justify-between">
+                      <Label>{{ t('extensions.gostc.tls') }}</Label>
+                      <Switch
+                        v-model="extConfig.gostc.tls"
+                        :disabled="isExtRunning(extensions?.gostc?.status)"
+                      />
+                    </div>
+                  </div>
+                  <!-- Logs -->
+                  <div class="space-y-2">
+                    <Collapsible
+                      v-model:open="showLogs.gostc"
+                      @update:open="(open) => open && refreshExtensionLogs('gostc')"
+                    >
+                      <CollapsibleTrigger as-child
+                        ><Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          class="gap-2 text-muted-foreground"
+                          ><ChevronRight
+                            :class="[
+                              'size-4 transition-transform',
+                              showLogs.gostc ? 'rotate-90' : '',
+                            ]"
+                          />{{ t('extensions.viewLogs') }}</Button
+                        ></CollapsibleTrigger
+                      >
+                      <CollapsibleContent class="space-y-2 pt-2">
+                        <pre
+                          class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono"
+                          >{{
+                            (extensionLogs.gostc || []).join('\n') || t('extensions.noLogs')
+                          }}</pre
+                        >
+                        <Button variant="ghost" size="sm" @click="refreshExtensionLogs('gostc')">
+                          <RefreshCw class="size-3 mr-1" />
+                          {{ t('common.refresh') }}
+                        </Button>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </template>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.easyfrp.desc')">{{
