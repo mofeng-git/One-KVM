@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -172,7 +173,7 @@ onUnmounted(() => {
             {{ t('extensions.stop') }}
           </Button>
         </div>
-        <Button variant="ghost" size="sm" :disabled="busy" @click="load()">
+        <Button variant="outline" size="sm" :disabled="busy" @click="load()">
           <RefreshCw class="size-4 mr-1" />
           刷新
         </Button>
@@ -204,18 +205,20 @@ onUnmounted(() => {
       </p>
 
       <div v-if="!status?.running" class="space-y-3">
-        <div class="flex gap-2">
+        <ButtonGroup class="grid w-full grid-cols-2">
           <Button
-            size="sm"
+            type="button"
             :variant="configMode === 'quick' ? 'default' : 'outline'"
+            :disabled="busy"
             @click="configMode = 'quick'"
           >快速配置</Button>
           <Button
-            size="sm"
+            type="button"
             :variant="configMode === 'full' ? 'default' : 'outline'"
+            :disabled="busy"
             @click="configMode = 'full'"
           >完整配置</Button>
-        </div>
+        </ButtonGroup>
 
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="space-y-1">
