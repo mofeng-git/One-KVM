@@ -732,10 +732,12 @@ impl SharedVideoPipeline {
             state_notifier: ParkingRwLock::new(None),
             last_state_notification: ParkingMutex::new(None),
             static_skip: ParkingMutex::new(StaticSkipState::new()),
+            // 默认开启：画面不变就不重复编码发送，省带宽也省 CPU。
+            // 需要关闭时设 ONE_KVM_SKIP_STATIC=0（也接受 false/off）。
             static_skip_enabled: AtomicBool::new(
                 std::env::var("ONE_KVM_SKIP_STATIC")
-                    .map(|v| v.trim() == "1")
-                    .unwrap_or(false),
+                    .map(|v| !matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off"))
+                    .unwrap_or(true),
             ),
             static_skip_interval: std::time::Duration::from_millis(
                 std::env::var("ONE_KVM_SKIP_STATIC_MS")
