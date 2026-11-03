@@ -10,7 +10,7 @@
 
 use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,7 +22,8 @@ use super::ch9329_proto::{
     build_packet, cmd, expected_response_cmd, try_extract_response, ChipInfo, LedStatus, Response,
     DEFAULT_ADDR, DEFAULT_BAUD_RATE, MAX_PACKET_SIZE,
 };
-use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
+use super::mouse_state::{IntentKind, MouseState};
+use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent};
 use crate::config::{Ch9329DescriptorConfig, Ch9329DescriptorState};
 use crate::error::{AppError, Result};
 use crate::events::LedState;
@@ -229,14 +230,11 @@ pub struct Ch9329Backend {
     worker_tx: Mutex<Option<mpsc::Sender<WorkerCommand>>>,
     worker_handle: Mutex<Option<thread::JoinHandle<()>>>,
     keyboard_state: Arc<Mutex<KeyboardReport>>,
-    mouse_buttons: Arc<AtomicU8>,
+    mouse_state: Arc<Mutex<MouseState>>,
     screen_resolution: RwLock<(u32, u32)>,
     chip_info: Arc<RwLock<Option<ChipInfo>>>,
     led_status: Arc<RwLock<LedStatus>>,
     address: u8,
-    last_abs_x: Arc<AtomicU16>,
-    last_abs_y: Arc<AtomicU16>,
-    relative_mouse_active: Arc<AtomicBool>,
     hybrid_mouse: bool,
     macos_drag: bool,
     macos_drag_state: Mutex<super::macos_drag::MacosDrag>,
@@ -268,14 +266,11 @@ impl Ch9329Backend {
             worker_tx: Mutex::new(None),
             worker_handle: Mutex::new(None),
             keyboard_state: Arc::new(Mutex::new(KeyboardReport::default())),
-            mouse_buttons: Arc::new(AtomicU8::new(0)),
+            mouse_state: Arc::new(Mutex::new(MouseState::default())),
             screen_resolution: RwLock::new((1920, 1080)),
             chip_info: Arc::new(RwLock::new(None)),
             led_status: Arc::new(RwLock::new(LedStatus::default())),
             address: DEFAULT_ADDR,
-            last_abs_x: Arc::new(AtomicU16::new(0)),
-            last_abs_y: Arc::new(AtomicU16::new(0)),
-            relative_mouse_active: Arc::new(AtomicBool::new(false)),
             hybrid_mouse,
             macos_drag,
             macos_drag_state: Mutex::new(super::macos_drag::MacosDrag::default()),
@@ -870,16 +865,10 @@ impl Ch9329Backend {
 
     fn clear_local_state(
         keyboard_state: &Arc<Mutex<KeyboardReport>>,
-        mouse_buttons: &Arc<AtomicU8>,
-        last_abs_x: &Arc<AtomicU16>,
-        last_abs_y: &Arc<AtomicU16>,
-        relative_mouse_active: &Arc<AtomicBool>,
+        mouse_state: &Arc<Mutex<MouseState>>,
     ) {
         keyboard_state.lock().clear();
-        mouse_buttons.store(0, Ordering::Relaxed);
-        last_abs_x.store(0, Ordering::Relaxed);
-        last_abs_y.store(0, Ordering::Relaxed);
-        relative_mouse_active.store(false, Ordering::Relaxed);
+        *mouse_state.lock() = MouseState::default();
     }
 
     fn worker_reconnect_loop(
@@ -990,9 +979,8 @@ impl Ch9329Backend {
         Ok(())
     }
 
-    fn should_send_button_wheel_relative(&self) -> bool {
-        (self.hybrid_mouse && !self.macos_drag)
-            || self.relative_mouse_active.load(Ordering::Relaxed)
+    fn should_send_button_wheel_relative(&self, mouse: &MouseState) -> bool {
+        (self.hybrid_mouse && !self.macos_drag) || mouse.relative_input()
     }
 
     fn absolute_move_buttons(&self, buttons: u8) -> u8 {
@@ -1012,10 +1000,7 @@ impl Ch9329Backend {
         led_status: Arc<RwLock<LedStatus>>,
         runtime: Arc<Ch9329RuntimeState>,
         keyboard_state: Arc<Mutex<KeyboardReport>>,
-        mouse_buttons: Arc<AtomicU8>,
-        last_abs_x: Arc<AtomicU16>,
-        last_abs_y: Arc<AtomicU16>,
-        relative_mouse_active: Arc<AtomicBool>,
+        mouse_state: Arc<Mutex<MouseState>>,
         init_tx: mpsc::Sender<Result<ChipInfo>>,
     ) {
         runtime.set_initialized(true);
@@ -1108,13 +1093,7 @@ impl Ch9329Backend {
                     }
                 }
                 Ok(WorkerCommand::ResetState) => {
-                    Self::clear_local_state(
-                        &keyboard_state,
-                        &mouse_buttons,
-                        &last_abs_x,
-                        &last_abs_y,
-                        &relative_mouse_active,
-                    );
+                    Self::clear_local_state(&keyboard_state, &mouse_state);
                     if let Err(err) = Self::release_state_on_port(port.as_mut(), address) {
                         Self::record_runtime_error(&runtime, &err);
                         let Some(new_port) = recover_port(port) else {
@@ -1168,10 +1147,7 @@ impl HidBackend for Ch9329Backend {
         let led_status = self.led_status.clone();
         let runtime = self.runtime.clone();
         let keyboard_state = self.keyboard_state.clone();
-        let mouse_buttons = self.mouse_buttons.clone();
-        let last_abs_x = self.last_abs_x.clone();
-        let last_abs_y = self.last_abs_y.clone();
-        let relative_mouse_active = self.relative_mouse_active.clone();
+        let mouse_state = self.mouse_state.clone();
 
         let handle = thread::Builder::new()
             .name("ch9329-worker".to_string())
@@ -1185,10 +1161,7 @@ impl HidBackend for Ch9329Backend {
                     led_status,
                     runtime,
                     keyboard_state,
-                    mouse_buttons,
-                    last_abs_x,
-                    last_abs_y,
-                    relative_mouse_active,
+                    mouse_state,
                     init_tx,
                 );
             })
@@ -1284,13 +1257,18 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
-        let buttons = self.mouse_buttons.load(Ordering::Relaxed);
+        // Keep state transitions and serial queue insertion in one total order.
+        let mut mouse = self.mouse_state.lock();
+        let buttons = mouse.buttons();
+        let Some(intent) = mouse.apply(&event) else {
+            return Ok(());
+        };
 
         if self.macos_drag {
             use super::macos_drag::MouseReport;
             let mut state = self.macos_drag_state.lock();
             let (buttons, reports) = state.plan(event, buttons, *self.screen_resolution.read());
-            self.mouse_buttons.store(buttons, Ordering::Relaxed);
+            debug_assert_eq!(buttons, mouse.buttons());
             for report in reports.iter().copied() {
                 match report {
                     MouseReport::Absolute { buttons, x, y } => {
@@ -1311,56 +1289,21 @@ impl HidBackend for Ch9329Backend {
             return Ok(());
         }
 
-        match event.event_type {
-            MouseEventType::Move => {
-                self.relative_mouse_active.store(true, Ordering::Relaxed);
-                let dx = event.x.clamp(-127, 127) as i8;
-                let dy = event.y.clamp(-127, 127) as i8;
-                self.send_mouse_relative(buttons, dx, dy, 0)?;
+        // Serial scaling and hybrid output policy do not belong to MouseState.
+        let x = (u32::from(intent.absolute.0) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+        let y = (u32::from(intent.absolute.1) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
+        match intent.kind {
+            IntentKind::RelativeMove => {
+                self.send_mouse_relative(intent.buttons, intent.relative.0, intent.relative.1, 0)?
             }
-            MouseEventType::MoveAbs => {
-                self.relative_mouse_active.store(false, Ordering::Relaxed);
-                let x = ((event.x.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
-                let y = ((event.y.clamp(0, 32767) as u32) * CH9329_MOUSE_RESOLUTION / 32768) as u16;
-                self.last_abs_x.store(x, Ordering::Relaxed);
-                self.last_abs_y.store(y, Ordering::Relaxed);
-                self.send_mouse_absolute(self.absolute_move_buttons(buttons), x, y, 0)?;
+            IntentKind::AbsoluteMove => {
+                self.send_mouse_absolute(self.absolute_move_buttons(intent.buttons), x, y, 0)?
             }
-            MouseEventType::Down => {
-                if let Some(button) = event.button {
-                    let bit = button.to_hid_bit();
-                    let new_buttons = self.mouse_buttons.fetch_or(bit, Ordering::Relaxed) | bit;
-                    trace!("Mouse down: {:?} buttons=0x{:02X}", button, new_buttons);
-                    if self.should_send_button_wheel_relative() {
-                        self.send_mouse_relative(new_buttons, 0, 0, 0)?;
-                    } else {
-                        let x = self.last_abs_x.load(Ordering::Relaxed);
-                        let y = self.last_abs_y.load(Ordering::Relaxed);
-                        self.send_mouse_absolute(new_buttons, x, y, 0)?;
-                    }
-                }
-            }
-            MouseEventType::Up => {
-                if let Some(button) = event.button {
-                    let bit = button.to_hid_bit();
-                    let new_buttons = self.mouse_buttons.fetch_and(!bit, Ordering::Relaxed) & !bit;
-                    trace!("Mouse up: {:?} buttons=0x{:02X}", button, new_buttons);
-                    if self.should_send_button_wheel_relative() {
-                        self.send_mouse_relative(new_buttons, 0, 0, 0)?;
-                    } else {
-                        let x = self.last_abs_x.load(Ordering::Relaxed);
-                        let y = self.last_abs_y.load(Ordering::Relaxed);
-                        self.send_mouse_absolute(new_buttons, x, y, 0)?;
-                    }
-                }
-            }
-            MouseEventType::Scroll => {
-                if self.should_send_button_wheel_relative() {
-                    self.send_mouse_relative(buttons, 0, 0, event.scroll)?;
+            IntentKind::Buttons | IntentKind::Wheel => {
+                if self.should_send_button_wheel_relative(&mouse) {
+                    self.send_mouse_relative(intent.buttons, 0, 0, intent.wheel)?;
                 } else {
-                    let x = self.last_abs_x.load(Ordering::Relaxed);
-                    let y = self.last_abs_y.load(Ordering::Relaxed);
-                    self.send_mouse_absolute(buttons, x, y, event.scroll)?;
+                    self.send_mouse_absolute(intent.buttons, x, y, intent.wheel)?;
                 }
             }
         }
@@ -1399,11 +1342,11 @@ impl HidBackend for Ch9329Backend {
             self.send_keyboard_report(&report)?;
         }
 
-        self.mouse_buttons.store(0, Ordering::Relaxed);
+        let mut mouse = self.mouse_state.lock();
+        // Preserve CH9329's existing reset-to-origin and both-output release.
+        mouse.release_buttons();
+        *mouse = MouseState::default();
         self.macos_drag_state.lock().reset();
-        self.last_abs_x.store(0, Ordering::Relaxed);
-        self.last_abs_y.store(0, Ordering::Relaxed);
-        self.relative_mouse_active.store(false, Ordering::Relaxed);
         self.send_mouse_relative(0, 0, 0, 0)?;
         self.send_mouse_absolute(0, 0, 0, 0)?;
 
@@ -1414,10 +1357,15 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        let _ = self.enqueue_command(WorkerCommand::ResetState);
-        let sender = self.worker_tx.lock().take();
-        if let Some(sender) = sender {
-            let _ = sender.send(WorkerCommand::Shutdown);
+        {
+            // No mouse event may enter the queue between final release and
+            // shutdown. Drop this guard before joining: the worker clears state.
+            let _mouse = self.mouse_state.lock();
+            let _ = self.enqueue_command(WorkerCommand::ResetState);
+            let sender = self.worker_tx.lock().take();
+            if let Some(sender) = sender {
+                let _ = sender.send(WorkerCommand::Shutdown);
+            }
         }
         if let Some(handle) = self.worker_handle.lock().take() {
             let _ = handle.join();
@@ -1709,7 +1657,7 @@ mod tests {
     fn test_hybrid_mouse_preserves_linux_compatibility_routing() {
         let backend = Ch9329Backend::with_options("/dev/null", DEFAULT_BAUD_RATE, true).unwrap();
 
-        assert!(backend.should_send_button_wheel_relative());
+        assert!(backend.should_send_button_wheel_relative(&backend.mouse_state.lock()));
         assert_eq!(backend.absolute_move_buttons(0x07), 0);
     }
 
@@ -1771,7 +1719,139 @@ mod tests {
     fn test_default_mouse_mode_preserves_absolute_report_buttons() {
         let backend = Ch9329Backend::with_baud_rate("/dev/null", DEFAULT_BAUD_RATE).unwrap();
 
-        assert!(!backend.should_send_button_wheel_relative());
+        assert!(!backend.should_send_button_wheel_relative(&backend.mouse_state.lock()));
         assert_eq!(backend.absolute_move_buttons(0x07), 0x07);
+    }
+
+    fn mouse_packets(rx: &mpsc::Receiver<WorkerCommand>) -> Vec<(u8, Vec<u8>)> {
+        rx.try_iter()
+            .filter_map(|command| match command {
+                WorkerCommand::Packet { cmd, data }
+                    if cmd == cmd::SEND_MS_ABS_DATA || cmd == cmd::SEND_MS_REL_DATA =>
+                {
+                    Some((cmd, data))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn shared_state_preserves_serial_absolute_click_drag_wheel_and_reset() {
+        use crate::hid::MouseButton;
+        let backend = Ch9329Backend::new("/dev/null").unwrap();
+        let (tx, rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(tx);
+        for event in [
+            MouseEvent::move_abs(18022, 16384),
+            MouseEvent::button_down(MouseButton::Left),
+            MouseEvent::scroll(-1),
+            MouseEvent::move_abs(8192, 12288),
+            MouseEvent::button_up(MouseButton::Left),
+        ] {
+            backend.send_mouse(event).await.unwrap();
+        }
+        assert_eq!(backend.mouse_state.lock().absolute(), (8192, 12288));
+        backend.reset().await.unwrap();
+        assert_eq!(
+            mouse_packets(&rx),
+            vec![
+                (cmd::SEND_MS_ABS_DATA, vec![2, 0, 204, 8, 0, 8, 0]),
+                (cmd::SEND_MS_ABS_DATA, vec![2, 1, 204, 8, 0, 8, 0]),
+                (cmd::SEND_MS_ABS_DATA, vec![2, 1, 204, 8, 0, 8, 255]),
+                (cmd::SEND_MS_ABS_DATA, vec![2, 1, 0, 4, 0, 6, 0]),
+                (cmd::SEND_MS_ABS_DATA, vec![2, 0, 0, 4, 0, 6, 0]),
+                (cmd::SEND_MS_REL_DATA, vec![1, 0, 0, 0, 0]),
+                (cmd::SEND_MS_ABS_DATA, vec![2, 0, 0, 0, 0, 0, 0]),
+            ]
+        );
+        assert_eq!(backend.mouse_state.lock().absolute(), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn shared_state_keeps_serial_hybrid_and_last_input_mode_routing() {
+        use crate::hid::MouseButton;
+        for hybrid in [false, true] {
+            let backend =
+                Ch9329Backend::with_options("/dev/null", DEFAULT_BAUD_RATE, hybrid).unwrap();
+            let (tx, rx) = mpsc::channel();
+            *backend.worker_tx.lock() = Some(tx);
+            for event in [
+                MouseEvent::move_rel(300, -300),
+                MouseEvent::button_down(MouseButton::Left),
+                MouseEvent::move_abs(32767, 0),
+                MouseEvent::scroll(1),
+                MouseEvent::button_up(MouseButton::Left),
+            ] {
+                backend.send_mouse(event).await.unwrap();
+            }
+            let packets = mouse_packets(&rx);
+            assert_eq!(packets[0], (cmd::SEND_MS_REL_DATA, vec![1, 0, 127, 129, 0]));
+            assert_eq!(packets[1], (cmd::SEND_MS_REL_DATA, vec![1, 1, 0, 0, 0]));
+            assert_eq!(
+                packets[2],
+                (
+                    cmd::SEND_MS_ABS_DATA,
+                    vec![2, if hybrid { 0 } else { 1 }, 255, 15, 0, 0, 0]
+                )
+            );
+            if hybrid {
+                assert_eq!(packets[3], (cmd::SEND_MS_REL_DATA, vec![1, 1, 0, 0, 1]));
+                assert_eq!(packets[4], (cmd::SEND_MS_REL_DATA, vec![1, 0, 0, 0, 0]));
+            } else {
+                assert_eq!(
+                    packets[3],
+                    (cmd::SEND_MS_ABS_DATA, vec![2, 1, 255, 15, 0, 0, 1])
+                );
+                assert_eq!(
+                    packets[4],
+                    (cmd::SEND_MS_ABS_DATA, vec![2, 0, 255, 15, 0, 0, 0])
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn concurrent_serial_button_transitions_match_queue_order() {
+        use crate::hid::MouseButton;
+        let backend = Arc::new(Ch9329Backend::new("/dev/null").unwrap());
+        let (tx, rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(tx);
+        let barrier = Arc::new(std::sync::Barrier::new(5));
+        let workers: Vec<_> = [
+            MouseButton::Left,
+            MouseButton::Right,
+            MouseButton::Middle,
+            MouseButton::Back,
+            MouseButton::Forward,
+        ]
+        .into_iter()
+        .map(|button| {
+            let backend = backend.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                barrier.wait();
+                runtime
+                    .block_on(backend.send_mouse(MouseEvent::button_down(button)))
+                    .unwrap();
+            })
+        })
+        .collect();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        let packets = mouse_packets(&rx);
+        assert_eq!(packets.len(), 5);
+        let mut previous: u8 = 0;
+        for (command, data) in packets {
+            assert_eq!(command, cmd::SEND_MS_ABS_DATA);
+            assert_eq!(data[1] & previous, previous);
+            assert_eq!(data[1].count_ones(), previous.count_ones() + 1);
+            previous = data[1];
+        }
+        assert_eq!(previous, 31);
     }
 }

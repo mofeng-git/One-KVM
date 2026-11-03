@@ -230,16 +230,21 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
 
 function setupDataChannel(channel: RTCDataChannel) {
   dataChannel = channel
+  channel.binaryType = 'arraybuffer'
 
   channel.onopen = () => {
+    if (dataChannel !== channel) return
     dataChannelReady.value = true
   }
 
   channel.onclose = () => {
+    if (dataChannel !== channel) return
     dataChannelReady.value = false
   }
 
   channel.onerror = (event) => {
+    if (dataChannel === channel) dataChannelReady.value = false
+    channel.close()
     videoDebugLog('WebRTC data channel error', {
       label: channel.label,
       readyState: channel.readyState,
@@ -248,14 +253,18 @@ function setupDataChannel(channel: RTCDataChannel) {
     })
   }
 
-  channel.onmessage = () => {
+  channel.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer && new Uint8Array(event.data)[0] === 0x01) {
+      if (dataChannel === channel) dataChannelReady.value = false
+      channel.close()
+    }
   }
 }
 
 function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
   const channel = pc.createDataChannel('hid', {
     ordered: true,
-    maxRetransmits: 3,
+    // HID edges must not be abandoned after a retransmission limit.
   })
   setupDataChannel(channel)
   return channel
@@ -627,6 +636,8 @@ function sendKeyboard(event: HidKeyboardEvent): boolean {
     dataChannel.send(buffer)
     return true
   } catch {
+    dataChannelReady.value = false
+    dataChannel?.close()
     return false
   }
 }
@@ -641,6 +652,8 @@ function sendMouse(event: HidMouseEvent): boolean {
     dataChannel.send(buffer)
     return true
   } catch {
+    dataChannelReady.value = false
+    dataChannel?.close()
     return false
   }
 }

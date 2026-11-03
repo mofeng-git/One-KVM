@@ -34,7 +34,8 @@ use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec};
 use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
-use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
+use crate::hid::datachannel::parse_hid_message;
+use crate::hid::input_session::HidInputSession;
 use crate::hid::HidController;
 use crate::video::codec::{h264_bitstream, h265_bitstream};
 use crate::video::pipeline::EncodedVideoFrameReceiver;
@@ -476,33 +477,35 @@ impl UniversalSession {
                     info!("Data channel with HID support: {}", dc.label());
                     *data_channel.write().await = Some(dc.clone());
 
+                    let input = Arc::new(HidInputSession::default());
+                    let close_input = input.clone();
+                    let close_hid = hid.clone();
+                    dc.on_close(Box::new(move || {
+                        let input = close_input.clone();
+                        let hid = close_hid.clone();
+                        Box::pin(async move {
+                            if let Err(error) = input.close(hid.as_ref()).await {
+                                warn!("HID release on data channel close failed: {}", error);
+                            }
+                        })
+                    }));
+                    let failed_channel = Arc::downgrade(&dc);
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let hid = hid.clone();
-
-                        // webrtc-rs won't poll this future; spawn HID work for latency.
-                        tokio::spawn(async move {
+                        let input = input.clone();
+                        let failed_channel = failed_channel.clone();
+                        // webrtc 0.17.2 awaits this future before reading the next
+                        // message. Preserve order into the controller's FIFO.
+                        Box::pin(async move {
                             if let Some(event) = parse_hid_message(&msg.data) {
-                                match event {
-                                    HidChannelEvent::Keyboard(kb_event) => {
-                                        if let Err(e) = hid.send_keyboard(kb_event).await {
-                                            debug!("Failed to send keyboard event: {}", e);
-                                        }
-                                    }
-                                    HidChannelEvent::Mouse(ms_event) => {
-                                        if let Err(e) = hid.send_mouse(ms_event).await {
-                                            debug!("Failed to send mouse event: {}", e);
-                                        }
-                                    }
-                                    HidChannelEvent::Consumer(consumer_event) => {
-                                        if let Err(e) = hid.send_consumer(consumer_event).await {
-                                            debug!("Failed to send consumer event: {}", e);
-                                        }
+                                if let Err(error) = input.dispatch(hid.as_ref(), event).await {
+                                    warn!("HID data channel admission failed: {}", error);
+                                    if let Some(channel) = failed_channel.upgrade() {
+                                        let _ = channel.send(&bytes::Bytes::from_static(&[0x01])).await;
                                     }
                                 }
                             }
-                        });
-
-                        Box::pin(async {})
+                        })
                     }));
                 })
             }));
