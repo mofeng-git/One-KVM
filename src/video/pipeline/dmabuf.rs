@@ -3,6 +3,7 @@
 use super::*;
 use crate::video::capture::status::capture_recovery_status;
 use crate::video::codec::registry::EncoderRegistry;
+use crate::video::hdr::{HdrConfig, HdrEncoder};
 use hwcodec::rkmpp_dmabuf::{DmaEncoder, DmaEncoderConfig, DmaFormat};
 
 pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
@@ -32,10 +33,31 @@ pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
 pub(super) fn prepare(
     stream: &CaptureStream,
     config: &SharedVideoPipelineConfig,
-) -> Result<DmaEncoder> {
+) -> Result<CaptureEncoder> {
     let buffers = stream
         .export_dmabufs()
         .map_err(|e| AppError::VideoError(e.to_string()))?;
+    if matches!(stream.format(), PixelFormat::Nv20 | PixelFormat::Nv15) {
+        let (layout, signal) = stream.hdr_input().ok_or_else(|| {
+            AppError::VideoError(
+                "10-bit HDMI input is not 3840x2160 PQ/BT.2020; HDR tone mapping is unavailable"
+                    .into(),
+            )
+        })?;
+        return HdrEncoder::new(
+            &HdrConfig {
+                layout,
+                signal,
+                hevc: config.output_codec == VideoEncoderType::H265,
+                fps: config.fps.min(30),
+                bitrate_kbps: config.bitrate_kbps(),
+                gop: config.gop_size().max(1),
+            },
+            buffers,
+        )
+        .map(|encoder| CaptureEncoder::Hdr(Box::new(encoder)))
+        .map_err(AppError::VideoError);
+    }
     DmaEncoder::new(
         DmaEncoderConfig {
             width: config.resolution.width,
@@ -56,12 +78,43 @@ pub(super) fn prepare(
         },
         buffers,
     )
+    .map(CaptureEncoder::Dma)
     .map_err(AppError::VideoError)
 }
 
-enum CaptureEncoder {
+pub(super) enum CaptureEncoder {
     Dma(DmaEncoder),
+    /// Packed 10-bit HDR input, tone mapped on the GPU. No copy fallback exists.
+    Hdr(Box<HdrEncoder>),
     Copy(Box<EncoderThreadState>),
+}
+
+fn is_packed_ten_bit(format: PixelFormat) -> bool {
+    matches!(format, PixelFormat::Nv20 | PixelFormat::Nv15)
+}
+
+fn wrap_packet(
+    pipeline: &SharedVideoPipeline,
+    config: &SharedVideoPipelineConfig,
+    packet: Vec<u8>,
+    pts_ms: i64,
+) -> Vec<EncodedVideoFrame> {
+    let data = Bytes::from(packet);
+    let is_keyframe = match config.output_codec {
+        VideoEncoderType::H264 => h264_bitstream::is_keyframe(&data),
+        VideoEncoderType::H265 => h265_bitstream::is_keyframe(&data),
+        _ => false,
+    };
+    let (data, is_keyframe) =
+        pipeline.inspect_and_parameterize_packet(config.output_codec, data, is_keyframe);
+    vec![EncodedVideoFrame {
+        data,
+        pts_ms,
+        is_keyframe,
+        sequence: pipeline.sequence.fetch_add(1, Ordering::Relaxed) + 1,
+        duration: Duration::from_micros(1_000_000 / config.fps.max(1) as u64),
+        codec: config.output_codec,
+    }]
 }
 
 // Field order is intentional, including during unwinding: destroy the encoder
@@ -94,7 +147,7 @@ impl Drop for Completion {
 pub(super) fn start(
     pipeline: Arc<SharedVideoPipeline>,
     stream: CaptureStream,
-    encoder: DmaEncoder,
+    encoder: CaptureEncoder,
     config: SharedVideoPipelineConfig,
     device: std::path::PathBuf,
     buffer_count: u32,
@@ -114,7 +167,7 @@ pub(super) fn start(
         stream.stride()
     );
     let active = ActiveCapture {
-        encoder: Some(CaptureEncoder::Dma(encoder)),
+        encoder: Some(encoder),
         stream,
     };
     let result = std::thread::Builder::new()
@@ -157,6 +210,12 @@ fn run(
 
     while pipeline.running_flag.load(Ordering::Acquire) {
         if pipeline.subscriber_count() == 0 {
+            // Nobody is watching: never send a stale converted picture first.
+            if let Some(CaptureEncoder::Hdr(encoder)) =
+                active.as_mut().and_then(|capture| capture.encoder.as_mut())
+            {
+                encoder.discard_pending();
+            }
             if idle_since.get_or_insert_with(Instant::now).elapsed()
                 >= Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS)
             {
@@ -171,6 +230,7 @@ fn run(
             let PipelineCmd::SetBitrate { preset } = command;
             // Preserve Custom values and preset-specific GOPs across fallback/reopen.
             config.bitrate_preset = preset;
+            let mut reopen = false;
             if let Some(capture) = active.as_mut() {
                 match capture.encoder.as_mut().expect("active encoder") {
                     CaptureEncoder::Dma(encoder) => {
@@ -186,10 +246,23 @@ fn run(
                             pipeline.keyframe_requested.store(true, Ordering::Release);
                         }
                     }
+                    CaptureEncoder::Hdr(encoder) => {
+                        // No copy encoder exists for packed 10-bit input: rebuild.
+                        if let Err(error) =
+                            encoder.reconfigure(config.bitrate_kbps(), config.gop_size().max(1))
+                        {
+                            warn!("HDR encoder reconfigure failed, reopening: {}", error);
+                            reopen = true;
+                        }
+                    }
                     CaptureEncoder::Copy(encoder) => {
                         pipeline.apply_cmd(encoder, PipelineCmd::SetBitrate { preset })?
                     }
                 }
+            }
+            if reopen {
+                drop(active.take());
+                pipeline.keyframe_requested.store(true, Ordering::Release);
             }
         }
 
@@ -214,18 +287,45 @@ fn run(
                         break;
                     }
                     config.align_source_fps(stream.source_fps());
+                    if is_packed_ten_bit(stream.format()) {
+                        config.fps = config.fps.min(30);
+                    }
                     // Update only timing: a concurrently queued bitrate command
                     // must retain the user's latest preset in the shared config.
                     pipeline.config.blocking_write().fps = config.fps;
                     let encoder = if allow_dma && stream.supports_rkmpp_dmabuf() {
                         match prepare(&stream, &config) {
-                            Ok(encoder) => CaptureEncoder::Dma(encoder),
+                            Ok(encoder) => encoder,
+                            Err(error) if is_packed_ten_bit(stream.format()) => {
+                                // Nothing can encode this on the CPU: retry like a lost signal.
+                                warn!("HDR tone mapping unavailable: {}", error);
+                                failures = failures.saturating_add(1);
+                                let delay = policy.retry_delay(failures);
+                                pipeline.notify_state(PipelineStateNotification::no_signal(
+                                    SignalStatus::NoSignal,
+                                    Some(delay.as_millis() as u64),
+                                ));
+                                drop(stream);
+                                wait_for_source_change(&bridge, delay, || {
+                                    pipeline.running_flag.load(Ordering::Acquire)
+                                });
+                                continue;
+                            }
                             Err(error) => {
                                 warn!("RKMPP DMA reopen failed, using copy encoder: {}", error);
                                 allow_dma = false;
                                 CaptureEncoder::Copy(Box::new(build_encoder_state(&config)?))
                             }
                         }
+                    } else if is_packed_ten_bit(stream.format()) {
+                        warn!("HDR input needs the RKMPP DMA path, which is disabled");
+                        failures = failures.saturating_add(1);
+                        let delay = policy.retry_delay(failures);
+                        drop(stream);
+                        wait_for_source_change(&bridge, delay, || {
+                            pipeline.running_flag.load(Ordering::Acquire)
+                        });
+                        continue;
                     } else {
                         CaptureEncoder::Copy(Box::new(build_encoder_state(&config)?))
                     };
@@ -275,9 +375,13 @@ fn run(
         let reservations = pipeline.reserve_outputs();
         let result = if reservations.as_ref().is_none_or(Vec::is_empty) {
             match capture.encoder.as_mut().expect("active encoder") {
-                CaptureEncoder::Dma(_) => capture
+                // No subscriber can take a packet right now: skip this capture
+                // only. The converted frame stays pending and is encoded with
+                // the next one, so a momentarily full output queue costs one
+                // source frame instead of a finished conversion.
+                CaptureEncoder::Dma(_) | CaptureEncoder::Hdr(_) => capture
                     .stream
-                    .with_next_dmabuf(|_, _, _| ())
+                    .with_next_dmabuf(|_, _, _, _| ())
                     .map(|_| Ok(Vec::new())),
                 CaptureEncoder::Copy(_) => {
                     let mut raw = buffer_pool.take(0);
@@ -292,7 +396,7 @@ fn run(
                     let pts = pipeline.pts_ms();
                     capture
                         .stream
-                        .with_next_dmabuf(|index, bytes_used, fresh_fd| {
+                        .with_next_dmabuf(|index, bytes_used, fresh_fd, _| {
                             let keyframe =
                                 pipeline.keyframe_requested.swap(false, Ordering::AcqRel);
                             // The callback holds the dequeue lease until native encode
@@ -301,34 +405,34 @@ fn run(
                         })
                         .map(|(_, packet)| {
                             packet
+                                .map(|packet| wrap_packet(pipeline, &config, packet, pts))
+                                .map_err(AppError::VideoError)
+                        })
+                }
+                CaptureEncoder::Hdr(encoder) => {
+                    let pts = pipeline.pts_ms();
+                    capture
+                        .stream
+                        .with_next_dmabuf(|index, _bytes_used, _fresh_fd, frame_time| {
+                            // The callback returns only after the GPU has finished
+                            // reading this capture buffer, before QBUF.
+                            encoder.process(index, pts, frame_time, || {
+                                pipeline.keyframe_requested.swap(false, Ordering::AcqRel)
+                            })
+                        })
+                        .map(|(_, packet)| {
+                            packet
                                 .map(|packet| {
-                                    let data = Bytes::from(packet);
-                                    let is_keyframe = match config.output_codec {
-                                        VideoEncoderType::H264 => {
-                                            h264_bitstream::is_keyframe(&data)
-                                        }
-                                        VideoEncoderType::H265 => {
-                                            h265_bitstream::is_keyframe(&data)
-                                        }
-                                        _ => false,
-                                    };
-                                    let (data, is_keyframe) = pipeline
-                                        .inspect_and_parameterize_packet(
-                                            config.output_codec,
-                                            data,
-                                            is_keyframe,
-                                        );
-                                    vec![EncodedVideoFrame {
-                                        data,
-                                        pts_ms: pts,
-                                        is_keyframe,
-                                        sequence: pipeline.sequence.fetch_add(1, Ordering::Relaxed)
-                                            + 1,
-                                        duration: Duration::from_micros(
-                                            1_000_000 / config.fps.max(1) as u64,
-                                        ),
-                                        codec: config.output_codec,
-                                    }]
+                                    packet
+                                        .map(|packet| {
+                                            wrap_packet(
+                                                pipeline,
+                                                &config,
+                                                packet.data,
+                                                packet.pts_ms,
+                                            )
+                                        })
+                                        .unwrap_or_default()
                                 })
                                 .map_err(AppError::VideoError)
                         })
@@ -362,6 +466,20 @@ fn run(
                     frames.into_iter().map(Arc::new).collect::<Vec<_>>().into(),
                     reservations.unwrap_or_default(),
                 );
+            }
+            Ok(Err(error)) if matches!(capture.encoder, Some(CaptureEncoder::Hdr(_))) => {
+                // The GPU or MPP failed; there is no CPU encoder for this input.
+                warn!("HDR tone-map/encode failed, reopening capture: {}", error);
+                drop(active.take());
+                failures = failures.saturating_add(1);
+                let delay = policy.retry_delay(failures);
+                pipeline.notify_state(PipelineStateNotification::no_signal(
+                    SignalStatus::NoSignal,
+                    Some(delay.as_millis() as u64),
+                ));
+                wait_for_source_change(&bridge, delay, || {
+                    pipeline.running_flag.load(Ordering::Acquire)
+                });
             }
             Ok(Err(error)) => {
                 if matches!(capture.encoder, Some(CaptureEncoder::Dma(_))) {

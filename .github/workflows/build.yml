@@ -78,6 +78,9 @@ jobs:
       - name: Build linux binary
         run: bash build/build-images.sh
 
+      - name: Run unit tests
+        run: cross test --release --target x86_64-unknown-linux-gnu --lib
+
       - name: Package deb
         run: bash build/package-deb.sh
 
@@ -88,6 +91,49 @@ jobs:
           path: target/debian/*.deb
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-linux-arm64
+          path: target/aarch64-unknown-linux-gnu/release/one-kvm
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    runs-on: ubuntu-22.04
+    needs: deb
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: one-kvm-linux-arm64
+          path: target/aarch64-unknown-linux-gnu/release
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Builds the arm64 runtime images locally (nothing is pushed), starts the
+      # binary without devices or privileges, and checks that the Mali (PanVK)
+      # Vulkan driver used by the HDR tone mapper is present.
+      - name: Check arm64 runtime images
+        run: |
+          for variant in minimal full; do
+            image="one-kvm-ci:$variant"
+            ./build/package-docker.sh --platform linux/arm64 --variant "$variant" --image-name one-kvm-ci --tag "$variant" --load
+            docker run --rm --platform linux/arm64 --read-only --cap-drop ALL \
+              --security-opt no-new-privileges --entrypoint /usr/bin/one-kvm "$image" --version
+            docker run --rm --platform linux/arm64 --entrypoint /bin/sh "$image" -c \
+              'ls /usr/share/vulkan/icd.d/ && test -f /usr/lib/aarch64-linux-gnu/libvulkan_panfrost.so' \
+              | tee vulkan-icd.txt
+            grep -qx panfrost_icd.json vulkan-icd.txt
+          done
 
   windows:
     runs-on: windows-2022

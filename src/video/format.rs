@@ -27,6 +27,10 @@ pub enum PixelFormat {
     Nv16,
     /// NV24 semi-planar format
     Nv24,
+    /// NV20: 10-bit packed 4:2:2 semi-planar (HDMI RX only, GPU path)
+    Nv20,
+    /// NV15: 10-bit packed 4:2:0 semi-planar (HDMI RX only, GPU path)
+    Nv15,
     /// YUV420 planar format
     Yuv420,
     /// YVU420 planar format
@@ -54,6 +58,8 @@ impl PixelFormat {
             PixelFormat::Nv21 => *b"NV21",
             PixelFormat::Nv16 => *b"NV16",
             PixelFormat::Nv24 => *b"NV24",
+            PixelFormat::Nv20 => *b"NV20",
+            PixelFormat::Nv15 => *b"NV15",
             PixelFormat::Yuv420 => *b"YU12",
             PixelFormat::Yvu420 => *b"YV12",
             PixelFormat::Rgb565 => *b"RGBP",
@@ -75,6 +81,8 @@ impl PixelFormat {
             b"NV21" => Some(PixelFormat::Nv21),
             b"NV16" => Some(PixelFormat::Nv16),
             b"NV24" => Some(PixelFormat::Nv24),
+            b"NV20" => Some(PixelFormat::Nv20),
+            b"NV15" => Some(PixelFormat::Nv15),
             b"YU12" | b"I420" => Some(PixelFormat::Yuv420),
             b"YV12" => Some(PixelFormat::Yvu420),
             b"RGBP" => Some(PixelFormat::Rgb565),
@@ -114,6 +122,7 @@ impl PixelFormat {
             } // Variable
             PixelFormat::Nv16 => None,
             PixelFormat::Nv24 => None,
+            PixelFormat::Nv20 | PixelFormat::Nv15 => None,
             PixelFormat::Rgb565 => Some(2),
             PixelFormat::Rgb24 | PixelFormat::Bgr24 => Some(3),
             PixelFormat::Grey => Some(1),
@@ -132,6 +141,9 @@ impl PixelFormat {
             }
             PixelFormat::Nv16 => Some(pixels * 2),
             PixelFormat::Nv24 => Some(pixels * 3),
+            // Unpadded 10-bit packing; real frames use the driver's row pitch.
+            PixelFormat::Nv20 => Some(pixels * 5 / 2),
+            PixelFormat::Nv15 => Some(pixels * 15 / 8),
             PixelFormat::Rgb565 => Some(pixels * 2),
             PixelFormat::Rgb24 | PixelFormat::Bgr24 => Some(pixels * 3),
             PixelFormat::Grey => Some(pixels),
@@ -153,6 +165,9 @@ impl PixelFormat {
             PixelFormat::Yvu420 => 63,
             PixelFormat::Nv16 => 60,
             PixelFormat::Nv24 => 55,
+            // Never auto-selected: only usable through the GPU tone-mapping path.
+            PixelFormat::Nv20 => 21,
+            PixelFormat::Nv15 => 20,
             PixelFormat::Rgb24 => 50,
             PixelFormat::Bgr24 => 49,
             PixelFormat::Rgb565 => 40,
@@ -191,6 +206,8 @@ impl PixelFormat {
             PixelFormat::Nv21,
             PixelFormat::Nv16,
             PixelFormat::Nv24,
+            PixelFormat::Nv20,
+            PixelFormat::Nv15,
             PixelFormat::Yuv420,
             PixelFormat::Yvu420,
             PixelFormat::Rgb565,
@@ -213,6 +230,8 @@ impl fmt::Display for PixelFormat {
             PixelFormat::Nv21 => "NV21",
             PixelFormat::Nv16 => "NV16",
             PixelFormat::Nv24 => "NV24",
+            PixelFormat::Nv20 => "NV20",
+            PixelFormat::Nv15 => "NV15",
             PixelFormat::Yuv420 => "YUV420",
             PixelFormat::Yvu420 => "YVU420",
             PixelFormat::Rgb565 => "RGB565",
@@ -238,6 +257,8 @@ impl std::str::FromStr for PixelFormat {
             "NV21" => Ok(PixelFormat::Nv21),
             "NV16" => Ok(PixelFormat::Nv16),
             "NV24" => Ok(PixelFormat::Nv24),
+            "NV20" => Ok(PixelFormat::Nv20),
+            "NV15" => Ok(PixelFormat::Nv15),
             "YUV420" | "I420" => Ok(PixelFormat::Yuv420),
             "YVU420" | "YV12" => Ok(PixelFormat::Yvu420),
             "RGB565" => Ok(PixelFormat::Rgb565),

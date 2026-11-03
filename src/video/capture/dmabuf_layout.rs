@@ -28,6 +28,14 @@ impl DmaCaptureLayout<'_> {
             match &self.fourcc {
                 b"NV12" => self.width,
                 b"BGR3" => self.width.checked_mul(3)?,
+                // Packed 10-bit HDR input is only accepted at the geometry the
+                // GPU tone mapper supports; the encoder never reads it.
+                b"NV20" | b"NV15" => {
+                    use crate::video::hdr::layout::{PackedFormat, PackedLayout};
+                    let format = PackedFormat::from_fourcc(self.fourcc)?;
+                    return PackedLayout::new(format, self.width, self.height, self.stride)
+                        .map(|layout| layout.bytes());
+                }
                 _ => return None,
             }
         } else if self.configurable_usb
@@ -124,7 +132,7 @@ mod tests {
     fn unverified_usb_formats_stay_on_copy_path() {
         for fourcc in [
             *b"H264", *b"NV21", *b"NV16", *b"NV24", *b"BGR3", *b"YU12", *b"UYVY", *b"YVYU",
-            *b"BAD!",
+            *b"NV20", *b"NV15", *b"BAD!",
         ] {
             let mut layout = usb();
             layout.fourcc = fourcc;
@@ -181,6 +189,26 @@ mod tests {
             layout.stride = stride;
             assert_eq!(layout.minimum_bytes(), None);
         }
+    }
+
+    #[test]
+    fn native_hdmi_packed_ten_bit_needs_the_supported_geometry() {
+        let mut layout = usb();
+        layout.native_hdmi = true;
+        layout.single_planar = false;
+        layout.width = 3840;
+        layout.height = 2160;
+        layout.stride = 4800;
+        layout.fourcc = *b"NV20";
+        assert_eq!(layout.minimum_bytes(), Some(4800 * 2160 * 2));
+        layout.fourcc = *b"NV15";
+        assert_eq!(layout.minimum_bytes(), Some(4800 * 2160 * 3 / 2));
+        layout.stride = 3840;
+        assert_eq!(layout.minimum_bytes(), None);
+        layout.stride = 4800;
+        layout.width = 1920;
+        layout.height = 1080;
+        assert_eq!(layout.minimum_bytes(), None);
     }
 
     #[test]

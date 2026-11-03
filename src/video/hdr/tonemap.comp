@@ -1,0 +1,59 @@
+#version 450
+// Independent SDR addon. Each invocation owns one uint of NV12 output.
+layout(local_size_x=256) in;
+layout(set=0,binding=0,std430) readonly buffer Packed { uint raw[]; };
+layout(set=0,binding=1,std430) readonly buffer Config { float white; float peak; float dither; float fullRange; float pq[]; } c;
+layout(set=0,binding=2,std430) writeonly buffer Output { uint dst[]; };
+layout(push_constant) uniform Params { uint words; uint ywords; uint is422; uint stride; uint uv; } p;
+uint byteAt(uint o) { return (raw[o/4] >> ((o&3)*8))&255; }
+float sampleAt(uint row,uint col,uint offset) {
+ uint bit=col*10, pos=offset+row*p.stride+bit/8;
+ return float(((byteAt(pos)|(byteAt(pos+1)<<8))>>(bit&7))&1023);
+}
+float eotf(float x) { float t=clamp(x,0.,1.)*4095.; uint i=min(uint(t),4094u); return mix(c.pq[i],c.pq[i+1],t-float(i)); }
+float oetf(float x) { return x<0.018?4.5*x:1.099*pow(x,0.45)-0.099; }
+vec3 pixel(uint row,uint col) {
+ float y=sampleAt(row,col,0), u=sampleAt(p.is422!=0?row:row/2,(col/2)*2,p.uv), v=sampleAt(p.is422!=0?row:row/2,(col/2)*2+1,p.uv);
+ y=c.fullRange!=0?y/1023.:(y-64.)/876.;
+ u=(u-512.)/(c.fullRange!=0?1023.:896.); v=(v-512.)/(c.fullRange!=0?1023.:896.);
+ vec3 rgb=vec3(y+1.4746*v,y-0.1645531268*u-0.5713531268*v,y+1.8814*u);
+ rgb=vec3(eotf(rgb.r),eotf(rgb.g),eotf(rgb.b));
+ float lum=dot(rgb,vec3(.2627,.6780,.0593));
+ float a=lum/c.white, w=c.peak/c.white;
+ float mapped=clamp(a*(1.+a/(w*w))/(1.+a),0.,1.);
+ rgb*=mapped/max(lum,1e-6);
+ // Linear BT.2020 -> BT.709, then compress toward neutral at fixed luminance.
+ rgb=vec3(dot(rgb,vec3(1.660491,-.587641,-.072850)),dot(rgb,vec3(-.124550,1.132900,-.008349)),dot(rgb,vec3(-.018151,-.100579,1.118730)));
+ vec3 delta=rgb-vec3(mapped); float s=1.;
+ for(int k=0;k<3;k++) {if(delta[k]>0.)s=min(s,(1.-mapped)/delta[k]);else if(delta[k]<0.)s=min(s,-mapped/delta[k]);}
+ rgb=clamp(vec3(mapped)+s*delta,0.,1.);
+ rgb=vec3(oetf(rgb.r),oetf(rgb.g),oetf(rgb.b));
+ float l=dot(rgb,vec3(.2126,.7152,.0722));
+ return vec3(l,(rgb.b-l)/1.8556,(rgb.r-l)/1.5748);
+}
+uint quant(float v,uint index,float lo,float hi) {
+ // Static spatial dither avoids temporal shimmer in desktop content.
+ uint h=index*1664525u+1013904223u; h^=h>>16; h*=2246822519u; h^=h>>13;
+ float noise=(float(h&65535u)/65535.-.5)*c.dither;
+ return uint(clamp(floor(v+noise+.5),lo,hi));
+}
+void main() {
+ // One invocation owns a 4x2 tile: two luma words and one UV word.
+ uint i=gl_GlobalInvocationID.x;if(i>=p.ywords/2)return;
+ uint row=(i/960)*2,col=(i%960)*4;
+ vec3 q[8];uint ya=0,yb=0,uv=0;
+ for(uint dy=0;dy<2;dy++)for(uint dx=0;dx<4;dx++) {
+  uint n=(row+dy)*3840+col+dx;q[dy*4+dx]=pixel(row+dy,col+dx);
+  uint v=quant(16.+219.*q[dy*4+dx].x,n,16.,235.);
+  if(dy==0)ya|=v<<(dx*8);else yb|=v<<(dx*8);
+ }
+ for(uint pair=0;pair<2;pair++) {
+  uint j=pair*2;vec3 avg=(q[j]+q[j+1]+q[j+4]+q[j+5])*.25;
+  for(uint k=0;k<2;k++) {
+   uint n=p.ywords*4+(row/2)*3840+col+j+k;
+   uv|=quant(128.+224.*avg[1+k],n,16.,240.)<<((j+k)*8);
+  }
+ }
+ dst[row*960+col/4]=ya;dst[(row+1)*960+col/4]=yb;
+ dst[p.ywords+(row/2)*960+col/4]=uv;
+}

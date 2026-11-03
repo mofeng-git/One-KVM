@@ -331,6 +331,8 @@ fn format_description(format: PixelFormat) -> &'static str {
         PixelFormat::Nv21 => "NV21",
         PixelFormat::Nv16 => "NV16",
         PixelFormat::Nv24 => "NV24",
+        PixelFormat::Nv20 => "NV20",
+        PixelFormat::Nv15 => "NV15",
         PixelFormat::Yuv420 => "YUV420",
         PixelFormat::Yvu420 => "YVU420",
         PixelFormat::Rgb565 => "RGB565",

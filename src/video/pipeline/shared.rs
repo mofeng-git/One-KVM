@@ -54,6 +54,8 @@ fn rkmpp_dma_eligible(
                 | PixelFormat::Yuyv
                 | PixelFormat::Rgb24
                 | PixelFormat::Mjpeg
+                | PixelFormat::Nv20
+                | PixelFormat::Nv15
         )
 }
 
@@ -77,6 +79,8 @@ mod dma_selection_tests {
                     PixelFormat::Yuyv,
                     PixelFormat::Rgb24,
                     PixelFormat::Mjpeg,
+                    PixelFormat::Nv20,
+                    PixelFormat::Nv15,
                 ] {
                     assert!(!rkmpp_dma_eligible(Some(backend), codec, format));
                 }
@@ -94,6 +98,8 @@ mod dma_selection_tests {
                 PixelFormat::Yuyv,
                 PixelFormat::Rgb24,
                 PixelFormat::Mjpeg,
+                PixelFormat::Nv20,
+                PixelFormat::Nv15,
             ] {
                 assert!(rkmpp_dma_eligible(
                     Some(EncoderBackend::Rkmpp),
@@ -379,7 +385,11 @@ impl SharedVideoPipelineConfig {
     fn align_source_fps(&mut self, source_fps: Option<f64>) {
         if self.control_mode == VideoControlMode::SourceFollowing {
             if let Some(fps) = source_fps {
-                self.fps = fps.round().clamp(1.0, 120.0) as u32;
+                let mut target_fps = fps.round().clamp(1.0, 120.0) as u32;
+                if matches!(self.input_format, PixelFormat::Nv20 | PixelFormat::Nv15) {
+                    target_fps = target_fps.min(30);
+                }
+                self.fps = target_fps;
             }
         }
     }
@@ -1116,9 +1126,9 @@ impl SharedVideoPipeline {
                 let negotiated_res = s.resolution();
                 let negotiated_fmt = s.format();
                 let previous = (config.resolution, config.input_format, config.fps);
-                config.align_source_fps(s.source_fps());
                 config.resolution = negotiated_res;
                 config.input_format = negotiated_fmt;
+                config.align_source_fps(s.source_fps());
                 if previous != (config.resolution, config.input_format, config.fps) {
                     info!(
                             "Negotiated capture {}x{} {:?} @ {} fps (configured {}x{} {:?} @ {} fps) — aligning encoder to source",
@@ -1170,6 +1180,13 @@ impl SharedVideoPipeline {
                                 parse_bridge_kind(bridge_kind.as_deref()),
                             ),
                         );
+                    }
+                    Err(error)
+                        if matches!(config.input_format, PixelFormat::Nv20 | PixelFormat::Nv15) =>
+                    {
+                        return Err(AppError::VideoError(format!(
+                            "10-bit HDMI input needs GPU tone mapping, which is unavailable: {error}"
+                        )));
                     }
                     Err(error) => warn!(
                         "RKMPP DMA unavailable; using existing copy pipeline: {}",
@@ -2108,7 +2125,10 @@ pub(crate) fn compact_strided_frame_for_encoder(
         PixelFormat::Nv24 | PixelFormat::Rgb24 | PixelFormat::Bgr24 => width * height * 3,
         PixelFormat::Rgb565 => width * height * 2,
         PixelFormat::Grey => width * height,
-        PixelFormat::Mjpeg | PixelFormat::Jpeg => return Ok(None),
+        // Packed 10-bit frames are consumed by the GPU path, never compacted.
+        PixelFormat::Mjpeg | PixelFormat::Jpeg | PixelFormat::Nv20 | PixelFormat::Nv15 => {
+            return Ok(None)
+        }
     };
 
     if data.len() == compact_size {
@@ -2213,7 +2233,9 @@ pub(crate) fn compact_strided_frame_for_encoder(
             require_len(data, stride * height, frame.format, stride)?;
             copy_rows(data, 0, stride, &mut out, 0, width, width, height);
         }
-        PixelFormat::Mjpeg | PixelFormat::Jpeg => return Ok(None),
+        PixelFormat::Mjpeg | PixelFormat::Jpeg | PixelFormat::Nv20 | PixelFormat::Nv15 => {
+            return Ok(None)
+        }
     }
 
     trace!(
@@ -2314,6 +2336,12 @@ mod tests {
         config.align_source_fps(Some(59.94));
         assert_eq!(config.fps, 60);
         assert_eq!(config.gop_size(), 120);
+
+        // Packed 10-bit HDR input is capped at 30 fps for Mali-G610 + VEPU121 pipeline
+        config.input_format = PixelFormat::Nv20;
+        config.align_source_fps(Some(59.94));
+        assert_eq!(config.fps, 30);
+        assert_eq!(config.gop_size(), 60);
     }
 
     #[test]

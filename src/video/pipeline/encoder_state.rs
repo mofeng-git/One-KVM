@@ -357,10 +357,7 @@ pub(super) fn build_encoder_state(
             VideoEncoderType::H264 | VideoEncoderType::H265
         )
     {
-        info!(
-            "Initializing FFmpeg HW MJPEG->{} pipeline (no fallback)",
-            config.output_codec
-        );
+        info!("Trying FFmpeg HW MJPEG->{} pipeline", config.output_codec);
         let pipeline = HwMjpegH26xPipeline::new(HwMjpegH26xConfig {
             decoder: "mjpeg_rkmpp".to_string(),
             encoder: selected_codec_name.clone(),
@@ -377,26 +374,29 @@ pub(super) fn build_encoder_state(
             } else {
                 e
             };
-            AppError::VideoError(format!(
-                "FFmpeg HW MJPEG->{} init failed: {}",
-                config.output_codec, detail
-            ))
-        })?;
-        info!("Using FFmpeg HW MJPEG->{} pipeline", config.output_codec);
-        return Ok(EncoderThreadState {
-            encoder: None,
-            mjpeg_decoder: None,
-            nv12_converter: None,
-            yuv420p_converter: None,
-            encoder_needs_yuv420p: false,
-            #[cfg(feature = "rkmpp")]
-            ffmpeg_hw_pipeline: Some(pipeline),
-            #[cfg(feature = "rkmpp")]
-            ffmpeg_hw_enabled: true,
-            fps: config.fps,
-            codec: config.output_codec,
-            input_format: config.input_format,
+            tracing::warn!(
+                "Hardware JPEG decode unavailable: {}; using libyuv JPEG decode with {} hardware encoding",
+                detail,
+                selected_codec_name
+            );
         });
+        if let Ok(pipeline) = pipeline {
+            info!("Using FFmpeg HW MJPEG->{} pipeline", config.output_codec);
+            return Ok(EncoderThreadState {
+                encoder: None,
+                mjpeg_decoder: None,
+                nv12_converter: None,
+                yuv420p_converter: None,
+                encoder_needs_yuv420p: false,
+                #[cfg(feature = "rkmpp")]
+                ffmpeg_hw_pipeline: Some(pipeline),
+                #[cfg(feature = "rkmpp")]
+                ffmpeg_hw_enabled: true,
+                fps: config.fps,
+                codec: config.output_codec,
+                input_format: config.input_format,
+            });
+        }
     }
 
     let (mjpeg_decoder, pipeline_input_format) = if needs_mjpeg_decode {
