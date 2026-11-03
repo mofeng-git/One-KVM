@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use tracing::{debug, info, warn};
 use v4l2r::bindings::{
-    v4l2_dv_timings, v4l2_requestbuffers, v4l2_streamparm, v4l2_streamparm__bindgen_ty_1,
-    V4L2_DV_BT_656_1120,
+    v4l2_dv_timings, v4l2_format, v4l2_requestbuffers, v4l2_streamparm,
+    v4l2_streamparm__bindgen_ty_1, V4L2_DV_BT_656_1120,
 };
 use v4l2r::ioctl::{
     self, Capabilities, Capability as V4l2rCapability, EventType, IntoErrno, MemoryConsistency,
@@ -81,6 +81,52 @@ pub struct CaptureStream {
     native_hdmirx_next_state_check: Option<Instant>,
     #[cfg(feature = "rkmpp")]
     dma_layout_bytes: Option<usize>,
+}
+
+/// Colourspace, transfer function and quantization of a packed 10-bit format.
+/// Other formats carry no colorimetry the pipeline acts on, so they yield
+/// `None` and never count as a signal change.
+fn packed_colorimetry(raw: &v4l2_format, queue: QueueType) -> Option<[u32; 3]> {
+    if queue != QueueType::VideoCaptureMplane {
+        return None;
+    }
+    // SAFETY: the queue type selects the multi-planar union member.
+    let pix = unsafe { raw.fmt.pix_mp };
+    // The struct is packed: read the fields by value, never by reference.
+    let (pixelformat, colorspace, xfer_func, quantization) = (
+        pix.pixelformat,
+        pix.colorspace,
+        pix.xfer_func,
+        pix.quantization,
+    );
+    let packed = [u32::from_le_bytes(*b"NV20"), u32::from_le_bytes(*b"NV15")];
+    packed.contains(&pixelformat).then_some([
+        colorspace,
+        u32::from(xfer_func),
+        u32::from(quantization),
+    ])
+}
+
+#[cfg(feature = "rkmpp")]
+const _: () = {
+    use crate::video::hdr::colorimetry as hdr;
+    use v4l2r::bindings as uapi;
+    assert!(uapi::v4l2_colorspace_V4L2_COLORSPACE_BT2020 == hdr::V4L2_COLORSPACE_BT2020);
+    assert!(uapi::v4l2_xfer_func_V4L2_XFER_FUNC_SMPTE2084 == hdr::V4L2_XFER_FUNC_SMPTE2084);
+    assert!(
+        uapi::v4l2_quantization_V4L2_QUANTIZATION_FULL_RANGE == hdr::V4L2_QUANTIZATION_FULL_RANGE
+    );
+};
+
+#[cfg(feature = "rkmpp")]
+fn monotonic_now() -> Duration {
+    let mut now = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: valid out-pointer; CLOCK_MONOTONIC is always available on Linux.
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+    Duration::new(now.tv_sec as u64, now.tv_nsec as u32)
 }
 
 fn open_capture_device(path: &Path) -> io::Result<File> {
@@ -209,12 +255,16 @@ impl CaptureStream {
         // rkcif + RK628: G_FMT is often 0×0 until the first S_FMT; G_FMT may
         // also fail. With DV timings from the subdev, build the format (same as
         // `v4l2-ctl --set-fmt-video=width=…,height=…`).
+        let mut queried = None;
         let mut fmt: V4l2rFormat = match (
             ioctl::g_fmt::<V4l2rFormat>(&fd, queue),
             is_source_following,
             dv_mode.as_ref(),
         ) {
-            (Ok(f), _, _) if f.width > 0 && f.height > 0 => f,
+            (Ok(f), _, _) if f.width > 0 && f.height > 0 => {
+                queried = Some(f.clone());
+                f
+            }
             (_, true, Some(m)) => {
                 let fourcc = format.to_fourcc();
                 V4l2rFormat::from((&fourcc, (m.width as usize, m.height as usize)))
@@ -253,8 +303,16 @@ impl CaptureStream {
             fmt.pixelformat = requested_fourcc;
         }
 
-        let actual_fmt: V4l2rFormat = ioctl::s_fmt(&mut fd, (queue, &fmt))
-            .map_err(|e| AppError::VideoError(format!("Failed to set device format: {}", e)))?;
+        // The native receiver dictates its format (followed above), so S_FMT
+        // could only restate it. Skip it: deployments may forbid S_FMT on the
+        // HDMI node to protect the source, and the receiver re-queries the
+        // InfoFrames on every format ioctl.
+        let actual_fmt: V4l2rFormat = if is_native_hdmirx && queried.as_ref() == Some(&fmt) {
+            fmt
+        } else {
+            ioctl::s_fmt(&mut fd, (queue, &fmt))
+                .map_err(|e| AppError::VideoError(format!("Failed to set device format: {}", e)))?
+        };
 
         let actual_resolution = Resolution::new(actual_fmt.width, actual_fmt.height);
         let actual_format = match PixelFormat::from_v4l2r(actual_fmt.pixelformat) {
@@ -268,11 +326,15 @@ impl CaptureStream {
             None => format,
         };
 
+        let colorimetry = ioctl::g_fmt::<v4l2_format>(&fd, queue)
+            .ok()
+            .and_then(|raw| packed_colorimetry(&raw, queue));
         let native_hdmirx_state = is_native_hdmirx.then(|| NativeHdmirxState {
             width: actual_fmt.width,
             height: actual_fmt.height,
             pixelformat: actual_fmt.pixelformat,
             timings: dv_mode.as_ref().and_then(|mode| mode.signature),
+            colorimetry,
         });
         let native_hdmirx_next_state_check =
             native_hdmirx_state.map(|_| Instant::now() + Duration::from_secs(1));
@@ -286,7 +348,8 @@ impl CaptureStream {
                 None => actual_resolution.width,
             });
 
-        if fps > 0 {
+        // The receiver's frame rate follows the HDMI source; never S_PARM it.
+        if fps > 0 && !is_native_hdmirx {
             match set_fps(&fd, queue, fps) {
                 Ok(()) => {}
                 Err(ioctl::GParmError::IoctlError(err))
@@ -451,6 +514,13 @@ impl CaptureStream {
             PixelFormat::Nv24 => (self.stride as usize)
                 .checked_mul(self.resolution.height as usize)?
                 .checked_mul(3),
+            PixelFormat::Nv20 => (self.stride as usize)
+                .checked_mul(self.resolution.height as usize)?
+                .checked_mul(2),
+            PixelFormat::Nv15 => (self.stride as usize)
+                .checked_mul(self.resolution.height as usize)?
+                .checked_mul(3)?
+                .checked_div(2),
             _ => None,
         }
     }
@@ -521,17 +591,55 @@ impl CaptureStream {
             .collect()
     }
 
+    /// Packed 10-bit PQ/BT.2020 input the GPU tone mapper can convert, from the
+    /// colorimetry captured when the stream was opened. A mid-stream HDR/SDR
+    /// switch changes it, which the periodic receiver check turns into a
+    /// re-open.
+    #[cfg(feature = "rkmpp")]
+    pub(crate) fn hdr_input(
+        &self,
+    ) -> Option<(
+        crate::video::hdr::layout::PackedLayout,
+        crate::video::hdr::colorimetry::PqSignal,
+    )> {
+        use crate::video::hdr::{colorimetry, layout};
+        let [colorspace, xfer_func, quantization] = self.native_hdmirx_state?.colorimetry?;
+        let format = layout::PackedFormat::from_fourcc(self.format.to_fourcc())?;
+        let packed = layout::PackedLayout::new(
+            format,
+            self.resolution.width,
+            self.resolution.height,
+            self.stride,
+        )?;
+        Some((
+            packed,
+            colorimetry::classify(colorspace, xfer_func, quantization)?,
+        ))
+    }
+
     /// Run a synchronous consumer while a buffer is dequeued. QBUF occurs only
     /// after the callback returns, including its error path. Consumers must end
     /// hardware access before returning; see hwcodec::rkmpp_dmabuf::encode.
     #[cfg(feature = "rkmpp")]
     pub(crate) fn with_next_dmabuf<T>(
         &mut self,
-        consume: impl FnOnce(usize, usize, Option<OwnedFd>) -> T,
+        consume: impl FnOnce(usize, usize, Option<OwnedFd>, Duration) -> T,
     ) -> std::result::Result<(CaptureMeta, T), CaptureReadError> {
         let buffer = self.dequeue_buffer()?;
         let index = buffer.as_v4l2_buffer().index as usize;
         let sequence = buffer.as_v4l2_buffer().sequence as u64;
+        // Driver capture time (CLOCK_MONOTONIC). Fall back to the same clock
+        // when a driver leaves it unset, so pacing never silently stops.
+        let ts = buffer.as_v4l2_buffer().timestamp;
+        let frame_time = if ts.tv_sec > 0 || ts.tv_usec > 0 {
+            Duration::from_micros(
+                (ts.tv_sec as u64)
+                    .saturating_mul(1_000_000)
+                    .saturating_add(ts.tv_usec as u64),
+            )
+        } else {
+            monotonic_now()
+        };
         if index >= self.mappings.len() {
             return Err(
                 io::Error::new(io::ErrorKind::InvalidData, "Invalid capture buffer index").into(),
@@ -607,7 +715,7 @@ impl CaptureStream {
         } else {
             None
         };
-        let output = consume(index, bytes_used, fresh_fd);
+        let output = consume(index, bytes_used, fresh_fd, frame_time);
         lease.finish()?;
         Ok((
             CaptureMeta {
@@ -774,18 +882,28 @@ impl CaptureStream {
         }
     }
 
+    /// One `G_FMT`: the receiver recomputes colorimetry from the InfoFrames on
+    /// every call, so this is kept off the per-frame path.
+    fn current_native_format(&self) -> Option<(V4l2rFormat, Option<[u32; 3]>)> {
+        let raw = ioctl::g_fmt::<v4l2_format>(&self.fd, self.queue).ok()?;
+        let colorimetry = packed_colorimetry(&raw, self.queue);
+        let format = V4l2rFormat::try_from(raw).ok()?;
+        Some((format, colorimetry))
+    }
+
     fn native_hdmirx_state_unchanged(&self) -> bool {
         let Some(expected) = self.native_hdmirx_state.as_ref() else {
             return false;
         };
-        let Ok(current_fmt) = ioctl::g_fmt::<V4l2rFormat>(&self.fd, self.queue) else {
+        let Some((current_fmt, colorimetry)) = self.current_native_format() else {
             return false;
         };
         if !expected.format_matches(
             current_fmt.width,
             current_fmt.height,
             current_fmt.pixelformat,
-        ) {
+        ) || expected.colorimetry != colorimetry
+        {
             return false;
         }
 
@@ -799,14 +917,15 @@ impl CaptureStream {
         let Some(expected) = self.native_hdmirx_state.as_ref() else {
             return false;
         };
-        let Ok(current_fmt) = ioctl::g_fmt::<V4l2rFormat>(&self.fd, self.queue) else {
+        let Some((current_fmt, colorimetry)) = self.current_native_format() else {
             return false;
         };
         if !expected.format_matches(
             current_fmt.width,
             current_fmt.height,
             current_fmt.pixelformat,
-        ) {
+        ) || expected.colorimetry != colorimetry
+        {
             return true;
         }
 
@@ -950,6 +1069,8 @@ struct NativeHdmirxState {
     height: u32,
     pixelformat: V4l2rPixelFormat,
     timings: Option<DvTimingsSignature>,
+    /// Colourspace, transfer function, quantization (packed 10-bit only).
+    colorimetry: Option<[u32; 3]>,
 }
 
 impl NativeHdmirxState {
@@ -1151,8 +1272,13 @@ fn set_fps(fd: &File, queue: QueueType, fps: u32) -> std::result::Result<(), ioc
 
 #[cfg(test)]
 mod tests {
-    use super::{append_capture_plane, open_capture_device, DvTimingsSignature, NativeHdmirxState};
+    use super::{
+        append_capture_plane, open_capture_device, packed_colorimetry, DvTimingsSignature,
+        NativeHdmirxState,
+    };
     use crate::video::format::PixelFormat;
+    use v4l2r::bindings::v4l2_format;
+    use v4l2r::QueueType;
 
     #[test]
     fn capture_planes_append_without_stale_bytes_or_reallocation() {
@@ -1197,6 +1323,7 @@ mod tests {
             height: 1080,
             pixelformat: bgr24,
             timings: Some(timing()),
+            colorimetry: None,
         };
 
         assert!(state.format_matches(1920, 1080, bgr24));
@@ -1213,6 +1340,31 @@ mod tests {
             ..state
         };
         assert_eq!(no_timing_state.timings_match(None), Some(true));
+    }
+
+    #[test]
+    fn colorimetry_is_tracked_only_for_packed_ten_bit_formats() {
+        let mut raw = v4l2_format {
+            type_: QueueType::VideoCaptureMplane as u32,
+            ..Default::default()
+        };
+        raw.fmt.pix_mp.colorspace = 10;
+        raw.fmt.pix_mp.xfer_func = 7;
+        raw.fmt.pix_mp.quantization = 2;
+        raw.fmt.pix_mp.pixelformat = u32::from_le_bytes(*b"NV20");
+        assert_eq!(
+            packed_colorimetry(&raw, QueueType::VideoCaptureMplane),
+            Some([10, 7, 2])
+        );
+        raw.fmt.pix_mp.pixelformat = u32::from_le_bytes(*b"NV15");
+        assert!(packed_colorimetry(&raw, QueueType::VideoCaptureMplane).is_some());
+        raw.fmt.pix_mp.pixelformat = u32::from_le_bytes(*b"NV12");
+        assert_eq!(
+            packed_colorimetry(&raw, QueueType::VideoCaptureMplane),
+            None
+        );
+        raw.fmt.pix_mp.pixelformat = u32::from_le_bytes(*b"NV20");
+        assert_eq!(packed_colorimetry(&raw, QueueType::VideoCapture), None);
     }
 
     #[test]

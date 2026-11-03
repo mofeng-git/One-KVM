@@ -157,7 +157,9 @@ fn map_pixel_format(format: PixelFormat) -> hwcodec::capture::CapturePixelFormat
         PixelFormat::Rgb24 => hwcodec::capture::CapturePixelFormat::Rgb24,
         PixelFormat::Bgr24 => hwcodec::capture::CapturePixelFormat::Bgr24,
         PixelFormat::Grey => hwcodec::capture::CapturePixelFormat::Grey,
-        PixelFormat::Rgb565 => hwcodec::capture::CapturePixelFormat::Unknown,
+        PixelFormat::Rgb565 | PixelFormat::Nv20 | PixelFormat::Nv15 => {
+            hwcodec::capture::CapturePixelFormat::Unknown
+        }
     }
 }
 

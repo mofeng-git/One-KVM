@@ -8,6 +8,9 @@ pub mod codec_constraints;
 pub mod device;
 pub mod format;
 pub mod frame;
+#[cfg(any(test, all(target_os = "linux", feature = "rkmpp")))]
+#[cfg_attr(not(feature = "rkmpp"), allow(dead_code))]
+pub mod hdr;
 #[cfg(feature = "desktop")]
 pub mod pipeline;
 pub mod recovery;

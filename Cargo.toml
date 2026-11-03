@@ -11,7 +11,7 @@ categories = ["embedded", "network-programming"]
 
 [features]
 default = ["desktop"]
-rkmpp = ["hwcodec/rkmpp"]
+rkmpp = ["hwcodec/rkmpp", "dep:ash"]
 desktop = [
     "dep:tokio",
     "dep:tokio-util",
@@ -135,6 +135,9 @@ time = { version = "0.3", features = ["serde", "formatting", "parsing"], optiona
 # Bytes handling
 bytes = { version = "1", optional = true }
 bytemuck = { version = "1.24", features = ["derive"], optional = true }
+
+# Vulkan loader for the native HDR tone-mapping stage (dlopen at runtime)
+ash = { version = "0.38", default-features = false, features = ["loaded", "std"], optional = true }
 
 # Frame deduplication (hash-based comparison)
 xxhash-rust = { version = "0.8", features = ["xxh64"], optional = true }
