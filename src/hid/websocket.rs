@@ -11,7 +11,8 @@ use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
-use super::datachannel::{parse_hid_message, HidChannelEvent};
+use super::datachannel::parse_hid_message;
+use super::input_session::HidInputSession;
 use crate::state::AppState;
 use crate::utils::LogThrottler;
 
@@ -26,6 +27,7 @@ pub async fn ws_hid_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppSta
 async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let log_throttler = LogThrottler::with_secs(5);
+    let input = HidInputSession::default();
 
     info!("WebSocket HID connection established (binary protocol)");
 
@@ -59,10 +61,14 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
                     continue;
                 }
 
-                if let Err(e) = handle_binary_message(&data, &state).await {
+                if let Err(e) = handle_binary_message(&data, &state, &input).await {
                     if log_throttler.should_log("binary_hid_error") {
                         warn!("Binary HID message error: {}", e);
                     }
+                    let _ = sender
+                        .send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE].into()))
+                        .await;
+                    break;
                 }
             }
             Ok(Message::Text(text)) => {
@@ -91,41 +97,23 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    if let Err(e) = state.hid.reset().await {
-        warn!("Failed to reset HID on WebSocket disconnect: {}", e);
+    if let Err(e) = input.close(state.hid.as_ref()).await {
+        warn!("Failed to release owned HID on WebSocket disconnect: {}", e);
     }
 
     info!("WebSocket HID connection ended");
 }
 
-async fn handle_binary_message(data: &[u8], state: &AppState) -> Result<(), String> {
+async fn handle_binary_message(
+    data: &[u8],
+    state: &AppState,
+    input: &HidInputSession,
+) -> Result<(), String> {
     let event = parse_hid_message(data).ok_or("Invalid binary HID message")?;
-
-    match event {
-        HidChannelEvent::Keyboard(kb_event) => {
-            state
-                .hid
-                .send_keyboard(kb_event)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        HidChannelEvent::Mouse(ms_event) => {
-            state
-                .hid
-                .send_mouse(ms_event)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        HidChannelEvent::Consumer(consumer_event) => {
-            state
-                .hid
-                .send_consumer(consumer_event)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-    }
-
-    Ok(())
+    input
+        .dispatch(state.hid.as_ref(), event)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

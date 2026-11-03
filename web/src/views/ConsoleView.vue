@@ -2059,18 +2059,26 @@ async function handleWol(mac: string) {
   }
 }
 
-function handleHidError(_error: any, _operation: string) {
+let lastHidErrorAt = 0
+function handleHidError(_error: unknown, _operation: string) {
+  const now = Date.now()
+  if (now - lastHidErrorAt < 2000) return
+  lastHidErrorAt = now
+  toast.error('Input connection unavailable', {
+    description: 'Input was not sent. Reconnect the console before continuing.',
+  })
 }
 
 async function transmitKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
-  if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
+  if (videoMode.value !== 'mjpeg') {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
       key,
       modifier,
     }
     const sent = webrtc.sendKeyboard(event)
-    if (sent) return
+    if (!sent) throw new Error('Input connection unavailable')
+    return // Do not switch transports midway through a gesture.
   }
   await hidApi.keyboard(type, key, modifier)
 }
@@ -2092,8 +2100,8 @@ async function executeShortcut(shortcut: KeyboardShortcut) {
   const controller = new AbortController()
   shortcutController = controller
   shortcutBusy.value = true
-  // Unlike the low-latency WebRTC channel (limited retransmissions), WebSocket
-  // delivers the whole chord reliably and in order, independent of video mode.
+  // Keep each shortcut chord on one reliable ordered WebSocket connection,
+  // independent of video mode.
   try {
     await executeKeyboardShortcut(shortcut, async (type, key, modifier) => {
       if (type === 'down' && hidStatus.value !== 'connected') throw new Error('HID disconnected')
@@ -2143,7 +2151,7 @@ async function toggleKeyboardLock(key: CanonicalKey.CapsLock | CanonicalKey.NumL
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
-  if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
+  if (videoMode.value !== 'mjpeg') {
     const event: HidMouseEvent = {
       type: data.type === 'move_abs' ? 'moveabs' : data.type,
       x: data.x,
@@ -2152,7 +2160,8 @@ function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scr
       scroll: data.scroll,
     }
     const sent = webrtc.sendMouse(event)
-    if (sent) return
+    if (!sent) handleHidError(null, 'mouse')
+    return // Do not switch transports midway through a gesture.
   }
   hidApi.mouse(data).catch(err => handleHidError(err, `mouse ${data.type}`))
 }
