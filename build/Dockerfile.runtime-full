@@ -41,6 +41,24 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
         apt-get install -y --no-install-recommends \
             libdrm2 libva2; \
+        # Vulkan for the native HDR tone mapper (src/video/hdr). Debian 12's Mesa
+        # cannot drive the Mali-G610, so PanVK (Mesa >= 25.0.2) comes from
+        # bookworm-backports. It is inert without a GPU render node.
+        echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list; \
+        if [ -n "$APT_MIRROR" ]; then \
+            sed -i "s@deb.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/backports.list; \
+        fi; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends -t bookworm-backports \
+            libvulkan1 mesa-vulkan-drivers; \
+        # Only the Mali (PanVK) driver is used. Drop the other Vulkan drivers and
+        # the LLVM/ICU/z3 stack they alone pull in (about 190 MB, leaving +20 MB);
+        # dpkg is told to ignore the now-unmet dependency of mesa-vulkan-drivers.
+        for icd in broadcom freedreno gfxstream lvp radeon virtio; do \
+            rm -f "/usr/lib/aarch64-linux-gnu/libvulkan_${icd}.so" \
+                /usr/share/vulkan/icd.d/*"${icd}"*.json; \
+        done; \
+        dpkg --purge --force-depends libllvm15 libz3-4 libxml2 libicu72 libedit2; \
     elif [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
         apt-get install -y --no-install-recommends \
             libdrm2 libva2; \
