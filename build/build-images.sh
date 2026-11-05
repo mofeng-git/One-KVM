@@ -31,7 +31,7 @@ build_arch() {
             local rust_root="${RUSTUP_UPDATE_ROOT_MIRROR:-https://mirrors.ustc.edu.cn/rust-static/rustup}"
             local crates_sparse="${CARGO_SPARSE_MIRROR:-sparse+https://mirrors.ustc.edu.cn/crates.io-index/}"
             local crates_git="${CARGO_GIT_MIRROR:-https://mirrors.ustc.edu.cn/crates.io-index}"
-            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://ghfast.top/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-dockerproxy.net/library/debian:11}"
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://ghfast.top/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-dockerproxy.net/library/debian:11} --build-arg APT_ARCHIVE_MIRROR=${APT_ARCHIVE_MIRROR:-https://mirror.nju.edu.cn/debian-archive}"
             cross_build_opts="$cross_build_opts --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg NO_PROXY="
             cross_build_opts="$cross_build_opts --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg no_proxy="
             echo "=== China mirror acceleration: enabled ==="

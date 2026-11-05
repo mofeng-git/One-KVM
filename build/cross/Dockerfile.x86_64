@@ -18,20 +18,21 @@ ARG X265_VERSION=3.4
 ARG OPUS_VERSION=1.5.2
 ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
 
-# Optionally use China mirrors for builds in China.
-# Debian 11 uses /etc/apt/sources.list while Debian 12 uses the deb822 file,
-# so rewrite whichever one the base image ships.
-RUN if [ "$CHINAMIRRO" = "1" ]; then \
-        for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
-            if [ -f "$f" ]; then \
-                sed -i -E \
-                    -e 's@http://security.debian.org/debian-security@http://mirrors.tuna.tsinghua.edu.cn/debian-security@g' \
-                    -e 's@http://deb.debian.org/debian-security@http://mirrors.tuna.tsinghua.edu.cn/debian-security@g' \
-                    -e 's@http://deb.debian.org/debian([[:space:]]|$)@http://mirrors.tuna.tsinghua.edu.cn/debian\1@g' \
-                    "$f"; \
-            fi; \
-        done; \
-    fi
+# Debian 11 is EOL: deb.debian.org still serves a package index that points at
+# pool files which have been removed (404). Build against archive.debian.org,
+# which still hosts the complete bullseye, updates and security suites.
+# Override APT_ARCHIVE_MIRROR to use a closer archive mirror.
+ARG APT_ARCHIVE_MIRROR=http://archive.debian.org
+RUN for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+        if [ -f "$f" ]; then \
+            sed -i -E \
+                -e "s@https?://security\.debian\.org/debian-security@${APT_ARCHIVE_MIRROR%/}/debian-security@g" \
+                -e "s@https?://deb\.debian\.org/debian@${APT_ARCHIVE_MIRROR%/}/debian@g" \
+                "$f"; \
+        fi; \
+    done \
+    && printf 'Acquire::Check-Valid-Until "false";\nAcquire::Retries "5";\n' \
+        > /etc/apt/apt.conf.d/99-one-kvm-archive
 
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
