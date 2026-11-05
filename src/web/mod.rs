@@ -1,6 +1,7 @@
 mod audio_ws;
 mod error;
 mod handlers;
+mod logs_ws;
 pub mod openwrt_system;
 mod routes;
 pub(crate) mod state;
@@ -11,6 +12,7 @@ mod ws;
 
 pub use audio_ws::audio_ws_handler;
 pub use error::ErrorResponse;
+pub use logs_ws::logs_ws_handler;
 pub use routes::create_router;
 #[cfg(not(debug_assertions))]
 pub use static_files::StaticAssets;

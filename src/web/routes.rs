@@ -18,6 +18,7 @@ use tower_http::{
 
 use super::audio_ws::audio_ws_handler;
 use super::handlers;
+use super::logs_ws::logs_ws_handler;
 #[cfg(unix)]
 use super::uac_ws::uac_audio_ws_handler;
 use super::ws::ws_handler;
@@ -70,6 +71,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/video/input-status", get(handlers::video_input_status))
         // WebSocket endpoint for real-time events
         .route("/ws", any(ws_handler))
+        // WebSocket endpoint streaming runtime log lines
+        .route("/ws/logs", any(logs_ws_handler))
+        // Runtime log report (description + recent log attachment)
+        .route("/logs/report", post(handlers::report_runtime_logs))
         // Stream control endpoints
         .route("/stream/status", get(handlers::stream_state))
         .route("/stream/start", post(handlers::stream_start))

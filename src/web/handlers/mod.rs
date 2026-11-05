@@ -10,6 +10,7 @@ mod auth;
 mod hid_api;
 mod host_power;
 mod inventory;
+mod logs;
 mod mcp;
 #[cfg(unix)]
 mod msd_api;
@@ -26,6 +27,7 @@ pub use auth::*;
 pub use hid_api::*;
 pub use host_power::*;
 pub use inventory::*;
+pub use logs::*;
 pub use mcp::*;
 #[cfg(unix)]
 pub use msd_api::*;

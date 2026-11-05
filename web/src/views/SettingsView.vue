@@ -9,6 +9,7 @@ import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
 import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
+import RuntimeLogsPanel from '@/components/RuntimeLogsPanel.vue'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -163,6 +164,7 @@ import {
   PanelTop,
   PanelLeft,
   GalleryHorizontalEnd,
+  ScrollText,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -202,6 +204,7 @@ const SETTINGS_SECTION_IDS = [
   'atx',
   'environment',
   'other',
+  'logs',
   'ext-ttyd',
   'third-party-access',
   'mcp',
@@ -231,6 +234,7 @@ const navGroups = computed(() => [
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
       { id: 'other', label: t('settings.other'), icon: Wrench },
+      { id: 'logs', label: t('settings.logs'), icon: ScrollText },
     ],
   },
   {
@@ -328,6 +332,8 @@ async function loadSectionData(section: SettingsSectionId) {
       await Promise.all([loadConfig(), loadAtxConfig(), loadAtxDevices()])
       return
     case 'environment':
+      return
+    case 'logs':
       return
     case 'other':
       await Promise.all([loadWatchdogConfig(), fetchUsbDevices()])
@@ -6251,6 +6257,10 @@ watch(isWindows, () => {
                 </p>
               </CardFooter>
             </Card>
+          </div>
+
+          <div v-if="activeSection === 'logs'" class="space-y-4">
+            <RuntimeLogsPanel />
           </div>
 
           <!-- About: usage, host identity and one upgrade card. -->
