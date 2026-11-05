@@ -59,9 +59,15 @@ jobs:
 
     - name: Build with cross
       run: |
-        cross build --target ${{ matrix.target }} --release
-        # Also build static version for better portability
-        cross build --target ${{ matrix.target }} --profile release-static
+        # ARM build images ship a static FFmpeg built with --enable-rkmpp, so the
+        # rkmpp feature is required for the link step as well as for the encoders.
+        features=()
+        case "${{ matrix.target }}" in
+          aarch64-*|armv7-*) features=(--features rkmpp) ;;
+        esac
+        cross build --target ${{ matrix.target }} --release "${features[@]}"
+        # Also build size-optimized version for better portability
+        cross build --target ${{ matrix.target }} --profile release-static "${features[@]}"
 
     - name: Prepare artifacts
       run: |

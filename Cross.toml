@@ -1,5 +1,7 @@
 # Cross-compilation configuration for One-KVM
-# Uses pre-built custom Debian 12 based images for consistent build/runtime environment
+# Uses pre-built custom Debian 11 based images for consistent build/runtime environment
+# Building on Debian 11 keeps the glibc baseline at 2.31, so binaries run on
+# Debian 11/12, Ubuntu 20.04+, and Raspberry Pi OS bullseye/bookworm.
 # See: https://github.com/cross-rs/cross
 
 [build]
