@@ -1,6 +1,8 @@
 name: Build
 
 on:
+  push:
+    branches: [ 'one-kvm-*' ]
   pull_request:
   workflow_dispatch:
     inputs:

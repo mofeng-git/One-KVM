@@ -1,6 +1,8 @@
 name: PR Check
 
 on:
+  push:
+    branches: [ 'one-kvm-*' ]
   pull_request:
     branches: [ main, master ]
 

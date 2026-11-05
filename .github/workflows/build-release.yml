@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'one-kvm-*' ]
     tags: [ 'v*' ]  # 当创建标签时触发构建
   pull_request:
     branches: [ main, master ]
