@@ -8,53 +8,232 @@ use tracing::{debug, info, warn};
 
 use super::executor::{timing, AtxKeyExecutor};
 use super::led::LedSensor;
-use super::types::{AtxKeyConfig, AtxLedConfig, AtxState, PowerStatus};
+use super::types::{
+    AtxAction, AtxDriverType, AtxInputBinding, AtxKeyConfig, AtxOutputBinding, AtxState, HddStatus,
+    PowerStatus,
+};
 use crate::error::{AppError, Result};
 
-/// ATX power control configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AtxControllerConfig {
-    /// Whether ATX is enabled
     pub enabled: bool,
-    /// Power button configuration (used for both short and long press)
-    pub power: AtxKeyConfig,
-    /// Reset button configuration
-    pub reset: AtxKeyConfig,
-    /// LED sensing configuration
-    pub led: AtxLedConfig,
+    pub driver: AtxDriverType,
+    pub device: String,
+    pub baud_rate: u32,
+    pub power: AtxOutputBinding,
+    pub reset: AtxOutputBinding,
+    pub led: AtxInputBinding,
+    pub hdd: AtxInputBinding,
 }
 
-impl Default for AtxControllerConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            power: AtxKeyConfig::default(),
-            reset: AtxKeyConfig::default(),
-            led: AtxLedConfig::default(),
-        }
-    }
-}
-
-/// Internal state holding all ATX components
 /// Grouped together to reduce lock acquisitions
 struct AtxInner {
     config: AtxControllerConfig,
     power_executor: Option<AtxKeyExecutor>,
     reset_executor: Option<AtxKeyExecutor>,
     led_sensor: Option<LedSensor>,
+    hdd_sensor: Option<LedSensor>,
 }
 
-/// ATX Controller
-///
 /// Manages ATX power control through independent executors for each action.
 /// Supports hot-reload of configuration.
 pub struct AtxController {
-    /// Single lock for all internal state to reduce lock contention
     inner: RwLock<AtxInner>,
 }
 
 impl AtxController {
-    /// Create a new ATX controller with the specified configuration
+    fn build_key_config(
+        config: &AtxControllerConfig,
+        binding: &AtxOutputBinding,
+    ) -> Option<AtxKeyConfig> {
+        if !binding.is_configured_for(config.driver, &config.device) {
+            return None;
+        }
+
+        let device = match config.driver {
+            AtxDriverType::Gpio => binding.device.clone(),
+            AtxDriverType::UsbRelay | AtxDriverType::Serial => config.device.clone(),
+            AtxDriverType::None => return None,
+        };
+
+        Some(AtxKeyConfig {
+            driver: config.driver,
+            device,
+            pin: binding.pin,
+            active_level: binding.active_level,
+            baud_rate: config.baud_rate,
+        })
+    }
+
+    fn runtime_key_configs(
+        config: &AtxControllerConfig,
+    ) -> (Option<AtxKeyConfig>, Option<AtxKeyConfig>) {
+        (
+            Self::build_key_config(config, &config.power),
+            Self::build_key_config(config, &config.reset),
+        )
+    }
+
+    fn should_share_serial_device(config: &AtxControllerConfig) -> bool {
+        if config.driver != AtxDriverType::Serial || config.device.trim().is_empty() {
+            return false;
+        }
+
+        config.power.enabled && config.reset.enabled
+    }
+
+    async fn init_key_executor(
+        warn_label: &str,
+        info_label: &str,
+        config: AtxKeyConfig,
+        mut executor: AtxKeyExecutor,
+    ) -> Option<AtxKeyExecutor> {
+        if let Err(e) = executor.init().await {
+            warn!("Failed to initialize {} executor: {}", warn_label, e);
+            return None;
+        }
+
+        info!(
+            "{} executor initialized: {:?} on {} pin {}",
+            info_label, config.driver, config.device, config.pin
+        );
+        Some(executor)
+    }
+
+    async fn init_components(inner: &mut AtxInner) {
+        let (power_config, reset_config) = Self::runtime_key_configs(&inner.config);
+
+        if Self::should_share_serial_device(&inner.config) {
+            match AtxKeyExecutor::open_shared_serial(&inner.config.device, inner.config.baud_rate) {
+                Ok(shared_serial) => {
+                    for (slot, warn_label, info_label, config, serial) in [
+                        (
+                            &mut inner.power_executor,
+                            "power",
+                            "Power",
+                            power_config.clone(),
+                            shared_serial.clone(),
+                        ),
+                        (
+                            &mut inner.reset_executor,
+                            "reset",
+                            "Reset",
+                            reset_config.clone(),
+                            shared_serial,
+                        ),
+                    ] {
+                        if let Some(config) = config {
+                            let executor =
+                                AtxKeyExecutor::new_with_shared_serial(config.clone(), serial);
+                            *slot =
+                                Self::init_key_executor(warn_label, info_label, config, executor)
+                                    .await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to open shared serial device {} for ATX power/reset: {}",
+                        inner.config.device, e
+                    );
+                }
+            }
+        } else {
+            for (slot, warn_label, info_label, config) in [
+                (&mut inner.power_executor, "power", "Power", power_config),
+                (&mut inner.reset_executor, "reset", "Reset", reset_config),
+            ] {
+                if let Some(config) = config {
+                    let executor = AtxKeyExecutor::new(config.clone());
+                    *slot = Self::init_key_executor(warn_label, info_label, config, executor).await;
+                }
+            }
+        }
+
+        if inner.config.driver == AtxDriverType::Gpio && inner.config.led.is_configured() {
+            let mut sensor = LedSensor::new(inner.config.led.clone());
+            if let Err(e) = sensor.init().await {
+                warn!("Failed to initialize LED sensor: {}", e);
+            } else {
+                info!(
+                    "LED sensor initialized on {} pin {}",
+                    inner.config.led.device, inner.config.led.pin
+                );
+                inner.led_sensor = Some(sensor);
+            }
+        }
+
+        if inner.config.driver == AtxDriverType::Gpio && inner.config.hdd.is_configured() {
+            let mut sensor = LedSensor::new(inner.config.hdd.clone());
+            if let Err(e) = sensor.init().await {
+                warn!("Failed to initialize HDD sensor: {}", e);
+            } else {
+                info!(
+                    "HDD sensor initialized on {} pin {}",
+                    inner.config.hdd.device, inner.config.hdd.pin
+                );
+                inner.hdd_sensor = Some(sensor);
+            }
+        }
+    }
+
+    async fn shutdown_components(inner: &mut AtxInner) {
+        for (slot, label) in [
+            (&mut inner.power_executor, "power"),
+            (&mut inner.reset_executor, "reset"),
+        ] {
+            if let Some(executor) = slot.as_mut() {
+                if let Err(e) = executor.shutdown().await {
+                    warn!("Failed to shutdown {} executor: {}", label, e);
+                }
+            }
+            *slot = None;
+        }
+
+        if let Some(sensor) = inner.led_sensor.as_mut() {
+            if let Err(e) = sensor.shutdown().await {
+                warn!("Failed to shutdown LED sensor: {}", e);
+            }
+        }
+        inner.led_sensor = None;
+
+        if let Some(sensor) = inner.hdd_sensor.as_mut() {
+            if let Err(e) = sensor.shutdown().await {
+                warn!("Failed to shutdown HDD sensor: {}", e);
+            }
+        }
+        inner.hdd_sensor = None;
+    }
+
+    async fn read_power_status(sensor: Option<&LedSensor>) -> PowerStatus {
+        let Some(sensor) = sensor else {
+            return PowerStatus::Unknown;
+        };
+
+        match sensor.read().await {
+            Ok(status) => status,
+            Err(e) => {
+                debug!("Failed to read ATX LED sensor: {}", e);
+                PowerStatus::Unknown
+            }
+        }
+    }
+
+    async fn read_hdd_status(sensor: Option<&LedSensor>) -> HddStatus {
+        let Some(sensor) = sensor else {
+            return HddStatus::Unknown;
+        };
+
+        match sensor.read_active().await {
+            Ok(true) => HddStatus::Active,
+            Ok(false) => HddStatus::Inactive,
+            Err(e) => {
+                debug!("Failed to read ATX HDD sensor: {}", e);
+                HddStatus::Unknown
+            }
+        }
+    }
+
     pub fn new(config: AtxControllerConfig) -> Self {
         Self {
             inner: RwLock::new(AtxInner {
@@ -62,16 +241,15 @@ impl AtxController {
                 power_executor: None,
                 reset_executor: None,
                 led_sensor: None,
+                hdd_sensor: None,
             }),
         }
     }
 
-    /// Create a disabled ATX controller
     pub fn disabled() -> Self {
         Self::new(AtxControllerConfig::default())
     }
 
-    /// Initialize the ATX controller and its executors
     pub async fn init(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
 
@@ -82,275 +260,194 @@ impl AtxController {
 
         info!("Initializing ATX controller");
 
-        // Initialize power executor
-        if inner.config.power.is_configured() {
-            let mut executor = AtxKeyExecutor::new(inner.config.power.clone());
-            if let Err(e) = executor.init().await {
-                warn!("Failed to initialize power executor: {}", e);
-            } else {
-                info!(
-                    "Power executor initialized: {:?} on {} pin {}",
-                    inner.config.power.driver, inner.config.power.device, inner.config.power.pin
-                );
-                inner.power_executor = Some(executor);
-            }
-        }
+        Self::init_components(&mut inner).await;
 
-        // Initialize reset executor
-        if inner.config.reset.is_configured() {
-            let mut executor = AtxKeyExecutor::new(inner.config.reset.clone());
-            if let Err(e) = executor.init().await {
-                warn!("Failed to initialize reset executor: {}", e);
-            } else {
-                info!(
-                    "Reset executor initialized: {:?} on {} pin {}",
-                    inner.config.reset.driver, inner.config.reset.device, inner.config.reset.pin
-                );
-                inner.reset_executor = Some(executor);
-            }
-        }
-
-        // Initialize LED sensor
-        if inner.config.led.is_configured() {
-            let mut sensor = LedSensor::new(inner.config.led.clone());
-            if let Err(e) = sensor.init().await {
-                warn!("Failed to initialize LED sensor: {}", e);
-            } else {
-                info!(
-                    "LED sensor initialized on {} pin {}",
-                    inner.config.led.gpio_chip, inner.config.led.gpio_pin
-                );
-                inner.led_sensor = Some(sensor);
-            }
-        }
-
-        info!("ATX controller initialized successfully");
         Ok(())
     }
 
-    /// Reload the ATX controller with new configuration
-    ///
-    /// This is called when configuration changes and supports hot-reload.
-    pub async fn reload(&self, new_config: AtxControllerConfig) -> Result<()> {
-        info!("Reloading ATX controller with new configuration");
+    pub async fn reload(&self, config: AtxControllerConfig) -> Result<()> {
+        let mut inner = self.inner.write().await;
 
-        // Shutdown existing executors
-        self.shutdown_internal().await?;
+        info!("Reloading ATX controller configuration");
 
-        // Update configuration and re-initialize
-        {
-            let mut inner = self.inner.write().await;
-            inner.config = new_config;
+        // Shutdown existing components first, then rebuild with new config.
+        Self::shutdown_components(&mut inner).await;
+        inner.config = config;
+
+        if !inner.config.enabled {
+            info!("ATX disabled after reload");
+            return Ok(());
         }
 
-        // Re-initialize
-        self.init().await?;
+        Self::init_components(&mut inner).await;
+        info!("ATX controller reloaded");
 
-        info!("ATX controller reloaded successfully");
         Ok(())
     }
 
-    /// Get current ATX state (single lock acquisition)
-    pub async fn state(&self) -> AtxState {
-        let inner = self.inner.read().await;
-
-        let power_status = if let Some(sensor) = inner.led_sensor.as_ref() {
-            sensor.read().await.unwrap_or(PowerStatus::Unknown)
-        } else {
-            PowerStatus::Unknown
-        };
-
-        AtxState {
-            available: inner.config.enabled,
-            power_configured: inner
-                .power_executor
-                .as_ref()
-                .map(|e| e.is_initialized())
-                .unwrap_or(false),
-            reset_configured: inner
-                .reset_executor
-                .as_ref()
-                .map(|e| e.is_initialized())
-                .unwrap_or(false),
-            power_status,
-            led_supported: inner
-                .led_sensor
-                .as_ref()
-                .map(|s| s.is_initialized())
-                .unwrap_or(false),
-        }
-    }
-
-    /// Get current state as SystemEvent
-    pub async fn current_state_event(&self) -> crate::events::SystemEvent {
-        let state = self.state().await;
-        crate::events::SystemEvent::AtxStateChanged {
-            power_status: state.power_status,
-        }
-    }
-
-    /// Check if ATX is available
-    pub async fn is_available(&self) -> bool {
-        let inner = self.inner.read().await;
-        inner.config.enabled
-    }
-
-    /// Check if power button is configured and initialized
-    pub async fn is_power_ready(&self) -> bool {
-        let inner = self.inner.read().await;
-        inner
-            .power_executor
-            .as_ref()
-            .map(|e| e.is_initialized())
-            .unwrap_or(false)
-    }
-
-    /// Check if reset button is configured and initialized
-    pub async fn is_reset_ready(&self) -> bool {
-        let inner = self.inner.read().await;
-        inner
-            .reset_executor
-            .as_ref()
-            .map(|e| e.is_initialized())
-            .unwrap_or(false)
-    }
-
-    /// Short press power button (turn on or graceful shutdown)
-    pub async fn power_short(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        let executor = inner
-            .power_executor
-            .as_ref()
-            .ok_or_else(|| AppError::Internal("Power button not configured".to_string()))?;
-
-        info!(
-            "ATX: Short press power button ({}ms)",
-            timing::SHORT_PRESS.as_millis()
-        );
-        executor.pulse(timing::SHORT_PRESS).await
-    }
-
-    /// Long press power button (force power off)
-    pub async fn power_long(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        let executor = inner
-            .power_executor
-            .as_ref()
-            .ok_or_else(|| AppError::Internal("Power button not configured".to_string()))?;
-
-        info!(
-            "ATX: Long press power button ({}ms)",
-            timing::LONG_PRESS.as_millis()
-        );
-        executor.pulse(timing::LONG_PRESS).await
-    }
-
-    /// Press reset button
-    pub async fn reset(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        let executor = inner
-            .reset_executor
-            .as_ref()
-            .ok_or_else(|| AppError::Internal("Reset button not configured".to_string()))?;
-
-        info!(
-            "ATX: Press reset button ({}ms)",
-            timing::RESET_PRESS.as_millis()
-        );
-        executor.pulse(timing::RESET_PRESS).await
-    }
-
-    /// Get current power status from LED sensor
-    pub async fn power_status(&self) -> Result<PowerStatus> {
-        let inner = self.inner.read().await;
-        match inner.led_sensor.as_ref() {
-            Some(sensor) => sensor.read().await,
-            None => Ok(PowerStatus::Unknown),
-        }
-    }
-
-    /// Shutdown the ATX controller
     pub async fn shutdown(&self) -> Result<()> {
-        info!("Shutting down ATX controller");
-        self.shutdown_internal().await?;
+        let mut inner = self.inner.write().await;
+        Self::shutdown_components(&mut inner).await;
         info!("ATX controller shutdown complete");
         Ok(())
     }
 
-    /// Internal shutdown helper
-    async fn shutdown_internal(&self) -> Result<()> {
-        let mut inner = self.inner.write().await;
+    pub async fn trigger_power_action(&self, action: AtxAction) -> Result<()> {
+        let inner = self.inner.read().await;
 
-        // Shutdown power executor
-        if let Some(mut executor) = inner.power_executor.take() {
-            executor.shutdown().await.ok();
-        }
+        let (executor, duration) = match action {
+            AtxAction::Short => (inner.power_executor.as_ref(), timing::SHORT_PRESS),
+            AtxAction::Long => (inner.power_executor.as_ref(), timing::LONG_PRESS),
+            AtxAction::Reset => (inner.reset_executor.as_ref(), timing::RESET_PRESS),
+        };
 
-        // Shutdown reset executor
-        if let Some(mut executor) = inner.reset_executor.take() {
-            executor.shutdown().await.ok();
-        }
+        let Some(executor) = executor else {
+            return Err(AppError::Config(
+                match action {
+                    AtxAction::Reset => "Reset button not configured for ATX controller",
+                    _ => "Power button not configured for ATX controller",
+                }
+                .to_string(),
+            ));
+        };
 
-        // Shutdown LED sensor
-        if let Some(mut sensor) = inner.led_sensor.take() {
-            sensor.shutdown().await.ok();
-        }
-
+        executor.pulse(duration).await?;
         Ok(())
     }
-}
 
-impl Drop for AtxController {
-    fn drop(&mut self) {
-        debug!("ATX controller dropped");
+    pub async fn power_short(&self) -> Result<()> {
+        self.trigger_power_action(AtxAction::Short).await
+    }
+
+    pub async fn power_long(&self) -> Result<()> {
+        self.trigger_power_action(AtxAction::Long).await
+    }
+
+    pub async fn reset(&self) -> Result<()> {
+        self.trigger_power_action(AtxAction::Reset).await
+    }
+
+    pub async fn power_status(&self) -> PowerStatus {
+        let inner = self.inner.read().await;
+        Self::read_power_status(inner.led_sensor.as_ref()).await
+    }
+
+    pub async fn state(&self) -> AtxState {
+        let inner = self.inner.read().await;
+
+        let power_status = Self::read_power_status(inner.led_sensor.as_ref()).await;
+        let hdd_status = Self::read_hdd_status(inner.hdd_sensor.as_ref()).await;
+
+        AtxState {
+            available: inner.config.enabled,
+            driver: if inner.config.enabled {
+                inner.config.driver
+            } else {
+                AtxDriverType::None
+            },
+            power_configured: inner.power_executor.is_some(),
+            reset_configured: inner.reset_executor.is_some(),
+            power_status,
+            led_supported: inner.led_sensor.is_some(),
+            hdd_status,
+            hdd_supported: inner.hdd_sensor.is_some(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::atx::{AtxDriverType, AtxOutputBinding};
 
     #[test]
-    fn test_controller_config_default() {
-        let config = AtxControllerConfig::default();
-        assert!(!config.enabled);
-        assert!(!config.power.is_configured());
-        assert!(!config.reset.is_configured());
-        assert!(!config.led.is_configured());
-    }
-
-    #[test]
-    fn test_controller_creation() {
-        let controller = AtxController::disabled();
-        assert!(controller.inner.try_read().is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_controller_disabled_state() {
-        let controller = AtxController::disabled();
-        let state = controller.state().await;
-        assert!(!state.available);
-        assert!(!state.power_configured);
-        assert!(!state.reset_configured);
-    }
-
-    #[tokio::test]
-    async fn test_controller_init_disabled() {
-        let controller = AtxController::disabled();
-        let result = controller.init().await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_controller_is_available() {
-        let controller = AtxController::disabled();
-        assert!(!controller.is_available().await);
-
+    fn test_should_share_serial_device_true() {
         let config = AtxControllerConfig {
-            enabled: true,
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            baud_rate: 9600,
+            power: AtxOutputBinding {
+                enabled: true,
+                pin: 1,
+                ..Default::default()
+            },
+            reset: AtxOutputBinding {
+                enabled: true,
+                pin: 2,
+                ..Default::default()
+            },
             ..Default::default()
         };
-        let controller = AtxController::new(config);
-        assert!(controller.is_available().await);
+
+        assert!(AtxController::should_share_serial_device(&config));
+    }
+
+    #[test]
+    fn test_should_share_serial_device_false_when_reset_disabled() {
+        let config = AtxControllerConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            baud_rate: 9600,
+            power: AtxOutputBinding {
+                enabled: true,
+                pin: 1,
+                ..Default::default()
+            },
+            reset: AtxOutputBinding {
+                enabled: false,
+                pin: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(!AtxController::should_share_serial_device(&config));
+    }
+
+    #[test]
+    fn test_gpio_runtime_key_uses_binding_device() {
+        let config = AtxControllerConfig {
+            driver: AtxDriverType::Gpio,
+            device: "/dev/ignored".to_string(),
+            baud_rate: 9600,
+            power: AtxOutputBinding {
+                enabled: true,
+                device: "/dev/gpiochip1".to_string(),
+                pin: 4,
+                active_level: super::super::types::ActiveLevel::Low,
+            },
+            ..Default::default()
+        };
+
+        let (power, reset) = AtxController::runtime_key_configs(&config);
+        let power = power.unwrap();
+        assert!(reset.is_none());
+        assert_eq!(power.driver, AtxDriverType::Gpio);
+        assert_eq!(power.device, "/dev/gpiochip1");
+        assert_eq!(power.pin, 4);
+        assert_eq!(power.active_level, super::super::types::ActiveLevel::Low);
+    }
+
+    #[test]
+    fn test_serial_runtime_key_uses_top_level_device() {
+        let config = AtxControllerConfig {
+            driver: AtxDriverType::Serial,
+            device: "/dev/ttyUSB0".to_string(),
+            baud_rate: 115200,
+            power: AtxOutputBinding {
+                enabled: true,
+                device: "/dev/ignored".to_string(),
+                pin: 3,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let (power, _) = AtxController::runtime_key_configs(&config);
+        let power = power.unwrap();
+        assert_eq!(power.driver, AtxDriverType::Serial);
+        assert_eq!(power.device, "/dev/ttyUSB0");
+        assert_eq!(power.pin, 3);
+        assert_eq!(power.baud_rate, 115200);
     }
 }

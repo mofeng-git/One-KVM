@@ -1,42 +1,32 @@
-//! OTG USB Gadget HID backend
+//! Linux gadget HID: `/dev/hidg*` opened from [`crate::otg::OtgService`].
+//! Typical nodes: hidg0 keyboard, hidg1 relative mouse, hidg2 absolute, hidg3 consumer control.
 //!
-//! This backend uses Linux USB Gadget API to emulate USB HID devices.
-//! It creates and manages three HID devices:
-//! - hidg0: Keyboard (8-byte reports, with LED feedback)
-//! - hidg1: Relative Mouse (4-byte reports)
-//! - hidg2: Absolute Mouse (6-byte reports)
-//!
-//! Requirements:
-//! - USB OTG/Device controller (UDC)
-//! - ConfigFS with USB gadget support
-//! - Root privileges for gadget setup
-//!
-//! Error Recovery:
-//! This module implements automatic device reconnection based on PiKVM's approach.
-//! When ESHUTDOWN or EAGAIN errors occur (common during MSD operations), the device
-//! file handles are closed and reopened on the next operation.
-//! See: https://github.com/raspberrypi/linux/issues/4373
+//! Polled timed writes (JetKVM-style). Treat `ESHUTDOWN` (108) by closing handles and reopening; keep fd on `EAGAIN` (11). Host/gadget teardown during MSD resembles PiKVM. <https://github.com/raspberrypi/linux/issues/4373>
 
 use async_trait::async_trait;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use parking_lot::Mutex;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Read;
+use std::os::fd::AsFd;
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::io::AsFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use tokio::sync::watch;
 use tracing::{debug, info, trace, warn};
 
-use super::backend::HidBackend;
-use super::keymap;
+use super::backend::{HidBackend, HidBackendRuntimeSnapshot};
+use super::otg_device::OtgDeviceIo;
 use super::types::{
     ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
 };
 use crate::error::{AppError, Result};
+use crate::events::LedState;
 use crate::otg::{wait_for_hid_devices, HidDevicePaths};
 
-/// Device type for ensure_device operations
 #[derive(Debug, Clone, Copy)]
 enum DeviceType {
     Keyboard,
@@ -45,23 +35,7 @@ enum DeviceType {
     ConsumerControl,
 }
 
-/// Keyboard LED state
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct LedState {
-    /// Num Lock LED
-    pub num_lock: bool,
-    /// Caps Lock LED
-    pub caps_lock: bool,
-    /// Scroll Lock LED
-    pub scroll_lock: bool,
-    /// Compose LED
-    pub compose: bool,
-    /// Kana LED
-    pub kana: bool,
-}
-
 impl LedState {
-    /// Create from raw byte
     pub fn from_byte(b: u8) -> Self {
         Self {
             num_lock: b & 0x01 != 0,
@@ -72,7 +46,6 @@ impl LedState {
         }
     }
 
-    /// Convert to raw byte
     pub fn to_byte(&self) -> u8 {
         let mut b = 0u8;
         if self.num_lock {
@@ -94,65 +67,50 @@ impl LedState {
     }
 }
 
-/// OTG HID backend with 4 devices
-///
-/// This backend opens HID device files created by OtgService.
-/// It does NOT manage the USB gadget itself - that's handled by OtgService.
-///
-/// ## Error Recovery
-///
-/// Based on PiKVM's implementation, this backend automatically handles:
-/// - EAGAIN (errno 11): Resource temporarily unavailable - just retry later, don't close device
-/// - ESHUTDOWN (errno 108): Transport endpoint shutdown - close and reopen device
-///
-/// When ESHUTDOWN occurs, the device file handle is closed and will be
-/// reopened on the next operation attempt.
+/// Opens `/dev/hidg*` nodes provisioned by `OtgService`; gadget lifecycle is not handled here.
 pub struct OtgBackend {
-    /// Keyboard device path (/dev/hidg0)
     keyboard_path: Option<PathBuf>,
-    /// Relative mouse device path (/dev/hidg1)
     mouse_rel_path: Option<PathBuf>,
-    /// Absolute mouse device path (/dev/hidg2)
     mouse_abs_path: Option<PathBuf>,
-    /// Consumer control device path (/dev/hidg3)
     consumer_path: Option<PathBuf>,
-    /// Keyboard device file
     keyboard_dev: Mutex<Option<File>>,
-    /// Relative mouse device file
     mouse_rel_dev: Mutex<Option<File>>,
-    /// Absolute mouse device file
     mouse_abs_dev: Mutex<Option<File>>,
-    /// Consumer control device file
     consumer_dev: Mutex<Option<File>>,
-    /// Current keyboard state
+    keyboard_leds_enabled: bool,
     keyboard_state: Mutex<KeyboardReport>,
-    /// Current mouse button state
     mouse_buttons: AtomicU8,
-    /// Last known LED state (using parking_lot::RwLock for sync access)
-    led_state: parking_lot::RwLock<LedState>,
-    /// Screen resolution for absolute mouse (using parking_lot::RwLock for sync access)
+    macos_drag: bool,
+    macos_drag_state: Mutex<super::macos_drag::MacosDrag>,
+    led_state: Arc<parking_lot::RwLock<LedState>>,
     screen_resolution: parking_lot::RwLock<Option<(u32, u32)>>,
-    /// UDC name for state checking (e.g., "fcc00000.usb")
-    udc_name: parking_lot::RwLock<Option<String>>,
-    /// Whether the device is currently online (UDC configured and devices accessible)
+    udc_name: Arc<parking_lot::RwLock<Option<String>>>,
+    initialized: AtomicBool,
     online: AtomicBool,
-    /// Last error log time for throttling (using parking_lot for sync)
+    last_error: parking_lot::RwLock<Option<(String, String)>>,
     last_error_log: parking_lot::Mutex<std::time::Instant>,
-    /// Error count since last successful operation (for log throttling)
     error_count: AtomicU8,
-    /// Consecutive EAGAIN count (for offline threshold detection)
-    eagain_count: AtomicU8,
+    runtime_notify_tx: watch::Sender<()>,
+    runtime_worker_stop: Arc<AtomicBool>,
+    runtime_worker: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
-/// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
-const HID_WRITE_TIMEOUT_MS: i32 = 500;
+const HID_WRITE_TIMEOUT_MS: i32 = 20;
+const OTG_RUNTIME_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 impl OtgBackend {
-    /// Create OTG backend from device paths provided by OtgService
-    ///
-    /// This is the ONLY way to create an OtgBackend - it no longer manages
-    /// the USB gadget itself. The gadget must already be set up by OtgService.
+    /// Gadget must already exist; paths come from `OtgService`.
     pub fn from_handles(paths: HidDevicePaths) -> Result<Self> {
+        Self::with_macos_drag(paths, false)
+    }
+
+    pub fn with_macos_drag(paths: HidDevicePaths, macos_drag: bool) -> Result<Self> {
+        if macos_drag && (paths.mouse_relative.is_none() || paths.mouse_absolute.is_none()) {
+            return Err(AppError::Config(
+                "macOS drag compatibility requires both OTG mouse interfaces".into(),
+            ));
+        }
+        let (runtime_notify_tx, _runtime_notify_rx) = watch::channel(());
         Ok(Self {
             keyboard_path: paths.keyboard,
             mouse_rel_path: paths.mouse_relative,
@@ -162,28 +120,69 @@ impl OtgBackend {
             mouse_rel_dev: Mutex::new(None),
             mouse_abs_dev: Mutex::new(None),
             consumer_dev: Mutex::new(None),
+            keyboard_leds_enabled: paths.keyboard_leds_enabled,
             keyboard_state: Mutex::new(KeyboardReport::default()),
             mouse_buttons: AtomicU8::new(0),
-            led_state: parking_lot::RwLock::new(LedState::default()),
+            macos_drag,
+            macos_drag_state: Mutex::new(super::macos_drag::MacosDrag::default()),
+            led_state: Arc::new(parking_lot::RwLock::new(LedState::default())),
             screen_resolution: parking_lot::RwLock::new(Some((1920, 1080))),
-            udc_name: parking_lot::RwLock::new(None),
+            udc_name: Arc::new(parking_lot::RwLock::new(paths.udc)),
+            initialized: AtomicBool::new(false),
             online: AtomicBool::new(false),
+            last_error: parking_lot::RwLock::new(None),
             last_error_log: parking_lot::Mutex::new(std::time::Instant::now()),
             error_count: AtomicU8::new(0),
-            eagain_count: AtomicU8::new(0),
+            runtime_notify_tx,
+            runtime_worker_stop: Arc::new(AtomicBool::new(false)),
+            runtime_worker: Mutex::new(None),
         })
     }
 
-    /// Log throttled error message (max once per second)
+    fn notify_runtime_changed(&self) {
+        let _ = self.runtime_notify_tx.send(());
+    }
+
+    fn clear_error(&self) {
+        let mut error = self.last_error.write();
+        if error.is_some() {
+            *error = None;
+            self.notify_runtime_changed();
+        }
+    }
+
+    fn record_error(&self, reason: impl Into<String>, error_code: impl Into<String>) {
+        let reason = reason.into();
+        let error_code = error_code.into();
+        let was_online = self.online.swap(false, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let changed = error.as_ref() != Some(&(reason.clone(), error_code.clone()));
+        *error = Some((reason, error_code));
+        drop(error);
+        if was_online || changed {
+            self.notify_runtime_changed();
+        }
+    }
+
+    fn mark_online(&self) {
+        let was_online = self.online.swap(true, Ordering::Relaxed);
+        let mut error = self.last_error.write();
+        let cleared_error = error.take().is_some();
+        drop(error);
+        if !was_online || cleared_error {
+            self.notify_runtime_changed();
+        }
+    }
+
     fn log_throttled_error(&self, msg: &str) {
         let mut last_log = self.last_error_log.lock();
         let now = std::time::Instant::now();
         if now.duration_since(*last_log).as_secs() >= 1 {
             let count = self.error_count.swap(0, Ordering::Relaxed);
             if count > 1 {
-                warn!("{} (repeated {} times)", msg, count);
+                debug!("{} (repeated {} times)", msg, count);
             } else {
-                warn!("{}", msg);
+                debug!("{}", msg);
             }
             *last_log = now;
         } else {
@@ -191,59 +190,29 @@ impl OtgBackend {
         }
     }
 
-    /// Reset error count on successful operation
     fn reset_error_count(&self) {
         self.error_count.store(0, Ordering::Relaxed);
-        // Also reset EAGAIN count - successful operation means device is working
-        self.eagain_count.store(0, Ordering::Relaxed);
     }
 
-    /// Write data to HID device with timeout (JetKVM style)
-    ///
-    /// Uses poll() to wait for device to be ready for writing.
-    /// If timeout expires, silently drops the data (acceptable for mouse movement).
-    /// Returns Ok(true) if write succeeded, Ok(false) if timed out (silently dropped).
+    /// Poll-based write with `HID_WRITE_TIMEOUT_MS`; timeout → drop (JetKVM-style).
     fn write_with_timeout(&self, file: &mut File, data: &[u8]) -> std::io::Result<bool> {
-        let mut pollfd = [PollFd::new(file.as_fd(), PollFlags::POLLOUT)];
-
-        match poll(&mut pollfd, PollTimeout::from(HID_WRITE_TIMEOUT_MS as u16)) {
-            Ok(1) => {
-                // Device ready, check for errors
-                if let Some(revents) = pollfd[0].revents() {
-                    if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP)
-                    {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::BrokenPipe,
-                            "Device error or hangup",
-                        ));
-                    }
-                }
-                // Write the data
-                file.write_all(data)?;
-                Ok(true)
-            }
-            Ok(0) => {
-                // Timeout - silently drop (JetKVM behavior)
-                trace!("HID write timeout, dropping data");
-                Ok(false)
-            }
-            Ok(_) => Ok(false),
-            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
-        }
+        OtgDeviceIo::write_with_timeout(file, data, HID_WRITE_TIMEOUT_MS)
     }
 
-    /// Set the UDC name for state checking
     pub fn set_udc_name(&self, udc: &str) {
         *self.udc_name.write() = Some(udc.to_string());
     }
 
-    /// Check if the UDC is in "configured" state
-    ///
-    /// This is based on PiKVM's `__is_udc_configured()` method.
-    /// The UDC state file indicates whether the USB host has enumerated and configured the gadget.
-    pub fn is_udc_configured(&self) -> bool {
-        let udc_name = self.udc_name.read();
-        if let Some(ref udc) = *udc_name {
+    fn read_udc_configured(udc_name: &parking_lot::RwLock<Option<String>>) -> bool {
+        let current_udc = udc_name.read().clone().or_else(Self::find_udc);
+        if let Some(udc) = current_udc {
+            {
+                let mut guard = udc_name.write();
+                if guard.as_ref() != Some(&udc) {
+                    *guard = Some(udc.clone());
+                }
+            }
+
             let state_path = format!("/sys/class/udc/{}/state", udc);
             match fs::read_to_string(&state_path) {
                 Ok(content) => {
@@ -253,50 +222,24 @@ impl OtgBackend {
                 }
                 Err(e) => {
                     debug!("Failed to read UDC state from {}: {}", state_path, e);
-                    // If we can't read the state, assume it might be configured
-                    // to avoid blocking operations unnecessarily
                     true
                 }
             }
         } else {
-            // No UDC name set, try to auto-detect
-            if let Some(udc) = Self::find_udc() {
-                drop(udc_name);
-                *self.udc_name.write() = Some(udc.clone());
-                let state_path = format!("/sys/class/udc/{}/state", udc);
-                fs::read_to_string(&state_path)
-                    .map(|s| s.trim().to_lowercase() == "configured")
-                    .unwrap_or(true)
-            } else {
-                true
-            }
+            true
         }
     }
 
-    /// Find the first available UDC
+    /// `true` when `/sys/class/udc/<name>/state` reads `configured` (PiKVM-style).
+    pub fn is_udc_configured(&self) -> bool {
+        Self::read_udc_configured(&self.udc_name)
+    }
+
     fn find_udc() -> Option<String> {
-        let udc_path = PathBuf::from("/sys/class/udc");
-        if let Ok(entries) = fs::read_dir(&udc_path) {
-            for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    return Some(name.to_string());
-                }
-            }
-        }
-        None
+        crate::otg::configfs::find_udc()
     }
 
-    /// Check if device is online
-    pub fn is_online(&self) -> bool {
-        self.online.load(Ordering::Relaxed)
-    }
-
-    /// Ensure a device is open and ready for I/O
-    ///
-    /// This method is based on PiKVM's `__ensure_device()` pattern:
-    /// 1. Check if device path exists, close handle if not
-    /// 2. If handle is None but path exists, reopen the device
-    /// 3. Return whether the device is ready for I/O
+    /// PiKVM-style: drop handle if node missing; reopen when path reappears.
     fn ensure_device(&self, device_type: DeviceType) -> Result<()> {
         let (path_opt, dev_mutex) = match device_type {
             DeviceType::Keyboard => (&self.keyboard_path, &self.keyboard_dev),
@@ -308,18 +251,17 @@ impl OtgBackend {
         let path = match path_opt {
             Some(p) => p,
             None => {
-                self.online.store(false, Ordering::Relaxed);
-                return Err(AppError::HidError {
+                let err = AppError::HidError {
                     backend: "otg".to_string(),
                     reason: "Device disabled".to_string(),
                     error_code: "disabled".to_string(),
-                });
+                };
+                self.record_error("Device disabled", "disabled");
+                return Err(err);
             }
         };
 
-        // Check if device path exists
         if !path.exists() {
-            // Close the device if open (device was removed)
             let mut dev = dev_mutex.lock();
             if dev.is_some() {
                 debug!(
@@ -328,15 +270,15 @@ impl OtgBackend {
                 );
                 *dev = None;
             }
-            self.online.store(false, Ordering::Relaxed);
+            let reason = format!("Device not found: {}", path.display());
+            self.record_error(reason.clone(), "enoent");
             return Err(AppError::HidError {
                 backend: "otg".to_string(),
-                reason: format!("Device not found: {}", path.display()),
+                reason,
                 error_code: "enoent".to_string(),
             });
         }
 
-        // If device is not open, try to open it
         let mut dev = dev_mutex.lock();
         if dev.is_none() {
             match Self::open_device(path) {
@@ -346,16 +288,19 @@ impl OtgBackend {
                 }
                 Err(e) => {
                     warn!("Failed to reopen HID device {}: {}", path.display(), e);
+                    self.record_error(
+                        format!("Failed to reopen HID device {}: {}", path.display(), e),
+                        "not_opened",
+                    );
                     return Err(e);
                 }
             }
         }
 
-        self.online.store(true, Ordering::Relaxed);
+        self.mark_online();
         Ok(())
     }
 
-    /// Open a HID device file with read/write access
     fn open_device(path: &PathBuf) -> Result<File> {
         OpenOptions::new()
             .read(true)
@@ -371,18 +316,21 @@ impl OtgBackend {
             })
     }
 
-    /// Convert I/O error to HidError with appropriate error code
-    fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
-        let error_code = match e.raw_os_error() {
-            Some(32) => "epipe",      // EPIPE - broken pipe
-            Some(108) => "eshutdown", // ESHUTDOWN - transport endpoint shutdown
-            Some(11) => "eagain",     // EAGAIN - resource temporarily unavailable
-            Some(6) => "enxio",       // ENXIO - no such device or address
-            Some(19) => "enodev",     // ENODEV - no such device
-            Some(5) => "eio",         // EIO - I/O error
-            Some(2) => "enoent",      // ENOENT - no such file or directory
+    fn io_error_code(e: &std::io::Error) -> &'static str {
+        match e.raw_os_error() {
+            Some(32) => "epipe",
+            Some(108) => "eshutdown",
+            Some(11) => "eagain",
+            Some(6) => "enxio",
+            Some(19) => "enodev",
+            Some(5) => "eio",
+            Some(2) => "enoent",
             _ => "io_error",
-        };
+        }
+    }
+
+    fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
+        let error_code = Self::io_error_code(&e);
 
         AppError::HidError {
             backend: "otg".to_string(),
@@ -391,26 +339,39 @@ impl OtgBackend {
         }
     }
 
-    /// Check if all HID device files exist
-    pub fn check_devices_exist(&self) -> bool {
-        self.keyboard_path
-            .as_ref()
-            .map_or(true, |p| p.exists())
-            && self
-                .mouse_rel_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
-            && self
-                .mouse_abs_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
-            && self
-                .consumer_path
-                .as_ref()
-                .map_or(true, |p| p.exists())
+    fn handle_write_error(
+        &self,
+        dev: &mut Option<File>,
+        err: std::io::Error,
+        operation: &str,
+        device_label: &str,
+    ) -> Result<()> {
+        match err.raw_os_error() {
+            Some(108) => {
+                debug!("{} ESHUTDOWN, closing for recovery", device_label);
+                *dev = None;
+                self.record_error(format!("{}: {}", operation, err), "eshutdown");
+                Err(Self::io_error_to_hid_error(err, operation))
+            }
+            Some(11) => {
+                trace!("{} EAGAIN after poll, dropping", device_label);
+                Ok(())
+            }
+            _ => {
+                warn!("{} write error: {}", device_label, err);
+                self.record_error(format!("{}: {}", operation, err), Self::io_error_code(&err));
+                Err(Self::io_error_to_hid_error(err, operation))
+            }
+        }
     }
 
-    /// Get list of missing device paths
+    pub fn check_devices_exist(&self) -> bool {
+        self.keyboard_path.as_ref().is_none_or(|p| p.exists())
+            && self.mouse_rel_path.as_ref().is_none_or(|p| p.exists())
+            && self.mouse_abs_path.as_ref().is_none_or(|p| p.exists())
+            && self.consumer_path.as_ref().is_none_or(|p| p.exists())
+    }
+
     pub fn get_missing_devices(&self) -> Vec<String> {
         let mut missing = Vec::new();
         if let Some(ref path) = self.keyboard_path {
@@ -431,17 +392,11 @@ impl OtgBackend {
         missing
     }
 
-    /// Send keyboard report (8 bytes)
-    ///
-    /// This method ensures the device is open before writing, and handles
-    /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_keyboard_report(&self, report: &KeyboardReport) -> Result<()> {
         if self.keyboard_path.is_none() {
             return Ok(());
         }
 
-        // Ensure device is ready
         self.ensure_device(DeviceType::Keyboard)?;
 
         let mut dev = self.keyboard_dev.lock();
@@ -449,47 +404,21 @@ impl OtgBackend {
             let data = report.to_bytes();
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     debug!("Sent keyboard report: {:02X?}", data);
                     Ok(())
                 }
                 Ok(false) => {
-                    // Timeout - silently dropped (JetKVM behavior)
                     self.log_throttled_error("HID keyboard write timeout, dropped");
                     Ok(())
                 }
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            // ESHUTDOWN - endpoint closed, need to reopen device
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Keyboard ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write keyboard report",
-                            ))
-                        }
-                        Some(11) => {
-                            // EAGAIN after poll - should be rare, silently drop
-                            trace!("Keyboard EAGAIN after poll, dropping");
-                            Ok(())
-                        }
-                        _ => {
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Keyboard write error: {}", e);
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write keyboard report",
-                            ))
-                        }
-                    }
-                }
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write keyboard report",
+                    "Keyboard",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -500,17 +429,11 @@ impl OtgBackend {
         }
     }
 
-    /// Send relative mouse report (4 bytes: buttons, dx, dy, wheel)
-    ///
-    /// This method ensures the device is open before writing, and handles
-    /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_relative(&self, buttons: u8, dx: i8, dy: i8, wheel: i8) -> Result<()> {
         if self.mouse_rel_path.is_none() {
             return Ok(());
         }
 
-        // Ensure device is ready
         self.ensure_device(DeviceType::MouseRelative)?;
 
         let mut dev = self.mouse_rel_dev.lock();
@@ -518,44 +441,18 @@ impl OtgBackend {
             let data = [buttons, dx as u8, dy as u8, wheel as u8];
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     trace!("Sent relative mouse report: {:02X?}", data);
                     Ok(())
                 }
-                Ok(false) => {
-                    // Timeout - silently dropped (JetKVM behavior)
-                    Ok(())
-                }
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Relative mouse ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                        Some(11) => {
-                            // EAGAIN after poll - should be rare, silently drop
-                            Ok(())
-                        }
-                        _ => {
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Relative mouse write error: {}", e);
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                    }
-                }
+                Ok(false) => Ok(()),
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write mouse report",
+                    "Relative mouse",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -566,17 +463,11 @@ impl OtgBackend {
         }
     }
 
-    /// Send absolute mouse report (6 bytes: buttons, x_lo, x_hi, y_lo, y_hi, wheel)
-    ///
-    /// This method ensures the device is open before writing, and handles
-    /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_absolute(&self, buttons: u8, x: u16, y: u16, wheel: i8) -> Result<()> {
         if self.mouse_abs_path.is_none() {
             return Ok(());
         }
 
-        // Ensure device is ready
         self.ensure_device(DeviceType::MouseAbsolute)?;
 
         let mut dev = self.mouse_abs_dev.lock();
@@ -591,43 +482,17 @@ impl OtgBackend {
             ];
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     Ok(())
                 }
-                Ok(false) => {
-                    // Timeout - silently dropped (JetKVM behavior)
-                    Ok(())
-                }
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-
-                    match error_code {
-                        Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            debug!("Absolute mouse ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                        Some(11) => {
-                            // EAGAIN after poll - should be rare, silently drop
-                            Ok(())
-                        }
-                        _ => {
-                            self.online.store(false, Ordering::Relaxed);
-                            self.eagain_count.store(0, Ordering::Relaxed);
-                            warn!("Absolute mouse write error: {}", e);
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write mouse report",
-                            ))
-                        }
-                    }
-                }
+                Ok(false) => Ok(()),
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write mouse report",
+                    "Absolute mouse",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -638,61 +503,33 @@ impl OtgBackend {
         }
     }
 
-    /// Send consumer control report (2 bytes: usage_lo, usage_hi)
-    ///
-    /// Sends a consumer control usage code and then releases it (sends 0x0000).
+    /// Press (`usage`) then release (`0x0000`).
     fn send_consumer_report(&self, usage: u16) -> Result<()> {
         if self.consumer_path.is_none() {
             return Ok(());
         }
 
-        // Ensure device is ready
         self.ensure_device(DeviceType::ConsumerControl)?;
 
         let mut dev = self.consumer_dev.lock();
         if let Some(ref mut file) = *dev {
-            // Send the usage code
             let data = [(usage & 0xFF) as u8, (usage >> 8) as u8];
             match self.write_with_timeout(file, &data) {
                 Ok(true) => {
                     trace!("Sent consumer report: {:02X?}", data);
-                    // Send release (0x0000)
                     let release = [0u8, 0u8];
                     let _ = self.write_with_timeout(file, &release);
-                    self.online.store(true, Ordering::Relaxed);
+                    self.mark_online();
                     self.reset_error_count();
                     Ok(())
                 }
-                Ok(false) => {
-                    // Timeout - silently dropped
-                    Ok(())
-                }
-                Err(e) => {
-                    let error_code = e.raw_os_error();
-                    match error_code {
-                        Some(108) => {
-                            self.online.store(false, Ordering::Relaxed);
-                            debug!("Consumer control ESHUTDOWN, closing for recovery");
-                            *dev = None;
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write consumer report",
-                            ))
-                        }
-                        Some(11) => {
-                            // EAGAIN after poll - silently drop
-                            Ok(())
-                        }
-                        _ => {
-                            self.online.store(false, Ordering::Relaxed);
-                            warn!("Consumer control write error: {}", e);
-                            Err(Self::io_error_to_hid_error(
-                                e,
-                                "Failed to write consumer report",
-                            ))
-                        }
-                    }
-                }
+                Ok(false) => Ok(()),
+                Err(e) => self.handle_write_error(
+                    &mut dev,
+                    e,
+                    "Failed to write consumer report",
+                    "Consumer control",
+                ),
             }
         } else {
             Err(AppError::HidError {
@@ -703,57 +540,216 @@ impl OtgBackend {
         }
     }
 
-    /// Send consumer control event
     pub fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
         self.send_consumer_report(event.usage)
     }
 
-    /// Read keyboard LED state (non-blocking)
-    pub fn read_led_state(&self) -> Result<Option<LedState>> {
-        let mut dev = self.keyboard_dev.lock();
-        if let Some(ref mut file) = *dev {
-            let mut buf = [0u8; 1];
-            match file.read(&mut buf) {
-                Ok(1) => {
-                    let state = LedState::from_byte(buf[0]);
-                    // Update LED state (using parking_lot RwLock)
-                    *self.led_state.write() = state;
-                    Ok(Some(state))
-                }
-                Ok(_) => Ok(None), // No data available
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-                Err(e) => Err(AppError::Internal(format!(
-                    "Failed to read LED state: {}",
-                    e
-                ))),
-            }
-        } else {
-            Ok(None)
+    pub fn led_state(&self) -> LedState {
+        *self.led_state.read()
+    }
+
+    fn build_runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+        let initialized = self.initialized.load(Ordering::Relaxed);
+        let mut online = initialized && self.online.load(Ordering::Relaxed);
+        let mut error = self.last_error.read().clone();
+
+        if initialized && !self.check_devices_exist() {
+            online = false;
+            let missing = self.get_missing_devices();
+            error = Some((
+                format!("HID device node missing: {}", missing.join(", ")),
+                "enoent".to_string(),
+            ));
+        } else if initialized && !self.is_udc_configured() {
+            online = false;
+            error = Some((
+                "UDC is not in configured state".to_string(),
+                "udc_not_configured".to_string(),
+            ));
+        }
+
+        HidBackendRuntimeSnapshot {
+            initialized,
+            online,
+            supports_absolute_mouse: self.mouse_abs_path.as_ref().is_some_and(|p| p.exists()),
+            keyboard_leds_enabled: self.keyboard_leds_enabled,
+            led_state: self.led_state(),
+            screen_resolution: *self.screen_resolution.read(),
+            device: self.udc_name.read().clone(),
+            error: error.as_ref().map(|(reason, _)| reason.clone()),
+            error_code: error.as_ref().map(|(_, code)| code.clone()),
         }
     }
 
-    /// Get last known LED state
-    pub fn led_state(&self) -> LedState {
-        *self.led_state.read()
+    fn poll_keyboard_led_once(
+        file: &mut Option<File>,
+        path: &PathBuf,
+        led_state: &Arc<parking_lot::RwLock<LedState>>,
+    ) -> bool {
+        if file.is_none() {
+            match OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(path)
+            {
+                Ok(opened) => {
+                    *file = Some(opened);
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to open OTG keyboard LED listener {}: {}",
+                        path.display(),
+                        err
+                    );
+                    thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                    return false;
+                }
+            }
+        }
+
+        let Some(file_ref) = file.as_mut() else {
+            return false;
+        };
+
+        let mut pollfd = [PollFd::new(
+            file_ref.as_fd(),
+            PollFlags::POLLIN | PollFlags::POLLERR | PollFlags::POLLHUP,
+        )];
+
+        match poll(&mut pollfd, PollTimeout::from(500u16)) {
+            Ok(0) => false,
+            Ok(_) => {
+                let Some(revents) = pollfd[0].revents() else {
+                    return false;
+                };
+
+                if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP) {
+                    *file = None;
+                    thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                    return true;
+                }
+
+                if !revents.contains(PollFlags::POLLIN) {
+                    return false;
+                }
+
+                let mut buf = [0u8; 1];
+                match file_ref.read(&mut buf) {
+                    Ok(1) => {
+                        let next = LedState::from_byte(buf[0]);
+                        let mut guard = led_state.write();
+                        if *guard == next {
+                            false
+                        } else {
+                            *guard = next;
+                            true
+                        }
+                    }
+                    Ok(_) => false,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => false,
+                    Err(err) => {
+                        if err.raw_os_error() == Some(libc::ESHUTDOWN) {
+                            debug!("OTG keyboard LED listener disconnected: {}", err);
+                        } else {
+                            warn!("OTG keyboard LED listener read failed: {}", err);
+                        }
+                        *file = None;
+                        thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                        true
+                    }
+                }
+            }
+            Err(err) => {
+                warn!("OTG keyboard LED listener poll failed: {}", err);
+                *file = None;
+                thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                true
+            }
+        }
+    }
+
+    fn start_runtime_worker(&self) {
+        let mut worker = self.runtime_worker.lock();
+        if worker.is_some() {
+            return;
+        }
+
+        self.runtime_worker_stop.store(false, Ordering::Relaxed);
+        let stop = self.runtime_worker_stop.clone();
+        let keyboard_leds_enabled = self.keyboard_leds_enabled;
+        let keyboard_path = self.keyboard_path.clone();
+        let led_state = self.led_state.clone();
+        let udc_name = self.udc_name.clone();
+        let runtime_notify_tx = self.runtime_notify_tx.clone();
+
+        let handle = thread::Builder::new()
+            .name("otg-runtime-monitor".to_string())
+            .spawn(move || {
+                let mut last_udc_configured = Some(Self::read_udc_configured(&udc_name));
+                let mut keyboard_led_file: Option<File> = None;
+
+                while !stop.load(Ordering::Relaxed) {
+                    let mut changed = false;
+
+                    let current_udc_configured = Self::read_udc_configured(&udc_name);
+                    if last_udc_configured != Some(current_udc_configured) {
+                        last_udc_configured = Some(current_udc_configured);
+                        changed = true;
+                    }
+
+                    if keyboard_leds_enabled && current_udc_configured {
+                        if let Some(path) = keyboard_path.as_ref() {
+                            changed |= Self::poll_keyboard_led_once(
+                                &mut keyboard_led_file,
+                                path,
+                                &led_state,
+                            );
+                        } else {
+                            thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                        }
+                    } else {
+                        keyboard_led_file = None;
+                        thread::sleep(OTG_RUNTIME_POLL_INTERVAL);
+                    }
+
+                    if changed {
+                        let _ = runtime_notify_tx.send(());
+                    }
+                }
+            });
+
+        match handle {
+            Ok(handle) => {
+                *worker = Some(handle);
+            }
+            Err(err) => {
+                warn!("Failed to spawn OTG runtime monitor: {}", err);
+            }
+        }
+    }
+
+    fn stop_runtime_worker(&self) {
+        self.runtime_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.runtime_worker.lock().take() {
+            let _ = handle.join();
+        }
     }
 }
 
 #[async_trait]
 impl HidBackend for OtgBackend {
-    fn name(&self) -> &'static str {
-        "OTG USB Gadget"
-    }
-
     async fn init(&self) -> Result<()> {
-        info!("Initializing OTG HID backend");
+        debug!("Initializing OTG HID backend");
 
-        // Auto-detect UDC name for state checking
-        if let Some(udc) = Self::find_udc() {
-            info!("Auto-detected UDC: {}", udc);
-            self.set_udc_name(&udc);
+        if self.udc_name.read().is_none() {
+            if let Some(udc) = Self::find_udc() {
+                debug!("Auto-detected UDC: {}", udc);
+                self.set_udc_name(&udc);
+            }
+        } else if let Some(udc) = self.udc_name.read().clone() {
+            debug!("Using configured UDC: {}", udc);
         }
 
-        // Wait for devices to appear (they should already exist from OtgService)
         let mut device_paths = Vec::new();
         if let Some(ref path) = self.keyboard_path {
             device_paths.push(path.clone());
@@ -778,69 +774,61 @@ impl HidBackend for OtgBackend {
             return Err(AppError::Internal("HID devices did not appear".into()));
         }
 
-        // Open keyboard device
         if let Some(ref path) = self.keyboard_path {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.keyboard_dev.lock() = Some(file);
-                info!("Keyboard device opened: {}", path.display());
+                debug!("Keyboard device opened: {}", path.display());
             } else {
                 warn!("Keyboard device not found: {}", path.display());
             }
         }
 
-        // Open relative mouse device
         if let Some(ref path) = self.mouse_rel_path {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.mouse_rel_dev.lock() = Some(file);
-                info!("Relative mouse device opened: {}", path.display());
+                debug!("Relative mouse device opened: {}", path.display());
             } else {
                 warn!("Relative mouse device not found: {}", path.display());
             }
         }
 
-        // Open absolute mouse device
         if let Some(ref path) = self.mouse_abs_path {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.mouse_abs_dev.lock() = Some(file);
-                info!("Absolute mouse device opened: {}", path.display());
+                debug!("Absolute mouse device opened: {}", path.display());
             } else {
                 warn!("Absolute mouse device not found: {}", path.display());
             }
         }
 
-        // Open consumer control device (optional, may not exist on older setups)
         if let Some(ref path) = self.consumer_path {
             if path.exists() {
                 let file = Self::open_device(path)?;
                 *self.consumer_dev.lock() = Some(file);
-                info!("Consumer control device opened: {}", path.display());
+                debug!("Consumer control device opened: {}", path.display());
             } else {
                 debug!("Consumer control device not found: {}", path.display());
             }
         }
 
-        // Mark as online if all devices opened successfully
-        self.online.store(true, Ordering::Relaxed);
+        self.initialized.store(true, Ordering::Relaxed);
+        self.notify_runtime_changed();
+        self.start_runtime_worker();
+        self.mark_online();
 
         Ok(())
     }
 
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
-        // Convert JS keycode to USB HID if needed (skip if already USB HID)
-        let usb_key = if event.is_usb_hid {
-            event.key
-        } else {
-            keymap::js_to_usb(event.key).unwrap_or(event.key)
-        };
+        let usb_key = event.key.to_hid_usage();
 
-        // Handle modifier keys separately
-        if keymap::is_modifier_key(usb_key) {
+        if event.key.is_modifier() {
             let mut state = self.keyboard_state.lock();
 
-            if let Some(bit) = keymap::modifier_bit(usb_key) {
+            if let Some(bit) = event.key.modifier_bit() {
                 match event.event_type {
                     KeyEventType::Down => state.modifiers |= bit,
                     KeyEventType::Up => state.modifiers &= !bit,
@@ -854,7 +842,6 @@ impl HidBackend for OtgBackend {
         } else {
             let mut state = self.keyboard_state.lock();
 
-            // Update modifiers from event
             state.modifiers = event.modifiers.to_hid_byte();
 
             match event.event_type {
@@ -878,17 +865,36 @@ impl HidBackend for OtgBackend {
     async fn send_mouse(&self, event: MouseEvent) -> Result<()> {
         let buttons = self.mouse_buttons.load(Ordering::Relaxed);
 
+        if self.macos_drag {
+            use super::macos_drag::MouseReport;
+            let mut state = self.macos_drag_state.lock();
+            let extent = self.screen_resolution.read().unwrap_or((1920, 1080));
+            let (buttons, reports) = state.plan(event, buttons, extent);
+            self.mouse_buttons.store(buttons, Ordering::Relaxed);
+            for report in reports.iter().copied() {
+                match report {
+                    MouseReport::Absolute { buttons, x, y } => {
+                        self.send_mouse_report_absolute(buttons, x, y, 0)?
+                    }
+                    MouseReport::Relative {
+                        buttons,
+                        dx,
+                        dy,
+                        wheel,
+                    } => self.send_mouse_report_relative(buttons, dx, dy, wheel)?,
+                }
+            }
+            return Ok(());
+        }
+
         match event.event_type {
             MouseEventType::Move => {
-                // Relative movement - use hidg1
                 let dx = event.x.clamp(-127, 127) as i8;
                 let dy = event.y.clamp(-127, 127) as i8;
                 self.send_mouse_report_relative(buttons, dx, dy, 0)?;
             }
             MouseEventType::MoveAbs => {
-                // Absolute movement - use hidg2
-                // Frontend sends 0-32767 range directly (standard HID absolute mouse range)
-                // Don't send button state with move - buttons are handled separately on relative device
+                // Coordinates 0–32767; buttons are sent only on the relative endpoint.
                 let x = event.x.clamp(0, 32767) as u16;
                 let y = event.y.clamp(0, 32767) as u16;
                 self.send_mouse_report_absolute(0, x, y, 0)?;
@@ -897,7 +903,6 @@ impl HidBackend for OtgBackend {
                 if let Some(button) = event.button {
                     let bit = button.to_hid_bit();
                     let new_buttons = self.mouse_buttons.fetch_or(bit, Ordering::Relaxed) | bit;
-                    // Send on relative device for button clicks
                     self.send_mouse_report_relative(new_buttons, 0, 0, 0)?;
                 }
             }
@@ -917,7 +922,6 @@ impl HidBackend for OtgBackend {
     }
 
     async fn reset(&self) -> Result<()> {
-        // Reset keyboard
         {
             let mut state = self.keyboard_state.lock();
             state.clear();
@@ -926,8 +930,8 @@ impl HidBackend for OtgBackend {
             self.send_keyboard_report(&report)?;
         }
 
-        // Reset mouse
         self.mouse_buttons.store(0, Ordering::Relaxed);
+        self.macos_drag_state.lock().reset();
         self.send_mouse_report_relative(0, 0, 0, 0)?;
         self.send_mouse_report_absolute(0, 0, 0, 0)?;
 
@@ -935,56 +939,62 @@ impl HidBackend for OtgBackend {
         Ok(())
     }
 
+    async fn prepare_rebuild(&self) -> Result<()> {
+        self.stop_runtime_worker();
+        *self.keyboard_dev.lock() = None;
+        *self.mouse_rel_dev.lock() = None;
+        *self.mouse_abs_dev.lock() = None;
+        *self.consumer_dev.lock() = None;
+        self.initialized.store(false, Ordering::Relaxed);
+        self.online.store(false, Ordering::Relaxed);
+        self.notify_runtime_changed();
+        info!("OTG backend prepared for gadget rebuild");
+        Ok(())
+    }
+
     async fn shutdown(&self) -> Result<()> {
-        // Reset before closing
+        self.stop_runtime_worker();
+
         self.reset().await?;
 
-        // Close devices
         *self.keyboard_dev.lock() = None;
         *self.mouse_rel_dev.lock() = None;
         *self.mouse_abs_dev.lock() = None;
         *self.consumer_dev.lock() = None;
 
-        // Gadget cleanup is handled by OtgService, not here
+        self.initialized.store(false, Ordering::Relaxed);
+        self.online.store(false, Ordering::Relaxed);
+        self.clear_error();
+        self.notify_runtime_changed();
 
         info!("OTG backend shutdown");
         Ok(())
     }
 
-    fn supports_absolute_mouse(&self) -> bool {
-        self.mouse_abs_path
-            .as_ref()
-            .map_or(false, |p| p.exists())
+    fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot {
+        self.build_runtime_snapshot()
+    }
+
+    fn subscribe_runtime(&self) -> watch::Receiver<()> {
+        self.runtime_notify_tx.subscribe()
     }
 
     async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
         self.send_consumer_report(event.usage)
     }
 
-    fn screen_resolution(&self) -> Option<(u32, u32)> {
-        *self.screen_resolution.read()
-    }
-
-    fn set_screen_resolution(&mut self, width: u32, height: u32) {
+    fn set_screen_resolution(&self, width: u32, height: u32) {
         *self.screen_resolution.write() = Some((width, height));
+        self.notify_runtime_changed();
     }
 }
 
-/// Check if OTG HID gadget is available
-pub fn is_otg_available() -> bool {
-    // Check for existing HID devices (they should be created by OtgService)
-    let kb = PathBuf::from("/dev/hidg0");
-    let mouse_rel = PathBuf::from("/dev/hidg1");
-    let mouse_abs = PathBuf::from("/dev/hidg2");
-
-    kb.exists() || mouse_rel.exists() || mouse_abs.exists()
-}
-
-/// Implement Drop for OtgBackend to close device files
 impl Drop for OtgBackend {
     fn drop(&mut self) {
-        // Close device files
-        // Note: Gadget cleanup is handled by OtgService, not here
+        self.runtime_worker_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.runtime_worker.get_mut().take() {
+            let _ = handle.join();
+        }
         *self.keyboard_dev.lock() = None;
         *self.mouse_rel_dev.lock() = None;
         *self.mouse_abs_dev.lock() = None;
@@ -996,12 +1006,7 @@ impl Drop for OtgBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_otg_availability_check() {
-        // This just tests the function runs without panicking
-        let _available = is_otg_available();
-    }
+    use std::io::{Seek, SeekFrom, Write};
 
     #[test]
     fn test_led_state() {
@@ -1015,8 +1020,70 @@ mod tests {
 
     #[test]
     fn test_report_sizes() {
-        // Keyboard report is 8 bytes
         let kb_report = KeyboardReport::default();
         assert_eq!(kb_report.to_bytes().len(), 8);
+    }
+
+    #[tokio::test]
+    async fn mouse_compatibility_writes_both_endpoints_and_preserves_default() {
+        use crate::hid::MouseButton;
+        for enabled in [false, true] {
+            let relative = tempfile::NamedTempFile::new().unwrap();
+            let absolute = tempfile::NamedTempFile::new().unwrap();
+            let backend = OtgBackend::with_macos_drag(
+                HidDevicePaths {
+                    mouse_relative: Some(relative.path().to_path_buf()),
+                    mouse_absolute: Some(absolute.path().to_path_buf()),
+                    ..Default::default()
+                },
+                enabled,
+            )
+            .unwrap();
+            for event in [
+                MouseEvent::move_abs(8000, 8000),
+                MouseEvent::button_down(MouseButton::Left),
+                MouseEvent::move_abs(16000, 16000),
+                MouseEvent::button_up(MouseButton::Left),
+            ] {
+                backend.send_mouse(event).await.unwrap();
+            }
+            let abs = fs::read(absolute.path()).unwrap();
+            let rel = fs::read(relative.path()).unwrap();
+            let buttons: Vec<_> = abs.chunks_exact(6).map(|packet| packet[0]).collect();
+            assert_eq!(buttons, if enabled { vec![0, 1, 0] } else { vec![0, 0] });
+            let dx: i32 = rel
+                .chunks_exact(4)
+                .map(|packet| i32::from(packet[1] as i8))
+                .sum();
+            let dy: i32 = rel
+                .chunks_exact(4)
+                .map(|packet| i32::from(packet[2] as i8))
+                .sum();
+            assert_eq!((dx, dy), if enabled { (468, 263) } else { (0, 0) });
+            assert_eq!(&rel[rel.len() - 4..], &[0, 0, 0, 0]);
+        }
+    }
+
+    #[test]
+    fn compatibility_requires_both_mouse_endpoints() {
+        assert!(OtgBackend::with_macos_drag(HidDevicePaths::default(), true).is_err());
+    }
+
+    #[tokio::test]
+    async fn prepare_rebuild_closes_devices_without_writing_reset_reports() {
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(b"sentinel").unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+
+        let backend = OtgBackend::from_handles(HidDevicePaths::default()).unwrap();
+        *backend.keyboard_dev.lock() = Some(file);
+        backend.initialized.store(true, Ordering::Relaxed);
+        backend.online.store(true, Ordering::Relaxed);
+
+        backend.prepare_rebuild().await.unwrap();
+
+        assert!(backend.keyboard_dev.lock().is_none());
+        assert!(!backend.initialized.load(Ordering::Relaxed));
+        assert!(!backend.online.load(Ordering::Relaxed));
     }
 }

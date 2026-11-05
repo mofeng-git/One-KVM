@@ -9,6 +9,9 @@ extern "C" {
 
 namespace util_encode {
 
+bool is_qcom_iris_platform();
+bool supports_forced_keyframe(const std::string &name);
+
 void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
                       int gop, int fps, int thread_count);
 bool set_lantency_free(void *priv_data, const std::string &name);

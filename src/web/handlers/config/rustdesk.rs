@@ -1,149 +1,194 @@
-//! RustDesk 配置 Handler
-
 use axum::{extract::State, Json};
-use std::sync::Arc;
 
 use crate::error::Result;
 use crate::rustdesk::config::RustDeskConfig;
-use crate::state::AppState;
+use crate::web::state::RemoteAccessApiState;
 
-use super::apply::apply_rustdesk_config;
 use super::types::RustDeskConfigUpdate;
+use crate::runtime::{try_apply_lock, ConfigApplyOptions};
 
-/// RustDesk 配置响应（隐藏敏感信息）
+fn validate_candidate(state: &RemoteAccessApiState, config: &RustDeskConfig) -> Result<()> {
+    let mut candidate = state.config.get().as_ref().clone();
+    candidate.rustdesk = config.clone();
+    crate::video::codec_constraints::validate_third_party_codec_compatibility(&candidate)
+}
+
+async fn persist_and_apply(
+    state: &RemoteAccessApiState,
+    old_config: RustDeskConfig,
+    new_config: RustDeskConfig,
+) -> Result<RustDeskConfig> {
+    validate_candidate(state, &new_config)?;
+    state
+        .config
+        .update(|config| {
+            config.rustdesk = new_config.clone();
+        })
+        .await?;
+    let stored_config = state.config.get().rustdesk.clone();
+    state
+        .coordinator
+        .apply_rustdesk(
+            &old_config,
+            &stored_config,
+            ConfigApplyOptions::preserving_service_state(),
+        )
+        .await?;
+    Ok(stored_config)
+}
+
+async fn current_status(
+    state: &RemoteAccessApiState,
+    config: RustDeskConfig,
+) -> RustDeskStatusResponse {
+    let runtime = state.coordinator.rustdesk_status().await;
+
+    RustDeskStatusResponse {
+        config: RustDeskConfigResponse::from(&config),
+        service_status: runtime.service_status,
+        rendezvous_status: runtime.rendezvous_status,
+        connection_count: runtime.connection_count,
+        listening: runtime.listening,
+        listen_port: runtime.listen_port,
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct RustDeskConfigResponse {
     pub enabled: bool,
+    pub mode: crate::rustdesk::config::RustDeskMode,
+    pub codec: crate::rustdesk::config::RustDeskCodec,
+    pub direct_access_port: u16,
     pub rendezvous_server: String,
     pub relay_server: Option<String>,
     pub device_id: String,
-    /// 是否已设置密码
     pub has_password: bool,
-    /// 是否已设置密钥对
-    pub has_keypair: bool,
-    /// 是否已设置 relay key
-    pub has_relay_key: bool,
+    pub relay_key: Option<String>,
 }
 
 impl From<&RustDeskConfig> for RustDeskConfigResponse {
     fn from(config: &RustDeskConfig) -> Self {
         Self {
             enabled: config.enabled,
+            mode: config.mode,
+            codec: config.codec,
+            direct_access_port: config.direct_access_port,
             rendezvous_server: config.rendezvous_server.clone(),
             relay_server: config.relay_server.clone(),
             device_id: config.device_id.clone(),
             has_password: !config.device_password.is_empty(),
-            has_keypair: config.public_key.is_some() && config.private_key.is_some(),
-            has_relay_key: config.relay_key.is_some(),
+            relay_key: config.relay_key.clone(),
         }
     }
 }
 
-/// RustDesk 状态响应
 #[derive(Debug, serde::Serialize)]
 pub struct RustDeskStatusResponse {
     pub config: RustDeskConfigResponse,
     pub service_status: String,
     pub rendezvous_status: Option<String>,
+    pub connection_count: usize,
+    pub listening: bool,
+    pub listen_port: Option<u16>,
 }
 
-/// 获取 RustDesk 配置
 pub async fn get_rustdesk_config(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Json<RustDeskConfigResponse> {
     Json(RustDeskConfigResponse::from(&state.config.get().rustdesk))
 }
 
-/// 获取 RustDesk 完整状态（配置 + 服务状态）
 pub async fn get_rustdesk_status(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Json<RustDeskStatusResponse> {
     let config = state.config.get().rustdesk.clone();
-
-    // 获取服务状态
-    let (service_status, rendezvous_status) = {
-        let guard = state.rustdesk.read().await;
-        if let Some(ref service) = *guard {
-            let status = format!("{}", service.status());
-            let rv_status = service.rendezvous_status().map(|s| format!("{}", s));
-            (status, rv_status)
-        } else {
-            ("not_initialized".to_string(), None)
-        }
-    };
-
-    Json(RustDeskStatusResponse {
-        config: RustDeskConfigResponse::from(&config),
-        service_status,
-        rendezvous_status,
-    })
+    Json(current_status(&state, config).await)
 }
 
-/// 更新 RustDesk 配置
 pub async fn update_rustdesk_config(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
     Json(req): Json<RustDeskConfigUpdate>,
 ) -> Result<Json<RustDeskConfigResponse>> {
-    // 1. 验证请求
     req.validate()?;
 
-    // 2. 获取旧配置
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
     let old_config = state.config.get().rustdesk.clone();
+    let mut merged_config = old_config.clone();
+    req.apply_to(&mut merged_config);
+    req.validate_merged(&merged_config)?;
 
-    // 3. 应用更新到配置存储
-    state
-        .config
-        .update(|config| {
-            req.apply_to(&mut config.rustdesk);
-        })
-        .await?;
-
-    // 4. 获取新配置
-    let new_config = state.config.get().rustdesk.clone();
-
-    // 5. 应用到子系统（热重载）
-    if let Err(e) = apply_rustdesk_config(&state, &old_config, &new_config).await {
-        tracing::error!("Failed to apply RustDesk config: {}", e);
-    }
+    let new_config = persist_and_apply(&state, old_config, merged_config).await?;
 
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
-/// 重新生成设备 ID
 pub async fn regenerate_device_id(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<RustDeskConfigResponse>> {
-    state
-        .config
-        .update(|config| {
-            config.rustdesk.device_id = RustDeskConfig::generate_device_id();
-        })
-        .await?;
-
-    let new_config = state.config.get().rustdesk.clone();
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let old_config = state.config.get().rustdesk.clone();
+    let mut regenerated = old_config.clone();
+    regenerated.device_id = RustDeskConfig::generate_device_id();
+    let new_config = persist_and_apply(&state, old_config, regenerated).await?;
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
-/// 重新生成设备密码
 pub async fn regenerate_device_password(
-    State(state): State<Arc<AppState>>,
+    State(state): State<RemoteAccessApiState>,
 ) -> Result<Json<RustDeskConfigResponse>> {
-    state
-        .config
-        .update(|config| {
-            config.rustdesk.device_password = RustDeskConfig::generate_password();
-        })
-        .await?;
-
-    let new_config = state.config.get().rustdesk.clone();
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let old_config = state.config.get().rustdesk.clone();
+    let mut regenerated = old_config.clone();
+    regenerated.device_password = RustDeskConfig::generate_password();
+    let new_config = persist_and_apply(&state, old_config, regenerated).await?;
     Ok(Json(RustDeskConfigResponse::from(&new_config)))
 }
 
-/// 获取设备密码（管理员专用）
-pub async fn get_device_password(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+pub async fn get_device_password(
+    State(state): State<RemoteAccessApiState>,
+) -> Json<serde_json::Value> {
     let config = state.config.get().rustdesk.clone();
     Json(serde_json::json!({
         "device_id": config.device_id,
         "device_password": config.device_password
     }))
+}
+
+pub async fn start_rustdesk_service(
+    State(state): State<RemoteAccessApiState>,
+) -> Result<Json<RustDeskStatusResponse>> {
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let stored_config = state.config.get().rustdesk.clone();
+    let runtime_config = state.coordinator.runtime_config().await.rustdesk;
+    let mut start_config = stored_config.clone();
+    start_config.enabled = true;
+    state
+        .coordinator
+        .apply_rustdesk(
+            &runtime_config,
+            &start_config,
+            ConfigApplyOptions::runtime_only(),
+        )
+        .await?;
+    let stored_config = state.config.get().rustdesk.clone();
+    Ok(Json(current_status(&state, stored_config).await))
+}
+
+pub async fn stop_rustdesk_service(
+    State(state): State<RemoteAccessApiState>,
+) -> Result<Json<RustDeskStatusResponse>> {
+    let _apply_guard = try_apply_lock(&state.rustdesk_apply_lock, "rustdesk")?;
+    let stored_config = state.config.get().rustdesk.clone();
+    let runtime_config = state.coordinator.runtime_config().await.rustdesk;
+    let mut stop_config = stored_config.clone();
+    stop_config.enabled = false;
+    state
+        .coordinator
+        .apply_rustdesk(
+            &runtime_config,
+            &stop_config,
+            ConfigApplyOptions::runtime_only(),
+        )
+        .await?;
+    Ok(Json(current_status(&state, stored_config).await))
 }

@@ -1,26 +1,22 @@
-//! RustDesk HID Adapter
-//!
-//! Converts RustDesk HID events (KeyEvent, MouseEvent) to One-KVM HID events.
-
+use super::keyboard_mapping::{self, CharacterMapping, KeyboardCodeSpace};
 use super::protocol::hbb::message::key_event as ke_union;
-use super::protocol::{ControlKey, KeyEvent, MouseEvent};
+use super::protocol::{ControlKey, KeyEvent, KeyboardMode, MouseEvent};
 use crate::hid::{
-    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent as OneKvmMouseEvent,
-    MouseEventType,
+    CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton,
+    MouseEvent as OneKvmMouseEvent, MouseEventType,
 };
-use protobuf::Enum;
+use std::time::{Duration, Instant};
+use tracing::debug;
 
-/// Mouse event types from RustDesk protocol
-/// mask = (button << 3) | event_type
 pub mod mouse_type {
     pub const MOVE: i32 = 0;
     pub const DOWN: i32 = 1;
     pub const UP: i32 = 2;
     pub const WHEEL: i32 = 3;
     pub const TRACKPAD: i32 = 4;
+    pub const MOVE_RELATIVE: i32 = 5;
 }
 
-/// Mouse button IDs from RustDesk protocol (before left shift by 3)
 pub mod mouse_button {
     pub const LEFT: i32 = 0x01;
     pub const RIGHT: i32 = 0x02;
@@ -29,9 +25,68 @@ pub mod mouse_button {
     pub const FORWARD: i32 = 0x10;
 }
 
-/// Convert RustDesk MouseEvent to One-KVM MouseEvent(s)
-/// Returns a Vec because a single RustDesk event may need multiple One-KVM events
-/// (e.g., move + button + scroll)
+const TRACKPAD_UNITS_PER_WHEEL_STEP: i64 = 120;
+const TRACKPAD_IDLE_RESET: Duration = Duration::from_millis(250);
+
+/// Per-session conversion of fractional RustDesk trackpad deltas to USB wheel steps.
+#[derive(Default)]
+pub(super) struct MouseEventAdapter {
+    trackpad_remainder: i64,
+    last_vertical_event: Option<Instant>,
+}
+
+impl MouseEventAdapter {
+    pub(super) fn convert(
+        &mut self,
+        event: &MouseEvent,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> Vec<OneKvmMouseEvent> {
+        self.convert_at(event, screen_width, screen_height, Instant::now())
+    }
+
+    fn convert_at(
+        &mut self,
+        event: &MouseEvent,
+        screen_width: u32,
+        screen_height: u32,
+        now: Instant,
+    ) -> Vec<OneKvmMouseEvent> {
+        if event.mask & 0x07 != mouse_type::TRACKPAD {
+            return convert_mouse_event(event, screen_width, screen_height);
+        }
+        // The USB mouse descriptor supports vertical wheel reports only.
+        if event.y == 0 {
+            return Vec::new();
+        }
+
+        let delta = i64::from(event.y);
+        let idle = self
+            .last_vertical_event
+            .is_some_and(|last| now.saturating_duration_since(last) >= TRACKPAD_IDLE_RESET);
+        if idle
+            || (self.trackpad_remainder != 0 && self.trackpad_remainder.signum() != delta.signum())
+        {
+            self.trackpad_remainder = 0;
+        }
+        self.last_vertical_event = Some(now);
+
+        // One-KVM advertises Windows compatibility. RustDesk sends TRACKPAD in
+        // Windows wheel units (120 per notch), whereas WHEEL already uses steps.
+        // Preserve the direction: the client has already applied its reverse setting.
+        let total = self.trackpad_remainder + delta;
+        let steps = total / TRACKPAD_UNITS_PER_WHEEL_STEP;
+        self.trackpad_remainder = total % TRACKPAD_UNITS_PER_WHEEL_STEP;
+        if steps == 0 {
+            Vec::new()
+        } else {
+            // One bounded HID report; discard pathological excess instead of
+            // retaining a backlog that would scroll long after the gesture ends.
+            vec![OneKvmMouseEvent::scroll(steps.clamp(-127, 127) as i8)]
+        }
+    }
+}
+
 pub fn convert_mouse_event(
     event: &MouseEvent,
     screen_width: u32,
@@ -39,22 +94,17 @@ pub fn convert_mouse_event(
 ) -> Vec<OneKvmMouseEvent> {
     let mut events = Vec::new();
 
-    // RustDesk uses absolute coordinates
-    let x = event.x.max(0) as u32;
-    let y = event.y.max(0) as u32;
-
-    // Normalize to 0-32767 range for absolute mouse (USB HID standard)
-    let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
-    let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
-
-    // Parse RustDesk mask format: (button << 3) | event_type
     let event_type = event.mask & 0x07;
     let button_id = event.mask >> 3;
 
     match event_type {
         mouse_type::MOVE => {
-            // Move event - may have button held down (button_id > 0 means dragging)
-            // Just send move, button state is tracked separately by HID backend
+            let x = event.x.max(0) as u32;
+            let y = event.y.max(0) as u32;
+
+            let abs_x = ((x as u64 * 32767) / screen_width.max(1) as u64) as i32;
+            let abs_y = ((y as u64 * 32767) / screen_height.max(1) as u64) as i32;
+
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::MoveAbs,
                 x: abs_x,
@@ -63,84 +113,53 @@ pub fn convert_mouse_event(
                 scroll: 0,
             });
         }
-        mouse_type::DOWN => {
-            // Button down - first move, then press
+        mouse_type::MOVE_RELATIVE => {
             events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
+                event_type: MouseEventType::Move,
+                x: event.x,
+                y: event.y,
                 button: None,
                 scroll: 0,
             });
-
+        }
+        mouse_type::DOWN => {
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Down,
-                    x: abs_x,
-                    y: abs_y,
+                    x: 0,
+                    y: 0,
                     button: Some(button),
                     scroll: 0,
                 });
             }
         }
         mouse_type::UP => {
-            // Button up - first move, then release
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
-
             if let Some(button) = button_id_to_button(button_id) {
                 events.push(OneKvmMouseEvent {
                     event_type: MouseEventType::Up,
-                    x: abs_x,
-                    y: abs_y,
+                    x: 0,
+                    y: 0,
                     button: Some(button),
                     scroll: 0,
                 });
             }
         }
         mouse_type::WHEEL => {
-            // Scroll event - move first, then scroll
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
-
-            // RustDesk encodes scroll direction in the y coordinate
-            // Positive y = scroll up, Negative y = scroll down
-            // The button_id field is not used for direction
             let scroll = if event.y > 0 { 1i8 } else { -1i8 };
             events.push(OneKvmMouseEvent {
                 event_type: MouseEventType::Scroll,
-                x: abs_x,
-                y: abs_y,
+                x: 0,
+                y: 0,
                 button: None,
                 scroll,
             });
         }
-        _ => {
-            // Unknown event type, just move
-            events.push(OneKvmMouseEvent {
-                event_type: MouseEventType::MoveAbs,
-                x: abs_x,
-                y: abs_y,
-                button: None,
-                scroll: 0,
-            });
-        }
+        _ => {}
     }
 
     events
 }
 
-/// Convert RustDesk button ID to One-KVM MouseButton
 fn button_id_to_button(button_id: i32) -> Option<MouseButton> {
     match button_id {
         mouse_button::LEFT => Some(MouseButton::Left),
@@ -150,413 +169,536 @@ fn button_id_to_button(button_id: i32) -> Option<MouseButton> {
     }
 }
 
-/// Convert RustDesk KeyEvent to One-KVM KeyboardEvent
-///
-/// RustDesk KeyEvent has two modes:
-/// - down=true/false: Key state (pressed/released)
-/// - press=true: Complete key press (down + up), used for typing
-///
-/// For press=true events, we only send Down and let the caller handle
-/// the timing for Up event if needed. Most systems handle this correctly.
-pub fn convert_key_event(event: &KeyEvent) -> Option<KeyboardEvent> {
-    // Determine if this is a key down or key up event
-    // press=true means "key was pressed" (down event)
-    // down=true means key is currently held down
-    // down=false with press=false means key was released
-    let event_type = if event.down || event.press {
-        KeyEventType::Down
-    } else {
-        KeyEventType::Up
-    };
+/// Convert using the code space associated with One-KVM's compatibility platform.
+pub fn convert_key_events(event: &KeyEvent) -> Vec<KeyboardEvent> {
+    convert_key_events_in_code_space(event, KeyboardCodeSpace::WindowsSet1)
+}
 
-    // For modifier keys sent as ControlKey, don't include them in modifiers
-    // to avoid double-pressing. The modifier will be tracked by HID state.
-    let modifiers = if is_modifier_control_key(event) {
+pub(super) fn convert_key_events_in_code_space(
+    event: &KeyEvent,
+    code_space: KeyboardCodeSpace,
+) -> Vec<KeyboardEvent> {
+    let base_modifiers = if is_modifier_control_key(event) {
         KeyboardModifiers::default()
     } else {
         parse_modifiers(event)
     };
 
-    // Handle control keys
-    if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
-        if let Some(key) = control_key_to_hid(ck.value()) {
-            return Some(KeyboardEvent {
-                event_type,
-                key,
-                modifiers,
-                is_usb_hid: true, // Already converted to USB HID code
-            });
-        }
+    let Some(mapping) = key_event_to_mapping(event, code_space, base_modifiers) else {
+        log_rejected_key_event(event, code_space);
+        return Vec::new();
+    };
+
+    if event.press {
+        let up_modifiers = if mapping.added_shift {
+            base_modifiers
+        } else {
+            mapping.modifiers
+        };
+        vec![
+            KeyboardEvent {
+                event_type: KeyEventType::Down,
+                key: mapping.key,
+                modifiers: mapping.modifiers,
+            },
+            KeyboardEvent {
+                event_type: KeyEventType::Up,
+                key: mapping.key,
+                modifiers: up_modifiers,
+            },
+        ]
+    } else {
+        vec![KeyboardEvent {
+            event_type: if event.down {
+                KeyEventType::Down
+            } else {
+                KeyEventType::Up
+            },
+            key: mapping.key,
+            modifiers: mapping.modifiers,
+        }]
     }
-
-    // Handle character keys (chr field contains platform-specific keycode)
-    if let Some(ke_union::Union::Chr(chr)) = &event.union {
-        // chr contains USB HID scancode on Windows, X11 keycode on Linux
-        if let Some(key) = keycode_to_hid(*chr) {
-            return Some(KeyboardEvent {
-                event_type,
-                key,
-                modifiers,
-                is_usb_hid: true, // Already converted to USB HID code
-            });
-        }
-    }
-
-    // Handle unicode (for text input, we'd need to convert to scancodes)
-    // Unicode input requires more complex handling, skip for now
-
-    None
 }
 
-/// Check if the event is a modifier key sent as ControlKey
+#[derive(Debug, Clone, Copy)]
+struct KeyMapping {
+    key: CanonicalKey,
+    modifiers: KeyboardModifiers,
+    added_shift: bool,
+}
+
+fn key_event_to_mapping(
+    event: &KeyEvent,
+    code_space: KeyboardCodeSpace,
+    modifiers: KeyboardModifiers,
+) -> Option<KeyMapping> {
+    let mode = event.mode.enum_value().ok()?;
+    match &event.union {
+        Some(ke_union::Union::ControlKey(key)) => {
+            plain_mapping(keyboard_mapping::control_key(key.value())?, modifiers)
+        }
+        Some(ke_union::Union::Unicode(ch)) => character_mapping(*ch, modifiers),
+        Some(ke_union::Union::Chr(code)) => match mode {
+            KeyboardMode::Map | KeyboardMode::Translate => plain_mapping(
+                keyboard_mapping::physical_key(code_space, *code)?,
+                modifiers,
+            ),
+            KeyboardMode::Legacy | KeyboardMode::Auto => legacy_character_mapping(*code, modifiers),
+        },
+        Some(ke_union::Union::Seq(_)) | Some(ke_union::Union::Win2winHotkey(_)) | None => None,
+    }
+}
+
+fn plain_mapping(key: CanonicalKey, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    Some(KeyMapping {
+        key,
+        modifiers,
+        added_shift: false,
+    })
+}
+
+fn character_mapping(ch: u32, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    let CharacterMapping { key, needs_shift } = keyboard_mapping::character(ch)?;
+    if !needs_shift {
+        return plain_mapping(key, modifiers);
+    }
+
+    let added_shift = !modifiers.left_shift && !modifiers.right_shift;
+    let mut shifted_modifiers = modifiers;
+    shifted_modifiers.left_shift = true;
+    Some(KeyMapping {
+        key,
+        modifiers: shifted_modifiers,
+        added_shift,
+    })
+}
+
+fn legacy_character_mapping(ch: u32, modifiers: KeyboardModifiers) -> Option<KeyMapping> {
+    let CharacterMapping { key, needs_shift } = keyboard_mapping::character(ch)?;
+    // Legacy Chr historically relied on the event's modifier list for uppercase
+    // letters, while synthesizing Shift for printable US-layout symbols.
+    if needs_shift && !(0x41..=0x5A).contains(&ch) {
+        character_mapping(ch, modifiers)
+    } else {
+        plain_mapping(key, modifiers)
+    }
+}
+
 fn is_modifier_control_key(event: &KeyEvent) -> bool {
-    if let Some(ke_union::Union::ControlKey(ck)) = &event.union {
-        let val = ck.value();
-        return val == ControlKey::Control.value()
-            || val == ControlKey::Shift.value()
-            || val == ControlKey::Alt.value()
-            || val == ControlKey::Meta.value()
-            || val == ControlKey::RControl.value()
-            || val == ControlKey::RShift.value()
-            || val == ControlKey::RAlt.value();
-    }
-    false
+    let Some(ke_union::Union::ControlKey(key)) = &event.union else {
+        return false;
+    };
+    matches!(
+        key.enum_value(),
+        Ok(ControlKey::Control)
+            | Ok(ControlKey::Shift)
+            | Ok(ControlKey::Alt)
+            | Ok(ControlKey::Meta)
+            | Ok(ControlKey::RControl)
+            | Ok(ControlKey::RShift)
+            | Ok(ControlKey::RAlt)
+            | Ok(ControlKey::RWin)
+    )
 }
 
-/// Parse modifier keys from RustDesk KeyEvent into KeyboardModifiers
 fn parse_modifiers(event: &KeyEvent) -> KeyboardModifiers {
     let mut modifiers = KeyboardModifiers::default();
-
     for modifier in &event.modifiers {
-        let val = modifier.value();
-        match val {
-            x if x == ControlKey::Control.value() => modifiers.left_ctrl = true,
-            x if x == ControlKey::Shift.value() => modifiers.left_shift = true,
-            x if x == ControlKey::Alt.value() => modifiers.left_alt = true,
-            x if x == ControlKey::Meta.value() => modifiers.left_meta = true,
-            x if x == ControlKey::RControl.value() => modifiers.right_ctrl = true,
-            x if x == ControlKey::RShift.value() => modifiers.right_shift = true,
-            x if x == ControlKey::RAlt.value() => modifiers.right_alt = true,
+        match modifier.enum_value() {
+            Ok(ControlKey::Control) => modifiers.left_ctrl = true,
+            Ok(ControlKey::Shift) => modifiers.left_shift = true,
+            Ok(ControlKey::Alt) => modifiers.left_alt = true,
+            Ok(ControlKey::Meta) => modifiers.left_meta = true,
+            Ok(ControlKey::RControl) => modifiers.right_ctrl = true,
+            Ok(ControlKey::RShift) => modifiers.right_shift = true,
+            Ok(ControlKey::RAlt) => modifiers.right_alt = true,
+            Ok(ControlKey::RWin) => modifiers.right_meta = true,
             _ => {}
         }
     }
-
     modifiers
 }
 
-/// Convert RustDesk ControlKey to USB HID usage code
-fn control_key_to_hid(key: i32) -> Option<u8> {
-    match key {
-        x if x == ControlKey::Alt as i32 => Some(0xE2), // Left Alt
-        x if x == ControlKey::Backspace as i32 => Some(0x2A),
-        x if x == ControlKey::CapsLock as i32 => Some(0x39),
-        x if x == ControlKey::Control as i32 => Some(0xE0), // Left Ctrl
-        x if x == ControlKey::Delete as i32 => Some(0x4C),
-        x if x == ControlKey::DownArrow as i32 => Some(0x51),
-        x if x == ControlKey::End as i32 => Some(0x4D),
-        x if x == ControlKey::Escape as i32 => Some(0x29),
-        x if x == ControlKey::F1 as i32 => Some(0x3A),
-        x if x == ControlKey::F2 as i32 => Some(0x3B),
-        x if x == ControlKey::F3 as i32 => Some(0x3C),
-        x if x == ControlKey::F4 as i32 => Some(0x3D),
-        x if x == ControlKey::F5 as i32 => Some(0x3E),
-        x if x == ControlKey::F6 as i32 => Some(0x3F),
-        x if x == ControlKey::F7 as i32 => Some(0x40),
-        x if x == ControlKey::F8 as i32 => Some(0x41),
-        x if x == ControlKey::F9 as i32 => Some(0x42),
-        x if x == ControlKey::F10 as i32 => Some(0x43),
-        x if x == ControlKey::F11 as i32 => Some(0x44),
-        x if x == ControlKey::F12 as i32 => Some(0x45),
-        x if x == ControlKey::Home as i32 => Some(0x4A),
-        x if x == ControlKey::LeftArrow as i32 => Some(0x50),
-        x if x == ControlKey::Meta as i32 => Some(0xE3), // Left GUI/Windows
-        x if x == ControlKey::PageDown as i32 => Some(0x4E),
-        x if x == ControlKey::PageUp as i32 => Some(0x4B),
-        x if x == ControlKey::Return as i32 => Some(0x28),
-        x if x == ControlKey::RightArrow as i32 => Some(0x4F),
-        x if x == ControlKey::Shift as i32 => Some(0xE1), // Left Shift
-        x if x == ControlKey::Space as i32 => Some(0x2C),
-        x if x == ControlKey::Tab as i32 => Some(0x2B),
-        x if x == ControlKey::UpArrow as i32 => Some(0x52),
-        x if x == ControlKey::Numpad0 as i32 => Some(0x62),
-        x if x == ControlKey::Numpad1 as i32 => Some(0x59),
-        x if x == ControlKey::Numpad2 as i32 => Some(0x5A),
-        x if x == ControlKey::Numpad3 as i32 => Some(0x5B),
-        x if x == ControlKey::Numpad4 as i32 => Some(0x5C),
-        x if x == ControlKey::Numpad5 as i32 => Some(0x5D),
-        x if x == ControlKey::Numpad6 as i32 => Some(0x5E),
-        x if x == ControlKey::Numpad7 as i32 => Some(0x5F),
-        x if x == ControlKey::Numpad8 as i32 => Some(0x60),
-        x if x == ControlKey::Numpad9 as i32 => Some(0x61),
-        x if x == ControlKey::Insert as i32 => Some(0x49),
-        x if x == ControlKey::Pause as i32 => Some(0x48),
-        x if x == ControlKey::Scroll as i32 => Some(0x47),
-        x if x == ControlKey::NumLock as i32 => Some(0x53),
-        x if x == ControlKey::RShift as i32 => Some(0xE5),
-        x if x == ControlKey::RControl as i32 => Some(0xE4),
-        x if x == ControlKey::RAlt as i32 => Some(0xE6),
-        x if x == ControlKey::Multiply as i32 => Some(0x55),
-        x if x == ControlKey::Add as i32 => Some(0x57),
-        x if x == ControlKey::Subtract as i32 => Some(0x56),
-        x if x == ControlKey::Decimal as i32 => Some(0x63),
-        x if x == ControlKey::Divide as i32 => Some(0x54),
-        x if x == ControlKey::NumpadEnter as i32 => Some(0x58),
-        _ => None,
-    }
-}
-
-/// Convert platform keycode to USB HID usage code
-/// Handles Windows Virtual Key Codes, X11 keycodes, and ASCII codes
-fn keycode_to_hid(keycode: u32) -> Option<u8> {
-    // First try ASCII code mapping (RustDesk often sends ASCII codes)
-    if let Some(hid) = ascii_to_hid(keycode) {
-        return Some(hid);
-    }
-    // Then try Windows Virtual Key Code mapping
-    if let Some(hid) = windows_vk_to_hid(keycode) {
-        return Some(hid);
-    }
-    // Fall back to X11 keycode mapping for Linux clients
-    x11_keycode_to_hid(keycode)
-}
-
-/// Convert ASCII code to USB HID usage code
-fn ascii_to_hid(ascii: u32) -> Option<u8> {
-    match ascii {
-        // Lowercase letters a-z (ASCII 97-122)
-        97..=122 => {
-            // USB HID: a=0x04, b=0x05, ..., z=0x1D
-            Some((ascii - 97 + 0x04) as u8)
+fn log_rejected_key_event(event: &KeyEvent, code_space: KeyboardCodeSpace) {
+    let mode = event.mode.value();
+    match &event.union {
+        Some(ke_union::Union::ControlKey(key)) => debug!(
+            mode,
+            union = "ControlKey",
+            raw = format_args!("0x{:X}", key.value()),
+            ?code_space,
+            "Dropping unsupported RustDesk keyboard event"
+        ),
+        Some(ke_union::Union::Chr(code)) => debug!(
+            mode,
+            union = "Chr",
+            raw = format_args!("0x{code:X}"),
+            ?code_space,
+            "Dropping unsupported RustDesk keyboard event"
+        ),
+        Some(ke_union::Union::Unicode(code)) => debug!(
+            mode,
+            union = "Unicode",
+            raw = format_args!("0x{code:X}"),
+            ?code_space,
+            "Dropping unsupported RustDesk keyboard event"
+        ),
+        Some(ke_union::Union::Seq(seq)) => {
+            debug!(mode, union = "Seq", raw = ?seq, ?code_space, "Dropping unsupported RustDesk keyboard event")
         }
-        // Uppercase letters A-Z (ASCII 65-90)
-        65..=90 => {
-            // USB HID: A=0x04, B=0x05, ..., Z=0x1D (same as lowercase)
-            Some((ascii - 65 + 0x04) as u8)
-        }
-        // Numbers 0-9 (ASCII 48-57)
-        48 => Some(0x27),                           // 0
-        49..=57 => Some((ascii - 49 + 0x1E) as u8), // 1-9
-        // Common punctuation
-        32 => Some(0x2C),  // Space
-        13 => Some(0x28),  // Enter (CR)
-        10 => Some(0x28),  // Enter (LF)
-        9 => Some(0x2B),   // Tab
-        27 => Some(0x29),  // Escape
-        8 => Some(0x2A),   // Backspace
-        127 => Some(0x4C), // Delete
-        // Symbols (US keyboard layout)
-        45 => Some(0x2D), // -
-        61 => Some(0x2E), // =
-        91 => Some(0x2F), // [
-        93 => Some(0x30), // ]
-        92 => Some(0x31), // \
-        59 => Some(0x33), // ;
-        39 => Some(0x34), // '
-        96 => Some(0x35), // `
-        44 => Some(0x36), // ,
-        46 => Some(0x37), // .
-        47 => Some(0x38), // /
-        _ => None,
-    }
-}
-
-/// Convert Windows Virtual Key Code to USB HID usage code
-fn windows_vk_to_hid(vk: u32) -> Option<u8> {
-    match vk {
-        // Letters A-Z (VK_A=0x41 to VK_Z=0x5A)
-        0x41..=0x5A => {
-            // USB HID: A=0x04, B=0x05, ..., Z=0x1D
-            let letter = (vk - 0x41) as u8;
-            Some(match letter {
-                0 => 0x04,  // A
-                1 => 0x05,  // B
-                2 => 0x06,  // C
-                3 => 0x07,  // D
-                4 => 0x08,  // E
-                5 => 0x09,  // F
-                6 => 0x0A,  // G
-                7 => 0x0B,  // H
-                8 => 0x0C,  // I
-                9 => 0x0D,  // J
-                10 => 0x0E, // K
-                11 => 0x0F, // L
-                12 => 0x10, // M
-                13 => 0x11, // N
-                14 => 0x12, // O
-                15 => 0x13, // P
-                16 => 0x14, // Q
-                17 => 0x15, // R
-                18 => 0x16, // S
-                19 => 0x17, // T
-                20 => 0x18, // U
-                21 => 0x19, // V
-                22 => 0x1A, // W
-                23 => 0x1B, // X
-                24 => 0x1C, // Y
-                25 => 0x1D, // Z
-                _ => return None,
-            })
-        }
-        // Numbers 0-9 (VK_0=0x30 to VK_9=0x39)
-        0x30 => Some(0x27),                            // 0
-        0x31..=0x39 => Some((vk - 0x31 + 0x1E) as u8), // 1-9
-        // Numpad 0-9 (VK_NUMPAD0=0x60 to VK_NUMPAD9=0x69)
-        0x60 => Some(0x62),                            // Numpad 0
-        0x61..=0x69 => Some((vk - 0x61 + 0x59) as u8), // Numpad 1-9
-        // Numpad operators
-        0x6A => Some(0x55), // Numpad *
-        0x6B => Some(0x57), // Numpad +
-        0x6D => Some(0x56), // Numpad -
-        0x6E => Some(0x63), // Numpad .
-        0x6F => Some(0x54), // Numpad /
-        // Function keys F1-F12 (VK_F1=0x70 to VK_F12=0x7B)
-        0x70..=0x7B => Some((vk - 0x70 + 0x3A) as u8),
-        // Special keys
-        0x08 => Some(0x2A), // Backspace
-        0x09 => Some(0x2B), // Tab
-        0x0D => Some(0x28), // Enter
-        0x1B => Some(0x29), // Escape
-        0x20 => Some(0x2C), // Space
-        0x21 => Some(0x4B), // Page Up
-        0x22 => Some(0x4E), // Page Down
-        0x23 => Some(0x4D), // End
-        0x24 => Some(0x4A), // Home
-        0x25 => Some(0x50), // Left Arrow
-        0x26 => Some(0x52), // Up Arrow
-        0x27 => Some(0x4F), // Right Arrow
-        0x28 => Some(0x51), // Down Arrow
-        0x2D => Some(0x49), // Insert
-        0x2E => Some(0x4C), // Delete
-        // OEM keys (US keyboard layout)
-        0xBA => Some(0x33), // ; :
-        0xBB => Some(0x2E), // = +
-        0xBC => Some(0x36), // , <
-        0xBD => Some(0x2D), // - _
-        0xBE => Some(0x37), // . >
-        0xBF => Some(0x38), // / ?
-        0xC0 => Some(0x35), // ` ~
-        0xDB => Some(0x2F), // [ {
-        0xDC => Some(0x31), // \ |
-        0xDD => Some(0x30), // ] }
-        0xDE => Some(0x34), // ' "
-        // Lock keys
-        0x14 => Some(0x39), // Caps Lock
-        0x90 => Some(0x53), // Num Lock
-        0x91 => Some(0x47), // Scroll Lock
-        // Print Screen, Pause
-        0x2C => Some(0x46), // Print Screen
-        0x13 => Some(0x48), // Pause
-        _ => None,
-    }
-}
-
-/// Convert X11 keycode to USB HID usage code (for Linux clients)
-fn x11_keycode_to_hid(keycode: u32) -> Option<u8> {
-    match keycode {
-        // Numbers: X11 keycode 10="1", 11="2", ..., 18="9", 19="0"
-        10..=18 => Some((keycode - 10 + 0x1E) as u8), // 1-9
-        19 => Some(0x27),                             // 0
-        // Punctuation
-        20 => Some(0x2D), // -
-        21 => Some(0x2E), // =
-        34 => Some(0x2F), // [
-        35 => Some(0x30), // ]
-        // Letters (X11 keycodes are row-based)
-        // Row 1: q(24) w(25) e(26) r(27) t(28) y(29) u(30) i(31) o(32) p(33)
-        24 => Some(0x14), // q
-        25 => Some(0x1A), // w
-        26 => Some(0x08), // e
-        27 => Some(0x15), // r
-        28 => Some(0x17), // t
-        29 => Some(0x1C), // y
-        30 => Some(0x18), // u
-        31 => Some(0x0C), // i
-        32 => Some(0x12), // o
-        33 => Some(0x13), // p
-        // Row 2: a(38) s(39) d(40) f(41) g(42) h(43) j(44) k(45) l(46)
-        38 => Some(0x04), // a
-        39 => Some(0x16), // s
-        40 => Some(0x07), // d
-        41 => Some(0x09), // f
-        42 => Some(0x0A), // g
-        43 => Some(0x0B), // h
-        44 => Some(0x0D), // j
-        45 => Some(0x0E), // k
-        46 => Some(0x0F), // l
-        47 => Some(0x33), // ;
-        48 => Some(0x34), // '
-        49 => Some(0x35), // `
-        51 => Some(0x31), // \
-        // Row 3: z(52) x(53) c(54) v(55) b(56) n(57) m(58)
-        52 => Some(0x1D), // z
-        53 => Some(0x1B), // x
-        54 => Some(0x06), // c
-        55 => Some(0x19), // v
-        56 => Some(0x05), // b
-        57 => Some(0x11), // n
-        58 => Some(0x10), // m
-        59 => Some(0x36), // ,
-        60 => Some(0x37), // .
-        61 => Some(0x38), // /
-        // Space
-        65 => Some(0x2C),
-        _ => None,
+        Some(ke_union::Union::Win2winHotkey(code)) => debug!(
+            mode,
+            union = "Win2winHotkey",
+            raw = format_args!("0x{code:X}"),
+            ?code_space,
+            "Dropping unsupported RustDesk keyboard event"
+        ),
+        None => debug!(
+            mode,
+            union = "None",
+            ?code_space,
+            "Dropping unsupported RustDesk keyboard event"
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use protobuf::EnumOrUnknown;
 
-    #[test]
-    fn test_control_key_mapping() {
-        assert_eq!(control_key_to_hid(ControlKey::Escape.value()), Some(0x29));
-        assert_eq!(control_key_to_hid(ControlKey::Return.value()), Some(0x28));
-        assert_eq!(control_key_to_hid(ControlKey::Space.value()), Some(0x2C));
+    fn key_event(mode: KeyboardMode, union: ke_union::Union, down: bool) -> KeyEvent {
+        let mut event = KeyEvent::new();
+        event.mode = EnumOrUnknown::new(mode);
+        event.union = Some(union);
+        event.down = down;
+        event
+    }
+
+    fn map_chr(code: u32, down: bool) -> KeyEvent {
+        key_event(KeyboardMode::Map, ke_union::Union::Chr(code), down)
+    }
+
+    fn scroll_event(event_type: i32, x: i32, y: i32) -> MouseEvent {
+        let mut event = MouseEvent::new();
+        event.mask = event_type;
+        event.x = x;
+        event.y = y;
+        event
+    }
+
+    fn trackpad_steps(adapter: &mut MouseEventAdapter, y: i32, now: Instant) -> i32 {
+        adapter
+            .convert_at(&scroll_event(mouse_type::TRACKPAD, 0, y), 640, 480, now)
+            .into_iter()
+            .map(|event| {
+                assert_eq!(event.event_type, MouseEventType::Scroll);
+                i32::from(event.scroll)
+            })
+            .sum()
     }
 
     #[test]
-    fn test_convert_mouse_move() {
-        let mut event = MouseEvent::new();
-        event.x = 500;
-        event.y = 300;
-        event.mask = mouse_type::MOVE; // Pure move event
+    fn trackpad_accumulates_fractional_steps_independently_of_packet_size() {
+        let now = Instant::now();
+        for direction in [-1, 1] {
+            let mut split = MouseEventAdapter::default();
+            assert_eq!(trackpad_steps(&mut split, 60 * direction, now), 0);
+            assert_eq!(trackpad_steps(&mut split, 60 * direction, now), direction);
+            let mut whole = MouseEventAdapter::default();
+            assert_eq!(trackpad_steps(&mut whole, 120 * direction, now), direction);
+            assert_eq!(
+                trackpad_steps(&mut whole, 360 * direction, now),
+                3 * direction
+            );
+            let mut tiny = MouseEventAdapter::default();
+            let total: i32 = (0..360)
+                .map(|_| trackpad_steps(&mut tiny, direction, now))
+                .sum();
+            assert_eq!(total, 3 * direction);
+        }
+    }
 
-        let events = convert_mouse_event(&event, 1920, 1080);
-        assert!(!events.is_empty());
+    #[test]
+    fn trackpad_horizontal_and_zero_scroll_do_not_generate_vertical_reports() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+        for x in [0, 120, -120] {
+            assert!(adapter
+                .convert_at(&scroll_event(mouse_type::TRACKPAD, x, 0), 640, 480, now)
+                .is_empty());
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
+    }
+
+    #[test]
+    fn trackpad_remainder_does_not_cross_sessions_or_idle_gaps() {
+        let now = Instant::now();
+        let mut first = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut first, 60, now), 0);
+        let mut second = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut second, 60, now), 0);
+        assert_eq!(trackpad_steps(&mut first, 60, now), 1);
+        // A new connection gets a fresh adapter, including when reconnecting.
+        first = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut first, 60, now), 0);
+        assert_eq!(
+            trackpad_steps(&mut first, 60, now + Duration::from_millis(250)),
+            0
+        );
+        assert_eq!(
+            trackpad_steps(&mut first, 60, now + Duration::from_millis(280)),
+            1
+        );
+    }
+
+    #[test]
+    fn trackpad_direction_change_discards_old_fraction() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 119, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, -60, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, -60, now), -1);
+        assert_eq!(trackpad_steps(&mut adapter, -119, now), 0);
+        assert_eq!(trackpad_steps(&mut adapter, 120, now), 1);
+    }
+
+    #[test]
+    fn trackpad_extreme_deltas_are_bounded_without_a_future_backlog() {
+        let now = Instant::now();
+        for delta in [i32::MIN, i32::MAX] {
+            let mut adapter = MouseEventAdapter::default();
+            assert_eq!(
+                trackpad_steps(&mut adapter, delta, now),
+                127 * delta.signum()
+            );
+            assert!(adapter.trackpad_remainder.abs() < 120);
+            assert_eq!(trackpad_steps(&mut adapter, delta.signum(), now), 0);
+        }
+    }
+
+    #[test]
+    fn wheel_steps_remain_immediate_and_do_not_use_trackpad_remainder() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+        for y in [-120, -1, 1, 120] {
+            let events = adapter.convert_at(&scroll_event(mouse_type::WHEEL, 0, y), 640, 480, now);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].scroll, y.signum() as i8);
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
+    }
+
+    #[test]
+    fn trackpad_accumulation_does_not_change_pointer_or_button_events() {
+        let now = Instant::now();
+        let mut adapter = MouseEventAdapter::default();
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 0);
+
+        let events = adapter.convert(&scroll_event(mouse_type::MOVE, 320, 240), 640, 480);
+        assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, MouseEventType::MoveAbs);
+        assert_eq!((events[0].x, events[0].y), (16383, 16383));
+
+        let events = adapter.convert(&scroll_event(mouse_type::MOVE_RELATIVE, -12, 8), 640, 480);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, MouseEventType::Move);
+        assert_eq!((events[0].x, events[0].y), (-12, 8));
+
+        for (kind, expected) in [
+            (mouse_type::DOWN, MouseEventType::Down),
+            (mouse_type::UP, MouseEventType::Up),
+        ] {
+            let event = scroll_event((mouse_button::LEFT << 3) | kind, 0, 0);
+            let events = adapter.convert(&event, 640, 480);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].event_type, expected);
+            assert_eq!(events[0].button, Some(MouseButton::Left));
+        }
+        assert_eq!(trackpad_steps(&mut adapter, 60, now), 1);
     }
 
     #[test]
-    fn test_convert_mouse_button_down() {
+    fn mouse_events_keep_existing_semantics() {
         let mut event = MouseEvent::new();
-        event.x = 500;
-        event.y = 300;
-        event.mask = (mouse_button::LEFT << 3) | mouse_type::DOWN;
-
+        event.x = -12;
+        event.y = 8;
+        event.mask = mouse_type::MOVE_RELATIVE;
         let events = convert_mouse_event(&event, 1920, 1080);
-        assert!(events.len() >= 2);
-        // Should have a button down event
-        assert!(events
-            .iter()
-            .any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));
+        assert_eq!(events[0].event_type, MouseEventType::Move);
+        assert_eq!((events[0].x, events[0].y), (-12, 8));
+
+        event.mask = (mouse_button::LEFT << 3) | mouse_type::DOWN;
+        let events = convert_mouse_event(&event, 1920, 1080);
+        assert_eq!(events[0].event_type, MouseEventType::Down);
+        assert_eq!(events[0].button, Some(MouseButton::Left));
+        assert_eq!((events[0].x, events[0].y), (0, 0));
     }
 
     #[test]
-    fn test_convert_key_event() {
-        use protobuf::EnumOrUnknown;
-        let mut key_event = KeyEvent::new();
-        key_event.down = true;
-        key_event.press = false;
-        key_event.union = Some(ke_union::Union::ControlKey(EnumOrUnknown::new(
-            ControlKey::Return,
-        )));
+    fn map_delete_generates_only_delete_down_and_up() {
+        let down = convert_key_events(&map_chr(0xE053, true));
+        let up = convert_key_events(&map_chr(0xE053, false));
+        assert_eq!((down.len(), up.len()), (1, 1));
+        assert_eq!(
+            (down[0].event_type, up[0].event_type),
+            (KeyEventType::Down, KeyEventType::Up)
+        );
+        assert_eq!(
+            (down[0].key, up[0].key),
+            (CanonicalKey::Delete, CanonicalKey::Delete)
+        );
+        assert_eq!(
+            (down[0].key.to_hid_usage(), up[0].key.to_hid_usage()),
+            (0x4C, 0x4C)
+        );
+    }
 
-        let result = convert_key_event(&key_event);
-        assert!(result.is_some());
+    #[test]
+    fn map_scan_codes_do_not_become_ascii_digits() {
+        let alt = convert_key_events(&map_chr(0x38, true));
+        let shift = convert_key_events(&map_chr(0x36, true));
+        assert_eq!(alt[0].key, CanonicalKey::AltLeft);
+        assert_ne!(alt[0].key, CanonicalKey::Digit8);
+        assert_eq!(shift[0].key, CanonicalKey::ShiftRight);
+        assert_ne!(shift[0].key, CanonicalKey::Digit6);
+    }
 
-        let kb_event = result.unwrap();
-        assert_eq!(kb_event.event_type, KeyEventType::Down);
-        assert_eq!(kb_event.key, 0x28); // Return key USB HID code
+    #[test]
+    fn legacy_uses_character_semantics_for_same_values() {
+        let digit8 = key_event(KeyboardMode::Legacy, ke_union::Union::Chr(0x38), true);
+        let digit6 = key_event(KeyboardMode::Legacy, ke_union::Union::Chr(0x36), true);
+        assert_eq!(convert_key_events(&digit8)[0].key, CanonicalKey::Digit8);
+        assert_eq!(convert_key_events(&digit6)[0].key, CanonicalKey::Digit6);
+
+        let uppercase = key_event(KeyboardMode::Legacy, ke_union::Union::Chr(0x41), true);
+        let uppercase = convert_key_events(&uppercase);
+        assert_eq!(uppercase[0].key, CanonicalKey::KeyA);
+        assert!(!uppercase[0].modifiers.left_shift);
+    }
+
+    #[test]
+    fn translate_chr_uses_physical_fallback_semantics() {
+        let event = key_event(KeyboardMode::Translate, ke_union::Union::Chr(0xE053), true);
+        assert_eq!(convert_key_events(&event)[0].key, CanonicalKey::Delete);
+    }
+
+    #[test]
+    fn unknown_map_codes_never_fall_back() {
+        for code in [0, 0x59, 0x61, 0x7F, 0xE054, 0x0101] {
+            assert!(
+                convert_key_events(&map_chr(code, true)).is_empty(),
+                "0x{code:X}"
+            );
+        }
+
+        let ascii_a_value = convert_key_events(&map_chr(0x41, true));
+        assert_eq!(ascii_a_value[0].key, CanonicalKey::F7);
+        assert_ne!(ascii_a_value[0].key, CanonicalKey::KeyA);
+    }
+
+    #[test]
+    fn unicode_and_control_keys_stay_independent() {
+        let unicode = key_event(
+            KeyboardMode::Map,
+            ke_union::Union::Unicode('@' as u32),
+            true,
+        );
+        let control = key_event(
+            KeyboardMode::Translate,
+            ke_union::Union::ControlKey(EnumOrUnknown::new(ControlKey::Delete)),
+            true,
+        );
+        let unicode = convert_key_events(&unicode);
+        assert_eq!(unicode[0].key, CanonicalKey::Digit2);
+        assert!(unicode[0].modifiers.left_shift);
+        assert_eq!(convert_key_events(&control)[0].key, CanonicalKey::Delete);
+    }
+
+    #[test]
+    fn press_and_repeated_events_preserve_state_model() {
+        let mut press = map_chr(0x1E, false);
+        press.press = true;
+        press
+            .modifiers
+            .push(EnumOrUnknown::new(ControlKey::Control));
+        let events = convert_key_events(&press);
+        assert_eq!(events.len(), 2);
+        assert_eq!(
+            (events[0].event_type, events[1].event_type),
+            (KeyEventType::Down, KeyEventType::Up)
+        );
+        assert_eq!(
+            (events[0].key, events[1].key),
+            (CanonicalKey::KeyA, CanonicalKey::KeyA)
+        );
+        assert!(events.iter().all(|event| event.modifiers.left_ctrl));
+
+        let down = map_chr(0x1E, true);
+        assert_eq!(convert_key_events(&down)[0].event_type, KeyEventType::Down);
+        assert_eq!(convert_key_events(&down)[0].event_type, KeyEventType::Down);
+    }
+
+    #[test]
+    fn shifted_press_releases_only_synthetic_shift() {
+        let mut event = key_event(
+            KeyboardMode::Legacy,
+            ke_union::Union::Chr('@' as u32),
+            false,
+        );
+        event.press = true;
+        let events = convert_key_events(&event);
+        assert!(events[0].modifiers.left_shift);
+        assert!(!events[1].modifiers.left_shift);
+    }
+
+    #[test]
+    fn modifier_control_key_does_not_duplicate_state() {
+        let mut event = key_event(
+            KeyboardMode::Legacy,
+            ke_union::Union::ControlKey(EnumOrUnknown::new(ControlKey::RWin)),
+            true,
+        );
+        event.modifiers.push(EnumOrUnknown::new(ControlKey::RWin));
+        let events = convert_key_events(&event);
+        assert_eq!(events[0].key, CanonicalKey::MetaRight);
+        assert_eq!(events[0].modifiers, KeyboardModifiers::default());
+    }
+
+    #[test]
+    fn legacy_delete_and_audited_controls_are_mapped() {
+        for (control, expected) in [
+            (ControlKey::Delete, CanonicalKey::Delete),
+            (ControlKey::Snapshot, CanonicalKey::PrintScreen),
+            (ControlKey::RWin, CanonicalKey::MetaRight),
+            (ControlKey::Apps, CanonicalKey::ContextMenu),
+        ] {
+            let event = key_event(
+                KeyboardMode::Legacy,
+                ke_union::Union::ControlKey(EnumOrUnknown::new(control)),
+                true,
+            );
+            assert_eq!(convert_key_events(&event)[0].key, expected);
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_modes_and_unsupported_unions() {
+        let mut unknown = map_chr(0x1E, true);
+        unknown.mode = EnumOrUnknown::from_i32(99);
+        assert!(convert_key_events(&unknown).is_empty());
+
+        let seq = key_event(
+            KeyboardMode::Translate,
+            ke_union::Union::Seq("a".to_string()),
+            true,
+        );
+        assert!(convert_key_events(&seq).is_empty());
+
+        let mut empty = KeyEvent::new();
+        empty.mode = EnumOrUnknown::new(KeyboardMode::Legacy);
+        assert!(convert_key_events(&empty).is_empty());
     }
 }

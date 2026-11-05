@@ -1,8 +1,12 @@
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
 }
 
 #include "util.h"
+#include <algorithm>
+#include <cctype>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <string.h>
@@ -23,7 +27,7 @@ bool is_software_h264(const std::string &name) {
   // Exclude all hardware encoders
   static const char* hw_suffixes[] = {
     "nvenc", "amf", "qsv", "vaapi", "rkmpp",
-    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+    "v4l2m2m", "videotoolbox", "_mf"
   };
   for (const auto& suffix : hw_suffixes) {
     if (name.find(suffix) != std::string::npos) return false;
@@ -36,7 +40,7 @@ bool is_software_hevc(const std::string &name) {
   if (name != "hevc" && name != "libx265") return false;
   static const char* hw_suffixes[] = {
     "nvenc", "amf", "qsv", "vaapi", "rkmpp",
-    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+    "v4l2m2m", "videotoolbox", "_mf"
   };
   for (const auto& suffix : hw_suffixes) {
     if (name.find(suffix) != std::string::npos) return false;
@@ -44,17 +48,46 @@ bool is_software_hevc(const std::string &name) {
   return true;
 }
 
+bool is_qcom_iris_driver() {
+  const char *driver_path = "/sys/class/video4linux/video1/name";
+  std::ifstream file(driver_path);
+  if (!file.is_open()) return false;
+
+  std::string value;
+  std::getline(file, value, '\0');
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return value.find("qcom-iris") != std::string::npos ||
+         value.find("iris-encoder") != std::string::npos ||
+         value.find("iris") != std::string::npos;
+}
+
 } // anonymous namespace
 
 namespace util_encode {
+
+bool is_qcom_iris_platform() {
+  return is_qcom_iris_driver();
+}
+
+bool supports_forced_keyframe(const std::string &name) {
+  if (name.find("v4l2m2m") != std::string::npos && is_qcom_iris_platform()) {
+    return false;
+  }
+  return true;
+}
 
 void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
                       int gop, int fps, int thread_count) {
   c->has_b_frames = 0;
   c->max_b_frames = 0;
-  if (gop > 0 && gop < std::numeric_limits<int16_t>::max()) {
-    c->gop_size = gop;
-    c->keyint_min = gop; // Match keyint_min to gop for consistent keyframe interval
+  const bool qcom_iris_v4l2 =
+      name.find("v4l2m2m") != std::string::npos && is_qcom_iris_platform();
+  const int effective_gop = qcom_iris_v4l2 ? std::max(5, fps / 3) : gop;
+  if (effective_gop > 0 && effective_gop < std::numeric_limits<int16_t>::max()) {
+    c->gop_size = effective_gop;
+    c->keyint_min = effective_gop; // Match keyint_min to gop for consistent keyframe interval
   } else if (name.find("vaapi") != std::string::npos) {
     c->gop_size = fps > 0 ? fps : 30; // Default to 1 second keyframe interval
     c->keyint_min = c->gop_size;
@@ -99,13 +132,12 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->color_primaries = AVCOL_PRI_SMPTE170M;
   c->color_trc = AVCOL_TRC_SMPTE170M;
 
-  // Profile selection: use BASELINE for software H264 (faster, simpler)
-  if (is_software_h264(name)) {
-    c->profile = FF_PROFILE_H264_BASELINE;  // Simpler profile for real-time
-  } else if (name.find("h264") != std::string::npos) {
-    c->profile = FF_PROFILE_H264_HIGH;
+  // WebRTC SDP advertises constrained baseline. Keep hardware and software
+  // encoders on the same browser-friendly H264 profile.
+  if (name.find("h264") != std::string::npos) {
+    c->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
   } else if (name.find("hevc") != std::string::npos) {
-    c->profile = FF_PROFILE_HEVC_MAIN;
+    c->profile = AV_PROFILE_HEVC_MAIN;
   }
 }
 
@@ -120,8 +152,8 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
   }
   if (name.find("amf") != std::string::npos) {
     if ((ret = av_opt_set(priv_data, "query_timeout", "1000", 0)) < 0) {
-      LOG_ERROR(std::string("amf set_lantency_free failed, ret = ") + av_err2str(ret));
-      return false;
+      LOG_DEBUG(std::string("amf query_timeout option is unavailable, ret = ") +
+                av_err2str(ret));
     }
   }
   if (name.find("qsv") != std::string::npos) {
@@ -140,19 +172,23 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
   if (name.find("rkmpp") != std::string::npos) {
     // Set async_depth to 1 for minimal buffering (0 = synchronous, higher = more buffering)
     if ((ret = av_opt_set(priv_data, "async_depth", "1", 0)) < 0) {
-      LOG_WARN(std::string("rkmpp set async_depth failed, ret = ") + av_err2str(ret));
+      LOG_DEBUG(std::string("rkmpp async_depth option is unavailable, ret = ") +
+                av_err2str(ret));
       // Not fatal - older FFmpeg versions may not support this option
     }
   }
   // V4L2 M2M hardware encoder - minimize buffer latency
   if (name.find("v4l2m2m") != std::string::npos) {
     // Minimize number of output buffers for lower latency
-    if ((ret = av_opt_set_int(priv_data, "num_output_buffers", 2, 0)) < 0) {
-      LOG_WARN(std::string("v4l2m2m set num_output_buffers failed, ret = ") + av_err2str(ret));
+    if ((ret = av_opt_set_int(priv_data, "num_output_buffers", 4, 0)) < 0) {
+      LOG_DEBUG(std::string("v4l2m2m num_output_buffers option is unavailable, ret = ") +
+                av_err2str(ret));
       // Not fatal
     }
-    if ((ret = av_opt_set_int(priv_data, "num_capture_buffers", 2, 0)) < 0) {
-      LOG_WARN(std::string("v4l2m2m set num_capture_buffers failed, ret = ") + av_err2str(ret));
+    const int capture_buffers = is_qcom_iris_driver() ? 12 : 8;
+    if ((ret = av_opt_set_int(priv_data, "num_capture_buffers", capture_buffers, 0)) < 0) {
+      LOG_DEBUG(std::string("v4l2m2m num_capture_buffers option is unavailable, ret = ") +
+                av_err2str(ret));
       // Not fatal
     }
   }
@@ -306,23 +342,6 @@ bool set_quality(void *priv_data, const std::string &name, int quality) {
       break;
     }
   }
-  if (name.find("mediacodec") != std::string::npos) {
-    if (name.find("h264") != std::string::npos) {
-      if ((ret = av_opt_set(priv_data, "level", "5.1", 0)) < 0) {
-        LOG_ERROR(std::string("mediacodec set opt level 5.1 failed, ret = ") +
-                  av_err2str(ret));
-        return false;
-      }
-    }
-    if (name.find("hevc") != std::string::npos) {
-      // https:en.wikipedia.org/wiki/High_Efficiency_Video_Coding_tiers_and_levels
-      if ((ret = av_opt_set(priv_data, "level", "h5.1", 0)) < 0) {
-        LOG_ERROR(std::string("mediacodec set opt level h5.1 failed, ret = ") +
-                  av_err2str(ret));
-        return false;
-      }
-    }
-  }
   // libx264 software encoder presets
   if (is_software_h264(name)) {
     const char* preset = nullptr;
@@ -378,6 +397,33 @@ struct CodecOptions {
 
 bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
                       int q) {
+  // Remote-desktop content is usually sparse. VBR avoids padding static
+  // frames up to the target bitrate while allowing short bursts for screen
+  // changes. Keep those bursts bounded at twice the target bitrate.
+  if (rc == RC_VBR && c->bit_rate > 0) {
+    c->rc_max_rate = c->bit_rate * 2;
+    c->rc_buffer_size = c->rc_max_rate;
+  }
+
+  if (name.find("vaapi") != std::string::npos && rc == RC_CQ) {
+    // Used only after the normal bitrate-based VAAPI initialization fails.
+    // Some drivers, including Intel iHD on Jasper Lake, expose CQP as their
+    // only compatible rate-control mode.
+    c->bit_rate = 0;
+    c->rc_min_rate = 0;
+    c->rc_max_rate = 0;
+    c->rc_buffer_size = 0;
+    c->rc_initial_buffer_occupancy = 0;
+
+    const int qp = q > 0 ? q : 23;
+    const int ret = av_opt_set_int(c->priv_data, "qp", qp, 0);
+    if (ret < 0) {
+      LOG_ERROR(std::string("vaapi set qp failed, ret = ") +
+                av_err2str(ret));
+      return false;
+    }
+    return true;
+  }
   if (name.find("qsv") != std::string::npos) {
     // https://github.com/LizardByte/Sunshine/blob/3e47cd3cc8fd37a7a88be82444ff4f3c0022856b/src/video.cpp#L1635
     c->strict_std_compliance = FF_COMPLIANCE_UNOFFICIAL;
@@ -385,9 +431,6 @@ bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
   std::vector<CodecOptions> codecs = {
       {"nvenc", "rc", {{RC_CBR, "cbr"}, {RC_VBR, "vbr"}}},
       {"amf", "rc", {{RC_CBR, "cbr"}, {RC_VBR, "vbr_latency"}}},
-      {"mediacodec",
-       "bitrate_mode",
-       {{RC_CBR, "cbr"}, {RC_VBR, "vbr"}, {RC_CQ, "cq"}}},
       // {"videotoolbox", "constant_bit_rate", {{RC_CBR, "1"}}},
     };
 
@@ -401,13 +444,6 @@ bool set_rate_control(AVCodecContext *c, const std::string &name, int rc,
           LOG_ERROR(codec.codec_name + " set opt " + codec.option_name + " " +
                     it->second + " failed, ret = " + av_err2str(ret));
           return false;
-        }
-        if (name.find("mediacodec") != std::string::npos) {
-          if (rc == RC_CQ) {
-            if (q >= 0 && q <= 51) {
-              c->global_quality = q;
-            }
-          }
         }
       }
       break;
@@ -467,6 +503,10 @@ bool set_others(void *priv_data, const std::string &name) {
 bool change_bit_rate(AVCodecContext *c, const std::string &name, int kbs) {
   if (kbs > 0) {
     c->bit_rate = kbs * 1000;
+    if (c->rc_max_rate > 0 && name.find("qsv") == std::string::npos) {
+      c->rc_max_rate = c->bit_rate * 2;
+      c->rc_buffer_size = c->rc_max_rate;
+    }
     if (name.find("qsv") != std::string::npos) {
       c->rc_max_rate = c->bit_rate;
     }

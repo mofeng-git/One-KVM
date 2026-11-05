@@ -1,82 +1,86 @@
-//! ConfigFS file operations for USB Gadget
-
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
+use std::process::Command;
 
 use crate::error::{AppError, Result};
 
-/// ConfigFS base path for USB gadgets
 pub const CONFIGFS_PATH: &str = "/sys/kernel/config/usb_gadget";
-
-/// Default gadget name
 pub const DEFAULT_GADGET_NAME: &str = "one-kvm";
-
-/// USB Vendor ID (Linux Foundation) - default value
 pub const DEFAULT_USB_VENDOR_ID: u16 = 0x1d6b;
-
-/// USB Product ID (Multifunction Composite Gadget) - default value
 pub const DEFAULT_USB_PRODUCT_ID: u16 = 0x0104;
-
-/// USB device version - default value
 pub const DEFAULT_USB_BCD_DEVICE: u16 = 0x0100;
-
-/// USB spec version (USB 2.0)
 pub const USB_BCD_USB: u16 = 0x0200;
 
-/// Check if ConfigFS is available
 pub fn is_configfs_available() -> bool {
-    Path::new(CONFIGFS_PATH).exists()
+    configfs_path().exists()
 }
 
-/// Find available UDC (USB Device Controller)
-pub fn find_udc() -> Option<String> {
-    let udc_path = Path::new("/sys/class/udc");
-    if !udc_path.exists() {
-        return None;
+pub fn configfs_path() -> &'static Path {
+    Path::new(CONFIGFS_PATH)
+}
+
+/// Loads `libcomposite` if needed; does not mount configfs.
+pub fn ensure_libcomposite_loaded() -> Result<()> {
+    if is_configfs_available() {
+        return Ok(());
     }
 
-    fs::read_dir(udc_path)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .next()
-}
+    if !Path::new("/sys/module/libcomposite").exists() {
+        let status = Command::new("modprobe")
+            .arg("libcomposite")
+            .status()
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to run modprobe libcomposite: {}", e))
+            })?;
 
-/// Check if UDC is known to have low endpoint resources
-pub fn is_low_endpoint_udc(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    name.contains("musb") || name.contains("musb-hdrc")
-}
-
-/// Resolve preferred UDC name if available, otherwise auto-detect
-pub fn resolve_udc_name(preferred: Option<&str>) -> Option<String> {
-    if let Some(name) = preferred {
-        let path = Path::new("/sys/class/udc").join(name);
-        if path.exists() {
-            return Some(name.to_string());
+        if !status.success() {
+            return Err(AppError::Internal(format!(
+                "modprobe libcomposite failed with status {}",
+                status
+            )));
         }
     }
-    find_udc()
+
+    if is_configfs_available() {
+        Ok(())
+    } else {
+        Err(AppError::Internal(
+            "libcomposite is not available after modprobe; check configfs mount and kernel support"
+                .to_string(),
+        ))
+    }
 }
 
-/// Write string content to a file
-///
-/// For sysfs files, this function appends a newline and flushes
-/// to ensure the kernel processes the write immediately.
-///
-/// IMPORTANT: sysfs attributes require a single atomic write() syscall.
-/// The kernel processes the value on the first write(), so we must
-/// build the complete buffer (including newline) before writing.
+pub fn find_udc() -> Option<String> {
+    list_udcs().into_iter().next()
+}
+
+pub fn list_udcs() -> Vec<String> {
+    let mut devices = Vec::new();
+    collect_dir_names(Path::new("/sys/class/udc"), &mut devices);
+    devices.sort();
+    devices.dedup();
+    devices
+}
+
+fn collect_dir_names(path: &Path, devices: &mut Vec<String>) {
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().trim().to_string();
+            if !name.is_empty() {
+                devices.push(name);
+            }
+        }
+    }
+}
+
+/// Sysfs/configfs: one write syscall with final buffer (incl. newline when needed).
 pub fn write_file(path: &Path, content: &str) -> Result<()> {
-    // For sysfs files (especially write-only ones like forced_eject),
-    // we need to use simple O_WRONLY without O_TRUNC
-    // O_TRUNC may fail on special files or require read permission
     let mut file = OpenOptions::new()
         .write(true)
         .open(path)
         .or_else(|e| {
-            // If open fails, try create (for regular files)
             if path.exists() {
                 Err(e)
             } else {
@@ -85,9 +89,6 @@ pub fn write_file(path: &Path, content: &str) -> Result<()> {
         })
         .map_err(|e| AppError::Internal(format!("Failed to open {}: {}", path.display(), e)))?;
 
-    // Build complete buffer with newline, then write in single syscall.
-    // This is critical for sysfs - multiple write() calls may cause
-    // the kernel to only process partial data or return EINVAL.
     let data: std::borrow::Cow<[u8]> = if content.ends_with('\n') {
         content.as_bytes().into()
     } else {
@@ -99,14 +100,22 @@ pub fn write_file(path: &Path, content: &str) -> Result<()> {
     file.write_all(&data)
         .map_err(|e| AppError::Internal(format!("Failed to write to {}: {}", path.display(), e)))?;
 
-    // Explicitly flush to ensure sysfs processes the write
     file.flush()
         .map_err(|e| AppError::Internal(format!("Failed to flush {}: {}", path.display(), e)))?;
 
     Ok(())
 }
 
-/// Write binary content to a file
+/// Write an optional configfs/sysfs attribute when the running kernel exposes it.
+/// This keeps newer kernel enhancements compatible with older kernels.
+pub fn write_file_if_exists(path: &Path, content: &str) -> Result<bool> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    write_file(path, content)?;
+    Ok(true)
+}
+
 pub fn write_bytes(path: &Path, data: &[u8]) -> Result<()> {
     let mut file = File::create(path)
         .map_err(|e| AppError::Internal(format!("Failed to create {}: {}", path.display(), e)))?;
@@ -117,14 +126,6 @@ pub fn write_bytes(path: &Path, data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Read string content from a file
-pub fn read_file(path: &Path) -> Result<String> {
-    fs::read_to_string(path)
-        .map(|s| s.trim().to_string())
-        .map_err(|e| AppError::Internal(format!("Failed to read {}: {}", path.display(), e)))
-}
-
-/// Create directory if not exists
 pub fn create_dir(path: &Path) -> Result<()> {
     fs::create_dir_all(path).map_err(|e| {
         AppError::Internal(format!(
@@ -135,7 +136,6 @@ pub fn create_dir(path: &Path) -> Result<()> {
     })
 }
 
-/// Remove directory
 pub fn remove_dir(path: &Path) -> Result<()> {
     if path.exists() {
         fs::remove_dir(path).map_err(|e| {
@@ -149,7 +149,6 @@ pub fn remove_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Remove file
 pub fn remove_file(path: &Path) -> Result<()> {
     if path.exists() {
         fs::remove_file(path).map_err(|e| {
@@ -159,7 +158,6 @@ pub fn remove_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Create symlink
 pub fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
     std::os::unix::fs::symlink(src, dest).map_err(|e| {
         AppError::Internal(format!(

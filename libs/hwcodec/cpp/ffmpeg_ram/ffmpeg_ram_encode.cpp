@@ -11,8 +11,10 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include "common.h"
+#include "owned_nv12_frame.h"
 
 #define LOG_MODULE "FFMPEG_RAM_ENC"
 #include <log.h>
@@ -20,6 +22,12 @@ extern "C" {
 #ifdef _WIN32
 #include "win.h"
 #endif
+
+static thread_local std::string g_encoder_last_error;
+
+static void set_encoder_last_error(const std::string &message) {
+  g_encoder_last_error = message;
+}
 
 static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
                                    int *offset, int *length) {
@@ -30,14 +38,25 @@ static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
     *length = offset[1] + linesize[2] * height / 2;
     break;
   case AV_PIX_FMT_NV12:
+  case AV_PIX_FMT_NV21:
     offset[0] = linesize[0] * height;
     *length = offset[0] + linesize[1] * height / 2;
+    break;
+  case AV_PIX_FMT_NV16:
+  case AV_PIX_FMT_NV24:
+    offset[0] = linesize[0] * height;
+    *length = offset[0] + linesize[1] * height;
     break;
   case AV_PIX_FMT_YUYV422:
   case AV_PIX_FMT_YVYU422:
   case AV_PIX_FMT_UYVY422:
     // Packed YUV 4:2:2 formats: single plane, 2 bytes per pixel
     // linesize[0] = width * 2 (YUYV/YVYU/UYVY are interleaved)
+    offset[0] = 0;  // Only one plane
+    *length = linesize[0] * height;
+    break;
+  case AV_PIX_FMT_RGB24:
+  case AV_PIX_FMT_BGR24:
     offset[0] = 0;  // Only one plane
     *length = linesize[0] * height;
     break;
@@ -101,6 +120,9 @@ _exit:
 namespace {
 typedef void (*RamEncodeCallback)(const uint8_t *data, int len, int64_t pts,
                                   int key, const void *obj);
+typedef void (*RamEncodePacketCallback)(void *packet, const uint8_t *data,
+                                        int len, int64_t pts, int key,
+                                        const void *obj);
 
 class FFmpegRamEncoder {
 public:
@@ -108,7 +130,6 @@ public:
   AVFrame *frame_ = NULL;
   AVPacket *pkt_ = NULL;
   std::string name_;
-  std::string mc_name_; // for mediacodec
 
   int width_ = 0;
   int height_ = 0;
@@ -123,6 +144,7 @@ public:
   int thread_count_ = 1;
   int gpu_ = 0;
   RamEncodeCallback callback_ = NULL;
+  RamEncodePacketCallback packet_callback_ = NULL;
   int offset_[AV_NUM_DATA_POINTERS] = {0};
   bool force_keyframe_ = false;  // Force next frame to be a keyframe
 
@@ -131,12 +153,11 @@ public:
   AVBufferRef *hw_device_ctx_ = NULL;
   AVFrame *hw_frame_ = NULL;
 
-  FFmpegRamEncoder(const char *name, const char *mc_name, int width, int height,
+  FFmpegRamEncoder(const char *name, int width, int height,
                    int pixfmt, int align, int fps, int gop, int rc, int quality,
                    int kbs, int q, int thread_count, int gpu,
                    RamEncodeCallback callback) {
     name_ = name;
-    mc_name_ = mc_name ? mc_name : "";
     width_ = width;
     height_ = height;
     pixfmt_ = (AVPixelFormat)pixfmt;
@@ -168,12 +189,13 @@ public:
   }
 
   bool init(int *linesize, int *offset, int *length) {
+    g_encoder_last_error.clear();
     const AVCodec *codec = NULL;
 
     int ret;
 
     if (!(codec = avcodec_find_encoder_by_name(name_.c_str()))) {
-      LOG_ERROR(std::string("Codec ") + name_ + " not found");
+      set_encoder_last_error(std::string("Codec ") + name_ + " not found");
       return false;
     }
 
@@ -236,7 +258,6 @@ public:
       LOG_ERROR(std::string("Could not allocate video packet"));
       return false;
     }
-
     /* resolution must be a multiple of two */
     c_->width = width_;
     c_->height = height_;
@@ -252,23 +273,16 @@ public:
       LOG_ERROR(std::string("set_quality failed, name: ") + name_);
       return false;
     }
-    util_encode::set_rate_control(c_, name_, rc_, q_);
+    if (!util_encode::set_rate_control(c_, name_, rc_, q_)) {
+      LOG_ERROR(std::string("set_rate_control failed, name: ") + name_);
+      return false;
+    }
     util_encode::set_gpu(c_->priv_data, name_, gpu_);
     util_encode::force_hw(c_->priv_data, name_);
     util_encode::set_others(c_->priv_data, name_);
-    if (name_.find("mediacodec") != std::string::npos) {
-      if (mc_name_.length() > 0) {
-        LOG_INFO(std::string("mediacodec codec_name: ") + mc_name_);
-        if ((ret = av_opt_set(c_->priv_data, "codec_name", mc_name_.c_str(),
-                              0)) < 0) {
-          LOG_ERROR(std::string("mediacodec codec_name failed, ret = ") + av_err2str(ret));
-        }
-      }
-    }
-
     if ((ret = avcodec_open2(c_, codec, NULL)) < 0) {
-      LOG_ERROR(std::string("avcodec_open2 failed, ret = ") + av_err2str(ret) +
-                ", name: " + name_);
+      set_encoder_last_error(std::string("avcodec_open2 failed, ret = ") +
+                             av_err2str(ret) + ", name: " + name_);
       return false;
     }
 
@@ -290,7 +304,7 @@ public:
       LOG_ERROR(std::string("av_frame_make_writable failed, ret = ") + av_err2str(ret));
       return ret;
     }
-    if ((ret = fill_frame(frame_, (uint8_t *)data, length, offset_)) != 0)
+    if ((ret = fill_frame(frame_, data, length, offset_)) != 0)
       return ret;
     AVFrame *tmp_frame;
     if (hw_device_type_ != AV_HWDEVICE_TYPE_NONE) {
@@ -304,6 +318,32 @@ public:
     }
 
     return do_encode(tmp_frame, obj, ms);
+  }
+
+  int encode_owned_packet(const uint8_t *data, int length, void *owner,
+                           RamInputRelease release, const void *obj,
+                           uint64_t ms, RamEncodePacketCallback callback) {
+    if (pixfmt_ != AV_PIX_FMT_NV12 || hw_device_type_ != AV_HWDEVICE_TYPE_NONE ||
+        name_.find("v4l2m2m") == std::string::npos) {
+      release(owner, const_cast<uint8_t *>(data));
+      return AVERROR(ENOSYS);
+    }
+    auto frame = make_owned_nv12_frame(data, length, width_, height_, owner,
+                                       release);
+    if (!frame)
+      return AVERROR(EINVAL);
+    packet_callback_ = callback;
+    int ret = do_encode(frame.get(), obj, ms);
+    packet_callback_ = NULL;
+    return ret;
+  }
+
+  int encode_packet(const uint8_t *data, int length, const void *obj,
+                    uint64_t ms, RamEncodePacketCallback callback) {
+    packet_callback_ = callback;
+    int ret = encode(data, length, obj, ms);
+    packet_callback_ = NULL;
+    return ret;
   }
 
   void free_encoder() {
@@ -324,6 +364,11 @@ public:
   }
 
 private:
+  int send_frame(AVFrame *frame) {
+    const int ret = avcodec_send_frame(c_, frame);
+    return ret;
+  }
+
   int set_hwframe_ctx() {
     AVBufferRef *hw_frames_ref;
     AVHWFramesContext *frames_ctx = NULL;
@@ -358,83 +403,210 @@ private:
     frame->pts = ms;
 
     // Force keyframe if requested
-    if (force_keyframe_) {
+    if (force_keyframe_ && util_encode::supports_forced_keyframe(name_)) {
       frame->pict_type = AV_PICTURE_TYPE_I;
-      force_keyframe_ = false;
     } else {
       frame->pict_type = AV_PICTURE_TYPE_NONE;
     }
+    force_keyframe_ = false;
 
-    if ((ret = avcodec_send_frame(c_, frame)) < 0) {
+    ret = send_frame(frame);
+    if (ret == AVERROR(EAGAIN)) {
+      int drain_ret = receive_available_packets(obj, encoded);
+      if (drain_ret < 0) {
+        return drain_ret;
+      }
+      ret = send_frame(frame);
+    }
+    if (ret == AVERROR(EAGAIN)) {
+      return encoded ? 0 : AVERROR(EAGAIN);
+    }
+    if (ret < 0) {
       LOG_ERROR(std::string("avcodec_send_frame failed, ret = ") + av_err2str(ret));
       return ret;
     }
 
-    auto start = util::now();
-    while (ret >= 0 && util::elapsed_ms(start) < DECODE_TIMEOUT_MS) {
-      if ((ret = avcodec_receive_packet(c_, pkt_)) < 0) {
-        if (ret != AVERROR(EAGAIN)) {
-          LOG_ERROR(std::string("avcodec_receive_packet failed, ret = ") + av_err2str(ret));
-        }
-        goto _exit;
-      }
-      if (!pkt_->data || !pkt_->size) {
-        LOG_ERROR(std::string("avcodec_receive_packet failed, pkt size is 0"));
-        goto _exit;
-      }
-      encoded = true;
-      callback_(pkt_->data, pkt_->size, pkt_->pts,
-                pkt_->flags & AV_PKT_FLAG_KEY, obj);
+    ret = receive_available_packets(obj, encoded);
+    if (ret < 0) {
+      return ret;
     }
-  _exit:
-    av_packet_unref(pkt_);
+
     // If no packet is produced for this input frame, treat it as EAGAIN.
     // This is not a fatal error: encoders may buffer internally (e.g., startup delay).
     return encoded ? 0 : AVERROR(EAGAIN);
   }
 
-  int fill_frame(AVFrame *frame, uint8_t *data, int data_length,
-                 const int *const offset) {
+  int receive_available_packets(const void *obj, bool &encoded) {
+    int ret = 0;
+    auto start = util::now();
+
+    while (util::elapsed_ms(start) < DECODE_TIMEOUT_MS) {
+      ret = avcodec_receive_packet(c_, pkt_);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        return 0;
+      }
+      if (ret < 0) {
+        LOG_ERROR(std::string("avcodec_receive_packet failed, ret = ") + av_err2str(ret));
+        av_packet_unref(pkt_);
+        return ret;
+      }
+      if (!pkt_->data || !pkt_->size) {
+        LOG_WARN(std::string("avcodec_receive_packet returned empty packet"));
+        av_packet_unref(pkt_);
+        continue;
+      }
+      encoded = true;
+      if (packet_callback_) {
+        AVPacket *owned_pkt = av_packet_clone(pkt_);
+        if (!owned_pkt) {
+          LOG_ERROR("av_packet_clone failed");
+          av_packet_unref(pkt_);
+          return AVERROR(ENOMEM);
+        }
+        packet_callback_(owned_pkt, owned_pkt->data, owned_pkt->size,
+                         owned_pkt->pts, owned_pkt->flags & AV_PKT_FLAG_KEY,
+                         obj);
+      } else {
+        callback_(pkt_->data, pkt_->size, pkt_->pts,
+                  pkt_->flags & AV_PKT_FLAG_KEY, obj);
+      }
+      av_packet_unref(pkt_);
+    }
+
+    return 0;
+  }
+
+  int copy_plane(uint8_t *dst, int dst_stride, const uint8_t *src,
+                 int src_stride, int row_bytes, int rows) {
+    if (!dst || !src || dst_stride < row_bytes || src_stride < row_bytes) {
+      return -1;
+    }
+    if (rows <= 0 || row_bytes <= 0) {
+      return 0;
+    }
+    if (dst_stride == row_bytes && src_stride == row_bytes) {
+      memcpy(dst, src, static_cast<size_t>(row_bytes) * rows);
+      return 0;
+    }
+    for (int y = 0; y < rows; y++) {
+      memcpy(dst + y * dst_stride, src + y * src_stride, row_bytes);
+    }
+    return 0;
+  }
+
+  int fill_frame(AVFrame *frame, const uint8_t *data, int data_length,
+                 const int *const) {
+    const int src_y_stride = width_;
+    const int src_packed_stride = width_ * bytes_per_pixel(frame->format);
+    const int src_uv_stride = width_;
+    const int src_y_size = width_ * frame->height;
+    const int src_420_chroma_size = (width_ / 2) * (frame->height / 2);
     switch (frame->format) {
     case AV_PIX_FMT_NV12:
+    case AV_PIX_FMT_NV21:
       if (data_length <
-          frame->height * (frame->linesize[0] + frame->linesize[1] / 2)) {
-        LOG_ERROR(std::string("fill_frame: NV12 data length error. data_length:") +
+          frame->height * src_y_stride + frame->height / 2 * src_uv_stride) {
+        LOG_ERROR(std::string("fill_frame: NV12/NV21 data length error. data_length:") +
                   std::to_string(data_length) +
-                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
-                  ", linesize[1]:" + std::to_string(frame->linesize[1]));
+                  ", width:" + std::to_string(width_) +
+                  ", height:" + std::to_string(frame->height));
         return -1;
       }
-      frame->data[0] = data;
-      frame->data[1] = data + offset[0];
+      if (copy_plane(frame->data[0], frame->linesize[0], data, src_y_stride,
+                     width_, frame->height) != 0 ||
+          copy_plane(frame->data[1], frame->linesize[1], data + src_y_size,
+                     src_uv_stride, width_, frame->height / 2) != 0) {
+        LOG_ERROR("fill_frame: NV12/NV21 copy failed");
+        return -1;
+      }
       break;
+    case AV_PIX_FMT_NV16:
+      if (data_length <
+          frame->height * src_y_stride + frame->height * src_uv_stride) {
+        LOG_ERROR(std::string("fill_frame: NV16 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", width:" + std::to_string(width_) +
+                  ", height:" + std::to_string(frame->height));
+        return -1;
+      }
+      if (copy_plane(frame->data[0], frame->linesize[0], data, src_y_stride,
+                     width_, frame->height) != 0 ||
+          copy_plane(frame->data[1], frame->linesize[1], data + src_y_size,
+                     src_uv_stride, width_, frame->height) != 0) {
+        LOG_ERROR("fill_frame: NV16 copy failed");
+        return -1;
+      }
+      break;
+    case AV_PIX_FMT_NV24: {
+      const int src_nv24_uv_stride = width_ * 2;
+      if (data_length <
+          frame->height * src_y_stride + frame->height * src_nv24_uv_stride) {
+        LOG_ERROR(std::string("fill_frame: NV24 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", width:" + std::to_string(width_) +
+                  ", height:" + std::to_string(frame->height));
+        return -1;
+      }
+      if (copy_plane(frame->data[0], frame->linesize[0], data, src_y_stride,
+                     width_, frame->height) != 0 ||
+          copy_plane(frame->data[1], frame->linesize[1], data + src_y_size,
+                     src_nv24_uv_stride, width_ * 2, frame->height) != 0) {
+        LOG_ERROR("fill_frame: NV24 copy failed");
+        return -1;
+      }
+      break;
+    }
     case AV_PIX_FMT_YUV420P:
       if (data_length <
-          frame->height * (frame->linesize[0] + frame->linesize[1] / 2 +
-                           frame->linesize[2] / 2)) {
+          width_ * frame->height + (width_ / 2) * (frame->height / 2) * 2) {
         LOG_ERROR(std::string("fill_frame: 420P data length error. data_length:") +
                   std::to_string(data_length) +
-                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
-                  ", linesize[1]:" + std::to_string(frame->linesize[1]) +
-                  ", linesize[2]:" + std::to_string(frame->linesize[2]));
+                  ", width:" + std::to_string(width_) +
+                  ", height:" + std::to_string(frame->height));
         return -1;
       }
-      frame->data[0] = data;
-      frame->data[1] = data + offset[0];
-      frame->data[2] = data + offset[1];
+      if (copy_plane(frame->data[0], frame->linesize[0], data, width_,
+                     width_, frame->height) != 0 ||
+          copy_plane(frame->data[1], frame->linesize[1], data + src_y_size,
+                     width_ / 2, width_ / 2, frame->height / 2) != 0 ||
+          copy_plane(frame->data[2], frame->linesize[2],
+                     data + src_y_size + src_420_chroma_size,
+                     width_ / 2, width_ / 2, frame->height / 2) != 0) {
+        LOG_ERROR("fill_frame: 420P copy failed");
+        return -1;
+      }
       break;
     case AV_PIX_FMT_YUYV422:
     case AV_PIX_FMT_YVYU422:
     case AV_PIX_FMT_UYVY422:
       // Packed YUV 4:2:2 formats: single plane, linesize[0] = width * 2
-      if (data_length < frame->height * frame->linesize[0]) {
+      if (data_length < frame->height * src_packed_stride) {
         LOG_ERROR(std::string("fill_frame: YUYV422 data length error. data_length:") +
                   std::to_string(data_length) +
-                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
+                  ", stride:" + std::to_string(src_packed_stride) +
                   ", height:" + std::to_string(frame->height));
         return -1;
       }
-      frame->data[0] = data;
+      if (copy_plane(frame->data[0], frame->linesize[0], data,
+                     src_packed_stride, src_packed_stride, frame->height) != 0) {
+        LOG_ERROR("fill_frame: YUYV422 copy failed");
+        return -1;
+      }
+      break;
+    case AV_PIX_FMT_RGB24:
+    case AV_PIX_FMT_BGR24:
+      if (data_length < frame->height * src_packed_stride) {
+        LOG_ERROR(std::string("fill_frame: RGB24/BGR24 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", stride:" + std::to_string(src_packed_stride) +
+                  ", height:" + std::to_string(frame->height));
+        return -1;
+      }
+      if (copy_plane(frame->data[0], frame->linesize[0], data,
+                     src_packed_stride, src_packed_stride, frame->height) != 0) {
+        LOG_ERROR("fill_frame: RGB24/BGR24 copy failed");
+        return -1;
+      }
       break;
     default:
       LOG_ERROR(std::string("fill_frame: unsupported format, ") +
@@ -443,23 +615,64 @@ private:
     }
     return 0;
   }
+
+  int bytes_per_pixel(int pix_fmt) {
+    switch (pix_fmt) {
+    case AV_PIX_FMT_YUYV422:
+    case AV_PIX_FMT_YVYU422:
+    case AV_PIX_FMT_UYVY422:
+      return 2;
+    case AV_PIX_FMT_RGB24:
+    case AV_PIX_FMT_BGR24:
+      return 3;
+    default:
+      return 1;
+    }
+  }
 };
 
 } // namespace
 
 extern "C" FFmpegRamEncoder *
-ffmpeg_ram_new_encoder(const char *name, const char *mc_name, int width,
+ffmpeg_ram_new_encoder(const char *name, int width,
                        int height, int pixfmt, int align, int fps, int gop,
                        int rc, int quality, int kbs, int q, int thread_count,
                        int gpu, int *linesize, int *offset, int *length,
                        RamEncodeCallback callback) {
   FFmpegRamEncoder *encoder = NULL;
   try {
-    encoder = new FFmpegRamEncoder(name, mc_name, width, height, pixfmt, align,
-                                   fps, gop, rc, quality, kbs, q, thread_count,
-                                   gpu, callback);
+    auto try_create = [&](int attempt_rc, int attempt_kbs) {
+      FFmpegRamEncoder *candidate = new FFmpegRamEncoder(
+          name, width, height, pixfmt, align, fps, gop, attempt_rc, quality,
+          attempt_kbs, q, thread_count, gpu, callback);
+      if (candidate && candidate->init(linesize, offset, length)) {
+        return candidate;
+      }
+
+      if (candidate) {
+        candidate->free_encoder();
+        delete candidate;
+      }
+      return static_cast<FFmpegRamEncoder *>(NULL);
+    };
+
+    // Preserve the existing VAAPI path first. With a target bitrate and no
+    // explicit QP, FFmpeg negotiates a supported bitrate-based mode such as
+    // AVBR, VBR or CBR with the driver.
+    encoder = try_create(rc, kbs);
     if (encoder) {
-      if (encoder->init(linesize, offset, length)) {
+      return encoder;
+    }
+
+    // Retry only VAAPI with a fresh context in explicit-QP mode. This avoids
+    // changing rate control on hardware which already supports CBR/VBR while
+    // allowing CQP-only drivers to pass probing and normal encoder creation.
+    if (name && std::string(name).find("vaapi") != std::string::npos &&
+        rc != RC_CQ) {
+      LOG_DEBUG(std::string("VAAPI bitrate-based rate control failed for ") +
+                name + ", retrying with CQP");
+      encoder = try_create(RC_CQ, 0);
+      if (encoder) {
         return encoder;
       }
     }
@@ -496,6 +709,44 @@ extern "C" void ffmpeg_ram_free_encoder(FFmpegRamEncoder *encoder) {
   }
 }
 
+extern "C" int ffmpeg_ram_encode_packet(FFmpegRamEncoder *encoder,
+                                        const uint8_t *data, int length,
+                                        const void *obj, uint64_t ms,
+                                        RamEncodePacketCallback callback) {
+  try {
+    return encoder->encode_packet(data, length, obj, ms, callback);
+  } catch (const std::exception &e) {
+    LOG_ERROR(std::string("encode_packet failed, ") + std::string(e.what()));
+    return -1;
+  }
+}
+
+extern "C" void ffmpeg_ram_free_packet(void *packet) {
+  AVPacket *pkt = reinterpret_cast<AVPacket *>(packet);
+  if (pkt) {
+    av_packet_free(&pkt);
+  }
+}
+
+extern "C" int ffmpeg_ram_encode_owned_packet(
+    FFmpegRamEncoder *encoder, const uint8_t *data, int length, void *owner,
+    RamInputRelease release, const void *obj, uint64_t ms,
+    RamEncodePacketCallback callback) {
+  if (!encoder || !release) {
+    if (release)
+      release(owner, const_cast<uint8_t *>(data));
+    return AVERROR(EINVAL);
+  }
+  try {
+    return encoder->encode_owned_packet(data, length, owner, release, obj, ms,
+                                        callback);
+  } catch (const std::exception &e) {
+    encoder->packet_callback_ = NULL;
+    LOG_ERROR(std::string("encode_owned_packet failed, ") + e.what());
+    return -1;
+  }
+}
+
 extern "C" int ffmpeg_ram_set_bitrate(FFmpegRamEncoder *encoder, int kbs) {
   try {
     return encoder->set_bitrate(kbs);
@@ -513,4 +764,8 @@ extern "C" void ffmpeg_ram_request_keyframe(FFmpegRamEncoder *encoder) {
   } catch (const std::exception &e) {
     LOG_ERROR(std::string("ffmpeg_ram_request_keyframe failed, ") + std::string(e.what()));
   }
+}
+
+extern "C" const char *ffmpeg_ram_encoder_last_error(void) {
+  return g_encoder_last_error.c_str();
 }

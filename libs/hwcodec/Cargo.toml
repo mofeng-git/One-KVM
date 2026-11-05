@@ -3,20 +3,25 @@ name = "hwcodec"
 version = "0.8.0"
 edition = "2021"
 description = "Hardware video codec for IP-KVM (Windows/Linux)"
+# This crate contains code derived from RustDesk hwcodec (AGPL-3.0).
+# See NOTICE in this directory and the LICENSE file in the repository root.
+license = "AGPL-3.0-only"
+
+[package.metadata.cargo-machete]
+ignored = ["serde"]
 
 [features]
 default = []
+bytes = ["dep:bytes"]
 rkmpp = []
 
 [dependencies]
 log = "0.4"
+bytes = { version = "1", optional = true }
 serde_derive = "1.0"
 serde = "1.0"
 serde_json = "1.0"
 
 [build-dependencies]
 cc = "1.0"
-bindgen = "0.59"
-
-[dev-dependencies]
-env_logger = "0.10"
+bindgen = "0.72"

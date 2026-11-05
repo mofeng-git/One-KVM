@@ -6,6 +6,7 @@
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ffi.rs"));
 
 use serde_derive::{Deserialize, Serialize};
+use std::{env, ffi::CString};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AVHWDeviceType {
@@ -31,14 +32,14 @@ pub extern "C" fn hwcodec_av_log_callback(level: i32, message: *const std::os::r
         if let Ok(str_slice) = c_str.to_str() {
             let string = String::from(str_slice);
             if level == AV_LOG_ERROR as i32 {
-                log::error!("{}", string);
                 if string.contains(could_not_find_ref_with_poc) {
                     hwcodec_set_flag_could_not_find_ref_with_poc();
                 }
+                log::debug!("{}", string);
             } else if level == AV_LOG_PANIC as i32 || level == AV_LOG_FATAL as i32 {
                 log::error!("{}", string);
             } else if level == AV_LOG_WARNING as i32 {
-                log::warn!("{}", string);
+                log::debug!("{}", string);
             } else if level == AV_LOG_INFO as i32 {
                 log::info!("{}", string);
             } else if level == AV_LOG_VERBOSE as i32 || level == AV_LOG_DEBUG as i32 {
@@ -53,7 +54,52 @@ pub extern "C" fn hwcodec_av_log_callback(level: i32, message: *const std::os::r
 pub(crate) fn init_av_log() {
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(|| unsafe {
-        av_log_set_level(AV_LOG_ERROR as i32);
+        av_log_set_level(parse_ffmpeg_log_level());
         hwcodec_set_av_log_callback();
     });
+}
+
+pub fn resolve_pixel_format(name: &str, fallback: AVPixelFormat) -> i32 {
+    let c_name = match CString::new(name) {
+        Ok(name) => name,
+        Err(_) => return fallback as i32,
+    };
+
+    unsafe {
+        let resolved = av_get_pix_fmt(c_name.as_ptr());
+        if resolved >= 0 {
+            resolved
+        } else {
+            fallback as i32
+        }
+    }
+}
+
+fn parse_ffmpeg_log_level() -> i32 {
+    let raw = match env::var("ONE_KVM_FFMPEG_LOG") {
+        Ok(value) => value,
+        Err(_) => return AV_LOG_ERROR as i32,
+    };
+
+    let value = raw.trim().to_ascii_lowercase();
+    if value.is_empty() {
+        return AV_LOG_ERROR as i32;
+    }
+
+    if let Ok(level) = value.parse::<i32>() {
+        return level;
+    }
+
+    match value.as_str() {
+        "quiet" => AV_LOG_QUIET as i32,
+        "panic" => AV_LOG_PANIC as i32,
+        "fatal" => AV_LOG_FATAL as i32,
+        "error" => AV_LOG_ERROR as i32,
+        "warn" | "warning" => AV_LOG_WARNING as i32,
+        "info" => AV_LOG_INFO as i32,
+        "verbose" => AV_LOG_VERBOSE as i32,
+        "debug" => AV_LOG_DEBUG as i32,
+        "trace" => AV_LOG_TRACE as i32,
+        _ => AV_LOG_ERROR as i32,
+    }
 }

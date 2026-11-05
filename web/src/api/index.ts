@@ -1,16 +1,33 @@
-// API client for One-KVM backend
-
-import { request, ApiError } from './request'
+import { request, uploadRequest, ApiError } from './request'
+import type {
+  CanonicalKey,
+  Ch9329DescriptorState,
+} from '@/types/generated'
+import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
+import type { StreamSignalReason, StreamState } from '@/types/websocket'
 
 const API_BASE = '/api'
 
-// Auth API
 export const authApi = {
   login: (username: string, password: string) =>
-    request<{ success: boolean; message?: string }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    }),
+    request<AuthLoginResponse>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      },
+      { toastOnError: false },
+    ),
+
+  loginTotp: (challengeId: string, code: string) =>
+    request<AuthLoginResponse>(
+      '/auth/login/totp',
+      {
+        method: 'POST',
+        body: JSON.stringify({ challenge_id: challengeId, code }),
+      },
+      { toastOnError: false },
+    ),
 
   logout: () =>
     request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
@@ -29,12 +46,63 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, current_password: currentPassword }),
     }),
+
+  totpStatus: () =>
+    request<TotpStatusResponse>('/auth/totp'),
+
+  beginTotpEnrollment: (currentPassword: string) =>
+    request<TotpEnrollmentResponse>('/auth/totp/enrollment', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword }),
+    }, { toastOnError: false }),
+
+  confirmTotpEnrollment: (enrollmentId: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/enrollment/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ enrollment_id: enrollmentId, code }),
+    }, { toastOnError: false }),
+
+  disableTotp: (currentPassword: string, code: string) =>
+    request<{ success: boolean }>('/auth/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, code }),
+    }, { toastOnError: false }),
 }
 
-// System API
+export interface AuthLoginResponse {
+  next: 'authenticated' | 'totp'
+  challenge_id?: string
+  expires_at_unix_ms?: number
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean
+  server_time_unix_ms: number
+}
+
+export interface TotpEnrollmentResponse {
+  enrollment_id: string
+  secret: string
+  otpauth_uri: string
+  expires_at_unix_ms: number
+  server_time_unix_ms: number
+}
+
 export interface NetworkAddress {
   interface: string
   ip: string
+}
+
+export interface HostInfo {
+  operating_system: string
+  architecture: string
+  kernel: string | null
+  cpu_count: number
+  storage: {
+    system: { total: number; used: number; available: number } | null
+    msd: { total: number; used: number; available: number } | null
+    shared_partition: boolean | null
+  }
 }
 
 export interface DeviceInfo {
@@ -44,33 +112,62 @@ export interface DeviceInfo {
   memory_total: number
   memory_used: number
   network_addresses: NetworkAddress[]
+  serial_ports: string[]
+}
+
+export interface FeatureCapability {
+  available: boolean
+  backends: string[]
+  selected_backend?: string
+  reason?: string
+}
+
+export interface PlatformCapabilities {
+  mode: 'linux' | 'windows'
+  mode_label: string
+  video_capture: FeatureCapability
+  encoder: FeatureCapability
+  hid: FeatureCapability
+  atx: FeatureCapability
+  msd: FeatureCapability
+  otg: FeatureCapability
+  audio: FeatureCapability
+  rustdesk: FeatureCapability
+  vnc: FeatureCapability
+  diagnostics: FeatureCapability
+  extensions: FeatureCapability
+  service_installation: FeatureCapability
 }
 
 export const systemApi = {
   info: () =>
     request<{
       version: string
-      build_date: string
       initialized: boolean
+      openwrt_system: boolean
+      platform: PlatformCapabilities
       capabilities: {
-        video: { available: boolean; backend?: string }
-        hid: { available: boolean; backend?: string }
-        msd: { available: boolean }
-        atx: { available: boolean; backend?: string }
-        audio: { available: boolean; backend?: string }
+        video: { available: boolean; backend?: string; reason?: string }
+        hid: { available: boolean; backend?: string; reason?: string }
+        msd: { available: boolean; backend?: string; reason?: string }
+        atx: { available: boolean; backend?: string; reason?: string }
+        audio: { available: boolean; backend?: string; reason?: string }
+        rustdesk: { available: boolean; backend?: string; reason?: string }
+        vnc: { available: boolean; backend?: string; reason?: string }
       }
       disk_space?: {
         total: number
         available: number
         used: number
       }
+      host?: HostInfo
       device_info?: DeviceInfo
     }>('/info'),
 
   health: () => request<{ status: string; version: string }>('/health'),
 
   setupStatus: () =>
-    request<{ initialized: boolean; needs_setup: boolean }>('/setup'),
+    request<{ initialized: boolean; needs_setup: boolean; platform: PlatformCapabilities }>('/setup'),
 
   setup: (data: {
     username: string
@@ -80,11 +177,14 @@ export const systemApi = {
     video_width?: number
     video_height?: number
     video_fps?: number
-    hid_backend?: string
+    hid_backend?: 'otg' | 'ch9329' | 'ch9329_otg' | 'bluetooth' | 'none'
+    hid_bluetooth?: { adapter: string; name: string }
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     hid_otg_profile?: string
+    hid_otg_keyboard_leds?: boolean
+    msd_enabled?: boolean
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean
@@ -99,9 +199,58 @@ export const systemApi = {
     request<{ success: boolean; message?: string }>('/system/restart', {
       method: 'POST',
     }),
+
+  hostPower: (action: 'reboot' | 'poweroff') =>
+    request<{ success: boolean; message?: string }>(`/system/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmed: true }),
+    }, { toastOnError: false }),
 }
 
-// Stream API
+export type UpdateChannel = 'stable' | 'beta'
+
+export interface UpdateOverviewResponse {
+  success: boolean
+  current_version: string
+  channel: UpdateChannel
+  latest_version: string
+  upgrade_available: boolean
+  target_version?: string
+  notes_between: Array<{
+    version: string
+    published_at: string
+    notes: string[]
+  }>
+}
+
+export interface UpdateStatusResponse {
+  success: boolean
+  phase: 'idle' | 'checking' | 'downloading' | 'verifying' | 'installing' | 'restarting' | 'success' | 'failed'
+  progress: number
+  current_version: string
+  target_version?: string
+  message?: string
+  last_error?: string
+}
+
+export const updateApi = {
+  overview: (channel: UpdateChannel = 'stable') =>
+    request<UpdateOverviewResponse>(
+      `/update/overview?channel=${encodeURIComponent(channel)}`,
+      {},
+      { toastOnError: false },
+    ),
+
+  upgrade: (payload: { channel?: UpdateChannel; target_version?: string }) =>
+    request<{ success: boolean; message?: string }>('/update/upgrade', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  status: () =>
+    request<UpdateStatusResponse>('/update/status'),
+}
+
 export interface VideoCodecInfo {
   id: string
   name: string
@@ -124,10 +273,50 @@ export interface AvailableCodecsResponse {
   codecs: VideoCodecInfo[]
 }
 
+export interface StreamConstraintsResponse {
+  success: boolean
+  allowed_codecs: string[]
+  locked_codec: string | null
+  disallow_mjpeg: boolean
+  sources: {
+    rustdesk: boolean
+    rtsp: boolean
+    vnc: boolean
+  }
+  reason: string
+  current_mode: string
+}
+
+export interface VideoEncoderSelfCheckCodec {
+  id: string
+  name: string
+}
+
+export interface VideoEncoderSelfCheckCell {
+  codec_id: string
+  ok: boolean
+  elapsed_ms?: number | null
+}
+
+export interface VideoEncoderSelfCheckRow {
+  resolution_id: string
+  resolution_label: string
+  width: number
+  height: number
+  cells: VideoEncoderSelfCheckCell[]
+}
+
+export interface VideoEncoderSelfCheckResponse {
+  current_hardware_encoder: string
+  codecs: VideoEncoderSelfCheckCodec[]
+  rows: VideoEncoderSelfCheckRow[]
+}
+
 export const streamApi = {
   status: () =>
     request<{
-      state: 'uninitialized' | 'ready' | 'streaming' | 'no_signal' | 'error'
+      state: StreamState
+      reason?: StreamSignalReason | null
       device: string | null
       format: string | null
       resolution: [number, number] | null
@@ -161,6 +350,12 @@ export const streamApi = {
   getCodecs: () =>
     request<AvailableCodecsResponse>('/stream/codecs'),
 
+  getConstraints: () =>
+    request<StreamConstraintsResponse>('/stream/constraints'),
+
+  encoderSelfCheck: () =>
+    request<VideoEncoderSelfCheckResponse>('/video/encoder/self-check'),
+
   setBitratePreset: (bitrate_preset: import('@/types/generated').BitratePreset) =>
     request<{ success: boolean; message?: string }>('/stream/bitrate', {
       method: 'POST',
@@ -168,7 +363,6 @@ export const streamApi = {
     }),
 }
 
-// WebRTC API
 export interface IceCandidate {
   candidate: string
   sdpMid?: string
@@ -186,11 +380,12 @@ export const webrtcApi = {
   createSession: () =>
     request<{ session_id: string }>('/webrtc/session', { method: 'POST' }),
 
-  offer: (sdp: string, clientId?: string) =>
+  offer: (sdp: string, signal?: AbortSignal) =>
     request<{ sdp: string; session_id: string; ice_candidates: IceCandidate[] }>('/webrtc/offer', {
       method: 'POST',
-      body: JSON.stringify({ sdp, client_id: clientId }),
-    }),
+      body: JSON.stringify({ sdp }),
+      signal,
+    }, { toastOnError: false }),
 
   addIceCandidate: (sessionId: string, candidate: IceCandidate) =>
     request<{ success: boolean }>('/webrtc/ice', {
@@ -214,15 +409,9 @@ export const webrtcApi = {
     request<{ ice_servers: IceServerConfig[]; mdns_mode: string }>('/webrtc/ice-servers'),
 }
 
-// HID API
-// Import HID WebSocket composable
-import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
-
-// Create shared HID WebSocket instance
 const hidWs = useHidWebSocket()
 let hidWsInitialized = false
 
-// Initialize HID WebSocket connection
 async function ensureHidConnection() {
   if (!hidWsInitialized) {
     hidWsInitialized = true
@@ -230,7 +419,6 @@ async function ensureHidConnection() {
   }
 }
 
-// Map button string to number
 function mapButton(button?: 'left' | 'right' | 'middle'): number | undefined {
   if (!button) return undefined
   const buttonMap = { left: 0, middle: 1, right: 2 }
@@ -242,22 +430,53 @@ export const hidApi = {
     request<{
       available: boolean
       backend: string
+      configured_backend: string
+      otg?: import('@/lib/hidGuide').OtgDeviceStatus
       initialized: boolean
+      online: boolean
       supports_absolute_mouse: boolean
+      keyboard_leds_enabled: boolean
+      led_state: {
+        num_lock: boolean
+        caps_lock: boolean
+        scroll_lock: boolean
+        compose: boolean
+        kana: boolean
+      }
       screen_resolution: [number, number] | null
+      device: string | null
+      error: string | null
+      error_code: string | null
     }>('/hid/status'),
 
-  keyboard: async (type: 'down' | 'up', key: number, modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }) => {
+  otgSelfCheck: () =>
+    request<{
+      overall_ok: boolean
+      error_count: number
+      warning_count: number
+      hid_backend: string
+      selected_udc: string | null
+      bound_udc: string | null
+      udc_state: string | null
+      udc_speed: string | null
+      available_udcs: string[]
+      other_gadgets: string[]
+      checks: Array<{
+        id: string
+        ok: boolean
+        level: 'info' | 'warn' | 'error'
+        message: string
+        hint?: string
+        path?: string
+      }>
+    }>('/hid/otg/self-check'),
+
+  keyboard: async (type: 'down' | 'up', key: CanonicalKey, modifier?: number) => {
     await ensureHidConnection()
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
       key,
-      modifiers,
+      modifier: (modifier ?? 0) & 0xff,
     }
     await hidWs.sendKeyboard(event)
     return { success: true }
@@ -271,7 +490,6 @@ export const hidApi = {
     scroll?: number | null
   }) => {
     await ensureHidConnection()
-    // Ensure all values are properly typed (convert null to undefined)
     const event: HidMouseEvent = {
       type: data.type === 'move_abs' ? 'moveabs' : data.type,
       x: data.x ?? undefined,
@@ -286,19 +504,38 @@ export const hidApi = {
   reset: () =>
     request<{ success: boolean }>('/hid/reset', { method: 'POST' }),
 
+  ch9329Descriptor: (params?: { port?: string; baudRate?: number }) => {
+    const query = new URLSearchParams()
+    if (params?.port) query.set('port', params.port)
+    if (params?.baudRate) query.set('baud_rate', String(params.baudRate))
+    const suffix = query.toString()
+    return request<Ch9329DescriptorState>(`/hid/ch9329/descriptor${suffix ? `?${suffix}` : ''}`)
+  },
+
   consumer: async (usage: number) => {
     await ensureHidConnection()
     await hidWs.sendConsumer({ usage })
     return { success: true }
   },
 
-  // WebSocket connection management
   connectWebSocket: () => hidWs.connect(),
   disconnectWebSocket: () => hidWs.disconnect(),
   isWebSocketConnected: () => hidWs.connected.value,
 }
 
-// ATX API
+export interface McpConfig {
+  enabled: boolean
+  requests_per_second: number
+  api_key_configured: boolean
+  endpoint: string
+  api_key?: string
+}
+export const mcpApi = {
+  config: () => request<McpConfig>('/config/mcp'),
+  updateConfig: (data: { enabled?: boolean; requests_per_second?: number; regenerate_api_key?: boolean }) =>
+    request<McpConfig>('/config/mcp', { method: 'PATCH', body: JSON.stringify(data) }),
+}
+
 export const atxApi = {
   status: () =>
     request<{
@@ -307,6 +544,8 @@ export const atxApi = {
       initialized: boolean
       power_status: 'on' | 'off' | 'unknown'
       led_supported: boolean
+      hdd_status: 'active' | 'inactive' | 'unknown'
+      hdd_supported: boolean
     }>('/atx/status'),
 
   power: (action: 'short' | 'long' | 'reset') =>
@@ -316,7 +555,6 @@ export const atxApi = {
     }),
 }
 
-// MSD API
 export interface MsdImage {
   id: string
   name: string
@@ -331,134 +569,125 @@ export interface DriveFile {
   size: number
 }
 
+export type DriveFileAccess = 'available' | 'unsupported' | 'blocked_while_connected' | 'unknown'
+
+export interface DriveInfo {
+  size: number
+  used: number | null
+  free: number | null
+  initialized: boolean
+  file_access: DriveFileAccess
+}
+
+export type DiskMode = 'single' | 'multi'
+export type MountedMediaKind = 'drive' | 'image'
+
+export interface MountedMedia {
+  id: string
+  kind: MountedMediaKind
+  name: string
+  cdrom: boolean
+  read_only: boolean
+  size: number
+}
+
 export const msdApi = {
   status: () =>
     request<{
       available: boolean
       state: {
-        connected: boolean
-        mode: 'none' | 'image' | 'drive'
-        current_image: {
-          id: string
-          name: string
-          size: number
-          created_at: string
-        } | null
-        drive_info: {
-          size: number
-          used: number
-          free: number
-          initialized: boolean
-        } | null
+        disk_mode: DiskMode
+        slot_capacity: number
+        mounted_count: number
+        mounted_media: MountedMedia[]
+        drive_info: DriveInfo | null
+        usb_reenumerating: boolean
       }
-    }>('/msd/status'),
+    }>('/msd/status', {}, { toastOnError: false }),
 
-  // Image management
-  listImages: () => request<MsdImage[]>('/msd/images'),
+  listImages: () => request<MsdImage[]>('/msd/images', {}, { toastOnError: false }),
 
   uploadImage: async (file: File, onProgress?: (progress: number) => void) => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE}/msd/images`)
-    xhr.withCredentials = true
-
-    return new Promise<MsdImage>((resolve, reject) => {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress((e.loaded / e.total) * 100)
-        }
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText))
-        } else {
-          reject(new ApiError(xhr.status, 'Upload failed'))
-        }
-      }
-
-      xhr.onerror = () => reject(new ApiError(0, 'Network error'))
-      xhr.send(formData)
+    return uploadRequest<MsdImage>('/msd/images', formData, onProgress, {
+      errorTitleKey: 'msd.operations.uploadImage',
     })
   },
 
   deleteImage: (id: string) =>
-    request<{ success: boolean }>(`/msd/images/${id}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/msd/images/${id}`, { method: 'DELETE' }, { errorTitleKey: 'msd.operations.deleteImage' }),
 
-  connect: (mode: 'image' | 'drive', imageId?: string, cdrom?: boolean, readOnly?: boolean) =>
-    request<{ success: boolean }>('/msd/connect', {
+  setDiskMode: (diskMode: DiskMode) =>
+    request<{ success: boolean }>('/msd/disk-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ disk_mode: diskMode }),
+    }, { errorTitleKey: 'msd.operations.changeMode' }),
+
+  mountImage: (id: string, cdrom: boolean, readOnly: boolean) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, {
       method: 'POST',
-      body: JSON.stringify({ mode, image_id: imageId, cdrom, read_only: readOnly }),
-    }),
+      body: JSON.stringify({ cdrom, read_only: readOnly }),
+    }, { errorTitleKey: 'msd.operations.mountImage' }),
 
-  disconnect: () =>
-    request<{ success: boolean }>('/msd/disconnect', { method: 'POST' }),
+  unmountImage: (id: string) =>
+    request<{ success: boolean }>(`/msd/images/${id}/mount`, { method: 'DELETE' }, { errorTitleKey: 'msd.operations.unmountImage' }),
 
-  // Virtual drive
+  mountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'POST' }, { errorTitleKey: 'msd.operations.mountDrive' }),
+
+  unmountDrive: () =>
+    request<{ success: boolean }>('/msd/drive/mount', { method: 'DELETE' }, { errorTitleKey: 'msd.operations.unmountDrive' }),
+
   driveInfo: () =>
-    request<{
-      size: number
-      used: number
-      free: number
-      initialized: boolean
-    }>('/msd/drive'),
+    request<DriveInfo>('/msd/drive', {}, { toastOnError: false }),
 
   initDrive: (sizeMb?: number) =>
-    request<{ path: string; size_mb: number }>('/msd/drive/init', {
-      method: 'POST',
-      body: JSON.stringify({ size_mb: sizeMb }),
-    }),
+    request<DriveInfo>(
+      '/msd/drive/init',
+      {
+        method: 'POST',
+        body: JSON.stringify({ size_mb: sizeMb }),
+      },
+      { errorTitleKey: 'msd.operations.initializeDrive' },
+    ),
 
   deleteDrive: () =>
-    request<{ success: boolean }>('/msd/drive', { method: 'DELETE' }),
+    request<{ success: boolean }>('/msd/drive', { method: 'DELETE' }, { errorTitleKey: 'msd.operations.deleteDrive' }),
 
   listDriveFiles: (path = '/') =>
-    request<DriveFile[]>(`/msd/drive/files?path=${encodeURIComponent(path)}`),
+    request<DriveFile[]>(
+      `/msd/drive/files?path=${encodeURIComponent(path)}`,
+      {},
+      { toastOnError: false },
+    ),
 
   uploadDriveFile: async (file: File, targetPath = '/', onProgress?: (progress: number) => void) => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE}/msd/drive/files?path=${encodeURIComponent(targetPath)}`)
-    xhr.withCredentials = true
-
-    return new Promise<{ success: boolean; message?: string }>((resolve, reject) => {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress((e.loaded / e.total) * 100)
-        }
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText))
-        } else {
-          reject(new ApiError(xhr.status, 'Upload failed'))
-        }
-      }
-
-      xhr.onerror = () => reject(new ApiError(0, 'Network error'))
-      xhr.send(formData)
-    })
+    return uploadRequest<{ success: boolean; message?: string }>(
+      `/msd/drive/files?path=${encodeURIComponent(targetPath)}`,
+      formData,
+      onProgress,
+      { errorTitleKey: 'msd.operations.uploadDriveFile' },
+    )
   },
 
   downloadDriveFile: (path: string) =>
-    `${API_BASE}/msd/drive/files${path.startsWith('/') ? path : '/' + path}`,
+    `${API_BASE}/msd/drive/files${encodeDrivePath(path)}`,
 
   deleteDriveFile: (path: string) =>
-    request<{ success: boolean }>(`/msd/drive/files${path.startsWith('/') ? path : '/' + path}`, {
+    request<{ success: boolean }>(`/msd/drive/files${encodeDrivePath(path)}`, {
       method: 'DELETE',
-    }),
+    }, { errorTitleKey: 'msd.operations.deleteDriveFile' }),
 
   createDirectory: (path: string) =>
-    request<{ success: boolean }>(`/msd/drive/mkdir${path.startsWith('/') ? path : '/' + path}`, {
+    request<{ success: boolean }>(`/msd/drive/mkdir${encodeDrivePath(path)}`, {
       method: 'POST',
-    }),
+    }, { errorTitleKey: 'msd.operations.createDirectory' }),
 
-  // Download from URL
   downloadFromUrl: (url: string, filename?: string) =>
     request<{
       download_id: string
@@ -468,83 +697,157 @@ export const msdApi = {
       total_bytes: number | null
       progress_pct: number | null
       status: string
-      error: string | null
+      error_code: string | null
     }>('/msd/images/download', {
       method: 'POST',
       body: JSON.stringify({ url, filename }),
-    }),
+    }, { errorTitleKey: 'msd.operations.startDownload' }),
 
   cancelDownload: (downloadId: string) =>
     request<{ success: boolean }>('/msd/images/download/cancel', {
       method: 'POST',
       body: JSON.stringify({ download_id: downloadId }),
-    }),
+    }, { errorTitleKey: 'msd.operations.cancelDownload' }),
 }
 
-// Config API
-/** @deprecated 使用域特定 API（videoConfigApi, hidConfigApi 等）替代 */
+interface SerialDeviceOption {
+  path: string
+  name: string
+}
+
+export type VideoControlMode = 'configurable' | 'source_following'
+export type VideoInputState = 'locked' | 'no_signal' | 'unavailable'
+
+export interface VideoInputStatus {
+  state: VideoInputState
+  format: string | null
+  width: number | null
+  height: number | null
+  fps: number | null
+}
+
+export interface VideoResolution {
+  width: number
+  height: number
+  fps: number[]
+}
+
+export interface VideoFormat {
+  format: string
+  description: string
+  resolutions: VideoResolution[]
+}
+
+export interface VideoDevice {
+  path: string
+  name: string
+  driver: string
+  formats: VideoFormat[]
+  usb_bus: string | null
+  has_signal: boolean
+  control_mode: VideoControlMode
+  input_status: VideoInputStatus
+}
+
+export interface DeviceList {
+  video: VideoDevice[]
+  serial: Array<{ path: string; name: string }>
+  audio: Array<{
+    name: string
+    description: string
+    is_hdmi: boolean
+    usb_bus: string | null
+  }>
+  udc: Array<{ name: string }>
+  extensions: {
+    ttyd_available: boolean
+    rustdesk_available: boolean
+  }
+}
+
+function encodeDrivePath(path: string): string {
+  if (path === '' || path === '/') {
+    return '/'
+  }
+
+  const hasLeadingSlash = path.startsWith('/')
+  const hasTrailingSlash = path.endsWith('/')
+  const encodedSegments = path
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment))
+    .join('/')
+
+  return `${hasLeadingSlash ? '/' : ''}${encodedSegments}${hasTrailingSlash ? '/' : ''}`
+}
+
+function getSerialDevicePriority(path: string): number {
+  if (/^\/dev\/ttyUSB/i.test(path)) return 0
+  if (/^\/dev\/(ttyS|S)/i.test(path)) return 2
+  return 1
+}
+
+function sortSerialDevices(serialDevices: SerialDeviceOption[]): SerialDeviceOption[] {
+  return [...serialDevices].sort((a, b) => {
+    const priorityDiff = getSerialDevicePriority(a.path) - getSerialDevicePriority(b.path)
+    if (priorityDiff !== 0) return priorityDiff
+    return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
+
 export const configApi = {
-  get: () => request<Record<string, unknown>>('/config'),
+  listDevices: async () => {
+    const result = await request<DeviceList>('/devices')
 
-  /** @deprecated 使用域特定 API 的 update 方法替代 */
-  update: (updates: Record<string, unknown>) =>
-    request<{ success: boolean }>('/config', {
-      method: 'POST',
-      body: JSON.stringify(updates),
-    }),
+    return {
+      ...result,
+      serial: sortSerialDevices(result.serial),
+    }
+  },
 
-  listDevices: () =>
-    request<{
-      video: Array<{
-        path: string
-        name: string
-        driver: string
-        formats: Array<{
-          format: string
-          description: string
-          resolutions: Array<{
-            width: number
-            height: number
-            fps: number[]
-          }>
-        }>
-        usb_bus: string | null
-      }>
-      serial: Array<{ path: string; name: string }>
-      audio: Array<{
-        name: string
-        description: string
-        is_hdmi: boolean
-        usb_bus: string | null
-      }>
-      udc: Array<{ name: string }>
-      extensions: {
-        ttyd_available: boolean
-        rustdesk_available: boolean
-      }
-    }>('/devices'),
+  getVideoInputStatus: (device: string) =>
+    request<VideoInputStatus>(
+      `/video/input-status?device=${encodeURIComponent(device)}`,
+      {},
+      { toastOnError: false },
+    ),
 }
 
-// 导出新的域分离配置 API
 export {
   authConfigApi,
   videoConfigApi,
   streamConfigApi,
   hidConfigApi,
   msdConfigApi,
+  otgConfigApi,
+  otgNetworkApi,
+  uacApi,
   atxConfigApi,
   audioConfigApi,
   extensionsApi,
+  redfishConfigApi,
   rustdeskConfigApi,
+  rtspConfigApi,
+  vncConfigApi,
   webConfigApi,
+  watchdogConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
   type RustDeskPasswordResponse,
+  type RtspConfigResponse,
+  type RedfishConfigResponse,
+  type RedfishConfigUpdate,
+  type RtspConfigUpdate,
+  type RtspStatusResponse,
+  type VncConfigResponse,
+  type VncConfigUpdate,
+  type VncEncoding,
+  type VncStatusResponse,
   type WebConfig,
+  type WebConfigUpdate,
 } from './config'
 
-// 导出生成的类型
 export type {
   AppConfig,
   AuthConfig,
@@ -567,7 +870,6 @@ export type {
   BitratePreset,
 } from '@/types/generated'
 
-// Audio API
 export const audioApi = {
   status: () =>
     request<{
@@ -599,6 +901,29 @@ export const audioApi = {
     request<{ success: boolean }>('/audio/device', {
       method: 'POST',
       body: JSON.stringify({ device }),
+    }),
+}
+
+export interface UsbDeviceInfo {
+  bus_num: number
+  dev_num: number
+  id_vendor: string
+  id_product: string
+  product?: string
+  manufacturer?: string
+  speed?: string
+  authorized?: boolean
+  video_device?: string
+}
+
+export const usbApi = {
+  listDevices: () =>
+    request<UsbDeviceInfo[]>('/devices/usb'),
+
+  resetDevice: (busNum: number, devNum: number) =>
+    request<{ success: boolean; message: string }>('/devices/usb/reset', {
+      method: 'POST',
+      body: JSON.stringify({ bus_num: busNum, dev_num: devNum }),
     }),
 }
 

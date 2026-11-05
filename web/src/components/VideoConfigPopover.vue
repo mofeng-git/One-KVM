@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusConsolePanel } from "@/composables/useConsoleAppearance"
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -15,56 +16,88 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
-import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image } from 'lucide-vue-next'
+import { Monitor, RefreshCw, Loader2, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo, type BitratePreset } from '@/api'
-import { useSystemStore } from '@/stores/system'
-import { useRouter } from 'vue-router'
+import {
+  configApi,
+  streamApi,
+  type VideoCodecInfo,
+  type EncoderBackendInfo,
+  type BitratePreset,
+  type StreamConstraintsResponse,
+  type VideoDevice,
+} from '@/api'
+import { getVideoFormatState, isVideoFormatSelectable } from '@/lib/video-format-support'
+import { toConfigFps } from '@/lib/fps'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
+import { useConfigStore } from '@/stores/config'
+import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
+import type { VideoRotation } from '@/composables/useVideoScaling'
+import VideoInputFields from '@/components/VideoInputFields.vue'
 
 export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
-
-interface VideoDevice {
-  path: string
-  name: string
-  driver: string
-  formats: {
-    format: string
-    description: string
-    resolutions: {
-      width: number
-      height: number
-      fps: number[]
-    }[]
-  }[]
-}
 
 const props = defineProps<{
   open: boolean
   videoMode: VideoMode
+  videoRotation: VideoRotation
+  side?: 'top' | 'right' | 'bottom' | 'left'
 }>()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'update:videoMode', value: VideoMode): void
+  (e: 'update:videoRotation', value: VideoRotation): void
 }>()
 
 const { t } = useI18n()
-const systemStore = useSystemStore()
-const router = useRouter()
+const configStore = useConfigStore()
 
 // Device list
 const devices = ref<VideoDevice[]>([])
 const loadingDevices = ref(false)
 
-// Codec list
 const codecs = ref<VideoCodecInfo[]>([])
 const loadingCodecs = ref(false)
 
 // Backend list
 const backends = ref<EncoderBackendInfo[]>([])
-const currentEncoderBackend = ref<string>('auto')
+const constraints = ref<StreamConstraintsResponse | null>(null)
+const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
+const isServiceActive = (status: string | undefined) => status === 'starting' || status === 'running'
+const isRtspEnabled = computed(() => isServiceActive(configStore.rtspStatus?.service_status))
+const isRustdeskEnabled = computed(() => isServiceActive(configStore.rustdeskStatus?.service_status))
+const isRtspCodecLocked = computed(() => isRtspEnabled.value)
+const isRustdeskWebrtcLocked = computed(() => !isRtspEnabled.value && isRustdeskEnabled.value)
+const codecLockSources = computed(() => {
+  if (isRtspCodecLocked.value) {
+    return isRustdeskEnabled.value ? 'RTSP/RustDesk' : 'RTSP'
+  }
+  if (isRustdeskWebrtcLocked.value) return 'RustDesk'
+  return ''
+})
+const codecLockMessage = computed(() => {
+  if (!codecLockSources.value) return ''
+  return t('actionbar.multiSourceCodecLocked', { sources: codecLockSources.value })
+})
+const videoParamWarningSources = computed(() => {
+  if (isRtspEnabled.value && isRustdeskEnabled.value) return 'RTSP/RustDesk'
+  if (isRtspEnabled.value) return 'RTSP'
+  if (isRustdeskEnabled.value) return 'RustDesk'
+  return ''
+})
+const videoParamWarningMessage = computed(() => {
+  if (!videoParamWarningSources.value) return ''
+  return t('actionbar.multiSourceVideoParamsWarning', { sources: videoParamWarningSources.value })
+})
+const isCodecLocked = computed(() => !!codecLockMessage.value)
+
+const isCodecOptionDisabled = (codecId: string): boolean => {
+  if (!isBrowserSupported(codecId)) return true
+  if (isRustdeskWebrtcLocked.value && codecId === 'mjpeg') return true
+  return false
+}
 
 // Browser supported codecs (WebRTC receive capabilities)
 const browserSupportedCodecs = ref<Set<string>>(new Set())
@@ -82,7 +115,6 @@ function detectBrowserCodecSupport() {
     if (capabilities?.codecs) {
       for (const codec of capabilities.codecs) {
         const mimeType = codec.mimeType.toLowerCase()
-        // Map MIME types to our codec IDs
         if (mimeType.includes('h264') || mimeType.includes('avc')) {
           supported.add('h264')
         }
@@ -101,7 +133,6 @@ function detectBrowserCodecSupport() {
       }
     }
   } else {
-    // Fallback: assume basic codecs are supported
     supported.add('h264')
     supported.add('vp8')
     supported.add('vp9')
@@ -116,6 +147,12 @@ const isBrowserSupported = (codecId: string): boolean => {
   if (codecId === 'mjpeg') return true
   return browserSupportedCodecs.value.has(codecId)
 }
+
+const getFormatState = (formatName: string) =>
+  getVideoFormatState(formatName, props.videoMode, currentEncoderBackend.value)
+
+const isFormatUnsupported = (formatName: string): boolean =>
+  getFormatState(formatName) === 'unsupported'
 
 // Translate backend name for display
 const translateBackendName = (backend: string | undefined): string => {
@@ -132,80 +169,50 @@ const translateBackendName = (backend: string | undefined): string => {
   return backend
 }
 
-// Check if a format has fps >= 30 in any resolution
-const hasHighFps = (format: { resolutions: { fps: number[] }[] }): boolean => {
-  return format.resolutions.some(res => res.fps.some(fps => fps >= 30))
-}
-
-// Check if a format is recommended based on video mode
-const isFormatRecommended = (formatName: string): boolean => {
-  const formats = availableFormats.value
-  const upperFormat = formatName.toUpperCase()
-
-  // MJPEG/HTTP mode: recommend MJPEG
-  if (props.videoMode === 'mjpeg') {
-    return upperFormat === 'MJPEG'
-  }
-
-  // WebRTC mode: check NV12 first, then YUYV
-  const currentFormat = formats.find(f => f.format.toUpperCase() === upperFormat)
-  if (!currentFormat) return false
-
-  // Check if NV12 exists with fps >= 30
-  const nv12Format = formats.find(f => f.format.toUpperCase() === 'NV12')
-  const nv12HasHighFps = nv12Format && hasHighFps(nv12Format)
-
-  // Check if YUYV exists with fps >= 30
-  const yuyvFormat = formats.find(f => f.format.toUpperCase() === 'YUYV')
-  const yuyvHasHighFps = yuyvFormat && hasHighFps(yuyvFormat)
-
-  // Priority 1: NV12 with high fps
-  if (nv12HasHighFps) {
-    return upperFormat === 'NV12'
-  }
-
-  // Priority 2: YUYV with high fps (only if NV12 doesn't qualify)
-  if (yuyvHasHighFps) {
-    return upperFormat === 'YUYV'
-  }
-
-  return false
-}
-
-// Check if a format is not recommended for current video mode
-// In WebRTC mode, compressed formats (MJPEG/JPEG) are not recommended
-const isFormatNotRecommended = (formatName: string): boolean => {
-  const upperFormat = formatName.toUpperCase()
-  // WebRTC mode: MJPEG/JPEG are not recommended (require decoding before encoding)
-  if (props.videoMode !== 'mjpeg') {
-    return upperFormat === 'MJPEG' || upperFormat === 'JPEG'
-  }
-  return false
-}
-
-// Selected values (mode comes from props)
 const selectedDevice = ref<string>('')
 const selectedFormat = ref<string>('')
 const selectedResolution = ref<string>('')
-const selectedFps = ref<number>(30)
+const selectedFps = ref<number | null>(30)
 const selectedBitratePreset = ref<'Speed' | 'Balanced' | 'Quality'>('Balanced')
 const isDirty = ref(false)
 
-// UI state
+const videoConfiguration = useVideoDeviceConfiguration({
+  devices,
+  selection: {
+    device: selectedDevice,
+    format: selectedFormat,
+    resolution: selectedResolution,
+    fps: selectedFps,
+  },
+  active: computed(() => props.open),
+  listenForStreamEvents: true,
+  preferredFormat: device => device.formats.find(format =>
+    isVideoFormatSelectable(format.format, props.videoMode, currentEncoderBackend.value),
+  )?.format,
+})
+const {
+  selectedDevice: selectedDeviceInfo,
+  isSourceFollowing,
+  availableFormats,
+  availableResolutions,
+  availableFps,
+  refreshInputStatus,
+  refreshingInputStatus,
+} = videoConfiguration
+
 const applying = ref(false)
 const applyingBitrate = ref(false)
 
-// Current config from store
 const currentConfig = computed(() => ({
-  device: systemStore.stream?.device || '',
-  format: systemStore.stream?.format || '',
-  width: systemStore.stream?.resolution?.[0] || 1920,
-  height: systemStore.stream?.resolution?.[1] || 1080,
-  fps: systemStore.stream?.targetFps || 30,
+  device: configStore.video?.device || '',
+  format: configStore.video?.format || '',
+  width: configStore.video?.width || 1920,
+  height: configStore.video?.height || 1080,
+  fps: configStore.video?.fps || 30,
 }))
 
-// Button display text - simplified to just show label
 const buttonText = computed(() => t('actionbar.videoConfig'))
+const videoRotationOptions: VideoRotation[] = [0, 90, 180, 270]
 
 // Available codecs for selection (filtered by backend support and enriched with backend info)
 const availableCodecs = computed(() => {
@@ -220,7 +227,7 @@ const availableCodecs = computed(() => {
   const backend = backends.value.find(b => b.id === currentEncoderBackend.value)
   if (!backend) return allAvailable
 
-  return allAvailable
+  const backendFiltered = allAvailable
     .filter(codec => {
       // MJPEG is always available (doesn't require encoder)
       if (codec.id === 'mjpeg') return true
@@ -238,33 +245,23 @@ const availableCodecs = computed(() => {
         backend: backend.name,
       }
     })
+
+  const allowed = constraints.value?.allowed_codecs
+  if (!allowed || allowed.length === 0) {
+    return backendFiltered
+  }
+
+  return backendFiltered.filter(codec => allowed.includes(codec.id))
 })
 
-// Cascading filters
-const availableFormats = computed(() => {
-  const device = devices.value.find(d => d.path === selectedDevice.value)
-  return device?.formats || []
+const availableFormatOptions = computed(() => {
+  return availableFormats.value.map(format => ({
+    ...format,
+    state: getFormatState(format.format),
+    disabled: isFormatUnsupported(format.format),
+  }))
 })
 
-const availableResolutions = computed(() => {
-  const format = availableFormats.value.find(f => f.format === selectedFormat.value)
-  return format?.resolutions || []
-})
-
-const availableFps = computed(() => {
-  const resolution = availableResolutions.value.find(
-    r => `${r.width}x${r.height}` === selectedResolution.value
-  )
-  return resolution?.fps || []
-})
-
-// Get selected format description for display in trigger
-const selectedFormatInfo = computed(() => {
-  const format = availableFormats.value.find(f => f.format === selectedFormat.value)
-  return format ? { description: format.description, format: format.format } : null
-})
-
-// Get selected codec info for display in trigger
 const selectedCodecInfo = computed(() => {
   const codec = availableCodecs.value.find(c => c.id === props.videoMode)
   return codec || null
@@ -293,7 +290,6 @@ async function loadCodecs() {
     backends.value = result.backends || []
   } catch (e) {
     console.info('[VideoConfig] Failed to load codecs')
-    // Fallback to default codecs
     codecs.value = [
       { id: 'mjpeg', name: 'MJPEG / HTTP', protocol: 'http', hardware: false, backend: 'software', available: true },
       { id: 'h264', name: 'H.264 / WebRTC', protocol: 'webrtc', hardware: false, backend: 'software', available: true },
@@ -303,25 +299,14 @@ async function loadCodecs() {
   }
 }
 
-// Load current encoder backend from config
-async function loadEncoderBackend() {
+async function loadConstraints() {
   try {
-    const config = await configApi.get()
-    // Access nested stream.encoder
-    const streamConfig = config.stream as { encoder?: string } | undefined
-    currentEncoderBackend.value = streamConfig?.encoder || 'auto'
-  } catch (e) {
-    console.info('[VideoConfig] Failed to load encoder backend config')
-    currentEncoderBackend.value = 'auto'
+    constraints.value = await streamApi.getConstraints()
+  } catch {
+    constraints.value = null
   }
 }
 
-// Navigate to settings page (video tab)
-function goToSettings() {
-  router.push('/settings?tab=video')
-}
-
-// Initialize selected values from current config
 function initializeFromCurrent() {
   const config = currentConfig.value
   selectedDevice.value = config.device
@@ -349,10 +334,56 @@ function syncFromCurrentIfChanged() {
   isDirty.value = false
 }
 
-// Handle video mode change
 function handleVideoModeChange(mode: unknown) {
   if (typeof mode !== 'string') return
+
+  if (isRtspCodecLocked.value) {
+    toast.warning(codecLockMessage.value)
+    return
+  }
+
+  if (isRustdeskWebrtcLocked.value && mode === 'mjpeg') {
+    toast.warning(codecLockMessage.value)
+    return
+  }
+
+  if (constraints.value?.allowed_codecs?.length && !constraints.value.allowed_codecs.includes(mode)) {
+    toast.error(constraints.value.reason || t('actionbar.selectMode'))
+    return
+  }
+
   emit('update:videoMode', mode as VideoMode)
+}
+
+function findFirstSelectableFormat(
+  formats: VideoDevice['formats'],
+): VideoDevice['formats'][number] | undefined {
+  return formats.find(format =>
+    isVideoFormatSelectable(format.format, props.videoMode, currentEncoderBackend.value),
+  )
+}
+
+function clearFormatSelection() {
+  selectedFormat.value = ''
+  selectedResolution.value = ''
+  selectedFps.value = 30
+}
+
+function selectFormatWithDefaults(format: string) {
+  if (isFormatUnsupported(format)) return
+
+  selectedFormat.value = format
+
+  const formatData = availableFormats.value.find(f => f.format === format)
+  const resolution = formatData?.resolutions[0]
+  if (!resolution) {
+    selectedResolution.value = ''
+    selectedFps.value = 30
+    return
+  }
+
+  selectedResolution.value = `${resolution.width}x${resolution.height}`
+  selectedFps.value = resolution.fps[0] || 30
 }
 
 // Handle device change
@@ -361,42 +392,33 @@ function handleDeviceChange(devicePath: unknown) {
   selectedDevice.value = devicePath
   isDirty.value = true
 
-  // Auto-select first format
   const device = devices.value.find(d => d.path === devicePath)
-  if (device?.formats[0]) {
-    selectedFormat.value = device.formats[0].format
-
-    // Auto-select first resolution
-    const resolution = device.formats[0].resolutions[0]
-    if (resolution) {
-      selectedResolution.value = `${resolution.width}x${resolution.height}`
-      selectedFps.value = resolution.fps[0] || 30
-    }
+  if (device?.control_mode === 'source_following') {
+    clearFormatSelection()
+    return
   }
+  const format = device ? findFirstSelectableFormat(device.formats) : undefined
+  if (!format) {
+    clearFormatSelection()
+    return
+  }
+
+  selectFormatWithDefaults(format.format)
 }
 
-// Handle format change
 function handleFormatChange(format: unknown) {
   if (typeof format !== 'string') return
-  selectedFormat.value = format
-  isDirty.value = true
+  if (isFormatUnsupported(format)) return
 
-  // Auto-select first resolution for this format
-  const formatData = availableFormats.value.find(f => f.format === format)
-  if (formatData?.resolutions[0]) {
-    const resolution = formatData.resolutions[0]
-    selectedResolution.value = `${resolution.width}x${resolution.height}`
-    selectedFps.value = resolution.fps[0] || 30
-  }
+  selectFormatWithDefaults(format)
+  isDirty.value = true
 }
 
-// Handle resolution change
 function handleResolutionChange(resolution: unknown) {
   if (typeof resolution !== 'string') return
   selectedResolution.value = resolution
   isDirty.value = true
 
-  // Auto-select first FPS for this resolution
   const resolutionData = availableResolutions.value.find(
     r => `${r.width}x${r.height}` === resolution
   )
@@ -405,14 +427,12 @@ function handleResolutionChange(resolution: unknown) {
   }
 }
 
-// Handle FPS change
 function handleFpsChange(fps: unknown) {
   if (typeof fps !== 'string' && typeof fps !== 'number') return
   selectedFps.value = typeof fps === 'string' ? Number(fps) : fps
   isDirty.value = true
 }
 
-// Apply bitrate preset change
 async function applyBitratePreset(preset: 'Speed' | 'Balanced' | 'Quality') {
   if (applyingBitrate.value) return
   applyingBitrate.value = true
@@ -426,7 +446,6 @@ async function applyBitratePreset(preset: 'Speed' | 'Balanced' | 'Quality') {
   }
 }
 
-// Handle bitrate preset selection
 function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
   selectedBitratePreset.value = preset
   if (props.videoMode !== 'mjpeg') {
@@ -434,55 +453,61 @@ function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
   }
 }
 
-// Apply video configuration
 async function applyVideoConfig() {
   const [width, height] = selectedResolution.value.split('x').map(Number)
 
   applying.value = true
   try {
-    await configApi.update({
-      video: {
-        device: selectedDevice.value,
-        format: selectedFormat.value,
-        width,
-        height,
-        fps: selectedFps.value,
-      },
-    })
+    await configStore.updateVideo(isSourceFollowing.value
+      ? { device: selectedDevice.value }
+      : {
+          device: selectedDevice.value,
+          format: selectedFormat.value,
+          width,
+          height,
+          fps: toConfigFps(selectedFps.value ?? 30),
+        })
 
-    toast.success(t('config.applied'))
     isDirty.value = false
     // Stream state will be updated via WebSocket system.device_info event
   } catch (e) {
     console.info('[VideoConfig] Failed to apply config:', e)
-    // Error toast already shown by API layer
   } finally {
     applying.value = false
   }
 }
 
-// Watch open state
 watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    // Detect browser codec support on first open
-    if (browserSupportedCodecs.value.size === 0) {
-      detectBrowserCodecSupport()
-    }
-    // Load devices on first open
-    if (devices.value.length === 0) {
-      loadDevices()
-    }
-    // Load codecs and backends on first open
-    if (codecs.value.length === 0) {
-      loadCodecs()
-    }
-    // Load encoder backend config
-    loadEncoderBackend()
-    // Initialize from current config
-    initializeFromCurrent()
-  } else {
+  if (!isOpen) {
     isDirty.value = false
+    return
   }
+
+  // Detect browser codec support on first open
+  if (browserSupportedCodecs.value.size === 0) {
+    detectBrowserCodecSupport()
+  }
+  // Load devices on first open
+  if (devices.value.length === 0) {
+    loadDevices()
+  }
+  // Load codecs and backends on first open
+  if (codecs.value.length === 0) {
+    loadCodecs()
+  }
+
+  loadConstraints()
+
+  Promise.all([
+    configStore.refreshVideo(),
+    configStore.refreshStream(),
+    configStore.refreshRtspStatus(),
+    configStore.refreshRustdeskStatus(),
+  ]).then(() => {
+    initializeFromCurrent()
+  }).catch(() => {
+    initializeFromCurrent()
+  })
 })
 
 // Sync selected values when backend config changes (e.g., auto format switch on mode change)
@@ -491,17 +516,51 @@ watch(currentConfig, () => {
   if (props.open && isDirty.value) return
   syncFromCurrentIfChanged()
 }, { deep: true })
+
+watch(
+  [availableFormatOptions, () => props.videoMode, currentEncoderBackend],
+  () => {
+    if (!selectedDevice.value) return
+
+    const currentFormat = availableFormatOptions.value.find(
+      format => format.format === selectedFormat.value,
+    )
+    if (currentFormat && !currentFormat.disabled) {
+      return
+    }
+
+    const fallback = availableFormatOptions.value.find(format => !format.disabled)
+    if (!fallback) {
+      clearFormatSelection()
+      return
+    }
+
+    selectFormatWithDefaults(fallback.format)
+  },
+  { deep: true },
+)
 </script>
 
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-        <Monitor class="h-4 w-4" />
+      <Button
+        variant="ghost"
+        size="sm"
+        class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+        :aria-label="buttonText"
+        :title="buttonText"
+      >
+        <Monitor class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="w-[320px] p-3" align="start">
+    <PopoverContent
+      @open-auto-focus="focusConsolePanel"
+      class="console-config-panel w-[min(320px,92vw)] p-3"
+      align="start"
+      :side="props.side ?? 'bottom'"
+    >
       <div class="space-y-3">
         <h4 class="text-sm font-medium">{{ t('actionbar.videoConfig') }}</h4>
 
@@ -513,21 +572,24 @@ watch(currentConfig, () => {
 
           <!-- Mode Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoMode') }}</Label>
+            <div class="flex items-center gap-1">
+              <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoMode') }}</Label>
+              <HelpTooltip :content="t('actionbar.videoModeHint')" icon-size="sm" side="right" />
+            </div>
             <Select
               :model-value="props.videoMode"
               @update:model-value="handleVideoModeChange"
-              :disabled="loadingCodecs || availableCodecs.length === 0"
+              :disabled="loadingCodecs || availableCodecs.length === 0 || isRtspCodecLocked"
             >
-              <SelectTrigger class="h-8 text-xs">
+              <SelectTrigger size="sm" class="w-full text-xs">
                 <div v-if="selectedCodecInfo" class="flex items-center gap-1.5 truncate">
                   <span class="truncate">{{ selectedCodecInfo.name }}</span>
                   <span
                     v-if="selectedCodecInfo.backend && selectedCodecInfo.id !== 'mjpeg'"
                     class="text-[10px] px-1 py-0.5 rounded shrink-0"
                     :class="selectedCodecInfo.hardware
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                      : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'"
+                      ? 'bg-info/10 text-info'
+                      : 'bg-warning/10 text-warning'"
                   >
                     {{ translateBackendName(selectedCodecInfo.backend) }}
                   </span>
@@ -539,8 +601,8 @@ watch(currentConfig, () => {
                   v-for="codec in availableCodecs"
                   :key="codec.id"
                   :value="codec.id"
-                  :disabled="!isBrowserSupported(codec.id)"
-                  :class="['text-xs', { 'opacity-50': !isBrowserSupported(codec.id) }]"
+                  :disabled="isCodecOptionDisabled(codec.id)"
+                  :class="['text-xs', { 'opacity-50': isCodecOptionDisabled(codec.id) }]"
                 >
                   <div class="flex items-center gap-2">
                     <span>{{ codec.name }}</span>
@@ -549,8 +611,8 @@ watch(currentConfig, () => {
                       v-if="codec.backend && codec.id !== 'mjpeg'"
                       class="text-[10px] px-1.5 py-0.5 rounded"
                       :class="codec.hardware
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                        : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'"
+                        ? 'bg-info/10 text-info'
+                        : 'bg-warning/10 text-warning'"
                     >
                       {{ translateBackendName(codec.backend) }}
                     </span>
@@ -564,15 +626,36 @@ watch(currentConfig, () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p v-if="props.videoMode !== 'mjpeg'" class="text-xs text-muted-foreground">
-              {{ t('actionbar.webrtcHint') }}
+            <p v-if="isCodecLocked" class="text-xs text-warning">
+              {{ codecLockMessage }}
             </p>
+          </div>
+
+          <!-- Display Rotation -->
+          <div class="space-y-2">
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoRotation') }}</Label>
+            <div class="grid grid-cols-4 gap-1.5">
+              <Button
+                v-for="rotation in videoRotationOptions"
+                :key="rotation"
+                variant="outline"
+                size="sm"
+                :class="[
+                  'h-8 px-1 text-xs tabular-nums',
+                  props.videoRotation === rotation && 'border-primary bg-primary/10',
+                ]"
+                :aria-pressed="props.videoRotation === rotation"
+                @click="emit('update:videoRotation', rotation)"
+              >
+                {{ rotation }}°
+              </Button>
+            </div>
           </div>
 
           <!-- Bitrate Preset - Only shown for WebRTC modes -->
           <div v-if="props.videoMode !== 'mjpeg'" class="space-y-2">
             <div class="flex items-center gap-1">
-              <Label class="text-xs">{{ t('actionbar.bitratePreset') }}</Label>
+              <Label class="text-xs text-muted-foreground">{{ t('actionbar.bitratePreset') }}</Label>
               <HelpTooltip :content="t('help.videoBitratePreset')" icon-size="sm" />
             </div>
             <div class="grid grid-cols-3 gap-1.5">
@@ -586,7 +669,7 @@ watch(currentConfig, () => {
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Speed')"
               >
-                <Zap class="h-3.5 w-3.5" />
+                <Zap class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateSpeed') }}</span>
               </Button>
               <Button
@@ -599,7 +682,7 @@ watch(currentConfig, () => {
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Balanced')"
               >
-                <Scale class="h-3.5 w-3.5" />
+                <Scale class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateBalanced') }}</span>
               </Button>
               <Button
@@ -612,172 +695,90 @@ watch(currentConfig, () => {
                 :disabled="applyingBitrate"
                 @click="handleBitratePresetChange('Quality')"
               >
-                <Image class="h-3.5 w-3.5" />
+                <Image class="size-3.5" />
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateQuality') }}</span>
               </Button>
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            class="w-full h-7 text-xs text-muted-foreground hover:text-foreground justify-start px-0"
-            @click="goToSettings"
-          >
-            <Settings class="h-3.5 w-3.5 mr-1.5" />
-            {{ t('actionbar.changeEncoderBackend') }}
-          </Button>
         </div>
 
         <!-- Device Settings Section -->
         <Separator />
 
         <div class="space-y-3">
+          <p v-if="videoParamWarningMessage" class="text-xs text-warning">
+            {{ videoParamWarningMessage }}
+          </p>
+
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.deviceSettings') }}</h5>
             <Button
               variant="ghost"
-              size="icon"
-              class="h-6 w-6"
+              size="icon-xs"
               :disabled="loadingDevices"
               @click="loadDevices"
             >
-              <RefreshCw :class="['h-3.5 w-3.5', loadingDevices && 'animate-spin']" />
+              <RefreshCw :class="['size-3.5', loadingDevices && 'animate-spin']" />
             </Button>
           </div>
 
           <!-- Device Selection -->
           <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoDevice') }}</Label>
+            <Label class="text-xs text-muted-foreground">{{ t('actionbar.videoDevice') }}</Label>
             <Select
               :model-value="selectedDevice"
               @update:model-value="handleDeviceChange"
               :disabled="loadingDevices || devices.length === 0"
             >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue :placeholder="loadingDevices ? t('common.loading') : t('actionbar.selectDevice')" />
+              <SelectTrigger size="sm" class="w-full text-xs">
+                <span v-if="selectedDeviceInfo" class="min-w-0 truncate">
+                  {{ formatVideoDeviceLabel(selectedDeviceInfo) }}
+                </span>
+                <span v-else class="text-muted-foreground">
+                  {{ loadingDevices ? t('common.loading') : t('actionbar.selectDevice') }}
+                </span>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent class="max-w-[min(360px,calc(100vw-2rem))]">
                 <SelectItem
                   v-for="device in devices"
                   :key="device.path"
                   :value="device.path"
                   class="text-xs"
                 >
-                  {{ device.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Format Selection -->
-          <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoFormat') }}</Label>
-            <Select
-              :model-value="selectedFormat"
-              @update:model-value="handleFormatChange"
-              :disabled="!selectedDevice || availableFormats.length === 0"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <div v-if="selectedFormatInfo" class="flex items-center gap-1.5 truncate">
-                  <span class="truncate">{{ selectedFormatInfo.description }}</span>
-                  <span
-                    v-if="isFormatRecommended(selectedFormatInfo.format)"
-                    class="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 shrink-0"
-                  >
-                    {{ t('actionbar.recommended') }}
+                  <span class="block min-w-0 truncate" :title="formatVideoDeviceLabel(device)">
+                    {{ formatVideoDeviceLabel(device) }}
                   </span>
-                  <span
-                    v-else-if="isFormatNotRecommended(selectedFormatInfo.format)"
-                    class="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 shrink-0"
-                  >
-                    {{ t('actionbar.notRecommended') }}
-                  </span>
-                </div>
-                <span v-else class="text-muted-foreground">{{ t('actionbar.selectFormat') }}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="format in availableFormats"
-                  :key="format.format"
-                  :value="format.format"
-                  class="text-xs"
-                >
-                  <div class="flex items-center gap-2">
-                    <span>{{ format.description }}</span>
-                    <span
-                      v-if="isFormatRecommended(format.format)"
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                    >
-                      {{ t('actionbar.recommended') }}
-                    </span>
-                    <span
-                      v-else-if="isFormatNotRecommended(format.format)"
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
-                    >
-                      {{ t('actionbar.notRecommended') }}
-                    </span>
-                  </div>
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <!-- Resolution Selection -->
-          <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoResolution') }}</Label>
-            <Select
-              :model-value="selectedResolution"
-              @update:model-value="handleResolutionChange"
-              :disabled="!selectedFormat || availableResolutions.length === 0"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue :placeholder="t('actionbar.selectResolution')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="res in availableResolutions"
-                  :key="`${res.width}x${res.height}`"
-                  :value="`${res.width}x${res.height}`"
-                  class="text-xs"
-                >
-                  {{ res.width }} x {{ res.height }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- FPS Selection -->
-          <div class="space-y-2">
-            <Label class="text-xs">{{ t('actionbar.videoFps') }}</Label>
-            <Select
-              :model-value="String(selectedFps)"
-              @update:model-value="handleFpsChange"
-              :disabled="!selectedResolution || availableFps.length === 0"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue :placeholder="t('actionbar.selectFps')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="fps in availableFps"
-                  :key="fps"
-                  :value="String(fps)"
-                  class="text-xs"
-                >
-                  {{ fps }} FPS
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <VideoInputFields
+            v-if="selectedDeviceInfo"
+            compact
+            :device="selectedDeviceInfo"
+            :formats="availableFormatOptions"
+            :resolutions="availableResolutions"
+            :fps-options="availableFps"
+            :format="selectedFormat"
+            :resolution="selectedResolution"
+            :fps="selectedFps"
+            :refreshing="refreshingInputStatus"
+            @update:format="handleFormatChange"
+            @update:resolution="handleResolutionChange"
+            @update:fps="handleFpsChange"
+            @refresh="refreshInputStatus"
+          />
 
           <!-- Apply Button -->
           <Button
-            class="w-full h-8 text-xs"
-            :disabled="applying || !selectedDevice || !selectedFormat"
+            size="sm"
+            class="w-full text-xs"
+            :disabled="applying || !selectedDevice || (!isSourceFollowing && !selectedFormat)"
             @click="applyVideoConfig"
           >
-            <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            <Loader2 v-if="applying" class="size-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
           </div>

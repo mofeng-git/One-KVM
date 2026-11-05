@@ -97,14 +97,14 @@ impl ExfatBootSector {
         let heap_sectors = volume_length as u32 - cluster_heap_offset;
         let cluster_count = heap_sectors / sectors_per_cluster;
 
-        // Calculate root directory cluster based on upcase table size
-        // Cluster 2: Bitmap (1 cluster)
-        // Cluster 3...: Upcase table (128KB, may span multiple clusters)
-        // Next available: Root directory
+        // Calculate root directory cluster based on bitmap and upcase table size.
         const UPCASE_TABLE_SIZE: u64 = 128 * 1024;
+        let bitmap_size = ((cluster_count + 7) / 8) as u64;
+        let bitmap_clusters =
+            ((bitmap_size + cluster_size as u64 - 1) / cluster_size as u64).max(1) as u32;
         let upcase_clusters =
             ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
-        let first_cluster_of_root = 3 + upcase_clusters;
+        let first_cluster_of_root = 2 + bitmap_clusters + upcase_clusters;
 
         Self {
             jump_boot: [0xEB, 0x76, 0x90],
@@ -211,6 +211,15 @@ const ENTRY_TYPE_VOLUME_LABEL: u8 = 0x83;
 const ENTRY_TYPE_BITMAP: u8 = 0x81;
 const ENTRY_TYPE_UPCASE: u8 = 0x82;
 
+fn set_cluster_allocated(bitmap: &mut [u8], cluster: u32) {
+    let index = (cluster - 2) as usize;
+    let byte_idx = index / 8;
+    let bit_idx = index % 8;
+    if byte_idx < bitmap.len() {
+        bitmap[byte_idx] |= 1 << bit_idx;
+    }
+}
+
 /// Create volume label directory entry
 fn create_volume_label_entry(label: &str) -> [u8; 32] {
     let mut entry = [0u8; 32];
@@ -301,27 +310,42 @@ pub fn format_exfat<W: Write + Seek>(
     let fat_offset = partition_offset + boot_sector.fat_offset as u64 * 512;
     writer.seek(SeekFrom::Start(fat_offset))?;
 
+    let bitmap_size = (boot_sector.cluster_count + 7) / 8;
+    let bitmap_clusters =
+        ((bitmap_size as u64 + cluster_size as u64 - 1) / cluster_size as u64).max(1) as u32;
+
     // Calculate how many clusters the upcase table needs (128KB)
     const UPCASE_TABLE_SIZE: u64 = 128 * 1024;
     let upcase_clusters =
         ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
-    let root_cluster = 3 + upcase_clusters; // Root comes after bitmap and upcase
+    let bitmap_start_cluster = 2;
+    let upcase_start_cluster = bitmap_start_cluster + bitmap_clusters;
+    let root_cluster = upcase_start_cluster + upcase_clusters;
 
     // FAT entries: cluster 0 and 1 are reserved
     // 0: Media type (0xFFFFFFF8)
     // 1: Reserved (0xFFFFFFFF)
-    // 2: Bitmap cluster (single cluster, end of chain)
-    // 3..3+upcase_clusters-1: Upcase table cluster chain
-    // 3+upcase_clusters: Root directory cluster (end of chain)
+    // 2..2+bitmap_clusters-1: Bitmap cluster chain
+    // upcase_start_cluster..upcase_start_cluster+upcase_clusters-1: Upcase table cluster chain
+    // root_cluster: Root directory cluster (end of chain)
     let mut fat_entries = vec![
         0xFFFFFFF8, // Media type
         0xFFFFFFFF, // Reserved
-        0xFFFFFFFF, // Bitmap (single cluster, end of chain)
     ];
+
+    // Build allocation bitmap cluster chain
+    for i in 0..bitmap_clusters {
+        let cluster_num = bitmap_start_cluster + i;
+        if i == bitmap_clusters - 1 {
+            fat_entries.push(0xFFFFFFFF);
+        } else {
+            fat_entries.push(cluster_num + 1);
+        }
+    }
 
     // Build upcase table cluster chain
     for i in 0..upcase_clusters {
-        let cluster_num = 3 + i;
+        let cluster_num = upcase_start_cluster + i;
         if i == upcase_clusters - 1 {
             // Last cluster in chain
             fat_entries.push(0xFFFFFFFF);
@@ -345,38 +369,26 @@ pub fn format_exfat<W: Write + Seek>(
     // Calculate cluster heap offset
     let heap_offset = partition_offset + boot_sector.cluster_heap_offset as u64 * 512;
 
-    // Cluster 2: Allocation Bitmap
-    let bitmap_size = (boot_sector.cluster_count + 7) / 8;
-    let _bitmap_clusters =
-        ((bitmap_size as u64 + cluster_size as u64 - 1) / cluster_size as u64).max(1);
-    let mut bitmap = vec![0u8; cluster_size as usize];
+    // Allocation Bitmap
+    let mut bitmap = vec![0u8; bitmap_clusters as usize * cluster_size as usize];
 
-    // Mark clusters 2, 3..3+upcase_clusters-1, root_cluster as used
-    // Cluster 2: bitmap
-    bitmap[0] |= 0b00000100; // Bit 2
-                             // Clusters 3..3+upcase_clusters-1: upcase table
+    // Mark bitmap, upcase, and root directory clusters as used.
+    // exFAT allocation bitmap bit 0 describes cluster 2.
+    for i in 0..bitmap_clusters {
+        set_cluster_allocated(&mut bitmap, bitmap_start_cluster + i);
+    }
     for i in 0..upcase_clusters {
-        let cluster = 3 + i;
-        let byte_idx = (cluster / 8) as usize;
-        let bit_idx = cluster % 8;
-        if byte_idx < bitmap.len() {
-            bitmap[byte_idx] |= 1 << bit_idx;
-        }
+        set_cluster_allocated(&mut bitmap, upcase_start_cluster + i);
     }
-    // Root directory cluster
-    let byte_idx = (root_cluster / 8) as usize;
-    let bit_idx = root_cluster % 8;
-    if byte_idx < bitmap.len() {
-        bitmap[byte_idx] |= 1 << bit_idx;
-    }
+    set_cluster_allocated(&mut bitmap, root_cluster);
 
     writer.seek(SeekFrom::Start(heap_offset))?;
     writer.write_all(&bitmap)?;
 
-    // Cluster 3..3+upcase_clusters-1: Upcase table
+    // Upcase table
     let upcase_data = generate_upcase_table();
     let upcase_checksum = calculate_upcase_checksum(&upcase_data);
-    let upcase_offset = heap_offset + cluster_size as u64; // Start at cluster 3
+    let upcase_offset = heap_offset + bitmap_clusters as u64 * cluster_size as u64;
     writer.seek(SeekFrom::Start(upcase_offset))?;
     writer.write_all(&upcase_data)?;
 
@@ -388,13 +400,18 @@ pub fn format_exfat<W: Write + Seek>(
     }
 
     // Root directory cluster
-    let root_offset = heap_offset + (1 + upcase_clusters as u64) * cluster_size as u64;
+    let root_offset =
+        heap_offset + (bitmap_clusters as u64 + upcase_clusters as u64) * cluster_size as u64;
     writer.seek(SeekFrom::Start(root_offset))?;
 
     // Write directory entries
     let volume_label_entry = create_volume_label_entry(label);
-    let bitmap_entry = create_bitmap_entry(2, bitmap_size as u64);
-    let upcase_entry = create_upcase_entry(3, upcase_data.len() as u64, upcase_checksum);
+    let bitmap_entry = create_bitmap_entry(bitmap_start_cluster, bitmap_size as u64);
+    let upcase_entry = create_upcase_entry(
+        upcase_start_cluster,
+        upcase_data.len() as u64,
+        upcase_checksum,
+    );
 
     writer.write_all(&volume_label_entry)?;
     writer.write_all(&bitmap_entry)?;
@@ -413,6 +430,9 @@ pub fn format_exfat<W: Write + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::partition::PartitionLayout;
+    use std::io::Read;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_cluster_size() {
@@ -427,5 +447,121 @@ mod tests {
         // >= 8GB: 128KB clusters
         assert_eq!(get_cluster_size(8 * 1024 * 1024 * 1024 / 512), 131072); // 8GB → 128KB
         assert_eq!(get_cluster_size(16 * 1024 * 1024 * 1024 / 512), 131072); // 16GB → 128KB
+    }
+
+    #[test]
+    fn test_format_bitmap_uses_cluster_heap_bit_indices() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let size = 64 * 1024 * 1024u64;
+        let layout = PartitionLayout::calculate(size).unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.set_len(size).unwrap();
+        format_exfat(&mut file, layout.data_offset(), layout.data_size(), "TEST").unwrap();
+
+        let mut boot_sector = [0u8; 512];
+        file.seek(SeekFrom::Start(layout.data_offset())).unwrap();
+        file.read_exact(&mut boot_sector).unwrap();
+        let cluster_heap_offset = u32::from_le_bytes(boot_sector[88..92].try_into().unwrap());
+        let first_cluster_of_root = u32::from_le_bytes(boot_sector[96..100].try_into().unwrap());
+        let sectors_per_cluster = 1u64 << boot_sector[109];
+        let cluster_size = sectors_per_cluster * 512;
+
+        let bitmap_offset = layout.data_offset() + cluster_heap_offset as u64 * 512;
+        let mut bitmap = vec![0u8; cluster_size as usize];
+        file.seek(SeekFrom::Start(bitmap_offset)).unwrap();
+        file.read_exact(&mut bitmap).unwrap();
+
+        let is_allocated = |cluster: u32| {
+            let index = (cluster - 2) as usize;
+            (bitmap[index / 8] & (1 << (index % 8))) != 0
+        };
+
+        assert!(
+            is_allocated(2),
+            "allocation bitmap cluster must be allocated"
+        );
+        assert!(
+            is_allocated(3),
+            "upcase table first cluster must be allocated"
+        );
+        assert!(
+            is_allocated(first_cluster_of_root),
+            "root directory cluster must be allocated"
+        );
+        assert!(
+            !is_allocated(first_cluster_of_root + 1),
+            "first data cluster after root should be free after formatting"
+        );
+    }
+
+    #[test]
+    fn test_format_supports_multi_cluster_allocation_bitmap() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+        let size = 240 * 1024 * 1024u64;
+        let layout = PartitionLayout::calculate(size).unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.set_len(size).unwrap();
+        format_exfat(&mut file, layout.data_offset(), layout.data_size(), "TEST").unwrap();
+
+        let mut boot_sector = [0u8; 512];
+        file.seek(SeekFrom::Start(layout.data_offset())).unwrap();
+        file.read_exact(&mut boot_sector).unwrap();
+        let fat_offset = u32::from_le_bytes(boot_sector[80..84].try_into().unwrap());
+        let cluster_heap_offset = u32::from_le_bytes(boot_sector[88..92].try_into().unwrap());
+        let cluster_count = u32::from_le_bytes(boot_sector[92..96].try_into().unwrap());
+        let first_cluster_of_root = u32::from_le_bytes(boot_sector[96..100].try_into().unwrap());
+        let sectors_per_cluster = 1u64 << boot_sector[109];
+        let cluster_size = sectors_per_cluster * 512;
+
+        let bitmap_size = ((cluster_count + 7) / 8) as u64;
+        let bitmap_clusters = bitmap_size.div_ceil(cluster_size) as u32;
+        assert!(
+            bitmap_clusters > 1,
+            "test volume should require a multi-cluster allocation bitmap"
+        );
+
+        let upcase_clusters = (128 * 1024u64).div_ceil(cluster_size) as u32;
+        assert_eq!(first_cluster_of_root, 2 + bitmap_clusters + upcase_clusters);
+
+        let read_fat = |file: &mut std::fs::File, cluster: u32| -> u32 {
+            let offset = layout.data_offset() + fat_offset as u64 * 512 + cluster as u64 * 4;
+            let mut bytes = [0u8; 4];
+            file.seek(SeekFrom::Start(offset)).unwrap();
+            file.read_exact(&mut bytes).unwrap();
+            u32::from_le_bytes(bytes)
+        };
+        assert_eq!(read_fat(&mut file, 2), 3);
+        assert_eq!(read_fat(&mut file, 2 + bitmap_clusters - 1), 0xFFFFFFFF);
+
+        let root_offset = layout.data_offset()
+            + cluster_heap_offset as u64 * 512
+            + (first_cluster_of_root - 2) as u64 * cluster_size;
+        let mut root = vec![0u8; cluster_size as usize];
+        file.seek(SeekFrom::Start(root_offset)).unwrap();
+        file.read_exact(&mut root).unwrap();
+
+        assert_eq!(root[32], ENTRY_TYPE_BITMAP);
+        assert_eq!(u32::from_le_bytes(root[52..56].try_into().unwrap()), 2);
+        assert_eq!(
+            u64::from_le_bytes(root[56..64].try_into().unwrap()),
+            bitmap_size
+        );
+        assert_eq!(root[64], ENTRY_TYPE_UPCASE);
+        assert_eq!(
+            u32::from_le_bytes(root[84..88].try_into().unwrap()),
+            2 + bitmap_clusters
+        );
     }
 }

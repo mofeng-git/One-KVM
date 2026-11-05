@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Power, RotateCcw, CircleDot, Wifi, Send } from 'lucide-vue-next'
+import { Power, RotateCcw, CircleDot, Wifi, Send, HardDrive } from 'lucide-vue-next'
+import { atxApi } from '@/api'
+import { atxConfigApi } from '@/api/config'
+
+type AtxAction = 'short' | 'long' | 'reset'
+
+const minActionFeedbackMs = 800
+const actionDurations: Record<AtxAction, number> = {
+  short: 500,
+  long: 5000,
+  reset: 500,
+}
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -27,24 +27,44 @@ const emit = defineEmits<{
   (e: 'wol', macAddress: string): void
 }>()
 
+const props = withDefaults(defineProps<{
+  /** Whether a hardware ATX controller is configured and available. */
+  atxEnabled?: boolean
+}>(), {
+  atxEnabled: false,
+})
+
 const { t } = useI18n()
 
-const activeTab = ref('atx')
+const activeTab = ref(props.atxEnabled ? 'atx' : 'wol')
+const showAtxControls = computed(() => props.atxEnabled)
+const tabTriggerClass = 'h-8 rounded-md border-0 bg-transparent text-center text-xs text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
 
-// ATX state
 const powerState = ref<'on' | 'off' | 'unknown'>('unknown')
-const confirmAction = ref<'short' | 'long' | 'reset' | null>(null)
+const hddState = ref<'active' | 'inactive' | 'unknown'>('unknown')
+let powerStateTimer: number | null = null
+let actionTimer: number | null = null
 
-// WOL state
 const wolMacAddress = ref('')
 const wolHistory = ref<string[]>([])
 const wolSending = ref(false)
+const wolLoadingHistory = ref(false)
+const activeAction = ref<AtxAction | null>(null)
 
-const powerStateColor = computed(() => {
+const actionBusy = computed(() => activeAction.value !== null)
+
+const powerStateIconColor = computed(() => {
   switch (powerState.value) {
-    case 'on': return 'bg-green-500'
-    case 'off': return 'bg-slate-400'
-    default: return 'bg-yellow-500'
+    case 'on': return 'text-success'
+    case 'off': return 'text-muted-foreground'
+    default: return 'text-warning'
+  }
+})
+
+const powerStateTextColor = computed(() => {
+  switch (powerState.value) {
+    case 'on': return 'text-success'
+    default: return ''
   }
 })
 
@@ -56,35 +76,51 @@ const powerStateText = computed(() => {
   }
 })
 
-function handleAction() {
-  if (confirmAction.value === 'short') emit('powerShort')
-  else if (confirmAction.value === 'long') emit('powerLong')
-  else if (confirmAction.value === 'reset') emit('reset')
-  confirmAction.value = null
+const hddStateIconColor = computed(() => {
+  switch (hddState.value) {
+    case 'active': return 'text-success'
+    case 'inactive': return 'text-muted-foreground'
+    default: return 'text-warning'
+  }
+})
+
+const hddStateTextColor = computed(() => {
+  switch (hddState.value) {
+    case 'active': return 'text-success'
+    default: return ''
+  }
+})
+
+const hddStateText = computed(() => {
+  switch (hddState.value) {
+    case 'active': return t('atx.hddActive')
+    case 'inactive': return t('atx.hddInactive')
+    default: return t('atx.stateUnknown')
+  }
+})
+
+function handleAction(action: AtxAction) {
+  if (actionBusy.value) return
+
+  console.log('[AtxPopover] Running action:', action)
+  activeAction.value = action
+
+  if (action === 'short') emit('powerShort')
+  else if (action === 'long') emit('powerLong')
+  else emit('reset')
+
+  if (actionTimer !== null) {
+    window.clearTimeout(actionTimer)
+  }
+  actionTimer = window.setTimeout(() => {
+    activeAction.value = null
+    actionTimer = null
+    refreshPowerState().catch(() => {})
+  }, Math.max(actionDurations[action], minActionFeedbackMs))
 }
 
-const confirmTitle = computed(() => {
-  switch (confirmAction.value) {
-    case 'short': return t('atx.confirmShortTitle')
-    case 'long': return t('atx.confirmLongTitle')
-    case 'reset': return t('atx.confirmResetTitle')
-    default: return ''
-  }
-})
-
-const confirmDescription = computed(() => {
-  switch (confirmAction.value) {
-    case 'short': return t('atx.confirmShortDesc')
-    case 'long': return t('atx.confirmLongDesc')
-    case 'reset': return t('atx.confirmResetDesc')
-    default: return ''
-  }
-})
-
-// MAC address validation
 const isValidMac = computed(() => {
   const mac = wolMacAddress.value.trim()
-  // Support formats: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF or AABBCCDDEEFF
   const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^([0-9A-Fa-f]{12})$/
   return macRegex.test(mac)
 })
@@ -93,7 +129,6 @@ function sendWol() {
   if (!isValidMac.value) return
   wolSending.value = true
 
-  // Normalize MAC address
   let mac = wolMacAddress.value.trim().toUpperCase()
   if (mac.length === 12) {
     mac = mac.match(/.{2}/g)!.join(':')
@@ -103,16 +138,10 @@ function sendWol() {
 
   emit('wol', mac)
 
-  // Add to history if not exists
-  if (!wolHistory.value.includes(mac)) {
-    wolHistory.value.unshift(mac)
-    // Keep only last 5
-    if (wolHistory.value.length > 5) {
-      wolHistory.value.pop()
-    }
-    // Save to localStorage
-    localStorage.setItem('wol_history', JSON.stringify(wolHistory.value))
-  }
+  wolHistory.value = [mac, ...wolHistory.value.filter(item => item !== mac)].slice(0, 5)
+  setTimeout(() => {
+    loadWolHistory().catch(() => {})
+  }, 1200)
 
   setTimeout(() => {
     wolSending.value = false
@@ -123,86 +152,153 @@ function selectFromHistory(mac: string) {
   wolMacAddress.value = mac
 }
 
-// Load WOL history on mount
-const savedHistory = localStorage.getItem('wol_history')
-if (savedHistory) {
+async function loadWolHistory() {
+  wolLoadingHistory.value = true
   try {
-    wolHistory.value = JSON.parse(savedHistory)
-  } catch (e) {
+    const response = await atxConfigApi.getWolHistory(5)
+    wolHistory.value = response.history.map(item => item.mac_address)
+  } catch {
     wolHistory.value = []
+  } finally {
+    wolLoadingHistory.value = false
   }
 }
+
+async function refreshPowerState() {
+  try {
+    const state = await atxApi.status()
+    powerState.value = state.power_status
+    hddState.value = state.hdd_status
+  } catch {
+    powerState.value = 'unknown'
+    hddState.value = 'unknown'
+  }
+}
+
+onMounted(() => {
+  refreshPowerState().catch(() => {})
+  powerStateTimer = window.setInterval(() => {
+    refreshPowerState().catch(() => {})
+  }, 3000)
+})
+
+onUnmounted(() => {
+  if (powerStateTimer !== null) {
+    window.clearInterval(powerStateTimer)
+    powerStateTimer = null
+  }
+  if (actionTimer !== null) {
+    window.clearTimeout(actionTimer)
+    actionTimer = null
+  }
+})
+
+watch(
+  () => activeTab.value,
+  (tab) => {
+    if (tab === 'wol') {
+      loadWolHistory().catch(() => {})
+    }
+  },
+  { immediate: true },
+)
+
+watch(showAtxControls, (enabled) => {
+  // A disabled ATX controller must never leave the hidden ATX tab selected.
+  if (!enabled) activeTab.value = 'wol'
+})
 </script>
 
 <template>
-  <div class="p-3 space-y-3">
+  <div class="p-2.5 space-y-2.5">
     <Tabs v-model="activeTab">
-      <TabsList class="w-full grid grid-cols-2">
-        <TabsTrigger value="atx" class="text-xs">
-          <Power class="h-3.5 w-3.5 mr-1" />
+      <TabsList v-if="showAtxControls" class="grid h-auto w-full grid-cols-2 gap-1 rounded-md border border-border bg-muted p-0.5">
+        <TabsTrigger
+          value="atx"
+          :class="tabTriggerClass"
+        >
+          <Power class="size-3 mr-1" />
           {{ t('atx.title') }}
         </TabsTrigger>
-        <TabsTrigger value="wol" class="text-xs">
-          <Wifi class="h-3.5 w-3.5 mr-1" />
+        <TabsTrigger
+          value="wol"
+          :class="tabTriggerClass"
+        >
+          <Wifi class="size-3 mr-1" />
           WOL
         </TabsTrigger>
       </TabsList>
 
       <!-- ATX Tab -->
-      <TabsContent value="atx" class="mt-3 space-y-3">
-        <p class="text-xs text-muted-foreground">{{ t('atx.description') }}</p>
-
-        <!-- Power State -->
-        <div class="flex items-center justify-between p-2 rounded-md bg-muted/50">
-          <span class="text-xs text-muted-foreground">{{ t('atx.powerState') }}</span>
-          <Badge variant="outline" class="gap-1.5 text-xs">
-            <span :class="['h-2 w-2 rounded-full', powerStateColor]" />
-            {{ powerStateText }}
-          </Badge>
+      <TabsContent v-if="showAtxControls" value="atx" class="mt-2.5 space-y-2.5">
+        <!-- Status -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+            <Power :class="['size-4 shrink-0', powerStateIconColor]" />
+            <div class="min-w-0">
+              <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.powerState') }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', powerStateTextColor]">{{ powerStateText }}</p>
+            </div>
+          </div>
+          <div class="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+            <HardDrive :class="['size-4 shrink-0', hddStateIconColor]" />
+            <div class="min-w-0">
+              <p class="truncate text-[11px] leading-none text-muted-foreground">{{ t('atx.hddState') }}</p>
+              <p :class="['mt-1 truncate text-xs font-medium leading-none', hddStateTextColor]">{{ hddStateText }}</p>
+            </div>
+          </div>
         </div>
 
         <Separator />
 
         <!-- Power Actions -->
-        <div class="space-y-1.5">
+        <div class="space-y-1">
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs"
-            @click="confirmAction = 'short'"
+            :disabled="actionBusy"
+            :class="[
+              'w-full justify-start gap-2 h-8 text-xs',
+              activeAction === 'short' ? 'bg-muted text-muted-foreground' : '',
+            ]"
+            @click="handleAction('short')"
           >
-            <Power class="h-3.5 w-3.5" />
+            <Power class="size-3" />
             {{ t('atx.shortPress') }}
           </Button>
 
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
-            @click="confirmAction = 'long'"
+            :disabled="actionBusy"
+            :class="[
+              'h-8 w-full justify-start gap-2 text-xs text-warning hover:bg-warning/10 hover:text-warning',
+              activeAction === 'long' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
+            ]"
+            @click="handleAction('long')"
           >
-            <CircleDot class="h-3.5 w-3.5" />
+            <CircleDot class="size-3" />
             {{ t('atx.longPress') }}
           </Button>
 
           <Button
             variant="outline"
             size="sm"
-            class="w-full justify-start gap-2 h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-            @click="confirmAction = 'reset'"
+            :disabled="actionBusy"
+            :class="[
+              'h-8 w-full justify-start gap-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive',
+              activeAction === 'reset' ? 'bg-muted text-muted-foreground hover:text-muted-foreground hover:bg-muted dark:hover:bg-muted' : '',
+            ]"
+            @click="handleAction('reset')"
           >
-            <RotateCcw class="h-3.5 w-3.5" />
+            <RotateCcw class="size-3" />
             {{ t('atx.reset') }}
           </Button>
         </div>
       </TabsContent>
 
       <!-- WOL Tab -->
-      <TabsContent value="wol" class="mt-3 space-y-3">
-        <p class="text-xs text-muted-foreground">
-          {{ t('atx.wolDescription') }}
-        </p>
-
+      <TabsContent value="wol" class="mt-2.5 space-y-2.5">
         <div class="space-y-2">
           <Label for="mac-address" class="text-xs">{{ t('atx.macAddress') }}</Label>
           <div class="flex gap-2">
@@ -219,7 +315,7 @@ if (savedHistory) {
               :disabled="!isValidMac || wolSending"
               @click="sendWol"
             >
-              <Send class="h-3.5 w-3.5" />
+              <Send class="size-3.5" />
             </Button>
           </div>
           <p v-if="wolMacAddress && !isValidMac" class="text-xs text-destructive">
@@ -227,36 +323,28 @@ if (savedHistory) {
           </p>
         </div>
 
+        <p v-if="wolLoadingHistory" class="text-xs text-muted-foreground">
+          {{ t('common.loading') }}
+        </p>
+
         <!-- History -->
         <div v-if="wolHistory.length > 0" class="space-y-2">
           <Separator />
           <Label class="text-xs text-muted-foreground">{{ t('atx.recentMac') }}</Label>
           <div class="space-y-1">
-            <button
+            <Button
               v-for="mac in wolHistory"
               :key="mac"
-              class="w-full text-left px-2 py-1.5 rounded text-xs font-mono hover:bg-muted transition-colors"
+              variant="ghost"
+              size="sm"
+              class="w-full justify-start font-mono text-xs"
               @click="selectFromHistory(mac)"
             >
               {{ mac }}
-            </button>
+            </Button>
           </div>
         </div>
       </TabsContent>
     </Tabs>
   </div>
-
-  <!-- Confirm Dialog -->
-  <AlertDialog :open="!!confirmAction" @update:open="confirmAction = null">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ confirmTitle }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ confirmDescription }}</AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="handleAction">{{ t('common.confirm') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
 </template>

@@ -42,29 +42,37 @@ function t(key: string, params?: Record<string, unknown>): string {
   return String(i18n.global.t(key, params as any))
 }
 
-// Navigation guard
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // Check if system needs setup
-  if (!authStore.initialized && to.name !== 'Setup') {
+  const shouldCheckSetup = to.name === 'Setup' || !authStore.initialized
+  if (shouldCheckSetup) {
     try {
       await authStore.checkSetupStatus()
-      if (authStore.needsSetup) {
-        return next({ name: 'Setup' })
-      }
     } catch {
-      // Continue anyway
     }
   }
 
-  // Check authentication for protected routes
+  if (authStore.needsSetup) {
+    if (to.name !== 'Setup') {
+      return next({ name: 'Setup' })
+    }
+  } else if (authStore.initialized && to.name === 'Setup') {
+    if (!authStore.isAuthenticated) {
+      try {
+        await authStore.checkAuth()
+      } catch {
+      }
+    }
+
+    return next({ name: authStore.isAuthenticated ? 'Console' : 'Login' })
+  }
+
   if (to.meta.requiresAuth !== false) {
     if (!authStore.isAuthenticated) {
       try {
         await authStore.checkAuth()
       } catch (e) {
-        // Not authenticated
         if (e instanceof ApiError && e.status === 401 && !sessionExpiredNotified) {
           const normalized = e.message.toLowerCase()
           const isLoggedInElsewhere = normalized.includes('logged in elsewhere')

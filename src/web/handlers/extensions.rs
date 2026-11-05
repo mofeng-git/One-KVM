@@ -1,26 +1,25 @@
-//! Extension management API handlers
-
 use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use typeshare::typeshare;
 
 use crate::error::{AppError, Result};
 use crate::extensions::{
-    EasytierConfig, EasytierInfo, ExtensionId, ExtensionInfo, ExtensionLogs, ExtensionsStatus,
-    GostcConfig, GostcInfo, TtydConfig, TtydInfo,
+    validate_easyfrp_config, validate_easytier_config, validate_extension_config,
+    validate_frpc_config, validate_gostc_config, EasyfrpConfig, EasyfrpInfo, EasytierConfig,
+    EasytierConfigMode, EasytierInfo, ExtensionId, ExtensionInfo, ExtensionLogs, ExtensionsStatus,
+    FrpProxyType, FrpcConfig, FrpcConfigMode, FrpcInfo, GostcConfig, GostcInfo, TtydConfig,
+    TtydInfo,
 };
 use crate::state::AppState;
 
-// ============================================================================
-// Get all extensions status
-// ============================================================================
+fn bad_request(validation: std::result::Result<(), String>) -> Result<()> {
+    validation.map_err(AppError::BadRequest)
+}
 
-/// Get status of all extensions
-/// GET /api/extensions
 pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<ExtensionsStatus> {
     let config = state.config.get();
     let mgr = &state.extensions;
@@ -36,20 +35,24 @@ pub async fn list_extensions(State(state): State<Arc<AppState>>) -> Json<Extensi
             status: mgr.status(ExtensionId::Gostc).await,
             config: config.extensions.gostc.clone(),
         },
+        easyfrp: EasyfrpInfo {
+            available: mgr.check_available(ExtensionId::Easyfrp),
+            status: mgr.status(ExtensionId::Easyfrp).await,
+            config: config.extensions.easyfrp.clone(),
+        },
         easytier: EasytierInfo {
             available: mgr.check_available(ExtensionId::Easytier),
             status: mgr.status(ExtensionId::Easytier).await,
             config: config.extensions.easytier.clone(),
         },
+        frpc: FrpcInfo {
+            available: mgr.check_available(ExtensionId::Frpc),
+            status: mgr.status(ExtensionId::Frpc).await,
+            config: config.extensions.frpc.clone(),
+        },
     })
 }
 
-// ============================================================================
-// Individual extension status
-// ============================================================================
-
-/// Get status of a single extension
-/// GET /api/extensions/:id
 pub async fn get_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -66,12 +69,6 @@ pub async fn get_extension(
     }))
 }
 
-// ============================================================================
-// Start/Stop extensions
-// ============================================================================
-
-/// Start an extension
-/// POST /api/extensions/:id/start
 pub async fn start_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -83,20 +80,18 @@ pub async fn start_extension(
     let config = state.config.get();
     let mgr = &state.extensions;
 
-    // Start the extension
+    bad_request(validate_extension_config(ext_id, &config.extensions))?;
+
     mgr.start(ext_id, &config.extensions)
         .await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
-    // Return updated status
     Ok(Json(ExtensionInfo {
         available: mgr.check_available(ext_id),
         status: mgr.status(ext_id).await,
     }))
 }
 
-/// Stop an extension
-/// POST /api/extensions/:id/stop
 pub async fn stop_extension(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -107,29 +102,20 @@ pub async fn stop_extension(
 
     let mgr = &state.extensions;
 
-    // Stop the extension
-    mgr.stop(ext_id).await.map_err(|e| AppError::Internal(e))?;
+    mgr.stop(ext_id).await.map_err(AppError::Internal)?;
 
-    // Return updated status
     Ok(Json(ExtensionInfo {
         available: mgr.check_available(ext_id),
         status: mgr.status(ext_id).await,
     }))
 }
 
-// ============================================================================
-// Extension logs
-// ============================================================================
-
-/// Query parameters for logs
 #[derive(Deserialize, Default)]
 pub struct LogsQuery {
     /// Number of lines to return (default: 100, max: 500)
     pub lines: Option<usize>,
 }
 
-/// Get extension logs
-/// GET /api/extensions/:id/logs
 pub async fn get_extension_logs(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -145,21 +131,13 @@ pub async fn get_extension_logs(
     Ok(Json(ExtensionLogs { id: ext_id, logs }))
 }
 
-// ============================================================================
-// Update extension config
-// ============================================================================
-
-/// Update ttyd config
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct TtydConfigUpdate {
     pub enabled: Option<bool>,
-    pub port: Option<u16>,
     pub shell: Option<String>,
-    pub credential: Option<String>,
 }
 
-/// Update gostc config
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct GostcConfigUpdate {
@@ -169,27 +147,50 @@ pub struct GostcConfigUpdate {
     pub tls: Option<bool>,
 }
 
-/// Update easytier config
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct EasyfrpConfigUpdate {
+    pub enabled: Option<bool>,
+    pub control_urls: Option<Vec<String>>,
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct EasytierConfigUpdate {
     pub enabled: Option<bool>,
+    pub config_mode: Option<EasytierConfigMode>,
     pub network_name: Option<String>,
     pub network_secret: Option<String>,
     pub peer_urls: Option<Vec<String>>,
     pub virtual_ip: Option<String>,
+    pub custom_toml: Option<String>,
 }
 
-/// Update ttyd configuration
-/// PATCH /api/extensions/ttyd/config
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct FrpcConfigUpdate {
+    pub enabled: Option<bool>,
+    pub config_mode: Option<FrpcConfigMode>,
+    pub proxy_name: Option<String>,
+    pub proxy_type: Option<FrpProxyType>,
+    pub server_addr: Option<String>,
+    pub server_port: Option<u16>,
+    pub token: Option<String>,
+    pub local_ip: Option<String>,
+    pub local_port: Option<u16>,
+    pub remote_port: Option<Option<u16>>,
+    pub custom_domain: Option<Option<String>>,
+    pub secret_key: Option<String>,
+    pub tls: Option<bool>,
+    pub custom_toml: Option<String>,
+}
+
 pub async fn update_ttyd_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<TtydConfigUpdate>,
 ) -> Result<Json<TtydConfig>> {
-    // Get current config
     let was_enabled = state.config.get().extensions.ttyd.enabled;
 
-    // Update config
     state
         .config
         .update(|config| {
@@ -197,14 +198,8 @@ pub async fn update_ttyd_config(
             if let Some(enabled) = req.enabled {
                 ttyd.enabled = enabled;
             }
-            if let Some(port) = req.port {
-                ttyd.port = port;
-            }
             if let Some(ref shell) = req.shell {
                 ttyd.shell = shell.clone();
-            }
-            if req.credential.is_some() {
-                ttyd.credential = req.credential.clone();
             }
         })
         .await?;
@@ -212,12 +207,9 @@ pub async fn update_ttyd_config(
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.ttyd.enabled;
 
-    // Handle enable/disable state change
     if was_enabled && !is_enabled {
-        // Was running, now disabled - stop it
         state.extensions.stop(ExtensionId::Ttyd).await.ok();
     } else if !was_enabled && is_enabled {
-        // Was disabled, now enabled - start it
         if state.extensions.check_available(ExtensionId::Ttyd) {
             state
                 .extensions
@@ -230,121 +222,228 @@ pub async fn update_ttyd_config(
     Ok(Json(new_config.extensions.ttyd.clone()))
 }
 
-/// Update gostc configuration
-/// PATCH /api/extensions/gostc/config
 pub async fn update_gostc_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<GostcConfigUpdate>,
 ) -> Result<Json<GostcConfig>> {
-    let was_enabled = state.config.get().extensions.gostc.enabled;
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.gostc.enabled;
+    let mut next_gostc = current_config.extensions.gostc.clone();
+
+    if let Some(enabled) = req.enabled {
+        next_gostc.enabled = enabled;
+    }
+    if let Some(ref addr) = req.addr {
+        next_gostc.addr = addr.clone();
+    }
+    if let Some(ref key) = req.key {
+        next_gostc.key = key.clone();
+    }
+    if let Some(tls) = req.tls {
+        next_gostc.tls = tls;
+    }
+
+    if next_gostc.enabled {
+        bad_request(validate_gostc_config(&next_gostc))?;
+    }
 
     state
         .config
         .update(|config| {
-            let gostc = &mut config.extensions.gostc;
-            if let Some(enabled) = req.enabled {
-                gostc.enabled = enabled;
-            }
-            if let Some(ref addr) = req.addr {
-                gostc.addr = addr.clone();
-            }
-            if let Some(ref key) = req.key {
-                gostc.key = key.clone();
-            }
-            if let Some(tls) = req.tls {
-                gostc.tls = tls;
-            }
+            config.extensions.gostc = next_gostc.clone();
         })
         .await?;
 
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.gostc.enabled;
-    let has_key = !new_config.extensions.gostc.key.is_empty();
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Gostc).await.ok();
-    } else if !was_enabled && is_enabled && has_key {
-        if state.extensions.check_available(ExtensionId::Gostc) {
-            state
-                .extensions
-                .start(ExtensionId::Gostc, &new_config.extensions)
-                .await
-                .ok();
-        }
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Gostc) {
+        state
+            .extensions
+            .start(ExtensionId::Gostc, &new_config.extensions)
+            .await
+            .ok();
     }
 
     Ok(Json(new_config.extensions.gostc.clone()))
 }
 
-/// Update easytier configuration
-/// PATCH /api/extensions/easytier/config
-pub async fn update_easytier_config(
+pub async fn update_easyfrp_config(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<EasytierConfigUpdate>,
-) -> Result<Json<EasytierConfig>> {
-    let was_enabled = state.config.get().extensions.easytier.enabled;
+    Json(req): Json<EasyfrpConfigUpdate>,
+) -> Result<Json<EasyfrpConfig>> {
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.easyfrp.enabled;
+    let mut next_easyfrp = current_config.extensions.easyfrp.clone();
+
+    if let Some(enabled) = req.enabled {
+        next_easyfrp.enabled = enabled;
+    }
+    if let Some(ref urls) = req.control_urls {
+        next_easyfrp.control_urls = urls.iter().map(|url| url.trim().to_string()).collect();
+    }
+
+    if next_easyfrp.enabled {
+        bad_request(validate_easyfrp_config(&next_easyfrp))?;
+    }
 
     state
         .config
         .update(|config| {
-            let et = &mut config.extensions.easytier;
-            if let Some(enabled) = req.enabled {
-                et.enabled = enabled;
-            }
-            if let Some(ref name) = req.network_name {
-                et.network_name = name.clone();
-            }
-            if let Some(ref secret) = req.network_secret {
-                et.network_secret = secret.clone();
-            }
-            if let Some(ref peers) = req.peer_urls {
-                et.peer_urls = peers.clone();
-            }
-            if req.virtual_ip.is_some() {
-                et.virtual_ip = req.virtual_ip.clone();
-            }
+            config.extensions.easyfrp = next_easyfrp.clone();
+        })
+        .await?;
+
+    let new_config = state.config.get();
+    let is_enabled = new_config.extensions.easyfrp.enabled;
+
+    if was_enabled && !is_enabled {
+        state.extensions.stop(ExtensionId::Easyfrp).await.ok();
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Easyfrp) {
+        state
+            .extensions
+            .start(ExtensionId::Easyfrp, &new_config.extensions)
+            .await
+            .ok();
+    }
+
+    Ok(Json(new_config.extensions.easyfrp.clone()))
+}
+
+pub async fn update_easytier_config(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<EasytierConfigUpdate>,
+) -> Result<Json<EasytierConfig>> {
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.easytier.enabled;
+    let mut next_easytier = current_config.extensions.easytier.clone();
+
+    if let Some(enabled) = req.enabled {
+        next_easytier.enabled = enabled;
+    }
+    if let Some(config_mode) = req.config_mode {
+        next_easytier.config_mode = config_mode;
+    }
+    if let Some(ref name) = req.network_name {
+        next_easytier.network_name = name.clone();
+    }
+    if let Some(ref secret) = req.network_secret {
+        next_easytier.network_secret = secret.clone();
+    }
+    if let Some(ref peers) = req.peer_urls {
+        next_easytier.peer_urls = peers.clone();
+    }
+    if req.virtual_ip.is_some() {
+        next_easytier.virtual_ip = req.virtual_ip.clone();
+    }
+    if let Some(ref custom_toml) = req.custom_toml {
+        next_easytier.custom_toml = custom_toml.clone();
+    }
+
+    if next_easytier.enabled || matches!(next_easytier.config_mode, EasytierConfigMode::Full) {
+        bad_request(validate_easytier_config(&next_easytier))?;
+    }
+
+    state
+        .config
+        .update(|config| {
+            config.extensions.easytier = next_easytier.clone();
         })
         .await?;
 
     let new_config = state.config.get();
     let is_enabled = new_config.extensions.easytier.enabled;
-    let has_name = !new_config.extensions.easytier.network_name.is_empty();
 
     if was_enabled && !is_enabled {
         state.extensions.stop(ExtensionId::Easytier).await.ok();
-    } else if !was_enabled && is_enabled && has_name {
-        if state.extensions.check_available(ExtensionId::Easytier) {
-            state
-                .extensions
-                .start(ExtensionId::Easytier, &new_config.extensions)
-                .await
-                .ok();
-        }
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Easytier)
+    {
+        state
+            .extensions
+            .start(ExtensionId::Easytier, &new_config.extensions)
+            .await
+            .ok();
     }
 
     Ok(Json(new_config.extensions.easytier.clone()))
 }
 
-// ============================================================================
-// Ttyd status for console (simplified)
-// ============================================================================
+pub async fn update_frpc_config(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<FrpcConfigUpdate>,
+) -> Result<Json<FrpcConfig>> {
+    let current_config = state.config.get();
+    let was_enabled = current_config.extensions.frpc.enabled;
+    let mut next_frpc = current_config.extensions.frpc.clone();
 
-/// Simple ttyd status for console view
-#[typeshare]
-#[derive(Debug, Serialize)]
-pub struct TtydStatus {
-    pub available: bool,
-    pub running: bool,
-}
+    if let Some(enabled) = req.enabled {
+        next_frpc.enabled = enabled;
+    }
+    if let Some(config_mode) = req.config_mode {
+        next_frpc.config_mode = config_mode;
+    }
+    if let Some(ref proxy_name) = req.proxy_name {
+        next_frpc.proxy_name = proxy_name.clone();
+    }
+    if let Some(proxy_type) = req.proxy_type {
+        next_frpc.proxy_type = proxy_type;
+    }
+    if let Some(ref addr) = req.server_addr {
+        next_frpc.server_addr = addr.clone();
+    }
+    if let Some(port) = req.server_port {
+        next_frpc.server_port = port;
+    }
+    if let Some(ref token) = req.token {
+        next_frpc.token = token.clone();
+    }
+    if let Some(ref local_ip) = req.local_ip {
+        next_frpc.local_ip = local_ip.clone();
+    }
+    if let Some(local_port) = req.local_port {
+        next_frpc.local_port = local_port;
+    }
+    if let Some(remote_port) = req.remote_port {
+        next_frpc.remote_port = remote_port;
+    }
+    if let Some(custom_domain) = req.custom_domain {
+        next_frpc.custom_domain = custom_domain;
+    }
+    if let Some(ref secret_key) = req.secret_key {
+        next_frpc.secret_key = secret_key.clone();
+    }
+    if let Some(tls) = req.tls {
+        next_frpc.tls = tls;
+    }
+    if let Some(ref custom_toml) = req.custom_toml {
+        next_frpc.custom_toml = custom_toml.clone();
+    }
 
-/// Get ttyd status for console view
-/// GET /api/extensions/ttyd/status
-pub async fn get_ttyd_status(State(state): State<Arc<AppState>>) -> Json<TtydStatus> {
-    let mgr = &state.extensions;
-    let status = mgr.status(ExtensionId::Ttyd).await;
+    if next_frpc.enabled || matches!(next_frpc.config_mode, FrpcConfigMode::Full) {
+        bad_request(validate_frpc_config(&next_frpc))?;
+    }
 
-    Json(TtydStatus {
-        available: mgr.check_available(ExtensionId::Ttyd),
-        running: status.is_running(),
-    })
+    state
+        .config
+        .update(|config| {
+            config.extensions.frpc = next_frpc.clone();
+        })
+        .await?;
+
+    let new_config = state.config.get();
+    let is_enabled = new_config.extensions.frpc.enabled;
+
+    if was_enabled && !is_enabled {
+        state.extensions.stop(ExtensionId::Frpc).await.ok();
+    } else if !was_enabled && is_enabled && state.extensions.check_available(ExtensionId::Frpc) {
+        state
+            .extensions
+            .start(ExtensionId::Frpc, &new_config.extensions)
+            .await
+            .ok();
+    }
+
+    Ok(Json(new_config.extensions.frpc.clone()))
 }

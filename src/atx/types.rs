@@ -1,83 +1,109 @@
 //! ATX data types and structures
 //!
-//! Defines the configuration and state types for the flexible ATX power control system.
-//! Each ATX action (power, reset) can be independently configured with different hardware.
+//! Defines the configuration and state types for the ATX power control system.
 
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-/// Power status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub const LCUS_RELAY_MAX_CHANNEL: u8 = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PowerStatus {
-    /// Power is on
     On,
-    /// Power is off
     Off,
-    /// Power status unknown (no LED connected)
+    #[default]
     Unknown,
 }
 
-impl Default for PowerStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HddStatus {
+    Active,
+    Inactive,
+    #[default]
+    Unknown,
 }
 
-/// Driver type for ATX key operations
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AtxDriverType {
-    /// GPIO control via Linux character device
     Gpio,
-    /// USB HID relay module
     UsbRelay,
-    /// Disabled / Not configured
+    Serial,
+    #[default]
     None,
 }
 
-impl Default for AtxDriverType {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-/// Active level for GPIO pins
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ActiveLevel {
-    /// Active high (default for most cases)
+    #[default]
     High,
-    /// Active low (inverted)
     Low,
 }
 
-impl Default for ActiveLevel {
-    fn default() -> Self {
-        Self::High
-    }
-}
-
-/// Configuration for a single ATX key (power or reset)
-/// This is the "four-tuple" configuration: (driver, device, pin/channel, level)
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
-pub struct AtxKeyConfig {
-    /// Driver type (GPIO or USB Relay)
-    pub driver: AtxDriverType,
-    /// Device path:
-    /// - For GPIO: /dev/gpiochipX
-    /// - For USB Relay: /dev/hidrawX
+pub struct AtxOutputBinding {
+    pub enabled: bool,
     pub device: String,
-    /// Pin or channel number:
-    /// - For GPIO: GPIO pin number
-    /// - For USB Relay: relay channel (0-based)
     pub pin: u32,
-    /// Active level (only applicable to GPIO, ignored for USB Relay)
     pub active_level: ActiveLevel,
+}
+
+impl Default for AtxOutputBinding {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            device: String::new(),
+            pin: 1,
+            active_level: ActiveLevel::High,
+        }
+    }
+}
+
+impl AtxOutputBinding {
+    pub fn is_configured_for(&self, driver: AtxDriverType, top_level_device: &str) -> bool {
+        if !self.enabled || driver == AtxDriverType::None {
+            return false;
+        }
+
+        match driver {
+            AtxDriverType::Gpio => !self.device.trim().is_empty(),
+            AtxDriverType::UsbRelay | AtxDriverType::Serial => !top_level_device.trim().is_empty(),
+            AtxDriverType::None => false,
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct AtxInputBinding {
+    pub enabled: bool,
+    pub device: String,
+    pub pin: u32,
+    pub active_level: ActiveLevel,
+}
+
+impl AtxInputBinding {
+    pub fn is_configured(&self) -> bool {
+        self.enabled && !self.device.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AtxKeyConfig {
+    pub driver: AtxDriverType,
+    pub device: String,
+    pub pin: u32,
+    pub active_level: ActiveLevel,
+    pub baud_rate: u32,
 }
 
 impl Default for AtxKeyConfig {
@@ -87,104 +113,48 @@ impl Default for AtxKeyConfig {
             device: String::new(),
             pin: 0,
             active_level: ActiveLevel::High,
+            baud_rate: 9600,
         }
     }
 }
 
 impl AtxKeyConfig {
-    /// Check if this key is configured
     pub fn is_configured(&self) -> bool {
         self.driver != AtxDriverType::None && !self.device.is_empty()
     }
 }
 
-/// LED sensing configuration (optional)
-#[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
-pub struct AtxLedConfig {
-    /// Whether LED sensing is enabled
-    pub enabled: bool,
-    /// GPIO chip for LED sensing
-    pub gpio_chip: String,
-    /// GPIO pin for LED input
-    pub gpio_pin: u32,
-    /// Whether LED is active low (inverted logic)
-    pub inverted: bool,
-}
-
-impl Default for AtxLedConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            gpio_chip: String::new(),
-            gpio_pin: 0,
-            inverted: false,
-        }
-    }
-}
-
-impl AtxLedConfig {
-    /// Check if LED sensing is configured
-    pub fn is_configured(&self) -> bool {
-        self.enabled && !self.gpio_chip.is_empty()
-    }
-}
-
-/// ATX state information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AtxState {
-    /// Whether ATX feature is available/enabled
     pub available: bool,
-    /// Whether power button is configured
+    pub driver: AtxDriverType,
     pub power_configured: bool,
-    /// Whether reset button is configured
     pub reset_configured: bool,
-    /// Current power status
     pub power_status: PowerStatus,
-    /// Whether power LED sensing is supported
     pub led_supported: bool,
+    pub hdd_status: HddStatus,
+    pub hdd_supported: bool,
 }
 
-impl Default for AtxState {
-    fn default() -> Self {
-        Self {
-            available: false,
-            power_configured: false,
-            reset_configured: false,
-            power_status: PowerStatus::Unknown,
-            led_supported: false,
-        }
-    }
-}
-
-/// ATX power action request
 #[derive(Debug, Clone, Deserialize)]
 pub struct AtxPowerRequest {
-    /// Action to perform: "short", "long", "reset"
     pub action: AtxAction,
 }
 
-/// ATX power action
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AtxAction {
-    /// Short press power button (turn on or graceful shutdown)
     Short,
-    /// Long press power button (force power off)
     Long,
-    /// Press reset button
     Reset,
 }
 
-/// Available ATX devices for discovery
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtxDevices {
-    /// Available GPIO chips (/dev/gpiochip*)
     pub gpio_chips: Vec<String>,
-    /// Available USB HID relay devices (/dev/hidraw*)
     pub usb_relays: Vec<String>,
+    pub serial_ports: Vec<String>,
 }
 
 impl Default for AtxDevices {
@@ -192,6 +162,7 @@ impl Default for AtxDevices {
         Self {
             gpio_chips: Vec::new(),
             usb_relays: Vec::new(),
+            serial_ports: Vec::new(),
         }
     }
 }
@@ -216,6 +187,29 @@ mod tests {
     }
 
     #[test]
+    fn test_atx_output_binding_default() {
+        let config = AtxOutputBinding::default();
+        assert!(!config.enabled);
+        assert!(config.device.is_empty());
+        assert_eq!(config.pin, 1);
+        assert!(!config.is_configured_for(AtxDriverType::Gpio, ""));
+    }
+
+    #[test]
+    fn test_atx_output_binding_is_configured() {
+        let mut config = AtxOutputBinding::default();
+        assert!(!config.is_configured_for(AtxDriverType::Gpio, ""));
+
+        config.enabled = true;
+        assert!(!config.is_configured_for(AtxDriverType::Gpio, ""));
+
+        config.device = "/dev/gpiochip0".to_string();
+        assert!(config.is_configured_for(AtxDriverType::Gpio, ""));
+        assert!(!config.is_configured_for(AtxDriverType::Serial, ""));
+        assert!(config.is_configured_for(AtxDriverType::Serial, "/dev/ttyUSB0"));
+    }
+
+    #[test]
     fn test_atx_key_config_default() {
         let config = AtxKeyConfig::default();
         assert_eq!(config.driver, AtxDriverType::None);
@@ -225,37 +219,22 @@ mod tests {
     }
 
     #[test]
-    fn test_atx_key_config_is_configured() {
-        let mut config = AtxKeyConfig::default();
-        assert!(!config.is_configured());
-
-        config.driver = AtxDriverType::Gpio;
-        assert!(!config.is_configured()); // device still empty
-
-        config.device = "/dev/gpiochip0".to_string();
-        assert!(config.is_configured());
-
-        config.driver = AtxDriverType::None;
-        assert!(!config.is_configured()); // driver is None
-    }
-
-    #[test]
-    fn test_atx_led_config_default() {
-        let config = AtxLedConfig::default();
+    fn test_atx_input_binding_default() {
+        let config = AtxInputBinding::default();
         assert!(!config.enabled);
-        assert!(config.gpio_chip.is_empty());
+        assert!(config.device.is_empty());
         assert!(!config.is_configured());
     }
 
     #[test]
-    fn test_atx_led_config_is_configured() {
-        let mut config = AtxLedConfig::default();
+    fn test_atx_input_binding_is_configured() {
+        let mut config = AtxInputBinding::default();
         assert!(!config.is_configured());
 
         config.enabled = true;
-        assert!(!config.is_configured()); // gpio_chip still empty
+        assert!(!config.is_configured());
 
-        config.gpio_chip = "/dev/gpiochip0".to_string();
+        config.device = "/dev/gpiochip0".to_string();
         assert!(config.is_configured());
     }
 
@@ -263,8 +242,12 @@ mod tests {
     fn test_atx_state_default() {
         let state = AtxState::default();
         assert!(!state.available);
+        assert_eq!(state.driver, AtxDriverType::None);
         assert!(!state.power_configured);
         assert!(!state.reset_configured);
         assert_eq!(state.power_status, PowerStatus::Unknown);
+        assert!(!state.led_supported);
+        assert_eq!(state.hdd_status, HddStatus::Unknown);
+        assert!(!state.hdd_supported);
     }
 }

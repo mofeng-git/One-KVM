@@ -3,18 +3,34 @@
 //! Sends magic packets to wake up remote machines.
 
 use std::net::{SocketAddr, UdpSocket};
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::error::{AppError, Result};
 
-/// WOL magic packet structure:
-/// - 6 bytes of 0xFF
-/// - 16 repetitions of the target MAC address (6 bytes each)
-/// Total: 6 + 16 * 6 = 102 bytes
 const MAGIC_PACKET_SIZE: usize = 102;
 
-/// Parse MAC address string into bytes
-/// Supports formats: "AA:BB:CC:DD:EE:FF" or "AA-BB-CC-DD-EE-FF"
+/// Validate and normalize the MAC formats accepted by the web and MCP APIs.
+pub fn normalize_wol_mac_address(mac_address: &str) -> Result<String> {
+    let normalized = mac_address.trim().replace('-', ":");
+    let normalized = if normalized.len() == 12 && normalized.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        normalized
+            .as_bytes()
+            .chunks(2)
+            .map(|b| std::str::from_utf8(b).unwrap())
+            .collect::<Vec<_>>()
+            .join(":")
+    } else {
+        normalized
+    };
+    let mac = parse_mac_address(&normalized)?;
+    Ok(mac
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(":"))
+}
+
 fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     let mac = mac.trim().to_uppercase();
     let parts: Vec<&str> = if mac.contains(':') {
@@ -44,16 +60,13 @@ fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     Ok(bytes)
 }
 
-/// Build WOL magic packet
 fn build_magic_packet(mac: &[u8; 6]) -> [u8; MAGIC_PACKET_SIZE] {
     let mut packet = [0u8; MAGIC_PACKET_SIZE];
 
-    // First 6 bytes are 0xFF
     for byte in packet.iter_mut().take(6) {
         *byte = 0xFF;
     }
 
-    // Next 96 bytes are 16 repetitions of the MAC address
     for i in 0..16 {
         let offset = 6 + i * 6;
         packet[offset..offset + 6].copy_from_slice(mac);
@@ -73,16 +86,13 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
 
     info!("Sending WOL packet to {} via {:?}", mac_address, interface);
 
-    // Create UDP socket
     let socket = UdpSocket::bind("0.0.0.0:0")
         .map_err(|e| AppError::Internal(format!("Failed to create UDP socket: {}", e)))?;
 
-    // Enable broadcast
     socket
         .set_broadcast(true)
         .map_err(|e| AppError::Internal(format!("Failed to enable broadcast: {}", e)))?;
 
-    // Bind to specific interface if specified
     #[cfg(target_os = "linux")]
     if let Some(iface) = interface {
         if !iface.is_empty() {
@@ -90,8 +100,7 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
             let fd = socket.as_raw_fd();
             let iface_bytes = iface.as_bytes();
 
-            // SO_BINDTODEVICE requires interface name as null-terminated string
-            let mut iface_buf = [0u8; 16]; // IFNAMSIZ is typically 16
+            let mut iface_buf = [0u8; 16];
             let len = iface_bytes.len().min(15);
             iface_buf[..len].copy_from_slice(&iface_bytes[..len]);
 
@@ -112,18 +121,16 @@ pub fn send_wol(mac_address: &str, interface: Option<&str>) -> Result<()> {
                     iface, err
                 )));
             }
-            debug!("Bound to interface: {}", iface);
+            tracing::debug!("Bound to interface: {}", iface);
         }
     }
 
-    // Send to broadcast address on port 9 (discard protocol, commonly used for WOL)
     let broadcast_addr: SocketAddr = "255.255.255.255:9".parse().unwrap();
 
     socket
         .send_to(&packet, broadcast_addr)
         .map_err(|e| AppError::Internal(format!("Failed to send WOL packet: {}", e)))?;
 
-    // Also try sending to port 7 (echo protocol, alternative WOL port)
     let broadcast_addr_7: SocketAddr = "255.255.255.255:7".parse().unwrap();
     let _ = socket.send_to(&packet, broadcast_addr_7);
 
@@ -155,16 +162,25 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_web_and_mcp_mac_formats() {
+        for value in [" aa-bb-cc-dd-ee-ff ", "aabbccddeeff", "AA:BB:CC:DD:EE:FF"] {
+            assert_eq!(
+                normalize_wol_mac_address(value).unwrap(),
+                "AA:BB:CC:DD:EE:FF"
+            );
+        }
+        assert!(normalize_wol_mac_address("invalid").is_err());
+    }
+
+    #[test]
     fn test_build_magic_packet() {
         let mac = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
         let packet = build_magic_packet(&mac);
 
-        // Check header (6 bytes of 0xFF)
-        for i in 0..6 {
-            assert_eq!(packet[i], 0xFF);
+        for byte in packet.iter().take(6) {
+            assert_eq!(*byte, 0xFF);
         }
 
-        // Check MAC repetitions
         for i in 0..16 {
             let offset = 6 + i * 6;
             assert_eq!(&packet[offset..offset + 6], &mac);

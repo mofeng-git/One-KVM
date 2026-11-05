@@ -3,30 +3,47 @@
 //! This module provides V4L2 video capture, encoding, and streaming functionality.
 
 pub mod capture;
-pub mod convert;
-pub mod decoder;
+pub mod codec;
+pub mod codec_constraints;
 pub mod device;
-pub mod encoder;
 pub mod format;
 pub mod frame;
-pub mod h264_pipeline;
-pub mod shared_video_pipeline;
+#[cfg(feature = "desktop")]
+pub mod pipeline;
+pub mod recovery;
+pub mod signal;
+#[cfg(feature = "desktop")]
+pub mod snapshot;
+#[cfg(feature = "desktop")]
 pub mod stream_manager;
+#[cfg(feature = "desktop")]
 pub mod streamer;
-pub mod video_session;
+#[cfg(feature = "desktop")]
+pub mod traits;
+#[cfg(feature = "desktop")]
+pub mod types;
 
-pub use capture::VideoCapturer;
-pub use convert::{PixelConverter, Yuv420pBuffer};
+pub use capture::{CaptureMeta, CaptureStream};
+pub use codec::{H264Encoder, H264EncoderType, JpegEncoder, PixelConverter, Yuv420pBuffer};
 pub use device::{VideoDevice, VideoDeviceInfo};
-pub use encoder::{H264Encoder, H264EncoderType, JpegEncoder};
 pub use format::PixelFormat;
 pub use frame::VideoFrame;
-pub use h264_pipeline::{H264Pipeline, H264PipelineBuilder, H264PipelineConfig};
-pub use shared_video_pipeline::{
+pub use pipeline::{
     EncodedVideoFrame, SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats,
 };
+pub use signal::SignalStatus;
 pub use stream_manager::VideoStreamManager;
 pub use streamer::{Streamer, StreamerState};
-pub use video_session::{
-    CodecInfo, VideoSessionInfo, VideoSessionManager, VideoSessionManagerConfig, VideoSessionState,
-};
+
+impl From<SignalStatus> for streamer::StreamerState {
+    fn from(value: SignalStatus) -> Self {
+        match value {
+            SignalStatus::NoCable => streamer::StreamerState::NoCable,
+            SignalStatus::NoSync => streamer::StreamerState::NoSync,
+            SignalStatus::OutOfRange => streamer::StreamerState::OutOfRange,
+            SignalStatus::NoSignal => streamer::StreamerState::NoSignal,
+            SignalStatus::UvcUsbError => streamer::StreamerState::UvcUsbError,
+            SignalStatus::UvcCaptureStall => streamer::StreamerState::UvcCaptureStall,
+        }
+    }
+}

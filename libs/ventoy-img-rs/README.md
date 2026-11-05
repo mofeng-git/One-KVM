@@ -142,7 +142,11 @@ fn main() -> Result<()> {
 
 ## 许可证
 
-GPL-2.0
+AGPL-3.0-only
+
+本 crate 随 One-KVM 整体按 AGPL-3.0-only 发布。其 `resources/` 目录内的
+Ventoy 启动文件衍生自 [Ventoy](https://www.ventoy.net/)（GPL-3.0-or-later），
+引导部分包含 [GRUB](https://www.gnu.org/software/grub/)（GPL-3.0-or-later）。
 
 ## 致谢
 

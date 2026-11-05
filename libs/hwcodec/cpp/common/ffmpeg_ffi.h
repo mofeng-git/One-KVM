@@ -25,6 +25,7 @@ enum AVPixelFormat {
   AV_PIX_FMT_NV24 = 188,
 };
 
+int av_get_pix_fmt(const char *name);
 int av_log_get_level(void);
 void av_log_set_level(int level);
 void hwcodec_set_av_log_callback();

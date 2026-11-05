@@ -1,131 +1,42 @@
 use arc_swap::ArcSwap;
-use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
-use std::path::Path;
+use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast;
+use tokio::sync::Mutex;
 
 use super::AppConfig;
+use super::ConfigChange;
 use crate::error::{AppError, Result};
 
-/// Configuration store backed by SQLite
-///
-/// Uses `ArcSwap` for lock-free reads, providing high performance
-/// for frequent configuration access in hot paths.
 #[derive(Clone)]
 pub struct ConfigStore {
     pool: Pool<Sqlite>,
-    /// Lock-free cache using ArcSwap for zero-cost reads
     cache: Arc<ArcSwap<AppConfig>>,
     change_tx: broadcast::Sender<ConfigChange>,
-}
-
-/// Configuration change event
-#[derive(Debug, Clone)]
-pub struct ConfigChange {
-    pub key: String,
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl ConfigStore {
-    /// Create a new configuration store
-    pub async fn new(db_path: &Path) -> Result<Self> {
-        // Ensure parent directory exists
-        if let Some(parent) = db_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
-
-        let pool = SqlitePoolOptions::new()
-            // SQLite uses single-writer mode, 2 connections is sufficient for embedded devices
-            // One for reads, one for writes to avoid blocking
-            .max_connections(2)
-            // Set reasonable timeouts for embedded environments
-            .acquire_timeout(Duration::from_secs(5))
-            .idle_timeout(Duration::from_secs(300))
-            .connect(&db_url)
-            .await?;
-
-        // Initialize database schema
-        Self::init_schema(&pool).await?;
-
-        // Load or create default config
-        let config = Self::load_config(&pool).await?;
-        let cache = Arc::new(ArcSwap::from_pointee(config));
-
-        let (change_tx, _) = broadcast::channel(16);
-
-        Ok(Self {
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self {
             pool,
-            cache,
-            change_tx,
-        })
+            cache: Arc::new(ArcSwap::from_pointee(AppConfig::default())),
+            change_tx: broadcast::channel(16).0,
+            write_lock: Arc::new(Mutex::new(())),
+        }
     }
 
-    /// Initialize database schema
-    async fn init_schema(pool: &Pool<Sqlite>) -> Result<()> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS config (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                is_admin INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                expires_at TEXT NOT NULL,
-                data TEXT
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS api_tokens (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                token_hash TEXT NOT NULL,
-                permissions TEXT NOT NULL,
-                expires_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                last_used TEXT
-            )
-            "#,
-        )
-        .execute(pool)
-        .await?;
-
+    pub async fn load(&self) -> Result<()> {
+        let (mut config, removed_legacy_fields) = Self::load_config(&self.pool).await?;
+        config.enforce_invariants();
+        if removed_legacy_fields {
+            Self::save_config_to_db(&self.pool, &config).await?;
+        }
+        self.cache.store(Arc::new(config));
         Ok(())
     }
 
-    /// Load configuration from database
-    async fn load_config(pool: &Pool<Sqlite>) -> Result<AppConfig> {
+    async fn load_config(pool: &Pool<Sqlite>) -> Result<(AppConfig, bool)> {
         let row: Option<(String,)> =
             sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")
                 .fetch_optional(pool)
@@ -133,18 +44,30 @@ impl ConfigStore {
 
         match row {
             Some((json,)) => {
-                serde_json::from_str(&json).map_err(|e| AppError::Config(e.to_string()))
+                let mut value: serde_json::Value =
+                    serde_json::from_str(&json).map_err(|e| AppError::Config(e.to_string()))?;
+                let mut removed = value
+                    .as_object_mut()
+                    .is_some_and(|object| object.remove("computer_use").is_some());
+                if let Some(auth) = value
+                    .get_mut("auth")
+                    .and_then(|value| value.as_object_mut())
+                {
+                    removed |= auth.remove("totp_enabled").is_some();
+                    removed |= auth.remove("totp_secret").is_some();
+                }
+                let config =
+                    serde_json::from_value(value).map_err(|e| AppError::Config(e.to_string()))?;
+                Ok((config, removed))
             }
             None => {
-                // Create default config
                 let config = AppConfig::default();
                 Self::save_config_to_db(pool, &config).await?;
-                Ok(config)
+                Ok((config, false))
             }
         }
     }
 
-    /// Save configuration to database
     async fn save_config_to_db(pool: &Pool<Sqlite>, config: &AppConfig) -> Result<()> {
         let json = serde_json::to_string(config)?;
 
@@ -162,20 +85,22 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Get current configuration (lock-free, zero-copy)
-    ///
-    /// Returns an `Arc<AppConfig>` for efficient sharing without cloning.
-    /// This is a lock-free operation with minimal overhead.
+    #[cfg(target_os = "linux")]
+    pub fn hid_bonds(&self) -> crate::db::hid_bonds::HidBondStore {
+        crate::db::hid_bonds::HidBondStore(self.pool.clone())
+    }
+
     pub fn get(&self) -> Arc<AppConfig> {
         self.cache.load_full()
     }
 
-    /// Set entire configuration
     pub async fn set(&self, config: AppConfig) -> Result<()> {
+        let _guard = self.write_lock.lock().await;
+        let mut config = config;
+        config.enforce_invariants();
         Self::save_config_to_db(&self.pool, &config).await?;
         self.cache.store(Arc::new(config));
 
-        // Notify subscribers
         let _ = self.change_tx.send(ConfigChange {
             key: "app_config".to_string(),
         });
@@ -183,27 +108,20 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Update configuration with a closure
-    ///
-    /// Note: This uses a read-modify-write pattern. For concurrent updates,
-    /// the last write wins. This is acceptable for configuration changes
-    /// which are infrequent and typically user-initiated.
     pub async fn update<F>(&self, f: F) -> Result<()>
     where
         F: FnOnce(&mut AppConfig),
     {
-        // Load current config, clone it for modification
+        let _guard = self.write_lock.lock().await;
         let current = self.cache.load();
         let mut config = (**current).clone();
         f(&mut config);
+        config.enforce_invariants();
 
-        // Persist to database first
         Self::save_config_to_db(&self.pool, &config).await?;
 
-        // Then update cache atomically
         self.cache.store(Arc::new(config));
 
-        // Notify subscribers
         let _ = self.change_tx.send(ConfigChange {
             key: "app_config".to_string(),
         });
@@ -211,39 +129,61 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Subscribe to configuration changes
     pub fn subscribe(&self) -> broadcast::Receiver<ConfigChange> {
         self.change_tx.subscribe()
     }
 
-    /// Check if system is initialized (lock-free)
     pub fn is_initialized(&self) -> bool {
         self.cache.load().initialized
-    }
-
-    /// Get database pool for session management
-    pub fn pool(&self) -> &Pool<Sqlite> {
-        &self.pool
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::DatabasePool;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn jiggler_defaults_and_preferences_survive_restart() {
+        let defaults: crate::config::HidConfig =
+            serde_json::from_str(r#"{"backend":"otg"}"#).unwrap();
+        assert!(!defaults.jiggler.enabled);
+        assert_eq!(defaults.jiggler.interval_secs, 60);
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("jiggler.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        store
+            .update(|config| {
+                config.hid.jiggler.enabled = true;
+                config.hid.jiggler.interval_secs = 120;
+            })
+            .await
+            .unwrap();
+        let reloaded = ConfigStore::new(db.clone_pool());
+        reloaded.load().await.unwrap();
+        assert!(reloaded.get().hid.jiggler.enabled);
+        assert_eq!(reloaded.get().hid.jiggler.interval_secs, 120);
+    }
 
     #[tokio::test]
     async fn test_config_store() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
 
-        let store = ConfigStore::new(&db_path).await.unwrap();
+        let db = DatabasePool::new(&db_path).await.unwrap();
+        db.init_schema().await.unwrap();
 
-        // Check default config (now lock-free, no await needed)
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+
         let config = store.get();
         assert!(!config.initialized);
 
-        // Update config
         store
             .update(|c| {
                 c.initialized = true;
@@ -252,15 +192,119 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify update
         let config = store.get();
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
 
-        // Create new store instance and verify persistence
-        let store2 = ConfigStore::new(&db_path).await.unwrap();
+        let store2 = ConfigStore::new(db.clone_pool());
+        store2.load().await.unwrap();
         let config = store2.get();
         assert!(config.initialized);
         assert_eq!(config.web.http_port, 9000);
+    }
+
+    #[tokio::test]
+    async fn mcp_key_remains_readable_after_config_reload() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("mcp-key.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        let key = crate::mcp::generate_key();
+        store
+            .update(|config| {
+                config.mcp.enabled = true;
+                config.mcp.api_key_hash = Some(crate::mcp::hash_key(&key));
+                config.mcp.api_key = Some(key.clone());
+            })
+            .await
+            .unwrap();
+        let reloaded = ConfigStore::new(db.clone_pool());
+        reloaded.load().await.unwrap();
+        assert_eq!(reloaded.get().mcp.api_key.as_deref(), Some(key.as_str()));
+        assert_eq!(
+            reloaded.get().mcp.api_key_hash,
+            store.get().mcp.api_key_hash
+        );
+    }
+
+    #[tokio::test]
+    async fn loading_legacy_agent_cleans_persisted_model_credentials() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("legacy-agent.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let value =
+            serde_json::json!({"computer_use":{"enabled":true,"api_key":"legacy-model-secret"}});
+        sqlx::query("INSERT INTO config (key, value) VALUES ('app_config', ?1)")
+            .bind(value.to_string())
+            .execute(db.pool())
+            .await
+            .unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        assert!(!store.get().mcp.enabled);
+        assert!(store.get().mcp.api_key_hash.is_none());
+        let (persisted,): (String,) =
+            sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
+        assert!(!persisted.contains("legacy-model-secret"));
+        assert!(!persisted.contains("computer_use"));
+    }
+
+    #[tokio::test]
+    async fn failed_watchdog_persistence_does_not_update_cache() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = DatabasePool::new(&db_path).await.unwrap();
+        db.init_schema().await.unwrap();
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+
+        sqlx::query("DROP TABLE config")
+            .execute(&db.clone_pool())
+            .await
+            .unwrap();
+        assert!(store
+            .update(|config| config.watchdog.enabled = true)
+            .await
+            .is_err());
+        assert!(!store.get().watchdog.enabled);
+    }
+
+    #[tokio::test]
+    async fn load_removes_legacy_totp_fields_from_persisted_config() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("test.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+        let auth = value.get_mut("auth").unwrap().as_object_mut().unwrap();
+        auth.insert("totp_enabled".to_string(), serde_json::json!(true));
+        auth.insert(
+            "totp_secret".to_string(),
+            serde_json::json!("legacy-secret"),
+        );
+        sqlx::query("INSERT INTO config (key, value) VALUES ('app_config', ?1)")
+            .bind(value.to_string())
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        let store = ConfigStore::new(db.clone_pool());
+        store.load().await.unwrap();
+        let (persisted,): (String,) =
+            sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
+        assert!(!persisted.contains("totp_enabled"));
+        assert!(!persisted.contains("totp_secret"));
     }
 }

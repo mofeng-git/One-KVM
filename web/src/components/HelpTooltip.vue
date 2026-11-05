@@ -6,6 +6,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { HelpCircle } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 defineProps<{
   content: string
@@ -19,13 +20,15 @@ defineProps<{
   <TooltipProvider :delay-duration="200">
     <Tooltip>
       <TooltipTrigger as-child>
-        <button
+        <Button
           type="button"
-          class="inline-flex items-center justify-center text-muted-foreground/60 hover:text-muted-foreground transition-colors focus:outline-none"
-          :class="iconSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'"
+          variant="ghost"
+          size="icon-xs"
+          class="text-muted-foreground/60 hover:text-muted-foreground"
+          :class="iconSize === 'sm' ? 'size-3.5' : 'size-4'"
         >
-          <HelpCircle :class="iconSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'" />
-        </button>
+          <HelpCircle :class="iconSize === 'sm' ? 'size-3.5' : 'size-4'" />
+        </Button>
       </TooltipTrigger>
       <TooltipContent
         :side="side || 'top'"

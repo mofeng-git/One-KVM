@@ -1,61 +1,35 @@
-//! MSD Controller
-//!
-//! Manages the mass storage device lifecycle including:
-//! - Image mounting and unmounting
-//! - Virtual drive management
-//! - State tracking
-//! - Image downloads from URL
-
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::image::ImageManager;
-use super::monitor::{MsdHealthMonitor, MsdHealthStatus};
-use super::types::{DownloadProgress, DownloadStatus, DriveInfo, ImageInfo, MsdMode, MsdState};
-use crate::error::{AppError, Result};
+use super::monitor::MsdHealthMonitor;
+use super::types::{
+    DiskMode, DownloadProgress, DownloadStatus, DriveFileAccess, DriveInfo, ImageInfo,
+    MountedMedia, MountedMediaKind, MsdState,
+};
+use super::ventoy_drive::VentoyDrive;
+use crate::error::{AppError, MsdErrorCode, Result};
 use crate::otg::{MsdFunction, MsdLunConfig, OtgService};
 
-/// USB Gadget path (system constant)
-const GADGET_PATH: &str = "/sys/kernel/config/usb_gadget/one-kvm";
-
-/// MSD Controller
 pub struct MsdController {
-    /// OTG Service reference
     otg_service: Arc<OtgService>,
-    /// MSD function manager (provided by OtgService)
     msd_function: RwLock<Option<MsdFunction>>,
-    /// Current state
     state: RwLock<MsdState>,
-    /// Images storage path
     images_path: PathBuf,
-    /// Ventoy directory path
     ventoy_dir: PathBuf,
-    /// Virtual drive path
     drive_path: PathBuf,
-    /// Event bus for broadcasting state changes (optional)
     events: tokio::sync::RwLock<Option<Arc<crate::events::EventBus>>>,
-    /// Active downloads (download_id -> CancellationToken)
     downloads: Arc<RwLock<HashMap<String, CancellationToken>>>,
-    /// Operation mutex lock (prevents concurrent operations)
     operation_lock: Arc<RwLock<()>>,
-    /// Health monitor for error tracking and recovery
     monitor: Arc<MsdHealthMonitor>,
 }
 
 impl MsdController {
-    /// Create new MSD controller
-    ///
-    /// # Parameters
-    /// * `otg_service` - OTG service for gadget management
-    /// * `msd_dir` - Base directory for MSD storage
-    pub fn new(
-        otg_service: Arc<OtgService>,
-        msd_dir: impl Into<PathBuf>,
-    ) -> Self {
+    pub fn new(otg_service: Arc<OtgService>, msd_dir: impl Into<PathBuf>) -> Self {
         let msd_dir = msd_dir.into();
         let images_path = msd_dir.join("images");
         let ventoy_dir = msd_dir.join("ventoy");
@@ -74,39 +48,46 @@ impl MsdController {
         }
     }
 
-    /// Initialize the MSD controller
-    pub async fn init(&self) -> Result<()> {
+    pub async fn init(&self, ventoy_resource_dir: &Path) -> Result<()> {
         info!("Initializing MSD controller");
 
-        // 1. Ensure images directory exists
-        if let Err(e) = std::fs::create_dir_all(&self.images_path) {
-            warn!("Failed to create images directory: {}", e);
-        }
-        if let Err(e) = std::fs::create_dir_all(&self.ventoy_dir) {
-            warn!("Failed to create ventoy directory: {}", e);
+        match ventoy_img::init_resources(ventoy_resource_dir) {
+            Ok(()) => info!(
+                "Ventoy resources ready from {}",
+                ventoy_resource_dir.display()
+            ),
+            Err(e) => warn!(
+                "Failed to initialize Ventoy resources from {}: {}. Ventoy drive creation will be unavailable, but regular ISO/IMG MSD remains available",
+                ventoy_resource_dir.display(),
+                e
+            ),
         }
 
-        // 2. Request MSD function from OtgService
-        info!("Requesting MSD function from OtgService");
-        let msd_func = self.otg_service.enable_msd().await?;
+        tokio::fs::create_dir_all(&self.images_path).await?;
+        tokio::fs::create_dir_all(&self.ventoy_dir).await?;
 
-        // 3. Store function handle
+        info!("Fetching MSD function from OtgService");
+        let msd_func = self
+            .otg_service
+            .msd_function()
+            .await
+            .ok_or_else(|| AppError::from(MsdErrorCode::MsdUnavailable))?;
+
         *self.msd_function.write().await = Some(msd_func);
 
-        // 4. Update state
         let mut state = self.state.write().await;
+        state.disk_mode = if self.otg_service.msd_lun_capacity().await == 1 {
+            DiskMode::Single
+        } else {
+            DiskMode::Multi
+        };
         state.available = true;
 
-        // 5. Check for existing virtual drive
         if self.drive_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(&self.drive_path) {
-                state.drive_info = Some(DriveInfo {
-                    size: metadata.len(),
-                    used: 0,
-                    free: metadata.len(),
-                    initialized: true,
-                    path: self.drive_path.clone(),
-                });
+            if let Ok(drive_info) =
+                VentoyDrive::new(self.drive_path.clone()).raw_info(DriveFileAccess::Unknown)
+            {
+                state.drive_info = Some(drive_info.clone());
                 debug!(
                     "Found existing virtual drive: {}",
                     self.drive_path.display()
@@ -118,310 +99,479 @@ impl MsdController {
         Ok(())
     }
 
-    /// Get current state as SystemEvent
-    pub async fn current_state_event(&self) -> crate::events::SystemEvent {
-        let state = self.state.read().await;
-        crate::events::SystemEvent::MsdStateChanged {
-            mode: state.mode.clone(),
-            connected: state.connected,
-        }
-    }
-
-    /// Get current MSD state
     pub async fn state(&self) -> MsdState {
         self.state.read().await.clone()
     }
 
-    /// Set event bus for broadcasting state changes
     pub async fn set_event_bus(&self, events: std::sync::Arc<crate::events::EventBus>) {
-        *self.events.write().await = Some(events.clone());
-        // Also set event bus on the monitor for health notifications
-        self.monitor.set_event_bus(events).await;
+        *self.events.write().await = Some(events);
     }
 
-    /// Publish an event to the event bus
     async fn publish_event(&self, event: crate::events::SystemEvent) {
         if let Some(ref bus) = *self.events.read().await {
             bus.publish(event);
         }
     }
 
-    /// Check if MSD is available
-    pub async fn is_available(&self) -> bool {
-        self.state.read().await.available
+    async fn mark_device_info_dirty(&self) {
+        if let Some(ref bus) = *self.events.read().await {
+            bus.mark_device_info_dirty();
+        }
     }
 
-    /// Connect an image file
-    ///
-    /// # Parameters
-    /// * `image` - Image info to mount
-    /// * `cdrom` - Mount as CD-ROM (read-only, removable)
-    /// * `read_only` - Mount as read-only
-    pub async fn connect_image(
+    pub async fn mount_image(&self, image: &ImageInfo, cdrom: bool, read_only: bool) -> Result<()> {
+        self.mount_image_in_slot(image, cdrom, read_only, None)
+            .await
+    }
+
+    pub async fn mount_image_at_lun(
         &self,
         image: &ImageInfo,
         cdrom: bool,
         read_only: bool,
+        lun: u8,
     ) -> Result<()> {
-        // Acquire operation lock to prevent concurrent operations
-        let _op_guard = self.operation_lock.write().await;
+        self.mount_image_in_slot(image, cdrom, read_only, Some(lun))
+            .await
+    }
 
+    async fn mount_image_in_slot(
+        &self,
+        image: &ImageInfo,
+        cdrom: bool,
+        read_only: bool,
+        requested_lun: Option<u8>,
+    ) -> Result<()> {
+        let _op_guard = self.try_operation()?;
         let mut state = self.state.write().await;
+        let previous_state = state.clone();
 
-        if !state.available {
-            let err = AppError::Internal("MSD not available".to_string());
-            self.monitor
-                .report_error("MSD not available", "not_available")
-                .await;
-            return Err(err);
-        }
+        self.assert_available(&state).await?;
 
-        if state.connected {
-            return Err(AppError::Internal(
-                "Already connected. Disconnect first.".to_string(),
-            ));
-        }
-
-        // Verify image exists
         if !image.path.exists() {
             let error_msg = format!("Image file not found: {}", image.path.display());
             self.monitor
                 .report_error(&error_msg, "image_not_found")
                 .await;
-            return Err(AppError::Internal(error_msg));
+            return Err(MsdErrorCode::MsdResourceNotFound.into());
         }
 
-        // Configure LUN
-        let config = if cdrom {
-            MsdLunConfig::cdrom(image.path.clone())
-        } else {
-            MsdLunConfig::disk(image.path.clone(), read_only)
-        };
-
-        let gadget_path = PathBuf::from(GADGET_PATH);
-        if let Some(ref msd) = *self.msd_function.read().await {
-            if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
-                let error_msg = format!("Failed to configure LUN: {}", e);
-                self.monitor
-                    .report_error(&error_msg, "configfs_error")
-                    .await;
-                return Err(e);
-            }
-        } else {
-            let err = AppError::Internal("MSD function not initialized".to_string());
-            self.monitor
-                .report_error("MSD function not initialized", "not_initialized")
-                .await;
-            return Err(err);
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Image && media.id == image.id)
+        {
+            return Err(MsdErrorCode::MsdMediaAlreadyMounted.into());
         }
 
-        state.connected = true;
-        state.mode = MsdMode::Image;
-        state.current_image = Some(image.clone());
+        let lun = Self::select_lun(&state, requested_lun)?;
+
+        let media = MountedMedia::image(lun, image, cdrom, read_only);
+        if let Err(e) = self.configure_media(&media).await {
+            *state = previous_state;
+            return Err(e);
+        }
+        state.mounted_media.push(media);
 
         info!(
-            "Connected image: {} (cdrom={}, ro={})",
-            image.name, cdrom, read_only
+            "Mounted image: {} on LUN {} (cdrom={}, ro={})",
+            image.name,
+            lun,
+            cdrom,
+            cdrom || read_only
         );
 
-        // Release the lock before publishing events
         drop(state);
         drop(_op_guard);
 
-        // Report recovery if we were in an error state
-        if self.monitor.is_error().await {
-            self.monitor.report_recovered().await;
-        }
-
-        // Publish events
-        self.publish_event(crate::events::SystemEvent::MsdImageMounted {
-            image_id: image.id.clone(),
-            image_name: image.name.clone(),
-            size: image.size,
-            cdrom,
-        })
-        .await;
-
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::Image,
-            connected: true,
-        })
-        .await;
-
+        self.finish_connect_success().await;
         Ok(())
     }
 
-    /// Connect the virtual drive
-    pub async fn connect_drive(&self) -> Result<()> {
-        // Acquire operation lock to prevent concurrent operations
-        let _op_guard = self.operation_lock.write().await;
-
+    pub async fn mount_drive(&self) -> Result<()> {
+        let _op_guard = self.try_operation()?;
         let mut state = self.state.write().await;
+        let previous_state = state.clone();
 
+        self.assert_available(&state).await?;
+
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
+        {
+            return Err(MsdErrorCode::MsdMediaAlreadyMounted.into());
+        }
+
+        let drive_info = match self.drive_mount_info() {
+            Ok(info) => info,
+            Err(error) => {
+                if matches!(
+                    &error,
+                    AppError::Msd(msd) if msd.code() == MsdErrorCode::MsdDriveNotInitialized
+                ) {
+                    self.monitor
+                        .report_error("Virtual drive not initialized", "drive_not_found")
+                        .await;
+                }
+                return Err(error);
+            }
+        };
+        state.drive_info = Some(drive_info.clone());
+
+        let lun = Self::lowest_free_lun(&state)
+            .ok_or_else(|| AppError::from(MsdErrorCode::MsdMediaSlotsFull))?;
+
+        let media = MountedMedia::drive(lun, &drive_info);
+        if let Err(e) = self.configure_media(&media).await {
+            *state = previous_state;
+            return Err(e);
+        }
+        state.mounted_media.push(media);
+        state.drive_info =
+            Some(drive_info.with_file_access(DriveFileAccess::BlockedWhileConnected));
+
+        info!(
+            "Mounted virtual drive on LUN {}: {}",
+            lun,
+            self.drive_path.display()
+        );
+
+        drop(state);
+        drop(_op_guard);
+
+        self.finish_connect_success().await;
+        Ok(())
+    }
+
+    fn drive_mount_info(&self) -> Result<DriveInfo> {
+        VentoyDrive::new(self.drive_path.clone()).raw_info(DriveFileAccess::Unknown)
+    }
+
+    pub async fn set_drive_info(&self, drive_info: Option<DriveInfo>) {
+        self.state.write().await.drive_info = drive_info;
+        self.mark_device_info_dirty().await;
+    }
+
+    async fn assert_available(&self, state: &MsdState) -> Result<()> {
         if !state.available {
-            let err = AppError::Internal("MSD not available".to_string());
             self.monitor
                 .report_error("MSD not available", "not_available")
                 .await;
-            return Err(err);
+            return Err(MsdErrorCode::MsdUnavailable.into());
         }
+        Ok(())
+    }
 
-        if state.connected {
-            return Err(AppError::Internal(
-                "Already connected. Disconnect first.".to_string(),
-            ));
-        }
-
-        // Check drive exists
-        if !self.drive_path.exists() {
-            let err =
-                AppError::Internal("Virtual drive not initialized. Call init first.".to_string());
-            self.monitor
-                .report_error("Virtual drive not initialized", "drive_not_found")
-                .await;
-            return Err(err);
-        }
-
-        // Configure LUN as read-write disk
-        let config = MsdLunConfig::disk(self.drive_path.clone(), false);
-
-        let gadget_path = PathBuf::from(GADGET_PATH);
-        if let Some(ref msd) = *self.msd_function.read().await {
-            if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
-                let error_msg = format!("Failed to configure LUN: {}", e);
-                self.monitor
-                    .report_error(&error_msg, "configfs_error")
-                    .await;
-                return Err(e);
-            }
+    fn media_config(media: &MountedMedia) -> MsdLunConfig {
+        if media.cdrom {
+            MsdLunConfig::cdrom(media.path.clone())
         } else {
-            let err = AppError::Internal("MSD function not initialized".to_string());
-            self.monitor
-                .report_error("MSD function not initialized", "not_initialized")
-                .await;
-            return Err(err);
+            MsdLunConfig::disk(media.path.clone(), media.read_only)
         }
+    }
 
-        state.connected = true;
-        state.mode = MsdMode::Drive;
-        state.current_image = None;
+    fn lowest_free_lun(state: &MsdState) -> Option<u8> {
+        (0..state.disk_mode.capacity())
+            .find(|lun| !state.mounted_media.iter().any(|media| media.lun == *lun))
+    }
 
-        info!("Connected virtual drive: {}", self.drive_path.display());
+    fn select_lun(state: &MsdState, requested_lun: Option<u8>) -> Result<u8> {
+        let Some(lun) = requested_lun else {
+            return Self::lowest_free_lun(state)
+                .ok_or_else(|| AppError::from(MsdErrorCode::MsdMediaSlotsFull));
+        };
 
-        // Release the lock before publishing event
+        if lun >= state.disk_mode.capacity() {
+            return Err(MsdErrorCode::MsdInvalidRequest.into());
+        }
+        if state.mounted_media.iter().any(|media| media.lun == lun) {
+            return Err(MsdErrorCode::MsdMediaSlotsFull.into());
+        }
+        Ok(lun)
+    }
+
+    fn reset_mounts_for_mode(state: &mut MsdState, disk_mode: DiskMode) {
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
+        {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
+        state.disk_mode = disk_mode;
+        state.mounted_media.clear();
+    }
+
+    pub async fn set_disk_mode(&self, disk_mode: DiskMode) -> Result<bool> {
+        let _op_guard = self.try_operation()?;
+        let previous_state = {
+            let mut state = self.state.write().await;
+            self.assert_available(&state).await?;
+            if state.disk_mode == disk_mode {
+                return Ok(false);
+            }
+            let previous_state = state.clone();
+            state.usb_reenumerating = true;
+            previous_state
+        };
+        self.mark_device_info_dirty().await;
+
+        let switch_result = async {
+            self.otg_service
+                .set_msd_lun_capacity(disk_mode.capacity())
+                .await?;
+            self.otg_service
+                .msd_function()
+                .await
+                .ok_or_else(|| AppError::from(MsdErrorCode::MsdOperationFailed))
+        }
+        .await;
+
+        let msd_function = match switch_result {
+            Ok(msd_function) => msd_function,
+            Err(switch_error) => {
+                if let Err(rollback_error) = self.rollback_mode_switch(&previous_state).await {
+                    let mut state = self.state.write().await;
+                    state.available = false;
+                    state.mounted_media.clear();
+                    state.usb_reenumerating = false;
+                    *self.msd_function.write().await = None;
+                    let error_msg = format!(
+                        "Failed to switch MSD disk mode: {switch_error}; rollback failed: {rollback_error}"
+                    );
+                    self.monitor
+                        .report_error(&error_msg, "disk_mode_rollback_failed")
+                        .await;
+                    self.mark_device_info_dirty().await;
+                    return Err(MsdErrorCode::MsdOperationFailed.into());
+                }
+
+                let mut state = self.state.write().await;
+                *state = previous_state;
+                state.usb_reenumerating = false;
+                let error_msg = format!("Failed to switch MSD disk mode: {switch_error}");
+                self.monitor
+                    .report_error(&error_msg, "disk_mode_switch_failed")
+                    .await;
+                self.mark_device_info_dirty().await;
+                return Err(MsdErrorCode::MsdOperationFailed.into());
+            }
+        };
+        *self.msd_function.write().await = Some(msd_function);
+
+        let mut state = self.state.write().await;
+        Self::reset_mounts_for_mode(&mut state, disk_mode);
+        state.usb_reenumerating = false;
+        info!("Switched MSD disk mode to {:?}", disk_mode);
+
         drop(state);
         drop(_op_guard);
 
-        // Report recovery if we were in an error state
+        self.mark_device_info_dirty().await;
+        Ok(true)
+    }
+
+    pub async fn unmount_image(&self, image_id: &str) -> Result<()> {
+        self.unmount_media(|media| media.kind == MountedMediaKind::Image && media.id == image_id)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn unmount_drive(&self) -> Result<()> {
+        self.unmount_media(|media| media.kind == MountedMediaKind::Drive)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn unmount_lun(&self, lun: u8) -> Result<bool> {
+        self.unmount_media(|media| media.lun == lun).await
+    }
+
+    async fn unmount_media<F>(&self, predicate: F) -> Result<bool>
+    where
+        F: Fn(&MountedMedia) -> bool,
+    {
+        let _op_guard = self.try_operation()?;
+
+        let mut state = self.state.write().await;
+        let Some(index) = state.mounted_media.iter().position(predicate) else {
+            debug!("Requested media was not mounted, skipping unmount");
+            return Ok(false);
+        };
+        let media = state.mounted_media[index].clone();
+
+        self.disconnect_lun(media.lun).await?;
+        state.mounted_media.remove(index);
+        if media.kind == MountedMediaKind::Drive {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
+        info!("Unmounted media");
+
+        drop(state);
+        drop(_op_guard);
+
+        self.mark_device_info_dirty().await;
+
+        Ok(true)
+    }
+
+    async fn configure_media(&self, media: &MountedMedia) -> Result<()> {
+        if let Err(e) = self
+            .otg_service
+            .configure_msd_lun(media.lun, &Self::media_config(media))
+            .await
+        {
+            let error_msg = format!("Failed to configure LUN {}: {}", media.lun, e);
+            self.monitor
+                .report_error(&error_msg, "configfs_error")
+                .await;
+            return Err(match e {
+                AppError::Msd(error) => AppError::Msd(error),
+                error => {
+                    warn!(%error, "Unclassified MSD media configuration failure");
+                    MsdErrorCode::MsdOperationFailed.into()
+                }
+            });
+        }
+        Ok(())
+    }
+
+    async fn disconnect_lun(&self, lun: u8) -> Result<()> {
+        let gadget_path = self.active_gadget_path().await?;
+        let msd_hold = self.msd_function.read().await;
+        let msd = msd_hold
+            .as_ref()
+            .ok_or_else(|| AppError::from(MsdErrorCode::MsdUnavailable))?;
+        msd.disconnect_lun_async(&gadget_path, lun).await
+    }
+
+    async fn rollback_mode_switch(&self, previous_state: &MsdState) -> Result<()> {
+        self.otg_service
+            .set_msd_lun_capacity(previous_state.disk_mode.capacity())
+            .await?;
+        let msd_function = self
+            .otg_service
+            .msd_function()
+            .await
+            .ok_or_else(|| AppError::from(MsdErrorCode::MsdOperationFailed))?;
+        *self.msd_function.write().await = Some(msd_function);
+        for media in &previous_state.mounted_media {
+            self.configure_media(media).await?;
+        }
+        Ok(())
+    }
+
+    async fn finish_connect_success(&self) {
         if self.monitor.is_error().await {
             self.monitor.report_recovered().await;
         }
-
-        // Publish event
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::Drive,
-            connected: true,
-        })
-        .await;
-
-        Ok(())
+        self.mark_device_info_dirty().await;
     }
 
-    /// Disconnect current storage
     pub async fn disconnect(&self) -> Result<()> {
-        // Acquire operation lock to prevent concurrent operations
-        let _op_guard = self.operation_lock.write().await;
+        let _op_guard = self.try_operation()?;
 
         let mut state = self.state.write().await;
-
-        if !state.connected {
-            debug!("Nothing connected, skipping disconnect");
+        if state.mounted_media.is_empty() {
+            debug!("Nothing mounted, skipping disconnect");
             return Ok(());
         }
 
-        let gadget_path = PathBuf::from(GADGET_PATH);
-        if let Some(ref msd) = *self.msd_function.read().await {
-            msd.disconnect_lun_async(&gadget_path, 0).await?;
+        let mounted_media = state.mounted_media.clone();
+        let mut disconnected = Vec::new();
+        for media in &mounted_media {
+            if let Err(error) = self.disconnect_lun(media.lun).await {
+                for prior in &disconnected {
+                    if let Err(restore_error) = self.configure_media(prior).await {
+                        state.available = false;
+                        warn!(
+                            lun = media.lun,
+                            disconnect_error = %error,
+                            %restore_error,
+                            "Failed to restore MSD media after disconnect failure"
+                        );
+                        return Err(MsdErrorCode::MsdDisconnectFailed.into());
+                    }
+                }
+                return Err(error);
+            }
+            disconnected.push(media.clone());
         }
 
-        state.connected = false;
-        state.mode = MsdMode::None;
-        state.current_image = None;
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
+        {
+            state.drive_info = state
+                .drive_info
+                .take()
+                .map(|info| info.with_file_access(DriveFileAccess::Unknown));
+        }
+        state.mounted_media.clear();
+        info!("Disconnected all mounted media");
 
-        info!("Disconnected storage");
-
-        // Release the lock before publishing events
         drop(state);
         drop(_op_guard);
 
-        // Publish events
-        self.publish_event(crate::events::SystemEvent::MsdImageUnmounted)
-            .await;
-
-        self.publish_event(crate::events::SystemEvent::MsdStateChanged {
-            mode: MsdMode::None,
-            connected: false,
-        })
-        .await;
+        self.mark_device_info_dirty().await;
 
         Ok(())
     }
 
-    /// Get images storage path
-    pub fn images_path(&self) -> &PathBuf {
-        &self.images_path
+    pub async fn is_drive_connected(&self) -> bool {
+        self.state
+            .read()
+            .await
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive)
     }
 
-    /// Get ventoy directory path
-    pub fn ventoy_dir(&self) -> &PathBuf {
-        &self.ventoy_dir
+    pub async fn delete_image(&self, image_id: &str) -> Result<()> {
+        let _op_guard = self.try_operation()?;
+        let state = self.state.read().await;
+        if state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Image && media.id == image_id)
+        {
+            return Err(MsdErrorCode::MsdMediaInUse.into());
+        }
+
+        ImageManager::new(self.images_path.clone()).delete(image_id)
     }
 
-    /// Get virtual drive path
-    pub fn drive_path(&self) -> &PathBuf {
-        &self.drive_path
-    }
-
-    /// Check if currently connected
-    pub async fn is_connected(&self) -> bool {
-        self.state.read().await.connected
-    }
-
-    /// Get current mode
-    pub async fn mode(&self) -> MsdMode {
-        self.state.read().await.mode.clone()
-    }
-
-    /// Update drive info
-    pub async fn update_drive_info(&self, info: DriveInfo) {
-        let mut state = self.state.write().await;
-        state.drive_info = Some(info);
-    }
-
-    /// Start downloading an image from URL
-    ///
-    /// Returns the download_id that can be used to track or cancel the download.
-    /// Progress is reported via MsdDownloadProgress events.
     pub async fn download_image(
         &self,
         url: String,
         filename: Option<String>,
     ) -> Result<DownloadProgress> {
+        let parsed_url =
+            reqwest::Url::parse(&url).map_err(|_| AppError::from(MsdErrorCode::MsdInvalidUrl))?;
+        if !matches!(parsed_url.scheme(), "http" | "https") {
+            return Err(MsdErrorCode::MsdInvalidUrl.into());
+        }
+
         let download_id = uuid::Uuid::new_v4().to_string();
         let cancel_token = CancellationToken::new();
 
-        // Register download
         {
             let mut downloads = self.downloads.write().await;
             downloads.insert(download_id.clone(), cancel_token.clone());
         }
 
-        // Extract filename for initial response
         let display_filename = filename
             .clone()
             .unwrap_or_else(|| url.rsplit('/').next().unwrap_or("download").to_string());
 
-        // Create initial progress
         let initial_progress = DownloadProgress {
             download_id: download_id.clone(),
             url: url.clone(),
@@ -430,10 +580,9 @@ impl MsdController {
             total_bytes: None,
             progress_pct: None,
             status: DownloadStatus::Started,
-            error: None,
+            error_code: None,
         };
 
-        // Publish started event
         self.publish_event(crate::events::SystemEvent::MsdDownloadProgress {
             download_id: download_id.clone(),
             url: url.clone(),
@@ -442,21 +591,19 @@ impl MsdController {
             total_bytes: None,
             progress_pct: None,
             status: "started".to_string(),
+            error_code: None,
         })
         .await;
 
-        // Clone what we need for the spawned task
         let images_path = self.images_path.clone();
         let events = self.events.read().await.clone();
         let downloads = self.downloads.clone();
         let download_id_clone = download_id.clone();
         let url_clone = url.clone();
 
-        // Spawn download task
         tokio::spawn(async move {
             let manager = ImageManager::new(images_path);
 
-            // Create progress callback
             let events_for_callback = events.clone();
             let download_id_for_callback = download_id_clone.clone();
             let url_for_callback = url_clone.clone();
@@ -474,22 +621,20 @@ impl MsdController {
                         total_bytes: total,
                         progress_pct,
                         status: "in_progress".to_string(),
+                        error_code: None,
                     });
                 }
             };
 
-            // Run download
             let result = manager
                 .download_from_url(&url_clone, filename, progress_callback)
                 .await;
 
-            // Remove from active downloads
             {
                 let mut downloads_guard = downloads.write().await;
                 downloads_guard.remove(&download_id_clone);
             }
 
-            // Publish completion event
             match result {
                 Ok(image_info) => {
                     if let Some(ref bus) = events {
@@ -501,11 +646,16 @@ impl MsdController {
                             total_bytes: Some(image_info.size),
                             progress_pct: Some(100.0),
                             status: "completed".to_string(),
+                            error_code: None,
                         });
                     }
                 }
                 Err(e) => {
-                    warn!("Download failed: {}", e);
+                    warn!(error = %e, "MSD image download failed");
+                    let code = match e {
+                        AppError::Msd(error) => error.code(),
+                        _ => MsdErrorCode::MsdOperationFailed,
+                    };
                     if let Some(ref bus) = events {
                         bus.publish(crate::events::SystemEvent::MsdDownloadProgress {
                             download_id: download_id_clone,
@@ -514,7 +664,8 @@ impl MsdController {
                             bytes_downloaded: 0,
                             total_bytes: None,
                             progress_pct: None,
-                            status: format!("failed: {}", e),
+                            status: "failed".to_string(),
+                            error_code: Some(code.as_str().to_string()),
                         });
                     }
                 }
@@ -524,7 +675,6 @@ impl MsdController {
         Ok(initial_progress)
     }
 
-    /// Cancel an active download
     pub async fn cancel_download(&self, download_id: &str) -> Result<()> {
         let mut downloads = self.downloads.write().await;
 
@@ -533,68 +683,50 @@ impl MsdController {
             info!("Download cancelled: {}", download_id);
             Ok(())
         } else {
-            Err(AppError::NotFound(format!(
-                "Download not found: {}",
-                download_id
-            )))
+            Err(MsdErrorCode::MsdResourceNotFound.into())
         }
     }
 
-    /// Get list of active download IDs
-    pub async fn active_downloads(&self) -> Vec<String> {
-        let downloads = self.downloads.read().await;
-        downloads.keys().cloned().collect()
+    async fn active_gadget_path(&self) -> Result<PathBuf> {
+        self.otg_service
+            .gadget_path()
+            .await
+            .ok_or_else(|| AppError::from(MsdErrorCode::MsdUnavailable))
     }
 
-    /// Shutdown the controller
+    fn try_operation(&self) -> Result<tokio::sync::RwLockWriteGuard<'_, ()>> {
+        self.operation_lock
+            .try_write()
+            .map_err(|_| MsdErrorCode::MsdOperationInProgress.into())
+    }
+
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down MSD controller");
 
-        // 1. Disconnect if connected
         if let Err(e) = self.disconnect().await {
             warn!("Error disconnecting during shutdown: {}", e);
         }
 
-        // 2. Notify OtgService to disable MSD
-        info!("Disabling MSD function in OtgService");
-        self.otg_service.disable_msd().await?;
-
-        // 3. Clear local state
         *self.msd_function.write().await = None;
 
         let mut state = self.state.write().await;
         state.available = false;
+        state.mounted_media.clear();
+        state.usb_reenumerating = false;
 
         info!("MSD controller shutdown complete");
         Ok(())
     }
 
-    /// Get the health monitor reference
     pub fn monitor(&self) -> &Arc<MsdHealthMonitor> {
         &self.monitor
-    }
-
-    /// Get current health status
-    pub async fn health_status(&self) -> MsdHealthStatus {
-        self.monitor.status().await
-    }
-
-    /// Check if the MSD is healthy
-    pub async fn is_healthy(&self) -> bool {
-        self.monitor.is_healthy().await
-    }
-}
-
-impl Drop for MsdController {
-    fn drop(&mut self) {
-        // Cleanup is handled by OtgGadgetManager when the gadget is torn down
-        // Individual controllers don't need to cleanup the ConfigFS
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::msd::MULTI_DISK_MSD_LUNS;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -605,11 +737,22 @@ mod tests {
 
         let controller = MsdController::new(otg_service, &msd_dir);
 
-        // Check that MSD is not initialized (msd_function is None)
         let state = controller.state().await;
         assert!(!state.available);
         assert!(controller.images_path.ends_with("images"));
         assert!(controller.drive_path.ends_with("ventoy.img"));
+    }
+
+    #[tokio::test]
+    async fn concurrent_operations_have_a_stable_error_code() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = MsdController::new(Arc::new(OtgService::new()), temp_dir.path());
+        let _guard = controller.operation_lock.write().await;
+
+        assert!(matches!(
+            controller.try_operation().unwrap_err(),
+            AppError::Msd(error) if error.code() == MsdErrorCode::MsdOperationInProgress
+        ));
     }
 
     #[tokio::test]
@@ -622,7 +765,243 @@ mod tests {
 
         let state = controller.state().await;
         assert!(!state.available);
-        assert!(!state.connected);
-        assert_eq!(state.mode, MsdMode::None);
+        assert_eq!(state.disk_mode, DiskMode::Single);
+        assert!(state.mounted_media.is_empty());
+    }
+
+    #[tokio::test]
+    async fn drive_mount_metadata_ignores_cached_drive_info() {
+        let temp_dir = TempDir::new().unwrap();
+        let controller = MsdController::new(Arc::new(OtgService::new()), temp_dir.path());
+        std::fs::create_dir_all(&controller.ventoy_dir).unwrap();
+        std::fs::write(&controller.drive_path, vec![0u8; 128]).unwrap();
+        controller.state.write().await.drive_info = Some(DriveInfo::from_raw(
+            controller.drive_path.clone(),
+            64,
+            DriveFileAccess::Available,
+        ));
+
+        std::fs::write(&controller.drive_path, vec![0u8; 256]).unwrap();
+        let info = controller.drive_mount_info().unwrap();
+
+        assert_eq!(info.size, 256);
+        assert_eq!(info.used, None);
+        assert_eq!(info.file_access, DriveFileAccess::Unknown);
+        let media = MountedMedia::drive(0, &info);
+        let config = MsdController::media_config(&media);
+        assert_eq!(config.file, controller.drive_path);
+    }
+
+    #[test]
+    fn single_disk_mode_only_exposes_lun_zero() {
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Single);
+        assert_eq!(state.disk_mode.capacity(), 1);
+        assert_eq!(MsdController::lowest_free_lun(&state), Some(0));
+
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.iso");
+        std::fs::write(&image_path, b"iso").unwrap();
+        let image = ImageInfo::new("test".into(), "test.iso".into(), image_path, 3);
+        state
+            .mounted_media
+            .push(MountedMedia::image(0, &image, true, false));
+
+        assert_eq!(MsdController::lowest_free_lun(&state), None);
+        let config = MsdController::media_config(&state.mounted_media[0]);
+        assert!(config.cdrom);
+        assert!(config.ro);
+    }
+
+    #[test]
+    fn multi_disk_mode_allocates_lowest_free_lun() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+
+        for lun in [0, 1, 3] {
+            let image_path = temp_dir.path().join(format!("test{lun}.img"));
+            std::fs::write(&image_path, b"img").unwrap();
+            let image = ImageInfo::new(
+                format!("test{lun}"),
+                format!("test{lun}.img"),
+                image_path,
+                3,
+            );
+            state
+                .mounted_media
+                .push(MountedMedia::image(lun, &image, false, false));
+        }
+
+        assert_eq!(MsdController::lowest_free_lun(&state), Some(2));
+    }
+
+    #[test]
+    fn explicit_lun_selection_rejects_occupied_and_out_of_range_slots() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.img");
+        std::fs::write(&image_path, b"img").unwrap();
+        let image = ImageInfo::new("test".into(), "test.img".into(), image_path, 3);
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+        state
+            .mounted_media
+            .push(MountedMedia::image(3, &image, false, true));
+
+        assert_eq!(MsdController::select_lun(&state, Some(5)).unwrap(), 5);
+        assert!(matches!(
+            MsdController::select_lun(&state, Some(3)).unwrap_err(),
+            AppError::Msd(error) if error.code() == MsdErrorCode::MsdMediaSlotsFull
+        ));
+        assert!(matches!(
+            MsdController::select_lun(&state, Some(8)).unwrap_err(),
+            AppError::Msd(error) if error.code() == MsdErrorCode::MsdInvalidRequest
+        ));
+    }
+
+    #[test]
+    fn multi_disk_mode_supports_eight_images_and_rejects_ninth_slot() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+
+        for lun in 0..MULTI_DISK_MSD_LUNS {
+            let image_path = temp_dir.path().join(format!("test{lun}.img"));
+            std::fs::write(&image_path, b"img").unwrap();
+            let image = ImageInfo::new(
+                format!("test{lun}"),
+                format!("test{lun}.img"),
+                image_path,
+                3,
+            );
+            let next_lun = MsdController::lowest_free_lun(&state).unwrap();
+            assert_eq!(next_lun, lun);
+            state
+                .mounted_media
+                .push(MountedMedia::image(next_lun, &image, false, false));
+        }
+
+        assert_eq!(state.mounted_media.len(), 8);
+        assert_eq!(MsdController::lowest_free_lun(&state), None);
+    }
+
+    #[test]
+    fn multi_disk_mode_supports_drive_plus_seven_images() {
+        let temp_dir = TempDir::new().unwrap();
+        let drive_path = temp_dir.path().join("ventoy.img");
+        std::fs::write(&drive_path, b"drive").unwrap();
+        let drive = DriveInfo::from_raw(drive_path, 5, DriveFileAccess::Unknown);
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+        state.mounted_media.push(MountedMedia::drive(0, &drive));
+
+        for lun in 1..MULTI_DISK_MSD_LUNS {
+            let image_path = temp_dir.path().join(format!("test{lun}.img"));
+            std::fs::write(&image_path, b"img").unwrap();
+            let image = ImageInfo::new(
+                format!("test{lun}"),
+                format!("test{lun}.img"),
+                image_path,
+                3,
+            );
+            state
+                .mounted_media
+                .push(MountedMedia::image(lun, &image, false, false));
+        }
+
+        assert_eq!(state.mounted_media.len(), 8);
+        assert_eq!(MsdController::lowest_free_lun(&state), None);
+        assert!(state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive));
+    }
+
+    #[test]
+    fn mode_switch_clears_mount_state() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.img");
+        std::fs::write(&image_path, b"img").unwrap();
+        let image = ImageInfo::new("test".into(), "test.img".into(), image_path, 3);
+        let mut state = MsdState::default();
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Multi);
+        state
+            .mounted_media
+            .push(MountedMedia::image(0, &image, false, false));
+
+        MsdController::reset_mounts_for_mode(&mut state, DiskMode::Single);
+
+        assert_eq!(state.disk_mode, DiskMode::Single);
+        assert_eq!(state.disk_mode.capacity(), 1);
+        assert!(state.mounted_media.is_empty());
+    }
+
+    #[test]
+    fn duplicate_image_and_drive_detection_use_media_identity() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.img");
+        std::fs::write(&image_path, b"img").unwrap();
+        let image = ImageInfo::new("test".into(), "test.img".into(), image_path, 3);
+        let drive = DriveInfo::from_raw(
+            temp_dir.path().join("ventoy.img"),
+            5,
+            DriveFileAccess::Unknown,
+        );
+        let mut state = MsdState::default();
+        state
+            .mounted_media
+            .push(MountedMedia::image(0, &image, false, false));
+        state.mounted_media.push(MountedMedia::drive(1, &drive));
+
+        assert!(state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Image && media.id == "test"));
+        assert!(state
+            .mounted_media
+            .iter()
+            .any(|media| media.kind == MountedMediaKind::Drive));
+    }
+
+    #[tokio::test]
+    async fn delete_image_is_serialized_with_mount_operations() {
+        let temp_dir = TempDir::new().unwrap();
+        let otg_service = Arc::new(OtgService::new());
+        let controller = MsdController::new(otg_service, temp_dir.path());
+        std::fs::create_dir_all(&controller.images_path).unwrap();
+        let image_path = controller.images_path.join("test.img");
+        std::fs::write(&image_path, b"img").unwrap();
+        let image = ImageManager::new(controller.images_path.clone())
+            .get_by_name("test.img")
+            .unwrap();
+
+        controller
+            .state
+            .write()
+            .await
+            .mounted_media
+            .push(MountedMedia::image(0, &image, false, false));
+        assert!(controller.delete_image(&image.id).await.is_err());
+        assert!(image_path.exists());
+
+        controller.state.write().await.mounted_media.clear();
+        controller.delete_image(&image.id).await.unwrap();
+        assert!(!image_path.exists());
+    }
+
+    #[test]
+    fn slot_configs_force_cdrom_read_only() {
+        let temp_dir = TempDir::new().unwrap();
+        let image_path = temp_dir.path().join("test.iso");
+        std::fs::write(&image_path, b"iso").unwrap();
+        let image = ImageInfo::new("test".into(), "test.iso".into(), image_path, 3);
+        let mut state = MsdState::default();
+        state
+            .mounted_media
+            .push(MountedMedia::image(0, &image, true, false));
+
+        let config = MsdController::media_config(&state.mounted_media[0]);
+        assert!(config.cdrom);
+        assert!(config.ro);
     }
 }

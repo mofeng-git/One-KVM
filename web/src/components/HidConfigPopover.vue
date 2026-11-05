@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusConsolePanel } from "@/composables/useConsoleAppearance"
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -7,26 +8,22 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { MousePointer, Move, Loader2, RefreshCw } from 'lucide-vue-next'
+import { MousePointer, Move, Loader2 } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import { configApi } from '@/api'
-import { useSystemStore } from '@/stores/system'
+import { useConfigStore } from '@/stores/config'
+import { HidBackend, OtgHidProfile } from '@/types/generated'
+import { usesCh9329 } from '@/lib/hidGuide'
 
 const props = defineProps<{
   open: boolean
   mouseMode?: 'absolute' | 'relative'
+  side?: 'top' | 'right' | 'bottom' | 'left'
 }>()
 
 const emit = defineEmits<{
@@ -35,7 +32,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const systemStore = useSystemStore()
+const configStore = useConfigStore()
 
 const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
 
@@ -52,7 +49,6 @@ function loadMouseMoveSendIntervalFromStorage(): number {
   )
 }
 
-// Mouse Settings (real-time)
 const mouseThrottle = ref<number>(
   loadMouseMoveSendIntervalFromStorage()
 )
@@ -60,9 +56,7 @@ const showCursor = ref<boolean>(
   localStorage.getItem('hidShowCursor') !== 'false' // default true
 )
 
-// Watch showCursor changes and sync to localStorage + notify ConsoleView
 watch(showCursor, (newValue, oldValue) => {
-  // Only sync if value actually changed (avoid triggering on initialization)
   if (newValue !== oldValue) {
     localStorage.setItem('hidShowCursor', newValue ? 'true' : 'false')
     window.dispatchEvent(new CustomEvent('hidCursorVisibilityChanged', {
@@ -71,171 +65,155 @@ watch(showCursor, (newValue, oldValue) => {
   }
 })
 
-// HID Device Settings (requires apply)
-const hidBackend = ref<'otg' | 'ch9329' | 'none'>('none')
-const devicePath = ref<string>('')
-const baudrate = ref<number>(9600)
-
-// UI state
-const applying = ref(false)
-const loadingDevices = ref(false)
-
-// Device lists
-const serialDevices = ref<Array<{ path: string; name: string }>>([])
-const udcDevices = ref<Array<{ name: string }>>([])
-
-// Button display text - simplified to just show label
 const buttonText = computed(() => t('actionbar.hidConfig'))
-
-// Available device paths based on backend type
-const availableDevicePaths = computed(() => {
-  if (hidBackend.value === 'ch9329') {
-    return serialDevices.value
-  } else if (hidBackend.value === 'otg') {
-    // For OTG, we show UDC devices
-    return udcDevices.value.map(udc => ({
-      path: udc.name,
-      name: udc.name,
-    }))
+const hidSaving = ref(false)
+const hidControlsDisabled = computed(() => hidSaving.value || configStore.hidLoading || !configStore.hid)
+const jigglerEnabled = computed(() => configStore.hid?.jiggler?.enabled ?? false)
+const jigglerInterval = ref<string | number>(60)
+const jigglerIntervalInvalid = ref(false)
+const hasMouseInterface = computed(() => {
+  const hid = configStore.hid
+  if (!hid || hid.backend === HidBackend.None) return false
+  if (hid.backend !== HidBackend.Otg) return true
+  if (hid.otg_profile === OtgHidProfile.LegacyKeyboard) return false
+  if (hid.otg_profile === OtgHidProfile.Custom) {
+    return !!(hid.otg_functions?.mouse_relative || hid.otg_functions?.mouse_absolute)
   }
-  return []
+  return true
 })
 
-// Load devices
-async function loadDevices() {
-  loadingDevices.value = true
+watch(() => [configStore.hid?.jiggler?.interval_secs, configStore.hid?.jiggler?.enabled] as const, ([interval]) => {
+  jigglerInterval.value = interval ?? 60
+  jigglerIntervalInvalid.value = false
+}, { immediate: true })
+
+async function saveJiggler(update: { enabled?: boolean; interval_secs?: number }) {
+  if (hidControlsDisabled.value) return
+  hidSaving.value = true
   try {
-    const result = await configApi.listDevices()
-    serialDevices.value = result.serial
-    udcDevices.value = result.udc
-  } catch (e) {
-    console.info('[HidConfig] Failed to load devices')
+    await configStore.updateHid({ jiggler: update })
+  } catch (error) {
+    toast.error(t('config.updateFailed'), {
+      description: error instanceof Error ? error.message : undefined,
+    })
+    await configStore.refreshHid().catch(() => undefined)
+    jigglerInterval.value = configStore.hid?.jiggler?.interval_secs ?? 60
   } finally {
-    loadingDevices.value = false
+    hidSaving.value = false
   }
 }
 
-// Initialize from current config
-function initializeFromCurrent() {
-  // Re-sync real-time settings from localStorage
-  mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
+function toggleJiggler(enabled: boolean) {
+  if (enabled && !hasMouseInterface.value) return
+  void saveJiggler({ enabled })
+}
 
-  const storedCursor = localStorage.getItem('hidShowCursor') !== 'false'
-  showCursor.value = storedCursor
+function saveJigglerInterval() {
+  if (hidControlsDisabled.value || !jigglerEnabled.value) return
+  const interval = Number(jigglerInterval.value)
+  jigglerIntervalInvalid.value = !Number.isInteger(interval) || interval < 10 || interval > 3600
+  if (jigglerIntervalInvalid.value || interval === configStore.hid?.jiggler?.interval_secs) return
+  void saveJiggler({ interval_secs: interval })
+}
+const supportsLinuxCompatibility = computed(() => usesCh9329(configStore.hid?.backend))
+const supportsMacosCompatibility = computed(() =>
+  supportsLinuxCompatibility.value || configStore.hid?.backend === HidBackend.Otg
+)
+const macosDragRequiresInterfaces = computed(() => {
+  const hid = configStore.hid
+  if (hid?.backend !== HidBackend.Otg) return false
+  switch (hid.otg_profile) {
+    case OtgHidProfile.LegacyKeyboard:
+    case OtgHidProfile.LegacyMouseRelative:
+      return true
+    case OtgHidProfile.Custom:
+      return hid.otg_functions?.mouse_relative === false || hid.otg_functions?.mouse_absolute === false
+    default:
+      return false
+  }
+})
 
-  // Initialize HID device settings from system state
-  const hid = systemStore.hid
-  if (hid) {
-    hidBackend.value = (hid.backend as 'otg' | 'ch9329' | 'none') || 'none'
+type MouseCompatibilityOption = 'ch9329_hybrid_mouse' | 'mouse_macos_drag'
+
+async function updateMouseCompatibility(option: MouseCompatibilityOption, enabled: boolean) {
+  if (hidControlsDisabled.value || !supportsMacosCompatibility.value) return
+  if (option === 'ch9329_hybrid_mouse' && !supportsLinuxCompatibility.value) return
+  if (option === 'mouse_macos_drag' && enabled && macosDragRequiresInterfaces.value) return
+  if ((configStore.hid?.[option] ?? false) === enabled) return
+
+  hidSaving.value = true
+  try {
+    // Keep both preferences: the backend gives macOS priority when both are enabled.
+    await configStore.updateHid({ [option]: enabled })
+  } catch (error) {
+    toast.error(t('config.updateFailed'), {
+      description: error instanceof Error ? error.message : undefined,
+    })
+    // Read back persisted state, including when the response was lost after applying.
+    await configStore.refreshHid().catch(() => undefined)
+  } finally {
+    hidSaving.value = false
   }
 }
 
-// Toggle mouse mode (real-time)
 function toggleMouseMode() {
+  if (hidControlsDisabled.value || configStore.hid?.backend === HidBackend.Bluetooth) return
   const newMode = props.mouseMode === 'absolute' ? 'relative' : 'absolute'
   emit('update:mouseMode', newMode)
 
   // Update backend config
-  configApi.update({
-    hid: {
-      mouse_absolute: newMode === 'absolute',
-    },
+  hidSaving.value = true
+  configStore.updateHid({
+    mouse_absolute: newMode === 'absolute',
   }).catch(_e => {
     console.info('[HidConfig] Failed to update mouse mode')
     toast.error(t('config.updateFailed'))
+  }).finally(() => {
+    hidSaving.value = false
   })
 }
 
-// Update mouse throttle (real-time)
 function handleThrottleChange(value: number[] | undefined) {
   if (!value || value.length === 0 || value[0] === undefined) return
   const throttleValue = clampMouseMoveSendIntervalMs(value[0])
   mouseThrottle.value = throttleValue
-  // Save to localStorage
   localStorage.setItem('hidMouseThrottle', String(throttleValue))
-  // Notify ConsoleView (storage event doesn't fire in same tab)
   window.dispatchEvent(new CustomEvent('hidMouseSendIntervalChanged', {
     detail: { intervalMs: throttleValue },
   }))
 }
 
-// Handle backend change
-function handleBackendChange(backend: unknown) {
-  if (typeof backend !== 'string') return
-  hidBackend.value = backend as 'otg' | 'ch9329' | 'none'
-
-  // Clear device path when changing backend
-  devicePath.value = ''
-
-  // Auto-select first device if available
-  if (availableDevicePaths.value.length > 0 && availableDevicePaths.value[0]) {
-    devicePath.value = availableDevicePaths.value[0].path
-  }
-}
-
-// Handle device path change
-function handleDevicePathChange(path: unknown) {
-  if (typeof path !== 'string') return
-  devicePath.value = path
-}
-
-// Handle baudrate change
-function handleBaudrateChange(rate: unknown) {
-  if (typeof rate !== 'string') return
-  baudrate.value = Number(rate)
-}
-
-// Apply HID device configuration
-async function applyHidConfig() {
-  applying.value = true
-  try {
-    const config: Record<string, unknown> = {
-      backend: hidBackend.value,
-    }
-
-    if (hidBackend.value === 'ch9329') {
-      config.ch9329_port = devicePath.value
-      config.ch9329_baudrate = baudrate.value
-    } else if (hidBackend.value === 'otg') {
-      config.otg_udc = devicePath.value
-    }
-
-    await configApi.update({ hid: config })
-
-    toast.success(t('config.applied'))
-
-    // HID state will be updated via WebSocket device_info event
-  } catch (e) {
-    console.info('[HidConfig] Failed to apply config:', e)
-    // Error toast already shown by API layer
-  } finally {
-    applying.value = false
-  }
-}
-
-// Watch open state
-watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    // Load devices on first open
-    if (serialDevices.value.length === 0) {
-      loadDevices()
-    }
-    // Initialize from current config
-    initializeFromCurrent()
-  }
+watch(() => props.open, (open) => {
+  if (!open) return
+  mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
+  showCursor.value = localStorage.getItem('hidShowCursor') !== 'false'
+  if (!hidSaving.value) void configStore.refreshHid().catch(() => undefined)
+  jigglerInterval.value = configStore.hid?.jiggler?.interval_secs ?? 60
+  jigglerIntervalInvalid.value = false
 })
 </script>
 
 <template>
   <Popover :open="open" @update:open="emit('update:open', $event)">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs">
-        <MousePointer v-if="mouseMode === 'absolute'" class="h-4 w-4" />
-        <Move v-else class="h-4 w-4" />
+      <Button
+        variant="ghost"
+        size="sm"
+        class="size-8 sm:w-auto p-0 sm:px-2 sm:gap-1.5 text-xs"
+        :aria-label="buttonText"
+        :title="buttonText"
+      >
+        <MousePointer v-if="mouseMode === 'absolute'" class="size-3.5 sm:size-4" />
+        <Move v-else class="size-3.5 sm:size-4" />
         <span class="hidden sm:inline">{{ buttonText }}</span>
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="w-[320px] p-3" align="start">
+    <PopoverContent
+      @open-auto-focus="focusConsolePanel"
+      class="console-config-panel w-[min(320px,92vw)] max-h-(--reka-popover-content-available-height) overflow-y-auto p-3"
+      align="start"
+      :side="props.side ?? 'bottom'"
+    >
       <div class="space-y-3">
         <h4 class="text-sm font-medium">{{ t('actionbar.hidConfig') }}</h4>
 
@@ -254,20 +232,22 @@ watch(() => props.open, (isOpen) => {
             <div class="flex gap-2">
               <Button
                 :variant="mouseMode === 'absolute' ? 'default' : 'outline'"
+                :disabled="hidControlsDisabled || configStore.hid?.backend === HidBackend.Bluetooth"
                 size="sm"
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
               >
-                <MousePointer class="h-3.5 w-3.5 mr-1" />
+                <MousePointer class="size-3.5 mr-1" />
                 {{ t('actionbar.absolute') }}
               </Button>
               <Button
                 :variant="mouseMode === 'relative' ? 'default' : 'outline'"
+                :disabled="hidControlsDisabled || configStore.hid?.backend === HidBackend.Bluetooth"
                 size="sm"
                 class="flex-1 h-8 text-xs"
                 @click="toggleMouseMode"
               >
-                <Move class="h-3.5 w-3.5 mr-1" />
+                <Move class="size-3.5 mr-1" />
                 {{ t('actionbar.relative') }}
               </Button>
             </div>
@@ -301,97 +281,81 @@ watch(() => props.open, (isOpen) => {
             <Label class="text-xs text-muted-foreground">{{ t('actionbar.showCursor') }}</Label>
             <Switch v-model="showCursor" />
           </div>
+
+          <div class="space-y-2" :aria-busy="hidSaving">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-mouse-jiggler" class="text-xs text-muted-foreground">{{ t('actionbar.mouseJiggler') }}</Label>
+                <HelpTooltip :content="t('actionbar.mouseJigglerHelp')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-mouse-jiggler"
+                :model-value="jigglerEnabled"
+                :disabled="hidControlsDisabled || (!hasMouseInterface && !jigglerEnabled)"
+                @update:model-value="toggleJiggler"
+              />
+            </div>
+            <div v-if="jigglerEnabled" class="flex items-center justify-between gap-3">
+              <Label for="hid-jiggler-interval" class="text-xs text-muted-foreground">{{ t('actionbar.jigglerInterval') }}</Label>
+              <div class="flex items-center gap-2">
+                <Input
+                  id="hid-jiggler-interval"
+                  v-model="jigglerInterval"
+                  type="number" min="10" max="3600" step="1" size="sm"
+                  class="w-20 text-xs"
+                  :disabled="hidControlsDisabled"
+                  :aria-invalid="jigglerIntervalInvalid"
+                  :aria-describedby="jigglerIntervalInvalid ? 'hid-jiggler-interval-error' : undefined"
+                  @input="jigglerIntervalInvalid = false"
+                  @blur="saveJigglerInterval"
+                  @keydown.enter.prevent="saveJigglerInterval"
+                />
+                <span class="text-xs text-muted-foreground">{{ t('actionbar.jigglerSeconds') }}</span>
+              </div>
+            </div>
+            <p v-if="jigglerEnabled && jigglerIntervalInvalid" id="hid-jiggler-interval-error" role="alert" class="text-xs text-destructive">{{ t('actionbar.jigglerIntervalInvalid') }}</p>
+            <p v-if="!hasMouseInterface && configStore.hid" class="text-xs text-muted-foreground">{{ t('actionbar.jigglerNoMouse') }}</p>
+          </div>
+          <p v-if="hidSaving" role="status" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 class="size-3 shrink-0 animate-spin" />
+            {{ t('actionbar.applying') }}
+          </p>
         </div>
 
-        <!-- HID Device Settings (Requires Apply) -->
-        <Separator />
+        <template v-if="supportsMacosCompatibility">
+          <Separator />
+          <div class="space-y-3" :aria-busy="hidSaving">
+            <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.mouseCompatibility') }}</h5>
 
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.hidDeviceSettings') }}</h5>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-6 w-6"
-              :disabled="loadingDevices"
-              @click="loadDevices"
-            >
-              <RefreshCw :class="['h-3.5 w-3.5', loadingDevices && 'animate-spin']" />
-            </Button>
-          </div>
+            <div v-if="supportsLinuxCompatibility" class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-linux-compatibility" class="text-xs">{{ t('settings.ch9329HybridMouse') }}</Label>
+                <HelpTooltip :content="t('settings.ch9329HybridMouseDesc')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-linux-compatibility"
+                :model-value="configStore.hid?.ch9329_hybrid_mouse ?? false"
+                :disabled="hidControlsDisabled"
+                @update:model-value="updateMouseCompatibility('ch9329_hybrid_mouse', $event)"
+              />
+            </div>
 
-          <!-- Backend Type -->
-          <div class="space-y-2">
-            <Label class="text-xs text-muted-foreground">{{ t('actionbar.backend') }}</Label>
-            <Select
-              :model-value="hidBackend"
-              @update:model-value="handleBackendChange"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="otg" class="text-xs">USB OTG</SelectItem>
-                <SelectItem value="ch9329" class="text-xs">CH9329 (Serial)</SelectItem>
-                <SelectItem value="none" class="text-xs">{{ t('common.disabled') }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <Label for="hid-macos-compatibility" class="text-xs">{{ t('settings.mouseMacosDrag') }}</Label>
+                <HelpTooltip :content="t('settings.mouseMacosDragDesc')" icon-size="sm" />
+              </div>
+              <Switch
+                id="hid-macos-compatibility"
+                :model-value="configStore.hid?.mouse_macos_drag ?? false"
+                :disabled="hidControlsDisabled || (macosDragRequiresInterfaces && !configStore.hid?.mouse_macos_drag)"
+                @update:model-value="updateMouseCompatibility('mouse_macos_drag', $event)"
+              />
+            </div>
 
-          <!-- Device Path (OTG or CH9329) -->
-          <div v-if="hidBackend !== 'none'" class="space-y-2">
-            <Label class="text-xs text-muted-foreground">{{ t('actionbar.devicePath') }}</Label>
-            <Select
-              :model-value="devicePath"
-              @update:model-value="handleDevicePathChange"
-              :disabled="availableDevicePaths.length === 0"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue :placeholder="t('actionbar.selectDevice')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="device in availableDevicePaths"
-                  :key="device.path"
-                  :value="device.path"
-                  class="text-xs"
-                >
-                  {{ device.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <p v-if="macosDragRequiresInterfaces" class="text-xs text-warning">{{ t('actionbar.macosDragRequiresBoth') }}</p>
           </div>
-
-          <!-- Baudrate (CH9329 only) -->
-          <div v-if="hidBackend === 'ch9329'" class="space-y-2">
-            <Label class="text-xs text-muted-foreground">{{ t('actionbar.baudrate') }}</Label>
-            <Select
-              :model-value="String(baudrate)"
-              @update:model-value="handleBaudrateChange"
-            >
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="9600" class="text-xs">9600</SelectItem>
-                <SelectItem value="19200" class="text-xs">19200</SelectItem>
-                <SelectItem value="38400" class="text-xs">38400</SelectItem>
-                <SelectItem value="57600" class="text-xs">57600</SelectItem>
-                <SelectItem value="115200" class="text-xs">115200</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Apply Button -->
-          <Button
-            class="w-full h-8 text-xs"
-            :disabled="applying"
-            @click="applyHidConfig"
-          >
-            <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
-          </Button>
-          </div>
+        </template>
       </div>
     </PopoverContent>
   </Popover>

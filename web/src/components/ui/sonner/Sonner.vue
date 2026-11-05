@@ -14,7 +14,7 @@ const props = defineProps<ToasterProps>()
       '--normal-bg': 'var(--popover)',
       '--normal-text': 'var(--popover-foreground)',
       '--normal-border': 'var(--border)',
-      '--border-radius': 'var(--radius)',
+      '--border-radius': 'calc(var(--radius) + 0.1875rem)',
     }"
     v-bind="props"
   >
@@ -36,7 +36,7 @@ const props = defineProps<ToasterProps>()
       </div>
     </template>
     <template #close-icon>
-      <XIcon class="size-4" />
+      <XIcon class="size-3 shrink-0" />
     </template>
   </Sonner>
 </template>

@@ -1,0 +1,189 @@
+name: Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish GitHub Release
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: Release tag name when publishing
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm install
+          npm run build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  deb:
+    runs-on: ubuntu-22.04
+    needs: frontend
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          # The Docker workflow builds the same targets with the same Cross images.
+          shared-key: linux-cross-release
+          key: ${{ hashFiles('Cross.toml', 'build/cross/Dockerfile.*') }}
+          cache-all-crates: true
+
+      - name: Install cross
+        run: cargo install cross --version 0.2.5 --locked
+
+      - name: Build linux binary
+        run: bash build/build-images.sh
+
+      - name: Package deb
+        run: bash build/package-deb.sh
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-deb
+          path: target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    runs-on: windows-2022
+    needs: frontend
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Prepare vcpkg and dependencies
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:VCPKG_DEFAULT_TRIPLET = "x64-windows-static"
+          $env:VCPKG_INSTALLED_DIR = Join-Path $pwd "vcpkg_installed"
+
+          if (-not (Test-Path $env:VCPKG_ROOT)) {
+            git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
+          }
+
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-install-root="$env:VCPKG_INSTALLED_DIR"
+
+          $tripletRoot = Join-Path $env:VCPKG_INSTALLED_DIR $env:VCPKG_DEFAULT_TRIPLET
+          $env:TURBOJPEG_SOURCE = "explicit"
+          $env:TURBOJPEG_LIB_DIR = Join-Path $tripletRoot "lib"
+          $env:TURBOJPEG_INCLUDE_DIR = Join-Path $tripletRoot "include"
+
+          "VCPKG_ROOT=$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_DEFAULT_TRIPLET=$env:VCPKG_DEFAULT_TRIPLET" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_SOURCE=$env:TURBOJPEG_SOURCE" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_LIB_DIR=$env:TURBOJPEG_LIB_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TURBOJPEG_INCLUDE_DIR=$env:TURBOJPEG_INCLUDE_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-msvc-release
+          key: ${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: .\build\windows\build.ps1 -Configuration release -Package
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-windows-exe
+          path: target/x86_64-pc-windows-msvc/release/one-kvm_*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    runs-on: ubuntu-22.04
+    needs: [deb, windows]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        run: |
+          if [ -z "${{ inputs.release_tag }}" ]; then
+            echo "release_tag is required when publish_release is true"
+            exit 1
+          fi
+
+      - name: Download deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: one-kvm-deb
+          path: release-artifacts/deb
+
+      - name: Download exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: one-kvm-windows-exe
+          path: release-artifacts/windows
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            release-artifacts/deb/*.deb
+            release-artifacts/windows/*.exe

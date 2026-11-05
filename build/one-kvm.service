@@ -1,12 +1,14 @@
 [Unit]
 Description=One-KVM IP-KVM Service
 Documentation=https://github.com/mofeng-git/One-KVM
-After=network.target
+After=network-online.target bluetooth.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
+# Example for older Intel GPUs:
+# Environment=LIBVA_DRIVER_NAME=i965
 ExecStart=/usr/bin/one-kvm
 Restart=on-failure
 RestartSec=5

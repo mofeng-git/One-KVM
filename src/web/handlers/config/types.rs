@@ -1,12 +1,29 @@
 use crate::config::*;
 use crate::error::AppError;
+use crate::rtsp::RtspServiceStatus;
 use crate::rustdesk::config::RustDeskConfig;
-use crate::video::encoder::BitratePreset;
-use serde::Deserialize;
+use crate::vnc::VncServiceStatus;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde::{Deserialize, Serialize};
+#[cfg(unix)]
 use std::path::Path;
 use typeshare::typeshare;
 
-// ===== Auth Config =====
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct WatchdogConfigUpdate {
+    pub enabled: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+pub struct WatchdogConfigResponse {
+    pub enabled: bool,
+    pub supported: bool,
+    pub running: bool,
+    pub reason: Option<String>,
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct AuthConfigUpdate {
@@ -14,10 +31,6 @@ pub struct AuthConfigUpdate {
 }
 
 impl AuthConfigUpdate {
-    pub fn validate(&self) -> crate::error::Result<()> {
-        Ok(())
-    }
-
     pub fn apply_to(&self, config: &mut AuthConfig) {
         if let Some(allow_multiple) = self.single_user_allow_multiple_sessions {
             config.single_user_allow_multiple_sessions = allow_multiple;
@@ -25,7 +38,6 @@ impl AuthConfigUpdate {
     }
 }
 
-// ===== Video Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct VideoConfigUpdate {
@@ -38,6 +50,22 @@ pub struct VideoConfigUpdate {
 }
 
 impl VideoConfigUpdate {
+    pub fn ignore_source_following_parameters(&mut self) {
+        if self.format.is_some()
+            || self.width.is_some()
+            || self.height.is_some()
+            || self.fps.is_some()
+        {
+            tracing::debug!(
+                "Ignoring client-supplied format, resolution, and FPS for source-following video input"
+            );
+        }
+        self.format = None;
+        self.width = None;
+        self.height = None;
+        self.fps = None;
+    }
+
     pub fn validate(&self) -> crate::error::Result<()> {
         if let Some(width) = self.width {
             if !(320..=7680).contains(&width) {
@@ -90,24 +118,47 @@ impl VideoConfigUpdate {
     }
 }
 
-// ===== Stream Config =====
+#[cfg(test)]
+mod video_config_update_tests {
+    use super::VideoConfigUpdate;
 
-/// Stream 配置响应（包含 has_turn_password 字段）
+    #[test]
+    fn source_following_parameters_are_silently_discarded() {
+        let mut update = VideoConfigUpdate {
+            device: Some("/dev/video0".to_string()),
+            format: Some("MJPEG".to_string()),
+            width: Some(7680),
+            height: Some(4320),
+            fps: Some(120),
+            quality: Some(90),
+        };
+        update.ignore_source_following_parameters();
+
+        assert_eq!(update.device.as_deref(), Some("/dev/video0"));
+        assert!(update.format.is_none());
+        assert!(update.width.is_none());
+        assert!(update.height.is_none());
+        assert!(update.fps.is_none());
+        assert_eq!(update.quality, Some(90));
+        assert!(update.validate().is_ok());
+    }
+}
+
+/// Stream configuration response
 #[typeshare]
 #[derive(Debug, serde::Serialize)]
 pub struct StreamConfigResponse {
     pub mode: StreamMode,
     pub encoder: EncoderType,
     pub bitrate_preset: BitratePreset,
-    /// 是否有公共 ICE 服务器可用（编译时确定）
+    /// Whether public ICE servers are available (compile-time decision)
     pub has_public_ice_servers: bool,
-    /// 当前是否正在使用公共 ICE 服务器（STUN/TURN 都为空时）
+    /// Whether public ICE servers are currently in use (when STUN/TURN are unset)
     pub using_public_ice_servers: bool,
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
-    /// 指示是否已设置 TURN 密码（实际密码不返回）
-    pub has_turn_password: bool,
+    pub turn_password: Option<String>,
 }
 
 impl From<&StreamConfig> for StreamConfigResponse {
@@ -122,7 +173,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
             stun_server: config.stun_server.clone(),
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
-            has_turn_password: config.turn_password.is_some(),
+            turn_password: config.turn_password.clone(),
         }
     }
 }
@@ -209,8 +260,6 @@ impl StreamConfigUpdate {
         }
     }
 }
-
-// ===== HID Config =====
 
 /// OTG USB device descriptor configuration update
 #[typeshare]
@@ -299,19 +348,113 @@ impl OtgHidFunctionsUpdate {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct Ch9329DescriptorConfigUpdate {
+    pub vendor_id: Option<u16>,
+    pub product_id: Option<u16>,
+    pub manufacturer: Option<String>,
+    pub product: Option<String>,
+    pub serial_number: Option<String>,
+}
+
+impl Ch9329DescriptorConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        Self::validate_optional_string("Manufacturer", self.manufacturer.as_deref())?;
+        Self::validate_optional_string("Product", self.product.as_deref())?;
+        Self::validate_optional_string("Serial number", self.serial_number.as_deref())?;
+        Ok(())
+    }
+
+    fn validate_optional_string(label: &str, value: Option<&str>) -> crate::error::Result<()> {
+        if let Some(value) = value {
+            if value.as_bytes().len() > 23 {
+                return Err(AppError::BadRequest(format!(
+                    "{} string too long (max 23 bytes for CH9329)",
+                    label
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut Ch9329DescriptorConfig) {
+        if let Some(v) = self.vendor_id {
+            config.vendor_id = v;
+        }
+        if let Some(v) = self.product_id {
+            config.product_id = v;
+        }
+        if let Some(ref v) = self.manufacturer {
+            config.manufacturer = v.clone();
+        }
+        if let Some(ref v) = self.product {
+            config.product = v.clone();
+        }
+        if let Some(ref v) = self.serial_number {
+            config.serial_number = if v.is_empty() { None } else { Some(v.clone()) };
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct MouseJigglerConfigUpdate {
+    pub enabled: Option<bool>,
+    pub interval_secs: Option<u32>,
+}
+
+impl MouseJigglerConfigUpdate {
+    fn apply_to(&self, config: &mut MouseJigglerConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(interval) = self.interval_secs {
+            config.interval_secs = interval;
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
+    pub jiggler: Option<MouseJigglerConfigUpdate>,
+    /// Request-only; never persisted or replayed during startup.
+    pub bluetooth_reset_pairing: Option<bool>,
+    pub bluetooth: Option<crate::config::BluetoothHidConfig>,
     pub backend: Option<HidBackend>,
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
+    pub ch9329_hybrid_mouse: Option<bool>,
+    #[serde(alias = "ch9329_macos_drag")]
+    pub mouse_macos_drag: Option<bool>,
+    pub ch9329_descriptor: Option<Ch9329DescriptorConfigUpdate>,
     pub otg_udc: Option<String>,
     pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub otg_profile: Option<OtgHidProfile>,
     pub otg_functions: Option<OtgHidFunctionsUpdate>,
+    pub otg_keyboard_leds: Option<bool>,
     pub mouse_absolute: Option<bool>,
+}
+
+#[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize, Default)]
+pub struct OtgConfigUpdate {
+    pub hid: Option<HidConfigUpdate>,
+    pub msd: Option<MsdConfigUpdate>,
+    pub network: Option<OtgNetworkConfigUpdate>,
+    pub uac: Option<crate::config::UacConfig>,
 }
 
 impl HidConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(update) = &self.jiggler {
+            let mut config = MouseJigglerConfig::default();
+            update.apply_to(&mut config);
+            config.validate()?;
+        }
+        if let Some(config) = &self.bluetooth {
+            config.validate()?;
+        }
         if let Some(baudrate) = self.ch9329_baudrate {
             let valid_rates = [9600, 19200, 38400, 57600, 115200];
             if !valid_rates.contains(&baudrate) {
@@ -323,10 +466,19 @@ impl HidConfigUpdate {
         if let Some(ref desc) = self.otg_descriptor {
             desc.validate()?;
         }
+        if let Some(ref desc) = self.ch9329_descriptor {
+            desc.validate()?;
+        }
         Ok(())
     }
 
     pub fn apply_to(&self, config: &mut HidConfig) {
+        if let Some(update) = &self.jiggler {
+            update.apply_to(&mut config.jiggler);
+        }
+        if let Some(bluetooth) = &self.bluetooth {
+            config.bluetooth = bluetooth.clone();
+        }
         if let Some(backend) = self.backend.clone() {
             config.backend = backend;
         }
@@ -335,6 +487,15 @@ impl HidConfigUpdate {
         }
         if let Some(baudrate) = self.ch9329_baudrate {
             config.ch9329_baudrate = baudrate;
+        }
+        if let Some(enabled) = self.ch9329_hybrid_mouse {
+            config.ch9329_hybrid_mouse = enabled;
+        }
+        if let Some(enabled) = self.mouse_macos_drag {
+            config.mouse_macos_drag = enabled;
+        }
+        if let Some(ref desc) = self.ch9329_descriptor {
+            desc.apply_to(&mut config.ch9329_descriptor);
         }
         if let Some(ref udc) = self.otg_udc {
             config.otg_udc = Some(udc.clone());
@@ -348,20 +509,58 @@ impl HidConfigUpdate {
         if let Some(ref functions) = self.otg_functions {
             functions.apply_to(&mut config.otg_functions);
         }
+        if let Some(enabled) = self.otg_keyboard_leds {
+            config.otg_keyboard_leds = enabled;
+        }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;
         }
     }
 }
 
-// ===== MSD Config =====
 #[typeshare]
+#[cfg(unix)]
+#[derive(Debug, Deserialize)]
+pub struct OtgNetworkConfigUpdate {
+    pub enabled: Option<bool>,
+    pub driver_mode: Option<OtgNetworkDriverMode>,
+    pub bridge_interface: Option<String>,
+    pub host_mac: Option<String>,
+    pub device_mac: Option<String>,
+}
+
+#[cfg(unix)]
+impl OtgNetworkConfigUpdate {
+    pub fn apply_to(&self, config: &mut OtgNetworkConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(driver_mode) = self.driver_mode {
+            config.driver_mode = driver_mode;
+        }
+        if let Some(ref interface) = self.bridge_interface {
+            config.bridge_interface = interface.trim().to_string();
+        }
+        if let Some(ref mac) = self.host_mac {
+            config.host_mac = mac.trim().to_ascii_lowercase();
+        }
+        if let Some(ref mac) = self.device_mac {
+            config.device_mac = mac.trim().to_ascii_lowercase();
+        }
+    }
+}
+
+#[typeshare]
+#[cfg(unix)]
 #[derive(Debug, Deserialize)]
 pub struct MsdConfigUpdate {
     pub enabled: Option<bool>,
     pub msd_dir: Option<String>,
+    pub flash_inquiry_string: Option<String>,
+    pub cdrom_inquiry_string: Option<String>,
 }
 
+#[cfg(unix)]
 impl MsdConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
         if let Some(ref dir) = self.msd_dir {
@@ -375,6 +574,12 @@ impl MsdConfigUpdate {
                 ));
             }
         }
+        if let Some(ref value) = self.flash_inquiry_string {
+            MsdConfig::validate_inquiry_string("Flash", value)?;
+        }
+        if let Some(ref value) = self.cdrom_inquiry_string {
+            MsdConfig::validate_inquiry_string("CD-ROM", value)?;
+        }
         Ok(())
     }
 
@@ -385,29 +590,33 @@ impl MsdConfigUpdate {
         if let Some(ref dir) = self.msd_dir {
             config.msd_dir = dir.trim().to_string();
         }
+        if let Some(ref value) = self.flash_inquiry_string {
+            config.flash_inquiry_string = value.trim().to_string();
+        }
+        if let Some(ref value) = self.cdrom_inquiry_string {
+            config.cdrom_inquiry_string = value.trim().to_string();
+        }
     }
 }
 
-// ===== ATX Config =====
-
-/// Update for a single ATX key configuration
+/// Update for a single ATX output binding
 #[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct AtxKeyConfigUpdate {
-    pub driver: Option<crate::atx::AtxDriverType>,
+pub struct AtxOutputBindingUpdate {
+    pub enabled: Option<bool>,
     pub device: Option<String>,
     pub pin: Option<u32>,
     pub active_level: Option<crate::atx::ActiveLevel>,
 }
 
-/// Update for LED sensing configuration
+/// Update for ATX GPIO input sensing
 #[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct AtxLedConfigUpdate {
+pub struct AtxInputBindingUpdate {
     pub enabled: Option<bool>,
-    pub gpio_chip: Option<String>,
-    pub gpio_pin: Option<u32>,
-    pub inverted: Option<bool>,
+    pub device: Option<String>,
+    pub pin: Option<u32>,
+    pub active_level: Option<crate::atx::ActiveLevel>,
 }
 
 /// ATX configuration update request
@@ -415,38 +624,193 @@ pub struct AtxLedConfigUpdate {
 #[derive(Debug, Deserialize)]
 pub struct AtxConfigUpdate {
     pub enabled: Option<bool>,
+    pub driver: Option<crate::atx::AtxDriverType>,
+    pub device: Option<String>,
+    pub baud_rate: Option<u32>,
     /// Power button configuration
-    pub power: Option<AtxKeyConfigUpdate>,
+    pub power: Option<AtxOutputBindingUpdate>,
     /// Reset button configuration
-    pub reset: Option<AtxKeyConfigUpdate>,
+    pub reset: Option<AtxOutputBindingUpdate>,
     /// LED sensing configuration
-    pub led: Option<AtxLedConfigUpdate>,
+    pub led: Option<AtxInputBindingUpdate>,
+    /// HDD activity sensing configuration
+    pub hdd: Option<AtxInputBindingUpdate>,
     /// Network interface for WOL packets (empty = auto)
     pub wol_interface: Option<String>,
 }
 
 impl AtxConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
-        // Validate power key config if present
-        if let Some(ref power) = self.power {
-            Self::validate_key_config(power, "power")?;
+        if let Some(baud_rate) = self.baud_rate {
+            if baud_rate == 0 {
+                return Err(AppError::BadRequest(
+                    "ATX baud_rate must be greater than 0".to_string(),
+                ));
+            }
         }
-        // Validate reset key config if present
-        if let Some(ref reset) = self.reset {
-            Self::validate_key_config(reset, "reset")?;
+
+        for (name, binding) in [
+            ("power", self.power.as_ref()),
+            ("reset", self.reset.as_ref()),
+        ] {
+            if let Some(binding) = binding {
+                Self::validate_output_binding_update(binding, name)?;
+            }
         }
+
+        for (name, binding) in [("led", self.led.as_ref()), ("hdd", self.hdd.as_ref())] {
+            if let Some(binding) = binding {
+                Self::validate_input_binding_update(binding, name)?;
+            }
+        }
+
         Ok(())
     }
 
-    fn validate_key_config(key: &AtxKeyConfigUpdate, name: &str) -> crate::error::Result<()> {
-        if let Some(ref device) = key.device {
-            if !device.is_empty() && !std::path::Path::new(device).exists() {
-                return Err(AppError::BadRequest(format!(
-                    "{} device '{}' does not exist",
-                    name, device
-                )));
+    pub fn validate_with_current(&self, current: &AtxConfig) -> crate::error::Result<()> {
+        self.validate()?;
+
+        // Validate with full context after applying the patch payload.
+        let mut merged = current.clone();
+        self.apply_to(&mut merged);
+
+        if merged.driver == crate::atx::AtxDriverType::None {
+            if merged.enabled {
+                return Err(AppError::BadRequest(
+                    "ATX driver must not be none when ATX is enabled".to_string(),
+                ));
+            }
+            return Ok(());
+        }
+
+        merged.normalize();
+
+        if !merged.enabled {
+            return Ok(());
+        }
+
+        Self::validate_effective_config(&merged)?;
+        Ok(())
+    }
+
+    fn validate_device_path(device: &str, name: &str) -> crate::error::Result<()> {
+        let trimmed = device.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest(format!(
+                "{} device cannot be empty",
+                name
+            )));
+        }
+
+        if !cfg!(windows) && !std::path::Path::new(trimmed).exists() {
+            return Err(AppError::BadRequest(format!(
+                "{} device '{}' does not exist",
+                name, trimmed
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn validate_output_binding_update(
+        binding: &AtxOutputBindingUpdate,
+        name: &str,
+    ) -> crate::error::Result<()> {
+        if let Some(ref device) = binding.device {
+            if !device.trim().is_empty() {
+                Self::validate_device_path(device, name)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn validate_input_binding_update(
+        binding: &AtxInputBindingUpdate,
+        name: &str,
+    ) -> crate::error::Result<()> {
+        if let Some(ref device) = binding.device {
+            if !device.trim().is_empty() {
+                Self::validate_device_path(device, name)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_effective_config(config: &AtxConfig) -> crate::error::Result<()> {
+        match config.driver {
+            crate::atx::AtxDriverType::Gpio => {
+                for (name, binding) in [("power", &config.power), ("reset", &config.reset)] {
+                    if binding.enabled {
+                        Self::validate_device_path(&binding.device, name)?;
+                    }
+                }
+
+                for (name, binding) in [("led", &config.led), ("hdd", &config.hdd)] {
+                    if binding.enabled {
+                        Self::validate_device_path(&binding.device, name)?;
+                    }
+                }
+            }
+            crate::atx::AtxDriverType::UsbRelay => {
+                Self::validate_device_path(&config.device, "ATX LCUS HID relay")?;
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+            }
+            crate::atx::AtxDriverType::Serial => {
+                Self::validate_device_path(&config.device, "ATX LCUS serial relay")?;
+                if config.baud_rate == 0 {
+                    return Err(AppError::BadRequest(
+                        "ATX baud_rate must be greater than 0".to_string(),
+                    ));
+                }
+                Self::validate_output_channel(
+                    &config.power,
+                    "power",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+                Self::validate_output_channel(
+                    &config.reset,
+                    "reset",
+                    1,
+                    crate::atx::LCUS_RELAY_MAX_CHANNEL as u32,
+                )?;
+            }
+            crate::atx::AtxDriverType::None => {}
+        };
+
+        Ok(())
+    }
+
+    fn validate_output_channel(
+        binding: &crate::atx::AtxOutputBinding,
+        name: &str,
+        min: u32,
+        max: u32,
+    ) -> crate::error::Result<()> {
+        if !binding.enabled {
+            return Ok(());
+        }
+
+        if binding.pin < min || binding.pin > max {
+            return Err(AppError::BadRequest(format!(
+                "{} channel must be between {} and {}",
+                name, min, max
+            )));
+        }
+
         Ok(())
     }
 
@@ -454,23 +818,38 @@ impl AtxConfigUpdate {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
         }
+        if let Some(driver) = self.driver {
+            config.driver = driver;
+        }
+        if let Some(ref device) = self.device {
+            config.device = device.clone();
+        }
+        if let Some(baud_rate) = self.baud_rate {
+            config.baud_rate = baud_rate;
+        }
         if let Some(ref power) = self.power {
-            Self::apply_key_update(power, &mut config.power);
+            Self::apply_output_binding_update(power, &mut config.power);
         }
         if let Some(ref reset) = self.reset {
-            Self::apply_key_update(reset, &mut config.reset);
+            Self::apply_output_binding_update(reset, &mut config.reset);
         }
         if let Some(ref led) = self.led {
-            Self::apply_led_update(led, &mut config.led);
+            Self::apply_input_binding_update(led, &mut config.led);
+        }
+        if let Some(ref hdd) = self.hdd {
+            Self::apply_input_binding_update(hdd, &mut config.hdd);
         }
         if let Some(ref wol_interface) = self.wol_interface {
             config.wol_interface = wol_interface.clone();
         }
     }
 
-    fn apply_key_update(update: &AtxKeyConfigUpdate, config: &mut crate::atx::AtxKeyConfig) {
-        if let Some(driver) = update.driver {
-            config.driver = driver;
+    fn apply_output_binding_update(
+        update: &AtxOutputBindingUpdate,
+        config: &mut crate::atx::AtxOutputBinding,
+    ) {
+        if let Some(enabled) = update.enabled {
+            config.enabled = enabled;
         }
         if let Some(ref device) = update.device {
             config.device = device.clone();
@@ -478,28 +857,30 @@ impl AtxConfigUpdate {
         if let Some(pin) = update.pin {
             config.pin = pin;
         }
-        if let Some(level) = update.active_level {
-            config.active_level = level;
+        if let Some(active_level) = update.active_level {
+            config.active_level = active_level;
         }
     }
 
-    fn apply_led_update(update: &AtxLedConfigUpdate, config: &mut crate::atx::AtxLedConfig) {
+    fn apply_input_binding_update(
+        update: &AtxInputBindingUpdate,
+        config: &mut crate::atx::AtxInputBinding,
+    ) {
         if let Some(enabled) = update.enabled {
             config.enabled = enabled;
         }
-        if let Some(ref chip) = update.gpio_chip {
-            config.gpio_chip = chip.clone();
+        if let Some(ref device) = update.device {
+            config.device = device.clone();
         }
-        if let Some(pin) = update.gpio_pin {
-            config.gpio_pin = pin;
+        if let Some(pin) = update.pin {
+            config.pin = pin;
         }
-        if let Some(inverted) = update.inverted {
-            config.inverted = inverted;
+        if let Some(active_level) = update.active_level {
+            config.active_level = active_level;
         }
     }
 }
 
-// ===== Audio Config =====
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct AudioConfigUpdate {
@@ -533,11 +914,32 @@ impl AudioConfigUpdate {
     }
 }
 
-// ===== RustDesk Config =====
+/// hbbs/hbbr `-k` relay key: standard Base64 encoding of exactly 32 bytes (typically 44 chars with padding).
+fn validate_rustdesk_relay_key(key: &str) -> Result<(), AppError> {
+    let decoded = STANDARD.decode(key.as_bytes()).map_err(|_| {
+        AppError::BadRequest(
+            "Relay key must be standard Base64 (32 raw bytes, e.g. hbbs/hbbr -k output)".into(),
+        )
+    })?;
+    if decoded.len() != 32 {
+        return Err(AppError::BadRequest(
+            format!(
+                "Relay key must decode to exactly 32 bytes (got {} bytes after Base64 decode)",
+                decoded.len()
+            )
+            .into(),
+        ));
+    }
+    Ok(())
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct RustDeskConfigUpdate {
     pub enabled: Option<bool>,
+    pub mode: Option<crate::rustdesk::config::RustDeskMode>,
+    pub codec: Option<crate::rustdesk::config::RustDeskCodec>,
+    pub direct_access_port: Option<u16>,
     pub rendezvous_server: Option<String>,
     pub relay_server: Option<String>,
     pub relay_key: Option<String>,
@@ -546,6 +948,11 @@ pub struct RustDeskConfigUpdate {
 
 impl RustDeskConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if self.direct_access_port == Some(0) {
+            return Err(AppError::BadRequest(
+                "RustDesk direct access port must be greater than 0".into(),
+            ));
+        }
         // Validate rendezvous server format (should be host:port)
         if let Some(ref server) = self.rendezvous_server {
             if !server.is_empty() && !server.contains(':') {
@@ -572,12 +979,50 @@ impl RustDeskConfigUpdate {
                 ));
             }
         }
+        if let Some(ref key) = self.relay_key {
+            let trimmed = key.trim();
+            if !trimmed.is_empty() {
+                validate_rustdesk_relay_key(trimmed)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_merged(&self, config: &RustDeskConfig) -> crate::error::Result<()> {
+        if config.enabled {
+            match config.mode {
+                crate::rustdesk::config::RustDeskMode::Id
+                    if config.rendezvous_server.trim().is_empty() =>
+                {
+                    return Err(AppError::BadRequest(
+                        "RustDesk ID server is required in ID service mode".into(),
+                    ));
+                }
+                crate::rustdesk::config::RustDeskMode::DirectIp
+                    if config.direct_access_port == 0 =>
+                {
+                    return Err(AppError::BadRequest(
+                        "RustDesk direct access port must be greater than 0".into(),
+                    ));
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
     pub fn apply_to(&self, config: &mut RustDeskConfig) {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
+        }
+        if let Some(mode) = self.mode {
+            config.mode = mode;
+        }
+        if let Some(codec) = self.codec {
+            config.codec = codec;
+        }
+        if let Some(port) = self.direct_access_port {
+            config.direct_access_port = port;
         }
         if let Some(ref server) = self.rendezvous_server {
             config.rendezvous_server = server.clone();
@@ -590,10 +1035,11 @@ impl RustDeskConfigUpdate {
             };
         }
         if let Some(ref key) = self.relay_key {
-            config.relay_key = if key.is_empty() {
+            let trimmed = key.trim();
+            config.relay_key = if trimmed.is_empty() {
                 None
             } else {
-                Some(key.clone())
+                Some(trimmed.to_string())
             };
         }
         if let Some(ref password) = self.device_password {
@@ -604,14 +1050,281 @@ impl RustDeskConfigUpdate {
     }
 }
 
-// ===== Web Config =====
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct RtspConfigResponse {
+    pub enabled: bool,
+    pub bind: String,
+    pub port: u16,
+    pub path: String,
+    pub allow_one_client: bool,
+    pub codec: RtspCodec,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl From<&RtspConfig> for RtspConfigResponse {
+    fn from(config: &RtspConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            bind: config.bind.clone(),
+            port: config.port,
+            path: config.path.clone(),
+            allow_one_client: config.allow_one_client,
+            codec: config.codec.clone(),
+            username: config.username.clone(),
+            password: config.password.clone(),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct RtspStatusResponse {
+    pub config: RtspConfigResponse,
+    pub service_status: String,
+}
+
+impl RtspStatusResponse {
+    pub fn new(config: &RtspConfig, status: RtspServiceStatus) -> Self {
+        Self {
+            config: RtspConfigResponse::from(config),
+            service_status: status.to_string(),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct RtspConfigUpdate {
+    pub enabled: Option<bool>,
+    pub bind: Option<String>,
+    pub port: Option<u16>,
+    pub path: Option<String>,
+    pub allow_one_client: Option<bool>,
+    pub codec: Option<RtspCodec>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct VncConfigResponse {
+    pub enabled: bool,
+    pub bind: String,
+    pub port: u16,
+    pub encoding: VncEncoding,
+    pub allow_one_client: bool,
+    pub has_password: bool,
+}
+
+impl From<&VncConfig> for VncConfigResponse {
+    fn from(config: &VncConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            bind: config.bind.clone(),
+            port: config.port,
+            encoding: config.encoding.clone(),
+            allow_one_client: config.allow_one_client,
+            has_password: config.password.as_deref().is_some_and(|p| !p.is_empty()),
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, serde::Serialize)]
+pub struct VncStatusResponse {
+    pub config: VncConfigResponse,
+    pub service_status: String,
+    pub connection_count: u32,
+}
+
+impl VncStatusResponse {
+    pub fn new(config: &VncConfig, status: VncServiceStatus, connection_count: usize) -> Self {
+        Self {
+            config: VncConfigResponse::from(config),
+            service_status: status.to_string(),
+            connection_count: connection_count as u32,
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct VncConfigUpdate {
+    pub enabled: Option<bool>,
+    pub bind: Option<String>,
+    pub port: Option<u16>,
+    pub encoding: Option<VncEncoding>,
+    pub allow_one_client: Option<bool>,
+    pub password: Option<String>,
+}
+
+impl VncConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(port) = self.port {
+            if port == 0 {
+                return Err(AppError::BadRequest("VNC port cannot be 0".into()));
+            }
+        }
+        if let Some(ref bind) = self.bind {
+            if bind.parse::<std::net::IpAddr>().is_err() {
+                return Err(AppError::BadRequest("VNC bind must be a valid IP".into()));
+            }
+        }
+        if let Some(ref password) = self.password {
+            if !password.is_empty() && password.len() > 8 {
+                return Err(AppError::BadRequest(
+                    "VNCAuth password must be at most 8 characters".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_merged(&self, config: &VncConfig) -> crate::error::Result<()> {
+        if config.enabled && config.password.as_deref().unwrap_or("").is_empty() {
+            return Err(AppError::BadRequest("VNC password is required".into()));
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut VncConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref bind) = self.bind {
+            config.bind = bind.clone();
+        }
+        if let Some(port) = self.port {
+            config.port = port;
+        }
+        if let Some(ref encoding) = self.encoding {
+            config.encoding = encoding.clone();
+        }
+        if let Some(allow_one_client) = self.allow_one_client {
+            config.allow_one_client = allow_one_client;
+        }
+        if let Some(ref password) = self.password {
+            if !password.is_empty() {
+                config.password = Some(password.clone());
+            }
+        }
+    }
+}
+
+impl RtspConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(port) = self.port {
+            if port == 0 {
+                return Err(AppError::BadRequest("RTSP port cannot be 0".into()));
+            }
+        }
+
+        if let Some(ref bind) = self.bind {
+            if bind.parse::<std::net::IpAddr>().is_err() {
+                return Err(AppError::BadRequest("RTSP bind must be a valid IP".into()));
+            }
+        }
+
+        if let Some(ref path) = self.path {
+            let normalized = path.trim_matches('/');
+            if normalized.is_empty() {
+                return Err(AppError::BadRequest("RTSP path cannot be empty".into()));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut RtspConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref bind) = self.bind {
+            config.bind = bind.clone();
+        }
+        if let Some(port) = self.port {
+            config.port = port;
+        }
+        if let Some(ref path) = self.path {
+            config.path = path.trim_matches('/').to_string();
+        }
+        if let Some(allow_one_client) = self.allow_one_client {
+            config.allow_one_client = allow_one_client;
+        }
+        if let Some(codec) = self.codec.clone() {
+            config.codec = codec;
+        }
+        if let Some(ref username) = self.username {
+            config.username = if username.is_empty() {
+                None
+            } else {
+                Some(username.clone())
+            };
+        }
+        if let Some(ref password) = self.password {
+            config.password = if password.is_empty() {
+                None
+            } else {
+                Some(password.clone())
+            };
+        }
+    }
+}
+
+/// Web server settings returned by `GET` / `PATCH /api/config/web`.
+///
+/// Public API shape: certificate paths on disk are not exposed. The full stored model is `WebConfig` in `config::schema`.
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfigResponse {
+    pub http_port: u16,
+    pub https_port: u16,
+    pub bind_addresses: Vec<String>,
+    pub bind_address: String,
+    pub https_enabled: bool,
+    /// Whether a custom TLS certificate is active (non-empty cert + key paths in stored config).
+    pub has_custom_cert: bool,
+}
+
+impl WebConfigResponse {
+    pub fn from_stored(web: &WebConfig) -> Self {
+        let has_custom_cert = web
+            .ssl_cert_path
+            .as_deref()
+            .map(|p| !p.is_empty())
+            .unwrap_or(false)
+            && web
+                .ssl_key_path
+                .as_deref()
+                .map(|p| !p.is_empty())
+                .unwrap_or(false);
+        Self {
+            http_port: web.http_port,
+            https_port: web.https_port,
+            bind_addresses: web.bind_addresses.clone(),
+            bind_address: web.bind_address.clone(),
+            https_enabled: web.https_enabled,
+            has_custom_cert,
+        }
+    }
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct WebConfigUpdate {
     pub http_port: Option<u16>,
     pub https_port: Option<u16>,
+    pub bind_addresses: Option<Vec<String>>,
     pub bind_address: Option<String>,
     pub https_enabled: Option<bool>,
+    /// PEM-encoded certificate content (must be provided together with ssl_key_pem)
+    pub ssl_cert_pem: Option<String>,
+    /// PEM-encoded private key content (must be provided together with ssl_cert_pem)
+    pub ssl_key_pem: Option<String>,
+    /// Set to true to remove the custom certificate and revert to self-signed
+    pub clear_custom_cert: Option<bool>,
 }
 
 impl WebConfigUpdate {
@@ -626,10 +1339,33 @@ impl WebConfigUpdate {
                 return Err(AppError::BadRequest("HTTPS port cannot be 0".into()));
             }
         }
+        if let Some(ref addrs) = self.bind_addresses {
+            for addr in addrs {
+                if addr.parse::<std::net::IpAddr>().is_err() {
+                    return Err(AppError::BadRequest("Invalid bind address".into()));
+                }
+            }
+        }
         if let Some(ref addr) = self.bind_address {
             if addr.parse::<std::net::IpAddr>().is_err() {
                 return Err(AppError::BadRequest("Invalid bind address".into()));
             }
+        }
+        // Cert and key must be provided together (cryptographic validity is checked in the
+        // handler via `server_config_from_pem`, same stack as the running HTTPS server).
+        match (&self.ssl_cert_pem, &self.ssl_key_pem) {
+            (Some(_cert), Some(_key)) => {}
+            (Some(_), None) => {
+                return Err(AppError::BadRequest(
+                    "ssl_key_pem is required when ssl_cert_pem is provided".into(),
+                ));
+            }
+            (None, Some(_)) => {
+                return Err(AppError::BadRequest(
+                    "ssl_cert_pem is required when ssl_key_pem is provided".into(),
+                ));
+            }
+            (None, None) => {}
         }
         Ok(())
     }
@@ -641,11 +1377,327 @@ impl WebConfigUpdate {
         if let Some(port) = self.https_port {
             config.https_port = port;
         }
-        if let Some(ref addr) = self.bind_address {
+        if let Some(ref addrs) = self.bind_addresses {
+            config.bind_addresses = addrs.clone();
+            if let Some(first) = addrs.first() {
+                config.bind_address = first.clone();
+            }
+        } else if let Some(ref addr) = self.bind_address {
             config.bind_address = addr.clone();
+            if config.bind_addresses.is_empty() {
+                config.bind_addresses = vec![addr.clone()];
+            }
         }
         if let Some(enabled) = self.https_enabled {
             config.https_enabled = enabled;
         }
+        // ssl_cert_pem, ssl_key_pem, clear_custom_cert are handled at the handler level
+        // (they require async file I/O before updating config paths)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedfishConfigResponse {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RedfishConfigUpdate {
+    pub enabled: Option<bool>,
+}
+
+impl RedfishConfigUpdate {
+    pub fn apply_to(&self, config: &mut crate::config::RedfishConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_atx_update() -> AtxConfigUpdate {
+        AtxConfigUpdate {
+            enabled: None,
+            driver: None,
+            device: None,
+            baud_rate: None,
+            power: None,
+            reset: None,
+            led: None,
+            hdd: None,
+            wol_interface: None,
+        }
+    }
+
+    #[test]
+    fn test_atx_apply_update_applies_global_baud_rate() {
+        let mut config = AtxConfig::default();
+        let mut update = empty_atx_update();
+        update.driver = Some(crate::atx::AtxDriverType::Serial);
+        update.device = Some("/dev/null".to_string());
+        update.baud_rate = Some(19200);
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: Some(true),
+            device: Some("/dev/ignored".to_string()),
+            pin: Some(1),
+            active_level: None,
+        });
+
+        update.apply_to(&mut config);
+        assert_eq!(config.driver, crate::atx::AtxDriverType::Serial);
+        assert_eq!(config.device, "/dev/null");
+        assert_eq!(config.baud_rate, 19200);
+        assert!(config.power.enabled);
+        assert_eq!(config.power.pin, 1);
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_serial_pin_zero() {
+        let mut current = AtxConfig::default();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::Serial;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
+        current.power.pin = 1;
+        current.baud_rate = 9600;
+
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: None,
+            device: None,
+            pin: Some(0),
+            active_level: None,
+        });
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_lcus_serial_channel_over_8() {
+        let mut current = AtxConfig::default();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::Serial;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
+        current.power.pin = 1;
+        current.baud_rate = 9600;
+
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: None,
+            device: None,
+            pin: Some(9),
+            active_level: None,
+        });
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_enabled_none_driver() {
+        let mut current = AtxConfig::default();
+        current.driver = crate::atx::AtxDriverType::None;
+
+        let mut update = empty_atx_update();
+        update.enabled = Some(true);
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn test_atx_validate_with_current_rejects_usb_relay_channel_over_8() {
+        let mut current = AtxConfig::default();
+        current.enabled = true;
+        current.driver = crate::atx::AtxDriverType::UsbRelay;
+        current.device = "/dev/null".to_string();
+        current.power.enabled = true;
+        current.power.pin = 1;
+
+        let mut update = empty_atx_update();
+        update.power = Some(AtxOutputBindingUpdate {
+            enabled: None,
+            device: None,
+            pin: Some(9),
+            active_level: None,
+        });
+
+        assert!(update.validate_with_current(&current).is_err());
+    }
+
+    #[test]
+    fn rustdesk_relay_key_accepts_hbbs_style_base64_32_bytes() {
+        let update = RustDeskConfigUpdate {
+            enabled: None,
+            mode: None,
+            codec: None,
+            direct_access_port: None,
+            rendezvous_server: None,
+            relay_server: None,
+            relay_key: Some("pLU0pEj2IZnNVKzrIO1pIdwGA3dOVJJLkFIYGOCGH1E=".to_string()),
+            device_password: None,
+        };
+        assert!(update.validate().is_ok());
+    }
+
+    #[test]
+    fn rustdesk_relay_key_rejects_non_32_byte_payload() {
+        // Standard Base64 for 16 zero bytes (not 32).
+        let not_32 = "AAAAAAAAAAAAAAAAAAAAAA==".to_string();
+        let update = RustDeskConfigUpdate {
+            enabled: None,
+            mode: None,
+            codec: None,
+            direct_access_port: None,
+            rendezvous_server: None,
+            relay_server: None,
+            relay_key: Some(not_32),
+            device_password: None,
+        };
+        assert!(update.validate().is_err());
+    }
+
+    #[test]
+    fn rustdesk_direct_ip_mode_does_not_require_id_server() {
+        let mut config = RustDeskConfig::default();
+        config.enabled = true;
+        config.mode = crate::rustdesk::config::RustDeskMode::DirectIp;
+        config.rendezvous_server.clear();
+
+        let update = RustDeskConfigUpdate {
+            enabled: Some(true),
+            mode: Some(crate::rustdesk::config::RustDeskMode::DirectIp),
+            codec: None,
+            direct_access_port: Some(21118),
+            rendezvous_server: Some(String::new()),
+            relay_server: None,
+            relay_key: None,
+            device_password: None,
+        };
+
+        assert!(update.validate().is_ok());
+        assert!(update.validate_merged(&config).is_ok());
+    }
+
+    #[test]
+    fn rustdesk_id_mode_requires_id_server_when_enabled() {
+        let mut config = RustDeskConfig::default();
+        config.enabled = true;
+        config.mode = crate::rustdesk::config::RustDeskMode::Id;
+        config.rendezvous_server.clear();
+
+        let update = RustDeskConfigUpdate {
+            enabled: Some(true),
+            mode: Some(crate::rustdesk::config::RustDeskMode::Id),
+            codec: None,
+            direct_access_port: None,
+            rendezvous_server: Some(String::new()),
+            relay_server: None,
+            relay_key: None,
+            device_password: None,
+        };
+
+        assert!(update.validate_merged(&config).is_err());
+    }
+
+    #[test]
+    fn ipv6_bind_vnc_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_vnc_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:5900", "[::1]:5900"] {
+            let update = VncConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(5900),
+                encoding: None,
+                allow_one_client: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_accepts_ipv6_literals() {
+        for bind in ["::", "::1", "2001:db8::1"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_ok(),
+                "bind address should pass: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_bind_rtsp_config_rejects_non_ip_or_socket_syntax() {
+        for bind in ["localhost", "127.0.0.1:8554", "[::1]:8554"] {
+            let update = RtspConfigUpdate {
+                enabled: None,
+                bind: Some(bind.to_string()),
+                port: Some(8554),
+                path: None,
+                allow_one_client: None,
+                codec: None,
+                username: None,
+                password: None,
+            };
+            assert!(
+                update.validate().is_err(),
+                "bind address should fail: {bind}"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_vnc_jpeg_quality_is_ignored_and_not_returned() {
+        let config: VncConfig = serde_json::from_value(serde_json::json!({
+            "enabled": false,
+            "bind": "0.0.0.0",
+            "port": 5900,
+            "encoding": "tight_jpeg",
+            "jpeg_quality": 37,
+            "allow_one_client": true
+        }))
+        .expect("legacy VNC config should deserialize");
+        let update: VncConfigUpdate = serde_json::from_value(serde_json::json!({
+            "jpeg_quality": 37,
+            "allow_one_client": false
+        }))
+        .expect("legacy VNC update should deserialize");
+        assert_eq!(update.allow_one_client, Some(false));
+
+        let response = serde_json::to_value(VncConfigResponse::from(&config))
+            .expect("VNC response should serialize");
+        assert!(response.get("jpeg_quality").is_none());
     }
 }

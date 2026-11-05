@@ -1,0 +1,139 @@
+/* Login and console share scheme B surfaces; settings keep their own styles. */
+.login-page,
+.console-page {
+  --console-control-active: color-mix(in srgb, var(--background) 93%, var(--foreground) 7%);
+  --console-workspace: color-mix(in srgb, var(--background) 97%, var(--foreground) 3%);
+}
+
+.login-page.dot-grid-bg,
+.console-page .dot-grid-bg {
+  background-color: var(--console-workspace);
+  background-image: none;
+}
+
+.login-card {
+  border-radius: 16px;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 4%), 0 1px 3px rgb(0 0 0 / 3%);
+}
+
+.login-card [data-slot="input"] {
+  border-radius: 10px;
+  background: var(--background);
+  box-shadow: none;
+}
+
+.login-card button {
+  border-radius: 10px;
+}
+
+.login-card button:not([type="submit"]) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-card button:not([type="submit"]):is(:active, [aria-haspopup][aria-expanded="true"]) {
+  background: var(--console-control-active);
+}
+
+.login-card [data-slot="card-title"] {
+  font-weight: 600;
+}
+
+.login-card [data-slot="field-label"] {
+  font-weight: 500;
+}
+
+.login-card .text-xs,
+.console-page :is(.console-header, .console-action-bar, .console-action-measure, .console-info-bar) .text-xs,
+.console-page :is(.console-header, .console-action-bar, .console-action-measure) button {
+  font-size: 13px;
+}
+
+.console-page .console-status-card {
+  gap: 0;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.console-page .console-status-card:not(.console-status-card--compact) :is(span, div) {
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.console-page :is(.console-header, .console-action-bar) button {
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hover tooltips do not select a tool. Only pressed or genuinely open controls do. */
+.console-page :is(.console-header, .console-action-bar) button:is(
+  :active, [aria-pressed="true"], [aria-haspopup][aria-expanded="true"]
+) {
+  background: var(--console-control-active);
+}
+
+.console-page :is(.console-header, .console-action-bar) button svg {
+  stroke-width: 1.75;
+}
+
+.console-page .console-action-bar--floating {
+  border-radius: 14px;
+  background: var(--background);
+  box-shadow: 0 2px 7px rgb(0 0 0 / 5%);
+  backdrop-filter: none;
+}
+
+.console-page .console-action-bar--sidebar {
+  background: var(--background);
+  backdrop-filter: none;
+}
+
+@media (max-width: 639px) {
+  .console-page .console-header--floating .console-status-summary__label {
+    display: none;
+  }
+}
+
+.console-page .console-info-bar [data-slot="badge"] {
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.console-page .console-info-bar [data-slot="badge"][aria-pressed="true"] {
+  background: var(--console-control-active);
+  color: var(--foreground);
+}
+
+/* Portal surfaces inherit the same visual grammar through their console owner. */
+[data-console-layout] {
+  --console-surface-radius: 14px;
+  --console-control-radius: 10px;
+  --console-surface-shadow: 0 6px 22px rgb(0 0 0 / 9%);
+  --console-control-active: color-mix(in srgb, var(--background) 93%, var(--foreground) 7%);
+}
+
+[data-console-layout] .text-xs {
+  font-size: 13px;
+}
+
+[data-console-layout] button[data-variant="ghost"],
+[data-console-layout] button[data-variant="outline"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-console-layout] button:is([data-variant="ghost"], [data-variant="outline"]):is(
+  :active, [aria-pressed="true"], [aria-haspopup][aria-expanded="true"]
+) {
+  background: var(--console-control-active);
+}
+
+.login-card :is(button, [data-slot="input"]):focus-visible,
+.console-page :is(.console-header, .console-action-bar) button:focus-visible,
+[data-console-layout] button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

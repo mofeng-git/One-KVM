@@ -18,7 +18,9 @@ pub fn mdns_mode_from_env() -> Option<MulticastDnsMode> {
 }
 
 pub fn mdns_mode() -> MulticastDnsMode {
-    mdns_mode_from_env().unwrap_or(MulticastDnsMode::QueryAndGather)
+    // Default to QueryOnly to avoid gathering .local host candidates by default.
+    // This is generally more stable for LAN first-connection while preserving mDNS queries.
+    mdns_mode_from_env().unwrap_or(MulticastDnsMode::QueryOnly)
 }
 
 pub fn mdns_mode_label(mode: MulticastDnsMode) -> &'static str {

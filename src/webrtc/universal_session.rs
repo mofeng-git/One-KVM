@@ -1,11 +1,9 @@
-//! Universal WebRTC session with multi-codec support
-//!
-//! Provides WebRTC sessions that can use any supported video codec (H264, H265, VP8, VP9).
-//! Replaces the H264-only H264Session with a more flexible implementation.
+//! One browser session: negotiated [`RTCPeerConnection`], outbound video/audio, HID DataChannel.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{watch, Mutex, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tracing::{debug, info, warn};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -15,12 +13,15 @@ use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice::mdns::MulticastDnsMode;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
+use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
@@ -33,36 +34,38 @@ use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec};
 use crate::audio::OpusFrame;
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
-use crate::video::encoder::registry::VideoEncoderType;
-use crate::video::encoder::BitratePreset;
-use crate::video::format::{PixelFormat, Resolution};
-use crate::video::shared_video_pipeline::EncodedVideoFrame;
-use std::sync::atomic::AtomicBool;
-use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
+use crate::video::codec::{h264_bitstream, h265_bitstream};
+use crate::video::pipeline::EncodedVideoFrameReceiver;
+use crate::video::types::{BitratePreset, PixelFormat, Resolution, VideoEncoderType};
 
-/// H.265/HEVC MIME type (RFC 7798)
 const MIME_TYPE_H265: &str = "video/H265";
+const KEYFRAME_RETRY_LIMIT: u8 = 3;
+const KEYFRAME_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
-/// Universal WebRTC session configuration
+fn is_allowed_ice_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => !ip.is_link_local(),
+        IpAddr::V6(ip) => {
+            !(ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_unique_local()
+                || ip.is_unicast_link_local())
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UniversalSessionConfig {
-    /// WebRTC configuration
     pub webrtc: WebRtcConfig,
-    /// Video codec type
     pub codec: VideoEncoderType,
-    /// Input resolution
     pub resolution: Resolution,
-    /// Input pixel format
     pub input_format: PixelFormat,
-    /// Bitrate preset
     pub bitrate_preset: BitratePreset,
-    /// Target FPS
     pub fps: u32,
-    /// Enable audio track
     pub audio_enabled: bool,
+    pub video_sdp_fmtp_line: Option<String>,
 }
 
 impl Default for UniversalSessionConfig {
@@ -75,12 +78,12 @@ impl Default for UniversalSessionConfig {
             bitrate_preset: BitratePreset::Balanced,
             fps: 30,
             audio_enabled: false,
+            video_sdp_fmtp_line: None,
         }
     }
 }
 
 impl UniversalSessionConfig {
-    /// Create config for specific codec
     pub fn with_codec(codec: VideoEncoderType) -> Self {
         Self {
             codec,
@@ -89,7 +92,6 @@ impl UniversalSessionConfig {
     }
 }
 
-/// Convert VideoEncoderType to VideoCodec
 fn encoder_type_to_video_codec(encoder_type: VideoEncoderType) -> VideoCodec {
     match encoder_type {
         VideoEncoderType::H264 => VideoCodec::H264,
@@ -99,47 +101,27 @@ fn encoder_type_to_video_codec(encoder_type: VideoEncoderType) -> VideoCodec {
     }
 }
 
-/// Universal WebRTC session
-///
-/// Receives pre-encoded video frames and sends via WebRTC.
-/// Supports H264, H265, VP8, VP9 codecs.
 pub struct UniversalSession {
-    /// Session ID
     pub session_id: String,
-    /// Video codec type
     codec: VideoEncoderType,
-    /// WebRTC peer connection
     pc: Arc<RTCPeerConnection>,
-    /// Video track for RTP packetization
     video_track: Arc<UniversalVideoTrack>,
-    /// Opus audio track (optional)
     audio_track: Option<Arc<OpusAudioTrack>>,
-    /// Data channel for HID events
     data_channel: Arc<RwLock<Option<Arc<RTCDataChannel>>>>,
-    /// Connection state
     state: Arc<watch::Sender<ConnectionState>>,
-    /// State receiver
     state_rx: watch::Receiver<ConnectionState>,
-    /// ICE candidates gathered
     ice_candidates: Arc<Mutex<Vec<IceCandidate>>>,
-    /// HID controller reference
     hid_controller: Option<Arc<HidController>>,
-    /// Event bus for WebRTC signaling events (optional)
-    event_bus: Option<Arc<EventBus>>,
-    /// Video frame receiver handle
+    keyframe_feedback: broadcast::Sender<()>,
     video_receiver_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    /// Audio frame receiver handle
     audio_receiver_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    /// FPS configuration
-    fps: u32,
 }
 
 impl UniversalSession {
-    /// Create a new universal WebRTC session
     pub async fn new(
         config: UniversalSessionConfig,
         session_id: String,
-        event_bus: Option<Arc<EventBus>>,
+        _event_bus: Option<Arc<crate::events::EventBus>>,
     ) -> Result<Self> {
         info!(
             "Creating {} session: {} @ {}x{} (audio={})",
@@ -150,7 +132,6 @@ impl UniversalSession {
             config.audio_enabled
         );
 
-        // Create video track with appropriate codec
         let video_codec = encoder_type_to_video_codec(config.codec);
         let track_config = UniversalVideoTrackConfig {
             track_id: format!("video-{}", &session_id[..8.min(session_id.len())]),
@@ -159,10 +140,10 @@ impl UniversalSession {
             resolution: config.resolution,
             bitrate_kbps: config.bitrate_preset.bitrate_kbps(),
             fps: config.fps,
+            sdp_fmtp_line: config.video_sdp_fmtp_line.clone(),
         };
         let video_track = Arc::new(UniversalVideoTrack::new(track_config));
 
-        // Create Opus audio track if enabled
         let audio_track = if config.audio_enabled {
             Some(Arc::new(OpusAudioTrack::new(
                 &format!("audio-{}", &session_id[..8.min(session_id.len())]),
@@ -172,11 +153,9 @@ impl UniversalSession {
             None
         };
 
-        // Create media engine
         let mut media_engine = MediaEngine::default();
 
-        // Register H.265/HEVC codec (not included in default codecs)
-        // According to RFC 7798, H.265 uses MIME type video/H265
+        // H265 is not registered by register_default_codecs.
         if config.codec == VideoEncoderType::H265 {
             let video_rtcp_feedback = vec![
                 RTCPFeedback {
@@ -197,8 +176,6 @@ impl UniversalSession {
                 },
             ];
 
-            // Register H.265 with profile-id=1 (Main profile) - matches Chrome's offer
-            // Chrome sends: level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST
             media_engine
                 .register_codec(
                     RTCRtpCodecParameters {
@@ -206,12 +183,11 @@ impl UniversalSession {
                             mime_type: MIME_TYPE_H265.to_owned(),
                             clock_rate: 90000,
                             channels: 0,
-                            // Match browser's fmtp format for profile-id=1
                             sdp_fmtp_line: "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST"
                                 .to_owned(),
                             rtcp_feedback: video_rtcp_feedback.clone(),
                         },
-                        payload_type: 49, // Use same payload type as browser
+                        payload_type: 49,
                         ..Default::default()
                     },
                     RTPCodecType::Video,
@@ -220,7 +196,6 @@ impl UniversalSession {
                     AppError::VideoError(format!("Failed to register H.265 codec: {}", e))
                 })?;
 
-            // Also register profile-id=2 (Main 10) variant
             media_engine
                 .register_codec(
                     RTCRtpCodecParameters {
@@ -251,13 +226,12 @@ impl UniversalSession {
             .register_default_codecs()
             .map_err(|e| AppError::VideoError(format!("Failed to register codecs: {}", e)))?;
 
-        // Create interceptor registry
         let mut registry = Registry::new();
         registry = register_default_interceptors(registry, &mut media_engine)
             .map_err(|e| AppError::VideoError(format!("Failed to register interceptors: {}", e)))?;
 
-        // Create API (with optional mDNS settings)
         let mut setting_engine = SettingEngine::default();
+        setting_engine.set_ip_filter(Box::new(is_allowed_ice_ip));
         let mode = mdns_mode();
         setting_engine.set_ice_multicast_dns_mode(mode);
         if mode == MulticastDnsMode::QueryAndGather {
@@ -271,7 +245,6 @@ impl UniversalSession {
             .with_interceptor_registry(registry)
             .build();
 
-        // Build ICE servers
         let mut ice_servers = vec![];
         for stun_url in &config.webrtc.stun_servers {
             ice_servers.push(RTCIceServer {
@@ -292,11 +265,9 @@ impl UniversalSession {
                 urls: turn.urls.clone(),
                 username: turn.username.clone(),
                 credential: turn.credential.clone(),
-                ..Default::default()
             });
         }
 
-        // Create peer connection
         let rtc_config = RTCConfiguration {
             ice_servers,
             ..Default::default()
@@ -308,17 +279,50 @@ impl UniversalSession {
 
         let pc = Arc::new(pc);
 
-        // Add video track to peer connection
-        pc.add_track(video_track.as_track_local())
+        let video_sender = pc
+            .add_track(video_track.as_track_local())
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to add video track: {}", e)))?;
+
+        // RTCP feedback is advertised in SDP, but it only reaches the
+        // application while the sender is actively drained. Forward PLI/FIR
+        // to the shared encoder so a client that missed an IDR can recover.
+        let (keyframe_feedback, _) = broadcast::channel(8);
+        let keyframe_feedback_tx = keyframe_feedback.clone();
+        let rtcp_session_id = session_id.clone();
+        tokio::spawn(async move {
+            loop {
+                let (packets, _) = match video_sender.read_rtcp().await {
+                    Ok(value) => value,
+                    Err(error) => {
+                        debug!(
+                            "RTCP reader stopped for session {}: {}",
+                            rtcp_session_id, error
+                        );
+                        break;
+                    }
+                };
+                if packets.iter().any(|packet| {
+                    packet
+                        .as_any()
+                        .downcast_ref::<PictureLossIndication>()
+                        .is_some()
+                        || packet.as_any().downcast_ref::<FullIntraRequest>().is_some()
+                }) {
+                    info!(
+                        "RTCP PLI/FIR requested a keyframe for session {}",
+                        rtcp_session_id
+                    );
+                    let _ = keyframe_feedback_tx.send(());
+                }
+            }
+        });
 
         info!(
             "{} video track added to peer connection (session {})",
             config.codec, session_id
         );
 
-        // Add Opus audio track if enabled
         if let Some(ref audio) = audio_track {
             pc.add_track(audio.as_track_local())
                 .await
@@ -329,7 +333,6 @@ impl UniversalSession {
             );
         }
 
-        // Create state channel
         let (state_tx, state_rx) = watch::channel(ConnectionState::New);
 
         let session = Self {
@@ -343,26 +346,20 @@ impl UniversalSession {
             state_rx,
             ice_candidates: Arc::new(Mutex::new(vec![])),
             hid_controller: None,
-            event_bus,
+            keyframe_feedback,
             video_receiver_handle: Mutex::new(None),
             audio_receiver_handle: Mutex::new(None),
-            fps: config.fps,
         };
 
-        // Set up event handlers
         session.setup_event_handlers().await;
 
         Ok(session)
     }
 
-    /// Set up peer connection event handlers
     async fn setup_event_handlers(&self) {
         let state = self.state.clone();
         let session_id = self.session_id.clone();
         let codec = self.codec;
-        let event_bus = self.event_bus.clone();
-
-        // Connection state change handler
         self.pc
             .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
                 let state = state.clone();
@@ -380,45 +377,49 @@ impl UniversalSession {
                     };
 
                     info!("{} session {} state: {}", codec, session_id, new_state);
+                    if matches!(
+                        (*state.borrow(), new_state),
+                        (
+                            ConnectionState::Connected,
+                            ConnectionState::New | ConnectionState::Connecting
+                        )
+                    ) {
+                        return;
+                    }
                     let _ = state.send(new_state);
                 })
             }));
 
-        // ICE connection state handler
+        let state_for_ice = self.state.clone();
         let session_id_ice = self.session_id.clone();
         self.pc
-            .on_ice_connection_state_change(Box::new(move |state| {
+            .on_ice_connection_state_change(Box::new(move |ice_state| {
+                let state = state_for_ice.clone();
                 let session_id = session_id_ice.clone();
                 Box::pin(async move {
-                    info!("[ICE] Session {} connection state: {:?}", session_id, state);
-                })
-            }));
+                    info!(
+                        "[ICE] Session {} connection state: {:?}",
+                        session_id, ice_state
+                    );
 
-        // ICE gathering state handler
-        let session_id_gather = self.session_id.clone();
-        let event_bus_gather = event_bus.clone();
-        self.pc
-            .on_ice_gathering_state_change(Box::new(move |state| {
-                let session_id = session_id_gather.clone();
-                let event_bus = event_bus_gather.clone();
-                Box::pin(async move {
-                    if matches!(state, RTCIceGathererState::Complete) {
-                        if let Some(bus) = event_bus.as_ref() {
-                            bus.publish(SystemEvent::WebRTCIceComplete { session_id });
+                    let new_state = match ice_state {
+                        RTCIceConnectionState::Connected | RTCIceConnectionState::Completed => {
+                            ConnectionState::Connected
                         }
-                    }
+                        RTCIceConnectionState::Disconnected => ConnectionState::Disconnected,
+                        RTCIceConnectionState::Failed => ConnectionState::Failed,
+                        RTCIceConnectionState::Closed => ConnectionState::Closed,
+                        _ => return,
+                    };
+
+                    let _ = state.send(new_state);
                 })
             }));
 
-        // ICE candidate handler
         let ice_candidates = self.ice_candidates.clone();
-        let session_id_candidate = self.session_id.clone();
-        let event_bus_candidate = event_bus.clone();
         self.pc
             .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
                 let ice_candidates = ice_candidates.clone();
-                let session_id = session_id_candidate.clone();
-                let event_bus = event_bus_candidate.clone();
 
                 Box::pin(async move {
                     if let Some(c) = candidate {
@@ -430,7 +431,9 @@ impl UniversalSession {
                         let candidate = IceCandidate {
                             candidate: candidate_str,
                             sdp_mid: candidate_json.as_ref().and_then(|j| j.sdp_mid.clone()),
-                            sdp_mline_index: candidate_json.as_ref().and_then(|j| j.sdp_mline_index),
+                            sdp_mline_index: candidate_json
+                                .as_ref()
+                                .and_then(|j| j.sdp_mline_index),
                             username_fragment: candidate_json
                                 .as_ref()
                                 .and_then(|j| j.username_fragment.clone()),
@@ -439,18 +442,10 @@ impl UniversalSession {
                         let mut candidates = ice_candidates.lock().await;
                         candidates.push(candidate.clone());
                         drop(candidates);
-
-                        if let Some(bus) = event_bus.as_ref() {
-                            bus.publish(SystemEvent::WebRTCIceCandidate {
-                                session_id,
-                                candidate,
-                            });
-                        }
                     }
                 })
             }));
 
-        // Data channel handler
         let data_channel = self.data_channel.clone();
         self.pc
             .on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
@@ -468,7 +463,6 @@ impl UniversalSession {
             }));
     }
 
-    /// Set HID controller for DataChannel HID processing
     pub fn set_hid_controller(&mut self, hid: Arc<HidController>) {
         let hid_clone = hid.clone();
         let data_channel = self.data_channel.clone();
@@ -485,8 +479,7 @@ impl UniversalSession {
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let hid = hid.clone();
 
-                        // Immediately spawn task in tokio runtime for low latency
-                        // Don't rely on webrtc-rs to poll the returned Future
+                        // webrtc-rs won't poll this future; spawn HID work for latency.
                         tokio::spawn(async move {
                             if let Some(event) = parse_hid_message(&msg.data) {
                                 match event {
@@ -509,7 +502,6 @@ impl UniversalSession {
                             }
                         });
 
-                        // Return empty future (actual work is spawned above)
                         Box::pin(async {})
                     }));
                 })
@@ -518,7 +510,6 @@ impl UniversalSession {
         self.hid_controller = Some(hid);
     }
 
-    /// Create data channel for HID events
     pub async fn create_data_channel(&self, label: &str) -> Result<()> {
         let dc = self
             .pc
@@ -532,15 +523,15 @@ impl UniversalSession {
         Ok(())
     }
 
-    /// Start receiving encoded video frames from shared pipeline
-    ///
-    /// The `on_connected` callback is called when ICE connection is established,
-    /// allowing the caller to request a keyframe at the right time.
+    /// `on_connected` runs once ICE is up (e.g. request a keyframe).
     pub async fn start_from_video_pipeline(
         &self,
-        mut frame_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<EncodedVideoFrame>>,
+        mut frame_rx: EncodedVideoFrameReceiver,
         request_keyframe: Arc<dyn Fn() + Send + Sync + 'static>,
     ) {
+        if let Some(handle) = self.video_receiver_handle.lock().await.take() {
+            handle.abort();
+        }
         info!(
             "Starting {} session {} with shared encoder",
             self.codec, self.session_id
@@ -549,9 +540,8 @@ impl UniversalSession {
         let video_track = self.video_track.clone();
         let mut state_rx = self.state_rx.clone();
         let session_id = self.session_id.clone();
-        let _fps = self.fps;
         let expected_codec = self.codec;
-        let send_in_flight = Arc::new(AtomicBool::new(false));
+        let mut keyframe_feedback = self.keyframe_feedback.subscribe();
 
         let handle = tokio::spawn(async move {
             info!(
@@ -559,7 +549,6 @@ impl UniversalSession {
                 session_id
             );
 
-            // Wait for Connected state before sending frames
             loop {
                 let current_state = *state_rx.borrow();
                 if current_state == ConnectionState::Connected {
@@ -582,11 +571,11 @@ impl UniversalSession {
                 session_id
             );
 
-            // Request keyframe now that connection is established
             request_keyframe();
             let mut waiting_for_keyframe = true;
             let mut last_sequence: Option<u64> = None;
-            let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
+            let mut keyframe_requests = 1u8;
+            let mut next_keyframe_retry = Instant::now() + KEYFRAME_RETRY_BASE_DELAY;
 
             let mut frames_sent: u64 = 0;
 
@@ -605,6 +594,16 @@ impl UniversalSession {
                         }
                     }
 
+                    feedback = keyframe_feedback.recv() => {
+                        if feedback.is_ok() {
+                            request_keyframe();
+                            waiting_for_keyframe = true;
+                            keyframe_requests = 1;
+                            next_keyframe_retry =
+                                Instant::now() + KEYFRAME_RETRY_BASE_DELAY;
+                        }
+                    }
+
                     result = frame_rx.recv() => {
                         let encoded_frame = match result {
                             Some(frame) => frame,
@@ -614,32 +613,12 @@ impl UniversalSession {
                             }
                         };
 
-                        // Verify codec matches
-                        let frame_codec = match encoded_frame.codec {
-                            VideoEncoderType::H264 => VideoEncoderType::H264,
-                            VideoEncoderType::H265 => VideoEncoderType::H265,
-                            VideoEncoderType::VP8 => VideoEncoderType::VP8,
-                            VideoEncoderType::VP9 => VideoEncoderType::VP9,
-                        };
+                        let frame_codec = encoded_frame.codec;
 
                         if frame_codec != expected_codec {
                             continue;
                         }
 
-                        // Debug log for H265 frames
-                        if expected_codec == VideoEncoderType::H265 {
-                            if encoded_frame.is_keyframe || frames_sent % 30 == 0 {
-                                debug!(
-                                    "[Session-H265] Received frame #{}: size={}, keyframe={}, seq={}",
-                                    frames_sent,
-                                    encoded_frame.data.len(),
-                                    encoded_frame.is_keyframe,
-                                    encoded_frame.sequence
-                                );
-                            }
-                        }
-
-                        // Ensure decoder starts from a keyframe and recover on gaps.
                         let mut gap_detected = false;
                         if let Some(prev) = last_sequence {
                             if encoded_frame.sequence > prev.saturating_add(1) {
@@ -650,37 +629,69 @@ impl UniversalSession {
                         if waiting_for_keyframe || gap_detected {
                             if encoded_frame.is_keyframe {
                                 waiting_for_keyframe = false;
+                                keyframe_requests = 0;
                             } else {
-                                if gap_detected {
+                                if gap_detected && !waiting_for_keyframe {
                                     waiting_for_keyframe = true;
+                                    keyframe_requests = 0;
+                                    next_keyframe_retry = Instant::now();
                                 }
+
+                                let forward_parameter_frame = waiting_for_keyframe
+                                    && match expected_codec {
+                                        VideoEncoderType::H264 => h264_bitstream::has_sps_pps(
+                                            encoded_frame.data.as_ref(),
+                                        ),
+                                        VideoEncoderType::H265 => h265_bitstream::has_vps_sps_pps(
+                                            encoded_frame.data.as_ref(),
+                                        ),
+                                        _ => false,
+                                    };
+
                                 let now = Instant::now();
-                                if now.duration_since(last_keyframe_request)
-                                    >= Duration::from_millis(200)
+                                if keyframe_requests < KEYFRAME_RETRY_LIMIT
+                                    && now >= next_keyframe_retry
                                 {
                                     request_keyframe();
-                                    last_keyframe_request = now;
+                                    keyframe_requests += 1;
+                                    let backoff = 1u32 << (keyframe_requests - 1);
+                                    next_keyframe_retry = now + KEYFRAME_RETRY_BASE_DELAY * backoff;
+                                    if keyframe_requests == KEYFRAME_RETRY_LIMIT {
+                                        warn!(
+                                            "Session {} exhausted keyframe retry budget; waiting for the encoder's next natural keyframe",
+                                            session_id
+                                        );
+                                    }
                                 }
-                                continue;
+                                if !forward_parameter_frame {
+                                    continue;
+                                }
                             }
                         }
 
-                        let _ = send_in_flight;
-
-                        // Send encoded frame via RTP (drop if previous send is still in flight)
                         let send_result = video_track
-                            .write_frame_bytes(
+                            .write_frame_bytes_at(
                                 encoded_frame.data.clone(),
                                 encoded_frame.is_keyframe,
+                                Some(encoded_frame.pts_ms),
                             )
                             .await;
-                        let _ = send_in_flight;
-
-                        if send_result.is_err() {
-                            // Keep quiet unless debugging send failures elsewhere
-                        } else {
-                            frames_sent += 1;
-                            last_sequence = Some(encoded_frame.sequence);
+                        frame_rx.record_send(send_result.is_ok());
+                        match send_result {
+                            Ok(()) => {
+                                frames_sent += 1;
+                                last_sequence = Some(encoded_frame.sequence);
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Session {} failed to write video frame: sequence={}, keyframe={}, bytes={}, error={}",
+                                    session_id,
+                                    encoded_frame.sequence,
+                                    encoded_frame.is_keyframe,
+                                    encoded_frame.data.len(),
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -692,13 +703,18 @@ impl UniversalSession {
             );
         });
 
-        *self.video_receiver_handle.lock().await = Some(handle);
+        {
+            let mut guard = self.video_receiver_handle.lock().await;
+            if let Some(old) = guard.take() {
+                old.abort();
+            }
+            *guard = Some(handle);
+        }
     }
 
-    /// Start receiving Opus audio frames
     pub async fn start_audio_from_opus(
         &self,
-        mut opus_rx: tokio::sync::watch::Receiver<Option<std::sync::Arc<OpusFrame>>>,
+        mut opus_rx: tokio::sync::mpsc::Receiver<std::sync::Arc<OpusFrame>>,
     ) {
         let audio_track = match &self.audio_track {
             Some(track) => track.clone(),
@@ -714,7 +730,6 @@ impl UniversalSession {
         let session_id = self.session_id.clone();
 
         let handle = tokio::spawn(async move {
-            // Wait for Connected state before sending audio
             loop {
                 let current_state = *state_rx.borrow();
                 if current_state == ConnectionState::Connected {
@@ -754,21 +769,18 @@ impl UniversalSession {
                         }
                     }
 
-                    result = opus_rx.changed() => {
-                        if result.is_err() {
-                            info!("Opus channel closed for session {}", session_id);
-                            break;
-                        }
-
-                        let opus_frame = match opus_rx.borrow().clone() {
+                    result = opus_rx.recv() => {
+                        let opus_frame = match result {
                             Some(frame) => frame,
-                            None => continue,
+                            None => {
+                                info!("Opus mpsc closed for session {}", session_id);
+                                break;
+                            }
                         };
 
-                        // 20ms at 48kHz = 960 samples
                         let samples = 960u32;
                         if let Err(e) = audio_track.write_packet(&opus_frame.data, samples).await {
-                            if packets_sent % 100 == 0 {
+                            if packets_sent.is_multiple_of(100) {
                                 debug!("Failed to write audio packet: {}", e);
                             }
                         } else {
@@ -784,22 +796,24 @@ impl UniversalSession {
             );
         });
 
-        *self.audio_receiver_handle.lock().await = Some(handle);
+        {
+            let mut guard = self.audio_receiver_handle.lock().await;
+            if let Some(old) = guard.take() {
+                old.abort();
+            }
+            *guard = Some(handle);
+        }
     }
 
-    /// Check if audio is enabled for this session
     pub fn has_audio(&self) -> bool {
         self.audio_track.is_some()
     }
 
-    /// Get codec type
     pub fn codec(&self) -> VideoEncoderType {
         self.codec
     }
 
-    /// Handle SDP offer and create answer
     pub async fn handle_offer(&self, offer: SdpOffer) -> Result<SdpAnswer> {
-        // Log offer for debugging H.265 codec negotiation
         if self.codec == VideoEncoderType::H265 {
             let has_h265 = offer.sdp.to_lowercase().contains("h265")
                 || offer.sdp.to_lowercase().contains("hevc");
@@ -825,7 +839,6 @@ impl UniversalSession {
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to create answer: {}", e)))?;
 
-        // Log answer for debugging
         if self.codec == VideoEncoderType::H265 {
             let has_h265 = answer.sdp.to_lowercase().contains("h265")
                 || answer.sdp.to_lowercase().contains("hevc");
@@ -843,14 +856,12 @@ impl UniversalSession {
             .await
             .map_err(|e| AppError::VideoError(format!("Failed to set local description: {}", e)))?;
 
-        // Wait for ICE candidates
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
+        tokio::time::sleep(Duration::from_millis(500)).await;
         let candidates = self.ice_candidates.lock().await.clone();
+
         Ok(SdpAnswer::with_candidates(answer.sdp, candidates))
     }
 
-    /// Add ICE candidate
     pub async fn add_ice_candidate(&self, candidate: IceCandidate) -> Result<()> {
         use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 
@@ -861,41 +872,51 @@ impl UniversalSession {
             username_fragment: candidate.username_fragment,
         };
 
-        self.pc
-            .add_ice_candidate(init)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to add ICE candidate: {}", e)))?;
+        if let Err(e) = self.pc.add_ice_candidate(init).await {
+            warn!(
+                "[ICE] Session {} failed to add remote candidate: {}",
+                self.session_id, e
+            );
+            return Err(AppError::VideoError(format!(
+                "Failed to add ICE candidate: {}",
+                e
+            )));
+        }
 
         Ok(())
     }
 
-    /// Get current connection state
     pub fn state(&self) -> ConnectionState {
         *self.state_rx.borrow()
     }
 
-    /// Subscribe to state changes
     pub fn state_watch(&self) -> watch::Receiver<ConnectionState> {
         self.state_rx.clone()
     }
 
-    /// Close the session
     pub async fn close(&self) -> Result<()> {
-        // Stop video receiver
         if let Some(handle) = self.video_receiver_handle.lock().await.take() {
             handle.abort();
         }
 
-        // Stop audio receiver
         if let Some(handle) = self.audio_receiver_handle.lock().await.take() {
             handle.abort();
         }
 
-        // Close peer connection
-        self.pc
-            .close()
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to close peer connection: {}", e)))?;
+        if let Err(e) = self.pc.close().await {
+            let error = e.to_string();
+            if error.contains("mpsc send: channel closed") {
+                debug!(
+                    "{} session {} peer connection was already closed: {}",
+                    self.codec, self.session_id, error
+                );
+            } else {
+                return Err(AppError::VideoError(format!(
+                    "Failed to close peer connection: {}",
+                    error
+                )));
+            }
+        }
 
         let _ = self.state.send(ConnectionState::Closed);
 
@@ -904,7 +925,6 @@ impl UniversalSession {
     }
 }
 
-/// Session info for listing
 #[derive(Debug, Clone)]
 pub struct UniversalSessionInfo {
     pub session_id: String,
@@ -942,5 +962,24 @@ mod tests {
             encoder_type_to_video_codec(VideoEncoderType::VP9),
             VideoCodec::VP9
         );
+    }
+
+    #[test]
+    fn test_ice_ip_filter_excludes_link_local_ipv4() {
+        assert!(!is_allowed_ice_ip("169.254.44.156".parse().unwrap()));
+        assert!(!is_allowed_ice_ip("169.254.228.140".parse().unwrap()));
+        assert!(is_allowed_ice_ip("192.168.10.9".parse().unwrap()));
+        assert!(is_allowed_ice_ip("10.0.0.5".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_ice_ip_filter_excludes_local_ipv6() {
+        assert!(!is_allowed_ice_ip("::1".parse().unwrap()));
+        assert!(!is_allowed_ice_ip("::".parse().unwrap()));
+        assert!(!is_allowed_ice_ip(
+            "fe80::3fb1:b28d:a3b0:d160".parse().unwrap()
+        ));
+        assert!(!is_allowed_ice_ip("fc00::1".parse().unwrap()));
+        assert!(is_allowed_ice_ip("2001:4860:4860::8888".parse().unwrap()));
     }
 }

@@ -6,6 +6,7 @@ Maintainer: SilentWind <admin@mofeng.run>
 Package: one-kvm
 Architecture: {arch}
 Depends: ${{auto}}, ca-certificates{distsuffix}
+Recommends: bluez
 Description: A open and lightweight IP-KVM solution written in Rust
  Enables BIOS-level remote management of servers and workstations.
  .
@@ -17,6 +18,7 @@ Description: A open and lightweight IP-KVM solution written in Rust
   * Hardware-accelerated video encoding (VAAPI, QSV, RKMPP)
   * WebRTC and MJPEG streaming with low latency
   * USB HID emulation via OTG gadget
+  * Classic Bluetooth keyboard and mouse via BlueZ
   * Mass storage device for ISO/IMG mounting
   * ATX power control via GPIO or USB relay
 Homepage: https://github.com/mofeng-git/One-KVM

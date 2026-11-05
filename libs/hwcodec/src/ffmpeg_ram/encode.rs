@@ -1,12 +1,18 @@
+#[cfg(feature = "bytes")]
+use crate::ffmpeg_ram::{
+    ffmpeg_ram_encode_owned_packet, ffmpeg_ram_encode_packet, ffmpeg_ram_free_packet,
+};
 use crate::{
     common::DataFormat::{self, *},
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
-        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_free_encoder,
-        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo,
-        AV_NUM_DATA_POINTERS,
+        ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_encoder_last_error,
+        ffmpeg_ram_free_encoder, ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe,
+        ffmpeg_ram_set_bitrate, CodecInfo, AV_NUM_DATA_POINTERS,
     },
 };
+#[cfg(feature = "bytes")]
+use bytes::Bytes;
 use log::trace;
 use std::{
     ffi::{c_void, CString},
@@ -15,20 +21,423 @@ use std::{
     slice,
 };
 
-use super::Priority;
 #[cfg(any(windows, target_os = "linux"))]
 use crate::common::Driver;
 
 /// Timeout for encoder test in milliseconds
 const TEST_TIMEOUT_MS: u64 = 3000;
+const PRIORITY_NVENC: i32 = 0;
+const PRIORITY_QSV: i32 = 1;
+const PRIORITY_AMF: i32 = 2;
+const PRIORITY_RKMPP: i32 = 3;
+const PRIORITY_VAAPI: i32 = 4;
+const PRIORITY_V4L2M2M: i32 = 5;
+
+#[derive(Clone, Copy)]
+struct CandidateCodecSpec {
+    name: &'static str,
+    format: DataFormat,
+    priority: i32,
+}
+
+fn push_candidate(codecs: &mut Vec<CodecInfo>, candidate: CandidateCodecSpec) {
+    codecs.push(CodecInfo {
+        name: candidate.name.to_owned(),
+        format: candidate.format,
+        priority: candidate.priority,
+        ..Default::default()
+    });
+}
+
+#[cfg(target_os = "linux")]
+fn linux_support_vaapi() -> bool {
+    let entries = match std::fs::read_dir("/dev/dri") {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+
+    entries.flatten().any(|entry| {
+        entry
+            .file_name()
+            .to_str()
+            .map(|name| name.starts_with("renderD"))
+            .unwrap_or(false)
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_support_vaapi() -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn linux_support_rkmpp() -> bool {
+    extern "C" {
+        fn linux_support_rkmpp() -> c_int;
+    }
+
+    unsafe { linux_support_rkmpp() == 0 }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_support_rkmpp() -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn linux_support_v4l2m2m() -> bool {
+    extern "C" {
+        fn linux_support_v4l2m2m() -> c_int;
+    }
+
+    unsafe { linux_support_v4l2m2m() == 0 }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_support_v4l2m2m() -> bool {
+    false
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+fn enumerate_candidate_codecs(ctx: &EncodeContext) -> Vec<CodecInfo> {
+    use log::debug;
+
+    let mut codecs = Vec::new();
+
+    let contains = |_vendor: Driver, _format: DataFormat| {
+        // Without VRAM feature, we can't check SDK availability.
+        // Keep the prefilter coarse and let FFmpeg validation do the real check.
+        true
+    };
+    let (nv, amf, intel) = crate::common::supported_gpu(true);
+
+    debug!(
+        "GPU support detected - NV: {}, AMF: {}, Intel: {}",
+        nv, amf, intel
+    );
+
+    if nv && contains(Driver::NV, H264) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_nvenc",
+                format: H264,
+                priority: PRIORITY_NVENC,
+            },
+        );
+    }
+    if nv && contains(Driver::NV, H265) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_nvenc",
+                format: H265,
+                priority: PRIORITY_NVENC,
+            },
+        );
+    }
+    if intel && contains(Driver::MFX, H264) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_qsv",
+                format: H264,
+                priority: PRIORITY_QSV,
+            },
+        );
+    }
+    if intel && contains(Driver::MFX, H265) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_qsv",
+                format: H265,
+                priority: PRIORITY_QSV,
+            },
+        );
+    }
+    if amf && contains(Driver::AMF, H264) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_amf",
+                format: H264,
+                priority: PRIORITY_AMF,
+            },
+        );
+    }
+    if amf && contains(Driver::AMF, H265) {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_amf",
+                format: H265,
+                priority: PRIORITY_AMF,
+            },
+        );
+    }
+    if linux_support_rkmpp() {
+        debug!("RKMPP hardware detected, adding Rockchip encoders");
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_rkmpp",
+                format: H264,
+                priority: PRIORITY_RKMPP,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_rkmpp",
+                format: H265,
+                priority: PRIORITY_RKMPP,
+            },
+        );
+    }
+    if cfg!(target_os = "linux") && linux_support_vaapi() {
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_vaapi",
+                format: H264,
+                priority: PRIORITY_VAAPI,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_vaapi",
+                format: H265,
+                priority: PRIORITY_VAAPI,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "vp8_vaapi",
+                format: VP8,
+                priority: PRIORITY_VAAPI,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "vp9_vaapi",
+                format: VP9,
+                priority: PRIORITY_VAAPI,
+            },
+        );
+    }
+    if linux_support_v4l2m2m() {
+        debug!("V4L2 M2M hardware detected, adding V4L2 encoders");
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "h264_v4l2m2m",
+                format: H264,
+                priority: PRIORITY_V4L2M2M,
+            },
+        );
+        push_candidate(
+            &mut codecs,
+            CandidateCodecSpec {
+                name: "hevc_v4l2m2m",
+                format: H265,
+                priority: PRIORITY_V4L2M2M,
+            },
+        );
+    }
+
+    codecs.retain(|codec| {
+        !(ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P as i32 && codec.name.contains("qsv"))
+    });
+    codecs
+}
+
+#[derive(Clone, Copy)]
+struct ProbePolicy {
+    max_attempts: usize,
+    request_keyframe: bool,
+    accept_any_output: bool,
+}
+
+impl ProbePolicy {
+    fn for_codec(codec_name: &str) -> Self {
+        if codec_name.contains("amf") {
+            Self {
+                max_attempts: 5,
+                request_keyframe: true,
+                accept_any_output: true,
+            }
+        } else if codec_name.contains("v4l2m2m") {
+            Self {
+                max_attempts: 5,
+                request_keyframe: true,
+                accept_any_output: true,
+            }
+        } else {
+            Self {
+                max_attempts: 1,
+                request_keyframe: false,
+                accept_any_output: false,
+            }
+        }
+    }
+
+    fn prepare_attempt(&self, encoder: &mut Encoder) {
+        if self.request_keyframe {
+            encoder.request_keyframe();
+        }
+    }
+
+    fn passed(&self, frames: &[EncodeFrame], elapsed_ms: u128) -> bool {
+        if elapsed_ms >= TEST_TIMEOUT_MS as u128 {
+            return false;
+        }
+
+        if self.accept_any_output {
+            !frames.is_empty()
+        } else {
+            frames.len() == 1 && frames[0].key == 1
+        }
+    }
+}
+
+fn log_failed_probe_attempt(
+    codec_name: &str,
+    policy: ProbePolicy,
+    attempt: usize,
+    frames: &[EncodeFrame],
+    elapsed_ms: u128,
+) {
+    use log::{debug, trace};
+
+    if policy.accept_any_output {
+        if frames.is_empty() {
+            trace!(
+                "Encoder {} test produced no output on attempt {}",
+                codec_name,
+                attempt
+            );
+        } else {
+            debug!(
+                "Encoder {} test failed on attempt {} - frames: {}, timeout: {}ms",
+                codec_name,
+                attempt,
+                frames.len(),
+                elapsed_ms
+            );
+        }
+    } else if frames.len() == 1 {
+        debug!(
+            "Encoder {} test failed on attempt {} - key: {}, timeout: {}ms",
+            codec_name, attempt, frames[0].key, elapsed_ms
+        );
+    } else {
+        debug!(
+            "Encoder {} test failed on attempt {} - wrong frame count: {}",
+            codec_name,
+            attempt,
+            frames.len()
+        );
+    }
+}
+
+fn validate_candidate(codec: &CodecInfo, ctx: &EncodeContext, yuv: &[u8]) -> bool {
+    use log::debug;
+
+    debug!("Testing encoder: {}", codec.name);
+
+    let test_ctx = EncodeContext {
+        name: codec.name.clone(),
+        ..ctx.clone()
+    };
+
+    match Encoder::new(test_ctx) {
+        Ok(mut encoder) => {
+            debug!("Encoder {} created successfully", codec.name);
+            let policy = ProbePolicy::for_codec(&codec.name);
+            let mut last_err: Option<i32> = None;
+
+            for attempt in 0..policy.max_attempts {
+                let attempt_no = attempt + 1;
+                policy.prepare_attempt(&mut encoder);
+
+                let pts = (attempt as i64) * 33;
+                let start = std::time::Instant::now();
+                match encoder.encode(yuv, pts) {
+                    Ok(frames) => {
+                        let elapsed = start.elapsed().as_millis();
+
+                        if policy.passed(frames, elapsed) {
+                            if policy.accept_any_output {
+                                debug!(
+                                    "Encoder {} test passed on attempt {} (frames: {})",
+                                    codec.name,
+                                    attempt_no,
+                                    frames.len()
+                                );
+                            } else {
+                                debug!(
+                                    "Encoder {} test passed on attempt {}",
+                                    codec.name, attempt_no
+                                );
+                            }
+                            return true;
+                        } else {
+                            log_failed_probe_attempt(
+                                &codec.name,
+                                policy,
+                                attempt_no,
+                                frames,
+                                elapsed,
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        last_err = Some(err);
+                        debug!(
+                            "Encoder {} test attempt {} returned error: {}",
+                            codec.name, attempt_no, err
+                        );
+                    }
+                }
+            }
+
+            debug!(
+                "Encoder {} test failed after retries{}",
+                codec.name,
+                last_err
+                    .map(|e| format!(" (last err: {})", e))
+                    .unwrap_or_default()
+            );
+            false
+        }
+        Err(_) => false,
+    }
+}
+
+fn add_software_fallback(codecs: &mut Vec<CodecInfo>) {
+    use log::debug;
+
+    for fallback in CodecInfo::soft().into_vec() {
+        if !codecs.iter().any(|codec| codec.format == fallback.format) {
+            debug!(
+                "Adding software {:?} encoder: {}",
+                fallback.format, fallback.name
+            );
+            codecs.push(fallback);
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncodeContext {
     pub name: String,
-    pub mc_name: Option<String>,
     pub width: i32,
     pub height: i32,
-    pub pixfmt: AVPixelFormat,
+    pub pixfmt: i32,
     pub align: i32,
     pub fps: i32,
     pub gop: i32,
@@ -45,6 +454,39 @@ pub struct EncodeFrame {
     pub key: i32,
 }
 
+#[cfg(feature = "bytes")]
+pub struct EncodeBytesFrame {
+    pub data: Bytes,
+    pub pts: i64,
+    pub key: i32,
+}
+
+#[cfg(feature = "bytes")]
+struct FfmpegPacketOwner {
+    packet: *mut c_void,
+    data: *const u8,
+    len: usize,
+}
+
+#[cfg(feature = "bytes")]
+unsafe impl Send for FfmpegPacketOwner {}
+
+#[cfg(feature = "bytes")]
+impl AsRef<[u8]> for FfmpegPacketOwner {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.data, self.len) }
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl Drop for FfmpegPacketOwner {
+    fn drop(&mut self) {
+        unsafe {
+            ffmpeg_ram_free_packet(self.packet);
+        }
+    }
+}
+
 impl Display for EncodeFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "encode len:{}, pts:{}", self.data.len(), self.pts)
@@ -58,6 +500,7 @@ pub struct Encoder {
     pub linesize: Vec<i32>,
     pub offset: Vec<i32>,
     pub length: i32,
+    owned_nv12_input: bool,
 }
 
 impl Encoder {
@@ -77,13 +520,11 @@ impl Encoder {
                 .unwrap_or("-1".to_owned())
                 .parse()
                 .unwrap_or(-1);
-            let mc_name = ctx.mc_name.clone().unwrap_or_default();
             let codec = ffmpeg_ram_new_encoder(
                 CString::new(ctx.name.as_str()).map_err(|_| ())?.as_ptr(),
-                CString::new(mc_name.as_str()).map_err(|_| ())?.as_ptr(),
                 ctx.width,
                 ctx.height,
-                ctx.pixfmt as c_int,
+                ctx.pixfmt,
                 ctx.align,
                 ctx.fps,
                 ctx.gop,
@@ -100,9 +541,15 @@ impl Encoder {
             );
 
             if codec.is_null() {
+                let message = encoder_last_error_message();
+                if !message.is_empty() {
+                    log::debug!("ffmpeg_ram_new_encoder failed: {}", message);
+                }
                 return Err(());
             }
 
+            let owned_nv12_input = ctx.name.ends_with("_v4l2m2m")
+                && ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_NV12 as i32;
             Ok(Encoder {
                 codec,
                 frames: Box::into_raw(Box::new(Vec::<EncodeFrame>::new())),
@@ -110,6 +557,7 @@ impl Encoder {
                 linesize,
                 offset,
                 length: length[0],
+                owned_nv12_input,
             })
         }
     }
@@ -137,11 +585,112 @@ impl Encoder {
         }
     }
 
+    #[cfg(feature = "bytes")]
+    pub fn encode_bytes(&mut self, data: &[u8], ms: i64) -> Result<Vec<EncodeBytesFrame>, i32> {
+        let length = c_int::try_from(data.len()).map_err(|_| -22)?;
+        unsafe {
+            let mut frames = Vec::<EncodeBytesFrame>::new();
+            let result = ffmpeg_ram_encode_packet(
+                self.codec,
+                data.as_ptr(),
+                length,
+                &mut frames as *mut _ as *const c_void,
+                ms,
+                Some(Encoder::packet_callback),
+            );
+            self.finish_bytes_encode(frames, result)
+        }
+    }
+
+    pub fn supports_owned_nv12_input(&self) -> bool {
+        self.owned_nv12_input
+    }
+
+    #[cfg(feature = "bytes")]
+    pub fn encode_owned_bytes(
+        &mut self,
+        data: Bytes,
+        ms: i64,
+    ) -> Result<Vec<EncodeBytesFrame>, i32> {
+        if !self.owned_nv12_input {
+            return self.encode_bytes(data.as_ref(), ms);
+        }
+        let length = c_int::try_from(data.len()).map_err(|_| -22)?;
+        let owner = Box::new(data);
+        let pointer = owner.as_ptr();
+        let mut frames = Vec::<EncodeBytesFrame>::new();
+        let result = unsafe {
+            ffmpeg_ram_encode_owned_packet(
+                self.codec,
+                pointer,
+                length,
+                Box::into_raw(owner) as *mut c_void,
+                Some(Self::release_input),
+                &mut frames as *mut _ as *const c_void,
+                ms,
+                Some(Self::packet_callback),
+            )
+        };
+        self.finish_bytes_encode(frames, result)
+    }
+
+    #[cfg(feature = "bytes")]
+    fn finish_bytes_encode(
+        &mut self,
+        frames: Vec<EncodeBytesFrame>,
+        result: i32,
+    ) -> Result<Vec<EncodeBytesFrame>, i32> {
+        if result != -11 && result != 0 {
+            return Err(result);
+        }
+        if !self.ctx.name.contains("v4l2m2m") {
+            return Ok(frames);
+        }
+        let detached = frames
+            .into_iter()
+            .map(|frame| EncodeBytesFrame {
+                data: Bytes::copy_from_slice(frame.data.as_ref()),
+                pts: frame.pts,
+                key: frame.key,
+            })
+            .collect();
+        Ok(detached)
+    }
+
+    #[cfg(feature = "bytes")]
+    extern "C" fn release_input(owner: *mut c_void, _data: *mut u8) {
+        unsafe { drop(Box::from_raw(owner as *mut Bytes)) };
+    }
+
     extern "C" fn callback(data: *const u8, size: c_int, pts: i64, key: i32, obj: *const c_void) {
         unsafe {
             let frames = &mut *(obj as *mut Vec<EncodeFrame>);
             frames.push(EncodeFrame {
                 data: slice::from_raw_parts(data, size as _).to_vec(),
+                pts,
+                key,
+            });
+        }
+    }
+
+    #[cfg(feature = "bytes")]
+    extern "C" fn packet_callback(
+        packet: *mut c_void,
+        data: *const u8,
+        size: c_int,
+        pts: i64,
+        key: i32,
+        obj: *const c_void,
+    ) {
+        unsafe {
+            let frames = &mut *(obj as *mut Vec<EncodeBytesFrame>);
+            let owner = FfmpegPacketOwner {
+                packet,
+                data,
+                len: size as usize,
+            };
+            frames.push(EncodeBytesFrame {
+                data: Bytes::from_owner(owner),
                 pts,
                 key,
             });
@@ -185,275 +734,21 @@ impl Encoder {
         if !(cfg!(windows) || cfg!(target_os = "linux")) {
             return vec![];
         }
-        let mut codecs: Vec<CodecInfo> = vec![];
-        #[cfg(any(windows, target_os = "linux"))]
-        {
-            let contains = |_vendor: Driver, _format: DataFormat| {
-                // Without VRAM feature, we can't check SDK availability
-                // Just return true and let FFmpeg handle the actual detection
-                true
-            };
-            let (_nv, amf, _intel) = crate::common::supported_gpu(true);
-            debug!(
-                "GPU support detected - NV: {}, AMF: {}, Intel: {}",
-                _nv, amf, _intel
-            );
-
-            #[cfg(windows)]
-            if _intel && contains(Driver::MFX, H264) {
-                codecs.push(CodecInfo {
-                    name: "h264_qsv".to_owned(),
-                    format: H264,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            #[cfg(windows)]
-            if _intel && contains(Driver::MFX, H265) {
-                codecs.push(CodecInfo {
-                    name: "hevc_qsv".to_owned(),
-                    format: H265,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            if _nv && contains(Driver::NV, H264) {
-                codecs.push(CodecInfo {
-                    name: "h264_nvenc".to_owned(),
-                    format: H264,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            if _nv && contains(Driver::NV, H265) {
-                codecs.push(CodecInfo {
-                    name: "hevc_nvenc".to_owned(),
-                    format: H265,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            if amf && contains(Driver::AMF, H264) {
-                codecs.push(CodecInfo {
-                    name: "h264_amf".to_owned(),
-                    format: H264,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            if amf {
-                codecs.push(CodecInfo {
-                    name: "hevc_amf".to_owned(),
-                    format: H265,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            #[cfg(target_os = "linux")]
-            {
-                codecs.push(CodecInfo {
-                    name: "h264_vaapi".to_owned(),
-                    format: H264,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-                codecs.push(CodecInfo {
-                    name: "hevc_vaapi".to_owned(),
-                    format: H265,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-                codecs.push(CodecInfo {
-                    name: "vp8_vaapi".to_owned(),
-                    format: VP8,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-                codecs.push(CodecInfo {
-                    name: "vp9_vaapi".to_owned(),
-                    format: VP9,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-
-                // Rockchip MPP hardware encoder support
-                use std::ffi::c_int;
-                extern "C" {
-                    fn linux_support_rkmpp() -> c_int;
-                    fn linux_support_v4l2m2m() -> c_int;
-                }
-
-                if unsafe { linux_support_rkmpp() } == 0 {
-                    debug!("RKMPP hardware detected, adding Rockchip encoders");
-                    codecs.push(CodecInfo {
-                        name: "h264_rkmpp".to_owned(),
-                        format: H264,
-                        priority: Priority::Best as _,
-                        ..Default::default()
-                    });
-                    codecs.push(CodecInfo {
-                        name: "hevc_rkmpp".to_owned(),
-                        format: H265,
-                        priority: Priority::Best as _,
-                        ..Default::default()
-                    });
-                }
-
-                // V4L2 Memory-to-Memory hardware encoder support (generic ARM)
-                if unsafe { linux_support_v4l2m2m() } == 0 {
-                    debug!("V4L2 M2M hardware detected, adding V4L2 encoders");
-                    codecs.push(CodecInfo {
-                        name: "h264_v4l2m2m".to_owned(),
-                        format: H264,
-                        priority: Priority::Good as _,
-                        ..Default::default()
-                    });
-                    codecs.push(CodecInfo {
-                        name: "hevc_v4l2m2m".to_owned(),
-                        format: H265,
-                        priority: Priority::Good as _,
-                        ..Default::default()
-                    });
-                }
-            }
-        }
-
-        // qsv doesn't support yuv420p
-        codecs.retain(|c| {
-            let ctx = ctx.clone();
-            if ctx.pixfmt == AVPixelFormat::AV_PIX_FMT_YUV420P && c.name.contains("qsv") {
-                return false;
-            }
-            return true;
-        });
-
         let mut res = vec![];
+        #[cfg(any(windows, target_os = "linux"))]
+        let codecs = enumerate_candidate_codecs(&ctx);
 
         if let Ok(yuv) = Encoder::dummy_yuv(ctx.clone()) {
             for codec in codecs {
-                // Skip if this format already exists in results
-                if res
-                    .iter()
-                    .any(|existing: &CodecInfo| existing.format == codec.format)
-                {
-                    continue;
-                }
-
-                debug!("Testing encoder: {}", codec.name);
-
-                let c = EncodeContext {
-                    name: codec.name.clone(),
-                    mc_name: codec.mc_name.clone(),
-                    ..ctx
-                };
-
-                match Encoder::new(c) {
-                    Ok(mut encoder) => {
-                        debug!("Encoder {} created successfully", codec.name);
-                        let mut passed = false;
-                        let mut last_err: Option<i32> = None;
-
-                        let max_attempts = 1;
-                        for attempt in 0..max_attempts {
-                            let pts = (attempt as i64) * 33; // 33ms is an approximation for 30 FPS (1000 / 30)
-                            let start = std::time::Instant::now();
-                            match encoder.encode(&yuv, pts) {
-                                Ok(frames) => {
-                                    let elapsed = start.elapsed().as_millis();
-
-                                    if frames.len() == 1 {
-                                        if frames[0].key == 1 && elapsed < TEST_TIMEOUT_MS as _ {
-                                            debug!(
-                                                "Encoder {} test passed on attempt {}",
-                                                codec.name,
-                                                attempt + 1
-                                            );
-                                            res.push(codec.clone());
-                                            passed = true;
-                                            break;
-                                        } else {
-                                            debug!(
-                                                "Encoder {} test failed on attempt {} - key: {}, timeout: {}ms",
-                                                codec.name,
-                                                attempt + 1,
-                                                frames[0].key,
-                                                elapsed
-                                            );
-                                        }
-                                    } else {
-                                        debug!(
-                                            "Encoder {} test failed on attempt {} - wrong frame count: {}",
-                                            codec.name,
-                                            attempt + 1,
-                                            frames.len()
-                                        );
-                                    }
-                                }
-                                Err(err) => {
-                                    last_err = Some(err);
-                                    debug!(
-                                        "Encoder {} test attempt {} returned error: {}",
-                                        codec.name,
-                                        attempt + 1,
-                                        err
-                                    );
-                                }
-                            }
-                        }
-
-                        if !passed {
-                            debug!(
-                                "Encoder {} test failed after retries{}",
-                                codec.name,
-                                last_err
-                                    .map(|e| format!(" (last err: {})", e))
-                                    .unwrap_or_default()
-                            );
-                        }
-                    }
-                    Err(_) => {
-                        debug!("Failed to create encoder {}", codec.name);
-                    }
+                if validate_candidate(&codec, &ctx, &yuv) {
+                    res.push(codec);
                 }
             }
         } else {
             debug!("Failed to generate dummy YUV data");
         }
 
-        // Add software encoders as fallback
-        let soft_codecs = CodecInfo::soft();
-
-        // Add H264 software encoder if not already present
-        if !res.iter().any(|c| c.format == H264) {
-            if let Some(h264_soft) = soft_codecs.h264 {
-                debug!("Adding software H264 encoder: {}", h264_soft.name);
-                res.push(h264_soft);
-            }
-        }
-
-        // Add H265 software encoder if not already present
-        if !res.iter().any(|c| c.format == H265) {
-            if let Some(h265_soft) = soft_codecs.h265 {
-                debug!("Adding software H265 encoder: {}", h265_soft.name);
-                res.push(h265_soft);
-            }
-        }
-
-        // Add VP8 software encoder if not already present
-        if !res.iter().any(|c| c.format == VP8) {
-            if let Some(vp8_soft) = soft_codecs.vp8 {
-                debug!("Adding software VP8 encoder: {}", vp8_soft.name);
-                res.push(vp8_soft);
-            }
-        }
-
-        // Add VP9 software encoder if not already present
-        if !res.iter().any(|c| c.format == VP9) {
-            if let Some(vp9_soft) = soft_codecs.vp9 {
-                debug!("Adding software VP9 encoder: {}", vp9_soft.name);
-                res.push(vp9_soft);
-            }
-        }
+        add_software_fallback(&mut res);
 
         res
     }
@@ -471,6 +766,16 @@ impl Encoder {
         }
 
         Err(())
+    }
+}
+
+pub fn encoder_last_error_message() -> String {
+    unsafe {
+        let ptr = ffmpeg_ram_encoder_last_error();
+        if ptr.is_null() {
+            return String::new();
+        }
+        std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string()
     }
 }
 

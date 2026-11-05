@@ -1,30 +1,49 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { cn } from '@/lib/utils'
+import { CanonicalKey } from '@/types/generated'
+import { Badge } from '@/components/ui/badge'
+import { Kbd } from '@/components/ui/kbd'
+import { Separator } from '@/components/ui/separator'
 
 const props = defineProps<{
-  pressedKeys?: string[]
+  pressedKeys?: CanonicalKey[]
   capsLock?: boolean
+  numLock?: boolean
+  scrollLock?: boolean
+  keyboardLedEnabled?: boolean
+  keyboardLockDisabled?: boolean
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
   compact?: boolean
+  captured?: boolean
+  minimal?: boolean
+}>()
+
+const emit = defineEmits<{
+  toggleLock: [key: CanonicalKey.CapsLock | CanonicalKey.NumLock | CanonicalKey.ScrollLock]
 }>()
 
 const { t } = useI18n()
 
-// Key name mapping for friendly display
+const lockButtons = computed(() => [
+  { key: CanonicalKey.CapsLock, label: t('infobar.caps'), active: props.capsLock },
+  { key: CanonicalKey.NumLock, label: t('infobar.num'), active: props.numLock },
+  { key: CanonicalKey.ScrollLock, label: t('infobar.scroll'), active: props.scrollLock },
+] as const)
+
 const keyNameMap: Record<string, string> = {
   MetaLeft: 'Win', MetaRight: 'Win',
   ControlLeft: 'Ctrl', ControlRight: 'Ctrl',
   ShiftLeft: 'Shift', ShiftRight: 'Shift',
-  AltLeft: 'Alt', AltRight: 'Alt',
+  AltLeft: 'Alt', AltRight: 'AltGr',
   CapsLock: 'Caps', NumLock: 'Num', ScrollLock: 'Scroll',
   Backspace: 'Back', Delete: 'Del',
   ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
   Escape: 'Esc', Enter: 'Enter', Tab: 'Tab', Space: 'Space',
   PageUp: 'PgUp', PageDown: 'PgDn',
   Insert: 'Ins', Home: 'Home', End: 'End',
+  ContextMenu: 'Menu',
 }
 
 const keysDisplay = computed(() => {
@@ -36,50 +55,84 @@ const keysDisplay = computed(() => {
 </script>
 
 <template>
-  <div class="w-full border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <!-- Compact mode for small screens -->
-    <div v-if="compact" class="flex items-center justify-between text-xs px-2 py-0.5">
-      <!-- LED indicator only in compact mode -->
-      <div class="flex items-center gap-1">
-        <span
-          v-if="capsLock"
-          class="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium"
-        >C</span>
-        <span v-else class="text-muted-foreground/40 text-[10px]">-</span>
-      </div>
-      <!-- Keys in compact mode -->
-      <div v-if="keysDisplay" class="text-[10px] text-muted-foreground truncate max-w-[150px]">
-        {{ keysDisplay }}
+  <div class="w-full border-t bg-background">
+    <!-- Compact mode (explicit prop or auto on small screens via sm:hidden) -->
+    <div :class="compact ? '' : 'sm:hidden'">
+      <div class="flex items-center justify-between gap-3 text-xs px-2 h-7">
+        <div v-if="keyboardLedEnabled && !minimal" class="flex items-center gap-1">
+          <Badge
+            v-for="lock in lockButtons"
+            :key="lock.key"
+            as="button"
+            type="button"
+            variant="outline"
+            class="h-5 gap-1 px-1 text-xs text-foreground cursor-pointer hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="keyboardLockDisabled || pressedKeys?.includes(lock.key)"
+            :aria-pressed="!!lock.active"
+            :aria-label="t('infobar.toggleLock', { key: lock.key })"
+            :title="t('infobar.toggleLock', { key: lock.key })"
+            @mousedown.prevent
+            @keydown.stop
+            @keyup.stop
+            @click="emit('toggleLock', lock.key)"
+          >
+            <span class="size-1.5 rounded-full" :class="lock.active ? 'bg-status-active' : 'bg-muted-foreground/30'" />
+            {{ lock.label }}
+          </Badge>
+        </div>
+        <div v-else-if="!minimal" class="text-xs text-muted-foreground">
+          {{ t('infobar.keyboardLedUnavailable') }}
+        </div>
+        <span v-if="captured && minimal" class="min-w-0 truncate text-xs text-muted-foreground" :title="t('infobar.pointerCaptured')">{{ t('infobar.pointerCaptured') }}</span>
+        <div v-if="keysDisplay" class="text-xs text-muted-foreground truncate max-w-[200px]">
+          {{ keysDisplay }}
+        </div>
       </div>
     </div>
 
-    <!-- Normal mode -->
-    <div v-else class="flex flex-wrap items-center justify-between text-xs">
-      <!-- Left side: Debug info and pressed keys -->
-      <div class="flex items-center gap-4 px-3 py-1 min-w-0 flex-1">
-        <!-- Pressed Keys -->
-        <div class="flex items-center gap-1.5 min-w-0">
-          <span class="font-medium text-muted-foreground shrink-0 hidden sm:inline">{{ t('infobar.keys') }}:</span>
-          <span class="text-foreground truncate">{{ keysDisplay || '-' }}</span>
+    <!-- Normal mode (hidden on small screens unless compact is explicitly set) -->
+    <div :class="compact ? 'hidden' : 'hidden sm:block'">
+      <div class="flex flex-wrap items-center justify-between text-xs">
+        <!-- Left side: Debug info and pressed keys -->
+        <div class="flex items-center gap-4 px-3 py-1 min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="font-medium text-muted-foreground shrink-0">{{ t('infobar.keys') }}:</span>
+            <Kbd class="max-w-full truncate">{{ keysDisplay || '-' }}</Kbd>
+          </div>
+
+          <div v-if="debugMode && mousePosition" class="flex items-center gap-1.5 hidden md:flex">
+            <span class="font-medium text-muted-foreground">{{ t('infobar.pointer') }}:</span>
+            <span class="text-foreground">{{ mousePosition.x }}, {{ mousePosition.y }}</span>
+          </div>
         </div>
 
-        <!-- Debug: Mouse Position -->
-        <div v-if="debugMode && mousePosition" class="flex items-center gap-1.5 hidden md:flex">
-          <span class="font-medium text-muted-foreground">{{ t('infobar.pointer') }}:</span>
-          <span class="text-foreground">{{ mousePosition.x }}, {{ mousePosition.y }}</span>
-        </div>
-      </div>
-
-      <!-- Right side: Caps Lock LED state -->
-      <div class="flex items-center shrink-0">
-        <div
-          :class="cn(
-            'px-2 py-1 select-none transition-colors',
-            capsLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
-          )"
-        >
-          <span class="hidden sm:inline">{{ t('infobar.caps') }}</span>
-          <span class="sm:hidden">C</span>
+        <!-- Right side: Keyboard LED states -->
+        <div class="flex items-center shrink-0">
+          <Separator orientation="vertical" class="h-5" />
+          <template v-if="keyboardLedEnabled">
+            <Badge
+              v-for="lock in lockButtons"
+              :key="lock.key"
+              as="button"
+              type="button"
+              variant="outline"
+              class="mx-1 gap-1.5 text-foreground cursor-pointer hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="keyboardLockDisabled || pressedKeys?.includes(lock.key)"
+              :aria-pressed="!!lock.active"
+              :aria-label="t('infobar.toggleLock', { key: lock.key })"
+              :title="t('infobar.toggleLock', { key: lock.key })"
+              @mousedown.prevent
+              @keydown.stop
+              @keyup.stop
+              @click="emit('toggleLock', lock.key)"
+            >
+              <span class="size-1.5 rounded-full" :class="lock.active ? 'bg-status-active' : 'bg-muted-foreground/30'" />
+              {{ lock.label }}
+            </Badge>
+          </template>
+          <div v-else class="px-3 py-1 text-muted-foreground/60">
+            {{ t('infobar.keyboardLedUnavailable') }}
+          </div>
         </div>
       </div>
     </div>

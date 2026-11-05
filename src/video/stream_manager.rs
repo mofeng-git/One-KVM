@@ -12,7 +12,6 @@
 //!     │
 //!     ├── MJPEG Mode
 //!     │       └── Streamer ──► MjpegStreamHandler
-//!     │           (Future: MjpegStreamer with WsAudio/WsHid)
 //!     │
 //!     └── WebRTC Mode
 //!             └── WebRtcStreamer ──► H264SessionManager
@@ -37,9 +36,10 @@ use crate::error::Result;
 use crate::events::{EventBus, SystemEvent, VideoDeviceInfo};
 use crate::hid::HidController;
 use crate::stream::MjpegStreamHandler;
+use crate::video::codec_constraints::StreamCodecConstraints;
 use crate::video::format::{PixelFormat, Resolution};
-use crate::video::streamer::{Streamer, StreamerState};
-use crate::webrtc::WebRtcStreamer;
+use crate::video::streamer::{Streamer, StreamerState, StreamerStats};
+use crate::video::traits::VideoOutput;
 
 /// Video stream manager configuration
 #[derive(Debug, Clone)]
@@ -94,12 +94,14 @@ pub struct VideoStreamManager {
     mode: RwLock<StreamMode>,
     /// MJPEG streamer (handles video capture and MJPEG distribution)
     streamer: Arc<Streamer>,
-    /// WebRTC streamer (unified WebRTC manager with multi-codec support)
-    webrtc_streamer: Arc<WebRtcStreamer>,
+    /// WebRTC output (unified WebRTC manager with multi-codec support)
+    webrtc_streamer: Arc<dyn VideoOutput>,
     /// Event bus for notifications
     events: RwLock<Option<Arc<EventBus>>>,
     /// Configuration store
     config_store: RwLock<Option<ConfigStore>>,
+    /// Codec constraints derived from services that are actually running.
+    runtime_codec_constraints: RwLock<Option<StreamCodecConstraints>>,
     /// Mode switching lock to prevent concurrent switch requests
     switching: AtomicBool,
     /// Current mode switch transaction ID (set while switching=true)
@@ -110,7 +112,7 @@ impl VideoStreamManager {
     /// Create a new video stream manager with WebRtcStreamer
     pub fn with_webrtc_streamer(
         streamer: Arc<Streamer>,
-        webrtc_streamer: Arc<WebRtcStreamer>,
+        webrtc_streamer: Arc<dyn VideoOutput>,
     ) -> Arc<Self> {
         Arc::new(Self {
             mode: RwLock::new(StreamMode::Mjpeg),
@@ -118,6 +120,7 @@ impl VideoStreamManager {
             webrtc_streamer,
             events: RwLock::new(None),
             config_store: RwLock::new(None),
+            runtime_codec_constraints: RwLock::new(None),
             switching: AtomicBool::new(false),
             transition_id: RwLock::new(None),
         })
@@ -144,6 +147,24 @@ impl VideoStreamManager {
         *self.config_store.write().await = Some(config);
     }
 
+    pub async fn set_runtime_codec_constraints(&self, constraints: StreamCodecConstraints) {
+        *self.runtime_codec_constraints.write().await = Some(constraints);
+    }
+
+    /// Get current stream codec constraints derived from running services.
+    pub async fn codec_constraints(&self) -> StreamCodecConstraints {
+        if let Some(constraints) = self.runtime_codec_constraints.read().await.as_ref() {
+            return constraints.clone();
+        }
+
+        if let Some(ref config_store) = *self.config_store.read().await {
+            let config = config_store.get();
+            StreamCodecConstraints::from_config(&config)
+        } else {
+            StreamCodecConstraints::unrestricted()
+        }
+    }
+
     /// Get current streaming mode
     pub async fn current_mode(&self) -> StreamMode {
         self.mode.read().await.clone()
@@ -164,11 +185,6 @@ impl VideoStreamManager {
         self.streamer.clone()
     }
 
-    /// Get the WebRTC streamer (unified interface with multi-codec support)
-    pub fn webrtc_streamer(&self) -> Arc<WebRtcStreamer> {
-        self.webrtc_streamer.clone()
-    }
-
     /// Get the MJPEG stream handler
     pub fn mjpeg_handler(&self) -> Arc<MjpegStreamHandler> {
         self.streamer.mjpeg_handler()
@@ -179,56 +195,19 @@ impl VideoStreamManager {
         info!("Initializing video stream manager with mode: {:?}", mode);
         *self.mode.write().await = mode.clone();
 
-        // Check if streamer is already initialized (capturer exists)
-        let needs_init = self.streamer.state().await == StreamerState::Uninitialized;
+        // A failed fixed-device configuration can leave the streamer in a transient
+        // state without a capture device. Treat that the same as an uninitialized
+        // streamer so the advertised auto-detection fallback actually runs.
+        let state = self.streamer.state().await;
+        let (device_path, _, _, _, _) = self.streamer.current_capture_config().await;
+        let needs_init = state == StreamerState::Uninitialized || device_path.is_none();
 
         if needs_init {
-            match mode {
-                StreamMode::Mjpeg => {
-                    // Initialize MJPEG streamer
-                    if let Err(e) = self.streamer.init_auto().await {
-                        warn!("Failed to auto-initialize MJPEG streamer: {}", e);
-                    }
-                }
-                StreamMode::WebRTC => {
-                    // WebRTC is initialized on-demand when clients connect
-                    // But we still need to initialize the video capture
-                    if let Err(e) = self.streamer.init_auto().await {
-                        warn!("Failed to auto-initialize video capture for WebRTC: {}", e);
-                    }
-                }
-            }
+            self.streamer.init_auto().await?;
         }
 
-        // Configure WebRTC capture source after initialization
-        let (device_path, resolution, format, fps, jpeg_quality) =
-            self.streamer.current_capture_config().await;
-        info!(
-            "WebRTC capture config after init: {}x{} {:?} @ {}fps",
-            resolution.width, resolution.height, format, fps
-        );
-        self.webrtc_streamer
-            .update_video_config(resolution, format, fps)
-            .await;
-        if let Some(device_path) = device_path {
-            self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
-                .await;
-        }
+        self.sync_webrtc_capture_source("after init").await;
 
-        Ok(())
-    }
-
-    /// Switch streaming mode
-    ///
-    /// This will:
-    /// 1. Acquire switching lock (prevent concurrent switches)
-    /// 2. Notify clients of the mode change
-    /// 3. Stop the current mode
-    /// 4. Start the new mode (ensuring video capture runs for WebRTC)
-    /// 5. Update configuration
-    pub async fn switch_mode(self: &Arc<Self>, new_mode: StreamMode) -> Result<()> {
-        let _ = self.switch_mode_transaction(new_mode).await?;
         Ok(())
     }
 
@@ -340,22 +319,29 @@ impl VideoStreamManager {
             }
         }
 
+        self.sync_webrtc_capture_source("for WebRTC ensure").await;
+
+        Ok(())
+    }
+
+    async fn sync_webrtc_capture_source(&self, reason: &str) {
         let (device_path, resolution, format, fps, jpeg_quality) =
             self.streamer.current_capture_config().await;
         info!(
-            "Configuring WebRTC capture: {}x{} {:?} @ {}fps",
-            resolution.width, resolution.height, format, fps
+            "Syncing WebRTC capture source {}: {}x{} {:?} @ {}fps",
+            reason, resolution.width, resolution.height, format, fps
         );
         self.webrtc_streamer
             .update_video_config(resolution, format, fps)
             .await;
         if let Some(device_path) = device_path {
+            let device_info = self.streamer.current_device().await;
             self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
+                .set_capture_device(device_path, jpeg_quality, device_info)
                 .await;
+        } else {
+            warn!("No capture device configured while syncing WebRTC capture source");
         }
-
-        Ok(())
     }
 
     /// Internal implementation of mode switching (called with lock held)
@@ -401,8 +387,11 @@ impl VideoStreamManager {
                 }
             }
             StreamMode::WebRTC => {
-                info!("Closing all WebRTC sessions");
-                let closed = self.webrtc_streamer.close_all_sessions().await;
+                info!("Closing all WebRTC sessions and releasing capture device");
+                let closed = self
+                    .webrtc_streamer
+                    .close_all_sessions_and_release_device()
+                    .await?;
                 if closed > 0 {
                     info!("Closed {} WebRTC sessions", closed);
                 }
@@ -416,32 +405,6 @@ impl VideoStreamManager {
         match new_mode {
             StreamMode::Mjpeg => {
                 info!("Starting MJPEG streaming");
-
-                // Auto-switch to MJPEG format if device supports it
-                if let Some(device) = self.streamer.current_device().await {
-                    let (current_format, resolution, fps) =
-                        self.streamer.current_video_config().await;
-                    let available_formats: Vec<PixelFormat> =
-                        device.formats.iter().map(|f| f.format).collect();
-
-                    // If current format is not MJPEG and device supports MJPEG, switch to it
-                    if current_format != PixelFormat::Mjpeg
-                        && available_formats.contains(&PixelFormat::Mjpeg)
-                    {
-                        info!("Auto-switching to MJPEG format for MJPEG mode");
-                        let device_path = device.path.to_string_lossy().to_string();
-                        if let Err(e) = self
-                            .streamer
-                            .apply_video_config(&device_path, PixelFormat::Mjpeg, resolution, fps)
-                            .await
-                        {
-                            warn!(
-                                "Failed to auto-switch to MJPEG format: {}, keeping current format",
-                                e
-                            );
-                        }
-                    }
-                }
 
                 if let Err(e) = self.streamer.start().await {
                     error!("Failed to start MJPEG streamer: {}", e);
@@ -460,22 +423,7 @@ impl VideoStreamManager {
                     }
                 }
 
-                let (device_path, resolution, format, fps, jpeg_quality) =
-                    self.streamer.current_capture_config().await;
-                info!(
-                    "Configuring WebRTC capture pipeline: {}x{} {:?} @ {}fps",
-                    resolution.width, resolution.height, format, fps
-                );
-                self.webrtc_streamer
-                    .update_video_config(resolution, format, fps)
-                    .await;
-                if let Some(device_path) = device_path {
-                    self.webrtc_streamer
-                        .set_capture_device(device_path, jpeg_quality)
-                        .await;
-                } else {
-                    warn!("No capture device configured for WebRTC");
-                }
+                self.sync_webrtc_capture_source("for WebRTC mode").await;
 
                 let codec = self.webrtc_streamer.current_video_codec().await;
                 let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
@@ -521,17 +469,30 @@ impl VideoStreamManager {
             device_path, format, resolution.width, resolution.height, fps, mode
         );
 
+        if mode == StreamMode::WebRTC {
+            // Stop the shared pipeline before replacing the capture source so WebRTC
+            // sessions do not stay attached to a stale frame source.
+            self.webrtc_streamer
+                .update_video_config(resolution, format, fps)
+                .await;
+            info!("WebRTC streamer config updated (pipeline stopped, sessions closed)");
+        }
+
         // Apply to streamer (handles video capture)
         self.streamer
             .apply_video_config(device_path, format, resolution, fps)
             .await?;
 
+        if mode != StreamMode::WebRTC {
+            if let Err(e) = self.start().await {
+                error!("Failed to start streamer after config change: {}", e);
+            } else {
+                info!("Streamer started after config change");
+            }
+        }
+
         // Update WebRTC config if in WebRTC mode
         if mode == StreamMode::WebRTC {
-            self.webrtc_streamer
-                .update_video_config(resolution, format, fps)
-                .await;
-
             let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
                 self.streamer.current_capture_config().await;
             if actual_format != format || actual_resolution != resolution || actual_fps != fps {
@@ -545,8 +506,9 @@ impl VideoStreamManager {
             }
             if let Some(device_path) = device_path {
                 info!("Configuring direct capture for WebRTC after config change");
+                let device_info = self.streamer.current_device().await;
                 self.webrtc_streamer
-                    .set_capture_device(device_path, jpeg_quality)
+                    .set_capture_device(device_path, jpeg_quality, device_info)
                     .await;
             } else {
                 warn!("No capture device configured for WebRTC after config change");
@@ -579,19 +541,7 @@ impl VideoStreamManager {
                     self.streamer.init_auto().await?;
                 }
 
-                // Synchronize WebRTC config with current capture config
-                let (device_path, resolution, format, fps, jpeg_quality) =
-                    self.streamer.current_capture_config().await;
-                self.webrtc_streamer
-                    .update_video_config(resolution, format, fps)
-                    .await;
-                if let Some(device_path) = device_path {
-                    self.webrtc_streamer
-                        .set_capture_device(device_path, jpeg_quality)
-                        .await;
-                } else {
-                    warn!("No capture device configured for WebRTC");
-                }
+                self.sync_webrtc_capture_source("before start").await;
             }
         }
 
@@ -617,7 +567,7 @@ impl VideoStreamManager {
 
     /// Get video device info for device_info event
     pub async fn get_video_info(&self) -> VideoDeviceInfo {
-        let stats = self.streamer.stats().await;
+        let stats = self.stats().await;
         let state = self.streamer.state().await;
         let device = self.streamer.current_device().await;
         let mode = self.mode.read().await.clone();
@@ -643,22 +593,12 @@ impl VideoStreamManager {
             config_changing: self.streamer.is_config_changing(),
             error: if state == StreamerState::Error {
                 Some("Video stream error".to_string())
-            } else if state == StreamerState::NoSignal {
+            } else if state.is_no_signal_like() {
                 Some("No video signal".to_string())
             } else {
                 None
             },
         }
-    }
-
-    /// Get MJPEG client count
-    pub fn mjpeg_client_count(&self) -> u64 {
-        self.streamer.mjpeg_handler().client_count()
-    }
-
-    /// Get WebRTC session count
-    pub async fn webrtc_session_count(&self) -> usize {
-        self.webrtc_streamer.session_count().await
     }
 
     /// Set HID controller for WebRTC DataChannel
@@ -669,11 +609,6 @@ impl VideoStreamManager {
     /// Set audio enabled state for WebRTC
     pub async fn set_webrtc_audio_enabled(&self, enabled: bool) -> Result<()> {
         self.webrtc_streamer.set_audio_enabled(enabled).await
-    }
-
-    /// Check if WebRTC audio is enabled
-    pub async fn is_webrtc_audio_enabled(&self) -> bool {
-        self.webrtc_streamer.is_audio_enabled().await
     }
 
     /// Reconnect audio sources for all WebRTC sessions
@@ -694,8 +629,24 @@ impl VideoStreamManager {
     }
 
     /// Get streamer statistics
-    pub async fn stats(&self) -> crate::video::streamer::StreamerStats {
-        self.streamer.stats().await
+    ///
+    /// In WebRTC mode, resolution/format/target_fps/fps reflect
+    /// [`WebRtcStreamer`]'s config (updated after DV negotiation / geometry sync),
+    /// not only the MJPEG [`Streamer`] snapshot — so `/api/stream/status` matches
+    /// what the shared encoder actually uses.
+    pub async fn stats(&self) -> StreamerStats {
+        let mut s = self.streamer.stats().await;
+        if *self.mode.read().await == StreamMode::WebRTC {
+            let (res, fmt, tgt_fps) = self.webrtc_streamer.current_video_geometry().await;
+            s.format = Some(fmt.to_string());
+            s.resolution = Some((res.width, res.height));
+            s.target_fps = tgt_fps;
+            if let Some(ps) = self.webrtc_streamer.pipeline_stats().await {
+                s.fps = ps.current_fps;
+            }
+            s.clients = self.webrtc_streamer.session_count().await as u64;
+        }
+        s
     }
 
     /// Check if config is being changed
@@ -718,9 +669,7 @@ impl VideoStreamManager {
     /// Returns None if video capture cannot be started or pipeline creation fails.
     pub async fn subscribe_encoded_frames(
         &self,
-    ) -> Option<tokio::sync::mpsc::Receiver<std::sync::Arc<
-        crate::video::shared_video_pipeline::EncodedVideoFrame,
-    >>> {
+    ) -> Option<crate::video::pipeline::EncodedVideoFrameReceiver> {
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");
@@ -734,29 +683,19 @@ impl VideoStreamManager {
         }
 
         // 2. Synchronize WebRTC config with capture config
-        let (device_path, resolution, format, fps, jpeg_quality) =
-            self.streamer.current_capture_config().await;
-        tracing::info!(
-            "Connecting encoded frame subscription: {}x{} {:?} @ {}fps",
-            resolution.width,
-            resolution.height,
-            format,
-            fps
-        );
-        self.webrtc_streamer
-            .update_video_config(resolution, format, fps)
+        let (device_path, _, _, _, _) = self.streamer.current_capture_config().await;
+        self.sync_webrtc_capture_source("for encoded frame subscription")
             .await;
-        if let Some(device_path) = device_path {
-            self.webrtc_streamer
-                .set_capture_device(device_path, jpeg_quality)
-                .await;
-        } else {
-            tracing::warn!("No capture device configured for encoded frames");
+        if device_path.is_none() {
             return None;
         }
 
         // 3. Use WebRtcStreamer to ensure the shared video pipeline is running
-        match self.webrtc_streamer.ensure_video_pipeline_for_external().await {
+        match self
+            .webrtc_streamer
+            .ensure_video_pipeline_for_external()
+            .await
+        {
             Ok(pipeline) => Some(pipeline.subscribe()),
             Err(e) => {
                 tracing::error!("Failed to start shared video pipeline: {}", e);
@@ -765,11 +704,37 @@ impl VideoStreamManager {
         }
     }
 
+    pub(crate) async fn snapshot_pipeline(
+        &self,
+    ) -> Result<Arc<crate::video::pipeline::SharedVideoPipeline>> {
+        // Preserve a running pipeline's negotiated/source-following geometry.
+        // Syncing the MJPEG configuration on every snapshot could restart WebRTC viewers.
+        if self.webrtc_streamer.get_pipeline_config().await.is_none() {
+            if self.streamer.state().await == StreamerState::Uninitialized {
+                self.streamer.init_auto().await?;
+            }
+            self.sync_webrtc_capture_source("for snapshot").await;
+        }
+        self.webrtc_streamer
+            .ensure_video_pipeline_for_external()
+            .await
+    }
+
     /// Get the current video encoding configuration from the shared pipeline
     pub async fn get_encoding_config(
         &self,
-    ) -> Option<crate::video::shared_video_pipeline::SharedVideoPipelineConfig> {
+    ) -> Option<crate::video::pipeline::SharedVideoPipelineConfig> {
         self.webrtc_streamer.get_pipeline_config().await
+    }
+
+    /// Get current video codec type
+    pub async fn current_video_codec(&self) -> crate::video::codec::VideoCodecType {
+        self.webrtc_streamer.current_video_codec().await
+    }
+
+    /// Check if hardware encoding is in use
+    pub async fn is_hardware_encoding(&self) -> bool {
+        self.webrtc_streamer.is_hardware_encoding().await
     }
 
     /// Set video codec for the shared video pipeline
@@ -778,7 +743,7 @@ impl VideoStreamManager {
     /// before subscribing to encoded frames.
     pub async fn set_video_codec(
         &self,
-        codec: crate::video::encoder::VideoCodecType,
+        codec: crate::video::codec::VideoCodecType,
     ) -> crate::error::Result<()> {
         self.webrtc_streamer.set_video_codec(codec).await
     }
@@ -789,7 +754,7 @@ impl VideoStreamManager {
     /// based on client preferences.
     pub async fn set_bitrate_preset(
         &self,
-        preset: crate::video::encoder::BitratePreset,
+        preset: crate::video::codec::BitratePreset,
     ) -> crate::error::Result<()> {
         self.webrtc_streamer.set_bitrate_preset(preset).await
     }
@@ -797,6 +762,61 @@ impl VideoStreamManager {
     /// Request a keyframe from the shared video pipeline
     pub async fn request_keyframe(&self) -> crate::error::Result<()> {
         self.webrtc_streamer.request_keyframe().await
+    }
+
+    /// Notify frontend about a codec-only switch (WebRTC mode unchanged, codec changed).
+    ///
+    /// `set_video_codec` already rebuilt the pipeline synchronously, so we just
+    /// emit the events the frontend waits on: `StreamModeChanged`, `WebRTCReady`,
+    /// and `StreamModeReady`.
+    ///
+    /// Events are spawned asynchronously so the HTTP response (carrying the
+    /// `transition_id`) reaches the client before the WebSocket events, giving
+    /// the frontend time to call `registerTransition()` first.
+    pub async fn notify_codec_switch(
+        self: &Arc<Self>,
+        transition_id: &str,
+        new_codec_str: &str,
+        previous_codec_str: &str,
+    ) {
+        let manager = Arc::clone(self);
+        let transition_id = transition_id.to_string();
+        let new_codec = new_codec_str.to_string();
+        let prev_codec = previous_codec_str.to_string();
+
+        tokio::spawn(async move {
+            // Small yield to ensure the HTTP response is flushed first.
+            tokio::task::yield_now().await;
+
+            manager
+                .publish_event(SystemEvent::StreamModeChanged {
+                    transition_id: Some(transition_id.clone()),
+                    mode: new_codec.clone(),
+                    previous_mode: prev_codec.clone(),
+                })
+                .await;
+
+            let is_hardware = manager.webrtc_streamer.is_hardware_encoding().await;
+            manager
+                .publish_event(SystemEvent::WebRTCReady {
+                    transition_id: Some(transition_id.clone()),
+                    codec: new_codec.clone(),
+                    hardware: is_hardware,
+                })
+                .await;
+
+            manager
+                .publish_event(SystemEvent::StreamModeReady {
+                    transition_id: transition_id.clone(),
+                    mode: new_codec.clone(),
+                })
+                .await;
+
+            info!(
+                "Codec switch notified: {} -> {} (transition: {})",
+                prev_codec, new_codec, transition_id
+            );
+        });
     }
 
     /// Publish event to event bus
@@ -808,19 +828,19 @@ impl VideoStreamManager {
 }
 
 /// Convert VideoCodecType to lowercase string for frontend
-fn codec_to_string(codec: crate::video::encoder::VideoCodecType) -> String {
+fn codec_to_string(codec: crate::video::codec::VideoCodecType) -> String {
     match codec {
-        crate::video::encoder::VideoCodecType::H264 => "h264".to_string(),
-        crate::video::encoder::VideoCodecType::H265 => "h265".to_string(),
-        crate::video::encoder::VideoCodecType::VP8 => "vp8".to_string(),
-        crate::video::encoder::VideoCodecType::VP9 => "vp9".to_string(),
+        crate::video::codec::VideoCodecType::H264 => "h264".to_string(),
+        crate::video::codec::VideoCodecType::H265 => "h265".to_string(),
+        crate::video::codec::VideoCodecType::VP8 => "vp8".to_string(),
+        crate::video::codec::VideoCodecType::VP9 => "vp9".to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::video::encoder::VideoCodecType;
+    use crate::video::codec::VideoCodecType;
 
     #[test]
     fn test_codec_to_string() {

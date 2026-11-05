@@ -1,17 +1,55 @@
-# Cross-compilation image for ARM64 based on Debian 11
-# Build on Debian 11 (GLIBC 2.31) for maximum runtime compatibility
+# Cross-compilation image for ARM64 based on Debian 12
+# Build on Debian 12 (GLIBC 2.36) to match the runtime images
 
-FROM debian:11
+ARG DEBIAN_IMAGE=debian:12
+FROM ${DEBIAN_IMAGE}
 
-# Set Rustup mirrors (Aliyun)
-ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
-    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+ARG CHINAMIRRO=0
+ARG GH_PROXY=https://gh-proxy.com/
+ARG RUSTUP_DIST_SERVER_CN=https://mirrors.ustc.edu.cn/rust-static
+ARG RUSTUP_UPDATE_ROOT_CN=https://mirrors.ustc.edu.cn/rust-static/rustup
+ARG CARGO_INDEX_CN=https://mirrors.ustc.edu.cn/crates.io-index
+ARG CARGO_REGISTRY_CN=sparse+https://mirrors.ustc.edu.cn/crates.io-index/
+ARG LIBJPEG_TURBO_VERSION=3.1.4.1
+ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
+ARG LIBVPX_VERSION=1.16.0
+ARG X265_VERSION=3.4
+ARG OPUS_VERSION=1.5.2
+ARG RKMPP_BRANCH=jellyfin-mpp
+ARG RKRGA_BRANCH=jellyfin-rga
+ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
+
+# Optionally use China mirrors for builds in China.
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        sed -i -E \
+            -e 's@http://deb.debian.org/debian([[:space:]]|$)@http://mirrors.tuna.tsinghua.edu.cn/debian\1@g' \
+            /etc/apt/sources.list.d/debian.sources; \
+    fi
 
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    && if [ "$CHINAMIRRO" = "1" ]; then \
+        export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER_CN}; \
+        export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT_CN}; \
+    fi \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && if [ "$CHINAMIRRO" = "1" ]; then \
+        mkdir -p /root/.cargo; \
+        printf '%s\n' \
+            '[source.crates-io]' \
+            "replace-with = 'cn-mirror-sparse'" \
+            '[source.cn-mirror]' \
+            "registry = '${CARGO_INDEX_CN}'" \
+            '[source.cn-mirror-sparse]' \
+            "registry = '${CARGO_REGISTRY_CN}'" \
+            '[registries.cn-mirror]' \
+            "index = '${CARGO_INDEX_CN}'" \
+            '[net]' \
+            'git-fetch-with-cli = true' \
+            > /root/.cargo/config.toml; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -22,6 +60,7 @@ RUN dpkg --add-architecture arm64
 # Install cross-compiler and native build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    patch \
     pkg-config \
     cmake \
     nasm \
@@ -31,7 +70,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     meson \
     ninja-build \
     wget \
+    xz-utils \
     file \
+    rsync \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
@@ -43,20 +84,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install ARM64 development libraries (without VAAPI/X11 for ARM)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    libssl3:arm64 \
     libasound2-dev:arm64 \
     libv4l-dev:arm64 \
     libudev-dev:arm64 \
     zlib1g-dev:arm64 \
+    linux-libc-dev:arm64 \
     # Note: libjpeg-turbo, libyuv, libvpx, libx264, libx265, libopus are built from source below for static linking
     libdrm-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Build static libjpeg-turbo from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/libjpeg-turbo \
     && cd /tmp/libjpeg-turbo \
+    && git remote add origin "${github_prefix}https://github.com/libjpeg-turbo/libjpeg-turbo.git" \
+    && git fetch --depth 1 origin "refs/tags/${LIBJPEG_TURBO_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
+        -DCMAKE_INSTALL_LIBDIR=lib \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
@@ -66,8 +116,13 @@ RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libj
     && rm -rf /tmp/libjpeg-turbo
 
 # Build static libyuv from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
+RUN git init /tmp/libyuv \
     && cd /tmp/libyuv \
+    && github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git remote add origin "${github_prefix}https://github.com/lemenkov/libyuv" \
+    && git fetch --depth 1 origin ${LIBYUV_REV} \
+    && git checkout --detach FETCH_HEAD \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
@@ -75,14 +130,24 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DJPEG_FOUND=TRUE \
+        -DJPEG_INCLUDE_DIR=/usr/aarch64-linux-gnu/include \
+        -DJPEG_LIBRARY=/usr/aarch64-linux-gnu/lib/libjpeg.a \
+        -DCMAKE_C_FLAGS="-DHAVE_JPEG -I/usr/aarch64-linux-gnu/include" \
+        -DCMAKE_CXX_FLAGS="-DHAVE_JPEG -I/usr/aarch64-linux-gnu/include" \
     && make -j$(nproc) \
     && make install \
     && rm -rf /tmp/libyuv
 
 # Build static libvpx from source (cross-compile for ARM64)
 # CC/CXX/LD/AR must be environment variables, not configure arguments
-RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/libvpx \
     && cd /tmp/libvpx \
+    && git remote add origin "${github_prefix}https://github.com/webmproject/libvpx.git" \
+    && git fetch --depth 1 origin "refs/tags/v${LIBVPX_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && echo "=== libvpx: Configuring for ARM64 ===" \
     && export CC=aarch64-linux-gnu-gcc \
     && export CXX=aarch64-linux-gnu-g++ \
@@ -105,7 +170,9 @@ RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
     && rm -rf /tmp/libvpx
 
 # Build static libx264 from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git clone --depth 1 "${github_prefix}https://github.com/mirror/x264.git" /tmp/x264 \
     && cd /tmp/x264 \
     && export CC=aarch64-linux-gnu-gcc \
     && export AR=aarch64-linux-gnu-ar \
@@ -121,12 +188,18 @@ RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
     && rm -rf /tmp/x264
 
 # Build static libx265 from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://bitbucket.org/multicoreware/x265_git /tmp/x265 \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git init /tmp/x265 \
     && cd /tmp/x265 \
+    && git remote add origin "${github_prefix}https://github.com/videolan/x265.git" \
+    && git fetch --depth 1 origin "refs/tags/${X265_VERSION}" \
+    && git checkout --detach FETCH_HEAD \
     && cd source \
     && mkdir -p build \
     && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_ASM_NASM_FLAGS="-w-macro-params-legacy" \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
@@ -160,12 +233,15 @@ Cflags: -I\${includedir}
 EOF
 
 # Build static libopus from source (cross-compile for ARM64)
-RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
+RUN github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && wget -O /tmp/opus.tar.gz "${github_prefix}https://github.com/xiph/opus/releases/download/v${OPUS_VERSION}/opus-${OPUS_VERSION}.tar.gz" \
+    && tar -xzf /tmp/opus.tar.gz -C /tmp \
+    && mv "/tmp/opus-${OPUS_VERSION}" /tmp/opus \
     && cd /tmp/opus \
     && export CC=aarch64-linux-gnu-gcc \
     && export AR=aarch64-linux-gnu-ar \
     && export RANLIB=aarch64-linux-gnu-ranlib \
-    && ./autogen.sh \
     && ./configure \
         --prefix=/usr/aarch64-linux-gnu \
         --host=aarch64-linux-gnu \
@@ -173,13 +249,24 @@ RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
         --disable-doc \
     && make -j$(nproc) \
     && make install \
-    && rm -rf /tmp/opus
+    && rm -rf /tmp/opus /tmp/opus.tar.gz
+
+# Reject raw formats smaller than the requested frame before any V4L2 upload.
+COPY build/cross/patches/0001-v4l2-m2m-reject-undersized-encoder-format.patch /tmp/ffmpeg-v4l2-size.patch
 
 # Download and build FFmpeg with RKMPP support
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
-    && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
-    && tar -xzf ffmpeg.tar.gz \
-    && cd ffmpeg \
+    && github_prefix="" \
+    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
+    && git clone --depth 1 --branch ${RKMPP_BRANCH} "${github_prefix}https://github.com/nyanmisaka/mpp.git" rkmpp \
+    && git clone --depth 1 --branch ${RKRGA_BRANCH} "${github_prefix}https://github.com/nyanmisaka/rk-mirrors.git" rkrga \
+    && git init ffmpeg-rockchip \
+    && cd ffmpeg-rockchip \
+    && git remote add origin "${github_prefix}https://github.com/nyanmisaka/ffmpeg-rockchip.git" \
+    && git fetch --depth 1 origin ${FFMPEG_ROCKCHIP_REV} \
+    && git checkout --detach FETCH_HEAD \
+    && patch -p1 < /tmp/ffmpeg-v4l2-size.patch \
+    && cd .. \
     # Build RKMPP
     && mkdir -p rkmpp/build && cd rkmpp/build \
     && cmake .. \
@@ -194,6 +281,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && make -j$(nproc) \
     && make install \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/aarch64-linux-gnu/lib/pkgconfig/rockchip_mpp.pc \
+    && rm -f /usr/aarch64-linux-gnu/lib/librockchip_mpp.so* \
     && cd ../.. \
     # Build RKRGA - create cross file for meson
     && echo '[binaries]' > /tmp/aarch64-cross.txt \
@@ -221,6 +309,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && ar rcs /usr/aarch64-linux-gnu/lib/librga.a $(find build -name '*.o') \
     && ranlib /usr/aarch64-linux-gnu/lib/librga.a \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/aarch64-linux-gnu/lib/pkgconfig/librga.pc \
+    && rm -f /usr/aarch64-linux-gnu/lib/librga.so* \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
     && echo '#!/bin/sh' > /tmp/aarch64-pkg-config \
@@ -309,7 +398,11 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && rm -rf /tmp/ffmpeg-build /tmp/aarch64-cross.txt /tmp/aarch64-pkg-config
 
 # Add Rust target
-RUN rustup target add aarch64-unknown-linux-gnu
+RUN if [ "$CHINAMIRRO" = "1" ]; then \
+        export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER_CN}; \
+        export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT_CN}; \
+    fi \
+    && rustup target add aarch64-unknown-linux-gnu
 
 # Configure environment for cross-compilation
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
@@ -323,4 +416,4 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     LIBYUV_STATIC=1 \
     OPUS_STATIC=1 \
     PKG_CONFIG_ALL_STATIC=1 \
-    RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"
+    RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc -C link-arg=-Wl,--allow-multiple-definition"

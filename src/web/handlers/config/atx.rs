@@ -1,32 +1,34 @@
-//! ATX 配置 Handler
-
 use axum::{extract::State, Json};
 use std::sync::Arc;
 
-use crate::config::AtxConfig;
-use crate::error::Result;
+use crate::atx::AtxDriverType;
+use crate::config::{AtxConfig, HidConfig};
+use crate::error::{AppError, Result};
+use crate::runtime::{apply_atx_config, try_apply_lock};
 use crate::state::AppState;
 
-use super::apply::apply_atx_config;
 use super::types::AtxConfigUpdate;
 
-/// 获取 ATX 配置
 pub async fn get_atx_config(State(state): State<Arc<AppState>>) -> Json<AtxConfig> {
     Json(state.config.get().atx.clone())
 }
 
-/// 更新 ATX 配置
 pub async fn update_atx_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<AtxConfigUpdate>,
 ) -> Result<Json<AtxConfig>> {
-    // 1. 验证请求
-    req.validate()?;
+    let _usb_guard = try_apply_lock(&state.config_apply_locks.otg, "otg")?;
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.atx, "atx")?;
+    let current_config = state.config.get();
+    let old_atx_config = current_config.atx.clone();
 
-    // 2. 获取旧配置
-    let old_atx_config = state.config.get().atx.clone();
+    req.validate_with_current(&old_atx_config)?;
 
-    // 3. 应用更新到配置存储
+    let mut merged_atx_config = old_atx_config.clone();
+    req.apply_to(&mut merged_atx_config);
+    validate_windows_atx_backends(&merged_atx_config)?;
+    validate_serial_device_conflict(&merged_atx_config, &current_config.hid)?;
+
     state
         .config
         .update(|config| {
@@ -34,13 +36,84 @@ pub async fn update_atx_config(
         })
         .await?;
 
-    // 4. 获取新配置
     let new_atx_config = state.config.get().atx.clone();
 
-    // 5. 应用到子系统（热重载）
-    if let Err(e) = apply_atx_config(&state, &old_atx_config, &new_atx_config).await {
-        tracing::error!("Failed to apply ATX config: {}", e);
-    }
+    apply_atx_config(&state, &new_atx_config).await?;
 
     Ok(Json(new_atx_config))
+}
+
+fn validate_windows_atx_backends(atx: &AtxConfig) -> Result<()> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+
+    if !matches!(atx.driver, AtxDriverType::Serial | AtxDriverType::None) {
+        return Err(AppError::BadRequest(
+            "Windows ATX only supports serial relay or none".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+pub(super) fn validate_serial_device_conflict(atx: &AtxConfig, hid: &HidConfig) -> Result<()> {
+    if !hid.backend.uses_ch9329() {
+        return Ok(());
+    }
+    let reserved = hid.ch9329_port.trim();
+    if reserved.is_empty() {
+        return Ok(());
+    }
+
+    if atx.driver == AtxDriverType::Serial && atx.device.trim() == reserved {
+        return Err(AppError::BadRequest(format!(
+            "ATX serial device '{}' conflicts with HID CH9329 serial device",
+            reserved
+        )));
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::HidBackend;
+
+    #[test]
+    fn test_validate_serial_device_conflict_rejects_ch9329_overlap() {
+        let mut atx = AtxConfig::default();
+        atx.driver = AtxDriverType::Serial;
+        atx.device = "/dev/ttyUSB0".to_string();
+
+        let mut hid = HidConfig::default();
+        hid.backend = HidBackend::Ch9329;
+        hid.ch9329_port = "/dev/ttyUSB0".to_string();
+
+        assert!(validate_serial_device_conflict(&atx, &hid).is_err());
+        hid.backend = HidBackend::Ch9329Otg;
+        assert!(validate_serial_device_conflict(&atx, &hid).is_err());
+    }
+
+    #[test]
+    fn test_validate_serial_device_conflict_allows_non_ch9329_backend() {
+        let mut atx = AtxConfig::default();
+        atx.driver = AtxDriverType::Serial;
+        atx.device = "/dev/ttyUSB0".to_string();
+
+        let mut hid = HidConfig::default();
+        hid.backend = HidBackend::None;
+        hid.ch9329_port = "/dev/ttyUSB0".to_string();
+
+        assert!(validate_serial_device_conflict(&atx, &hid).is_ok());
+    }
+
+    #[test]
+    fn test_validate_windows_atx_backends_allows_serial() {
+        let mut atx = AtxConfig::default();
+        atx.driver = AtxDriverType::Serial;
+
+        assert!(validate_windows_atx_backends(&atx).is_ok());
+    }
 }

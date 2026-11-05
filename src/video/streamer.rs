@@ -3,29 +3,36 @@
 //! This module provides a high-level interface for video capture and streaming,
 //! managing the lifecycle of the capture thread and MJPEG/WebRTC distribution.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
 
-use super::device::{enumerate_devices, find_best_device, VideoDeviceInfo};
+use super::device::{
+    bridge as csi_bridge, enumerate_devices, find_best_device, is_csi_hdmi_bridge,
+    parse_bridge_kind, resolve_video_input_config, select_recovery_device, VideoControlMode,
+    VideoDevice, VideoDeviceInfo, VideoDeviceRecoveryHint,
+};
 use super::format::{PixelFormat, Resolution};
 use super::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 use crate::error::{AppError, Result};
-use crate::events::{EventBus, SystemEvent};
+use crate::events::{EventBus, StreamKind, SystemEvent};
 use crate::stream::MjpegStreamHandler;
-use v4l::buffer::Type as BufferType;
-use v4l::io::traits::CaptureStream;
-use v4l::prelude::*;
-use v4l::video::capture::Parameters;
-use v4l::video::Capture;
-use v4l::Format;
+use crate::utils::LogThrottler;
+use crate::video::capture::runtime::open_capture_stream;
+use crate::video::capture::status::{
+    capture_error_log_key, classify_capture_io_error, signal_status_from_capture_kind,
+    CaptureIoErrorKind,
+};
+use crate::video::capture::{
+    BridgeContext, CaptureReadError, CaptureStream, DEFAULT_CAPTURE_BUFFER_COUNT,
+};
+use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 
-/// Minimum valid frame size for capture
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
-/// Validate JPEG header every N frames to reduce overhead
-const JPEG_VALIDATE_INTERVAL: u64 = 30;
 
 /// Streamer configuration
 #[derive(Debug, Clone)]
@@ -54,7 +61,7 @@ impl Default for StreamerConfig {
     }
 }
 
-/// Streamer state
+/// Fine-grained capture state; [`external_state`] maps to UI wire names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamerState {
     /// Not initialized
@@ -63,20 +70,102 @@ pub enum StreamerState {
     Ready,
     /// Actively streaming
     Streaming,
-    /// No video signal
+    /// No video signal (generic / source not detected)
     NoSignal,
+    /// HDMI cable not connected (DV_RX_POWER_PRESENT = false or ENOLINK)
+    NoCable,
+    /// TMDS signal present but timings not locked (ENOLCK)
+    NoSync,
+    /// Source timings are outside of what the capture hardware supports (ERANGE)
+    OutOfRange,
+    /// UVC/USB isochronous protocol error (kernel EPROTO/-71)
+    UvcUsbError,
+    /// UVC capture stalled (repeated DQBUF timeouts)
+    UvcCaptureStall,
     /// Error occurred
     Error,
     /// Device was lost (unplugged)
     DeviceLost,
     /// Device is being recovered (reconnecting)
     Recovering,
+    Busy,
+}
+
+impl StreamerState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StreamerState::Uninitialized => "uninitialized",
+            StreamerState::Ready => "ready",
+            StreamerState::Streaming => "streaming",
+            StreamerState::NoSignal => "no_signal",
+            StreamerState::NoCable => "no_cable",
+            StreamerState::NoSync => "no_sync",
+            StreamerState::OutOfRange => "out_of_range",
+            StreamerState::UvcUsbError => "uvc_usb_error",
+            StreamerState::UvcCaptureStall => "uvc_capture_stall",
+            StreamerState::Error => "error",
+            StreamerState::DeviceLost => "device_lost",
+            StreamerState::Recovering => "recovering",
+            StreamerState::Busy => "device_busy",
+        }
+    }
+
+    /// Parse a state string as produced by [`StreamerState::as_str`].
+    pub fn from_str(s: &str) -> Option<Self> {
+        Some(match s {
+            "uninitialized" => StreamerState::Uninitialized,
+            "ready" => StreamerState::Ready,
+            "streaming" => StreamerState::Streaming,
+            "no_signal" => StreamerState::NoSignal,
+            "no_cable" => StreamerState::NoCable,
+            "no_sync" => StreamerState::NoSync,
+            "out_of_range" => StreamerState::OutOfRange,
+            "uvc_usb_error" => StreamerState::UvcUsbError,
+            "uvc_capture_stall" => StreamerState::UvcCaptureStall,
+            "error" => StreamerState::Error,
+            "device_lost" => StreamerState::DeviceLost,
+            "recovering" => StreamerState::Recovering,
+            "device_busy" | "busy" => StreamerState::Busy,
+            _ => return None,
+        })
+    }
+
+    pub fn is_no_signal_like(self) -> bool {
+        matches!(
+            self,
+            StreamerState::NoSignal
+                | StreamerState::NoCable
+                | StreamerState::NoSync
+                | StreamerState::OutOfRange
+                | StreamerState::UvcUsbError
+                | StreamerState::UvcCaptureStall
+        )
+    }
+
+    pub fn external_state(self) -> (&'static str, Option<&'static str>) {
+        match self {
+            StreamerState::Streaming => ("streaming", None),
+            StreamerState::Ready => ("ready", None),
+            StreamerState::Uninitialized => ("uninitialized", None),
+            StreamerState::Error => ("error", None),
+            StreamerState::NoSignal => ("no_signal", Some("no_signal")),
+            StreamerState::NoCable => ("no_signal", Some("no_cable")),
+            StreamerState::NoSync => ("no_signal", Some("no_sync")),
+            StreamerState::OutOfRange => ("no_signal", Some("out_of_range")),
+            StreamerState::UvcUsbError => ("no_signal", Some("uvc_usb_error")),
+            StreamerState::UvcCaptureStall => ("no_signal", Some("uvc_capture_stall")),
+            StreamerState::DeviceLost => ("device_lost", Some("device_lost")),
+            StreamerState::Recovering => ("device_lost", Some("recovering")),
+            StreamerState::Busy => ("device_busy", None),
+        }
+    }
 }
 
 /// Video streamer service
 pub struct Streamer {
     config: RwLock<StreamerConfig>,
     mjpeg_handler: Arc<MjpegStreamHandler>,
+    pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
     current_device: RwLock<Option<VideoDeviceInfo>>,
     state: RwLock<StreamerState>,
     start_lock: tokio::sync::Mutex<()>,
@@ -86,8 +175,8 @@ pub struct Streamer {
     current_fps: AtomicU32,
     /// Event bus for broadcasting state changes (optional)
     events: RwLock<Option<Arc<EventBus>>>,
-    /// Last published state (for change detection)
-    last_published_state: RwLock<Option<StreamerState>>,
+    last_published_state: RwLock<Option<(String, Option<String>, Option<u64>)>>,
+    next_retry_ms: AtomicU64,
     /// Flag to indicate config is being changed (prevents auto-start during config change)
     config_changing: std::sync::atomic::AtomicBool,
     /// Flag to indicate background tasks (stats, cleanup, monitor) have been started
@@ -109,6 +198,7 @@ impl Streamer {
         Arc::new(Self {
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
@@ -118,6 +208,7 @@ impl Streamer {
             current_fps: AtomicU32::new(0),
             events: RwLock::new(None),
             last_published_state: RwLock::new(None),
+            next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
             background_tasks_started: std::sync::atomic::AtomicBool::new(false),
             recovery_retry_count: std::sync::atomic::AtomicU32::new(0),
@@ -132,6 +223,7 @@ impl Streamer {
         Arc::new(Self {
             config: RwLock::new(config),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
@@ -141,6 +233,7 @@ impl Streamer {
             current_fps: AtomicU32::new(0),
             events: RwLock::new(None),
             last_published_state: RwLock::new(None),
+            next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
             background_tasks_started: std::sync::atomic::AtomicBool::new(false),
             recovery_retry_count: std::sync::atomic::AtomicU32::new(0),
@@ -150,7 +243,6 @@ impl Streamer {
         })
     }
 
-    /// Get current state as SystemEvent
     pub async fn current_state_event(&self) -> SystemEvent {
         let state = *self.state.read().await;
         let device = self
@@ -159,18 +251,15 @@ impl Streamer {
             .await
             .as_ref()
             .map(|d| d.path.display().to_string());
+        let (external, reason) = state.external_state();
+        let next = self.next_retry_ms.load(Ordering::Relaxed);
 
         SystemEvent::StreamStateChanged {
-            state: match state {
-                StreamerState::Uninitialized => "uninitialized".to_string(),
-                StreamerState::Ready => "ready".to_string(),
-                StreamerState::Streaming => "streaming".to_string(),
-                StreamerState::NoSignal => "no_signal".to_string(),
-                StreamerState::Error => "error".to_string(),
-                StreamerState::DeviceLost => "device_lost".to_string(),
-                StreamerState::Recovering => "recovering".to_string(),
-            },
+            kind: StreamKind::Video,
+            state: external.to_string(),
             device,
+            reason: reason.map(|s| s.to_string()),
+            next_retry_ms: if next == 0 { None } else { Some(next) },
         }
     }
 
@@ -199,12 +288,6 @@ impl Streamer {
     /// Get current device info
     pub async fn current_device(&self) -> Option<VideoDeviceInfo> {
         self.current_device.read().await.clone()
-    }
-
-    /// Get current video configuration (format, resolution, fps)
-    pub async fn current_video_config(&self) -> (PixelFormat, Resolution, u32) {
-        let config = self.config.read().await;
-        (config.format, config.resolution, config.fps)
     }
 
     /// Get current capture configuration for direct pipelines
@@ -265,35 +348,35 @@ impl Streamer {
         })
         .await;
 
+        // Surface a "device busy" state so the frontend can render a
+        // "please wait" overlay for the (short) duration of the config
+        // change.  The capture loop itself will flip to `Streaming` once
+        // the first frame of the new geometry arrives.
+        *self.state.write().await = StreamerState::Busy;
+        self.publish_event(self.current_state_event().await).await;
+
         let devices = enumerate_devices()?;
-        let device = devices
-            .into_iter()
-            .find(|d| d.path.to_string_lossy() == device_path)
-            .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?;
+        let device = if device_path.eq_ignore_ascii_case("auto") {
+            devices
+                .into_iter()
+                .next()
+                .ok_or_else(|| AppError::VideoError("No video devices found".to_string()))?
+        } else {
+            devices
+                .into_iter()
+                .find(|d| d.path.to_string_lossy() == device_path)
+                .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?
+        };
 
-        // Validate format
-        let fmt_info = device
-            .formats
-            .iter()
-            .find(|f| f.format == format)
-            .ok_or_else(|| AppError::VideoError("Requested format not supported".to_string()))?;
-
-        // Validate resolution
-        if !fmt_info.resolutions.is_empty()
-            && !fmt_info
-                .resolutions
-                .iter()
-                .any(|r| r.width == resolution.width && r.height == resolution.height)
-        {
-            return Err(AppError::VideoError(
-                "Requested resolution not supported".to_string(),
-            ));
-        }
+        let resolved = self.resolve_capture_config(&device, format, resolution, fps)?;
+        let format = resolved.format;
+        let resolution = resolved.resolution;
+        let fps = resolved.fps;
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
         // This prevents race conditions where clients try to reconnect and reopen the device
-        info!("Disconnecting all MJPEG clients before config change...");
-        self.mjpeg_handler.disconnect_all_clients();
+        debug!("Disconnecting HTTP MJPEG clients before config change...");
+        self.mjpeg_handler.disconnect_non_vnc_clients();
 
         // Give clients time to receive the disconnect signal and close their connections
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -318,7 +401,7 @@ impl Streamer {
         *self.state.write().await = StreamerState::Ready;
 
         // Publish "config applied" event
-        info!(
+        debug!(
             "Publishing StreamConfigApplied event: {}x{} {:?} @ {}fps",
             resolution.width, resolution.height, format, fps
         );
@@ -334,7 +417,7 @@ impl Streamer {
         // Note: We don't auto-start here anymore.
         // The stream will be started when MJPEG client connects (handlers.rs:790)
         // This avoids race conditions between config change and client reconnection.
-        info!("Config applied, stream will start when client connects");
+        debug!("Config applied, stream will start when client connects");
 
         Ok(())
     }
@@ -357,19 +440,18 @@ impl Streamer {
             device.path.display()
         );
 
-        // Determine best format for this device
         let config = self.config.read().await;
-        let format = self.select_format(&device, config.format)?;
-        let resolution = self.select_resolution(&device, &format, config.resolution)?;
-
+        let resolved =
+            self.resolve_capture_config(&device, config.format, config.resolution, config.fps)?;
         drop(config);
 
         // Update config with actual values
         {
             let mut config = self.config.write().await;
             config.device_path = Some(device.path.clone());
-            config.format = format;
-            config.resolution = resolution;
+            config.format = resolved.format;
+            config.resolution = resolved.resolution;
+            config.fps = resolved.fps;
         }
 
         // Store device info
@@ -377,7 +459,10 @@ impl Streamer {
 
         *self.state.write().await = StreamerState::Ready;
 
-        info!("Streamer initialized: {} @ {}", format, resolution);
+        info!(
+            "Streamer initialized: {} @ {} {} fps",
+            resolved.format, resolved.resolution, resolved.fps
+        );
         Ok(())
     }
 
@@ -387,6 +472,37 @@ impl Streamer {
         device: &VideoDeviceInfo,
         preferred: PixelFormat,
     ) -> Result<PixelFormat> {
+        if is_csi_hdmi_bridge(device) {
+            if !device.has_signal {
+                info!(
+                    "select_format: CSI bridge no signal, keeping preferred {:?}",
+                    preferred
+                );
+                return Ok(preferred);
+            }
+            // Prefer the user-configured format if the device actually supports
+            // it; otherwise fall back to the highest-priority format (formats
+            // are pre-sorted by PixelFormat::priority(), e.g. NV12 > YUYV for rkcif/rk_hdmirx).
+            if device.formats.iter().any(|f| f.format == preferred) {
+                info!(
+                    "select_format: CSI bridge with signal, using preferred {:?}",
+                    preferred
+                );
+                return Ok(preferred);
+            }
+            let fmt =
+                device.formats.first().map(|f| f.format).ok_or_else(|| {
+                    AppError::VideoError("No supported formats found".to_string())
+                })?;
+            info!(
+                "select_format: CSI bridge with signal, preferred {:?} unavailable, selected {:?} from {:?}",
+                preferred,
+                fmt,
+                device.formats.iter().map(|f| f.format).collect::<Vec<_>>()
+            );
+            return Ok(fmt);
+        }
+
         // Check if preferred format is available
         if device.formats.iter().any(|f| f.format == preferred) {
             return Ok(preferred);
@@ -407,11 +523,33 @@ impl Streamer {
         format: &PixelFormat,
         preferred: Resolution,
     ) -> Result<Resolution> {
+        if is_csi_hdmi_bridge(device) && !device.has_signal {
+            info!(
+                "select_resolution: CSI bridge no signal, keeping preferred {}",
+                preferred
+            );
+            return Ok(preferred);
+        }
+
         let format_info = device
             .formats
             .iter()
             .find(|f| &f.format == format)
             .ok_or_else(|| AppError::VideoError("Format not found".to_string()))?;
+
+        if is_csi_hdmi_bridge(device) {
+            let res = format_info
+                .resolutions
+                .first()
+                .map(|r| r.resolution())
+                .unwrap_or(preferred);
+            info!(
+                "select_resolution: CSI bridge with signal, selected {} (preferred {}, available {:?})",
+                res, preferred,
+                format_info.resolutions.iter().map(|r| format!("{}x{}", r.width, r.height)).collect::<Vec<_>>()
+            );
+            return Ok(res);
+        }
 
         // Check if preferred resolution is available
         if format_info.resolutions.is_empty()
@@ -431,6 +569,27 @@ impl Streamer {
             .ok_or_else(|| AppError::VideoError("No resolutions available".to_string()))
     }
 
+    fn resolve_capture_config(
+        &self,
+        device: &VideoDeviceInfo,
+        requested_format: PixelFormat,
+        requested_resolution: Resolution,
+        requested_fps: u32,
+    ) -> Result<super::device::ResolvedVideoInputConfig> {
+        let mut resolved = resolve_video_input_config(
+            device,
+            requested_format,
+            requested_resolution,
+            requested_fps,
+        );
+        if device.control_mode == VideoControlMode::Configurable {
+            resolved.format = self.select_format(device, resolved.format)?;
+            resolved.resolution =
+                self.select_resolution(device, &resolved.format, resolved.resolution)?;
+        }
+        Ok(resolved)
+    }
+
     /// Restart capture for recovery (direct capture path)
     async fn restart_capture(self: &Arc<Self>) -> Result<()> {
         self.direct_stop.store(false, Ordering::SeqCst);
@@ -442,7 +601,8 @@ impl Streamer {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             let state = *self.state.read().await;
             match state {
-                StreamerState::Streaming | StreamerState::NoSignal => return Ok(()),
+                StreamerState::Streaming => return Ok(()),
+                s if s.is_no_signal_like() => return Ok(()),
                 StreamerState::Error | StreamerState::DeviceLost => {
                     return Err(AppError::VideoError(
                         "Failed to restart capture".to_string(),
@@ -463,6 +623,17 @@ impl Streamer {
 
         let state = self.state().await;
         if state == StreamerState::Streaming {
+            return Ok(());
+        }
+
+        // A no-signal/source-change recovery keeps the existing capture thread
+        // alive while it closes and re-opens the V4L2 stream.  HTTP clients may
+        // reconnect while that thread is still probing.  Do not spawn a second
+        // capture thread here: it would contend for the same video node and
+        // overwrite `direct_handle`, making the original thread impossible to
+        // join from `stop()`.
+        if self.direct_active.load(Ordering::SeqCst) {
+            debug!("Capture thread is already active; waiting for its recovery loop");
             return Ok(());
         }
 
@@ -573,11 +744,9 @@ impl Streamer {
                                 break;
                             }
                         }
-                    } else {
-                        if zero_since.is_some() {
-                            info!("Clients reconnected, canceling auto-pause");
-                            zero_since = None;
-                        }
+                    } else if zero_since.is_some() {
+                        info!("Clients reconnected, canceling auto-pause");
+                        zero_since = None;
                     }
                 }
             });
@@ -612,13 +781,18 @@ impl Streamer {
         Ok(())
     }
 
-    /// Direct capture loop for MJPEG mode (single loop, no broadcast)
-    fn run_direct_capture(self: Arc<Self>, device_path: PathBuf, config: StreamerConfig) {
+    /// Direct capture loop for MJPEG mode.
+    ///
+    /// The outer `'session` loop allows "soft restarts": when no signal has been
+    /// detected for `NOSIGNAL_SOFT_RESTART_SECS` the capture stream is closed and
+    /// re-opened (re-probing format/resolution) without going through the full
+    /// DeviceLost recovery path.  This handles the common CSI/HDMI-bridge case where
+    /// the source switches resolution and the driver requires a new `s_fmt` call.
+    fn run_direct_capture(self: Arc<Self>, device_path: PathBuf, _initial_config: StreamerConfig) {
         const MAX_RETRIES: u32 = 5;
         const RETRY_DELAY_MS: u64 = 200;
         const IDLE_STOP_DELAY_SECS: u64 = 5;
-        const BUFFER_COUNT: u32 = 2;
-
+        const BUFFER_COUNT: u32 = DEFAULT_CAPTURE_BUFFER_COUNT;
         let handle = tokio::runtime::Handle::current();
         let mut last_state = StreamerState::Streaming;
 
@@ -632,250 +806,511 @@ impl Streamer {
             }
         };
 
-        let mut device_opt: Option<Device> = None;
-        let mut format_opt: Option<Format> = None;
-        let mut last_error: Option<String> = None;
-
-        for attempt in 0..MAX_RETRIES {
-            if self.direct_stop.load(Ordering::Relaxed) {
-                self.direct_active.store(false, Ordering::SeqCst);
-                return;
-            }
-
-            let device = match Device::with_path(&device_path) {
-                Ok(d) => d,
-                Err(e) => {
-                    let err_str = e.to_string();
-                    if err_str.contains("busy") || err_str.contains("resource") {
-                        warn!(
-                            "Device busy on attempt {}/{}, retrying in {}ms...",
-                            attempt + 1,
-                            MAX_RETRIES,
-                            RETRY_DELAY_MS
-                        );
-                        std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
-                        last_error = Some(err_str);
-                        continue;
-                    }
-                    last_error = Some(err_str);
-                    break;
-                }
-            };
-
-            let requested = Format::new(
-                config.resolution.width,
-                config.resolution.height,
-                config.format.to_fourcc(),
-            );
-
-            match device.set_format(&requested) {
-                Ok(actual) => {
-                    device_opt = Some(device);
-                    format_opt = Some(actual);
-                    break;
-                }
-                Err(e) => {
-                    let err_str = e.to_string();
-                    if err_str.contains("busy") || err_str.contains("resource") {
-                        warn!(
-                            "Device busy on set_format attempt {}/{}, retrying in {}ms...",
-                            attempt + 1,
-                            MAX_RETRIES,
-                            RETRY_DELAY_MS
-                        );
-                        std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
-                        last_error = Some(err_str);
-                        continue;
-                    }
-                    last_error = Some(err_str);
-                    break;
-                }
-            }
-        }
-
-        let (device, actual_format) = match (device_opt, format_opt) {
-            (Some(d), Some(f)) => (d, f),
-            _ => {
-                error!(
-                    "Failed to open device {:?}: {}",
-                    device_path,
-                    last_error.unwrap_or_else(|| "unknown error".to_string())
-                );
-                self.mjpeg_handler.set_offline();
-                set_state(StreamerState::Error);
-                self.direct_active.store(false, Ordering::SeqCst);
-                self.current_fps.store(0, Ordering::Relaxed);
-                return;
-            }
+        // Helper: drop the MJPEG online flag so any connected HTTP clients
+        // exit their streaming tasks cleanly.  Replaces the old "push a
+        // placeholder JPEG every second" scheme — the frontend now renders
+        // its own overlay from `stream.state_changed` and doesn't need a
+        // fake image to keep the connection alive.  Idempotent.
+        let go_offline = || {
+            self.mjpeg_handler.set_offline();
         };
 
-        info!(
-            "Capture format: {}x{} {:?} stride={}",
-            actual_format.width, actual_format.height, actual_format.fourcc, actual_format.stride
-        );
+        // Helper: record the back-off window on the streamer so it rides
+        // along on the next `stream.state_changed` event; cleared when we
+        // return to `Streaming`.
+        let set_retry = |ms: u64| {
+            self.next_retry_ms.store(ms, Ordering::Relaxed);
+        };
 
-        let resolution = Resolution::new(actual_format.width, actual_format.height);
-        let pixel_format =
-            PixelFormat::from_fourcc(actual_format.fourcc).unwrap_or(config.format);
+        // Consecutive recovery attempts, shared with the common retry policy.
+        let mut no_signal_restart_count: u32 = 0;
+        let mut no_consumers_since: Option<std::time::Instant> = None;
 
-        if config.fps > 0 {
-            if let Err(e) = device.set_params(&Parameters::with_fps(config.fps)) {
-                warn!("Failed to set hardware FPS: {}", e);
+        'session: loop {
+            if self.direct_stop.load(Ordering::Relaxed) {
+                break 'session;
             }
-        }
+            if self.mjpeg_handler.client_count() == 0 {
+                let since = no_consumers_since.get_or_insert_with(std::time::Instant::now);
+                if since.elapsed() >= Duration::from_secs(IDLE_STOP_DELAY_SECS) {
+                    info!("No MJPEG consumers during recovery; stopping capture");
+                    break 'session;
+                }
+            } else {
+                no_consumers_since = None;
+            }
 
-        let mut stream =
-            match MmapStream::with_buffers(&device, BufferType::VideoCapture, BUFFER_COUNT) {
-                Ok(s) => s,
-                Err(e) => {
-                    error!("Failed to create capture stream: {}", e);
-                    self.mjpeg_handler.set_offline();
-                    set_state(StreamerState::Error);
+            // Re-read config at the start of each session so that a re_init_device()
+            // call (from a previous soft-restart or recovery) is reflected here.
+            let config = handle.block_on(async { self.config.read().await.clone() });
+
+            // ── Resolve the CSI bridge subdev (if any) for this video ──────────
+            //
+            // The subdev is where QUERY_DV_TIMINGS and SOURCE_CHANGE events
+            // actually live on RK628-on-rkcif.  It's stored in
+            // `VideoDeviceInfo` during enumeration; we re-read it here
+            // rather than caching on Streamer so a hot-plug recovery picks
+            // up a possibly-different subdev path.
+            let (bridge_ctx, control_mode) = handle.block_on(async {
+                self.current_device
+                    .read()
+                    .await
+                    .as_ref()
+                    .map(|info| {
+                        (
+                            BridgeContext::from_parts(
+                                info.subdev_path.clone(),
+                                parse_bridge_kind(info.bridge_kind.as_deref()),
+                            ),
+                            info.control_mode,
+                        )
+                    })
+                    .unwrap_or((BridgeContext::default(), VideoControlMode::Configurable))
+            });
+            let recovery_policy = CaptureRecoveryPolicy::new(control_mode);
+
+            // ── STREAMON gate: for CSI bridges with a subdev, refuse to
+            //    open the video node when the subdev reports no signal.
+            //    On RK628 this prevents a kernel null-pointer deref.
+            if let Some(subdev_path) = bridge_ctx.subdev_path.as_ref() {
+                if let Some(status) = probe_subdev_signal(subdev_path, bridge_ctx.kind) {
+                    let delay =
+                        recovery_policy.retry_delay(no_signal_restart_count.saturating_add(1));
+                    debug!(
+                        "Pre-STREAMON gate: subdev {:?} reports {:?} — \
+                             waiting for SOURCE_CHANGE (<= {:?}) before opening {:?}",
+                        subdev_path, status, delay, device_path
+                    );
+                    set_retry(delay.as_millis() as u64);
+                    go_offline();
+                    set_state(status.into());
+                    wait_for_source_change(&bridge_ctx, delay, || {
+                        !self.direct_stop.load(Ordering::Relaxed)
+                    });
+                    no_signal_restart_count = no_signal_restart_count.saturating_add(1);
+                    continue 'session;
+                }
+            }
+
+            // ── Open the capture stream ─────────────────────────────────────────
+            let mut stream_opt: Option<CaptureStream> = None;
+            let mut last_error: Option<String> = None;
+
+            for attempt in 0..MAX_RETRIES {
+                if self.direct_stop.load(Ordering::Relaxed) {
                     self.direct_active.store(false, Ordering::SeqCst);
-                    self.current_fps.store(0, Ordering::Relaxed);
                     return;
                 }
-            };
 
-        let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
-        let mut signal_present = true;
-        let mut sequence: u64 = 0;
-        let mut validate_counter: u64 = 0;
-        let mut idle_since: Option<std::time::Instant> = None;
+                match open_capture_stream(
+                    &device_path,
+                    config.resolution,
+                    config.format,
+                    config.fps,
+                    BUFFER_COUNT,
+                    Duration::from_secs(2),
+                    bridge_ctx.clone(),
+                    control_mode,
+                ) {
+                    Ok(stream) => {
+                        stream_opt = Some(stream);
+                        break;
+                    }
+                    Err(AppError::CaptureNoSignal { kind }) => {
+                        // CSI bridge open-time DV-timings probe failed.
+                        // Drop the HTTP stream so the frontend renders its
+                        // "no signal" overlay, update the state with the
+                        // fine-grained reason, and let the outer 'session
+                        // loop back off before the next retry.
+                        let status = signal_status_from_capture_kind(&kind);
+                        debug!(
+                            "CSI open probe reports no signal ({:?}), will soft-restart",
+                            status
+                        );
+                        let delay =
+                            recovery_policy.retry_delay(no_signal_restart_count.saturating_add(1));
+                        set_retry(delay.as_millis() as u64);
+                        go_offline();
+                        set_state(status.into());
+                        last_error = Some(format!("CaptureNoSignal({})", kind));
+                        break;
+                    }
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        if err_str.contains("busy") || err_str.contains("resource") {
+                            warn!(
+                                "Device busy on attempt {}/{}, retrying in {}ms...",
+                                attempt + 1,
+                                MAX_RETRIES,
+                                RETRY_DELAY_MS
+                            );
+                            std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
+                            last_error = Some(err_str);
+                            continue;
+                        }
+                        last_error = Some(err_str);
+                        break;
+                    }
+                }
+            }
 
-        let mut fps_frame_count: u64 = 0;
-        let mut last_fps_time = std::time::Instant::now();
-
-        while !self.direct_stop.load(Ordering::Relaxed) {
-            let mjpeg_clients = self.mjpeg_handler.client_count();
-            if mjpeg_clients == 0 {
-                if idle_since.is_none() {
-                    idle_since = Some(std::time::Instant::now());
-                    trace!("No active video consumers, starting idle timer");
-                } else if let Some(since) = idle_since {
-                    if since.elapsed().as_secs() >= IDLE_STOP_DELAY_SECS {
-                        info!(
-                            "No active video consumers for {}s, stopping capture",
-                            IDLE_STOP_DELAY_SECS
+            let mut stream = match stream_opt {
+                Some(stream) => stream,
+                None => {
+                    // If the open failed because of a no-signal condition, do
+                    // *not* escalate to Error — instead keep the capture loop
+                    // alive in NoSignal-like state and retry via the soft
+                    // restart path.  This lets CSI bridges recover on their
+                    // own when the source comes back (resolution change,
+                    // host reboot, HDMI cable re-plug).
+                    let was_no_signal = handle
+                        .block_on(async { self.state().await })
+                        .is_no_signal_like();
+                    if !was_no_signal {
+                        error!(
+                            "Failed to open device {:?}: {}",
+                            device_path,
+                            last_error.unwrap_or_else(|| "unknown error".to_string())
                         );
                         self.mjpeg_handler.set_offline();
-                        set_state(StreamerState::Ready);
-                        break;
-                    }
-                }
-            } else if idle_since.is_some() {
-                trace!("Video consumers active, resetting idle timer");
-                idle_since = None;
-            }
-
-            let (buf, meta) = match stream.next() {
-                Ok(frame_data) => frame_data,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::TimedOut {
-                        if signal_present {
-                            signal_present = false;
-                            self.mjpeg_handler.set_offline();
-                            set_state(StreamerState::NoSignal);
-                            self.current_fps.store(0, Ordering::Relaxed);
-                            fps_frame_count = 0;
-                            last_fps_time = std::time::Instant::now();
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
+                        set_state(StreamerState::Error);
+                        break 'session;
                     }
 
-                    let is_device_lost = match e.raw_os_error() {
-                        Some(6) => true,   // ENXIO
-                        Some(19) => true,  // ENODEV
-                        Some(5) => true,   // EIO
-                        Some(32) => true,  // EPIPE
-                        Some(108) => true, // ESHUTDOWN
-                        _ => false,
-                    };
-
-                    if is_device_lost {
-                        error!("Video device lost: {} - {}", device_path.display(), e);
-                        self.mjpeg_handler.set_offline();
-                        handle.block_on(async {
-                            *self.last_lost_device.write().await =
-                                Some(device_path.display().to_string());
-                            *self.last_lost_reason.write().await = Some(e.to_string());
-                        });
-                        set_state(StreamerState::DeviceLost);
-                        handle.block_on(async {
-                            let streamer = Arc::clone(&self);
-                            tokio::spawn(async move {
-                                streamer.start_device_recovery_internal().await;
-                            });
-                        });
-                        break;
+                    debug!("Open failed in NoSignal-like state, backing off before soft-restart");
+                    if !recovery_policy.should_retry(no_signal_restart_count.saturating_add(1)) {
+                        set_state(StreamerState::Error);
+                        break 'session;
                     }
-
-                    error!("Capture error: {}", e);
-                    continue;
+                    let delay =
+                        recovery_policy.retry_delay(no_signal_restart_count.saturating_add(1));
+                    set_retry(delay.as_millis() as u64);
+                    wait_for_source_change(&bridge_ctx, delay, || {
+                        !self.direct_stop.load(Ordering::Relaxed)
+                    });
+                    no_signal_restart_count = no_signal_restart_count.saturating_add(1);
+                    continue 'session;
                 }
             };
 
-            let frame_size = meta.bytesused as usize;
-            if frame_size < MIN_CAPTURE_FRAME_SIZE {
-                continue;
+            let resolution = stream.resolution();
+            let pixel_format = stream.format();
+            let source_fps = stream
+                .source_fps()
+                .map(|fps| fps.round().clamp(1.0, 120.0) as u32)
+                .unwrap_or(config.fps);
+            let stride = stream.stride();
+
+            if control_mode == VideoControlMode::SourceFollowing {
+                handle.block_on(async {
+                    let mut current = self.config.write().await;
+                    current.resolution = resolution;
+                    current.format = pixel_format;
+                    current.fps = source_fps;
+                });
             }
 
-            validate_counter = validate_counter.wrapping_add(1);
-            if pixel_format.is_compressed()
-                && validate_counter % JPEG_VALIDATE_INTERVAL == 0
-                && !VideoFrame::is_valid_jpeg_bytes(&buf[..frame_size])
-            {
-                continue;
-            }
-
-            let mut owned = buffer_pool.take(frame_size);
-            owned.resize(frame_size, 0);
-            owned[..frame_size].copy_from_slice(&buf[..frame_size]);
-            let frame = VideoFrame::from_pooled(
-                Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
-                resolution,
-                pixel_format,
-                actual_format.stride,
-                sequence,
+            info!(
+                "Capture format: {}x{} {:?} stride={}",
+                resolution.width, resolution.height, pixel_format, stride
             );
-            sequence = sequence.wrapping_add(1);
 
-            if !signal_present {
-                signal_present = true;
-                self.mjpeg_handler.set_online();
-                set_state(StreamerState::Streaming);
+            let buffer_pool = Arc::new(FrameBufferPool::new(BUFFER_COUNT.max(4) as usize));
+            // Preserve the no-signal state across an outer-loop re-open.  This
+            // makes the first recovered frame transition the handler back
+            // online and publish Streaming instead of silently inheriting the
+            // previous offline state.
+            let mut signal_present = !handle
+                .block_on(async { self.state().await })
+                .is_no_signal_like();
+            let mut idle_since: Option<std::time::Instant> = None;
+
+            let mut fps_frame_count: u64 = 0;
+            let mut last_fps_time = std::time::Instant::now();
+            let capture_error_throttler = LogThrottler::with_secs(5);
+            let mut suppressed_capture_errors: HashMap<String, u64> = HashMap::new();
+
+            // None = signal is present; Some(Instant) = when signal was first lost.
+            let mut no_signal_since: Option<std::time::Instant> = None;
+            // Whether the inner 'capture loop should trigger a soft restart.
+            let mut need_soft_restart = false;
+
+            // ── Inner capture loop ──────────────────────────────────────────────
+            'capture: while !self.direct_stop.load(Ordering::Relaxed) {
+                let mjpeg_clients = self.mjpeg_handler.client_count();
+                if mjpeg_clients == 0 {
+                    if idle_since.is_none() {
+                        idle_since = Some(std::time::Instant::now());
+                        trace!("No active video consumers, starting idle timer");
+                    } else if let Some(since) = idle_since {
+                        if since.elapsed().as_secs() >= IDLE_STOP_DELAY_SECS {
+                            info!(
+                                "No active video consumers for {}s, stopping capture",
+                                IDLE_STOP_DELAY_SECS
+                            );
+                            self.mjpeg_handler.set_offline();
+                            set_state(StreamerState::Ready);
+                            break 'capture;
+                        }
+                    }
+                } else if idle_since.is_some() {
+                    trace!("Video consumers active, resetting idle timer");
+                    idle_since = None;
+                }
+
+                let mut owned = buffer_pool.take(MIN_CAPTURE_FRAME_SIZE);
+                let meta = match stream.next_into(&mut owned) {
+                    Ok(meta) => meta,
+                    Err(CaptureReadError::SourceChanged) => {
+                        info!("Capture SOURCE_CHANGE — soft-restart for DV re-probe");
+                        let delay =
+                            recovery_policy.retry_delay(no_signal_restart_count.saturating_add(1));
+                        set_retry(delay.as_millis() as u64);
+                        go_offline();
+                        set_state(StreamerState::NoSignal);
+                        need_soft_restart = true;
+                        break 'capture;
+                    }
+                    Err(CaptureReadError::Io(e)) => {
+                        if e.kind() == std::io::ErrorKind::WouldBlock {
+                            continue 'capture;
+                        }
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            if signal_present {
+                                signal_present = false;
+                                let delay = recovery_policy
+                                    .retry_delay(no_signal_restart_count.saturating_add(1));
+                                set_retry(delay.as_millis() as u64);
+                                go_offline();
+                                set_state(StreamerState::NoSignal);
+                                no_signal_since = Some(std::time::Instant::now());
+                                self.current_fps.store(0, Ordering::Relaxed);
+                                fps_frame_count = 0;
+                                last_fps_time = std::time::Instant::now();
+                            } else if let Some(since) = no_signal_since {
+                                let delay = recovery_policy
+                                    .retry_delay(no_signal_restart_count.saturating_add(1));
+                                if since.elapsed() >= delay {
+                                    info!(
+                                        "NoSignal for {:?}, attempting soft restart (attempt {})",
+                                        delay,
+                                        no_signal_restart_count + 1
+                                    );
+                                    need_soft_restart = true;
+                                    break 'capture;
+                                }
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            continue 'capture;
+                        }
+
+                        // Classify the capture error.
+                        //
+                        // Only errnos that mean "the device file is gone"
+                        // (ENODEV, ENXIO, ESHUTDOWN) trigger the full
+                        // DeviceLost → recovery path.
+                        //
+                        // EIO / EPIPE are common transient errors on rkcif
+                        // when the source glitches or re-locks; those are
+                        // treated as NoSignal + soft-restart so we recover
+                        // in ~1 s instead of the 1 s recovery-poll loop.
+                        match classify_capture_io_error(&e) {
+                            CaptureIoErrorKind::DeviceLost => {
+                                error!("Video device lost: {} - {}", device_path.display(), e);
+                                go_offline();
+                                set_retry(0);
+                                handle.block_on(async {
+                                    *self.last_lost_device.write().await =
+                                        Some(device_path.display().to_string());
+                                    *self.last_lost_reason.write().await = Some(e.to_string());
+                                });
+                                set_state(StreamerState::DeviceLost);
+                                handle.block_on(async {
+                                    let streamer = Arc::clone(&self);
+                                    tokio::spawn(async move {
+                                        streamer.start_device_recovery_internal().await;
+                                    });
+                                });
+                                break 'capture;
+                            }
+                            CaptureIoErrorKind::TransientSignal { status } => {
+                                if status == Some(crate::video::signal::SignalStatus::UvcUsbError) {
+                                    warn!(
+                                        "Capture transient error (EPROTO/-71, often UVC USB): {}",
+                                        e
+                                    );
+                                    if control_mode == VideoControlMode::Configurable {
+                                        go_offline();
+                                        set_state(StreamerState::UvcUsbError);
+                                        need_soft_restart = true;
+                                        break 'capture;
+                                    }
+                                } else {
+                                    warn!(
+                                    "Capture transient error ({}): treating as NoSignal + soft-restart",
+                                    e
+                                );
+                                }
+                                let delay = recovery_policy
+                                    .retry_delay(no_signal_restart_count.saturating_add(1));
+                                set_retry(delay.as_millis() as u64);
+                                go_offline();
+                                set_state(StreamerState::NoSignal);
+                                need_soft_restart = true;
+                                break 'capture;
+                            }
+                            CaptureIoErrorKind::Other => {}
+                        }
+
+                        let key = capture_error_log_key(&e);
+                        if capture_error_throttler.should_log(&key) {
+                            let suppressed = suppressed_capture_errors.remove(&key).unwrap_or(0);
+                            if suppressed > 0 {
+                                error!("Capture error: {} (suppressed {} repeats)", e, suppressed);
+                            } else {
+                                error!("Capture error: {}", e);
+                            }
+                        } else {
+                            let counter = suppressed_capture_errors.entry(key).or_insert(0);
+                            *counter = counter.saturating_add(1);
+                        }
+                        continue 'capture;
+                    }
+                };
+
+                let frame_size = meta.bytes_used;
+                if frame_size < MIN_CAPTURE_FRAME_SIZE {
+                    continue 'capture;
+                }
+
+                owned.truncate(frame_size);
+                let frame = VideoFrame::from_pooled(
+                    Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
+                    resolution,
+                    pixel_format,
+                    stride,
+                    meta.sequence,
+                );
+
+                if !signal_present {
+                    signal_present = true;
+                    no_signal_since = None;
+                    no_signal_restart_count = 0;
+                    set_retry(0);
+                    // Signal-loss handling marks the MJPEG handler offline so
+                    // stale HTTP responses close cleanly.  Re-enable it on the
+                    // first recovered frame so a reconnect can remain attached
+                    // to this (still single) capture thread.
+                    self.mjpeg_handler.set_online();
+                    set_state(StreamerState::Streaming);
+
+                    let fps_val = source_fps;
+                    let recovered_device = device_path.display().to_string();
+                    handle.block_on(async {
+                        self.publish_event(SystemEvent::StreamRecovered {
+                            device: recovered_device,
+                        })
+                        .await;
+                    });
+                    let dp = device_path.display().to_string();
+                    let fmt = pixel_format.to_string();
+                    let w = resolution.width;
+                    let h = resolution.height;
+                    handle.block_on(async {
+                        self.publish_event(SystemEvent::StreamConfigApplied {
+                            transition_id: None,
+                            device: dp,
+                            resolution: (w, h),
+                            format: fmt,
+                            fps: fps_val,
+                        })
+                        .await;
+                    });
+                }
+
+                self.snapshot_slot.publish(&frame);
+                self.mjpeg_handler.update_frame(frame);
+
+                fps_frame_count += 1;
+                let fps_elapsed = last_fps_time.elapsed();
+                if fps_elapsed >= std::time::Duration::from_secs(1) {
+                    let current_fps = fps_frame_count as f32 / fps_elapsed.as_secs_f32();
+                    fps_frame_count = 0;
+                    last_fps_time = std::time::Instant::now();
+                    self.current_fps
+                        .store((current_fps * 100.0) as u32, Ordering::Relaxed);
+                }
+            } // 'capture
+
+            // ── After inner loop ────────────────────────────────────────────────
+            // The stream is dropped here, releasing the device FD.
+            drop(stream);
+
+            if self.direct_stop.load(Ordering::Relaxed) {
+                break 'session;
             }
 
-            self.mjpeg_handler.update_frame(frame);
-
-            fps_frame_count += 1;
-            let fps_elapsed = last_fps_time.elapsed();
-            if fps_elapsed >= std::time::Duration::from_secs(1) {
-                let current_fps = fps_frame_count as f32 / fps_elapsed.as_secs_f32();
-                fps_frame_count = 0;
-                last_fps_time = std::time::Instant::now();
-                self.current_fps
-                    .store((current_fps * 100.0) as u32, Ordering::Relaxed);
+            if !need_soft_restart {
+                // Normal exit (idle / device-lost / stop).
+                break 'session;
             }
-        }
+
+            no_signal_restart_count = no_signal_restart_count.saturating_add(1);
+            // Continue 'session: the single open path performs QUERY_DV_TIMINGS,
+            // applies the source mode, and owns the retry delay.
+        } // 'session
 
         self.direct_active.store(false, Ordering::SeqCst);
         self.current_fps.store(0, Ordering::Relaxed);
     }
 
-    /// Check if streaming
+    /// `Streaming` or any no-signal-like state (capture thread still alive).
     pub async fn is_streaming(&self) -> bool {
-        self.state().await == StreamerState::Streaming
+        let s = self.state().await;
+        s == StreamerState::Streaming || s.is_no_signal_like()
+    }
+
+    pub async fn re_init_device(self: &Arc<Self>, device_path: &str) -> Result<()> {
+        let device = VideoDevice::open_readonly(device_path)
+            .map_err(|e| AppError::VideoError(format!("Cannot open device for re-init: {}", e)))?;
+        let device_info = device.info()?;
+
+        let resolved = {
+            let config = self.config.read().await;
+            self.resolve_capture_config(&device_info, config.format, config.resolution, config.fps)
+                .unwrap_or(super::device::ResolvedVideoInputConfig {
+                    format: config.format,
+                    resolution: config.resolution,
+                    fps: config.fps,
+                })
+        };
+
+        {
+            let mut cfg = self.config.write().await;
+            cfg.device_path = Some(device_info.path.clone());
+            cfg.format = resolved.format;
+            cfg.resolution = resolved.resolution;
+            cfg.fps = resolved.fps;
+        }
+        *self.current_device.write().await = Some(device_info);
+
+        info!(
+            "Device re-initialized: {}x{} {:?}",
+            resolved.resolution.width, resolved.resolution.height, resolved.format
+        );
+        Ok(())
     }
 
     /// Get stream statistics
     pub async fn stats(&self) -> StreamerStats {
         let config = self.config.read().await;
         let fps = self.current_fps.load(Ordering::Relaxed) as f32 / 100.0;
+        let (state, reason) = self.state().await.external_state();
 
         StreamerStats {
-            state: self.state().await,
+            state: state.to_string(),
+            reason: reason.map(str::to_string),
             device: self.current_device().await.map(|d| d.name),
             format: Some(config.format.to_string()),
             resolution: Some((config.resolution.width, config.resolution.height)),
@@ -885,30 +1320,27 @@ impl Streamer {
         }
     }
 
-    /// Publish event to event bus (if configured)
-    /// For StreamStateChanged events, only publishes if state actually changed (de-duplication)
+    /// Dedupes `StreamStateChanged` on `(state, reason, next_retry_ms)`.
     async fn publish_event(&self, event: SystemEvent) {
         if let Some(events) = self.events.read().await.as_ref() {
-            // For state change events, check if state actually changed
-            if let SystemEvent::StreamStateChanged { ref state, .. } = event {
-                let current_state = match state.as_str() {
-                    "uninitialized" => StreamerState::Uninitialized,
-                    "ready" => StreamerState::Ready,
-                    "streaming" => StreamerState::Streaming,
-                    "no_signal" => StreamerState::NoSignal,
-                    "error" => StreamerState::Error,
-                    "device_lost" => StreamerState::DeviceLost,
-                    "recovering" => StreamerState::Recovering,
-                    _ => StreamerState::Error,
-                };
-
+            if let SystemEvent::StreamStateChanged {
+                ref state,
+                ref reason,
+                next_retry_ms,
+                ..
+            } = event
+            {
+                let key = (state.clone(), reason.clone(), next_retry_ms);
                 let mut last_state = self.last_published_state.write().await;
-                if *last_state == Some(current_state) {
-                    // State hasn't changed, skip publishing
-                    trace!("Skipping duplicate stream state event: {}", state);
+                if last_state.as_ref() == Some(&key) {
+                    trace!(
+                        "Skipping duplicate stream state event: {} (reason={:?})",
+                        state,
+                        reason
+                    );
                     return;
                 }
-                *last_state = Some(current_state);
+                *last_state = Some(key);
             }
 
             events.publish(event);
@@ -947,6 +1379,20 @@ impl Streamer {
             .await
             .clone()
             .unwrap_or_else(|| "Device lost".to_string());
+        let recovery_hint = self
+            .current_device
+            .read()
+            .await
+            .as_ref()
+            .map(VideoDeviceRecoveryHint::from)
+            .unwrap_or_else(|| VideoDeviceRecoveryHint {
+                path: PathBuf::from(&device),
+                name: String::new(),
+                driver: String::new(),
+                bus_info: String::new(),
+                card: String::new(),
+                is_capture_card: true,
+            });
 
         // Store error info
         *self.last_lost_device.write().await = Some(device.clone());
@@ -956,6 +1402,7 @@ impl Streamer {
 
         // Publish device lost event
         self.publish_event(SystemEvent::StreamDeviceLost {
+            kind: StreamKind::Video,
             device: device.clone(),
             reason: reason.clone(),
         })
@@ -964,7 +1411,7 @@ impl Streamer {
         // Start recovery task
         let streamer = Arc::clone(self);
         tokio::spawn(async move {
-            let device_path = device.clone();
+            let original_device_path = device.clone();
 
             loop {
                 let attempt = streamer
@@ -985,27 +1432,59 @@ impl Streamer {
                 *streamer.state.write().await = StreamerState::Recovering;
 
                 // Publish reconnecting event (every 5 attempts to avoid spam)
-                if attempt == 1 || attempt % 5 == 0 {
+                if attempt == 1 || attempt.is_multiple_of(5) {
                     streamer
                         .publish_event(SystemEvent::StreamReconnecting {
-                            device: device_path.clone(),
+                            device: original_device_path.clone(),
                             attempt,
                         })
                         .await;
                     info!(
                         "Attempting to recover video device {} (attempt {})",
-                        device_path, attempt
+                        original_device_path, attempt
                     );
                 }
 
-                // Wait before retry (1 second)
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let wait = if attempt == 1 {
+                    std::time::Duration::from_millis(200)
+                } else {
+                    std::time::Duration::from_secs(1)
+                };
+                tokio::time::sleep(wait).await;
 
-                // Check if device file exists
-                let device_exists = std::path::Path::new(&device_path).exists();
-                if !device_exists {
+                let devices = match enumerate_devices() {
+                    Ok(devices) => devices,
+                    Err(e) => {
+                        debug!("Failed to enumerate devices during recovery: {}", e);
+                        continue;
+                    }
+                };
+
+                let Some(device) = select_recovery_device(&devices, &recovery_hint) else {
+                    debug!("No matching video device present yet for recovery");
+                    continue;
+                };
+
+                let device_path = device.path.display().to_string();
+                if device_path != original_device_path {
+                    info!(
+                        "Recovered video device path changed: {} -> {}",
+                        original_device_path, device_path
+                    );
+                }
+
+                if !std::path::Path::new(&device_path).exists() {
                     debug!("Device {} not present yet", device_path);
                     continue;
+                }
+
+                // Re-probe device to pick up resolution/format changes
+                if let Err(e) = streamer.re_init_device(&device_path).await {
+                    debug!(
+                        "Failed to re-probe device format (attempt {}): {}",
+                        attempt, e
+                    );
+                    // Don't skip – device exists, try restart anyway
                 }
 
                 // Try to restart capture
@@ -1049,6 +1528,7 @@ impl Default for Streamer {
         Self {
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
+            snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
             state: RwLock::new(StreamerState::Uninitialized),
             start_lock: tokio::sync::Mutex::new(()),
@@ -1058,6 +1538,7 @@ impl Default for Streamer {
             current_fps: AtomicU32::new(0),
             events: RwLock::new(None),
             last_published_state: RwLock::new(None),
+            next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
             background_tasks_started: std::sync::atomic::AtomicBool::new(false),
             recovery_retry_count: std::sync::atomic::AtomicU32::new(0),
@@ -1071,7 +1552,9 @@ impl Default for Streamer {
 /// Streamer statistics
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StreamerStats {
-    pub state: StreamerState,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     pub device: Option<String>,
     pub format: Option<String>,
     pub resolution: Option<(u32, u32)>,
@@ -1082,20 +1565,30 @@ pub struct StreamerStats {
     pub fps: f32,
 }
 
+fn probe_subdev_signal(
+    subdev_path: &std::path::Path,
+    kind: Option<csi_bridge::CsiBridgeKind>,
+) -> Option<crate::video::signal::SignalStatus> {
+    let fd = match csi_bridge::open_subdev(subdev_path) {
+        Ok(f) => f,
+        Err(e) => {
+            debug!(
+                "probe_subdev_signal: failed to open {:?}: {}",
+                subdev_path, e
+            );
+            return Some(crate::video::signal::SignalStatus::NoSignal);
+        }
+    };
+    let kind = kind.unwrap_or(csi_bridge::CsiBridgeKind::Unknown);
+    let probe = csi_bridge::probe_signal(&fd, kind);
+    probe.as_status()
+}
+
 impl serde::Serialize for StreamerState {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let s = match self {
-            StreamerState::Uninitialized => "uninitialized",
-            StreamerState::Ready => "ready",
-            StreamerState::Streaming => "streaming",
-            StreamerState::NoSignal => "no_signal",
-            StreamerState::Error => "error",
-            StreamerState::DeviceLost => "device_lost",
-            StreamerState::Recovering => "recovering",
-        };
-        serializer.serialize_str(s)
+        serializer.serialize_str(self.as_str())
     }
 }

@@ -1,145 +1,164 @@
-use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Sqlite};
+use std::collections::HashMap;
+use std::sync::Arc;
+use time::{Duration, OffsetDateTime};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::Result;
 
-/// Session data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
     pub user_id: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub expires_at: OffsetDateTime,
     pub data: Option<serde_json::Value>,
 }
 
 impl Session {
-    /// Check if session is expired
     pub fn is_expired(&self) -> bool {
-        Utc::now() > self.expires_at
+        OffsetDateTime::now_utc() > self.expires_at
     }
 }
 
-/// Session store backed by SQLite
 #[derive(Clone)]
 pub struct SessionStore {
-    pool: Pool<Sqlite>,
+    inner: Arc<RwLock<HashMap<String, Session>>>,
     default_ttl: Duration,
 }
 
 impl SessionStore {
-    /// Create a new session store
-    pub fn new(pool: Pool<Sqlite>, ttl_secs: i64) -> Self {
+    pub fn new(ttl_secs: i64) -> Self {
         Self {
-            pool,
+            inner: Arc::new(RwLock::new(HashMap::new())),
             default_ttl: Duration::seconds(ttl_secs),
         }
     }
 
-    /// Create a new session
     pub async fn create(&self, user_id: &str) -> Result<Session> {
-        let session = Session {
-            id: Uuid::new_v4().to_string(),
-            user_id: user_id.to_string(),
-            created_at: Utc::now(),
-            expires_at: Utc::now() + self.default_ttl,
-            data: None,
-        };
-
-        sqlx::query(
-            r#"
-            INSERT INTO sessions (id, user_id, created_at, expires_at, data)
-            VALUES (?1, ?2, ?3, ?4, ?5)
-            "#,
-        )
-        .bind(&session.id)
-        .bind(&session.user_id)
-        .bind(session.created_at.to_rfc3339())
-        .bind(session.expires_at.to_rfc3339())
-        .bind(session.data.as_ref().map(|d| d.to_string()))
-        .execute(&self.pool)
-        .await?;
-
+        let session = self.new_session(user_id);
+        let mut guard = self.inner.write().await;
+        guard.insert(session.id.clone(), session.clone());
         Ok(session)
     }
 
-    /// Get a session by ID
-    pub async fn get(&self, session_id: &str) -> Result<Option<Session>> {
-        let row: Option<(String, String, String, String, Option<String>)> = sqlx::query_as(
-            "SELECT id, user_id, created_at, expires_at, data FROM sessions WHERE id = ?1",
-        )
-        .bind(session_id)
-        .fetch_optional(&self.pool)
-        .await?;
+    pub async fn create_for_login(
+        &self,
+        user_id: &str,
+        allow_multiple_sessions: bool,
+    ) -> Result<(Session, Vec<String>)> {
+        let session = self.new_session(user_id);
+        let mut guard = self.inner.write().await;
+        let revoked = if allow_multiple_sessions {
+            Vec::new()
+        } else {
+            let ids = guard.keys().cloned().collect();
+            guard.clear();
+            ids
+        };
+        guard.insert(session.id.clone(), session.clone());
+        Ok((session, revoked))
+    }
 
-        match row {
-            Some((id, user_id, created_at, expires_at, data)) => {
-                let session = Session {
-                    id,
-                    user_id,
-                    created_at: DateTime::parse_from_rfc3339(&created_at)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    expires_at: DateTime::parse_from_rfc3339(&expires_at)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    data: data.and_then(|d| serde_json::from_str(&d).ok()),
-                };
-
-                if session.is_expired() {
-                    self.delete(&session.id).await?;
-                    Ok(None)
-                } else {
-                    Ok(Some(session))
-                }
-            }
-            None => Ok(None),
+    fn new_session(&self, user_id: &str) -> Session {
+        let now = OffsetDateTime::now_utc();
+        Session {
+            id: Uuid::new_v4().to_string(),
+            user_id: user_id.to_string(),
+            created_at: now,
+            expires_at: now + self.default_ttl,
+            data: None,
         }
     }
 
-    /// Delete a session
+    pub async fn get(&self, session_id: &str) -> Result<Option<Session>> {
+        let mut guard = self.inner.write().await;
+        let Some(session) = guard.get(session_id).cloned() else {
+            return Ok(None);
+        };
+        if session.is_expired() {
+            guard.remove(session_id);
+            return Ok(None);
+        }
+        Ok(Some(session))
+    }
+
     pub async fn delete(&self, session_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM sessions WHERE id = ?1")
-            .bind(session_id)
-            .execute(&self.pool)
-            .await?;
+        let mut guard = self.inner.write().await;
+        guard.remove(session_id);
         Ok(())
     }
 
-    /// Delete all expired sessions
-    pub async fn cleanup_expired(&self) -> Result<u64> {
-        let result = sqlx::query("DELETE FROM sessions WHERE expires_at < datetime('now')")
-            .execute(&self.pool)
-            .await?;
-        Ok(result.rows_affected())
-    }
-
-    /// Delete all sessions
     pub async fn delete_all(&self) -> Result<u64> {
-        let result = sqlx::query("DELETE FROM sessions")
-            .execute(&self.pool)
-            .await?;
-        Ok(result.rows_affected())
+        let mut guard = self.inner.write().await;
+        let n = guard.len() as u64;
+        guard.clear();
+        Ok(n)
     }
 
-    /// List all session IDs
+    pub async fn delete_all_except(&self, session_id: &str) -> Result<Vec<String>> {
+        let mut guard = self.inner.write().await;
+        let revoked: Vec<String> = guard
+            .keys()
+            .filter(|id| id.as_str() != session_id)
+            .cloned()
+            .collect();
+        guard.retain(|id, _| id == session_id);
+        Ok(revoked)
+    }
+
     pub async fn list_ids(&self) -> Result<Vec<String>> {
-        let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM sessions")
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows.into_iter().map(|(id,)| id).collect())
+        let guard = self.inner.read().await;
+        Ok(guard.keys().cloned().collect())
     }
 
-    /// Extend session expiration
     pub async fn extend(&self, session_id: &str) -> Result<()> {
-        let new_expires = Utc::now() + self.default_ttl;
-        sqlx::query("UPDATE sessions SET expires_at = ?1 WHERE id = ?2")
-            .bind(new_expires.to_rfc3339())
-            .bind(session_id)
-            .execute(&self.pool)
-            .await?;
+        let mut guard = self.inner.write().await;
+        if let Some(session) = guard.get_mut(session_id) {
+            if session.is_expired() {
+                guard.remove(session_id);
+            } else {
+                session.expires_at = OffsetDateTime::now_utc() + self.default_ttl;
+            }
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn delete_all_except_preserves_only_current_session() {
+        let sessions = SessionStore::new(60);
+        let current = sessions.create("user").await.unwrap();
+        let other = sessions.create("user").await.unwrap();
+
+        let revoked = sessions.delete_all_except(&current.id).await.unwrap();
+        assert_eq!(revoked, vec![other.id.clone()]);
+        assert!(sessions.get(&current.id).await.unwrap().is_some());
+        assert!(sessions.get(&other.id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn login_creation_applies_session_policy_atomically() {
+        let sessions = SessionStore::new(60);
+        let existing = sessions.create("user").await.unwrap();
+
+        let (multiple, revoked) = sessions.create_for_login("user", true).await.unwrap();
+        assert!(revoked.is_empty());
+        assert!(sessions.get(&existing.id).await.unwrap().is_some());
+        assert!(sessions.get(&multiple.id).await.unwrap().is_some());
+
+        let (single, mut revoked) = sessions.create_for_login("user", false).await.unwrap();
+        revoked.sort();
+        let mut expected = vec![existing.id, multiple.id];
+        expected.sort();
+        assert_eq!(revoked, expected);
+        assert_eq!(sessions.list_ids().await.unwrap(), vec![single.id]);
     }
 }

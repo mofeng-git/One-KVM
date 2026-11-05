@@ -1,115 +1,199 @@
-use std::{collections::VecDeque, sync::Arc};
-use tokio::sync::{broadcast, RwLock};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 
 use crate::atx::AtxController;
 use crate::audio::AudioController;
-use crate::auth::{SessionStore, UserStore};
+use crate::auth::{SessionStore, TwoFactorService, UserStore};
 use crate::config::ConfigStore;
+use crate::db::DatabasePool;
+#[cfg(unix)]
+use crate::events::MsdDeviceMediaInfo;
 use crate::events::{
-    AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, MsdDeviceInfo, SystemEvent,
-    VideoDeviceInfo,
+    AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, LedState, MsdDeviceInfo, SystemEvent,
+    TtydDeviceInfo, VideoDeviceInfo,
 };
-use crate::extensions::ExtensionManager;
+use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
+use crate::mcp::{McpHardware, McpService};
+#[cfg(unix)]
 use crate::msd::MsdController;
+#[cfg(unix)]
 use crate::otg::OtgService;
-use crate::rustdesk::RustDeskService;
+use crate::runtime::{RemoteAccessCoordinator, UsbCoordinator};
+use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
+use crate::watchdog::WatchdogController;
+use crate::webrtc::WebRtcStreamer;
 
-/// Application-wide state shared across handlers
-///
-/// # Video Streaming
-///
-/// All video operations should go through `stream_manager`:
-/// - `stream_manager.webrtc_streamer()` - WebRTC streaming (H264, extensible to VP8/VP9/H265)
-/// - `stream_manager.mjpeg_handler()` - MJPEG stream handler
-/// - `stream_manager.streamer()` - Low-level video capture
-/// - `stream_manager.start()` / `stream_manager.stop()` - Stream control
-/// - `stream_manager.stats()` - Stream statistics
-/// - `stream_manager.list_devices()` - List video devices
+#[derive(Clone)]
+pub struct ConfigApplyLocks {
+    pub video: Arc<Mutex<()>>,
+    pub stream: Arc<Mutex<()>>,
+    pub otg: Arc<Mutex<()>>,
+    pub audio: Arc<Mutex<()>>,
+    pub atx: Arc<Mutex<()>>,
+    pub rustdesk: Arc<Mutex<()>>,
+    pub vnc: Arc<Mutex<()>>,
+    pub rtsp: Arc<Mutex<()>>,
+    pub watchdog: Arc<Mutex<()>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShutdownAction {
+    Exit,
+    Restart { exe_path: Option<PathBuf> },
+}
+
+impl ConfigApplyLocks {
+    fn new() -> Self {
+        Self {
+            video: Arc::new(Mutex::new(())),
+            stream: Arc::new(Mutex::new(())),
+            otg: Arc::new(Mutex::new(())),
+            audio: Arc::new(Mutex::new(())),
+            atx: Arc::new(Mutex::new(())),
+            rustdesk: Arc::new(Mutex::new(())),
+            vnc: Arc::new(Mutex::new(())),
+            rtsp: Arc::new(Mutex::new(())),
+            watchdog: Arc::new(Mutex::new(())),
+        }
+    }
+}
+
+/// Shared Axum/App state: video flows through [`VideoStreamManager`]; WebRTC SDP/ICE/sessions on [`WebRtcStreamer`].
 pub struct AppState {
-    /// Configuration store
+    pub db: DatabasePool,
     pub config: ConfigStore,
-    /// Session store
     pub sessions: SessionStore,
-    /// User store
     pub users: UserStore,
-    /// OTG Service - centralized USB gadget lifecycle management
-    /// This is the single owner of OtgGadgetManager, coordinating HID and MSD functions
+    pub two_factor: TwoFactorService,
+    #[cfg(unix)]
     pub otg_service: Arc<OtgService>,
-    /// Video stream manager (unified MJPEG/WebRTC management)
-    /// This is the single entry point for all video operations.
     pub stream_manager: Arc<VideoStreamManager>,
-    /// HID controller
+    pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
-    /// MSD controller (optional, may not be initialized)
+    pub mcp: Arc<McpService>,
+    #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
-    /// ATX controller (optional, may not be initialized)
     pub atx: Arc<RwLock<Option<AtxController>>>,
-    /// Audio controller
     pub audio: Arc<AudioController>,
-    /// RustDesk remote access service (optional)
-    pub rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,
-    /// Extension manager (ttyd, gostc, easytier)
+    #[cfg(unix)]
+    pub uac_playback: Arc<RwLock<Option<crate::audio::uac::UacPlayback>>>,
+    pub usb: Arc<UsbCoordinator>,
+    pub remote_access: Arc<RemoteAccessCoordinator>,
     pub extensions: Arc<ExtensionManager>,
-    /// Event bus for real-time notifications
     pub events: Arc<EventBus>,
-    /// Shutdown signal sender
-    pub shutdown_tx: broadcast::Sender<()>,
-    /// Recently revoked session IDs (for client kick detection)
+    device_info_tx: watch::Sender<Option<SystemEvent>>,
+    pub update: Arc<UpdateService>,
+    pub watchdog: Arc<WatchdogController>,
+    pub shutdown_tx: broadcast::Sender<ShutdownAction>,
     pub revoked_sessions: Arc<RwLock<VecDeque<String>>>,
-    /// Data directory path
+    pub config_apply_locks: ConfigApplyLocks,
     data_dir: std::path::PathBuf,
 }
 
 impl AppState {
-    /// Create new application state
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        db: DatabasePool,
         config: ConfigStore,
         sessions: SessionStore,
         users: UserStore,
-        otg_service: Arc<OtgService>,
+        two_factor: TwoFactorService,
+        #[cfg(unix)] otg_service: Arc<OtgService>,
         stream_manager: Arc<VideoStreamManager>,
+        webrtc: Arc<WebRtcStreamer>,
         hid: Arc<HidController>,
-        msd: Option<MsdController>,
+        #[cfg(unix)] msd: Option<MsdController>,
         atx: Option<AtxController>,
         audio: Arc<AudioController>,
-        rustdesk: Option<Arc<RustDeskService>>,
         extensions: Arc<ExtensionManager>,
         events: Arc<EventBus>,
-        shutdown_tx: broadcast::Sender<()>,
+        update: Arc<UpdateService>,
+        shutdown_tx: broadcast::Sender<ShutdownAction>,
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
+        let (device_info_tx, _device_info_rx) = watch::channel(None);
+
+        let remote_access = RemoteAccessCoordinator::new(
+            config.clone(),
+            stream_manager.clone(),
+            hid.clone(),
+            audio.clone(),
+        );
+        #[cfg(unix)]
+        let msd = Arc::new(RwLock::new(msd));
+        #[cfg(unix)]
+        let uac_playback = Arc::new(RwLock::new(None));
+        let usb = UsbCoordinator::new(
+            hid.clone(),
+            #[cfg(unix)]
+            otg_service.clone(),
+            #[cfg(unix)]
+            msd.clone(),
+            #[cfg(unix)]
+            uac_playback.clone(),
+            events.clone(),
+            data_dir.clone(),
+        );
+
+        let atx = Arc::new(RwLock::new(atx));
+        let config_apply_locks = ConfigApplyLocks::new();
+        let hardware = McpHardware {
+            config: config.clone(),
+            atx: atx.clone(),
+            wol_history: db.wol_history(),
+            #[cfg(unix)]
+            msd: msd.clone(),
+            #[cfg(unix)]
+            otg_lock: config_apply_locks.otg.clone(),
+        };
+        let mcp = McpService::new(
+            config.clone(),
+            hid.clone(),
+            stream_manager.clone(),
+            hardware,
+        );
         Arc::new(Self {
+            db,
             config,
             sessions,
             users,
+            two_factor,
+            #[cfg(unix)]
             otg_service,
             stream_manager,
+            webrtc,
             hid,
-            msd: Arc::new(RwLock::new(msd)),
-            atx: Arc::new(RwLock::new(atx)),
+            mcp,
+            #[cfg(unix)]
+            msd,
+            atx,
             audio,
-            rustdesk: Arc::new(RwLock::new(rustdesk)),
+            usb,
+            remote_access,
             extensions,
             events,
+            device_info_tx,
+            update,
+            watchdog: Arc::new(WatchdogController::new()),
             shutdown_tx,
             revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
+            config_apply_locks,
             data_dir,
+            #[cfg(unix)]
+            uac_playback,
         })
     }
 
-    /// Get data directory path
     pub fn data_dir(&self) -> &std::path::PathBuf {
         &self.data_dir
     }
 
-    /// Subscribe to shutdown signal
-    pub fn shutdown_signal(&self) -> broadcast::Receiver<()> {
-        self.shutdown_tx.subscribe()
+    pub fn subscribe_device_info(&self) -> watch::Receiver<Option<SystemEvent>> {
+        self.device_info_tx.subscribe()
     }
 
-    /// Record revoked session IDs (bounded queue)
     pub async fn remember_revoked_sessions(&self, session_ids: Vec<String>) {
         if session_ids.is_empty() {
             return;
@@ -123,25 +207,19 @@ impl AppState {
         }
     }
 
-    /// Check if a session ID was revoked (kicked)
     pub async fn is_session_revoked(&self, session_id: &str) -> bool {
         let guard = self.revoked_sessions.read().await;
         guard.iter().any(|id| id == session_id)
     }
 
-    /// Get complete device information for WebSocket clients
-    ///
-    /// This method collects the current state of all devices (video, HID, MSD, ATX, Audio)
-    /// and returns a DeviceInfo event that can be sent to clients.
-    /// Uses tokio::join! to collect all device info in parallel for better performance.
     pub async fn get_device_info(&self) -> SystemEvent {
-        // Collect all device info in parallel
-        let (video, hid, msd, atx, audio) = tokio::join!(
+        let (video, hid, msd, atx, audio, ttyd) = tokio::join!(
             self.collect_video_info(),
             self.collect_hid_info(),
             self.collect_msd_info(),
             self.collect_atx_info(),
             self.collect_audio_info(),
+            self.collect_ttyd_info(),
         );
 
         SystemEvent::DeviceInfo {
@@ -150,100 +228,117 @@ impl AppState {
             msd,
             atx,
             audio,
+            ttyd,
         }
     }
 
-    /// Publish DeviceInfo event to all connected WebSocket clients
     pub async fn publish_device_info(&self) {
         let device_info = self.get_device_info().await;
-        self.events.publish(device_info);
+        if let SystemEvent::DeviceInfo { video, .. } = &device_info {
+            if let Some((width, height)) = video.resolution {
+                self.hid.set_screen_resolution(width, height).await;
+            }
+        }
+        let _ = self.device_info_tx.send(Some(device_info));
     }
 
-    /// Collect video device information
     async fn collect_video_info(&self) -> VideoDeviceInfo {
-        // Use stream_manager to get video info (includes stream_mode)
         self.stream_manager.get_video_info().await
     }
 
-    /// Collect HID device information
     async fn collect_hid_info(&self) -> HidDeviceInfo {
-        let info = self.hid.info().await;
-        let backend_type = self.hid.backend_type().await;
+        let state = self.hid.snapshot().await;
 
-        match info {
-            Some(hid_info) => HidDeviceInfo {
-                available: true,
-                backend: hid_info.name.to_string(),
-                initialized: hid_info.initialized,
-                supports_absolute_mouse: hid_info.supports_absolute_mouse,
-                device: match backend_type {
-                    crate::hid::HidBackendType::Ch9329 { ref port, .. } => Some(port.clone()),
-                    _ => None,
-                },
-                error: None,
+        HidDeviceInfo {
+            available: state.available,
+            backend: state.backend,
+            initialized: state.initialized,
+            online: state.online,
+            supports_absolute_mouse: state.supports_absolute_mouse,
+            keyboard_leds_enabled: state.keyboard_leds_enabled,
+            led_state: LedState {
+                num_lock: state.led_state.num_lock,
+                caps_lock: state.led_state.caps_lock,
+                scroll_lock: state.led_state.scroll_lock,
+                compose: state.led_state.compose,
+                kana: state.led_state.kana,
             },
-            None => HidDeviceInfo {
-                available: false,
-                backend: backend_type.name_str().to_string(),
-                initialized: false,
-                supports_absolute_mouse: false,
-                device: match backend_type {
-                    crate::hid::HidBackendType::Ch9329 { ref port, .. } => Some(port.clone()),
-                    _ => None,
-                },
-                error: Some("HID backend not available".to_string()),
-            },
+            device: state.device,
+            error: state.error,
+            error_code: state.error_code,
         }
     }
 
-    /// Collect MSD device information (optional)
     async fn collect_msd_info(&self) -> Option<MsdDeviceInfo> {
-        let msd_guard = self.msd.read().await;
-        let msd = msd_guard.as_ref()?;
+        #[cfg(not(unix))]
+        {
+            None
+        }
+        #[cfg(unix)]
+        {
+            let msd_guard = self.msd.read().await;
+            let msd = msd_guard.as_ref()?;
 
-        let state = msd.state().await;
-        Some(MsdDeviceInfo {
-            available: state.available,
-            mode: match state.mode {
-                crate::msd::MsdMode::None => "none",
-                crate::msd::MsdMode::Image => "image",
-                crate::msd::MsdMode::Drive => "drive",
-            }
-            .to_string(),
-            connected: state.connected,
-            image_id: state.current_image.map(|img| img.id),
-            error: None,
-        })
+            let state = msd.state().await;
+            let error = msd.monitor().error_message().await;
+            let mounted_media = state
+                .mounted_media
+                .iter()
+                .map(|media| MsdDeviceMediaInfo {
+                    id: media.id.clone(),
+                    kind: match media.kind {
+                        crate::msd::MountedMediaKind::Drive => "drive",
+                        crate::msd::MountedMediaKind::Image => "image",
+                    }
+                    .to_string(),
+                    name: media.name.clone(),
+                    cdrom: media.cdrom,
+                    read_only: media.read_only,
+                    size: media.size,
+                })
+                .collect::<Vec<_>>();
+            Some(MsdDeviceInfo {
+                available: state.available,
+                disk_mode: match state.disk_mode {
+                    crate::msd::DiskMode::Single => "single",
+                    crate::msd::DiskMode::Multi => "multi",
+                }
+                .to_string(),
+                slot_capacity: state.disk_mode.capacity(),
+                mounted_count: state.mounted_media.len() as u8,
+                mounted_media,
+                usb_reenumerating: state.usb_reenumerating,
+                error,
+            })
+        }
     }
 
-    /// Collect ATX device information (optional)
     async fn collect_atx_info(&self) -> Option<AtxDeviceInfo> {
-        // Predefined backend strings to avoid repeated allocations
-        const BACKEND_POWER_ONLY: &str = "power: configured, reset: none";
-        const BACKEND_RESET_ONLY: &str = "power: none, reset: configured";
-        const BACKEND_BOTH: &str = "power: configured, reset: configured";
-        const BACKEND_NONE: &str = "none";
-
         let atx_guard = self.atx.read().await;
         let atx = atx_guard.as_ref()?;
 
         let state = atx.state().await;
         Some(AtxDeviceInfo {
             available: state.available,
-            backend: match (state.power_configured, state.reset_configured) {
-                (true, true) => BACKEND_BOTH,
-                (true, false) => BACKEND_POWER_ONLY,
-                (false, true) => BACKEND_RESET_ONLY,
-                (false, false) => BACKEND_NONE,
+            backend: match state.driver {
+                crate::atx::AtxDriverType::Gpio => "gpio",
+                crate::atx::AtxDriverType::UsbRelay => "usbrelay",
+                crate::atx::AtxDriverType::Serial => "serial",
+                crate::atx::AtxDriverType::None => "none",
             }
             .to_string(),
             initialized: state.power_configured || state.reset_configured,
             power_on: state.power_status == crate::atx::PowerStatus::On,
+            hdd_status: match state.hdd_status {
+                crate::atx::HddStatus::Active => "active",
+                crate::atx::HddStatus::Inactive => "inactive",
+                crate::atx::HddStatus::Unknown => "unknown",
+            }
+            .to_string(),
             error: None,
         })
     }
 
-    /// Collect Audio device information (optional)
     async fn collect_audio_info(&self) -> Option<AudioDeviceInfo> {
         let status = self.audio.status().await;
 
@@ -254,5 +349,14 @@ impl AppState {
             quality: status.quality.to_string(),
             error: status.error,
         })
+    }
+
+    async fn collect_ttyd_info(&self) -> TtydDeviceInfo {
+        let status = self.extensions.status(ExtensionId::Ttyd).await;
+
+        TtydDeviceInfo {
+            available: self.extensions.check_available(ExtensionId::Ttyd),
+            running: status.is_running(),
+        }
     }
 }

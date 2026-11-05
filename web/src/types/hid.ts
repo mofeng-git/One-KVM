@@ -1,16 +1,15 @@
 // HID (Human Interface Device) type definitions
 // Shared between WebRTC DataChannel and WebSocket HID channels
 
+import { type CanonicalKey } from '@/types/generated'
+import { canonicalKeyToHidUsage } from '@/lib/keyboardMappings'
+
 /** Keyboard event for HID input */
 export interface HidKeyboardEvent {
   type: 'keydown' | 'keyup'
-  key: number
-  modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }
+  key: CanonicalKey
+  /** Raw HID modifier byte (bit0..bit7 = LCtrl..RMeta) */
+  modifier?: number
 }
 
 /** Mouse event for HID input */
@@ -55,15 +54,9 @@ export function encodeKeyboardEvent(event: HidKeyboardEvent): ArrayBuffer {
 
   view.setUint8(0, MSG_KEYBOARD)
   view.setUint8(1, event.type === 'keydown' ? KB_EVENT_DOWN : KB_EVENT_UP)
-  view.setUint8(2, event.key & 0xff)
+  view.setUint8(2, canonicalKeyToHidUsage(event.key) & 0xff)
 
-  // Build modifiers bitmask
-  let modifiers = 0
-  if (event.modifiers?.ctrl) modifiers |= 0x01 // Left Ctrl
-  if (event.modifiers?.shift) modifiers |= 0x02 // Left Shift
-  if (event.modifiers?.alt) modifiers |= 0x04 // Left Alt
-  if (event.modifiers?.meta) modifiers |= 0x08 // Left Meta
-  view.setUint8(3, modifiers)
+  view.setUint8(3, (event.modifier ?? 0) & 0xff)
 
   return buffer
 }

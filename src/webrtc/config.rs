@@ -1,66 +1,28 @@
-//! WebRTC configuration
-
 use serde::{Deserialize, Serialize};
 
-use crate::secrets;
-
-/// ICE server utilities - Only provides Google STUN, no TURN
+/// Public STUN from build-time secrets; TURN is user-configured.
 pub mod public_ice {
-    use super::*;
-
-    /// Always returns true (we have Google STUN)
+    #[inline]
     pub fn is_configured() -> bool {
-        secrets::ice::is_configured()
+        true
     }
 
-    /// Always returns false (TURN not provided)
-    pub fn has_turn() -> bool {
-        secrets::ice::has_turn()
-    }
-
-    /// Get the Google STUN server URL
-    pub fn stun_server() -> Option<String> {
-        let server = secrets::ice::STUN_SERVER;
-        if server.is_empty() {
-            None
-        } else {
-            Some(server.to_string())
-        }
-    }
-
-    /// Always returns empty vector (TURN not provided)
-    pub fn turn_servers() -> Vec<TurnServer> {
-        vec![]
-    }
-
-    /// Get all public ICE servers (STUN only, no TURN)
-    pub fn get_all_servers() -> (Vec<String>, Vec<TurnServer>) {
-        let stun_servers = stun_server().into_iter().collect();
-        let turn_servers = vec![];
-        (stun_servers, turn_servers)
+    #[inline]
+    pub fn stun_server() -> &'static str {
+        crate::secrets::ice::STUN_SERVER
     }
 }
 
-/// WebRTC configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebRtcConfig {
-    /// Enable WebRTC
     pub enabled: bool,
-    /// STUN server URLs
     pub stun_servers: Vec<String>,
-    /// TURN server configuration
     pub turn_servers: Vec<TurnServer>,
-    /// Enable DataChannel for HID
     pub enable_datachannel: bool,
-    /// Video codec preference
     pub video_codec: VideoCodec,
-    /// Target bitrate in kbps
     pub target_bitrate_kbps: u32,
-    /// Maximum bitrate in kbps
     pub max_bitrate_kbps: u32,
-    /// Minimum bitrate in kbps
     pub min_bitrate_kbps: u32,
-    /// Enable audio track
     pub enable_audio: bool,
 }
 
@@ -68,8 +30,6 @@ impl Default for WebRtcConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            // Empty STUN servers for local connections - host candidates work directly
-            // For remote access, configure STUN/TURN servers via settings
             stun_servers: vec![],
             turn_servers: vec![],
             enable_datachannel: true,
@@ -82,20 +42,14 @@ impl Default for WebRtcConfig {
     }
 }
 
-/// TURN server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnServer {
-    /// TURN server URLs (e.g., ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"])
-    /// Multiple URLs allow fallback between UDP and TCP transports
     pub urls: Vec<String>,
-    /// Username for TURN authentication
     pub username: String,
-    /// Credential for TURN authentication
     pub credential: String,
 }
 
 impl TurnServer {
-    /// Create a TurnServer with a single URL (for backwards compatibility)
     pub fn new(url: String, username: String, credential: String) -> Self {
         Self {
             urls: vec![url],
@@ -105,20 +59,15 @@ impl TurnServer {
     }
 }
 
-/// Video codec preference
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum VideoCodec {
+    #[default]
     H264,
     VP8,
     VP9,
     AV1,
-}
-
-impl Default for VideoCodec {
-    fn default() -> Self {
-        Self::H264
-    }
 }
 
 impl std::fmt::Display for VideoCodec {
@@ -132,14 +81,10 @@ impl std::fmt::Display for VideoCodec {
     }
 }
 
-/// ICE configuration
 #[derive(Debug, Clone)]
 pub struct IceConfig {
-    /// ICE candidate gathering timeout (ms)
     pub gathering_timeout_ms: u64,
-    /// ICE connection timeout (ms)
     pub connection_timeout_ms: u64,
-    /// Enable ICE lite mode
     pub ice_lite: bool,
 }
 

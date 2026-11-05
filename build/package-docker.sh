@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
             echo "  # Build for current platform and load locally"
             echo "  $0 --platform linux/arm64 --load"
             echo ""
-            echo "  # Build full image (includes gostc + easytier)"
+            echo "  # Build full image (includes GOSTC + EasyFrp + EasyTier + frpc)"
             echo "  $0 --variant full --platform linux/arm64 --load"
             echo ""
             echo "  # Build and push single platform"
@@ -184,29 +184,32 @@ get_tool_urls() {
     case "$platform" in
         "linux/amd64")
             TTYD_URL="https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64"
-            GOSTC_URL="https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_amd64_v1.tar.gz"
-            EASYTIER_URL="https://github.com/EasyTier/EasyTier/releases/download/v2.4.5/easytier-linux-x86_64-v2.4.5.zip"
-            EASYTIER_DIR="easytier-linux-x86_64"
             ;;
         "linux/arm64")
             TTYD_URL="https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.aarch64"
-            GOSTC_URL="https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_arm64_v8.0.tar.gz"
-            EASYTIER_URL="https://github.com/EasyTier/EasyTier/releases/download/v2.4.5/easytier-linux-aarch64-v2.4.5.zip"
-            EASYTIER_DIR="easytier-linux-aarch64"
             ;;
         "linux/arm/v7")
             TTYD_URL="https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.armhf"
-            GOSTC_URL="https://github.com/SianHH/gostc-open/releases/download/v2.0.9/gostc_linux_arm_7.tar.gz"
-            EASYTIER_URL="https://github.com/EasyTier/EasyTier/releases/download/v2.4.5/easytier-linux-armv7hf-v2.4.5.zip"
-            EASYTIER_DIR="easytier-linux-armv7hf"
             ;;
     esac
 }
 
 # Download tools for a platform
+# Set CURL_PROXY=http://host:port to route GitHub downloads through an HTTP proxy
+# Set GHPROXY_PREFIX=https://ghfast.top/ to prefix GitHub URLs instead
 download_tools() {
     local platform="$1"
     local staging="$2"
+    local curl_proxy=()
+    if [ -n "${CURL_PROXY:-}" ]; then
+        curl_proxy=(-x "$CURL_PROXY")
+    fi
+    dl() {
+        # dl <url> <output>
+        local url="$1"
+        [ -n "${GHPROXY_PREFIX:-}" ] && url="${GHPROXY_PREFIX%/}/$url"
+        curl -fsSL "${curl_proxy[@]}" "$url" -o "$2"
+    }
 
     get_tool_urls "$platform"
 
@@ -214,27 +217,14 @@ download_tools() {
 
     # ttyd
     if [ ! -f "$staging/ttyd" ]; then
-        curl -fsSL "$TTYD_URL" -o "$staging/ttyd"
+        dl "$TTYD_URL" "$staging/ttyd"
         chmod +x "$staging/ttyd"
     fi
 
     if [ "$INCLUDE_THIRD_PARTY" = true ]; then
-        # gostc
-        if [ ! -f "$staging/gostc" ]; then
-            curl -fsSL "$GOSTC_URL" -o /tmp/gostc.tar.gz
-            tar -xzf /tmp/gostc.tar.gz -C "$staging"
-            chmod +x "$staging/gostc"
-            rm /tmp/gostc.tar.gz
-        fi
+        python3 "$PROJECT_ROOT/build/download-remote-tools.py" \
+            --platform "$platform" --output "$staging"
 
-        # easytier
-        if [ ! -f "$staging/easytier-core" ]; then
-            curl -fsSL "$EASYTIER_URL" -o /tmp/easytier.zip
-            unzip -o /tmp/easytier.zip -d /tmp/easytier
-            cp "/tmp/easytier/$EASYTIER_DIR/easytier-core" "$staging/easytier-core"
-            chmod +x "$staging/easytier-core"
-            rm -rf /tmp/easytier.zip /tmp/easytier
-        fi
     fi
 }
 
@@ -256,14 +246,18 @@ build_for_platform() {
     if [ "$BUILD_BINARY" = true ]; then
         echo_info "Building binary with cross..."
         cd "$PROJECT_ROOT"
-        cross build --release --target "$target"
+        local feature_args=()
+        case "$target" in
+            aarch64-*|armv7-*) feature_args=(--features rkmpp) ;;
+        esac
+        cross build --release --target "$target" "${feature_args[@]}"
     fi
 
     # Check binary exists
     local binary="$PROJECT_ROOT/target/$target/release/one-kvm"
     if [ ! -f "$binary" ]; then
         echo_error "Binary not found: $binary"
-        echo_error "Build it first: cross build --release --target $target"
+        echo_error "Build it first: ./build/build-images.sh"
         exit 1
     fi
 
@@ -311,9 +305,16 @@ build_for_platform() {
 
     local build_cmd="docker buildx build --platform $platform"
     build_cmd="$build_cmd --build-arg TARGETPLATFORM=$platform"
+    if [ -n "${APT_MIRROR:-}" ]; then
+        build_cmd="$build_cmd --build-arg APT_MIRROR=$APT_MIRROR"
+    fi
 
     if [ "$PUSH" = true ]; then
         build_cmd="$build_cmd --push"
+        # Aliyun ACR rejects the OCI artifact manifests used by BuildKit attestations.
+        if [[ "$REGISTRY" == registry.cn-*.aliyuncs.com/* ]]; then
+            build_cmd="$build_cmd --provenance=false --sbom=false"
+        fi
     elif [ "$LOAD" = true ]; then
         build_cmd="$build_cmd --load"
     fi

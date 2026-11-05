@@ -1,13 +1,14 @@
+import type { HostInfo } from '@/api'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo } from '@/api'
+import { systemApi, streamApi, hidApi, atxApi, msdApi, type DeviceInfo, type DiskMode, type MountedMedia, type PlatformCapabilities } from '@/api'
 
 interface SystemCapabilities {
-  video: { available: boolean; backend?: string }
-  hid: { available: boolean; backend?: string }
-  msd: { available: boolean }
-  atx: { available: boolean; backend?: string }
-  audio: { available: boolean; backend?: string }
+  video: { available: boolean; backend?: string; reason?: string }
+  hid: { available: boolean; backend?: string; reason?: string }
+  msd: { available: boolean; backend?: string; reason?: string }
+  atx: { available: boolean; backend?: string; reason?: string }
+  audio: { available: boolean; backend?: string; reason?: string }
 }
 
 interface DiskSpaceInfo {
@@ -32,9 +33,17 @@ interface HidState {
   available: boolean
   backend: string
   initialized: boolean
+  online: boolean
   supportsAbsoluteMouse: boolean
+  keyboardLedsEnabled: boolean
+  ledState: {
+    numLock: boolean
+    capsLock: boolean
+    scrollLock: boolean
+  }
   device: string | null
   error: string | null
+  errorCode: string | null
 }
 
 interface AtxState {
@@ -42,14 +51,17 @@ interface AtxState {
   backend: string
   initialized: boolean
   powerOn: boolean
+  hddStatus: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
 interface MsdState {
   available: boolean
-  connected: boolean
-  mode: 'none' | 'image' | 'drive'
-  imageId: string | null
+  diskMode: DiskMode
+  slotCapacity: number
+  mountedCount: number
+  mountedMedia: MountedMedia[]
+  usbReenumerating: boolean
   error: string | null
 }
 
@@ -85,16 +97,35 @@ export interface HidDeviceInfo {
   available: boolean
   backend: string
   initialized: boolean
+  online: boolean
   supports_absolute_mouse: boolean
+  keyboard_leds_enabled: boolean
+  led_state: {
+    num_lock: boolean
+    caps_lock: boolean
+    scroll_lock: boolean
+    compose: boolean
+    kana: boolean
+  }
   device: string | null
   error: string | null
+  error_code?: string | null
 }
 
 export interface MsdDeviceInfo {
   available: boolean
-  mode: string
-  connected: boolean
-  image_id: string | null
+  disk_mode: DiskMode
+  slot_capacity: number
+  mounted_count: number
+  mounted_media: Array<{
+    id: string
+    kind: 'drive' | 'image'
+    name: string
+    cdrom: boolean
+    read_only: boolean
+    size: number
+  }>
+  usb_reenumerating: boolean
   error: string | null
 }
 
@@ -103,6 +134,7 @@ export interface AtxDeviceInfo {
   backend: string
   initialized: boolean
   power_on: boolean
+  hdd_status: 'active' | 'inactive' | 'unknown'
   error: string | null
 }
 
@@ -114,20 +146,28 @@ export interface AudioDeviceInfo {
   error: string | null
 }
 
+export interface TtydDeviceInfo {
+  available: boolean
+  running: boolean
+}
+
 export interface DeviceInfoEvent {
   video: VideoDeviceInfo
   hid: HidDeviceInfo
   msd: MsdDeviceInfo | null
   atx: AtxDeviceInfo | null
   audio: AudioDeviceInfo | null
+  ttyd: TtydDeviceInfo
 }
 
 export const useSystemStore = defineStore('system', () => {
   const version = ref<string>('')
-  const buildDate = ref<string>('')
+  const openwrtSystem = ref(false)
+  const platform = ref<PlatformCapabilities | null>(null)
   const capabilities = ref<SystemCapabilities | null>(null)
   const diskSpace = ref<DiskSpaceInfo | null>(null)
   const deviceInfo = ref<DeviceInfo | null>(null)
+  const hostInfo = ref<HostInfo | null>(null)
   const stream = ref<StreamState | null>(null)
   const hid = ref<HidState | null>(null)
   const atx = ref<AtxState | null>(null)
@@ -146,10 +186,12 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const info = await systemApi.info()
       version.value = info.version
-      buildDate.value = info.build_date
+      openwrtSystem.value = info.openwrt_system === true
+      platform.value = info.platform
       capabilities.value = info.capabilities
       diskSpace.value = info.disk_space ?? null
       deviceInfo.value = info.device_info ?? null
+      hostInfo.value = info.host ?? null
       return info
     } catch (e) {
       console.error('Failed to fetch system info:', e)
@@ -182,9 +224,17 @@ export const useSystemStore = defineStore('system', () => {
         available: state.available,
         backend: state.backend,
         initialized: state.initialized,
+        online: state.online,
         supportsAbsoluteMouse: state.supports_absolute_mouse,
-        device: null,
-        error: null,
+        keyboardLedsEnabled: state.keyboard_leds_enabled,
+        ledState: {
+          numLock: state.led_state.num_lock,
+          capsLock: state.led_state.caps_lock,
+          scrollLock: state.led_state.scroll_lock,
+        },
+        device: state.device ?? null,
+        error: state.error ?? null,
+        errorCode: state.error_code ?? null,
       }
       return state
     } catch (e) {
@@ -201,6 +251,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: state.backend,
         initialized: state.initialized,
         powerOn: state.power_status === 'on',
+        hddStatus: state.hdd_status,
         error: null,
       }
       return state
@@ -212,12 +263,19 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchMsdState() {
     try {
+      if (!platform.value) await fetchSystemInfo()
+      if (!platform.value?.msd.available) {
+        msd.value = null
+        return null
+      }
       const result = await msdApi.status()
       msd.value = {
         available: result.available,
-        connected: result.state.connected,
-        mode: result.state.mode,
-        imageId: result.state.current_image?.id ?? null,
+        diskMode: result.state.disk_mode,
+        slotCapacity: result.state.slot_capacity,
+        mountedCount: result.state.mounted_count,
+        mountedMedia: result.state.mounted_media,
+        usbReenumerating: result.state.usb_reenumerating,
         error: null,
       }
       return result
@@ -227,16 +285,42 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchStreamState() {
+    try {
+      const [status, modeResp] = await Promise.all([
+        streamApi.status(),
+        streamApi.getMode().catch(() => ({ mode: 'mjpeg' }))
+      ])
+      stream.value = {
+        online: status.state === 'streaming',
+        active: status.state !== 'uninitialized',
+        device: status.device,
+        format: status.format,
+        resolution: status.resolution,
+        targetFps: status.target_fps,
+        clients: status.clients,
+        streamMode: modeResp.mode || 'mjpeg',
+        error: status.state === 'error' ? 'Stream error' : null,
+      }
+      return status
+    } catch (e) {
+      console.error('Failed to fetch stream state:', e)
+      throw e
+    }
+  }
+
   async function fetchAllStates() {
     loading.value = true
     error.value = null
 
     try {
+      const systemInfoRequest = fetchSystemInfo()
       await Promise.all([
-        fetchSystemInfo(),
-        // HID state is updated via WebSocket device_info event
+        systemInfoRequest,
+        fetchStreamState().catch(() => null),
+        fetchHidState().catch(() => null),
         fetchAtxState().catch(() => null),
-        fetchMsdState().catch(() => null),
+        systemInfoRequest.then(() => fetchMsdState()).catch(() => null),
       ])
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch states'
@@ -284,18 +368,28 @@ export const useSystemStore = defineStore('system', () => {
       available: data.hid.available,
       backend: data.hid.backend,
       initialized: data.hid.initialized,
+      online: data.hid.online,
       supportsAbsoluteMouse: data.hid.supports_absolute_mouse,
+      keyboardLedsEnabled: data.hid.keyboard_leds_enabled,
+      ledState: {
+        numLock: data.hid.led_state.num_lock,
+        capsLock: data.hid.led_state.caps_lock,
+        scrollLock: data.hid.led_state.scroll_lock,
+      },
       device: data.hid.device,
       error: data.hid.error,
+      errorCode: data.hid.error_code ?? null,
     }
 
     // Update MSD state (optional)
     if (data.msd) {
       msd.value = {
         available: data.msd.available,
-        connected: data.msd.connected,
-        mode: data.msd.mode as 'none' | 'image' | 'drive',
-        imageId: data.msd.image_id,
+        diskMode: data.msd.disk_mode,
+        slotCapacity: data.msd.slot_capacity,
+        mountedCount: data.msd.mounted_count,
+        mountedMedia: data.msd.mounted_media,
+        usbReenumerating: data.msd.usb_reenumerating,
         error: data.msd.error,
       }
     } else {
@@ -309,6 +403,7 @@ export const useSystemStore = defineStore('system', () => {
         backend: data.atx.backend,
         initialized: data.atx.initialized,
         powerOn: data.atx.power_on,
+        hddStatus: data.atx.hdd_status,
         error: data.atx.error,
       }
     } else {
@@ -358,10 +453,12 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     version,
-    buildDate,
+    openwrtSystem,
+    platform,
     capabilities,
     diskSpace,
     deviceInfo,
+    hostInfo,
     stream,
     hid,
     atx,

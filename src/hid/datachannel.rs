@@ -9,7 +9,7 @@
 //!
 //! Keyboard event (type 0x01):
 //! - Byte 1: Event type (0x00 = down, 0x01 = up)
-//! - Byte 2: Key code (USB HID usage code or JS keyCode)
+//! - Byte 2: Canonical key code (stable One-KVM key id aligned with HID usage)
 //! - Byte 3: Modifiers bitmask
 //!   - Bit 0: Left Ctrl
 //!   - Bit 1: Left Shift
@@ -38,26 +38,23 @@ use tracing::warn;
 
 use super::types::ConsumerEvent;
 use super::{
-    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent, MouseEventType,
+    CanonicalKey, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,
+    MouseEventType,
 };
 
-/// Message types
 pub const MSG_KEYBOARD: u8 = 0x01;
 pub const MSG_MOUSE: u8 = 0x02;
 pub const MSG_CONSUMER: u8 = 0x03;
 
-/// Keyboard event types
 pub const KB_EVENT_DOWN: u8 = 0x00;
 pub const KB_EVENT_UP: u8 = 0x01;
 
-/// Mouse event types
 pub const MS_EVENT_MOVE: u8 = 0x00;
 pub const MS_EVENT_MOVE_ABS: u8 = 0x01;
 pub const MS_EVENT_DOWN: u8 = 0x02;
 pub const MS_EVENT_UP: u8 = 0x03;
 pub const MS_EVENT_SCROLL: u8 = 0x04;
 
-/// Parsed HID event from DataChannel
 #[derive(Debug, Clone)]
 pub enum HidChannelEvent {
     Keyboard(KeyboardEvent),
@@ -65,7 +62,6 @@ pub enum HidChannelEvent {
     Consumer(ConsumerEvent),
 }
 
-/// Parse a binary HID message from DataChannel
 pub fn parse_hid_message(data: &[u8]) -> Option<HidChannelEvent> {
     if data.is_empty() {
         warn!("Empty HID message");
@@ -85,7 +81,6 @@ pub fn parse_hid_message(data: &[u8]) -> Option<HidChannelEvent> {
     }
 }
 
-/// Parse keyboard message payload
 fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
     if data.len() < 3 {
         warn!("Keyboard message too short: {} bytes", data.len());
@@ -101,7 +96,13 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         }
     };
 
-    let key = data[1];
+    let key = match CanonicalKey::from_hid_usage(data[1]) {
+        Some(key) => key,
+        None => {
+            warn!("Unknown canonical keyboard key code: 0x{:02X}", data[1]);
+            return None;
+        }
+    };
     let modifiers_byte = data[2];
 
     let modifiers = KeyboardModifiers {
@@ -119,11 +120,9 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         event_type,
         key,
         modifiers,
-        is_usb_hid: false, // WebRTC datachannel sends JS keycodes
     }))
 }
 
-/// Parse mouse message payload
 fn parse_mouse_message(data: &[u8]) -> Option<HidChannelEvent> {
     if data.len() < 6 {
         warn!("Mouse message too short: {} bytes", data.len());
@@ -142,11 +141,9 @@ fn parse_mouse_message(data: &[u8]) -> Option<HidChannelEvent> {
         }
     };
 
-    // Parse coordinates as i16 LE (works for both relative and absolute)
     let x = i16::from_le_bytes([data[1], data[2]]) as i32;
     let y = i16::from_le_bytes([data[3], data[4]]) as i32;
 
-    // Button or scroll delta
     let (button, scroll) = match event_type {
         MouseEventType::Down | MouseEventType::Up => {
             let btn = match data[5] {
@@ -172,7 +169,6 @@ fn parse_mouse_message(data: &[u8]) -> Option<HidChannelEvent> {
     }))
 }
 
-/// Parse consumer control message payload
 fn parse_consumer_message(data: &[u8]) -> Option<HidChannelEvent> {
     if data.len() < 2 {
         warn!("Consumer message too short: {} bytes", data.len());
@@ -184,7 +180,6 @@ fn parse_consumer_message(data: &[u8]) -> Option<HidChannelEvent> {
     Some(HidChannelEvent::Consumer(ConsumerEvent { usage }))
 }
 
-/// Encode a keyboard event to binary format (for sending to client if needed)
 pub fn encode_keyboard_event(event: &KeyboardEvent) -> Vec<u8> {
     let event_type = match event.event_type {
         KeyEventType::Down => KB_EVENT_DOWN,
@@ -193,40 +188,11 @@ pub fn encode_keyboard_event(event: &KeyboardEvent) -> Vec<u8> {
 
     let modifiers = event.modifiers.to_hid_byte();
 
-    vec![MSG_KEYBOARD, event_type, event.key, modifiers]
-}
-
-/// Encode a mouse event to binary format (for sending to client if needed)
-pub fn encode_mouse_event(event: &MouseEvent) -> Vec<u8> {
-    let event_type = match event.event_type {
-        MouseEventType::Move => MS_EVENT_MOVE,
-        MouseEventType::MoveAbs => MS_EVENT_MOVE_ABS,
-        MouseEventType::Down => MS_EVENT_DOWN,
-        MouseEventType::Up => MS_EVENT_UP,
-        MouseEventType::Scroll => MS_EVENT_SCROLL,
-    };
-
-    let x_bytes = (event.x as i16).to_le_bytes();
-    let y_bytes = (event.y as i16).to_le_bytes();
-
-    let extra = match event.event_type {
-        MouseEventType::Down | MouseEventType::Up => event
-            .button
-            .as_ref()
-            .map(|b| match b {
-                MouseButton::Left => 0u8,
-                MouseButton::Middle => 1u8,
-                MouseButton::Right => 2u8,
-                MouseButton::Back => 3u8,
-                MouseButton::Forward => 4u8,
-            })
-            .unwrap_or(0),
-        MouseEventType::Scroll => event.scroll as u8,
-        _ => 0,
-    };
-
     vec![
-        MSG_MOUSE, event_type, x_bytes[0], x_bytes[1], y_bytes[0], y_bytes[1], extra,
+        MSG_KEYBOARD,
+        event_type,
+        event.key.to_hid_usage(),
+        modifiers,
     ]
 }
 
@@ -242,7 +208,7 @@ mod tests {
         match event {
             HidChannelEvent::Keyboard(kb) => {
                 assert!(matches!(kb.event_type, KeyEventType::Down));
-                assert_eq!(kb.key, 0x04);
+                assert_eq!(kb.key, CanonicalKey::KeyA);
                 assert!(kb.modifiers.left_ctrl);
                 assert!(!kb.modifiers.left_shift);
             }
@@ -269,7 +235,7 @@ mod tests {
     fn test_encode_keyboard() {
         let event = KeyboardEvent {
             event_type: KeyEventType::Down,
-            key: 0x04,
+            key: CanonicalKey::KeyA,
             modifiers: KeyboardModifiers {
                 left_ctrl: true,
                 left_shift: false,
@@ -280,7 +246,6 @@ mod tests {
                 right_alt: false,
                 right_meta: false,
             },
-            is_usb_hid: false,
         };
 
         let encoded = encode_keyboard_event(&event);

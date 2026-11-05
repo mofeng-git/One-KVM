@@ -1,8 +1,7 @@
 use crate::{
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
-        ffmpeg_ram_decode, ffmpeg_ram_free_decoder, ffmpeg_ram_last_error,
-        ffmpeg_ram_new_decoder,
+        ffmpeg_ram_decode, ffmpeg_ram_free_decoder, ffmpeg_ram_last_error, ffmpeg_ram_new_decoder,
     },
 };
 use std::{
@@ -115,7 +114,7 @@ impl Drop for Decoder {
     }
 }
 
-fn last_error_message() -> String {
+pub fn last_error_message() -> String {
     unsafe {
         let ptr = ffmpeg_ram_last_error();
         if ptr.is_null() {

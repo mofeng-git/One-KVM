@@ -21,10 +21,18 @@
   --accent-foreground: oklch(20.47% 0.006 285.88);
   --destructive: oklch(57.71% 0.215 27.33);
   --destructive-foreground: oklch(98.48% 0 0);
+  --success: oklch(52.7% 0.154 150.07);
+  --success-foreground: oklch(98.48% 0 0);
+  /* Compact state indicators need stronger luminance separation than success text. */
+  --status-active: oklch(72.3% 0.219 149.58);
+  --warning: oklch(55.4% 0.135 66.44);
+  --warning-foreground: oklch(98.48% 0 0);
+  --info: oklch(54.6% 0.245 262.88);
+  --info-foreground: oklch(98.48% 0 0);
   --border: oklch(91.97% 0.004 286.32);
   --input: oklch(91.97% 0.004 286.32);
   --ring: oklch(70.9% 0.015 286.07);
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   --chart-1: oklch(57.42% 0.169 243.35);
   --chart-2: oklch(76.95% 0.149 183.61);
   --chart-3: oklch(55.75% 0.099 259.21);
@@ -38,11 +46,10 @@
   --sidebar-accent-foreground: oklch(20.47% 0.006 285.88);
   --sidebar-border: oklch(91.97% 0.004 286.32);
   --sidebar-ring: oklch(70.9% 0.015 286.07);
-  /* Keyboard button variables - light mode */
-  --keyboard-button-bg: white;
-  --keyboard-button-color: #1f2937;
-  --keyboard-button-border: #e5e7eb;
-  --keyboard-button-hover-bg: #f3f4f6;
+  --keyboard-button-bg: var(--background);
+  --keyboard-button-color: var(--foreground);
+  --keyboard-button-border: var(--border);
+  --keyboard-button-hover-bg: var(--accent);
 }
 
 .dark {
@@ -62,6 +69,12 @@
   --accent-foreground: oklch(98.48% 0 0);
   --destructive: oklch(57.71% 0.215 27.33);
   --destructive-foreground: oklch(98.48% 0 0);
+  --success: oklch(72.3% 0.219 149.58);
+  --success-foreground: oklch(14.08% 0.004 285.82);
+  --warning: oklch(76.9% 0.188 70.08);
+  --warning-foreground: oklch(14.08% 0.004 285.82);
+  --info: oklch(70.7% 0.165 254.62);
+  --info-foreground: oklch(14.08% 0.004 285.82);
   --border: oklch(26.98% 0.005 286.03);
   --input: oklch(26.98% 0.005 286.03);
   --ring: oklch(83.91% 0.018 227.91);
@@ -98,6 +111,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-status-active: var(--status-active);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -114,10 +134,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* Base styles */
@@ -134,4 +157,100 @@ body {
 
 #app {
   min-height: 100vh;
+}
+
+@layer components {
+  /* Shared dotted backdrop: console video area, login & setup pages */
+  .dot-grid-bg {
+    background-color: var(--muted);
+    background-image: radial-gradient(circle, color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+/* Settings page density: compact cards.
+   Unlayered on purpose — must outrank Tailwind's @layer utilities (py-6/px-6/gap-6). */
+.settings-dense [data-slot="card"] {
+  gap: 1rem;
+  padding-block: 1rem;
+}
+.settings-dense [data-slot="card-header"],
+.settings-dense [data-slot="card-content"],
+.settings-dense [data-slot="card-footer"] {
+  padding-inline: 1rem;
+}
+.settings-dense [data-slot="card-header"].border-b {
+  padding-bottom: 1rem;
+}
+.settings-dense [data-slot="card-footer"].border-t {
+  padding-top: 1rem;
+}
+
+/* Console surfaces follow their owning layout, including content rendered in portals. */
+[data-console-layout="current"] {
+  --console-surface-radius: 8px;
+  --console-control-radius: 5px;
+  --console-menu-row: 32px;
+  --console-surface-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+}
+[data-console-layout="floating"] {
+  --console-surface-radius: 16px;
+  --console-control-radius: 10px;
+  --console-menu-row: 38px;
+  --console-surface-shadow: 0 12px 36px rgb(0 0 0 / 20%);
+}
+[data-console-layout="sidebar"] {
+  --console-surface-radius: 10px;
+  --console-control-radius: 7px;
+  --console-menu-row: 36px;
+  --console-surface-shadow: 4px 6px 20px rgb(0 0 0 / 14%);
+}
+[data-console-layout]:is(
+  [data-slot="popover-content"], [data-slot="hover-card-content"],
+  [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+  [data-slot="select-content"], [data-slot="dialog-content"]
+) {
+  border-radius: var(--console-surface-radius);
+  box-shadow: var(--console-surface-shadow);
+}
+[data-console-layout][data-slot="popover-content"] {
+  max-height: min(var(--reka-popover-content-available-height, 80dvh), 80dvh);
+  overflow-y: auto;
+}
+[data-console-layout] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="button"]) {
+  border-radius: var(--console-control-radius);
+}
+[data-console-layout] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"]) {
+  min-height: var(--console-menu-row);
+  border-radius: var(--console-control-radius);
+}
+[data-console-layout="floating"]:is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"]) {
+  padding: 6px;
+}
+.console-config-panel[data-console-layout="floating"] {
+  width: min(360px, calc(100vw - 24px));
+  padding: 16px;
+}
+.console-config-panel[data-console-layout="sidebar"] {
+  padding: 14px;
+}
+[data-console-layout="floating"][data-slot="tooltip-content"] {
+  border-radius: 8px;
+}
+[data-console-layout="floating"][data-slot="sheet-content"] {
+  margin: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+[data-console-layout="floating"][data-slot="sheet-content"]:is([data-edge="left"], [data-edge="right"]) {
+  height: calc(100% - 24px);
+  max-width: min(24rem, calc(100vw - 24px));
+}
+[data-console-layout="sidebar"][data-slot="sheet-content"][data-edge="right"] {
+  border-radius: 12px 0 0 12px;
+}
+@media (pointer: coarse) {
+  [data-console-layout] :is([data-slot="dropdown-menu-item"], [data-slot="select-item"]) {
+    min-height: 44px;
+  }
 }

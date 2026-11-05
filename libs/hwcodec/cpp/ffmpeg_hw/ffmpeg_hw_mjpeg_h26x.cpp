@@ -271,6 +271,7 @@ extern "C" int ffmpeg_hw_mjpeg_h26x_encode(FfmpegHwMjpegH26x* handle,
   *out_data = nullptr;
   *out_len = 0;
   *out_keyframe = 0;
+  bool encoded = false;
 
   av_packet_unref(ctx->dec_pkt);
   int ret = av_new_packet(ctx->dec_pkt, len);
@@ -290,7 +291,7 @@ extern "C" int ffmpeg_hw_mjpeg_h26x_encode(FfmpegHwMjpegH26x* handle,
   while (true) {
     ret = avcodec_receive_frame(ctx->dec_ctx, ctx->dec_frame);
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-      return 0;
+      return encoded ? 1 : 0;
     }
     if (ret < 0) {
       set_last_error(make_err("avcodec_receive_frame failed", ret));
@@ -370,33 +371,40 @@ extern "C" int ffmpeg_hw_mjpeg_h26x_encode(FfmpegHwMjpegH26x* handle,
       return -1;
     }
 
-    av_packet_unref(ctx->enc_pkt);
-    ret = avcodec_receive_packet(ctx->enc_ctx, ctx->enc_pkt);
-    if (ret == AVERROR(EAGAIN)) {
-      av_frame_unref(ctx->dec_frame);
-      return 0;
-    }
-    if (ret < 0) {
-      set_last_error(make_err("avcodec_receive_packet failed", ret));
-      av_frame_unref(ctx->dec_frame);
-      return -1;
-    }
-
-    if (ctx->enc_pkt->size > 0) {
-      uint8_t *buf = (uint8_t*)malloc(ctx->enc_pkt->size);
-      if (!buf) {
-        set_last_error("malloc for output packet failed");
+    while (true) {
+      av_packet_unref(ctx->enc_pkt);
+      ret = avcodec_receive_packet(ctx->enc_ctx, ctx->enc_pkt);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        break;
+      }
+      if (ret < 0) {
+        set_last_error(make_err("avcodec_receive_packet failed", ret));
         av_packet_unref(ctx->enc_pkt);
         av_frame_unref(ctx->dec_frame);
         return -1;
       }
-      memcpy(buf, ctx->enc_pkt->data, ctx->enc_pkt->size);
-      *out_data = buf;
-      *out_len = ctx->enc_pkt->size;
-      *out_keyframe = (ctx->enc_pkt->flags & AV_PKT_FLAG_KEY) ? 1 : 0;
-      av_packet_unref(ctx->enc_pkt);
-      av_frame_unref(ctx->dec_frame);
-      return 1;
+
+      if (ctx->enc_pkt->size <= 0) {
+        set_last_error("avcodec_receive_packet failed, pkt size is 0");
+        av_packet_unref(ctx->enc_pkt);
+        av_frame_unref(ctx->dec_frame);
+        return -1;
+      }
+
+      if (!encoded) {
+        uint8_t *buf = (uint8_t*)malloc(ctx->enc_pkt->size);
+        if (!buf) {
+          set_last_error("malloc for output packet failed");
+          av_packet_unref(ctx->enc_pkt);
+          av_frame_unref(ctx->dec_frame);
+          return -1;
+        }
+        memcpy(buf, ctx->enc_pkt->data, ctx->enc_pkt->size);
+        *out_data = buf;
+        *out_len = ctx->enc_pkt->size;
+        *out_keyframe = (ctx->enc_pkt->flags & AV_PKT_FLAG_KEY) ? 1 : 0;
+        encoded = true;
+      }
     }
 
     av_frame_unref(ctx->dec_frame);

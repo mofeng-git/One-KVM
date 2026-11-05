@@ -1,56 +1,37 @@
-//! MSD data types and structures
-
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use time::OffsetDateTime;
 
-/// MSD operating mode
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum MsdMode {
-    /// No storage connected
-    None,
-    /// Image file mounted (ISO/IMG)
-    Image,
-    /// Virtual drive (FAT32) connected
-    Drive,
+pub enum DiskMode {
+    #[default]
+    Single,
+    Multi,
 }
 
-impl Default for MsdMode {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-/// Image file metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageInfo {
-    /// Unique image ID
     pub id: String,
-    /// Display name
     pub name: String,
-    /// File path on disk
     #[serde(skip_serializing)]
     pub path: PathBuf,
-    /// File size in bytes
     pub size: u64,
-    /// Creation timestamp
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
 }
 
 impl ImageInfo {
-    /// Create new image info
     pub fn new(id: String, name: String, path: PathBuf, size: u64) -> Self {
         Self {
             id,
             name,
             path,
             size,
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
         }
     }
 
-    /// Format size for display
     pub fn size_display(&self) -> String {
         const KB: u64 = 1024;
         const MB: u64 = KB * 1024;
@@ -68,148 +49,211 @@ impl ImageInfo {
     }
 }
 
-/// MSD state information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MsdState {
-    /// Whether MSD feature is available
     pub available: bool,
-    /// Current mode
-    pub mode: MsdMode,
-    /// Whether storage is connected to target
-    pub connected: bool,
-    /// Currently mounted image (if mode is Image)
-    pub current_image: Option<ImageInfo>,
-    /// Virtual drive info (if mode is Drive)
+    pub disk_mode: DiskMode,
+    pub mounted_media: Vec<MountedMedia>,
     pub drive_info: Option<DriveInfo>,
+    pub usb_reenumerating: bool,
 }
 
 impl Default for MsdState {
     fn default() -> Self {
         Self {
             available: false,
-            mode: MsdMode::None,
-            connected: false,
-            current_image: None,
+            disk_mode: DiskMode::Single,
+            mounted_media: Vec::new(),
             drive_info: None,
+            usb_reenumerating: false,
         }
     }
 }
 
-/// Virtual drive information
+#[derive(Debug, Clone, Serialize)]
+pub struct MsdStateResponse {
+    pub available: bool,
+    pub disk_mode: DiskMode,
+    pub slot_capacity: u8,
+    pub mounted_count: u8,
+    pub mounted_media: Vec<MountedMedia>,
+    pub drive_info: Option<DriveInfo>,
+    pub usb_reenumerating: bool,
+}
+
+impl From<&MsdState> for MsdStateResponse {
+    fn from(state: &MsdState) -> Self {
+        Self {
+            available: state.available,
+            disk_mode: state.disk_mode,
+            slot_capacity: state.disk_mode.capacity(),
+            mounted_count: state.mounted_media.len() as u8,
+            mounted_media: state.mounted_media.clone(),
+            drive_info: state.drive_info.clone(),
+            usb_reenumerating: state.usb_reenumerating,
+        }
+    }
+}
+
+pub const SINGLE_DISK_MSD_LUNS: u8 = 1;
+pub const MULTI_DISK_MSD_LUNS: u8 = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MountedMediaKind {
+    Drive,
+    Image,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountedMedia {
+    pub id: String,
+    pub kind: MountedMediaKind,
+    pub name: String,
+    pub cdrom: bool,
+    pub read_only: bool,
+    pub size: u64,
+    #[serde(skip)]
+    pub lun: u8,
+    #[serde(skip)]
+    pub path: PathBuf,
+}
+
+impl MountedMedia {
+    pub fn image(lun: u8, image: &ImageInfo, cdrom: bool, read_only: bool) -> Self {
+        Self {
+            id: image.id.clone(),
+            lun,
+            kind: MountedMediaKind::Image,
+            name: image.name.clone(),
+            cdrom,
+            read_only: cdrom || read_only,
+            size: image.size,
+            path: image.path.clone(),
+        }
+    }
+
+    pub fn drive(lun: u8, info: &DriveInfo) -> Self {
+        Self {
+            id: "drive".to_string(),
+            lun,
+            kind: MountedMediaKind::Drive,
+            name: "Virtual USB".to_string(),
+            cdrom: false,
+            read_only: false,
+            size: info.size,
+            path: info.path.clone(),
+        }
+    }
+}
+
+impl DiskMode {
+    pub fn capacity(self) -> u8 {
+        match self {
+            DiskMode::Single => SINGLE_DISK_MSD_LUNS,
+            DiskMode::Multi => MULTI_DISK_MSD_LUNS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DriveFileAccess {
+    Available,
+    Unsupported,
+    BlockedWhileConnected,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DriveInfo {
-    /// Drive size in bytes
     pub size: u64,
-    /// Used space in bytes
-    pub used: u64,
-    /// Free space in bytes
-    pub free: u64,
-    /// Whether drive is initialized
+    pub used: Option<u64>,
+    pub free: Option<u64>,
     pub initialized: bool,
-    /// Drive file path
+    pub file_access: DriveFileAccess,
     #[serde(skip_serializing)]
     pub path: PathBuf,
 }
 
 impl DriveInfo {
-    /// Create new drive info
-    pub fn new(path: PathBuf, size: u64) -> Self {
+    pub fn from_raw(path: PathBuf, size: u64, file_access: DriveFileAccess) -> Self {
         Self {
             size,
-            used: 0,
-            free: size,
-            initialized: false,
+            used: None,
+            free: None,
+            initialized: true,
+            file_access,
             path,
         }
     }
+
+    pub fn with_file_access(mut self, file_access: DriveFileAccess) -> Self {
+        self.used = None;
+        self.free = None;
+        self.file_access = file_access;
+        self
+    }
 }
 
-/// File entry in virtual drive
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DriveFile {
-    /// File name
     pub name: String,
-    /// Relative path from drive root
     pub path: String,
-    /// File size in bytes (0 for directories)
     pub size: u64,
-    /// Whether this is a directory
     pub is_dir: bool,
-    /// Last modified timestamp
-    pub modified: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub modified: Option<OffsetDateTime>,
 }
 
-/// MSD connect request
 #[derive(Debug, Clone, Deserialize)]
-pub struct MsdConnectRequest {
-    /// Connection mode: "image" or "drive"
-    pub mode: MsdMode,
-    /// Image ID to mount (required for image mode)
-    pub image_id: Option<String>,
-    /// Mount as CD-ROM (optional, defaults based on image type)
-    #[serde(default)]
-    pub cdrom: Option<bool>,
-    /// Mount as read-only
-    #[serde(default)]
-    pub read_only: Option<bool>,
+pub struct DiskModeRequest {
+    pub disk_mode: DiskMode,
 }
 
-/// Virtual drive init request
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImageMountRequest {
+    #[serde(default)]
+    pub cdrom: bool,
+    #[serde(default)]
+    pub read_only: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct DriveInitRequest {
-    /// Drive size in megabytes (defaults to 16GB)
     #[serde(default = "default_drive_size")]
     pub size_mb: u32,
-    /// Optional custom path for Ventoy installation
-    pub ventoy_path: Option<String>,
 }
 
 fn default_drive_size() -> u32 {
-    16 * 1024 // 16GB
+    64
 }
 
-/// Image download request
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImageDownloadRequest {
-    /// URL to download from
     pub url: String,
-    /// Optional custom filename
     pub filename: Option<String>,
 }
 
-/// Download status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DownloadStatus {
-    /// Download has started
     Started,
-    /// Download is in progress
     InProgress,
-    /// Download completed successfully
     Completed,
-    /// Download failed
     Failed,
 }
 
-/// Download progress information
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgress {
-    /// Unique download ID
     pub download_id: String,
-    /// Source URL
     pub url: String,
-    /// Target filename
     pub filename: String,
-    /// Bytes downloaded so far
     pub bytes_downloaded: u64,
-    /// Total file size (None if unknown)
     pub total_bytes: Option<u64>,
-    /// Progress percentage (0.0 - 100.0, None if total unknown)
     pub progress_pct: Option<f32>,
-    /// Download status
     pub status: DownloadStatus,
-    /// Error message if failed
-    pub error: Option<String>,
+    pub error_code: Option<String>,
 }
 
 #[cfg(test)]
@@ -222,8 +266,55 @@ mod tests {
             "test".into(),
             "test.iso".into(),
             PathBuf::from("/tmp/test.iso"),
-            1024 * 1024 * 1024 * 2, // 2 GB
+            1024 * 1024 * 1024 * 2,
         );
         assert!(info.size_display().contains("GB"));
+    }
+
+    #[test]
+    fn default_state_serializes_single_disk_mode() {
+        assert_eq!(DiskMode::default(), DiskMode::Single);
+
+        let state = MsdState::default();
+        assert_eq!(state.disk_mode, DiskMode::Single);
+
+        let json = serde_json::to_value(MsdStateResponse::from(&state)).unwrap();
+        assert_eq!(json["disk_mode"], "single");
+        assert_eq!(json["slot_capacity"], 1);
+        assert!(json.get("mode").is_none());
+        assert!(json.get("current_image").is_none());
+        assert!(json.get("slots").is_none());
+    }
+
+    #[test]
+    fn drive_info_json_has_stable_nullable_space_and_file_access() {
+        let info = DriveInfo::from_raw(
+            PathBuf::from("/tmp/drive.img"),
+            4096,
+            DriveFileAccess::Unsupported,
+        );
+
+        let value = serde_json::to_value(info).unwrap();
+        assert_eq!(value["size"], 4096);
+        assert_eq!(value["used"], serde_json::Value::Null);
+        assert_eq!(value["free"], serde_json::Value::Null);
+        assert_eq!(value["initialized"], true);
+        assert_eq!(value["file_access"], "unsupported");
+        assert!(value.get("path").is_none());
+    }
+
+    #[test]
+    fn drive_file_access_serializes_all_public_states() {
+        for (access, expected) in [
+            (DriveFileAccess::Available, "available"),
+            (DriveFileAccess::Unsupported, "unsupported"),
+            (
+                DriveFileAccess::BlockedWhileConnected,
+                "blocked_while_connected",
+            ),
+            (DriveFileAccess::Unknown, "unknown"),
+        ] {
+            assert_eq!(serde_json::to_value(access).unwrap(), expected);
+        }
     }
 }

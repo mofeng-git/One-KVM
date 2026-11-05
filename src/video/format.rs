@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use v4l::format::fourcc;
+#[cfg(unix)]
+use v4l2r::PixelFormat as V4l2rPixelFormat;
 
 /// Supported pixel formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -41,30 +42,29 @@ pub enum PixelFormat {
 }
 
 impl PixelFormat {
-    /// Convert to V4L2 FourCC
-    pub fn to_fourcc(&self) -> fourcc::FourCC {
+    /// Convert to V4L2 FourCC bytes
+    pub fn to_fourcc(&self) -> [u8; 4] {
         match self {
-            PixelFormat::Mjpeg => fourcc::FourCC::new(b"MJPG"),
-            PixelFormat::Jpeg => fourcc::FourCC::new(b"JPEG"),
-            PixelFormat::Yuyv => fourcc::FourCC::new(b"YUYV"),
-            PixelFormat::Yvyu => fourcc::FourCC::new(b"YVYU"),
-            PixelFormat::Uyvy => fourcc::FourCC::new(b"UYVY"),
-            PixelFormat::Nv12 => fourcc::FourCC::new(b"NV12"),
-            PixelFormat::Nv21 => fourcc::FourCC::new(b"NV21"),
-            PixelFormat::Nv16 => fourcc::FourCC::new(b"NV16"),
-            PixelFormat::Nv24 => fourcc::FourCC::new(b"NV24"),
-            PixelFormat::Yuv420 => fourcc::FourCC::new(b"YU12"),
-            PixelFormat::Yvu420 => fourcc::FourCC::new(b"YV12"),
-            PixelFormat::Rgb565 => fourcc::FourCC::new(b"RGBP"),
-            PixelFormat::Rgb24 => fourcc::FourCC::new(b"RGB3"),
-            PixelFormat::Bgr24 => fourcc::FourCC::new(b"BGR3"),
-            PixelFormat::Grey => fourcc::FourCC::new(b"GREY"),
+            PixelFormat::Mjpeg => *b"MJPG",
+            PixelFormat::Jpeg => *b"JPEG",
+            PixelFormat::Yuyv => *b"YUYV",
+            PixelFormat::Yvyu => *b"YVYU",
+            PixelFormat::Uyvy => *b"UYVY",
+            PixelFormat::Nv12 => *b"NV12",
+            PixelFormat::Nv21 => *b"NV21",
+            PixelFormat::Nv16 => *b"NV16",
+            PixelFormat::Nv24 => *b"NV24",
+            PixelFormat::Yuv420 => *b"YU12",
+            PixelFormat::Yvu420 => *b"YV12",
+            PixelFormat::Rgb565 => *b"RGBP",
+            PixelFormat::Rgb24 => *b"RGB3",
+            PixelFormat::Bgr24 => *b"BGR3",
+            PixelFormat::Grey => *b"GREY",
         }
     }
 
     /// Try to convert from V4L2 FourCC
-    pub fn from_fourcc(fourcc: fourcc::FourCC) -> Option<Self> {
-        let repr = fourcc.repr;
+    pub fn from_fourcc(repr: [u8; 4]) -> Option<Self> {
         match &repr {
             b"MJPG" => Some(PixelFormat::Mjpeg),
             b"JPEG" => Some(PixelFormat::Jpeg),
@@ -83,6 +83,19 @@ impl PixelFormat {
             b"GREY" | b"Y800" => Some(PixelFormat::Grey),
             _ => None,
         }
+    }
+
+    /// Convert to v4l2r PixelFormat
+    #[cfg(unix)]
+    pub fn to_v4l2r(&self) -> V4l2rPixelFormat {
+        V4l2rPixelFormat::from(&self.to_fourcc())
+    }
+
+    /// Convert from v4l2r PixelFormat
+    #[cfg(unix)]
+    pub fn from_v4l2r(format: V4l2rPixelFormat) -> Option<Self> {
+        let repr: [u8; 4] = format.into();
+        Self::from_fourcc(repr)
     }
 
     /// Check if format is compressed (JPEG/MJPEG)
@@ -131,8 +144,8 @@ impl PixelFormat {
         match self {
             PixelFormat::Mjpeg => 100,
             PixelFormat::Jpeg => 99,
-            PixelFormat::Yuyv => 80,
-            PixelFormat::Nv12 => 75,
+            PixelFormat::Nv12 => 80,
+            PixelFormat::Yuyv => 75,
             PixelFormat::Nv21 => 74,
             PixelFormat::Yuv420 => 70,
             PixelFormat::Uyvy => 65,
@@ -149,30 +162,18 @@ impl PixelFormat {
 
     /// Get recommended format for video encoding (WebRTC)
     ///
-    /// Hardware encoding prefers: NV12 > YUYV
-    /// Software encoding prefers: YUYV > NV12
+    /// Prefers NV12 over YUYV (matches [`Self::priority`])
     ///
     /// Returns None if no suitable format is available
     pub fn recommended_for_encoding(
         available: &[PixelFormat],
-        is_hardware: bool,
+        _is_hardware: bool,
     ) -> Option<PixelFormat> {
-        if is_hardware {
-            // Hardware encoding: NV12 > YUYV
-            if available.contains(&PixelFormat::Nv12) {
-                return Some(PixelFormat::Nv12);
-            }
-            if available.contains(&PixelFormat::Yuyv) {
-                return Some(PixelFormat::Yuyv);
-            }
-        } else {
-            // Software encoding: YUYV > NV12
-            if available.contains(&PixelFormat::Yuyv) {
-                return Some(PixelFormat::Yuyv);
-            }
-            if available.contains(&PixelFormat::Nv12) {
-                return Some(PixelFormat::Nv12);
-            }
+        if available.contains(&PixelFormat::Nv12) {
+            return Some(PixelFormat::Nv12);
+        }
+        if available.contains(&PixelFormat::Yuyv) {
+            return Some(PixelFormat::Yuyv);
         }
         // Fallback to any non-compressed format
         available.iter().find(|f| !f.is_compressed()).copied()
@@ -270,18 +271,75 @@ impl Resolution {
         self.width as u64 * self.height as u64
     }
 
-    /// Common resolutions
+    /// Common resolutions.
+    ///
+    /// All constants here are 8-pixel aligned on both axes so they survive
+    /// the `step=8` constraint imposed by most CSI bridge drivers (e.g.
+    /// `rkcif` on Rockchip). If you add a new entry, make sure
+    /// `width % 8 == 0 && height % 8 == 0`, otherwise the driver will
+    /// silently round it at `S_FMT` time and the UI will report a
+    /// different resolution than the one the user picked.
     pub const VGA: Resolution = Resolution {
         width: 640,
         height: 480,
+    };
+    /// CEA-2/3 NTSC SD (480p)
+    pub const NTSC: Resolution = Resolution {
+        width: 720,
+        height: 480,
+    };
+    /// CEA-5/17/18 PAL SD (576p)
+    pub const PAL: Resolution = Resolution {
+        width: 720,
+        height: 576,
+    };
+    /// SVGA — legacy BIOS / POST output
+    pub const SVGA: Resolution = Resolution {
+        width: 800,
+        height: 600,
+    };
+    /// XGA — very common BIOS / server console output
+    pub const XGA: Resolution = Resolution {
+        width: 1024,
+        height: 768,
     };
     pub const HD720: Resolution = Resolution {
         width: 1280,
         height: 720,
     };
+    /// WXGA — older laptop panels
+    pub const WXGA: Resolution = Resolution {
+        width: 1280,
+        height: 800,
+    };
+    /// SXGA — 4:3 / 5:4 legacy desktop displays
+    pub const SXGA: Resolution = Resolution {
+        width: 1280,
+        height: 1024,
+    };
+    /// 1360×768 — fallback for 8-aligned "1366×768"-like panels
+    pub const HDTV: Resolution = Resolution {
+        width: 1360,
+        height: 768,
+    };
+    /// UXGA — industrial / 4:3 legacy displays
+    pub const UXGA: Resolution = Resolution {
+        width: 1600,
+        height: 1200,
+    };
     pub const HD1080: Resolution = Resolution {
         width: 1920,
         height: 1080,
+    };
+    /// WUXGA — 16:10 professional monitors
+    pub const WUXGA: Resolution = Resolution {
+        width: 1920,
+        height: 1200,
+    };
+    /// QHD / 2K — modern PC monitors
+    pub const QHD: Resolution = Resolution {
+        width: 2560,
+        height: 1440,
     };
     pub const UHD4K: Resolution = Resolution {
         width: 3840,

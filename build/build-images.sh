@@ -18,9 +18,39 @@ ARCH_MAP=(
 # Build for specific architecture using cross
 build_arch() {
     local rust_target="$1"
+    local feature_args=()
+    case "$rust_target" in
+        aarch64-*|armv7-*) feature_args=(--features rkmpp) ;;
+    esac
+
+    case "${CHINAMIRRO:-}" in
+        1|true|TRUE|yes|YES|on|ON)
+            # Default Rust toolchain mirror is USTC (rsproxy.cn is unreachable via the
+            # Docker bridge on some networks because its CDN blocks the SNAT source IP).
+            local rust_dist="${RUSTUP_DIST_SERVER_MIRROR:-https://mirrors.ustc.edu.cn/rust-static}"
+            local rust_root="${RUSTUP_UPDATE_ROOT_MIRROR:-https://mirrors.ustc.edu.cn/rust-static/rustup}"
+            local crates_sparse="${CARGO_SPARSE_MIRROR:-sparse+https://mirrors.ustc.edu.cn/crates.io-index/}"
+            local crates_git="${CARGO_GIT_MIRROR:-https://mirrors.ustc.edu.cn/crates.io-index}"
+            local cross_build_opts="${CROSS_BUILD_OPTS:+$CROSS_BUILD_OPTS }--progress=plain --build-arg CHINAMIRRO=1 --build-arg GH_PROXY=${GH_PROXY:-https://ghfast.top/} --build-arg DEBIAN_IMAGE=${DEBIAN_IMAGE:-dockerproxy.net/library/debian:12}"
+            cross_build_opts="$cross_build_opts --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg NO_PROXY="
+            cross_build_opts="$cross_build_opts --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg no_proxy="
+            echo "=== China mirror acceleration: enabled ==="
+            echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
+            env \
+                CROSS_BUILD_OPTS="$cross_build_opts" \
+                CARGO_SOURCE_CRATES_IO_REPLACE_WITH=cn-mirror \
+                CARGO_SOURCE_CN-MIRROR_REGISTRY="$crates_sparse" \
+                CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
+                CARGO_NET_GIT_FETCH_WITH_CLI=true \
+                RUSTUP_DIST_SERVER="$rust_dist" \
+                RUSTUP_UPDATE_ROOT="$rust_root" \
+                cross build --release --target "$rust_target" "${feature_args[@]}"
+            return
+            ;;
+    esac
 
     echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
-    cross build --release --target "$rust_target"
+    cross build --release --target "$rust_target" "${feature_args[@]}"
 }
 
 # Main
@@ -49,6 +79,7 @@ case "${1:-all}" in
         echo "Examples:"
         echo "  $0              # Build all"
         echo "  $0 x86_64       # Build x86_64 only"
+        echo "  CHINAMIRRO=1 $0 arm64  # Build with China mirrors"
         exit 0
         ;;
     *)
@@ -62,18 +93,6 @@ echo "Binaries built:"
 for target in "${ARCH_MAP[@]}"; do
     if [ -f "$PROJECT_DIR/target/$target/release/one-kvm" ]; then
         echo "  $target: OK"
-    fi
-done
-echo ""
-echo "Static libraries:"
-for target in "${ARCH_MAP[@]}"; do
-    case "$target" in
-        x86_64-unknown-linux-gnu) gnu_target="x86_64-linux-gnu" ;;
-        aarch64-unknown-linux-gnu) gnu_target="aarch64-linux-gnu" ;;
-        armv7-unknown-linux-gnueabihf) gnu_target="armv7-linux-gnueabihf" ;;
-    esac
-    if [ -d "$PROJECT_DIR/target/one-kvm-libs/$gnu_target/lib" ]; then
-        echo "  $gnu_target: OK"
     fi
 done
 echo ""

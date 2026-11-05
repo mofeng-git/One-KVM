@@ -5,7 +5,8 @@ use std::{
 };
 
 fn main() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Read the current source path when running, since build artifacts may move.
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("cpp");
 
     println!("cargo:rerun-if-changed=cpp/yuv_ffi.h");
@@ -19,9 +20,9 @@ fn main() {
 
 fn generate_bindings(cpp_dir: &Path) {
     let ffi_header = cpp_dir.join("yuv_ffi.h");
+    let builder = bindgen::builder().header(ffi_header.to_string_lossy().to_string());
 
-    bindgen::builder()
-        .header(ffi_header.to_string_lossy().to_string())
+    builder
         // YUYV conversions
         .allowlist_function("YUY2ToI420")
         .allowlist_function("YUY2ToNV12")
@@ -34,10 +35,13 @@ fn generate_bindings(cpp_dir: &Path) {
         .allowlist_function("I420Copy")
         // I422 conversions
         .allowlist_function("I422ToI420")
+        .allowlist_function("I444ToI420")
         // NV12/NV21 conversions
         .allowlist_function("NV12ToI420")
         .allowlist_function("NV21ToI420")
+        .allowlist_function("NV21ToNV12")
         .allowlist_function("NV12Copy")
+        .allowlist_function("SplitUVPlane")
         // ARGB/BGRA conversions
         .allowlist_function("ARGBToI420")
         .allowlist_function("ARGBToNV12")
@@ -47,18 +51,23 @@ fn generate_bindings(cpp_dir: &Path) {
         .allowlist_function("ABGRToARGB")
         // RGB24/BGR24 conversions
         .allowlist_function("RGB24ToI420")
+        .allowlist_function("RGB24ToNV12")
         .allowlist_function("RAWToI420")
         .allowlist_function("RGB24ToARGB")
         .allowlist_function("RAWToARGB")
         // YUV to RGB conversions
         .allowlist_function("I420ToRGB24")
         .allowlist_function("I420ToARGB")
+        .allowlist_function("H444ToARGB")
         .allowlist_function("NV12ToRGB24")
         .allowlist_function("NV12ToARGB")
         .allowlist_function("YUY2ToARGB")
         .allowlist_function("UYVYToARGB")
         .allowlist_function("ARGBToRGB24")
         .allowlist_function("ARGBToRAW")
+        // MJPEG decoding
+        .allowlist_function("MJPGToNV12")
+        .allowlist_function("MJPGSize")
         // Scaling
         .allowlist_function("I420Scale")
         .allowlist_function("NV12Scale")
@@ -78,9 +87,24 @@ fn generate_bindings(cpp_dir: &Path) {
 }
 
 fn link_libyuv() {
+    println!("cargo:rerun-if-env-changed=ONE_KVM_LIBS_PATH");
+    println!("cargo:rerun-if-env-changed=LIBYUV_STATIC");
+
+    // An explicit library root must take precedence over host discovery.
+    if env::var("ONE_KVM_LIBS_PATH")
+        .ok()
+        .is_some_and(|path| !path.trim().is_empty())
+    {
+        if link_system() {
+            return;
+        }
+
+        panic!("libyuv not found under ONE_KVM_LIBS_PATH");
+    }
+
     // Try vcpkg first
-    if let Ok(vcpkg_root) = env::var("VCPKG_ROOT") {
-        if link_vcpkg(vcpkg_root.into()) {
+    if let Some(vcpkg_installed) = vcpkg_installed_root() {
+        if link_vcpkg(vcpkg_installed) {
             return;
         }
     }
@@ -106,6 +130,22 @@ fn link_libyuv() {
     );
 }
 
+fn vcpkg_installed_root() -> Option<PathBuf> {
+    println!("cargo:rerun-if-env-changed=VCPKG_INSTALLED_DIR");
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+
+    if let Ok(path) = env::var("VCPKG_INSTALLED_DIR") {
+        if !path.trim().is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    env::var("VCPKG_ROOT")
+        .ok()
+        .filter(|path| !path.trim().is_empty())
+        .map(|path| PathBuf::from(path).join("installed"))
+}
+
 fn link_vcpkg(mut path: PathBuf) -> bool {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -127,7 +167,6 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
         }
     };
 
-    path.push("installed");
     path.push(triplet);
 
     let include_path = path.join("include");
@@ -151,12 +190,17 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
     if use_static && static_lib.exists() {
         // Static linking (for deb packaging)
         println!("cargo:rustc-link-lib=static=yuv");
-        println!("cargo:rustc-link-lib=stdc++");
+        link_libjpeg_for_static_libyuv(&[lib_path.clone()], &target_os);
+        if target_os == "linux" {
+            println!("cargo:rustc-link-lib=stdc++");
+        }
         println!("cargo:info=Using libyuv from vcpkg (static linking)");
     } else {
         // Dynamic linking (default for development)
         println!("cargo:rustc-link-lib=yuv");
-        println!("cargo:rustc-link-lib=stdc++");
+        if target_os == "linux" {
+            println!("cargo:rustc-link-lib=stdc++");
+        }
         println!("cargo:info=Using libyuv from vcpkg (dynamic linking)");
     }
 
@@ -204,17 +248,21 @@ fn link_system() -> bool {
     // Build custom library paths based on target architecture:
     // 1. Check ONE_KVM_LIBS_PATH environment variable (explicit override)
     // 2. Fall back to architecture-based detection
-    let custom_lib_path = if let Ok(path) = env::var("ONE_KVM_LIBS_PATH") {
-        format!("{}/lib", path)
-    } else {
-        match target_arch.as_str() {
-            "x86_64" => "/usr/local/lib",
-            "aarch64" => "/usr/aarch64-linux-gnu/lib",
-            "arm" => "/usr/arm-linux-gnueabihf/lib",
-            _ => "",
-        }
-        .to_string()
-    };
+    let explicit_lib_root = env::var("ONE_KVM_LIBS_PATH")
+        .ok()
+        .filter(|path| !path.trim().is_empty());
+    let custom_lib_path = explicit_lib_root
+        .as_ref()
+        .map(|path| format!("{}/lib", path))
+        .unwrap_or_else(|| {
+            match target_arch.as_str() {
+                "x86_64" => "/usr/local/lib",
+                "aarch64" => "/usr/aarch64-linux-gnu/lib",
+                "arm" => "/usr/arm-linux-gnueabihf/lib",
+                _ => "",
+            }
+            .to_string()
+        });
 
     // Try common system library paths (custom paths first)
     let mut lib_paths: Vec<String> = Vec::new();
@@ -224,20 +272,22 @@ fn link_system() -> bool {
         lib_paths.push(custom_lib_path);
     }
 
-    // Then standard paths
-    lib_paths.extend(
-        [
-            "/usr/local/lib", // Custom builds
-            "/usr/local/lib64",
-            "/usr/lib",
-            "/usr/lib64",
-            "/usr/lib/x86_64-linux-gnu",    // Debian/Ubuntu x86_64
-            "/usr/lib/aarch64-linux-gnu",   // Debian/Ubuntu ARM64
-            "/usr/lib/arm-linux-gnueabihf", // Debian/Ubuntu ARMv7
-        ]
-        .iter()
-        .map(|s| s.to_string()),
-    );
+    // An explicit root is strict: do not silently fall back to host libraries.
+    if explicit_lib_root.is_none() {
+        lib_paths.extend(
+            [
+                "/usr/local/lib", // Custom builds
+                "/usr/local/lib64",
+                "/usr/lib",
+                "/usr/lib64",
+                "/usr/lib/x86_64-linux-gnu",    // Debian/Ubuntu x86_64
+                "/usr/lib/aarch64-linux-gnu",   // Debian/Ubuntu ARM64
+                "/usr/lib/arm-linux-gnueabihf", // Debian/Ubuntu ARMv7
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+    }
 
     for path in &lib_paths {
         let lib_path = Path::new(path);
@@ -248,6 +298,7 @@ fn link_system() -> bool {
         if use_static && libyuv_static.exists() {
             println!("cargo:rustc-link-search=native={}", path);
             println!("cargo:rustc-link-lib=static=yuv");
+            link_libjpeg_for_static_libyuv(&[lib_path.to_path_buf()], "linux");
             println!("cargo:rustc-link-lib=stdc++");
             println!(
                 "cargo:info=Using system libyuv from {} (static linking)",
@@ -273,4 +324,59 @@ fn link_system() -> bool {
     }
 
     false
+}
+
+fn link_libjpeg_for_static_libyuv(preferred_lib_dirs: &[PathBuf], target_os: &str) {
+    if target_os != "linux" {
+        return;
+    }
+
+    println!("cargo:rerun-if-env-changed=ONE_KVM_LIBJPEG_DIR");
+
+    let mut lib_dirs = Vec::new();
+    if let Ok(path) = env::var("ONE_KVM_LIBJPEG_DIR") {
+        if !path.trim().is_empty() {
+            lib_dirs.push(PathBuf::from(path));
+        }
+    }
+    lib_dirs.extend(preferred_lib_dirs.iter().cloned());
+    lib_dirs.extend(
+        [
+            "/usr/local/lib",
+            "/usr/local/lib64",
+            "/usr/lib",
+            "/usr/lib64",
+            "/usr/lib/x86_64-linux-gnu",
+            "/usr/lib/aarch64-linux-gnu",
+            "/usr/lib/arm-linux-gnueabihf",
+            "/usr/aarch64-linux-gnu/lib",
+            "/usr/arm-linux-gnueabihf/lib",
+        ]
+        .iter()
+        .map(PathBuf::from),
+    );
+
+    for lib_dir in dedupe_paths(lib_dirs) {
+        if lib_dir.join("libjpeg.a").exists() {
+            println!("cargo:rustc-link-search=native={}", lib_dir.display());
+            println!("cargo:rustc-link-lib=static=jpeg");
+            println!(
+                "cargo:info=Using libjpeg for static libyuv MJPEG from {}",
+                lib_dir.display()
+            );
+            return;
+        }
+    }
+
+    println!("cargo:warning=libjpeg.a not found; static libyuv built with MJPEG may fail to link");
+}
+
+fn dedupe_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut deduped = Vec::new();
+    for path in paths {
+        if !deduped.iter().any(|existing| existing == &path) {
+            deduped.push(path);
+        }
+    }
+    deduped
 }

@@ -1,6 +1,5 @@
 # Rust
-/target/
-Cargo.lock
+target/
 
 # IDE
 .idea/
@@ -30,6 +29,8 @@ Thumbs.db
 
 # Build artifacts
 /dist/
+/build-staging
+/.tmp/
 
 # Frontend (built files)
 /web/node_modules/
@@ -39,3 +40,5 @@ CLAUDE.md
 
 # Secrets (compile-time configuration)
 secrets.toml
+.env
+/docs/

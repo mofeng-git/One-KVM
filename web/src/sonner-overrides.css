@@ -1,0 +1,205 @@
+/* Must load after vue-sonner/style.css — overrides Sonner defaults to match shadcn-style tokens */
+
+[data-sonner-toaster] {
+  font-family: inherit;
+  /* Inline default is 356px — flatten bar reads better a bit wider */
+  --width: min(30rem, calc(100vw - 2rem)) !important;
+}
+
+/* Top-right preset: tuck close control inside (+ vertically center) instead of protruding outside */
+[data-sonner-toaster] [data-close-button-position='top-right'] {
+  --toast-close-button-right: 0.5rem;
+  --toast-close-button-left: unset;
+  --toast-close-button-top: 50%;
+  --toast-close-button-bottom: unset;
+  --toast-close-button-transform: translateY(-50%);
+}
+
+[data-sonner-toast][data-styled='true'] {
+  font-size: 0.875rem;
+  line-height: 1.35;
+  gap: 0.5rem;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(0 0 0 / 0.04);
+  padding: 0.5625rem 2.125rem 0.5625rem 0.75rem;
+  align-items: center;
+}
+
+[data-sonner-toast][data-styled='true'] [data-content] {
+  gap: 0.0625rem;
+}
+
+:is(.dark *) [data-sonner-toast][data-styled='true'] {
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.28),
+    0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+[data-sonner-toast]:focus-visible {
+  outline: none;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 0 0 2px var(--background),
+    0 0 0 4px color-mix(in oklch, var(--ring) 55%, transparent);
+}
+
+:is(.dark *) [data-sonner-toast]:focus-visible {
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.28),
+    0 1px 2px rgb(0 0 0 / 0.2),
+    0 0 0 2px var(--background),
+    0 0 0 4px color-mix(in oklch, var(--ring) 55%, transparent);
+}
+
+html body [data-sonner-toast][data-styled='true'] [data-title] {
+  font-weight: 600;
+}
+
+html body [data-sonner-toast][data-styled='true'] [data-description] {
+  color: var(--muted-foreground);
+}
+
+/* Only semantic variants keep description tied to tinted foreground */
+html body [data-rich-colors='true'][data-sonner-toast][data-type='error'][data-styled='true'] [data-description],
+html body [data-rich-colors='true'][data-sonner-toast][data-type='warning'][data-styled='true'] [data-description],
+html body [data-rich-colors='true'][data-sonner-toast][data-type='success'][data-styled='true'] [data-description],
+html body [data-rich-colors='true'][data-sonner-toast][data-type='info'][data-styled='true'] [data-description] {
+  color: inherit;
+  opacity: 0.92;
+}
+
+/* Compact ghost close (inside strip, smaller hit target) */
+[data-sonner-toast][data-styled='true'] [data-close-button] {
+  height: 1.5rem;
+  width: 1.5rem;
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  border-radius: calc(var(--radius) - 4px);
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+[data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  background: color-mix(in oklch, var(--muted) 65%, transparent);
+  color: var(--foreground);
+}
+
+[data-sonner-toast][data-styled='true']:hover [data-close-button]:hover {
+  background: color-mix(in oklch, var(--muted) 65%, transparent);
+}
+
+[data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+/* Semantic: soft tinted surface + theme tokens */
+[data-rich-colors='true'][data-sonner-toast][data-type='error'][data-styled='true'] {
+  background: color-mix(in oklch, var(--destructive) 14%, var(--popover));
+  border-color: color-mix(in oklch, var(--destructive) 38%, var(--border));
+  color: var(--destructive);
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='error'][data-styled='true'] [data-close-button] {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.88;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='error'][data-styled='true'] [data-close-button]:hover {
+  background: color-mix(in oklch, var(--destructive) 16%, transparent);
+  opacity: 1;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'][data-styled='true'] {
+  background: color-mix(in oklch, var(--chart-4) 16%, var(--popover));
+  border-color: color-mix(in oklch, var(--chart-4) 36%, var(--border));
+  color: color-mix(in oklch, var(--chart-4) 48%, var(--foreground));
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'][data-styled='true'] [data-close-button] {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.88;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'][data-styled='true'] [data-close-button]:hover {
+  background: color-mix(in oklch, var(--chart-4) 18%, transparent);
+  opacity: 1;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'][data-styled='true'] {
+  background: color-mix(in oklch, var(--chart-2) 14%, var(--popover));
+  border-color: color-mix(in oklch, var(--chart-2) 34%, var(--border));
+  color: color-mix(in oklch, var(--chart-2) 42%, var(--foreground));
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'][data-styled='true'] [data-close-button] {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.88;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='success'][data-styled='true'] [data-close-button]:hover {
+  background: color-mix(in oklch, var(--chart-2) 16%, transparent);
+  opacity: 1;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='info'][data-styled='true'] {
+  background: color-mix(in oklch, var(--chart-1) 14%, var(--popover));
+  border-color: color-mix(in oklch, var(--chart-1) 34%, var(--border));
+  color: color-mix(in oklch, var(--chart-1) 42%, var(--foreground));
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='info'][data-styled='true'] [data-close-button] {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.88;
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='info'][data-styled='true'] [data-close-button]:hover {
+  background: color-mix(in oklch, var(--chart-1) 16%, transparent);
+  opacity: 1;
+}
+
+[data-sonner-toast][data-styled='true'] [data-button]:not([data-cancel]) {
+  border-radius: calc(var(--radius) - 2px);
+  height: 2rem;
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+[data-sonner-toast][data-styled='true'] [data-button]:not([data-cancel]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+[data-sonner-toast][data-styled='true'] [data-cancel] {
+  border-radius: calc(var(--radius) - 2px);
+  height: 2rem;
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--muted) 88%, transparent);
+  border: 1px solid var(--border);
+}
+
+[data-sonner-toast][data-styled='true'] [data-cancel]:hover {
+  background: var(--muted);
+}
+
+.sonner-loading-bar {
+  background: var(--muted-foreground);
+}

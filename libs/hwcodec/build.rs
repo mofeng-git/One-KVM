@@ -5,7 +5,8 @@ use std::{
 };
 
 fn main() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Read the current source path when running, since build artifacts may move.
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("cpp");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed={}", cpp_dir.display());
@@ -17,15 +18,16 @@ fn main() {
 }
 
 fn build_common(builder: &mut Build) {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let common_dir = manifest_dir.join("cpp").join("common");
 
-    bindgen::builder()
+    let bindings = bindgen::builder()
         .header(common_dir.join("common.h").to_string_lossy().to_string())
         .header(common_dir.join("callback.h").to_string_lossy().to_string())
-        .rustified_enum("*")
-        .parse_callbacks(Box::new(CommonCallbacks))
+        .rustified_enum(".*")
+        .parse_callbacks(Box::new(CommonCallbacks));
+    bindings
         .generate()
         .unwrap()
         .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("common_ffi.rs"))
@@ -34,7 +36,9 @@ fn build_common(builder: &mut Build) {
     // system
     #[cfg(windows)]
     {
-        ["d3d11", "dxgi"].map(|lib| println!("cargo:rustc-link-lib={}", lib));
+        for lib in ["d3d11", "dxgi"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
     }
 
     builder.include(&common_dir);
@@ -69,9 +73,9 @@ fn build_common(builder: &mut Build) {
 #[derive(Debug)]
 struct CommonCallbacks;
 impl bindgen::callbacks::ParseCallbacks for CommonCallbacks {
-    fn add_derives(&self, name: &str) -> Vec<String> {
+    fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
         let names = vec!["DataFormat", "SurfaceFormat", "API"];
-        if names.contains(&name) {
+        if names.contains(&info.name) {
             vec!["Serialize", "Deserialize"]
                 .drain(..)
                 .map(|s| s.to_string())
@@ -89,8 +93,8 @@ mod ffmpeg {
         ffmpeg_ffi();
 
         // Try VCPKG first, fallback to system FFmpeg via pkg-config
-        if let Ok(vcpkg_root) = std::env::var("VCPKG_ROOT") {
-            link_vcpkg(builder, vcpkg_root.into());
+        if let Some(vcpkg_installed) = vcpkg_installed_root() {
+            link_vcpkg(builder, vcpkg_installed);
         } else {
             // Use system FFmpeg via pkg-config
             link_system_ffmpeg(builder);
@@ -99,6 +103,23 @@ mod ffmpeg {
         link_os();
         build_ffmpeg_ram(builder);
         build_ffmpeg_hw(builder);
+        build_ffmpeg_capture(builder);
+    }
+
+    fn vcpkg_installed_root() -> Option<PathBuf> {
+        println!("cargo:rerun-if-env-changed=VCPKG_INSTALLED_DIR");
+        println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+
+        if let Ok(path) = std::env::var("VCPKG_INSTALLED_DIR") {
+            if !path.trim().is_empty() {
+                return Some(PathBuf::from(path));
+            }
+        }
+
+        std::env::var("VCPKG_ROOT")
+            .ok()
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| PathBuf::from(path).join("installed"))
     }
 
     /// Link system FFmpeg using pkg-config or custom path
@@ -133,7 +154,7 @@ mod ffmpeg {
             let include_dir = Path::new(&custom_lib_path).join("include");
             let avcodec_lib = lib_dir.join("libavcodec.a");
 
-            if avcodec_lib.exists() {
+            if avcodec_lib.exists() && use_static {
                 println!("cargo:info=Using custom FFmpeg from {}", custom_lib_path);
                 println!("cargo:rustc-link-search=native={}", lib_dir.display());
                 builder.include(&include_dir);
@@ -142,7 +163,7 @@ mod ffmpeg {
                 println!("cargo:rustc-link-lib=static=avcodec");
                 println!("cargo:rustc-link-lib=static=avutil");
 
-                // Link hardware acceleration dependencies (dynamic)
+                // Link hardware acceleration dependencies
                 // These vary by architecture
                 if target_arch == "x86_64" {
                     // VAAPI for x86_64
@@ -150,14 +171,12 @@ mod ffmpeg {
                     println!("cargo:rustc-link-lib=va-drm");
                     println!("cargo:rustc-link-lib=va-x11"); // Required for vaGetDisplay
                     println!("cargo:rustc-link-lib=mfx");
-                } else {
-                    // RKMPP for ARM
-                    println!("cargo:rustc-link-lib=rockchip_mpp");
-                    let rga_static = lib_dir.join("librga.a");
-                    if rga_static.exists() {
-                        println!("cargo:rustc-link-lib=static=rga");
-                    } else {
-                        println!("cargo:rustc-link-lib=rga");
+                } else if std::env::var_os("CARGO_FEATURE_RKMPP").is_some() {
+                    for lib in ["rockchip_mpp", "rga"] {
+                        if !lib_dir.join(format!("lib{lib}.a")).exists() {
+                            panic!("missing static library: lib{lib}.a");
+                        }
+                        println!("cargo:rustc-link-lib=static={}", lib);
                     }
                 }
 
@@ -216,12 +235,6 @@ mod ffmpeg {
                                 // For static linking, link FFmpeg libs statically, others dynamically
                                 if lib_name.starts_with("av") || lib_name == "swresample" {
                                     println!("cargo:rustc-link-lib=static={}", lib_name);
-                                } else if lib_name == "rga"
-                                    && link_paths
-                                        .iter()
-                                        .any(|path| Path::new(path).join("librga.a").exists())
-                                {
-                                    println!("cargo:rustc-link-lib=static=rga");
                                 } else {
                                     // Runtime libraries (va, drm, etc.) must be dynamic
                                     println!("cargo:rustc-link-lib={}", lib_name);
@@ -271,7 +284,6 @@ mod ffmpeg {
             target = target.replace("x64", "x86");
         }
         println!("cargo:info={}", target);
-        path.push("installed");
         path.push(target);
 
         println!(
@@ -282,15 +294,26 @@ mod ffmpeg {
             )
         );
         {
-            // Only need avcodec and avutil for encoding
+            // avdevice/avformat are needed by the Windows DirectShow capture bridge.
             let mut static_libs = vec!["avcodec", "avutil"];
             if target_os == "windows" {
-                static_libs.push("libmfx");
+                static_libs.extend([
+                    "avformat",
+                    "avdevice",
+                    "avfilter",
+                    "swresample",
+                    "swscale",
+                    "vpx",
+                    "libx264",
+                    "x265-static",
+                ]);
             }
-            static_libs
-                .iter()
-                .map(|lib| println!("cargo:rustc-link-lib=static={}", lib))
-                .count();
+            for lib in static_libs {
+                println!("cargo:rustc-link-lib=static={}", lib);
+            }
+            if target_os == "windows" {
+                link_windows_qsv_lib(&path.join("lib"));
+            }
         }
 
         let include = path.join("include");
@@ -299,12 +322,28 @@ mod ffmpeg {
         include
     }
 
+    fn link_windows_qsv_lib(lib_dir: &Path) {
+        if lib_dir.join("libmfx.lib").exists() {
+            println!("cargo:rustc-link-lib=static=libmfx");
+            println!("cargo:info=Using Windows QSV support library libmfx.lib");
+            return;
+        }
+
+        println!(
+            "cargo:warning=Windows QSV support library not found in {}",
+            lib_dir.display()
+        );
+    }
+
     fn link_os() {
         let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
         let dyn_libs: Vec<&str> = if target_os == "windows" {
-            ["User32", "bcrypt", "ole32", "advapi32"].to_vec()
+            [
+                "User32", "bcrypt", "ole32", "advapi32", "mfuuid", "strmiids",
+            ]
+            .to_vec()
         } else if target_os == "linux" {
             // Base libraries for all Linux platforms
             let mut v = vec!["drm", "stdc++"];
@@ -329,14 +368,13 @@ mod ffmpeg {
     }
 
     fn ffmpeg_ffi() {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_ram_dir = manifest_dir.join("cpp").join("common");
         let ffi_header_path = ffmpeg_ram_dir.join("ffmpeg_ffi.h");
         println!("cargo:rerun-if-changed={}", ffi_header_path.display());
         let ffi_header = ffi_header_path.to_string_lossy().to_string();
-        bindgen::builder()
-            .header(ffi_header)
-            .rustified_enum("*")
+        let bindings = bindgen::builder().header(ffi_header).rustified_enum(".*");
+        bindings
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ffi.rs"))
@@ -344,15 +382,14 @@ mod ffmpeg {
     }
 
     fn build_ffmpeg_ram(builder: &mut Build) {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_ram_dir = manifest_dir.join("cpp").join("ffmpeg_ram");
         let ffi_header = ffmpeg_ram_dir
             .join("ffmpeg_ram_ffi.h")
             .to_string_lossy()
             .to_string();
-        bindgen::builder()
-            .header(ffi_header)
-            .rustified_enum("*")
+        let bindings = bindgen::builder().header(ffi_header).rustified_enum(".*");
+        bindings
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ram_ffi.rs"))
@@ -363,10 +400,12 @@ mod ffmpeg {
         // RKMPP decode only exists on ARM builds where FFmpeg is compiled with RKMPP support.
         // Avoid compiling this file on x86/x64 where `AV_HWDEVICE_TYPE_RKMPP` doesn't exist.
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
-            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        let enable_rkmpp = std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             builder.file(ffmpeg_ram_dir.join("ffmpeg_ram_decode.cpp"));
+            if enable_rkmpp {
+                builder.define("ONE_KVM_FFMPEG_RKMPP", None);
+            }
         } else {
             println!(
                 "cargo:info=Skipping ffmpeg_ram_decode.cpp (RKMPP) for arch {}",
@@ -375,8 +414,36 @@ mod ffmpeg {
         }
     }
 
+    fn build_ffmpeg_capture(builder: &mut Build) {
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target_os != "windows" {
+            return;
+        }
+
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
+        let capture_header = manifest_dir
+            .join("cpp")
+            .join("ffmpeg_capture_ffi.h")
+            .to_string_lossy()
+            .to_string();
+        bindgen::builder()
+            .header(capture_header)
+            .rustified_enum(".*")
+            .generate()
+            .unwrap()
+            .write_to_file(
+                Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_capture_ffi.rs"),
+            )
+            .unwrap();
+
+        builder.file(manifest_dir.join("cpp").join("ffmpeg_capture.cpp"));
+        println!("cargo:rustc-link-lib=strmiids");
+        println!("cargo:rustc-link-lib=oleaut32");
+        println!("cargo:rustc-link-lib=quartz");
+    }
+
     fn build_ffmpeg_hw(builder: &mut Build) {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
         let ffmpeg_hw_dir = manifest_dir.join("cpp").join("ffmpeg_hw");
         let ffi_header = ffmpeg_hw_dir
             .join("ffmpeg_hw_ffi.h")
@@ -384,15 +451,14 @@ mod ffmpeg {
             .to_string();
         bindgen::builder()
             .header(ffi_header)
-            .rustified_enum("*")
+            .rustified_enum(".*")
             .generate()
             .unwrap()
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_hw_ffi.rs"))
             .unwrap();
 
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
-            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        let enable_rkmpp = std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
         if enable_rkmpp {
             // Include RGA headers for NV16->NV12 conversion (RGA im2d API)
             let rga_sys_dirs = [
@@ -420,6 +486,7 @@ mod ffmpeg {
                 }
             }
             builder.file(ffmpeg_hw_dir.join("ffmpeg_hw_mjpeg_h26x.cpp"));
+            builder.file(ffmpeg_hw_dir.join("rkmpp_dmabuf.cpp"));
         } else {
             println!(
                 "cargo:info=Skipping ffmpeg_hw_mjpeg_h26x.cpp (RKMPP) for arch {}",

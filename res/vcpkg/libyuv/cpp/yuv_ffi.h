@@ -58,6 +58,15 @@ int I422ToI420(const uint8_t* src_y, int src_stride_y,
                uint8_t* dst_v, int dst_stride_v,
                int width, int height);
 
+// I444 (YUV444P) -> I420 (YUV420P) with horizontal and vertical chroma downsampling
+int I444ToI420(const uint8_t* src_y, int src_stride_y,
+               const uint8_t* src_u, int src_stride_u,
+               const uint8_t* src_v, int src_stride_v,
+               uint8_t* dst_y, int dst_stride_y,
+               uint8_t* dst_u, int dst_stride_u,
+               uint8_t* dst_v, int dst_stride_v,
+               int width, int height);
+
 // I420 -> NV12
 int I420ToNV12(const uint8_t* src_y, int src_stride_y,
                const uint8_t* src_u, int src_stride_u,
@@ -93,6 +102,19 @@ int NV21ToI420(const uint8_t* src_y, int src_stride_y,
                uint8_t* dst_u, int dst_stride_u,
                uint8_t* dst_v, int dst_stride_v,
                int width, int height);
+
+// NV21 -> NV12
+int NV21ToNV12(const uint8_t* src_y, int src_stride_y,
+               const uint8_t* src_vu, int src_stride_vu,
+               uint8_t* dst_y, int dst_stride_y,
+               uint8_t* dst_uv, int dst_stride_uv,
+               int width, int height);
+
+// Split interleaved UV plane into separate U and V planes
+void SplitUVPlane(const uint8_t* src_uv, int src_stride_uv,
+                  uint8_t* dst_u, int dst_stride_u,
+                  uint8_t* dst_v, int dst_stride_v,
+                  int width, int height);
 
 // ----------------------------------------------------------------------------
 // ARGB/BGRA conversions (32-bit RGB)
@@ -152,6 +174,12 @@ int RAWToI420(const uint8_t* src_raw, int src_stride_raw,
               uint8_t* dst_v, int dst_stride_v,
               int width, int height);
 
+// BGR24 -> NV12
+int RGB24ToNV12(const uint8_t* src_rgb24, int src_stride_rgb24,
+                uint8_t* dst_y, int dst_stride_y,
+                uint8_t* dst_uv, int dst_stride_uv,
+                int width, int height);
+
 // RGB24 -> ARGB
 int RGB24ToARGB(const uint8_t* src_rgb24, int src_stride_rgb24,
                 uint8_t* dst_argb, int dst_stride_argb,
@@ -175,6 +203,13 @@ int I420ToRGB24(const uint8_t* src_y, int src_stride_y,
 
 // I420 -> ARGB (BGRA)
 int I420ToARGB(const uint8_t* src_y, int src_stride_y,
+               const uint8_t* src_u, int src_stride_u,
+               const uint8_t* src_v, int src_stride_v,
+               uint8_t* dst_argb, int dst_stride_argb,
+               int width, int height);
+
+// H444 (BT.709 limited-range YUV444P) -> ARGB (BGRA)
+int H444ToARGB(const uint8_t* src_y, int src_stride_y,
                const uint8_t* src_u, int src_stride_u,
                const uint8_t* src_v, int src_stride_v,
                uint8_t* dst_argb, int dst_stride_argb,
@@ -228,12 +263,6 @@ int MJPGToI420(const uint8_t* sample, size_t sample_size,
 int MJPGToNV12(const uint8_t* sample, size_t sample_size,
                uint8_t* dst_y, int dst_stride_y,
                uint8_t* dst_uv, int dst_stride_uv,
-               int src_width, int src_height,
-               int dst_width, int dst_height);
-
-// MJPEG -> ARGB
-int MJPGToARGB(const uint8_t* sample, size_t sample_size,
-               uint8_t* dst_argb, int dst_stride_argb,
                int src_width, int src_height,
                int dst_width, int dst_height);
 

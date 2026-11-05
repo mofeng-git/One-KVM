@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import HidDriverForm from '@/components/HidDriverForm.vue'
+import { selectionFrom } from '@/lib/hidGuide'
+
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { configApi, streamApi, type EncoderBackendInfo } from '@/api'
-import {
-  supportedLanguages,
-  setLanguage,
-  getCurrentLanguage,
-  type SupportedLocale,
-} from '@/i18n'
+import { configApi, streamApi, type DeviceList, type EncoderBackendInfo, type PlatformCapabilities } from '@/api'
+import { toConfigFps } from '@/lib/fps'
+import { formatVideoDeviceLabel } from '@/lib/video-device-label'
+import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
+import VideoInputFields from '@/components/VideoInputFields.vue'
+import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,19 +25,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import { Switch } from '@/components/ui/switch'
+import { Stepper, StepperItem, StepperSeparator, StepperTitle, StepperTrigger } from '@/components/ui/stepper'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Monitor,
   Eye,
   EyeOff,
   ChevronRight,
@@ -44,36 +42,24 @@ import {
   Keyboard,
   Check,
   HelpCircle,
-  Languages,
   Puzzle,
+  AlertTriangle,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
-// Language switcher
-const currentLanguage = ref<SupportedLocale>(getCurrentLanguage())
-
-function switchLanguage(lang: SupportedLocale) {
-  currentLanguage.value = lang
-  setLanguage(lang)
-}
-
-// Steps: 1 = Account, 2 = Audio/Video, 3 = HID, 4 = Extensions
 const step = ref(1)
-const totalSteps = 4
 const loading = ref(false)
 const error = ref('')
 const slideDirection = ref<'forward' | 'backward'>('forward')
 
-// Account settings
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
 
-// Form validation states
 const usernameError = ref('')
 const passwordError = ref('')
 const confirmPasswordError = ref('')
@@ -81,26 +67,22 @@ const usernameTouched = ref(false)
 const passwordTouched = ref(false)
 const confirmPasswordTouched = ref(false)
 
-// Video settings
 const videoDevice = ref('')
 const videoFormat = ref('')
 const videoResolution = ref('')
 const videoFps = ref<number | null>(null)
 
-// Audio settings
 const audioDevice = ref('')
 const audioEnabled = ref(true)
+const platform = ref<PlatformCapabilities | null>(null)
+const isWindows = computed(() => platform.value?.mode === 'windows')
+const audioSupported = computed(() => platform.value?.audio.available ?? true)
+const totalSteps = 4
+const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 
-// HID settings
-const hidBackend = ref('ch9329')
-const ch9329Port = ref('')
-const ch9329Baudrate = ref(9600)
-const otgUdc = ref('')
-const hidOtgProfile = ref('full')
-const otgProfileTouched = ref(false)
-const showAdvancedOtg = ref(false)
+const hidSelection = ref(selectionFrom())
+const hidSelectionValid = ref(false)
 
-// Extension settings
 const ttydEnabled = ref(false)
 const ttydAvailable = ref(false)
 
@@ -109,51 +91,17 @@ const encoderBackend = ref('auto')
 const availableBackends = ref<EncoderBackendInfo[]>([])
 const showAdvancedEncoder = ref(false)
 
-// Device info from API
-interface VideoDeviceInfo {
-  path: string
-  name: string
-  driver: string
-  formats: Array<{
-    format: string
-    description: string
-    resolutions: Array<{
-      width: number
-      height: number
-      fps: number[]
-    }>
-  }>
-  usb_bus: string | null
-}
-
-interface AudioDeviceInfo {
-  name: string
-  description: string
-  is_hdmi: boolean
-  usb_bus: string | null
-}
-
-interface DeviceInfo {
-  video: VideoDeviceInfo[]
-  serial: Array<{ path: string; name: string }>
-  audio: AudioDeviceInfo[]
-  udc: Array<{ name: string }>
-  extensions: {
-    ttyd_available: boolean
-  }
-}
-
-const devices = ref<DeviceInfo>({
+const devices = ref<DeviceList>({
   video: [],
   serial: [],
   audio: [],
   udc: [],
   extensions: {
     ttyd_available: false,
+    rustdesk_available: false,
   },
 })
 
-// Password strength calculation
 const passwordStrength = computed(() => {
   const pwd = password.value
   if (!pwd) return 0
@@ -178,55 +126,32 @@ const passwordStrengthText = computed(() => {
 })
 
 const passwordStrengthColor = computed(() => {
-  const colors = ['bg-muted', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500']
+  const colors = ['bg-muted', 'bg-destructive', 'bg-warning', 'bg-warning', 'bg-success']
   return colors[passwordStrength.value] || colors[0]
 })
 
-// Computed: available formats for selected video device
-const availableFormats = computed(() => {
-  const device = devices.value.video.find((d) => d.path === videoDevice.value)
-  return device?.formats || []
+const videoConfiguration = useVideoDeviceConfiguration({
+  devices: computed(() => devices.value.video),
+  selection: {
+    device: videoDevice,
+    format: videoFormat,
+    resolution: videoResolution,
+    fps: videoFps,
+  },
+  active: computed(() => step.value === 2),
+  preferredFormat: device =>
+    device.formats.find(format => format.format.toUpperCase().includes('MJPEG'))?.format,
 })
+const {
+  selectedDevice,
+  isSourceFollowing,
+  availableFormats,
+  availableResolutions,
+  availableFps,
+  refreshInputStatus,
+  refreshingInputStatus,
+} = videoConfiguration
 
-// Computed: available resolutions for selected format
-const availableResolutions = computed(() => {
-  const format = availableFormats.value.find((f) => f.format === videoFormat.value)
-  return format?.resolutions || []
-})
-
-// Computed: available FPS for selected resolution
-const availableFps = computed(() => {
-  const [width, height] = (videoResolution.value || '').split('x').map(Number)
-  const resolution = availableResolutions.value.find(
-    (r) => r.width === width && r.height === height
-  )
-  return resolution?.fps || []
-})
-
-const isLowEndpointUdc = computed(() => {
-  if (otgUdc.value) {
-    return /musb/i.test(otgUdc.value)
-  }
-  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
-})
-
-function applyOtgProfileDefault() {
-  if (otgProfileTouched.value) return
-  if (hidBackend.value !== 'otg') return
-  const preferred = isLowEndpointUdc.value ? 'full_no_consumer' : 'full'
-  if (hidOtgProfile.value === preferred) return
-  hidOtgProfile.value = preferred
-}
-
-function onOtgProfileChange(value: unknown) {
-  hidOtgProfile.value = typeof value === 'string' ? value : 'full'
-  otgProfileTouched.value = true
-}
-
-// Common baud rates for CH9329
-const baudRates = [9600, 19200, 38400, 57600, 115200]
-
-// Step labels for the indicator
 const stepLabels = computed(() => [
   t('setup.stepAccount'),
   t('setup.stepAudioVideo'),
@@ -234,7 +159,6 @@ const stepLabels = computed(() => [
   t('setup.stepExtensions'),
 ])
 
-// Real-time validation functions
 function validateUsername() {
   usernameTouched.value = true
   if (username.value.length === 0) {
@@ -255,7 +179,6 @@ function validatePassword() {
   } else {
     passwordError.value = ''
   }
-  // Also validate confirm password if it was touched
   if (confirmPasswordTouched.value) {
     validateConfirmPassword()
   }
@@ -272,19 +195,10 @@ function validateConfirmPassword() {
   }
 }
 
-// Watch video device change to auto-select first format and matching audio device
+// Match audio to the selected capture device's USB bus.
 watch(videoDevice, (newDevice) => {
-  videoFormat.value = ''
-  videoResolution.value = ''
-  videoFps.value = null
-  if (availableFormats.value.length > 0) {
-    // Prefer MJPEG if available
-    const mjpeg = availableFormats.value.find((f) => f.format.toUpperCase().includes('MJPEG'))
-    videoFormat.value = mjpeg?.format || availableFormats.value[0]?.format || ''
-  }
-
   // Auto-select matching audio device based on USB bus
-  if (newDevice && audioEnabled.value) {
+  if (newDevice && audioEnabled.value && audioSupported.value) {
     const video = devices.value.video.find((d) => d.path === newDevice)
     if (video?.usb_bus) {
       // Find audio device on the same USB bus
@@ -306,52 +220,17 @@ watch(videoDevice, (newDevice) => {
   }
 })
 
-// Watch format change to auto-select best resolution
-watch(videoFormat, () => {
-  videoResolution.value = ''
-  videoFps.value = null
-  if (availableResolutions.value.length > 0) {
-    // Prefer 1080p if available, otherwise highest resolution
-    const r1080 = availableResolutions.value.find((r) => r.width === 1920 && r.height === 1080)
-    const r720 = availableResolutions.value.find((r) => r.width === 1280 && r.height === 720)
-    const best = r1080 || r720 || availableResolutions.value[0]
-    if (best) {
-      videoResolution.value = `${best.width}x${best.height}`
-    }
-  }
-})
-
-// Watch resolution change to auto-select FPS
-watch(videoResolution, () => {
-  videoFps.value = null
-  if (availableFps.value.length > 0) {
-    // Prefer 30fps if available
-    videoFps.value = availableFps.value.includes(30) ? 30 : availableFps.value[0] || null
-  }
-})
-
-// Watch HID backend change to set defaults
-watch(hidBackend, (newBackend) => {
-  if (newBackend === 'ch9329' && !ch9329Port.value && devices.value.serial.length > 0) {
-    ch9329Port.value = devices.value.serial[0]?.path || ''
-  }
-  if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
-    otgUdc.value = devices.value.udc[0]?.name || ''
-  }
-  applyOtgProfileDefault()
-})
-
-watch(otgUdc, () => {
-  applyOtgProfileDefault()
-})
-
-watch(showAdvancedOtg, (open) => {
-  if (open) {
-    applyOtgProfileDefault()
-  }
-})
-
 onMounted(async () => {
+  try {
+    const status = await authStore.checkSetupStatus()
+    platform.value = status.platform
+    if (!audioSupported.value) {
+      audioEnabled.value = false
+      audioDevice.value = '__none__'
+    }
+  } catch {
+  }
+
   try {
     const result = await configApi.listDevices()
     devices.value = result
@@ -361,19 +240,8 @@ onMounted(async () => {
       videoDevice.value = result.video[0].path
     }
 
-    // Auto-select first serial device for CH9329
-    if (result.serial.length > 0 && result.serial[0]) {
-      ch9329Port.value = result.serial[0].path
-    }
-
-    // Auto-select first UDC for OTG
-    if (result.udc.length > 0 && result.udc[0]) {
-      otgUdc.value = result.udc[0].name
-    }
-    applyOtgProfileDefault()
-
     // Auto-select audio device if available (and no video device to trigger watch)
-    if (result.audio.length > 0 && !audioDevice.value) {
+    if (audioSupported.value && result.audio.length > 0 && !audioDevice.value) {
       // Prefer HDMI audio device
       const hdmiAudio = result.audio.find((a) => a.is_hdmi)
       audioDevice.value = hdmiAudio?.name || result.audio[0]?.name || ''
@@ -384,7 +252,6 @@ onMounted(async () => {
       ttydAvailable.value = result.extensions.ttyd_available
     }
   } catch {
-    // Use defaults
   }
 
   // Load encoder backends
@@ -392,10 +259,8 @@ onMounted(async () => {
     const codecsResult = await streamApi.getCodecs()
     availableBackends.value = codecsResult.backends || []
   } catch {
-    // Use defaults
   }
 
-  // Add keyboard navigation
   document.addEventListener('keydown', handleKeyDown)
 })
 
@@ -404,7 +269,6 @@ onUnmounted(() => {
 })
 
 function handleKeyDown(e: KeyboardEvent) {
-  // Don't interfere with input fields
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
     return
   }
@@ -423,7 +287,6 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 function validateStep1(): boolean {
-  // Trigger validation for all fields
   validateUsername()
   validatePassword()
   validateConfirmPassword()
@@ -445,7 +308,7 @@ function validateStep1(): boolean {
 
 function validateStep2(): boolean {
   // Video settings are optional, but if device is selected, format should be too
-  if (videoDevice.value && !videoFormat.value) {
+  if (videoDevice.value && !isSourceFollowing.value && !videoFormat.value) {
     error.value = t('setup.selectFormat')
     return false
   }
@@ -453,12 +316,8 @@ function validateStep2(): boolean {
 }
 
 function validateStep3(): boolean {
-  if (hidBackend.value === 'ch9329' && !ch9329Port.value) {
-    error.value = t('setup.selectSerialPort')
-    return false
-  }
-  if (hidBackend.value === 'otg' && !otgUdc.value) {
-    error.value = t('setup.selectUdc')
+  if (!hidSelectionValid.value) {
+    error.value = t('hidGuide.selectDevice')
     return false
   }
   return true
@@ -469,6 +328,7 @@ function nextStep() {
 
   if (step.value === 1 && !validateStep1()) return
   if (step.value === 2 && !validateStep2()) return
+  if (step.value === 3 && !validateStep3()) return
 
   if (step.value < totalSteps) {
     slideDirection.value = 'forward'
@@ -487,11 +347,23 @@ function prevStep() {
 async function handleSetup() {
   error.value = ''
 
-  if (!validateStep3()) return
+  if (loading.value || !validateStep3()) return
 
   loading.value = true
+  // Reconcile a previous timed-out account request before submitting again.
+  try {
+    const status = await authStore.checkSetupStatus()
+    if (status.initialized) {
+      loading.value = false
+      await router.push('/login')
+      return
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+    loading.value = false
+    return
+  }
 
-  // Parse resolution
   const [width, height] = (videoResolution.value || '').split('x').map(Number)
 
   const setupData: Parameters<typeof authStore.setup>[0] = {
@@ -499,51 +371,49 @@ async function handleSetup() {
     password: password.value,
   }
 
-  // Video settings
   if (videoDevice.value) {
     setupData.video_device = videoDevice.value
   }
-  if (videoFormat.value) {
+  if (!isSourceFollowing.value && videoFormat.value) {
     setupData.video_format = videoFormat.value
   }
-  if (width && height) {
+  if (!isSourceFollowing.value && width && height) {
     setupData.video_width = width
     setupData.video_height = height
   }
-  if (videoFps.value) {
-    setupData.video_fps = videoFps.value
+  if (!isSourceFollowing.value && videoFps.value) {
+    setupData.video_fps = toConfigFps(videoFps.value)
   }
 
-  // HID settings
-  setupData.hid_backend = hidBackend.value
-  if (hidBackend.value === 'ch9329') {
-    setupData.hid_ch9329_port = ch9329Port.value
-    setupData.hid_ch9329_baudrate = ch9329Baudrate.value
+  const hid = hidSelection.value
+  setupData.hid_backend = hid.backend
+  if (hid.backend === 'ch9329' || hid.backend === 'ch9329_otg') {
+    setupData.hid_ch9329_port = hid.ch9329_port
+    setupData.hid_ch9329_baudrate = hid.ch9329_baudrate
   }
-  if (hidBackend.value === 'otg' && otgUdc.value) {
-    setupData.hid_otg_udc = otgUdc.value
-    setupData.hid_otg_profile = hidOtgProfile.value
+  if (hid.backend === 'otg' || hid.backend === 'ch9329_otg') {
+    setupData.hid_otg_udc = hid.otg_udc
+  } else if (hid.backend === 'bluetooth') {
+    setupData.hid_bluetooth = { ...hid.bluetooth }
   }
+  setupData.msd_enabled = false
 
   // Encoder backend setting
   if (encoderBackend.value !== 'auto') {
     setupData.encoder_backend = encoderBackend.value
   }
 
-  // Audio settings
-  if (audioDevice.value && audioDevice.value !== '__none__') {
+  if (audioSupported.value && audioDevice.value && audioDevice.value !== '__none__') {
     setupData.audio_device = audioDevice.value
   }
 
-  // Extension settings
   setupData.ttyd_enabled = ttydEnabled.value
 
   const success = await authStore.setup(setupData)
 
   if (success) {
-    // Auto login after setup
-    await authStore.login(username.value, password.value)
-    router.push('/')
+    const loggedIn = await authStore.login(username.value, password.value)
+    router.push(loggedIn ? '/' : '/login')
   } else {
     error.value = authStore.error || t('setup.setupFailed')
   }
@@ -551,85 +421,61 @@ async function handleSetup() {
   loading.value = false
 }
 
-// Step icon component helper
 const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background p-4">
+  <div class="min-h-screen min-h-dvh flex items-start sm:items-center justify-center dot-grid-bg px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="sm" class="gap-2">
-              <Languages class="w-4 h-4" />
-              <span class="text-sm">
-                {{ supportedLanguages.find((l) => l.code === currentLanguage)?.name }}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              v-for="lang in supportedLanguages"
-              :key="lang.code"
-              :class="{ 'bg-accent': lang.code === currentLanguage }"
-              @click="switchLanguage(lang.code)"
-            >
-              <span class="mr-2">{{ lang.flag }}</span>
-              {{ lang.name }}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <LanguageToggleButton />
       </div>
 
-      <CardHeader class="text-center space-y-2 pt-12">
-        <div
-          class="inline-flex items-center justify-center w-16 h-16 mx-auto rounded-full bg-primary/10"
-        >
-          <Monitor class="w-8 h-8 text-primary" />
+      <CardHeader class="text-center space-y-2 pt-8">
+        <div class="mx-auto flex justify-center">
+          <BrandMark size="lg" />
         </div>
-        <CardTitle class="text-2xl">{{ t('setup.welcome') }}</CardTitle>
+        <CardTitle class="text-xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="space-y-6">
+      <CardContent class="space-y-5 sm:space-y-6">
         <!-- Progress Text -->
         <p class="text-sm text-muted-foreground text-center">
           {{ t('setup.progress', { current: step, total: totalSteps }) }}
         </p>
 
-        <!-- Step Indicator with Labels -->
-        <div class="flex items-center justify-center gap-2 mb-6">
-          <template v-for="i in totalSteps" :key="i">
-            <div class="flex flex-col items-center gap-1">
-              <div
-                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300"
-                :class="
-                  step > i
-                    ? 'bg-primary border-primary text-primary-foreground scale-100'
-                    : step === i
-                      ? 'border-primary text-primary scale-110'
-                      : 'border-muted text-muted-foreground scale-100'
-                "
-              >
-                <Check v-if="step > i" class="w-5 h-5" />
-                <component :is="stepIcons[i - 1]" v-else class="w-5 h-5" />
-              </div>
-              <span
-                class="text-xs transition-colors duration-300 max-w-16 text-center leading-tight"
-                :class="step >= i ? 'text-foreground font-medium' : 'text-muted-foreground'"
-              >
-                {{ stepLabels[i - 1] }}
-              </span>
-            </div>
-            <div
+        <Stepper :model-value="step" class="mb-5 flex w-full items-start gap-1 sm:mb-6 sm:gap-2">
+          <StepperItem
+            v-for="i in totalSteps"
+            :key="i"
+            v-slot="{ state }"
+            :step="i"
+            class="relative flex w-full flex-col items-center justify-center"
+          >
+            <StepperSeparator
               v-if="i < totalSteps"
-              class="w-8 h-0.5 transition-colors duration-300 mb-6"
-              :class="step > i ? 'bg-primary' : 'bg-muted'"
+              class="absolute left-[calc(50%+18px)] right-[calc(-50%+8px)] top-5 h-0.5 rounded-full group-data-[state=completed]:bg-primary"
             />
-          </template>
-        </div>
+            <StepperTrigger as-child>
+              <Button
+                type="button"
+                size="icon"
+                :variant="state === 'completed' || state === 'active' ? 'default' : 'outline'"
+                class="z-10 size-9 shrink-0 rounded-full disabled:opacity-100 sm:size-10"
+                :class="state === 'active' && 'ring-2 ring-ring ring-offset-2 ring-offset-background'"
+                disabled
+              >
+                <Check v-if="state === 'completed'" class="size-4 sm:size-5" />
+                <component :is="stepIcons[i - 1]" v-else class="size-4 sm:size-5" />
+              </Button>
+            </StepperTrigger>
+            <StepperTitle class="mt-1 max-w-14 whitespace-normal text-center text-[10px] leading-tight sm:max-w-16 sm:text-xs" :class="state === 'active' ? 'text-foreground' : 'text-muted-foreground'">
+              {{ stepLabels[i - 1] }}
+            </StepperTitle>
+          </StepperItem>
+        </Stepper>
 
         <!-- Step Content with Animation -->
         <Transition :name="slideDirection === 'forward' ? 'slide-forward' : 'slide-backward'" mode="out-in">
@@ -649,6 +495,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   id="username"
                   v-model="username"
                   type="text"
+                  autocomplete="username"
                   :placeholder="t('setup.usernameHint')"
                   class="pl-10"
                   :class="{ 'border-destructive focus-visible:ring-destructive': usernameError }"
@@ -668,20 +515,24 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   id="password"
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
+                  autocomplete="new-password"
                   :placeholder="t('setup.passwordHint')"
                   class="pr-10"
                   :class="{ 'border-destructive focus-visible:ring-destructive': passwordError }"
                   @blur="validatePassword"
                   @input="passwordTouched && validatePassword()"
                 />
-                <button
+                <Button
                   type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
                   @click="showPassword = !showPassword"
                 >
                   <Eye v-if="!showPassword" class="w-4 h-4" />
                   <EyeOff v-else class="w-4 h-4" />
-                </button>
+                </Button>
               </div>
               <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
 
@@ -709,6 +560,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 id="confirmPassword"
                 v-model="confirmPassword"
                 :type="showPassword ? 'text' : 'password'"
+                autocomplete="new-password"
                 :placeholder="t('setup.confirmPassword')"
                 :class="{ 'border-destructive focus-visible:ring-destructive': confirmPasswordError }"
                 @blur="validateConfirmPassword"
@@ -727,116 +579,79 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <Label for="videoDevice">{{ t('setup.videoDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                    <Button type="button" variant="ghost" size="icon-xs" class="text-muted-foreground" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
-                    </button>
+                    </Button>
                   </HoverCardTrigger>
                   <HoverCardContent class="w-64 text-sm">
                     {{ t('setup.videoDeviceHelp') }}
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select v-model="videoDevice">
-                <SelectTrigger>
+              <Select
+                :model-value="videoDevice"
+                @update:model-value="value => videoDevice = value === EMPTY_SELECT_VALUE ? '' : String(value)"
+              >
+                <SelectTrigger id="videoDevice" class="w-full">
                   <SelectValue :placeholder="t('setup.selectVideoDevice')" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('setup.selectVideoDevice') }}</SelectItem>
                   <SelectItem v-for="dev in devices.video" :key="dev.path" :value="dev.path">
-                    {{ dev.name }} ({{ dev.path }})
+                    {{ formatVideoDeviceLabel(dev) }}
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div v-if="videoDevice" class="space-y-2">
-              <div class="flex items-center gap-2">
-                <Label for="videoFormat">{{ t('setup.videoFormat') }}</Label>
-                <HoverCard>
-                  <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
-                      <HelpCircle class="w-4 h-4" />
-                    </button>
-                  </HoverCardTrigger>
-                  <HoverCardContent class="w-64 text-sm">
-                    {{ t('setup.videoFormatHelp') }}
-                  </HoverCardContent>
-                </HoverCard>
-              </div>
-              <Select v-model="videoFormat">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('setup.selectFormat')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">
-                    {{ fmt.format }} - {{ fmt.description }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div v-if="videoFormat" class="grid grid-cols-2 gap-4">
-              <div class="space-y-2">
-                <Label for="videoResolution">{{ t('setup.resolution') }}</Label>
-                <Select v-model="videoResolution">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectResolution')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="res in availableResolutions"
-                      :key="`${res.width}x${res.height}`"
-                      :value="`${res.width}x${res.height}`"
-                    >
-                      {{ res.width }}x{{ res.height }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="videoFps">{{ t('setup.fps') }}</Label>
-                <Select v-model="videoFps">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectFps')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="fps in availableFps" :key="fps" :value="fps">
-                      {{ fps }} FPS
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <VideoInputFields
+              v-if="selectedDevice"
+              :device="selectedDevice"
+              :formats="availableFormats"
+              :resolutions="availableResolutions"
+              :fps-options="availableFps"
+              :format="videoFormat"
+              :resolution="videoResolution"
+              :fps="videoFps"
+              resolution-fps-inline
+              :refreshing="refreshingInputStatus"
+              @update:format="videoFormat = $event"
+              @update:resolution="videoResolution = $event"
+              @update:fps="videoFps = $event"
+              @refresh="refreshInputStatus"
+            />
 
             <p v-if="!devices.video.length" class="text-sm text-muted-foreground text-center py-4">
               {{ t('setup.noVideoDevices') }}
             </p>
 
             <!-- Audio Device Selection -->
-            <div class="space-y-2 pt-2 border-t">
+            <div v-if="!isWindows" class="space-y-2 pt-2 border-t">
               <div class="flex items-center gap-2">
                 <Label for="audioDevice">{{ t('setup.audioDevice') }}</Label>
                 <HoverCard>
                   <HoverCardTrigger as-child>
-                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                    <Button type="button" variant="ghost" size="icon-xs" class="text-muted-foreground" :aria-label="t('common.info')">
                       <HelpCircle class="w-4 h-4" />
-                    </button>
+                    </Button>
                   </HoverCardTrigger>
                   <HoverCardContent class="w-64 text-sm">
                     {{ t('setup.audioDeviceHelp') }}
                   </HoverCardContent>
                 </HoverCard>
               </div>
-              <Select v-model="audioDevice" :disabled="!audioEnabled">
-                <SelectTrigger>
+              <Select
+                :model-value="audioDevice"
+                :disabled="!audioEnabled"
+                @update:model-value="value => audioDevice = value === EMPTY_SELECT_VALUE ? '' : String(value)"
+              >
+                <SelectTrigger id="audioDevice" class="w-full">
                   <SelectValue :placeholder="t('setup.selectAudioDevice')" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem :value="EMPTY_SELECT_VALUE">{{ t('setup.selectAudioDevice') }}</SelectItem>
                   <SelectItem value="__none__">{{ t('setup.noAudio') }}</SelectItem>
-                  <SelectItem v-for="dev in devices.audio" :key="dev.name" :value="dev.name">
-                    {{ dev.description }}
-                    <span v-if="dev.is_hdmi" class="text-xs text-muted-foreground ml-1">(HDMI)</span>
-                  </SelectItem>
+                  <SelectItem v-for="dev in devices.audio" :key="dev.name" :value="dev.name">{{ dev.description }}{{ dev.is_hdmi ? ' (HDMI)' : '' }}</SelectItem>
                 </SelectContent>
               </Select>
               <p v-if="!devices.audio.length" class="text-xs text-muted-foreground">
@@ -846,25 +661,27 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
             <!-- Advanced: Encoder Backend (Collapsible) -->
             <div class="mt-4 border rounded-lg">
-              <button
+              <Button
                 type="button"
-                class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                variant="ghost"
+                class="h-auto w-full justify-between rounded-lg p-3 text-left"
+                :aria-label="t('setup.advancedEncoder')"
                 @click="showAdvancedEncoder = !showAdvancedEncoder"
               >
                 <span class="text-sm font-medium">
                   {{ t('setup.advancedEncoder') }} ({{ t('common.optional') }})
                 </span>
                 <ChevronRight
-                  class="h-4 w-4 transition-transform duration-200"
+                  class="size-4 transition-transform duration-200"
                   :class="{ 'rotate-90': showAdvancedEncoder }"
                 />
-              </button>
+              </Button>
               <div v-if="showAdvancedEncoder" class="px-3 pb-3 space-y-3">
                 <p class="text-xs text-muted-foreground">
                   {{ t('setup.encoderHint') }}
                 </p>
                 <Select v-model="encoderBackend">
-                  <SelectTrigger>
+                  <SelectTrigger class="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -883,124 +700,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
           <div v-else-if="step === 3" key="step3" class="space-y-4">
             <h3 class="text-lg font-medium text-center">{{ t('setup.stepHid') }}</h3>
 
-            <div class="space-y-2">
-              <Label for="hidBackend">{{ t('setup.hidBackend') }}</Label>
-              <Select v-model="hidBackend">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ch9329">
-                    CH9329 ({{ t('setup.serialHid') }})
-                  </SelectItem>
-                  <SelectItem value="otg">USB OTG</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <!-- CH9329 Settings -->
-            <div v-if="hidBackend === 'ch9329'" class="space-y-4 p-4 rounded-lg bg-muted/50">
-              <div class="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-                <HelpCircle class="w-4 h-4 mt-0.5 shrink-0" />
-                <p>{{ t('setup.ch9329Help') }}</p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="ch9329Port">{{ t('setup.serialPort') }}</Label>
-                <Select v-model="ch9329Port">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectSerialPort')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="port in devices.serial" :key="port.path" :value="port.path">
-                      {{ port.name }} ({{ port.path }})
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="!devices.serial.length" class="text-xs text-muted-foreground">
-                  {{ t('setup.noSerialDevices') }}
-                </p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="ch9329Baudrate">{{ t('setup.baudRate') }}</Label>
-                <Select v-model="ch9329Baudrate">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="rate in baudRates" :key="rate" :value="rate">
-                      {{ rate }} bps
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <!-- OTG Settings -->
-            <div v-if="hidBackend === 'otg'" class="space-y-4 p-4 rounded-lg bg-muted/50">
-              <div class="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-                <HelpCircle class="w-4 h-4 mt-0.5 shrink-0" />
-                <p>{{ t('setup.otgHelp') }}</p>
-              </div>
-
-              <div class="space-y-2">
-                <Label for="otgUdc">{{ t('setup.udc') }}</Label>
-                <Select v-model="otgUdc">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="t('setup.selectUdc')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="udc in devices.udc" :key="udc.name" :value="udc.name">
-                      {{ udc.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="!devices.udc.length" class="text-xs text-muted-foreground">
-                  {{ t('setup.noUdcDevices') }}
-                </p>
-              </div>
-
-              <div class="mt-2 border rounded-lg">
-                <button
-                  type="button"
-                  class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
-                  @click="showAdvancedOtg = !showAdvancedOtg"
-                >
-                  <span class="text-sm font-medium">
-                    {{ t('setup.otgAdvanced') }} ({{ t('common.optional') }})
-                  </span>
-                  <ChevronRight
-                    class="h-4 w-4 transition-transform duration-200"
-                    :class="{ 'rotate-90': showAdvancedOtg }"
-                  />
-                </button>
-                <div v-if="showAdvancedOtg" class="px-3 pb-3 space-y-3">
-                  <p class="text-xs text-muted-foreground">
-                    {{ t('setup.otgProfileDesc') }}
-                  </p>
-                  <div class="space-y-2">
-                    <Label for="otgProfile">{{ t('setup.otgProfile') }}</Label>
-                    <Select :model-value="hidOtgProfile" @update:modelValue="onOtgProfileChange">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="full">{{ t('settings.otgProfileFull') }}</SelectItem>
-                        <SelectItem value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</SelectItem>
-                        <SelectItem value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</SelectItem>
-                        <SelectItem value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</SelectItem>
-                        <SelectItem value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</SelectItem>
-                        <SelectItem value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <p v-if="isLowEndpointUdc" class="text-xs text-amber-600 dark:text-amber-400">
-                    {{ t('setup.otgLowEndpointHint') }}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <HidDriverForm v-model="hidSelection" :platform="platform" @valid="hidSelectionValid = $event" />
           </div>
 
           <!-- Step 4: Extensions Settings -->
@@ -1034,7 +734,10 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 
         <!-- Error Message -->
         <Transition name="fade">
-          <p v-if="error" class="text-sm text-destructive text-center">{{ error }}</p>
+          <Alert v-if="error" variant="destructive">
+            <AlertTriangle />
+            <AlertDescription>{{ error }}</AlertDescription>
+          </Alert>
         </Transition>
 
         <!-- Navigation Buttons -->
@@ -1044,8 +747,8 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             {{ t('common.back') }}
           </Button>
 
-          <Button v-if="step < totalSteps" class="flex-1" @click="nextStep">
-            {{ t('common.next') }}
+          <Button v-if="step < totalSteps" class="flex-1" :disabled="step === 3 && !hidSelectionValid" @click="nextStep">
+            {{ t(step === 3 ? 'hidGuide.useConfiguration' : 'common.next') }}
             <ChevronRight class="w-4 h-4 ml-2" />
           </Button>
 
@@ -1058,7 +761,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
         <!-- Keyboard shortcuts hint -->
         <p class="text-xs text-muted-foreground text-center">
           <kbd class="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd>
-          {{ t('common.next') }}
+          {{ t(step === 3 ? 'hidGuide.useConfiguration' : 'common.next') }}
           <span v-if="step > 1" class="ml-2">
             <kbd class="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd>
             {{ t('common.back') }}

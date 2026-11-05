@@ -1,26 +1,30 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import 'vue-sonner/style.css'
+import '@/sonner-overrides.css'
+import { computed, KeepAlive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
+import { Toaster } from '@/components/ui/sonner'
+import { useTheme } from '@/composables/useTheme'
+
+const { t } = useI18n()
+
+/** Defaults merged into every toast; duration also set on `<Toaster>` for clarity */
+const toasterToastOptions = computed(() => ({
+  closeButtonAriaLabel: t('toast.closeNotification'),
+  classes: {
+    title: 'text-sm font-semibold leading-snug tracking-tight text-popover-foreground',
+    description: 'text-sm leading-relaxed text-muted-foreground',
+  },
+}))
 
 const router = useRouter()
 const authStore = useAuthStore()
 const systemStore = useSystemStore()
-
-// Check for dark mode preference
-function initTheme() {
-  const stored = localStorage.getItem('theme')
-  if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark')
-  }
-}
-
-// Initialize on mount
+const { isDark } = useTheme()
 onMounted(async () => {
-  initTheme()
-
-  // Check setup status
   try {
     await authStore.checkSetupStatus()
     if (authStore.needsSetup) {
@@ -28,33 +32,37 @@ onMounted(async () => {
       return
     }
   } catch {
-    // Continue anyway
   }
 
-  // Check auth status
   try {
     await authStore.checkAuth()
     if (authStore.isAuthenticated) {
-      // Fetch system info
       await systemStore.fetchSystemInfo()
     }
   } catch {
-    // Not authenticated
   }
 })
-
-// Listen for dark mode changes
-watch(
-  () => window.matchMedia('(prefers-color-scheme: dark)').matches,
-  (dark) => {
-    const stored = localStorage.getItem('theme')
-    if (!stored) {
-      document.documentElement.classList.toggle('dark', dark)
-    }
-  }
-)
 </script>
 
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component, route }">
+    <KeepAlive v-if="authStore.isAuthenticated">
+      <component :is="Component" v-if="route.name === 'Console'" />
+    </KeepAlive>
+    <component :is="Component" v-if="route.name !== 'Console' || !authStore.isAuthenticated" />
+  </RouterView>
+  <Toaster
+    rich-colors
+    close-button
+    expand
+    position="top-center"
+    close-button-position="top-right"
+    :theme="isDark ? 'dark' : 'light'"
+    :duration="4000"
+    :gap="14"
+    :offset="{ top: '1rem', right: '1rem', left: '1rem', bottom: '1rem' }"
+    :mobile-offset="{ top: 'max(1rem, env(safe-area-inset-top))', bottom: 'max(1rem, env(safe-area-inset-bottom))', left: '1rem', right: '1rem' }"
+    :toast-options="toasterToastOptions"
+    :container-aria-label="t('toast.notificationsRegion')"
+  />
 </template>

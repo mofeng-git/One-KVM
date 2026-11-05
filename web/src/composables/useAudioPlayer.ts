@@ -1,20 +1,14 @@
-// Audio player composable - handles WebSocket connection, Opus decoding, and Web Audio API playback
-
 import { ref, watch } from 'vue'
 import { OpusDecoder } from 'opus-decoder'
 import { buildWsUrl } from '@/types/websocket'
 
-// Binary protocol header format (15 bytes)
-// [type:1][timestamp:4][duration:2][sequence:4][length:4][data:...]
 
 export function useAudioPlayer() {
-  // State
   const connected = ref(false)
   const playing = ref(false)
   const volume = ref(0) // Default to 0, user must adjust to enable audio (browser autoplay policy)
   const error = ref<string | null>(null)
 
-  // Internal variables
   let ws: WebSocket | null = null
   let audioContext: AudioContext | null = null
   let gainNode: GainNode | null = null
@@ -22,8 +16,32 @@ export function useAudioPlayer() {
   let decoder: any = null
   let nextPlayTime = 0
   let isConnecting = false // Prevent concurrent connection attempts
+  let reconnectTimer: number | null = null
+  let shouldReconnect = false
 
-  // Initialize decoder
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  function scheduleReconnect() {
+    if (!shouldReconnect || volume.value <= 0 || reconnectTimer !== null) {
+      return
+    }
+
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null
+      if (!shouldReconnect || volume.value <= 0) {
+        return
+      }
+      connect().catch(() => {
+        scheduleReconnect()
+      })
+    }, 1000)
+  }
+
   async function initDecoder() {
     const opusDecoder = new OpusDecoder({
       channels: 2,
@@ -33,7 +51,6 @@ export function useAudioPlayer() {
     decoder = opusDecoder
   }
 
-  // Initialize audio context
   function initAudioContext() {
     audioContext = new AudioContext({ sampleRate: 48000 })
     gainNode = audioContext.createGain()
@@ -41,14 +58,14 @@ export function useAudioPlayer() {
     updateVolume()
   }
 
-  // Connect to WebSocket
   async function connect() {
+    shouldReconnect = true
+
     // Prevent concurrent connection attempts (critical fix for multiple WS connections)
     if (isConnecting) {
       return
     }
 
-    // Check if already connected
     if (ws) {
       if (ws.readyState === WebSocket.OPEN) {
         return
@@ -62,9 +79,9 @@ export function useAudioPlayer() {
     }
 
     isConnecting = true
+    clearReconnectTimer()
 
     try {
-      // Initialize
       if (!decoder) await initDecoder()
       if (!audioContext) initAudioContext()
 
@@ -83,6 +100,7 @@ export function useAudioPlayer() {
         connected.value = true
         playing.value = true
         error.value = null
+        clearReconnectTimer()
         nextPlayTime = audioContext!.currentTime
       }
 
@@ -94,8 +112,10 @@ export function useAudioPlayer() {
 
       ws.onclose = () => {
         isConnecting = false
+        ws = null
         connected.value = false
         playing.value = false
+        scheduleReconnect()
       }
 
       ws.onerror = () => {
@@ -105,11 +125,13 @@ export function useAudioPlayer() {
     } catch (e) {
       isConnecting = false
       error.value = e instanceof Error ? e.message : 'Failed to initialize audio'
+      scheduleReconnect()
     }
   }
 
-  // Disconnect
   function disconnect() {
+    shouldReconnect = false
+    clearReconnectTimer()
     if (ws) {
       ws.close()
       ws = null
@@ -140,14 +162,12 @@ export function useAudioPlayer() {
       const samplesPerChannel = decoded.samplesDecoded
       const channels = decoded.channelData.length
 
-      // Create audio buffer
       const audioBuffer = audioContext.createBuffer(
         channels,
         samplesPerChannel,
         48000
       )
 
-      // Fill channel data
       for (let ch = 0; ch < channels; ch++) {
         const channelData = audioBuffer.getChannelData(ch)
         const sourceData = decoded.channelData[ch]
@@ -156,7 +176,6 @@ export function useAudioPlayer() {
         }
       }
 
-      // Schedule playback
       const source = audioContext.createBufferSource()
       source.buffer = audioBuffer
       source.connect(gainNode)
@@ -164,12 +183,10 @@ export function useAudioPlayer() {
       const now = audioContext.currentTime
       const scheduledAhead = nextPlayTime - now
 
-      // Reset if too far behind (audio was paused/lagged)
       if (nextPlayTime < now) {
         nextPlayTime = now + 0.02 // Start 20ms ahead
       }
 
-      // Reset if buffer too large (> 500ms ahead)
       if (scheduledAhead > 0.5) {
         nextPlayTime = now + 0.05 // Keep 50ms buffer
       }
@@ -177,33 +194,32 @@ export function useAudioPlayer() {
       source.start(nextPlayTime)
       nextPlayTime += audioBuffer.duration
     } catch {
-      // Ignore decode errors
     }
   }
 
-  // Update volume
   function updateVolume() {
     if (gainNode) {
       gainNode.gain.value = volume.value
     }
   }
 
-  // Set volume
   function setVolume(v: number) {
     volume.value = Math.max(0, Math.min(1, v))
     updateVolume()
+    if (volume.value <= 0) {
+      clearReconnectTimer()
+    } else if (shouldReconnect && !connected.value && !isConnecting) {
+      scheduleReconnect()
+    }
   }
 
-  // Watch volume changes
   watch(volume, updateVolume)
 
   return {
-    // State
     connected,
     playing,
     volume,
     error,
-    // Methods
     connect,
     disconnect,
     setVolume,

@@ -1,8 +1,3 @@
-// WebSocket composable for real-time event streaming
-//
-// Usage:
-//   const { connected, on, off } = useWebSocket()
-//   on('stream.state_changed', (data) => { ... })
 
 import { ref } from 'vue'
 import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
@@ -16,13 +11,39 @@ type EventHandler = (data: any) => void
 
 let wsInstance: WebSocket | null = null
 let handlers = new Map<string, EventHandler[]>()
+let subscribedTopics: string[] = []
 const connected = ref(false)
 const reconnectAttempts = ref(0)
 const networkError = ref(false)
 const networkErrorMessage = ref<string | null>(null)
 
+function getSubscribedTopics(): string[] {
+  return Array.from(handlers.entries())
+    .filter(([, eventHandlers]) => eventHandlers.length > 0)
+    .map(([event]) => event)
+    .sort()
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
+function syncSubscriptions(force = false) {
+  const topics = getSubscribedTopics()
+
+  if (!force && arraysEqual(topics, subscribedTopics)) {
+    return
+  }
+
+  if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+    subscribe(topics)
+    subscribedTopics = topics
+  }
+}
+
 function connect() {
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+    syncSubscriptions()
     return
   }
 
@@ -37,8 +58,7 @@ function connect() {
       networkErrorMessage.value = null
       reconnectAttempts.value = 0
 
-      // Subscribe to all events by default
-      subscribe(['*'])
+      syncSubscriptions(true)
     }
 
     wsInstance.onmessage = (e) => {
@@ -78,6 +98,7 @@ function disconnect() {
     wsInstance.close()
     wsInstance = null
   }
+  subscribedTopics = []
 }
 
 function subscribe(topics: string[]) {
@@ -94,6 +115,7 @@ function on(event: string, handler: EventHandler) {
     handlers.set(event, [])
   }
   handlers.get(event)!.push(handler)
+  syncSubscriptions()
 }
 
 function off(event: string, handler: EventHandler) {
@@ -103,7 +125,11 @@ function off(event: string, handler: EventHandler) {
     if (index > -1) {
       eventHandlers.splice(index, 1)
     }
+    if (eventHandlers.length === 0) {
+      handlers.delete(event)
+    }
   }
+  syncSubscriptions()
 }
 
 function handleEvent(payload: WsEvent) {
@@ -119,7 +145,6 @@ function handleEvent(payload: WsEvent) {
       }
     })
   }
-  // Silently ignore events without handlers
 }
 
 export function useWebSocket() {
@@ -138,7 +163,6 @@ export function useWebSocket() {
   }
 }
 
-// Global lifecycle - disconnect when page unloads
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     disconnect()

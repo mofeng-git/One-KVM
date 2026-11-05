@@ -1,19 +1,3 @@
-//! MSD (Mass Storage Device) module
-//!
-//! Provides virtual USB storage functionality with two modes:
-//! - Image mounting: Mount ISO/IMG files for system installation
-//! - Ventoy drive: Bootable exFAT drive for multiple ISO files
-//!
-//! Architecture:
-//! ```text
-//! Web API --> MSD Controller --> ConfigFS Mass Storage --> Target PC
-//!                 |
-//!          ┌──────┴──────┐
-//!          │             │
-//!    Image Manager  Ventoy Drive
-//!    (ISO/IMG)      (Bootable exFAT)
-//! ```
-
 pub mod controller;
 pub mod image;
 pub mod monitor;
@@ -22,12 +6,13 @@ pub mod ventoy_drive;
 
 pub use controller::MsdController;
 pub use image::ImageManager;
-pub use monitor::{MsdHealthMonitor, MsdHealthStatus, MsdMonitorConfig};
+pub use monitor::MsdHealthMonitor;
 pub use types::{
-    DownloadProgress, DownloadStatus, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest,
-    ImageInfo, MsdConnectRequest, MsdMode, MsdState,
+    DiskMode, DiskModeRequest, DownloadProgress, DownloadStatus, DriveFile, DriveFileAccess,
+    DriveInfo, DriveInitRequest, ImageDownloadRequest, ImageInfo, ImageMountRequest, MountedMedia,
+    MountedMediaKind, MsdState, MsdStateResponse, MULTI_DISK_MSD_LUNS, SINGLE_DISK_MSD_LUNS,
 };
-pub use ventoy_drive::VentoyDrive;
+pub use ventoy_drive::{VentoyDrive, MIN_DRIVE_SIZE_MB};
 
-// Re-export from otg module for backward compatibility
+pub use crate::error::{MsdError, MsdErrorCode};
 pub use crate::otg::{MsdFunction, MsdLunConfig};

@@ -1,138 +1,138 @@
-//! HID backend trait definition
+//! `HidBackend` trait plus serde `HidBackendType` (OTG | CH9329 | disabled).
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 
 use super::types::{ConsumerEvent, KeyboardEvent, MouseEvent};
+use crate::config::{Ch9329DescriptorConfig, Ch9329DescriptorState};
 use crate::error::Result;
+use crate::events::LedState;
 
-/// Default CH9329 baud rate
 fn default_ch9329_baud_rate() -> u32 {
     9600
 }
 
-/// HID backend type
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
+#[derive(Default)]
 pub enum HidBackendType {
-    /// USB OTG gadget mode
-    Otg,
-    /// CH9329 serial HID controller
+    Otg {
+        #[serde(default)]
+        macos_drag: bool,
+    },
+    Bluetooth {
+        config: crate::config::BluetoothHidConfig,
+    },
     Ch9329 {
-        /// Serial port path
         port: String,
-        /// Baud rate (default: 9600)
         #[serde(default = "default_ch9329_baud_rate")]
         baud_rate: u32,
+        #[serde(default)]
+        hybrid_mouse: bool,
+        #[serde(default)]
+        macos_drag: bool,
     },
-    /// No HID backend (disabled)
+    #[default]
     None,
 }
 
-impl Default for HidBackendType {
-    fn default() -> Self {
-        Self::None
+impl From<&crate::config::HidConfig> for HidBackendType {
+    fn from(config: &crate::config::HidConfig) -> Self {
+        use crate::config::HidBackend;
+        match config.backend {
+            HidBackend::Otg => Self::Otg {
+                macos_drag: config.mouse_macos_drag,
+            },
+            HidBackend::Ch9329 | HidBackend::Ch9329Otg => Self::Ch9329 {
+                port: config.ch9329_port.clone(),
+                baud_rate: config.ch9329_baudrate,
+                hybrid_mouse: config.ch9329_hybrid_mouse,
+                macos_drag: config.mouse_macos_drag,
+            },
+            HidBackend::Bluetooth => Self::Bluetooth {
+                config: config.bluetooth.clone(),
+            },
+            HidBackend::None => Self::None,
+        }
     }
 }
 
 impl HidBackendType {
-    /// Check if OTG backend is available on this system
-    pub fn otg_available() -> bool {
-        // Check for USB gadget support
-        std::path::Path::new("/sys/class/udc").exists()
-    }
-
-    /// Detect the best available backend
-    pub fn detect() -> Self {
-        // Check for OTG gadget support
-        if Self::otg_available() {
-            return Self::Otg;
-        }
-
-        // Check for common CH9329 serial ports
-        let common_ports = [
-            "/dev/ttyUSB0",
-            "/dev/ttyUSB1",
-            "/dev/ttyAMA0",
-            "/dev/serial0",
-        ];
-
-        for port in &common_ports {
-            if std::path::Path::new(port).exists() {
-                return Self::Ch9329 {
-                    port: port.to_string(),
-                    baud_rate: 9600, // Use default baud rate for auto-detection
-                };
-            }
-        }
-
-        Self::None
-    }
-
-    /// Get backend name as string
     pub fn name_str(&self) -> &str {
         match self {
-            Self::Otg => "otg",
+            Self::Otg { .. } => "otg",
+            Self::Bluetooth { .. } => "bluetooth",
             Self::Ch9329 { .. } => "ch9329",
             Self::None => "none",
         }
     }
 }
 
-/// HID backend trait
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HidBackendRuntimeSnapshot {
+    pub initialized: bool,
+    pub online: bool,
+    pub supports_absolute_mouse: bool,
+    pub keyboard_leds_enabled: bool,
+    pub led_state: LedState,
+    pub screen_resolution: Option<(u32, u32)>,
+    pub device: Option<String>,
+    pub error: Option<String>,
+    pub error_code: Option<String>,
+}
+
 #[async_trait]
 pub trait HidBackend: Send + Sync {
-    /// Get backend name
-    fn name(&self) -> &'static str;
-
-    /// Initialize the backend
     async fn init(&self) -> Result<()>;
 
-    /// Send a keyboard event
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()>;
 
-    /// Send a mouse event
     async fn send_mouse(&self, event: MouseEvent) -> Result<()>;
 
-    /// Send a consumer control event (multimedia keys)
-    /// Default implementation returns an error (not supported)
     async fn send_consumer(&self, _event: ConsumerEvent) -> Result<()> {
         Err(crate::error::AppError::BadRequest(
             "Consumer control not supported by this backend".to_string(),
         ))
     }
 
-    /// Reset all inputs (release all keys/buttons)
+    async fn apply_ch9329_descriptor(
+        &self,
+        _descriptor: &Ch9329DescriptorConfig,
+    ) -> Result<Ch9329DescriptorState> {
+        Err(crate::error::AppError::BadRequest(
+            "CH9329 descriptor configuration is not supported by this backend".to_string(),
+        ))
+    }
+
+    async fn read_ch9329_descriptor(&self) -> Result<Ch9329DescriptorState> {
+        Err(crate::error::AppError::BadRequest(
+            "CH9329 descriptor reading is not supported by this backend".to_string(),
+        ))
+    }
+
+    async fn bluetooth_status(&self) -> Result<serde_json::Value> {
+        Err(crate::error::AppError::BadRequest(
+            "Bluetooth HID is not active".into(),
+        ))
+    }
+    async fn bluetooth_action(&self, _action: &str, _seconds: u32) -> Result<()> {
+        Err(crate::error::AppError::BadRequest(
+            "Bluetooth HID is not active".into(),
+        ))
+    }
+
     async fn reset(&self) -> Result<()>;
 
-    /// Shutdown the backend
+    async fn prepare_rebuild(&self) -> Result<()> {
+        self.shutdown().await
+    }
+
     async fn shutdown(&self) -> Result<()>;
 
-    /// Check if backend supports absolute mouse positioning
-    fn supports_absolute_mouse(&self) -> bool {
-        false
-    }
+    fn runtime_snapshot(&self) -> HidBackendRuntimeSnapshot;
 
-    /// Get screen resolution (for absolute mouse)
-    fn screen_resolution(&self) -> Option<(u32, u32)> {
-        None
-    }
+    fn subscribe_runtime(&self) -> watch::Receiver<()>;
 
-    /// Set screen resolution (for absolute mouse)
-    fn set_screen_resolution(&mut self, _width: u32, _height: u32) {}
-}
-
-/// HID backend information
-#[derive(Debug, Clone, Serialize)]
-pub struct HidBackendInfo {
-    /// Backend name
-    pub name: String,
-    /// Backend type
-    pub backend_type: String,
-    /// Is initialized
-    pub initialized: bool,
-    /// Supports absolute mouse
-    pub absolute_mouse: bool,
-    /// Screen resolution (if absolute mouse)
-    pub resolution: Option<(u32, u32)>,
+    fn set_screen_resolution(&self, _width: u32, _height: u32) {}
 }

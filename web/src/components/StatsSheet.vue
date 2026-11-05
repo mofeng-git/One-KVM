@@ -10,17 +10,16 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
+import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
+import { Card } from '@/components/ui/card'
 import type { WebRTCStats } from '@/composables/useWebRTC'
+import { formatFpsValue } from '@/lib/fps'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
-  videoMode: 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
-  // MJPEG stats
-  mjpegFps?: number
-  wsLatency?: number
-  // WebRTC stats
   webrtcStats?: WebRTCStats
 }>()
 
@@ -28,19 +27,16 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
 }>()
 
-// Chart containers
 const stabilityChartRef = ref<HTMLDivElement | null>(null)
 const delayChartRef = ref<HTMLDivElement | null>(null)
 const packetLossChartRef = ref<HTMLDivElement | null>(null)
 const fpsChartRef = ref<HTMLDivElement | null>(null)
 
-// Chart instances
 let stabilityChart: uPlot | null = null
 let delayChart: uPlot | null = null
 let packetLossChart: uPlot | null = null
 let fpsChart: uPlot | null = null
 
-// Data history (last 120 seconds)
 const MAX_POINTS = 120
 const timestamps = ref<number[]>([])
 const jitterHistory = ref<number[]>([])
@@ -49,21 +45,15 @@ const packetLossHistory = ref<number[]>([])
 const fpsHistory = ref<number[]>([])
 const bitrateHistory = ref<number[]>([])
 
-// For delta calculations
 let lastBytesReceived = 0
 let lastPacketsLost = 0
 let lastTimestamp = 0
 
-// Is WebRTC mode
-const isWebRTC = computed(() => props.videoMode !== 'mjpeg')
-
-// Format time for axis
 function formatTime(ts: number): string {
   const date = new Date(ts * 1000)
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// Chart theme colors
 const chartColors = {
   line: '#3b82f6',
   fill: 'rgba(59, 130, 246, 0.1)',
@@ -72,7 +62,6 @@ const chartColors = {
   text: '#94a3b8',
 }
 
-// Chart options factory
 function createChartOptions(
   container: HTMLElement,
   _yLabel: string,
@@ -128,7 +117,6 @@ function createChartOptions(
   }
 }
 
-// Tooltip state for each chart
 const activeTooltip = ref<{
   chartId: string
   time: string
@@ -185,12 +173,10 @@ function createTooltipPlugin(chartId: string, unit: string): uPlot.Plugin {
   }
 }
 
-// Initialize charts
 function initCharts() {
   if (!props.open) return
 
   nextTick(() => {
-    // Initialize timestamps if empty
     if (timestamps.value.length === 0) {
       const now = Date.now() / 1000
       for (let i = MAX_POINTS - 1; i >= 0; i--) {
@@ -203,7 +189,6 @@ function initCharts() {
       bitrateHistory.value = new Array(MAX_POINTS).fill(0)
     }
 
-    // Network Stability (Jitter) Chart
     if (stabilityChartRef.value && !stabilityChart) {
       const opts = createChartOptions(stabilityChartRef.value, 'ms', (v) => `${v.toFixed(0)} ms`)
       opts.plugins = [createTooltipPlugin('stability', 'ms')]
@@ -214,7 +199,6 @@ function initCharts() {
       )
     }
 
-    // Playback Delay Chart
     if (delayChartRef.value && !delayChart) {
       const opts = createChartOptions(delayChartRef.value, 'ms', (v) => `${v.toFixed(0)} ms`)
       opts.plugins = [createTooltipPlugin('delay', 'ms')]
@@ -236,7 +220,6 @@ function initCharts() {
       )
     }
 
-    // FPS Chart
     if (fpsChartRef.value && !fpsChart) {
       const opts = createChartOptions(fpsChartRef.value, 'fps', (v) => `${v.toFixed(0)} fps`)
       opts.plugins = [createTooltipPlugin('fps', 'fps')]
@@ -249,7 +232,6 @@ function initCharts() {
   })
 }
 
-// Destroy charts
 function destroyCharts() {
   stabilityChart?.destroy()
   stabilityChart = null
@@ -261,35 +243,28 @@ function destroyCharts() {
   fpsChart = null
 }
 
-// Add data point
 function addDataPoint() {
   const now = Date.now() / 1000
 
-  // Shift timestamps
   timestamps.value.push(now)
   if (timestamps.value.length > MAX_POINTS) {
     timestamps.value.shift()
   }
 
-  if (isWebRTC.value && props.webrtcStats) {
-    // Jitter in ms
+  if (props.webrtcStats) {
     const jitter = (props.webrtcStats.jitter || 0) * 1000
     jitterHistory.value.push(jitter)
 
-    // RTT (round trip time) as delay in ms
     const rtt = (props.webrtcStats.roundTripTime || 0) * 1000
     delayHistory.value.push(rtt)
 
-    // Packet loss delta
     const currentLost = props.webrtcStats.packetsLost || 0
     const lostDelta = lastPacketsLost > 0 ? Math.max(0, currentLost - lastPacketsLost) : 0
     lastPacketsLost = currentLost
     packetLossHistory.value.push(lostDelta)
 
-    // FPS
     fpsHistory.value.push(props.webrtcStats.framesPerSecond || 0)
 
-    // Calculate bitrate
     const currentBytes = props.webrtcStats.bytesReceived || 0
     const currentTime = Date.now()
     if (lastTimestamp > 0 && currentBytes > lastBytesReceived) {
@@ -303,26 +278,22 @@ function addDataPoint() {
     lastBytesReceived = currentBytes
     lastTimestamp = currentTime
   } else {
-    // MJPEG mode
     jitterHistory.value.push(0)
-    delayHistory.value.push(props.wsLatency || 0)
+    delayHistory.value.push(0)
     packetLossHistory.value.push(0)
-    fpsHistory.value.push(props.mjpegFps || 0)
+    fpsHistory.value.push(0)
     bitrateHistory.value.push(0)
   }
 
-  // Trim arrays
   if (jitterHistory.value.length > MAX_POINTS) jitterHistory.value.shift()
   if (delayHistory.value.length > MAX_POINTS) delayHistory.value.shift()
   if (packetLossHistory.value.length > MAX_POINTS) packetLossHistory.value.shift()
   if (fpsHistory.value.length > MAX_POINTS) fpsHistory.value.shift()
   if (bitrateHistory.value.length > MAX_POINTS) bitrateHistory.value.shift()
 
-  // Update charts
   updateCharts()
 }
 
-// Update charts with new data
 function updateCharts() {
   stabilityChart?.setData([timestamps.value, jitterHistory.value])
   delayChart?.setData([timestamps.value, delayHistory.value])
@@ -330,7 +301,6 @@ function updateCharts() {
   fpsChart?.setData([timestamps.value, fpsHistory.value])
 }
 
-// Data collection interval
 let dataInterval: number | null = null
 
 function startDataCollection() {
@@ -345,7 +315,6 @@ function stopDataCollection() {
   }
 }
 
-// Format candidate type for display
 function formatCandidateType(type: string): string {
   const typeMap: Record<string, string> = {
     host: 'Host (Local)',
@@ -359,7 +328,7 @@ function formatCandidateType(type: string): string {
 
 // Current stats for header display
 const currentStats = computed(() => {
-  if (isWebRTC.value && props.webrtcStats) {
+  if (props.webrtcStats) {
     const lastBitrate = bitrateHistory.value[bitrateHistory.value.length - 1]
     const bitrate = lastBitrate !== undefined ? lastBitrate : 0
     return {
@@ -380,8 +349,8 @@ const currentStats = computed(() => {
   }
   return {
     jitter: 0,
-    delay: props.wsLatency || 0,
-    fps: props.mjpegFps || 0,
+    delay: 0,
+    fps: 0,
     resolution: '-',
     bitrate: '0',
     packetsLost: 0,
@@ -392,10 +361,8 @@ const currentStats = computed(() => {
   }
 })
 
-// Watch open state
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
-    // Reset data
     timestamps.value = []
     jitterHistory.value = []
     delayHistory.value = []
@@ -416,7 +383,6 @@ watch(() => props.open, (isOpen) => {
   }
 })
 
-// Resize handler
 function handleResize() {
   if (!props.open) return
   destroyCharts()
@@ -442,40 +408,36 @@ onUnmounted(() => {
   <Sheet :open="props.open" @update:open="emit('update:open', $event)">
     <SheetContent
       side="right"
-      class="w-[400px] sm:w-[440px] p-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+      class="w-[90vw] max-w-[440px] gap-0 overflow-hidden border-l bg-background p-0"
     >
       <!-- Header -->
-      <SheetHeader class="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
+      <SheetHeader class="shrink-0 border-b px-6 py-3">
         <div class="flex items-center gap-2">
           <SheetTitle class="text-base">{{ t('stats.title') }}</SheetTitle>
-          <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted-foreground">
-            {{ isWebRTC ? 'WebRTC' : 'MJPEG' }}
-          </span>
+          <Badge variant="secondary">WebRTC</Badge>
         </div>
       </SheetHeader>
 
-      <ScrollArea class="h-[calc(100vh-60px)]">
+      <ScrollArea class="min-h-0 flex-1">
         <div class="px-6 py-4 space-y-6">
-          <!-- Video Section Header -->
-          <div>
+          <!-- Video Information -->
+          <div class="space-y-3">
             <h3 class="text-sm font-medium">{{ t('stats.video') }}</h3>
-            <p class="text-xs text-muted-foreground mt-0.5">
-              {{ t('stats.videoDesc') }}
-            </p>
+            <div class="grid grid-cols-2 gap-3">
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.resolution') }}</ItemDescription><ItemTitle>{{ currentStats.resolution }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.bitrate') }}</ItemDescription><ItemTitle>{{ currentStats.bitrate }} Mbps</ItemTitle></ItemContent></Item>
+            </div>
           </div>
 
           <!-- Network Stability (Jitter) -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.stability') }}</h4>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.stabilityDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="stabilityChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'stability'"
@@ -483,26 +445,23 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- Playback Delay -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.delay') }}</h4>
               <span class="text-xs text-muted-foreground">
                 {{ currentStats.delay }} ms
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.delayDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="delayChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'delay'"
@@ -510,26 +469,23 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- Packet Loss -->
-          <div class="space-y-2" v-if="isWebRTC">
+          <div class="space-y-2">
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.packetLoss') }}</h4>
               <span class="text-xs text-muted-foreground">
                 {{ currentStats.packetsLost }} {{ t('stats.total') }}
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.packetLossDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="packetLossChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'packetLoss'"
@@ -537,9 +493,9 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
           <!-- FPS -->
@@ -547,16 +503,13 @@ onUnmounted(() => {
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-medium">{{ t('stats.frameRate') }}</h4>
               <span class="text-xs text-muted-foreground">
-                {{ currentStats.fps }} fps
+                {{ formatFpsValue(currentStats.fps) }} fps
               </span>
             </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('stats.frameRateDesc') }}
-            </p>
-            <div class="relative">
+            <Card class="relative gap-0 p-2 shadow-none">
               <div
                 ref="fpsChartRef"
-                class="w-full rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2"
+                class="w-full"
               />
               <div
                 v-if="activeTooltip.visible && activeTooltip.chartId === 'fps'"
@@ -564,52 +517,27 @@ onUnmounted(() => {
                 :style="{ left: `${activeTooltip.left + 60}px`, top: `${activeTooltip.top - 40}px` }"
               >
                 <div class="text-xs font-medium">{{ activeTooltip.time }}</div>
-                <div class="text-xs text-blue-500">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
+                <div class="text-xs text-info">{{ activeTooltip.value }} {{ activeTooltip.unit }}</div>
               </div>
-            </div>
+            </Card>
           </div>
 
-          <!-- Additional Stats -->
-          <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800" v-if="isWebRTC">
-            <h4 class="text-sm font-medium">{{ t('stats.additional') }}</h4>
+          <!-- Connection Information -->
+          <div class="space-y-3 border-t pt-2">
+            <h4 class="text-sm font-medium">{{ t('stats.connection') }}</h4>
             <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.resolution') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.resolution }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.bitrate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.bitrate }} Mbps</p>
-              </div>
-            </div>
-
-            <!-- Connection Info -->
-            <h4 class="text-sm font-medium pt-2">{{ t('stats.connection') }}</h4>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.connectionType') }}</p>
-                <p class="text-sm font-medium mt-1 flex items-center gap-1.5">
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.connectionType') }}</ItemDescription><ItemTitle class="flex items-center gap-1.5">
                   <span
                     :class="[
-                      'inline-block w-2 h-2 rounded-full',
-                      currentStats.isRelay ? 'bg-amber-500' : 'bg-green-500'
+                      'inline-block size-2 rounded-full',
+                      currentStats.isRelay ? 'bg-warning' : 'bg-status-active'
                     ]"
                   />
                   {{ currentStats.isRelay ? t('stats.relay') : t('stats.p2p') }}
-                </p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.transport') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.transport }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.localCandidate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.localType }}</p>
-              </div>
-              <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-3">
-                <p class="text-xs text-muted-foreground">{{ t('stats.remoteCandidate') }}</p>
-                <p class="text-sm font-medium mt-1">{{ currentStats.remoteType }}</p>
-              </div>
+                </ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.transport') }}</ItemDescription><ItemTitle>{{ currentStats.transport }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.localCandidate') }}</ItemDescription><ItemTitle>{{ currentStats.localType }}</ItemTitle></ItemContent></Item>
+              <Item variant="muted" size="sm"><ItemContent><ItemDescription>{{ t('stats.remoteCandidate') }}</ItemDescription><ItemTitle>{{ currentStats.remoteType }}</ItemTitle></ItemContent></Item>
             </div>
           </div>
         </div>

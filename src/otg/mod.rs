@@ -1,35 +1,49 @@
-//! OTG USB Gadget unified management module
-//!
-//! This module provides unified management for USB Gadget functions:
-//! - HID (Keyboard, Mouse)
-//! - MSD (Mass Storage Device)
-//!
-//! Architecture:
-//! ```text
-//! OtgService (high-level coordination)
-//!     └── OtgGadgetManager (gadget lifecycle)
-//!             ├── EndpointAllocator (manages UDC endpoints)
-//!             ├── HidFunction (keyboard, mouse_rel, mouse_abs)
-//!             └── MsdFunction (mass storage)
-//! ```
-//!
-//! The recommended way to use this module is through `OtgService`, which provides
-//! a high-level interface for enabling/disabling HID and MSD functions independently.
-//! Both `HidController` and `MsdController` should share the same `OtgService` instance.
+//! USB OTG composite gadget (HID + MSD + Ethernet).
 
+#[cfg(unix)]
+pub mod bridge;
+#[cfg(unix)]
 pub mod configfs;
-pub mod endpoint;
+#[cfg(unix)]
 pub mod function;
+#[cfg(unix)]
 pub mod hid;
+#[cfg(unix)]
 pub mod manager;
+#[cfg(unix)]
 pub mod msd;
+#[cfg(unix)]
+pub mod network;
+#[cfg(unix)]
+mod network_backend;
+#[cfg(unix)]
+mod netifd_bridge;
 pub mod report_desc;
+pub mod self_check;
+#[cfg(unix)]
 pub mod service;
+#[cfg(unix)]
+pub mod uac;
 
-pub use endpoint::EndpointAllocator;
-pub use function::{FunctionMeta, GadgetFunction};
-pub use hid::{HidFunction, HidFunctionType};
+#[cfg(unix)]
 pub use manager::{wait_for_hid_devices, OtgGadgetManager};
+#[cfg(unix)]
 pub use msd::{MsdFunction, MsdLunConfig};
-pub use report_desc::{KEYBOARD, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
-pub use service::{HidDevicePaths, OtgService, OtgServiceState};
+#[cfg(unix)]
+pub use network::NetworkFunction;
+#[cfg(unix)]
+pub use service::{HidDevicePaths, OtgNetworkStatus, OtgRuntimeHealth, OtgService};
+#[cfg(unix)]
+pub use uac::UacFunction;
+
+/// List USB Device Controller names exposed by sysfs.
+pub fn list_udc_devices() -> Vec<String> {
+    #[cfg(unix)]
+    {
+        configfs::list_udcs()
+    }
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
+}

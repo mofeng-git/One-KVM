@@ -1,37 +1,34 @@
-//! RustDesk Connection Handler
-//!
-//! This module handles incoming connections from RustDesk clients.
-//! It manages the connection lifecycle including:
-//! - Connection establishment (P2P or via relay)
-//! - Encrypted handshake
-//! - Authentication
-//! - Message routing (video, audio, input)
-//! - Video frame streaming (shared with WebRTC)
+//! Incoming RustDesk TCP sessions (handshake, AV, input).
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use parking_lot::RwLock;
 use protobuf::Message as ProtobufMessage;
 use sodiumoxide::crypto::box_;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{mpsc, watch};
 use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
-use crate::hid::{HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
-use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
-use crate::video::encoder::BitratePreset;
+use crate::hid::{CanonicalKey, HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
+use crate::utils::hostname_from_etc;
+use crate::video::codec::registry::{EncoderRegistry, VideoEncoderType};
+use crate::video::codec::BitratePreset;
+use crate::video::codec_constraints::{encoder_codec_to_id, encoder_codec_to_video_codec};
 use crate::video::stream_manager::VideoStreamManager;
 
-use super::bytes_codec::{read_frame, write_frame, write_frame_buffered};
+use super::bytes_codec::{read_frame_with_limit, write_frame_vectored};
 use super::config::RustDeskConfig;
 use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
-use super::hid_adapter::{convert_key_event, convert_mouse_event, mouse_type};
+use super::hid_adapter::{convert_key_events_in_code_space, mouse_type, MouseEventAdapter};
+use super::keyboard_mapping::KeyboardCodeSpace;
+use super::protocol::hbb::message::key_event as ke_union;
 use super::protocol::{
     decode_message, login_response, message, misc, Clipboard, ControlKey, DisplayInfo, Hash,
     HbbMessage, IdPk, KeyEvent, LoginRequest, LoginResponse, Misc, MouseEvent, OptionMessage,
@@ -46,6 +43,57 @@ const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 
 /// Default mouse event throttle interval (16ms ≈ 60Hz)
 const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
+/// Bound accumulated relative input so one flush cannot create an excessive HID burst.
+const MAX_PENDING_RELATIVE_DELTA: i64 = 4096;
+
+/// Limit work retained for unauthenticated peers.
+const MAX_CONNECTIONS: usize = 8;
+const MAX_UNAUTHENTICATED_PACKET_LENGTH: usize = 256 * 1024;
+const MAX_AUTHENTICATED_PACKET_LENGTH: usize = 8 * 1024 * 1024;
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_PASSWORD_ATTEMPTS: u8 = 5;
+const CONNECTION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// RustDesk-facing identity and the physical key code space implied by it.
+struct RustDeskCompatibility {
+    version: &'static str,
+    platform: RustDeskCompatibilityPlatform,
+}
+
+#[derive(Clone, Copy)]
+enum RustDeskCompatibilityPlatform {
+    Windows,
+}
+
+impl RustDeskCompatibilityPlatform {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Windows => "Windows",
+        }
+    }
+
+    const fn keyboard_code_space(self) -> KeyboardCodeSpace {
+        match self {
+            Self::Windows => KeyboardCodeSpace::WindowsSet1,
+        }
+    }
+}
+
+const RUSTDESK_COMPATIBILITY: RustDeskCompatibility = RustDeskCompatibility {
+    version: "1.4.5",
+    platform: RustDeskCompatibilityPlatform::Windows,
+};
+
+fn key_event_union_details(event: &KeyEvent) -> (&'static str, String) {
+    match &event.union {
+        Some(ke_union::Union::ControlKey(key)) => ("ControlKey", format!("0x{:X}", key.value())),
+        Some(ke_union::Union::Chr(code)) => ("Chr", format!("0x{code:X}")),
+        Some(ke_union::Union::Unicode(code)) => ("Unicode", format!("0x{code:X}")),
+        Some(ke_union::Union::Seq(seq)) => ("Seq", format!("{seq:?}")),
+        Some(ke_union::Union::Win2winHotkey(code)) => ("Win2winHotkey", format!("0x{code:X}")),
+        None => ("None", "none".to_string()),
+    }
+}
 
 /// Input event throttler
 ///
@@ -86,13 +134,6 @@ impl InputThrottler {
     }
 }
 
-/// Get system hostname
-fn get_hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|_| "One-KVM".to_string())
-}
-
 /// Connection state
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConnectionState {
@@ -108,6 +149,12 @@ pub enum ConnectionState {
     Error(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionMode {
+    Secure,
+    DirectIp,
+}
+
 /// Incoming connection from a RustDesk client
 pub struct Connection {
     /// Connection ID
@@ -121,12 +168,18 @@ pub struct Connection {
     /// Connection state
     state: Arc<RwLock<ConnectionState>>,
     /// Our signing keypair (Ed25519) for signing SignedId messages
-    signing_keypair: SigningKeyPair,
+    signing_keypair: Option<SigningKeyPair>,
     /// Temporary Curve25519 keypair for this connection (used for encryption)
     /// Generated fresh for each connection, public key goes in IdPk.pk
     temp_keypair: (box_::PublicKey, box_::SecretKey),
     /// Device password
     password: String,
+    /// Connection path determines whether the RustDesk signed-ID handshake is used.
+    mode: ConnectionMode,
+    /// Password hashing salt sent to the client.
+    password_salt: String,
+    /// Per-connection challenge prevents replaying a captured password hash.
+    password_challenge: String,
     /// HID controller for keyboard/mouse events
     hid: Option<Arc<HidController>>,
     /// Audio controller for audio streaming
@@ -136,10 +189,8 @@ pub struct Connection {
     /// Screen dimensions for mouse coordinate conversion
     screen_width: u32,
     screen_height: u32,
-    /// Message sender to connection handler
-    tx: mpsc::UnboundedSender<ConnectionMessage>,
     /// Shutdown signal
-    shutdown_tx: broadcast::Sender<()>,
+    shutdown_tx: watch::Sender<bool>,
     /// Video streaming task handle
     video_task: Option<tokio::task::JoinHandle<()>>,
     /// Audio streaming task handle
@@ -148,35 +199,34 @@ pub struct Connection {
     session_key: Option<secretbox::Key>,
     /// Encryption enabled flag
     encryption_enabled: bool,
-    /// Encryption sequence number (for nonce generation)
-    enc_seqnum: u64,
     /// Decryption sequence number (for nonce generation)
     dec_seqnum: u64,
     /// Negotiated video codec (after client capability exchange)
     negotiated_codec: Option<VideoEncoderType>,
-    /// Video frame sender for restarting video after codec switch
-    video_frame_tx: Option<mpsc::Sender<Bytes>>,
     /// Input event throttler to prevent HID device EAGAIN errors
     input_throttler: InputThrottler,
+    /// Fractional trackpad wheel state belongs to this session only.
+    mouse_event_adapter: MouseEventAdapter,
     /// Last measured round-trip delay in milliseconds (for TestDelay responses)
     last_delay: u32,
     /// Time when we last sent a TestDelay to the client (for RTT calculation)
     last_test_delay_sent: Option<Instant>,
     /// Last known CapsLock state from RustDesk modifiers (for detecting toggle)
     last_caps_lock: bool,
+    /// Whether relative mouse mode is currently active for this connection
+    relative_mouse_active: bool,
+    /// Latest absolute position or accumulated relative movement, flushed on the next HID interval.
+    pending_mouse_move: Option<MouseEvent>,
+    /// Server-configured RustDesk video codec.
+    configured_codec: VideoEncoderType,
+    /// Failed authentication attempts on this TCP session.
+    password_attempts: u8,
 }
 
-/// Messages sent to connection handler
-#[derive(Debug)]
-pub enum ConnectionMessage {
-    /// Send video frame
-    VideoFrame(Bytes),
-    /// Send audio frame
-    AudioFrame(Bytes),
-    /// Send cursor data
-    CursorData(Bytes),
-    /// Close connection
-    Close,
+enum WriterCommand {
+    SetSessionKey(secretbox::Key),
+    Send { data: Bytes, encrypt: bool },
+    Shutdown,
 }
 
 /// Messages received from client
@@ -201,19 +251,24 @@ impl Connection {
     pub fn new(
         id: u32,
         config: &RustDeskConfig,
-        signing_keypair: SigningKeyPair,
+        mode: ConnectionMode,
+        signing_keypair: Option<SigningKeyPair>,
         hid: Option<Arc<HidController>>,
         audio: Option<Arc<AudioController>>,
         video_manager: Option<Arc<VideoStreamManager>>,
-    ) -> (Self, mpsc::UnboundedReceiver<ConnectionMessage>) {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let (shutdown_tx, _) = broadcast::channel(1);
+    ) -> Self {
+        let (shutdown_tx, _) = watch::channel(false);
 
         // Generate fresh Curve25519 keypair for this connection
         // This is used for encrypting the symmetric key exchange
         let temp_keypair = box_::gen_keypair();
 
-        let conn = Self {
+        let configured_codec = match config.codec {
+            super::config::RustDeskCodec::H264 => VideoEncoderType::H264,
+            super::config::RustDeskCodec::H265 => VideoEncoderType::H265,
+        };
+
+        Self {
             id,
             device_id: config.device_id.clone(),
             peer_id: String::new(),
@@ -222,28 +277,31 @@ impl Connection {
             signing_keypair,
             temp_keypair,
             password: config.device_password.clone(),
+            mode,
+            password_salt: config.device_id.clone(),
+            password_challenge: uuid::Uuid::new_v4().simple().to_string(),
             hid,
             audio,
             video_manager,
             screen_width: DEFAULT_SCREEN_WIDTH,
             screen_height: DEFAULT_SCREEN_HEIGHT,
-            tx,
             shutdown_tx,
             video_task: None,
             audio_task: None,
             session_key: None,
             encryption_enabled: false,
-            enc_seqnum: 0,
             dec_seqnum: 0,
             negotiated_codec: None,
-            video_frame_tx: None,
             input_throttler: InputThrottler::new(),
+            mouse_event_adapter: MouseEventAdapter::default(),
             last_delay: 0,
             last_test_delay_sent: None,
             last_caps_lock: false,
-        };
-
-        (conn, rx)
+            relative_mouse_active: false,
+            pending_mouse_move: None,
+            configured_codec,
+            password_attempts: 0,
+        }
     }
 
     /// Get connection ID
@@ -261,9 +319,8 @@ impl Connection {
         &self.peer_id
     }
 
-    /// Get message sender
-    pub fn sender(&self) -> mpsc::UnboundedSender<ConnectionMessage> {
-        self.tx.clone()
+    pub fn shutdown_sender(&self) -> watch::Sender<bool> {
+        self.shutdown_tx.clone()
     }
 
     /// Handle an incoming TCP connection
@@ -273,45 +330,75 @@ impl Connection {
         peer_addr: SocketAddr,
     ) -> anyhow::Result<()> {
         info!("New connection from {}", peer_addr);
+        stream.set_nodelay(true)?;
         *self.state.write() = ConnectionState::Handshaking;
 
         let (mut reader, writer) = stream.into_split();
-        let writer = Arc::new(Mutex::new(writer));
         let mut shutdown_rx = self.shutdown_tx.subscribe();
+        if *shutdown_rx.borrow() {
+            *self.state.write() = ConnectionState::Closed;
+            return Ok(());
+        }
 
-        // Send our SignedId first (this is what RustDesk protocol expects)
-        // The SignedId contains our device ID and temporary public key
-        let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = signed_id_msg
-            .write_to_bytes()
-            .map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
-        debug!("Sending SignedId with device_id={}", self.device_id);
-        self.send_framed_arc(&writer, &signed_id_bytes).await?;
+        // Keep socket writes out of the input loop. A congested video path must
+        // never prevent us from reading keyboard and mouse events.
+        let (control_tx, control_rx) = mpsc::channel::<WriterCommand>(32);
+        // Absorb short encoder/socket scheduling bursts without treating a
+        // momentarily busy writer as a broken inter-frame sequence.
+        let (video_tx, video_rx) = mpsc::channel::<Bytes>(4);
+        let (audio_tx, audio_rx) = mpsc::channel::<Bytes>(8);
+        let mut writer_task = tokio::spawn(run_connection_writer(
+            writer, control_rx, video_rx, audio_rx,
+        ));
 
-        // Channel for receiving video frames to send (bounded to provide backpressure)
-        let (video_tx, mut video_rx) = mpsc::channel::<Bytes>(4);
+        match self.mode {
+            ConnectionMode::Secure => {
+                // ID-server and relay connections authenticate our ephemeral key through hbbs.
+                let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
+                let signed_id_bytes = signed_id_msg
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
+                debug!("Sending SignedId with device_id={}", self.device_id);
+                self.send_framed(&control_tx, &signed_id_bytes).await?;
+            }
+            ConnectionMode::DirectIp => {
+                // Standard RustDesk direct-IP clients do not perform the signed-ID handshake.
+                // They expect password authentication to start immediately.
+                let hash_msg = self.create_hash_message();
+                let hash_bytes = hash_msg
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode Hash: {}", e))?;
+                debug!("Sending password challenge for direct IP connection");
+                self.send_framed(&control_tx, &hash_bytes).await?;
+            }
+        }
+
         let mut video_streaming = false;
-
-        // Channel for receiving audio frames to send (bounded to provide backpressure)
-        let (audio_tx, mut audio_rx) = mpsc::channel::<Bytes>(8);
         let mut audio_streaming = false;
 
         // Timer for sending TestDelay to measure round-trip latency
         // RustDesk clients display this delay information
         let mut test_delay_interval = tokio::time::interval(Duration::from_secs(1));
         test_delay_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut mouse_flush_interval =
+            tokio::time::interval(Duration::from_millis(DEFAULT_MOUSE_THROTTLE_MS));
+        mouse_flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-        // Pre-allocated buffer for framing (reused across sends to reduce allocations)
-        // Typical H264 frame is 10-100KB, pre-allocate 128KB
-        let mut frame_buf = BytesMut::with_capacity(128 * 1024);
+        let handshake_deadline = tokio::time::sleep(HANDSHAKE_TIMEOUT);
+        tokio::pin!(handshake_deadline);
 
         loop {
+            let packet_limit = if self.state() == ConnectionState::Active {
+                MAX_AUTHENTICATED_PACKET_LENGTH
+            } else {
+                MAX_UNAUTHENTICATED_PACKET_LENGTH
+            };
             tokio::select! {
                 // Read framed message from client using RustDesk's variable-length encoding
-                result = read_frame(&mut reader) => {
+                result = read_frame_with_limit(&mut reader, packet_limit) => {
                     match result {
                         Ok(msg_buf) => {
-                            if let Err(e) = self.handle_message_arc(&msg_buf, &writer, &video_tx, &mut video_streaming, &audio_tx, &mut audio_streaming).await {
+                            if let Err(e) = self.handle_message_arc(&msg_buf, &control_tx, &video_tx, &mut video_streaming, &audio_tx, &mut audio_streaming).await {
                                 error!("Error handling message: {}", e);
                                 break;
                             }
@@ -331,61 +418,35 @@ impl Connection {
                     }
                 }
 
-                // Send video frames (encrypted if session key is set)
-                // Optimized path: inline encryption and use pre-allocated buffer
-                Some(frame_data) = video_rx.recv() => {
-                    let send_result = if let Some(ref key) = self.session_key {
-                        // Encrypt the frame
-                        self.enc_seqnum += 1;
-                        let nonce = Self::get_nonce(self.enc_seqnum);
-                        let ciphertext = secretbox::seal(&frame_data, &nonce, key);
-                        // Send using pre-allocated buffer
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &ciphertext, &mut frame_buf).await
-                    } else {
-                        // No encryption, send plain
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &frame_data, &mut frame_buf).await
-                    };
-
-                    if let Err(e) = send_result {
-                        error!("Error sending video frame: {}", e);
-                        break;
-                    }
-                }
-
-                // Send audio frames (encrypted if session key is set)
-                Some(frame_data) = audio_rx.recv() => {
-                    let send_result = if let Some(ref key) = self.session_key {
-                        // Encrypt the frame
-                        self.enc_seqnum += 1;
-                        let nonce = Self::get_nonce(self.enc_seqnum);
-                        let ciphertext = secretbox::seal(&frame_data, &nonce, key);
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &ciphertext, &mut frame_buf).await
-                    } else {
-                        // No encryption, send plain
-                        let mut w = writer.lock().await;
-                        write_frame_buffered(&mut *w, &frame_data, &mut frame_buf).await
-                    };
-
-                    if let Err(e) = send_result {
-                        error!("Error sending audio frame: {}", e);
-                        break;
-                    }
-                }
-
                 // Send TestDelay periodically to measure latency
                 _ = test_delay_interval.tick() => {
                     if self.state() == ConnectionState::Active && self.last_test_delay_sent.is_none() {
-                        if let Err(e) = self.send_test_delay(&writer).await {
+                        if let Err(e) = self.send_test_delay(&control_tx).await {
                             warn!("Failed to send TestDelay: {}", e);
                         }
                     }
                 }
 
+                _ = mouse_flush_interval.tick(), if self.pending_mouse_move.is_some() => {
+                    self.flush_pending_mouse_move().await;
+                }
+
+                _ = &mut handshake_deadline, if self.state() != ConnectionState::Active => {
+                    warn!("RustDesk handshake timed out for {}", peer_addr);
+                    break;
+                }
+
+                result = &mut writer_task => {
+                    match result {
+                        Ok(Ok(())) => debug!("RustDesk writer stopped for {}", peer_addr),
+                        Ok(Err(error)) => warn!("RustDesk writer failed for {}: {}", peer_addr, error),
+                        Err(error) => warn!("RustDesk writer task failed for {}: {}", peer_addr, error),
+                    }
+                    break;
+                }
+
                 // Shutdown signal
-                _ = shutdown_rx.recv() => {
+                _ = shutdown_rx.changed() => {
                     info!("Connection shutdown requested");
                     break;
                 }
@@ -402,19 +463,33 @@ impl Connection {
             task.abort();
         }
 
+        let _ = control_tx.try_send(WriterCommand::Shutdown);
+        if !writer_task.is_finished() {
+            match tokio::time::timeout(Duration::from_secs(1), &mut writer_task).await {
+                Ok(_) => {}
+                Err(_) => {
+                    writer_task.abort();
+                    let _ = writer_task.await;
+                }
+            }
+        }
+
         *self.state.write() = ConnectionState::Closed;
         Ok(())
     }
 
-    /// Send framed message using Arc<Mutex<OwnedWriteHalf>> with RustDesk's variable-length encoding
-    async fn send_framed_arc(
+    async fn send_framed(
         &self,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
         data: &[u8],
     ) -> anyhow::Result<()> {
-        let mut w = writer.lock().await;
-        write_frame(&mut *w, data).await?;
-        Ok(())
+        writer
+            .send(WriterCommand::Send {
+                data: Bytes::copy_from_slice(data),
+                encrypt: false,
+            })
+            .await
+            .map_err(|_| anyhow::anyhow!("RustDesk writer is closed"))
     }
 
     /// Generate nonce from sequence number (RustDesk format)
@@ -426,22 +501,18 @@ impl Connection {
 
     /// Send encrypted framed message if encryption is enabled
     /// RustDesk uses sequence-based nonce, NOT nonce prefix in message
-    async fn send_encrypted_arc(
-        &mut self,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+    async fn send_encrypted(
+        &self,
+        writer: &mpsc::Sender<WriterCommand>,
         data: &[u8],
     ) -> anyhow::Result<()> {
-        if let Some(ref key) = self.session_key {
-            // Increment encryption sequence number
-            self.enc_seqnum += 1;
-            let nonce = Self::get_nonce(self.enc_seqnum);
-            // Encrypt the message - RustDesk only sends ciphertext, no nonce prefix
-            let ciphertext = secretbox::seal(data, &nonce, key);
-            self.send_framed_arc(writer, &ciphertext).await
-        } else {
-            // No encryption, send plain
-            self.send_framed_arc(writer, data).await
-        }
+        writer
+            .send(WriterCommand::Send {
+                data: Bytes::copy_from_slice(data),
+                encrypt: self.session_key.is_some(),
+            })
+            .await
+            .map_err(|_| anyhow::anyhow!("RustDesk writer is closed"))
     }
 
     /// Handle incoming message with Arc writer
@@ -449,7 +520,7 @@ impl Connection {
     async fn handle_message_arc(
         &mut self,
         data: &[u8],
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
         video_tx: &mpsc::Sender<Bytes>,
         video_streaming: &mut bool,
         audio_tx: &mpsc::Sender<Bytes>,
@@ -502,8 +573,6 @@ impl Connection {
 
                 // Handle login and start video/audio streaming if successful
                 if self.handle_login_request_arc(&lr, writer).await? {
-                    // Store video_tx for potential codec switching
-                    self.video_frame_tx = Some(video_tx.clone());
                     // Start video streaming
                     if !*video_streaming {
                         self.start_video_streaming(video_tx.clone());
@@ -573,7 +642,7 @@ impl Connection {
     async fn handle_login_request_arc(
         &mut self,
         lr: &LoginRequest,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
     ) -> anyhow::Result<bool> {
         info!(
             "Login request from {} ({}), password_len={}",
@@ -595,19 +664,23 @@ impl Connection {
                 let response_bytes = error_response
                     .write_to_bytes()
                     .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-                self.send_encrypted_arc(writer, &response_bytes).await?;
+                self.send_encrypted(writer, &response_bytes).await?;
                 // Don't close connection - wait for retry with password
                 return Ok(false);
             }
 
             // Verify the password
             if !self.verify_password(&lr.password) {
+                self.password_attempts = self.password_attempts.saturating_add(1);
                 warn!("Wrong password from {}", lr.my_id);
                 let error_response = self.create_login_error_response("Wrong Password");
                 let response_bytes = error_response
                     .write_to_bytes()
                     .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-                self.send_encrypted_arc(writer, &response_bytes).await?;
+                self.send_encrypted(writer, &response_bytes).await?;
+                if self.password_attempts >= MAX_PASSWORD_ATTEMPTS {
+                    anyhow::bail!("Too many failed RustDesk password attempts");
+                }
                 // Don't close connection - wait for retry with correct password
                 return Ok(false);
             }
@@ -615,11 +688,12 @@ impl Connection {
 
         // Password valid or no password required
         info!("Login successful for {}", lr.my_id);
+        self.password_attempts = 0;
         *self.state.write() = ConnectionState::Active;
 
         // Select the best available video codec
         // Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding)
-        let negotiated = self.negotiate_video_codec();
+        let negotiated = self.negotiate_video_codec().await;
         self.negotiated_codec = Some(negotiated);
         info!("Negotiated video codec: {:?}", negotiated);
 
@@ -627,41 +701,50 @@ impl Connection {
         let response_bytes = response
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-        self.send_encrypted_arc(writer, &response_bytes).await?;
+        self.send_encrypted(writer, &response_bytes).await?;
         Ok(true)
     }
 
-    /// Negotiate video codec - select the best available encoder
-    /// Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding on embedded devices)
-    fn negotiate_video_codec(&self) -> VideoEncoderType {
+    /// Negotiate video codec from the server-configured RustDesk codec.
+    async fn negotiate_video_codec(&self) -> VideoEncoderType {
         let registry = EncoderRegistry::global();
+        let constraints = self.current_codec_constraints().await;
+        let configured = self.configured_codec;
 
-        // Check availability in priority order
-        // H264 is preferred because it has the best hardware encoder support (RKMPP, VAAPI, etc.)
-        // and most RustDesk clients support H264 hardware decoding
-        if registry.is_format_available(VideoEncoderType::H264, false) {
-            return VideoEncoderType::H264;
-        }
-        if registry.is_format_available(VideoEncoderType::H265, false) {
-            return VideoEncoderType::H265;
-        }
-        if registry.is_format_available(VideoEncoderType::VP8, false) {
-            return VideoEncoderType::VP8;
-        }
-        if registry.is_format_available(VideoEncoderType::VP9, false) {
-            return VideoEncoderType::VP9;
+        if !constraints.is_webrtc_codec_allowed(encoder_codec_to_video_codec(configured)) {
+            warn!(
+                "Configured RustDesk codec {} is blocked by constraints: {}",
+                encoder_codec_to_id(configured),
+                constraints.reason
+            );
+            return configured;
         }
 
-        // Fallback to H264 (should be available via hardware or software encoder)
-        warn!("No video encoder available, defaulting to H264");
-        VideoEncoderType::H264
+        if !registry.is_codec_available(configured) {
+            warn!(
+                "Configured RustDesk codec {} is not reported available; attempting to use it anyway",
+                encoder_codec_to_id(configured)
+            );
+        }
+
+        configured
+    }
+
+    async fn current_codec_constraints(
+        &self,
+    ) -> crate::video::codec_constraints::StreamCodecConstraints {
+        if let Some(ref video_manager) = self.video_manager {
+            video_manager.codec_constraints().await
+        } else {
+            crate::video::codec_constraints::StreamCodecConstraints::unrestricted()
+        }
     }
 
     /// Handle misc message with Arc writer
     async fn handle_misc_arc(
         &mut self,
         misc: &Misc,
-        _writer: &Arc<Mutex<OwnedWriteHalf>>,
+        _writer: &mpsc::Sender<WriterCommand>,
     ) -> anyhow::Result<()> {
         match &misc.union {
             Some(misc::Union::SwitchDisplay(sd)) => {
@@ -720,43 +803,10 @@ impl Connection {
             }
         }
 
-        // Check if client sent supported_decoding with a codec preference
-        if let Some(ref supported_decoding) = opt.supported_decoding.as_ref() {
+        // Codec switching is locked to the server-configured RustDesk codec.
+        if let Some(supported_decoding) = opt.supported_decoding.as_ref() {
             let prefer = supported_decoding.prefer.value();
             debug!("Client codec preference: prefer={}", prefer);
-
-            // Map RustDesk PreferCodec enum to our VideoEncoderType
-            // From proto: Auto=0, VP9=1, H264=2, H265=3, VP8=4, AV1=5
-            let requested_codec = match prefer {
-                1 => Some(VideoEncoderType::VP9),
-                2 => Some(VideoEncoderType::H264),
-                3 => Some(VideoEncoderType::H265),
-                4 => Some(VideoEncoderType::VP8),
-                // Auto(0) or AV1(5) or unknown: use current or negotiate
-                _ => None,
-            };
-
-            if let Some(new_codec) = requested_codec {
-                // Check if this codec is different from current and available
-                if self.negotiated_codec != Some(new_codec) {
-                    let registry = EncoderRegistry::global();
-                    if registry.is_format_available(new_codec, false) {
-                        info!(
-                            "Client requested codec switch: {:?} -> {:?}",
-                            self.negotiated_codec, new_codec
-                        );
-                        // Switch codec
-                        if let Err(e) = self.switch_video_codec(new_codec).await {
-                            warn!("Failed to switch video codec: {}", e);
-                        }
-                    } else {
-                        warn!(
-                            "Client requested codec {:?} but it's not available",
-                            new_codec
-                        );
-                    }
-                }
-            }
         }
 
         // Log custom_image_quality (accept but don't process)
@@ -768,31 +818,6 @@ impl Connection {
         }
         if opt.custom_fps > 0 {
             debug!("Client requested FPS: {}", opt.custom_fps);
-        }
-
-        Ok(())
-    }
-
-    /// Switch video codec dynamically
-    /// Stops current video task, changes codec, and restarts
-    async fn switch_video_codec(&mut self, new_codec: VideoEncoderType) -> anyhow::Result<()> {
-        // Stop current video streaming task
-        if let Some(task) = self.video_task.take() {
-            info!("Stopping video task for codec switch");
-            task.abort();
-            // Wait a bit for cleanup
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        }
-
-        // Update negotiated codec
-        self.negotiated_codec = Some(new_codec);
-
-        // Restart video streaming with new codec if we have a video_tx
-        if let Some(ref video_tx) = self.video_frame_tx {
-            info!("Restarting video streaming with codec {:?}", new_codec);
-            self.start_video_streaming(video_tx.clone());
-        } else {
-            warn!("No video_tx available, cannot restart video streaming");
         }
 
         Ok(())
@@ -888,7 +913,11 @@ impl Connection {
 
         // Sign the IdPk bytes with Ed25519
         // RustDesk's sign::sign() prepends the 64-byte signature to the message
-        let signed_id_pk = self.signing_keypair.sign(&id_pk_bytes);
+        let signed_id_pk = self
+            .signing_keypair
+            .as_ref()
+            .expect("secure RustDesk connections require a signing keypair")
+            .sign(&id_pk_bytes);
 
         let mut signed_id = SignedId::new();
         signed_id.id = signed_id_pk.into();
@@ -903,7 +932,7 @@ impl Connection {
     async fn handle_peer_public_key(
         &mut self,
         pk: &PublicKey,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
     ) -> anyhow::Result<()> {
         // RustDesk's PublicKey message has two parts:
         // - asymmetric_value: The peer's temporary Curve25519 public key (32 bytes)
@@ -926,6 +955,10 @@ impl Connection {
             ) {
                 Ok(session_key) => {
                     info!("Session key negotiated successfully");
+                    writer
+                        .send(WriterCommand::SetSessionKey(session_key.clone()))
+                        .await
+                        .map_err(|_| anyhow::anyhow!("RustDesk writer is closed"))?;
                     self.session_key = Some(session_key);
                     self.encryption_enabled = true;
                 }
@@ -963,7 +996,7 @@ impl Connection {
             "Sending Hash message for password authentication (encrypted={})",
             self.encryption_enabled
         );
-        self.send_encrypted_arc(writer, &hash_bytes).await?;
+        self.send_encrypted(writer, &hash_bytes).await?;
 
         Ok(())
     }
@@ -976,7 +1009,7 @@ impl Connection {
     async fn handle_signed_id(
         &mut self,
         si: &SignedId,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
     ) -> anyhow::Result<()> {
         // The SignedId contains a signed IdPk message
         // Try to parse the IdPk from the signed data
@@ -1018,7 +1051,7 @@ impl Connection {
         let signed_id_bytes = signed_id_msg
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-        self.send_framed_arc(writer, &signed_id_bytes).await?;
+        self.send_framed(writer, &signed_id_bytes).await?;
 
         Ok(())
     }
@@ -1026,7 +1059,7 @@ impl Connection {
     /// Verify password
     fn verify_password(&self, provided: &[u8]) -> bool {
         // RustDesk password verification:
-        // We send Hash { salt: device_id, challenge: "" } to client
+        // We send a stable salt and a fresh per-connection challenge to the client.
         // The client calculates: SHA256(SHA256(password + salt) + challenge)
         // See create_hash_message() for the salt and challenge we use
         //
@@ -1039,19 +1072,27 @@ impl Connection {
             return false;
         }
 
-        // The client calculates: SHA256(SHA256(password + salt) + challenge)
-        // where salt is our device_id and challenge is empty
-        let expected_hash = crypto::hash_password_double(&self.password, &self.device_id, "");
+        let expected_hash = crypto::hash_password_double(
+            &self.password,
+            &self.password_salt,
+            &self.password_challenge,
+        );
 
         // Try comparison with double hash
-        if provided == expected_hash.as_slice() {
+        if provided.len() == expected_hash.len()
+            && sodiumoxide::utils::memcmp(provided, expected_hash.as_slice())
+        {
             debug!("Password verified with double hash");
             return true;
         }
 
-        // Also try single hash for compatibility
-        let expected_hash_single = crypto::hash_password(&self.password, &self.device_id);
-        if provided == expected_hash_single.as_slice() {
+        // Keep the legacy single-hash fallback only inside the encrypted ID-service path.
+        // It has no per-connection challenge and must not be accepted on direct IP access.
+        let expected_hash_single = crypto::hash_password(&self.password, &self.password_salt);
+        if self.mode == ConnectionMode::Secure
+            && provided.len() == expected_hash_single.len()
+            && sodiumoxide::utils::memcmp(provided, expected_hash_single.as_slice())
+        {
             debug!("Password verified with single hash");
             return true;
         }
@@ -1068,16 +1109,22 @@ impl Connection {
     }
 
     /// Create login response with dynamically detected encoder capabilities
-    async fn create_login_response(&self, success: bool) -> HbbMessage {
+    async fn create_login_response(&mut self, success: bool) -> HbbMessage {
         if success {
             // Dynamically detect available encoders
             let registry = EncoderRegistry::global();
+            let constraints = self.current_codec_constraints().await;
 
             // Check which encoders are available (include software fallback)
-            let h264_available = registry.is_format_available(VideoEncoderType::H264, false);
-            let h265_available = registry.is_format_available(VideoEncoderType::H265, false);
-            let vp8_available = registry.is_format_available(VideoEncoderType::VP8, false);
-            let vp9_available = registry.is_format_available(VideoEncoderType::VP9, false);
+            let configured = self.configured_codec;
+            let h264_available = configured == VideoEncoderType::H264
+                && constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H264)
+                && registry.is_codec_available(VideoEncoderType::H264);
+            let h265_available = configured == VideoEncoderType::H265
+                && constraints.is_webrtc_codec_allowed(crate::video::codec::VideoCodecType::H265)
+                && registry.is_codec_available(VideoEncoderType::H265);
+            let vp8_available = false;
+            let vp9_available = false;
 
             info!(
                 "Server encoding capabilities: H264={}, H265={}, VP8={}, VP9={}",
@@ -1093,6 +1140,10 @@ impl Connection {
                     display_height = height;
                 }
             }
+            // Use the same geometry for both the advertised display and HID
+            // absolute-coordinate conversion.
+            self.screen_width = display_width.max(1);
+            self.screen_height = display_height.max(1);
 
             let mut display_info = DisplayInfo::new();
             display_info.x = 0;
@@ -1112,12 +1163,12 @@ impl Connection {
 
             let mut peer_info = PeerInfo::new();
             peer_info.username = "one-kvm".to_string();
-            peer_info.hostname = get_hostname();
-            peer_info.platform = "Linux".to_string();
+            peer_info.hostname = hostname_from_etc();
+            peer_info.platform = RUSTDESK_COMPATIBILITY.platform.name().to_string();
             peer_info.displays.push(display_info);
             peer_info.current_display = 0;
             peer_info.sas_enabled = false;
-            peer_info.version = env!("CARGO_PKG_VERSION").to_string();
+            peer_info.version = RUSTDESK_COMPATIBILITY.version.to_string();
             peer_info.encoding = protobuf::MessageField::some(encoding);
 
             let mut login_response = LoginResponse::new();
@@ -1156,11 +1207,9 @@ impl Connection {
     /// Create Hash message for password authentication
     /// The client will hash the password with the salt and send it back in LoginRequest
     fn create_hash_message(&self) -> HbbMessage {
-        // Use device_id as salt for simplicity (RustDesk uses Config::get_salt())
-        // The challenge field is not used for our password verification
         let mut hash = Hash::new();
-        hash.salt = self.device_id.clone();
-        hash.challenge = String::new();
+        hash.salt = self.password_salt.clone();
+        hash.challenge = self.password_challenge.clone();
 
         let mut msg = HbbMessage::new();
         msg.union = Some(message::Union::Hash(hash));
@@ -1177,7 +1226,7 @@ impl Connection {
     async fn handle_test_delay(
         &mut self,
         td: &TestDelay,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        writer: &mpsc::Sender<WriterCommand>,
     ) -> anyhow::Result<()> {
         if td.from_client {
             // Client initiated the delay test, respond with the same time
@@ -1193,7 +1242,7 @@ impl Connection {
             let data = response
                 .write_to_bytes()
                 .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-            self.send_encrypted_arc(writer, &data).await?;
+            self.send_encrypted(writer, &data).await?;
 
             debug!(
                 "TestDelay response sent: time={}, last_delay={}ms",
@@ -1220,7 +1269,10 @@ impl Connection {
     /// The client will echo this back, allowing us to calculate RTT.
     /// The measured delay is then included in future TestDelay messages
     /// for the client to display.
-    async fn send_test_delay(&mut self, writer: &Arc<Mutex<OwnedWriteHalf>>) -> anyhow::Result<()> {
+    async fn send_test_delay(
+        &mut self,
+        writer: &mpsc::Sender<WriterCommand>,
+    ) -> anyhow::Result<()> {
         // Get current time in milliseconds since epoch
         let time_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1239,7 +1291,7 @@ impl Connection {
         let data = msg
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-        self.send_encrypted_arc(writer, &data).await?;
+        self.send_encrypted(writer, &data).await?;
 
         // Record when we sent this, so we can calculate RTT when client echoes back
         self.last_test_delay_sent = Some(Instant::now());
@@ -1253,9 +1305,15 @@ impl Connection {
 
     /// Handle key event
     async fn handle_key_event(&mut self, ke: &KeyEvent) -> anyhow::Result<()> {
+        let (union_type, raw_value) = key_event_union_details(ke);
         debug!(
-            "Key event: down={}, press={}, chr={:?}, modifiers={:?}",
-            ke.down, ke.press, ke.union, ke.modifiers
+            mode = ke.mode.value(),
+            union = union_type,
+            raw = %raw_value,
+            down = ke.down,
+            press = ke.press,
+            modifiers = ?ke.modifiers,
+            "RustDesk key event"
         );
 
         // Check for CapsLock state change in modifiers
@@ -1275,15 +1333,13 @@ impl Connection {
                 );
                 let caps_down = KeyboardEvent {
                     event_type: KeyEventType::Down,
-                    key: 0x39, // USB HID CapsLock
+                    key: CanonicalKey::CapsLock,
                     modifiers: KeyboardModifiers::default(),
-                    is_usb_hid: true,
                 };
                 let caps_up = KeyboardEvent {
                     event_type: KeyEventType::Up,
-                    key: 0x39,
+                    key: CanonicalKey::CapsLock,
                     modifiers: KeyboardModifiers::default(),
-                    is_usb_hid: true,
                 };
                 if let Err(e) = hid.send_keyboard(caps_down).await {
                     warn!("Failed to send CapsLock down: {}", e);
@@ -1294,24 +1350,38 @@ impl Connection {
             }
         }
 
-        // Convert RustDesk key event to One-KVM key event
-        if let Some(kb_event) = convert_key_event(ke) {
-            debug!(
-                "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
-                kb_event.key,
-                kb_event.event_type,
-                kb_event.modifiers.to_hid_byte()
-            );
-            // Send to HID controller if available
+        // Convert RustDesk key event to One-KVM key events
+        let kb_events = convert_key_events_in_code_space(
+            ke,
+            RUSTDESK_COMPATIBILITY.platform.keyboard_code_space(),
+        );
+        if !kb_events.is_empty() {
             if let Some(ref hid) = self.hid {
-                if let Err(e) = hid.send_keyboard(kb_event).await {
-                    warn!("Failed to send keyboard event: {}", e);
+                for kb_event in kb_events {
+                    debug!(
+                        mode = ke.mode.value(),
+                        union = union_type,
+                        raw = %raw_value,
+                        hid = format_args!("0x{:02X}", kb_event.key.to_hid_usage()),
+                        event_type = ?kb_event.event_type,
+                        modifiers = format_args!("0x{:02X}", kb_event.modifiers.to_hid_byte()),
+                        "Converted RustDesk key event"
+                    );
+
+                    if let Err(e) = hid.send_keyboard(kb_event).await {
+                        warn!("Failed to send keyboard event: {}", e);
+                    }
                 }
             } else {
                 debug!("HID controller not available, skipping key event");
             }
         } else {
-            warn!("Could not convert key event to HID: chr={:?}", ke.union);
+            debug!(
+                mode = ke.mode.value(),
+                union = union_type,
+                raw = %raw_value,
+                "RustDesk key event produced no HID event"
+            );
         }
 
         Ok(())
@@ -1324,44 +1394,157 @@ impl Connection {
     async fn handle_mouse_event(&mut self, me: &MouseEvent) -> anyhow::Result<()> {
         // Parse RustDesk mask format: (button << 3) | event_type
         let event_type = me.mask & 0x07;
+        let is_relative_move = event_type == mouse_type::MOVE_RELATIVE;
+
+        if is_relative_move {
+            self.relative_mouse_active = true;
+        } else if event_type == mouse_type::MOVE {
+            self.relative_mouse_active = false;
+        }
 
         // Check if this is a pure move event (no button/scroll)
-        let is_pure_move = event_type == mouse_type::MOVE;
+        let is_pure_move = event_type == mouse_type::MOVE || is_relative_move;
 
-        // For pure move events, apply throttling
-        if is_pure_move && !self.input_throttler.should_send_mouse_move() {
-            // Skip this move event to prevent HID EAGAIN
+        if is_pure_move {
+            self.queue_mouse_move(me);
+            if self.input_throttler.should_send_mouse_move() {
+                self.flush_pending_mouse_move().await;
+            }
             return Ok(());
         }
 
+        // Preserve input ordering when a button/scroll event follows a move
+        // that was waiting for the next HID poll interval.
+        self.flush_pending_mouse_move().await;
+
         debug!("Mouse event: x={}, y={}, mask={}", me.x, me.y, me.mask);
 
-        // Convert RustDesk mouse event to One-KVM mouse events
-        let mouse_events = convert_mouse_event(me, self.screen_width, self.screen_height);
-
-        // Send to HID controller if available
-        if let Some(ref hid) = self.hid {
-            for event in mouse_events {
-                if let Err(e) = hid.send_mouse(event).await {
-                    warn!("Failed to send mouse event: {}", e);
-                }
-            }
-            // Mark that we sent a mouse event (for non-move events)
-            if !is_pure_move {
-                self.input_throttler.mark_mouse_sent();
-            }
-        } else {
-            debug!("HID controller not available, skipping mouse event");
+        let attempted = self.send_mouse_event_to_hid(me).await;
+        // Fractional trackpad packets that emit no HID report must not delay moves.
+        // Keep the existing throttling behavior for other event types.
+        if self.hid.is_some() && (event_type != mouse_type::TRACKPAD || attempted) {
+            self.input_throttler.mark_mouse_sent();
         }
 
         Ok(())
     }
 
+    fn queue_mouse_move(&mut self, event: &MouseEvent) {
+        let mut next = event.clone();
+        if event.mask & 0x07 == mouse_type::MOVE_RELATIVE {
+            let previous = self
+                .pending_mouse_move
+                .as_ref()
+                .filter(|pending| pending.mask & 0x07 == mouse_type::MOVE_RELATIVE);
+            let (x, y) = previous
+                .map(|pending| (pending.x, pending.y))
+                .unwrap_or_default();
+            next.x = (i64::from(x) + i64::from(event.x))
+                .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA)
+                as i32;
+            next.y = (i64::from(y) + i64::from(event.y))
+                .clamp(-MAX_PENDING_RELATIVE_DELTA, MAX_PENDING_RELATIVE_DELTA)
+                as i32;
+        }
+        // Absolute coordinates replace the previous sample. Changing modes also
+        // replaces it: absolute coordinates and relative deltas cannot be added.
+        self.pending_mouse_move = Some(next);
+    }
+
+    async fn flush_pending_mouse_move(&mut self) {
+        if let Some(pending) = self.pending_mouse_move.take() {
+            if self.send_mouse_event_to_hid(&pending).await {
+                self.input_throttler.mark_mouse_sent();
+            }
+        }
+    }
+
+    /// Returns whether at least one HID report was attempted, including failed sends.
+    async fn send_mouse_event_to_hid(&mut self, event: &MouseEvent) -> bool {
+        let mouse_events =
+            self.mouse_event_adapter
+                .convert(event, self.screen_width, self.screen_height);
+        let has_events = !mouse_events.is_empty();
+        if let Some(ref hid) = self.hid {
+            for mouse_event in mouse_events {
+                if let Err(error) = hid.send_mouse(mouse_event).await {
+                    warn!("Failed to send mouse event: {}", error);
+                }
+            }
+            has_events
+        } else {
+            debug!("HID controller not available, skipping mouse event");
+            false
+        }
+    }
+
     /// Close the connection
     pub fn close(&self) {
-        let _ = self.shutdown_tx.send(());
+        self.shutdown_tx.send_replace(true);
         *self.state.write() = ConnectionState::Closed;
     }
+}
+
+async fn run_connection_writer(
+    mut writer: OwnedWriteHalf,
+    mut control_rx: mpsc::Receiver<WriterCommand>,
+    mut video_rx: mpsc::Receiver<Bytes>,
+    mut audio_rx: mpsc::Receiver<Bytes>,
+) -> anyhow::Result<()> {
+    let mut session_key: Option<secretbox::Key> = None;
+    let mut sequence = 0u64;
+
+    loop {
+        let (data, encrypt) = tokio::select! {
+            biased;
+
+            command = control_rx.recv() => {
+                match command {
+                    Some(WriterCommand::SetSessionKey(key)) => {
+                        session_key = Some(key);
+                        continue;
+                    }
+                    Some(WriterCommand::Send { data, encrypt }) => (data, encrypt),
+                    Some(WriterCommand::Shutdown) | None => break,
+                }
+            }
+            frame = video_rx.recv() => {
+                match frame {
+                    Some(data) => (data, session_key.is_some()),
+                    None => continue,
+                }
+            }
+            frame = audio_rx.recv() => {
+                match frame {
+                    Some(data) => (data, session_key.is_some()),
+                    None => continue,
+                }
+            }
+        };
+
+        let encrypted;
+        let payload = if encrypt {
+            if let Some(key) = session_key.as_ref() {
+                sequence = sequence.wrapping_add(1);
+                let nonce = Connection::get_nonce(sequence);
+                encrypted = secretbox::seal(&data, &nonce, key);
+                encrypted.as_slice()
+            } else {
+                data.as_ref()
+            }
+        } else {
+            data.as_ref()
+        };
+
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            write_frame_vectored(&mut writer, payload),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("RustDesk socket write timed out"))??;
+    }
+
+    Ok(())
 }
 
 /// Lightweight connection info for tracking active connections
@@ -1370,6 +1553,19 @@ pub struct ConnectionInfo {
     pub id: u32,
     /// Connection state (shared with Connection)
     pub state: Arc<RwLock<ConnectionState>>,
+    shutdown_tx: watch::Sender<bool>,
+    abort_handle: Option<tokio::task::AbortHandle>,
+}
+
+struct ConnectionCleanup {
+    id: u32,
+    connections: Arc<RwLock<HashMap<u32, ConnectionInfo>>>,
+}
+
+impl Drop for ConnectionCleanup {
+    fn drop(&mut self) {
+        self.connections.write().remove(&self.id);
+    }
 }
 
 impl ConnectionInfo {
@@ -1382,7 +1578,7 @@ impl ConnectionInfo {
 /// Connection manager
 pub struct ConnectionManager {
     /// Active connection info
-    connections: Arc<RwLock<Vec<Arc<RwLock<ConnectionInfo>>>>>,
+    connections: Arc<RwLock<HashMap<u32, ConnectionInfo>>>,
     /// Next connection ID
     next_id: Arc<RwLock<u32>>,
     /// Configuration
@@ -1403,7 +1599,7 @@ impl ConnectionManager {
     /// Create a new connection manager
     pub fn new(config: RustDeskConfig) -> Self {
         Self {
-            connections: Arc::new(RwLock::new(Vec::new())),
+            connections: Arc::new(RwLock::new(HashMap::new())),
             next_id: Arc::new(RwLock::new(1)),
             config: Arc::new(RwLock::new(config)),
             keypair: Arc::new(RwLock::new(None)),
@@ -1427,6 +1623,10 @@ impl ConnectionManager {
     /// Set video stream manager
     pub fn set_video_manager(&self, video_manager: Arc<VideoStreamManager>) {
         *self.video_manager.write() = Some(video_manager);
+    }
+
+    pub fn update_config(&self, config: RustDeskConfig) {
+        *self.config.write() = config;
     }
 
     /// Set keypair
@@ -1464,6 +1664,42 @@ impl ConnectionManager {
         stream: TcpStream,
         peer_addr: SocketAddr,
     ) -> anyhow::Result<u32> {
+        self.accept_connection_with_mode(stream, peer_addr, ConnectionMode::Secure)
+            .await
+    }
+
+    pub async fn accept_direct_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+    ) -> anyhow::Result<u32> {
+        self.accept_connection_with_mode(stream, peer_addr, ConnectionMode::DirectIp)
+            .await
+    }
+
+    pub async fn accept_listener_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+    ) -> anyhow::Result<u32> {
+        let mode = match self.config.read().mode {
+            super::config::RustDeskMode::Id => ConnectionMode::Secure,
+            super::config::RustDeskMode::DirectIp => ConnectionMode::DirectIp,
+        };
+        self.accept_connection_with_mode(stream, peer_addr, mode)
+            .await
+    }
+
+    async fn accept_connection_with_mode(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+        mode: ConnectionMode,
+    ) -> anyhow::Result<u32> {
+        if self.connection_count() >= MAX_CONNECTIONS {
+            anyhow::bail!("RustDesk connection limit ({MAX_CONNECTIONS}) reached");
+        }
+
         let id = {
             let mut next = self.next_id.write();
             let id = *next;
@@ -1472,25 +1708,53 @@ impl ConnectionManager {
         };
 
         let config = self.config.read().clone();
-        let signing_keypair = self.ensure_signing_keypair();
+        let signing_keypair = match mode {
+            ConnectionMode::Secure => Some(self.ensure_signing_keypair()),
+            ConnectionMode::DirectIp => None,
+        };
         let hid = self.hid.read().clone();
         let audio = self.audio.read().clone();
         let video_manager = self.video_manager.read().clone();
-        let (mut conn, _rx) =
-            Connection::new(id, &config, signing_keypair, hid, audio, video_manager);
+        let mut conn = Connection::new(
+            id,
+            &config,
+            mode,
+            signing_keypair,
+            hid,
+            audio,
+            video_manager,
+        );
 
         // Track connection state for external access
         let state = conn.state.clone();
-        self.connections
-            .write()
-            .push(Arc::new(RwLock::new(ConnectionInfo { id, state })));
+        let shutdown_tx = conn.shutdown_sender();
+        {
+            let mut connections = self.connections.write();
+            if connections.len() >= MAX_CONNECTIONS {
+                anyhow::bail!("RustDesk connection limit ({MAX_CONNECTIONS}) reached");
+            }
+            connections.insert(
+                id,
+                ConnectionInfo {
+                    id,
+                    state,
+                    shutdown_tx,
+                    abort_handle: None,
+                },
+            );
+        }
 
         // Spawn connection handler - Connection is moved, not locked
-        tokio::spawn(async move {
+        let connections = self.connections.clone();
+        let task = tokio::spawn(async move {
+            let _cleanup = ConnectionCleanup { id, connections };
             if let Err(e) = conn.handle_tcp(stream, peer_addr).await {
                 error!("Connection {} error: {}", id, e);
             }
         });
+        if let Some(connection) = self.connections.write().get_mut(&id) {
+            connection.abort_handle = Some(task.abort_handle());
+        }
 
         Ok(id)
     }
@@ -1500,11 +1764,47 @@ impl ConnectionManager {
         self.connections.read().len()
     }
 
-    /// Mark all connections as closed (actual connection tasks will detect this)
-    pub fn close_all(&self) {
-        let connections = self.connections.read();
-        for conn_info in connections.iter() {
-            *conn_info.read().state.write() = ConnectionState::Closed;
+    /// Cancel all sessions and wait briefly for their TCP tasks to exit.
+    pub async fn close_all(&self) {
+        let senders = self
+            .connections
+            .read()
+            .values()
+            .map(|connection| connection.shutdown_tx.clone())
+            .collect::<Vec<_>>();
+        for sender in senders {
+            sender.send_replace(true);
+        }
+
+        let wait_for_empty = async {
+            while !self.connections.read().is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        };
+        if tokio::time::timeout(CONNECTION_SHUTDOWN_TIMEOUT, wait_for_empty)
+            .await
+            .is_err()
+        {
+            warn!(
+                "Timed out waiting for {} RustDesk connection(s) to close",
+                self.connection_count()
+            );
+            let abort_handles = self
+                .connections
+                .read()
+                .values()
+                .filter_map(|connection| connection.abort_handle.clone())
+                .collect::<Vec<_>>();
+            for handle in abort_handles {
+                handle.abort();
+            }
+
+            let abort_wait = async {
+                while !self.connections.read().is_empty() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            };
+            let _ = tokio::time::timeout(Duration::from_secs(1), abort_wait).await;
         }
     }
 }
@@ -1522,10 +1822,10 @@ async fn run_video_streaming(
     video_manager: Arc<VideoStreamManager>,
     video_tx: mpsc::Sender<Bytes>,
     state: Arc<RwLock<ConnectionState>>,
-    shutdown_tx: broadcast::Sender<()>,
+    shutdown_tx: watch::Sender<bool>,
     negotiated_codec: VideoEncoderType,
 ) -> anyhow::Result<()> {
-    use crate::video::encoder::VideoCodecType;
+    use crate::video::codec::VideoCodecType;
 
     // Convert VideoEncoderType to VideoCodecType for the pipeline
     let webrtc_codec = match negotiated_codec {
@@ -1555,6 +1855,9 @@ async fn run_video_streaming(
     let mut video_adapter = VideoFrameAdapter::new(codec);
 
     let mut shutdown_rx = shutdown_tx.subscribe();
+    if *shutdown_rx.borrow() {
+        return Ok(());
+    }
     let mut encoded_count: u64 = 0;
     let mut last_log_time = Instant::now();
     let mut waiting_for_keyframe = true;
@@ -1600,7 +1903,10 @@ async fn run_video_streaming(
             );
         }
         if let Err(e) = video_manager.request_keyframe().await {
-            debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+            debug!(
+                "Failed to request keyframe for connection {}: {}",
+                conn_id, e
+            );
         }
 
         // Inner loop: receives frames from current subscription
@@ -1614,7 +1920,7 @@ async fn run_video_streaming(
             tokio::select! {
                 biased;
 
-                _ = shutdown_rx.recv() => {
+                _ = shutdown_rx.changed() => {
                     debug!("Shutdown signal received, stopping video for connection {}", conn_id);
                     break 'subscribe_loop;
                 }
@@ -1661,7 +1967,9 @@ async fn run_video_streaming(
                         frame.pts_ms as u64,
                     );
 
-                    // Send to connection (backpressure instead of dropping)
+                    // A small bounded queue absorbs transient writer jitter.
+                    // Backpressure here cannot block input handling because the
+                    // TCP reader and writer run independently.
                     if video_tx.send(msg_bytes).await.is_err() {
                         debug!("Video channel closed for connection {}", conn_id);
                         break 'subscribe_loop;
@@ -1700,12 +2008,15 @@ async fn run_audio_streaming(
     audio_controller: Arc<AudioController>,
     audio_tx: mpsc::Sender<Bytes>,
     state: Arc<RwLock<ConnectionState>>,
-    shutdown_tx: broadcast::Sender<()>,
+    shutdown_tx: watch::Sender<bool>,
 ) -> anyhow::Result<()> {
     // Audio format: 48kHz stereo Opus
     let mut audio_adapter = AudioFrameAdapter::new(48000, 2);
 
     let mut shutdown_rx = shutdown_tx.subscribe();
+    if *shutdown_rx.borrow() {
+        return Ok(());
+    }
     let mut frame_count: u64 = 0;
     let mut last_log_time = Instant::now();
 
@@ -1720,7 +2031,7 @@ async fn run_audio_streaming(
         }
 
         // Subscribe to the audio Opus stream
-        let mut opus_rx = match audio_controller.subscribe_opus_async().await {
+        let mut opus_rx = match audio_controller.subscribe_opus().await {
             Some(rx) => rx,
             None => {
                 // Audio not available, wait and retry
@@ -1760,32 +2071,36 @@ async fn run_audio_streaming(
             tokio::select! {
                 biased;
 
-                _ = shutdown_rx.recv() => {
+                _ = shutdown_rx.changed() => {
                     debug!("Shutdown signal received, stopping audio for connection {}", conn_id);
                     break 'subscribe_loop;
                 }
 
-                result = opus_rx.changed() => {
-                    if result.is_err() {
-                        // Pipeline was restarted
-                        info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
-                        audio_adapter.reset();
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        continue 'subscribe_loop;
-                    }
-
-                    let opus_frame = match opus_rx.borrow().clone() {
+                result = opus_rx.recv() => {
+                    let opus_frame = match result {
                         Some(frame) => frame,
-                        None => continue,
+                        None => {
+                            info!(
+                                "Audio pipeline closed for connection {}, re-subscribing...",
+                                conn_id
+                            );
+                            audio_adapter.reset();
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            continue 'subscribe_loop;
+                        }
                     };
 
                     // Convert OpusFrame to RustDesk AudioFrame message
                     let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
 
-                    // Send to connection (blocks if channel is full, providing backpressure)
-                    if audio_tx.send(msg_bytes).await.is_err() {
-                        debug!("Audio channel closed for connection {}", conn_id);
-                        break 'subscribe_loop;
+                    // Audio is real-time data; dropping an old packet is preferable
+                    // to accumulating seconds of latency.
+                    match audio_tx.try_send(msg_bytes) {
+                        Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => {}
+                        Err(mpsc::error::TrySendError::Closed(_)) => {
+                            debug!("Audio channel closed for connection {}", conn_id);
+                            break 'subscribe_loop;
+                        }
                     }
 
                     frame_count += 1;
@@ -1809,4 +2124,321 @@ async fn run_audio_streaming(
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hid::test_support::RecordingBackend;
+
+    fn mouse_event(kind: i32, x: i32, y: i32) -> MouseEvent {
+        let mut event = MouseEvent::new();
+        event.mask = kind;
+        event.x = x;
+        event.y = y;
+        event
+    }
+
+    #[test]
+    fn pending_mouse_motion_accumulates_relative_and_replaces_absolute() {
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 100, -20));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 80, 30));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (180, 10));
+
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE, 320, 240));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE, 640, 480));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (640, 480));
+
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 12, -8));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (12, -8));
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, i32::MAX, i32::MIN));
+        let pending = connection.pending_mouse_move.as_ref().unwrap();
+        assert_eq!((pending.x, pending.y), (4096, -4096));
+    }
+
+    #[tokio::test]
+    async fn immediate_relative_move_includes_pending_delta_and_clears_it() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.queue_mouse_move(&mouse_event(mouse_type::MOVE_RELATIVE, 30, -10));
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::MOVE_RELATIVE, 20, 5))
+            .await
+            .unwrap();
+        assert!(connection.pending_mouse_move.is_none());
+        backend.wait_for_events(1).await;
+        let events = backend.events.lock();
+        assert_eq!(events.len(), 1);
+        assert_eq!((events[0].x, events[0].y), (50, -5));
+    }
+
+    #[tokio::test]
+    async fn pending_relative_motion_is_delivered_before_mouse_buttons() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.input_throttler.mouse_interval = Duration::from_secs(60);
+        connection.input_throttler.mark_mouse_sent();
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::MOVE_RELATIVE, 300, -260))
+            .await
+            .unwrap();
+        assert!(connection.pending_mouse_move.is_some());
+        for kind in [mouse_type::DOWN, mouse_type::UP] {
+            connection
+                .handle_mouse_event(&mouse_event(
+                    kind | (super::super::hid_adapter::mouse_button::LEFT << 3),
+                    0,
+                    0,
+                ))
+                .await
+                .unwrap();
+        }
+        assert!(connection.pending_mouse_move.is_none());
+        backend.wait_for_events(5).await;
+        let events = backend.events.lock();
+        assert_eq!(events[..3].iter().map(|event| event.x).sum::<i32>(), 300);
+        assert_eq!(events[..3].iter().map(|event| event.y).sum::<i32>(), -260);
+        assert!(events[..3]
+            .iter()
+            .all(|event| event.event_type == crate::hid::MouseEventType::Move));
+        assert_eq!(events[3].event_type, crate::hid::MouseEventType::Down);
+        assert_eq!(events[4].event_type, crate::hid::MouseEventType::Up);
+    }
+
+    #[tokio::test]
+    async fn fractional_trackpad_input_does_not_restart_mouse_throttle() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        let previous = Instant::now() - Duration::from_millis(10);
+        connection.input_throttler.last_mouse_time = previous;
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::TRACKPAD, 0, 60))
+            .await
+            .unwrap();
+        assert_eq!(connection.input_throttler.last_mouse_time, previous);
+        connection
+            .handle_mouse_event(&mouse_event(mouse_type::TRACKPAD, 0, 60))
+            .await
+            .unwrap();
+        assert!(connection.input_throttler.last_mouse_time > previous);
+        backend.wait_for_events(1).await;
+        assert_eq!(backend.events.lock()[0].scroll, 1);
+    }
+
+    #[tokio::test]
+    async fn connection_timer_delivers_final_relative_move_without_more_input() {
+        let backend = RecordingBackend::new();
+        let mut connection = connection(ConnectionMode::DirectIp);
+        connection.hid = Some(crate::hid::test_controller(backend.clone()).await);
+        connection.input_throttler.mouse_interval = Duration::from_secs(60);
+        connection.input_throttler.mark_mouse_sent();
+        let state = connection.state.clone();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let client = tokio::spawn(async move { TcpStream::connect(address).await.unwrap() });
+        let (stream, peer) = listener.accept().await.unwrap();
+        let mut client = client.await.unwrap();
+        let server = tokio::spawn(async move { connection.handle_tcp(stream, peer).await });
+        read_frame_with_limit(&mut client, MAX_UNAUTHENTICATED_PACKET_LENGTH)
+            .await
+            .unwrap();
+        // Authentication is covered separately; exercise the real socket input
+        // loop and flush timer without starting unrelated media pipelines.
+        *state.write() = ConnectionState::Active;
+        let mut message = HbbMessage::new();
+        message.union = Some(message::Union::MouseEvent(mouse_event(
+            mouse_type::MOVE_RELATIVE,
+            10,
+            -5,
+        )));
+        super::super::bytes_codec::write_frame(&mut client, &message.write_to_bytes().unwrap())
+            .await
+            .unwrap();
+        // No subsequent packet or button event is needed to deliver this move.
+        backend.wait_for_events(1).await;
+        let events = backend.events.lock().clone();
+        assert_eq!(events.len(), 1);
+        assert_eq!((events[0].x, events[0].y), (10, -5));
+        drop(client);
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+
+    fn connection(mode: ConnectionMode) -> Connection {
+        crypto::init().expect("crypto should initialize");
+        let config = RustDeskConfig {
+            device_id: "123456789".to_string(),
+            device_password: "fixed-password".to_string(),
+            ..Default::default()
+        };
+        let connection = Connection::new(
+            1,
+            &config,
+            mode,
+            (mode == ConnectionMode::Secure).then(SigningKeyPair::generate),
+            None,
+            None,
+            None,
+        );
+        connection
+    }
+
+    async fn first_server_message(mode: ConnectionMode) -> HbbMessage {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test listener should bind");
+        let address = listener
+            .local_addr()
+            .expect("listener should have an address");
+        let client = tokio::spawn(async move {
+            TcpStream::connect(address)
+                .await
+                .expect("client should connect")
+        });
+        let (server_stream, peer_addr) = listener.accept().await.expect("server should accept");
+        let mut client_stream = client.await.expect("client task should finish");
+        let mut server_connection = connection(mode);
+        let server =
+            tokio::spawn(
+                async move { server_connection.handle_tcp(server_stream, peer_addr).await },
+            );
+
+        let bytes = read_frame_with_limit(&mut client_stream, MAX_UNAUTHENTICATED_PACKET_LENGTH)
+            .await
+            .expect("client should receive the first frame");
+        drop(client_stream);
+        let _ = tokio::time::timeout(Duration::from_secs(1), server).await;
+        decode_message(&bytes).expect("first frame should contain a RustDesk message")
+    }
+
+    #[test]
+    fn direct_ip_password_challenge_is_non_empty_and_verifiable() {
+        let connection = connection(ConnectionMode::DirectIp);
+        let message = connection.create_hash_message();
+        let hash = match message.union {
+            Some(message::Union::Hash(hash)) => hash,
+            _ => panic!("expected Hash message"),
+        };
+
+        assert_eq!(hash.salt, "123456789");
+        assert!(!hash.challenge.is_empty());
+
+        let response = crypto::hash_password_double("fixed-password", &hash.salt, &hash.challenge);
+        assert!(connection.verify_password(&response));
+    }
+
+    #[test]
+    fn direct_ip_rejects_legacy_replayable_single_hash() {
+        let direct = connection(ConnectionMode::DirectIp);
+        let single_hash = crypto::hash_password("fixed-password", "123456789");
+        assert!(!direct.verify_password(&single_hash));
+
+        let secure = connection(ConnectionMode::Secure);
+        assert!(secure.verify_password(&single_hash));
+    }
+
+    #[test]
+    fn password_challenge_changes_for_each_connection() {
+        let first = connection(ConnectionMode::DirectIp);
+        let second = connection(ConnectionMode::DirectIp);
+        assert_ne!(first.password_challenge, second.password_challenge);
+    }
+
+    #[tokio::test]
+    async fn direct_ip_connection_starts_with_password_hash() {
+        let message = first_server_message(ConnectionMode::DirectIp).await;
+        assert!(matches!(message.union, Some(message::Union::Hash(_))));
+    }
+
+    #[tokio::test]
+    async fn secure_connection_starts_with_signed_id() {
+        let message = first_server_message(ConnectionMode::Secure).await;
+        assert!(matches!(message.union, Some(message::Union::SignedId(_))));
+    }
+
+    #[tokio::test]
+    async fn connection_manager_close_all_cancels_and_removes_sessions() {
+        let config = RustDeskConfig {
+            enabled: true,
+            mode: super::super::config::RustDeskMode::DirectIp,
+            ..Default::default()
+        };
+        let manager = ConnectionManager::new(config);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let client = tokio::spawn(async move { TcpStream::connect(address).await.unwrap() });
+        let (server, peer) = listener.accept().await.unwrap();
+        let _client = client.await.unwrap();
+
+        manager
+            .accept_direct_connection(server, peer)
+            .await
+            .unwrap();
+        assert_eq!(manager.connection_count(), 1);
+        manager.close_all().await;
+        assert_eq!(manager.connection_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn connection_manager_enforces_session_limit() {
+        let config = RustDeskConfig {
+            enabled: true,
+            mode: super::super::config::RustDeskMode::DirectIp,
+            ..Default::default()
+        };
+        let manager = ConnectionManager::new(config);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut clients = Vec::new();
+
+        for _ in 0..MAX_CONNECTIONS {
+            let client = tokio::spawn(async move { TcpStream::connect(address).await.unwrap() });
+            let (server, peer) = listener.accept().await.unwrap();
+            clients.push(client.await.unwrap());
+            manager
+                .accept_direct_connection(server, peer)
+                .await
+                .unwrap();
+        }
+        let extra_client = tokio::spawn(async move { TcpStream::connect(address).await.unwrap() });
+        let (extra_server, extra_peer) = listener.accept().await.unwrap();
+        clients.push(extra_client.await.unwrap());
+        assert!(manager
+            .accept_direct_connection(extra_server, extra_peer)
+            .await
+            .is_err());
+
+        manager.close_all().await;
+        assert_eq!(manager.connection_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn password_attempts_are_bounded_per_session() {
+        let mut connection = connection(ConnectionMode::DirectIp);
+        let (writer, _reader) = mpsc::channel(32);
+        let mut login = LoginRequest::new();
+        login.my_id = "attacker".to_string();
+        login.password = vec![0u8; 32].into();
+
+        for _ in 1..MAX_PASSWORD_ATTEMPTS {
+            assert!(!connection
+                .handle_login_request_arc(&login, &writer)
+                .await
+                .unwrap());
+        }
+        assert!(connection
+            .handle_login_request_arc(&login, &writer)
+            .await
+            .is_err());
+    }
 }

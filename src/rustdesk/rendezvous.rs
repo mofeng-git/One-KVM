@@ -1,10 +1,6 @@
-//! RustDesk Rendezvous Mediator
-//!
-//! This module handles communication with the hbbs rendezvous server.
-//! It registers the device ID and public key, handles punch hole requests,
-//! and relay requests.
+//! HBBS UDP registration; punch / relay / intranet callbacks.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -15,6 +11,8 @@ use tokio::sync::broadcast;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
+use crate::utils::bind_udp_socket;
+
 use super::config::RustDeskConfig;
 use super::crypto::{KeyPair, SigningKeyPair};
 use super::protocol::{
@@ -22,24 +20,20 @@ use super::protocol::{
     rendezvous_message, NatType, RendezvousMessage,
 };
 
-/// Registration interval in milliseconds
-const REG_INTERVAL_MS: u64 = 12_000;
+const REG_INTERVAL: Duration = Duration::from_secs(12);
 
-/// Minimum registration timeout
-const MIN_REG_TIMEOUT_MS: u64 = 3_000;
+const MIN_REG_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Maximum registration timeout
-const MAX_REG_TIMEOUT_MS: u64 = 30_000;
+const MAX_REG_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Timer interval for checking registration status
+const OFFLINE_AFTER_TIMEOUTS: u32 = 4;
+
 const TIMER_INTERVAL_MS: u64 = 300;
 
-/// Rendezvous mediator status
 #[derive(Debug, Clone, PartialEq)]
 pub enum RendezvousStatus {
     Disconnected,
     Connecting,
-    Connected,
     Registered,
     Error(String),
 }
@@ -49,51 +43,93 @@ impl std::fmt::Display for RendezvousStatus {
         match self {
             Self::Disconnected => write!(f, "disconnected"),
             Self::Connecting => write!(f, "connecting"),
-            Self::Connected => write!(f, "connected"),
             Self::Registered => write!(f, "registered"),
             Self::Error(e) => write!(f, "error: {}", e),
         }
     }
 }
 
-/// Callback for handling incoming connection requests
-pub type ConnectionCallback = Arc<dyn Fn(ConnectionRequest) + Send + Sync>;
-
-/// Incoming connection request from a RustDesk client
-#[derive(Debug, Clone)]
-pub struct ConnectionRequest {
-    /// Peer socket address (encoded)
-    pub socket_addr: Vec<u8>,
-    /// Relay server to use
-    pub relay_server: String,
-    /// NAT type
-    pub nat_type: NatType,
-    /// Connection UUID
-    pub uuid: String,
-    /// Whether to use secure connection
-    pub secure: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegistrationDecision {
+    Wait,
+    Send,
+    Retry { consecutive_timeouts: u32 },
 }
 
-/// Callback type for relay requests
-/// Parameters: rendezvous_addr, relay_server, uuid, socket_addr (client's mangled address), device_id
+/// Tracks the request/response lifecycle for HBBS registration.
+///
+/// UDP `connect` only selects a peer; it does not prove reachability. Registration
+/// health is therefore derived exclusively from acknowledged registration requests.
+#[derive(Debug)]
+struct RegistrationTracker {
+    last_sent: Option<Instant>,
+    last_response: Option<Instant>,
+    response_timeout: Duration,
+    consecutive_timeouts: u32,
+}
+
+impl RegistrationTracker {
+    fn new() -> Self {
+        Self {
+            last_sent: None,
+            last_response: None,
+            response_timeout: MIN_REG_TIMEOUT,
+            consecutive_timeouts: 0,
+        }
+    }
+
+    fn poll(&mut self, now: Instant) -> RegistrationDecision {
+        if let Some(sent_at) = self.last_sent {
+            if now.saturating_duration_since(sent_at) < self.response_timeout {
+                return RegistrationDecision::Wait;
+            }
+
+            self.consecutive_timeouts = self.consecutive_timeouts.saturating_add(1);
+            self.response_timeout = (self.response_timeout + MIN_REG_TIMEOUT).min(MAX_REG_TIMEOUT);
+            return RegistrationDecision::Retry {
+                consecutive_timeouts: self.consecutive_timeouts,
+            };
+        }
+
+        let registration_expired = self
+            .last_response
+            .map(|response_at| now.saturating_duration_since(response_at) >= REG_INTERVAL)
+            .unwrap_or(true);
+
+        if registration_expired {
+            RegistrationDecision::Send
+        } else {
+            RegistrationDecision::Wait
+        }
+    }
+
+    fn mark_sent(&mut self, now: Instant) {
+        self.last_sent = Some(now);
+    }
+
+    fn mark_response(&mut self, now: Instant) {
+        self.last_sent = None;
+        self.last_response = Some(now);
+        self.response_timeout = MIN_REG_TIMEOUT;
+        self.consecutive_timeouts = 0;
+    }
+
+    fn status_after_timeout(consecutive_timeouts: u32) -> RendezvousStatus {
+        if consecutive_timeouts >= OFFLINE_AFTER_TIMEOUTS {
+            RendezvousStatus::Disconnected
+        } else {
+            RendezvousStatus::Connecting
+        }
+    }
+}
+
 pub type RelayCallback = Arc<dyn Fn(String, String, String, Vec<u8>, String) + Send + Sync>;
 
-/// Callback type for P2P punch hole requests
-/// Parameters: peer_addr (decoded), relay_callback_params (rendezvous_addr, relay_server, uuid, socket_addr, device_id)
-/// Returns: should call relay callback if P2P fails
 pub type PunchCallback =
     Arc<dyn Fn(Option<SocketAddr>, String, String, String, Vec<u8>, String) + Send + Sync>;
 
-/// Callback type for intranet/local address connections
-/// Parameters: rendezvous_addr, peer_socket_addr (mangled), local_addr, relay_server, device_id
-pub type IntranetCallback = Arc<dyn Fn(String, Vec<u8>, SocketAddr, String, String) + Send + Sync>;
+pub type IntranetCallback = Arc<dyn Fn(String, Vec<u8>, IpAddr, String, String) + Send + Sync>;
 
-/// Rendezvous Mediator
-///
-/// Handles communication with hbbs rendezvous server:
-/// - Registers device ID and public key
-/// - Maintains keep-alive with server
-/// - Handles punch hole and relay requests
 pub struct RendezvousMediator {
     config: Arc<RwLock<RustDeskConfig>>,
     keypair: Arc<RwLock<Option<KeyPair>>>,
@@ -107,16 +143,13 @@ pub struct RendezvousMediator {
     relay_callback: Arc<RwLock<Option<RelayCallback>>>,
     punch_callback: Arc<RwLock<Option<PunchCallback>>>,
     intranet_callback: Arc<RwLock<Option<IntranetCallback>>>,
-    listen_port: Arc<RwLock<u16>>,
     shutdown_tx: broadcast::Sender<()>,
 }
 
 impl RendezvousMediator {
-    /// Create a new rendezvous mediator
     pub fn new(mut config: RustDeskConfig) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
 
-        // Get or generate UUID from config (persisted)
         let (uuid, uuid_needs_save) = config.ensure_uuid();
 
         Self {
@@ -132,93 +165,71 @@ impl RendezvousMediator {
             relay_callback: Arc::new(RwLock::new(None)),
             punch_callback: Arc::new(RwLock::new(None)),
             intranet_callback: Arc::new(RwLock::new(None)),
-            listen_port: Arc::new(RwLock::new(21118)),
             shutdown_tx,
         }
     }
 
-    /// Set the TCP listen port for direct connections
-    pub fn set_listen_port(&self, port: u16) {
-        let old_port = *self.listen_port.read();
-        if old_port != port {
-            *self.listen_port.write() = port;
-            // Port changed, increment serial to notify server
-            self.increment_serial();
-        }
-    }
-
-    /// Get the TCP listen port
-    pub fn listen_port(&self) -> u16 {
-        *self.listen_port.read()
-    }
-
-    /// Increment the serial number to indicate local state change
     pub fn increment_serial(&self) {
         let mut serial = self.serial.write();
         *serial = serial.wrapping_add(1);
         debug!("Serial incremented to {}", *serial);
     }
 
-    /// Get current serial number
     pub fn serial(&self) -> i32 {
         *self.serial.read()
     }
 
-    /// Check if UUID needs to be saved to persistent storage
     pub fn uuid_needs_save(&self) -> bool {
         *self.uuid_needs_save.read()
     }
 
-    /// Get the current config (with UUID set)
     pub fn config(&self) -> RustDeskConfig {
         self.config.read().clone()
     }
 
-    /// Mark UUID as saved
     pub fn mark_uuid_saved(&self) {
         *self.uuid_needs_save.write() = false;
     }
 
-    /// Set the callback for relay requests
     pub fn set_relay_callback(&self, callback: RelayCallback) {
         *self.relay_callback.write() = Some(callback);
     }
 
-    /// Set the callback for P2P punch hole requests
     pub fn set_punch_callback(&self, callback: PunchCallback) {
         *self.punch_callback.write() = Some(callback);
     }
 
-    /// Set the callback for intranet/local address connections
     pub fn set_intranet_callback(&self, callback: IntranetCallback) {
         *self.intranet_callback.write() = Some(callback);
     }
 
-    /// Get current status
     pub fn status(&self) -> RendezvousStatus {
         self.status.read().clone()
     }
 
-    /// Update configuration
+    fn set_status(&self, next: RendezvousStatus) {
+        let mut current = self.status.write();
+        if *current != next {
+            info!("Rendezvous status changed: {} -> {}", *current, next);
+            *current = next;
+        }
+    }
+
     pub fn update_config(&self, config: RustDeskConfig) {
         *self.config.write() = config;
-        // Config changed, increment serial to notify server
         self.increment_serial();
     }
 
-    /// Initialize or get keypair (Curve25519 for encryption)
     pub fn ensure_keypair(&self) -> KeyPair {
         let mut keypair_guard = self.keypair.write();
         if keypair_guard.is_none() {
             let config = self.config.read();
-            // Try to load from config first
             if let (Some(pk), Some(sk)) = (&config.public_key, &config.private_key) {
                 if let Ok(kp) = KeyPair::from_base64(pk, sk) {
                     *keypair_guard = Some(kp.clone());
                     return kp;
                 }
             }
-            // Generate new keypair
             let kp = KeyPair::generate();
             *keypair_guard = Some(kp.clone());
             kp
@@ -227,12 +238,10 @@ impl RendezvousMediator {
         }
     }
 
-    /// Initialize or get signing keypair (Ed25519 for SignedId)
     pub fn ensure_signing_keypair(&self) -> SigningKeyPair {
         let mut signing_guard = self.signing_keypair.write();
         if signing_guard.is_none() {
             let config = self.config.read();
-            // Try to load from config first
             if let (Some(pk), Some(sk)) = (&config.signing_public_key, &config.signing_private_key)
             {
                 if let Ok(skp) = SigningKeyPair::from_base64(pk, sk) {
@@ -243,7 +252,6 @@ impl RendezvousMediator {
                     warn!("Failed to decode signing keypair from config, generating new one");
                 }
             }
-            // Generate new signing keypair
             let skp = SigningKeyPair::generate();
             debug!("Generated new signing keypair");
             *signing_guard = Some(skp.clone());
@@ -253,12 +261,10 @@ impl RendezvousMediator {
         }
     }
 
-    /// Get the device ID
     pub fn device_id(&self) -> String {
         self.config.read().device_id.clone()
     }
 
-    /// Start the rendezvous mediator
     pub async fn start(&self) -> anyhow::Result<()> {
         let config = self.config.read().clone();
         let effective_server = config.effective_rendezvous_server();
@@ -271,89 +277,90 @@ impl RendezvousMediator {
                 "Rendezvous mediator not starting: enabled={}, server='{}'",
                 config.enabled, effective_server
             );
+            self.set_status(RendezvousStatus::Disconnected);
             return Ok(());
         }
 
-        *self.status.write() = RendezvousStatus::Connecting;
+        self.set_status(RendezvousStatus::Connecting);
 
+        let result = self.run(config).await;
+        match &result {
+            Ok(()) => self.set_status(RendezvousStatus::Disconnected),
+            Err(err) => self.set_status(RendezvousStatus::Error(err.to_string())),
+        }
+        result
+    }
+
+    async fn run(&self, config: RustDeskConfig) -> anyhow::Result<()> {
         let addr = config.rendezvous_addr();
         info!(
             "Starting rendezvous mediator for {} to {}",
             config.device_id, addr
         );
 
-        // Resolve server address
         let server_addr: SocketAddr = tokio::net::lookup_host(&addr)
             .await?
             .next()
             .ok_or_else(|| anyhow::anyhow!("Failed to resolve {}", addr))?;
 
-        // Create UDP socket
-        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        let bind_addr = match server_addr {
+            SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+            SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+        };
+        let std_socket = bind_udp_socket(bind_addr)?;
+        let socket = UdpSocket::from_std(std_socket)?;
         socket.connect(server_addr).await?;
 
-        info!("Connected to rendezvous server at {}", server_addr);
-        *self.status.write() = RendezvousStatus::Connected;
+        info!("RustDesk UDP transport ready for {}", server_addr);
 
-        // Start registration loop
         self.registration_loop(socket).await
     }
 
-    /// Main registration loop
     async fn registration_loop(&self, socket: UdpSocket) -> anyhow::Result<()> {
         let mut timer = interval(Duration::from_millis(TIMER_INTERVAL_MS));
         let mut recv_buf = vec![0u8; 65535];
-        let mut last_register_sent: Option<Instant> = None;
-        let mut last_register_resp: Option<Instant> = None;
-        let mut reg_timeout = MIN_REG_TIMEOUT_MS;
-        let mut fails = 0;
+        let mut registration = RegistrationTracker::new();
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         loop {
             tokio::select! {
-                // Handle incoming messages
                 result = socket.recv(&mut recv_buf) => {
                     match result {
                         Ok(len) => {
                             if let Ok(msg) = decode_rendezvous_message(&recv_buf[..len]) {
-                                self.handle_response(&socket, msg, &mut last_register_resp, &mut fails, &mut reg_timeout).await?;
+                                self.handle_response(&socket, msg, &mut registration).await?;
                             } else {
                                 debug!("Failed to decode rendezvous message");
                             }
                         }
                         Err(e) => {
-                            error!("Failed to receive from socket: {}", e);
-                            *self.status.write() = RendezvousStatus::Error(e.to_string());
-                            break;
+                            return Err(anyhow::anyhow!("Failed to receive from socket: {}", e));
                         }
                     }
                 }
 
-                // Periodic registration
                 _ = timer.tick() => {
                     let now = Instant::now();
-                    let expired = last_register_resp
-                        .map(|x| x.elapsed().as_millis() as u64 >= REG_INTERVAL_MS)
-                        .unwrap_or(true);
-                    let timeout = last_register_sent
-                        .map(|x| x.elapsed().as_millis() as u64 >= reg_timeout)
-                        .unwrap_or(false);
-
-                    if timeout && reg_timeout < MAX_REG_TIMEOUT_MS {
-                        reg_timeout += MIN_REG_TIMEOUT_MS;
-                        fails += 1;
-                        if fails >= 4 {
-                            warn!("Registration timeout, {} consecutive failures", fails);
+                    match registration.poll(now) {
+                        RegistrationDecision::Wait => {}
+                        RegistrationDecision::Send => {
+                            self.send_register(&socket).await?;
+                            registration.mark_sent(now);
                         }
-                    }
-
-                    if timeout || (last_register_sent.is_none() && expired) {
-                        self.send_register(&socket).await?;
-                        last_register_sent = Some(now);
+                        RegistrationDecision::Retry { consecutive_timeouts } => {
+                            let next_status =
+                                RegistrationTracker::status_after_timeout(consecutive_timeouts);
+                            self.set_status(next_status);
+                            warn!(
+                                "RustDesk registration timed out ({} consecutive timeouts)",
+                                consecutive_timeouts
+                            );
+                            self.send_register(&socket).await?;
+                            registration.mark_sent(now);
+                        }
                     }
                 }
 
-                // Shutdown signal
                 _ = shutdown_rx.recv() => {
                     info!("Rendezvous mediator shutting down");
                     break;
@@ -361,24 +368,19 @@ impl RendezvousMediator {
             }
         }
 
-        *self.status.write() = RendezvousStatus::Disconnected;
         Ok(())
     }
 
-    /// Send registration message
     async fn send_register(&self, socket: &UdpSocket) -> anyhow::Result<()> {
         let key_confirmed = *self.key_confirmed.read();
 
         if !key_confirmed {
-            // Send RegisterPk with public key
             self.send_register_pk(socket).await
         } else {
-            // Send RegisterPeer heartbeat
             self.send_register_peer(socket).await
         }
     }
 
-    /// Send RegisterPeer message
     async fn send_register_peer(&self, socket: &UdpSocket) -> anyhow::Result<()> {
         let id = self.device_id();
         let serial = *self.serial.read();
@@ -391,12 +393,8 @@ impl RendezvousMediator {
         Ok(())
     }
 
-    /// Send RegisterPk message
-    /// Uses the Ed25519 signing public key for registration
     async fn send_register_pk(&self, socket: &UdpSocket) -> anyhow::Result<()> {
         let id = self.device_id();
-        // Use signing public key (Ed25519) for RegisterPk
-        // This is what clients will use to verify our SignedId signature
         let signing_keypair = self.ensure_signing_keypair();
         let pk = signing_keypair.public_key_bytes();
         let uuid = *self.uuid.read();
@@ -410,12 +408,6 @@ impl RendezvousMediator {
         Ok(())
     }
 
-    /// Handle FetchLocalAddr - send to callback for proper TCP handling
-    ///
-    /// The intranet callback will:
-    /// 1. Open a TCP connection to the rendezvous server
-    /// 2. Send LocalAddr message
-    /// 3. Accept the peer connection over that same TCP stream
     async fn send_local_addr(
         &self,
         _udp_socket: &UdpSocket,
@@ -424,35 +416,29 @@ impl RendezvousMediator {
     ) -> anyhow::Result<()> {
         let id = self.device_id();
 
-        // Get our actual local IP addresses for same-LAN connection
-        let local_addrs = get_local_addresses();
+        let local_addrs = tokio::task::spawn_blocking(get_local_addresses)
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to inspect local addresses: {error}"))?;
         if local_addrs.is_empty() {
             debug!("No local addresses available for LocalAddr response");
             return Ok(());
         }
 
-        // Get the rendezvous server address for TCP connection
         let config = self.config.read().clone();
         let rendezvous_addr = config.rendezvous_addr();
 
-        // Use TCP listen port for direct connections
-        let listen_port = self.listen_port();
-
-        // Use the first local IP
         let local_ip = local_addrs[0];
-        let local_sock_addr = SocketAddr::new(local_ip, listen_port);
 
         info!(
-            "FetchLocalAddr: calling intranet callback with local_addr={}, rendezvous={}",
-            local_sock_addr, rendezvous_addr
+            "FetchLocalAddr: requesting an on-demand listener for {}, rendezvous={}",
+            local_ip, rendezvous_addr
         );
 
-        // Call the intranet callback if set
         if let Some(callback) = self.intranet_callback.read().as_ref() {
             callback(
                 rendezvous_addr,
                 peer_socket_addr.to_vec(),
-                local_sock_addr,
+                local_ip,
                 relay_server.to_string(),
                 id,
             );
@@ -463,60 +449,53 @@ impl RendezvousMediator {
         Ok(())
     }
 
-    /// Handle response from rendezvous server
     async fn handle_response(
         &self,
         socket: &UdpSocket,
         msg: RendezvousMessage,
-        last_resp: &mut Option<Instant>,
-        fails: &mut i32,
-        reg_timeout: &mut u64,
+        registration: &mut RegistrationTracker,
     ) -> anyhow::Result<()> {
-        *last_resp = Some(Instant::now());
-        *fails = 0;
-        *reg_timeout = MIN_REG_TIMEOUT_MS;
-
         match msg.union {
             Some(rendezvous_message::Union::RegisterPeerResponse(rpr)) => {
+                registration.mark_response(Instant::now());
                 if rpr.request_pk {
-                    // Server wants us to register our public key
                     info!("Server requested public key registration");
                     *self.key_confirmed.write() = false;
+                    self.set_status(RendezvousStatus::Connecting);
                     self.send_register_pk(socket).await?;
+                    registration.mark_sent(Instant::now());
+                } else {
+                    self.set_status(RendezvousStatus::Registered);
                 }
-                *self.status.write() = RendezvousStatus::Registered;
             }
             Some(rendezvous_message::Union::RegisterPkResponse(rpr)) => {
+                registration.mark_response(Instant::now());
                 info!("Received RegisterPkResponse: result={:?}", rpr.result);
                 match rpr.result.value() {
                     0 => {
-                        // OK
                         info!("✓ Public key registered successfully with server");
                         *self.key_confirmed.write() = true;
-                        // Increment serial after successful registration
                         self.increment_serial();
-                        *self.status.write() = RendezvousStatus::Registered;
+                        self.set_status(RendezvousStatus::Registered);
                     }
                     2 => {
-                        // UUID_MISMATCH
                         warn!("UUID mismatch, need to re-register");
                         *self.key_confirmed.write() = false;
+                        self.set_status(RendezvousStatus::Connecting);
                     }
                     3 => {
-                        // ID_EXISTS
                         error!("Device ID already exists on server");
-                        *self.status.write() =
-                            RendezvousStatus::Error("Device ID already exists".to_string());
+                        self.set_status(RendezvousStatus::Error(
+                            "Device ID already exists".to_string(),
+                        ));
                     }
                     4 => {
-                        // TOO_FREQUENT
                         warn!("Registration too frequent");
+                        self.set_status(RendezvousStatus::Connecting);
                     }
                     5 => {
-                        // INVALID_ID_FORMAT
                         error!("Invalid device ID format");
-                        *self.status.write() =
-                            RendezvousStatus::Error("Invalid ID format".to_string());
+                        self.set_status(RendezvousStatus::Error("Invalid ID format".to_string()));
                     }
                     _ => {
                         error!("Unknown RegisterPkResponse result: {:?}", rpr.result);
@@ -529,7 +508,13 @@ impl RendezvousMediator {
                 }
             }
             Some(rendezvous_message::Union::PunchHole(ph)) => {
-                // Decode the peer's socket address
+                let config = self.config.read().clone();
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &ph.relay_server,
+                    &config.rendezvous_server,
+                );
+
                 let peer_addr = if !ph.socket_addr.is_empty() {
                     AddrMangle::decode(&ph.socket_addr)
                 } else {
@@ -537,24 +522,32 @@ impl RendezvousMediator {
                 };
 
                 info!(
-                    "Received PunchHole request: peer_addr={:?}, socket_addr_len={}, relay_server={}, nat_type={:?}",
-                    peer_addr, ph.socket_addr.len(), ph.relay_server, ph.nat_type
+                    "Received PunchHole request: peer_addr={:?}, socket_addr_len={}, relay_server={}, effective_relay_server={}, nat_type={:?}",
+                    peer_addr,
+                    ph.socket_addr.len(),
+                    ph.relay_server,
+                    effective_relay_server.as_deref().unwrap_or(""),
+                    ph.nat_type
                 );
 
-                // Send PunchHoleSent to acknowledge
                 // IMPORTANT: socket_addr in PunchHoleSent should be the PEER's address (from PunchHole),
-                // not our own address. This is how RustDesk protocol works.
                 let id = self.device_id();
 
                 info!(
                     "Sending PunchHoleSent: id={}, peer_addr={:?}, relay_server={}",
-                    id, peer_addr, ph.relay_server
+                    id,
+                    peer_addr,
+                    effective_relay_server
+                        .as_deref()
+                        .unwrap_or(ph.relay_server.as_str())
                 );
 
                 let msg = make_punch_hole_sent(
-                    &ph.socket_addr.to_vec(), // Use peer's socket_addr, not ours
+                    &ph.socket_addr, // Use peer's socket_addr, not ours
                     &id,
-                    &ph.relay_server,
+                    effective_relay_server
+                        .as_deref()
+                        .unwrap_or(ph.relay_server.as_str()),
                     ph.nat_type.enum_value().unwrap_or(NatType::UNKNOWN_NAT),
                     env!("CARGO_PKG_VERSION"),
                 );
@@ -565,22 +558,11 @@ impl RendezvousMediator {
                     info!("Sent PunchHoleSent response successfully");
                 }
 
-                // Try P2P direct connection first, fall back to relay if needed
-                if !ph.relay_server.is_empty() {
-                    let relay_server = if ph.relay_server.contains(':') {
-                        ph.relay_server.clone()
-                    } else {
-                        format!("{}:21117", ph.relay_server)
-                    };
-                    // Generate a standard UUID v4 for relay pairing
-                    // This must match the format used by RustDesk client
+                if let Some(relay_server) = effective_relay_server {
                     let uuid = uuid::Uuid::new_v4().to_string();
-                    let config = self.config.read().clone();
                     let rendezvous_addr = config.rendezvous_addr();
                     let device_id = config.device_id.clone();
 
-                    // Use punch callback if set (tries P2P first, then relay)
-                    // Otherwise fall back to relay callback directly
                     if let Some(callback) = self.punch_callback.read().as_ref() {
                         callback(
                             peer_addr,
@@ -599,41 +581,59 @@ impl RendezvousMediator {
                             device_id,
                         );
                     }
+                } else {
+                    debug!("No relay server available for PunchHole, skipping relay fallback");
                 }
             }
             Some(rendezvous_message::Union::RequestRelay(rr)) => {
-                info!(
-                    "Received RequestRelay: relay_server={}, uuid={}, secure={}",
-                    rr.relay_server, rr.uuid, rr.secure
+                let config = self.config.read().clone();
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &rr.relay_server,
+                    &config.rendezvous_server,
                 );
-                // Call the relay callback to handle the connection
+
+                info!(
+                    "Received RequestRelay: relay_server={}, effective_relay_server={}, uuid={}, secure={}",
+                    rr.relay_server,
+                    effective_relay_server.as_deref().unwrap_or(""),
+                    rr.uuid,
+                    rr.secure
+                );
                 if let Some(callback) = self.relay_callback.read().as_ref() {
-                    let relay_server = if rr.relay_server.contains(':') {
-                        rr.relay_server.clone()
+                    if let Some(relay_server) = effective_relay_server {
+                        let rendezvous_addr = config.rendezvous_addr();
+                        let device_id = config.device_id.clone();
+                        callback(
+                            rendezvous_addr,
+                            relay_server,
+                            rr.uuid.clone(),
+                            rr.socket_addr.to_vec(),
+                            device_id,
+                        );
                     } else {
-                        format!("{}:21117", rr.relay_server)
-                    };
-                    let config = self.config.read().clone();
-                    let rendezvous_addr = config.rendezvous_addr();
-                    let device_id = config.device_id.clone();
-                    callback(
-                        rendezvous_addr,
-                        relay_server,
-                        rr.uuid.clone(),
-                        rr.socket_addr.to_vec(),
-                        device_id,
-                    );
+                        debug!("No relay server available for RequestRelay callback");
+                    }
                 }
             }
             Some(rendezvous_message::Union::FetchLocalAddr(fla)) => {
-                // Decode the peer address for logging
+                let config = self.config.read().clone();
+                let effective_relay_server = select_relay_server(
+                    config.relay_server.as_deref(),
+                    &fla.relay_server,
+                    &config.rendezvous_server,
+                )
+                .unwrap_or_default();
+
                 let peer_addr = AddrMangle::decode(&fla.socket_addr);
                 info!(
-                    "Received FetchLocalAddr request: peer_addr={:?}, socket_addr_len={}, relay_server={}",
-                    peer_addr, fla.socket_addr.len(), fla.relay_server
+                    "Received FetchLocalAddr request: peer_addr={:?}, socket_addr_len={}, relay_server={}, effective_relay_server={}",
+                    peer_addr,
+                    fla.socket_addr.len(),
+                    fla.relay_server,
+                    effective_relay_server
                 );
-                // Respond with our local address for same-LAN direct connection
-                self.send_local_addr(socket, &fla.socket_addr, &fla.relay_server)
+                self.send_local_addr(socket, &fla.socket_addr, &effective_relay_server)
                     .await?;
             }
             Some(rendezvous_message::Union::ConfigureUpdate(cu)) => {
@@ -641,7 +641,6 @@ impl RendezvousMediator {
                 *self.serial.write() = cu.serial;
             }
             Some(other) => {
-                // Log the actual message type for debugging
                 let type_name = match other {
                     rendezvous_message::Union::PunchHoleRequest(_) => "PunchHoleRequest",
                     rendezvous_message::Union::PunchHoleResponse(_) => "PunchHoleResponse",
@@ -666,29 +665,49 @@ impl RendezvousMediator {
         Ok(())
     }
 
-    /// Stop the rendezvous mediator
     pub fn stop(&self) {
         info!("Stopping rendezvous mediator");
         let _ = self.shutdown_tx.send(());
         *self.status.write() = RendezvousStatus::Disconnected;
     }
 
-    /// Get a shutdown receiver
     pub fn shutdown_rx(&self) -> broadcast::Receiver<()> {
         self.shutdown_tx.subscribe()
     }
 }
 
-/// AddrMangle - RustDesk's address encoding scheme
-///
-/// Certain routers and firewalls scan packets and modify IP addresses.
-/// This encoding mangles the address to avoid detection.
+/// RustDesk mangled socket encoding.
 pub struct AddrMangle;
 
+fn normalize_relay_server(server: &str) -> Option<String> {
+    let trimmed = server.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.contains(':') {
+        Some(trimmed.to_string())
+    } else {
+        Some(format!("{}:21117", trimmed))
+    }
+}
+
+fn select_relay_server(
+    local_relay: Option<&str>,
+    server_relay: &str,
+    rendezvous_server: &str,
+) -> Option<String> {
+    local_relay
+        .and_then(normalize_relay_server)
+        .or_else(|| normalize_relay_server(server_relay))
+        .or_else(|| {
+            let host = rendezvous_server.trim().split(':').next().unwrap_or("");
+            normalize_relay_server(host)
+        })
+}
+
 impl AddrMangle {
-    /// Encode a SocketAddr to bytes using RustDesk's mangle algorithm
     pub fn encode(addr: SocketAddr) -> Vec<u8> {
-        // Try to convert IPv6-mapped IPv4 to plain IPv4
         let addr = try_into_v4(addr);
 
         match addr {
@@ -704,7 +723,6 @@ impl AddrMangle {
                 let v = ((ip + tm) << 49) | (tm << 17) | (port + (tm & 0xFFFF));
                 let bytes = v.to_le_bytes();
 
-                // Remove trailing zeros
                 let mut n_padding = 0;
                 for i in bytes.iter().rev() {
                     if *i == 0u8 {
@@ -725,13 +743,11 @@ impl AddrMangle {
         }
     }
 
-    /// Decode bytes to SocketAddr using RustDesk's mangle algorithm
     pub fn decode(bytes: &[u8]) -> Option<SocketAddr> {
         use std::convert::TryInto;
         use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4};
 
         if bytes.len() > 16 {
-            // IPv6 format: 16 bytes IP + 2 bytes port
             if bytes.len() != 18 {
                 return None;
             }
@@ -742,7 +758,6 @@ impl AddrMangle {
             return Some(SocketAddr::new(std::net::IpAddr::V6(ip), port));
         }
 
-        // IPv4 mangled format
         let mut padded = [0u8; 16];
         padded[..bytes.len()].copy_from_slice(bytes);
         let number = u128::from_le_bytes(padded);
@@ -756,7 +771,6 @@ impl AddrMangle {
     }
 }
 
-/// Try to convert IPv6-mapped IPv4 address to plain IPv4
 fn try_into_v4(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) if !addr.ip().is_loopback() => {
@@ -769,41 +783,31 @@ fn try_into_v4(addr: SocketAddr) -> SocketAddr {
     addr
 }
 
-/// Check if an interface name belongs to Docker or other virtual networks
+#[cfg(target_os = "linux")]
 fn is_virtual_interface(name: &str) -> bool {
-    // Docker interfaces
     name.starts_with("docker")
         || name.starts_with("br-")
         || name.starts_with("veth")
-        // Kubernetes/container interfaces
         || name.starts_with("cni")
         || name.starts_with("flannel")
         || name.starts_with("calico")
         || name.starts_with("weave")
-        // Virtual bridge interfaces
         || name.starts_with("virbr")
         || name.starts_with("lxcbr")
         || name.starts_with("lxdbr")
-        // VPN interfaces (usually not useful for LAN discovery)
         || name.starts_with("tun")
         || name.starts_with("tap")
 }
 
-/// Check if an IP address is in a Docker/container private range
 fn is_docker_ip(ip: &std::net::IpAddr) -> bool {
     if let std::net::IpAddr::V4(ipv4) = ip {
         let octets = ipv4.octets();
-        // Docker default bridge: 172.17.0.0/16
         if octets[0] == 172 && octets[1] == 17 {
             return true;
         }
-        // Docker user-defined networks: 172.18-31.0.0/16
         if octets[0] == 172 && (18..=31).contains(&octets[1]) {
             return true;
         }
-        // Docker overlay networks: 10.0.0.0/8 (common range)
-        // Note: 10.x.x.x is also used for corporate LANs, so we only filter
-        // specific Docker-like patterns (10.0.x.x with small third octet)
         if octets[0] == 10 && octets[1] == 0 && octets[2] < 10 {
             return true;
         }
@@ -811,22 +815,18 @@ fn is_docker_ip(ip: &std::net::IpAddr) -> bool {
     false
 }
 
-/// Get local IP addresses (non-loopback, non-Docker)
 fn get_local_addresses() -> Vec<std::net::IpAddr> {
     let mut addrs = Vec::new();
 
-    // Use pnet or network-interface crate if available, otherwise use simple method
     #[cfg(target_os = "linux")]
     {
         if let Ok(interfaces) = std::fs::read_dir("/sys/class/net") {
             for entry in interfaces.flatten() {
                 let iface_name = entry.file_name().to_string_lossy().to_string();
-                // Skip loopback and virtual interfaces
                 if iface_name == "lo" || is_virtual_interface(&iface_name) {
                     continue;
                 }
 
-                // Try to get IP via command (simple approach)
                 if let Ok(output) = std::process::Command::new("ip")
                     .args(["-4", "addr", "show", &iface_name])
                     .output()
@@ -837,7 +837,6 @@ fn get_local_addresses() -> Vec<std::net::IpAddr> {
                             let ip_part = &line[inet_pos + 5..];
                             if let Some(slash_pos) = ip_part.find('/') {
                                 if let Ok(ip) = ip_part[..slash_pos].parse::<std::net::IpAddr>() {
-                                    // Skip loopback and Docker IPs
                                     if !ip.is_loopback() && !is_docker_ip(&ip) {
                                         addrs.push(ip);
                                     }
@@ -850,15 +849,11 @@ fn get_local_addresses() -> Vec<std::net::IpAddr> {
         }
     }
 
-    // Fallback: try to get default route interface IP
     if addrs.is_empty() {
-        // Try using DNS lookup to get local IP (connects to external server)
         if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
-            // Connect to a public DNS server (doesn't actually send data)
             if socket.connect("8.8.8.8:53").is_ok() {
                 if let Ok(local_addr) = socket.local_addr() {
                     let ip = local_addr.ip();
-                    // Skip loopback and Docker IPs
                     if !ip.is_loopback() && !is_docker_ip(&ip) {
                         addrs.push(ip);
                     }
@@ -868,4 +863,165 @@ fn get_local_addresses() -> Vec<std::net::IpAddr> {
     }
 
     addrs
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::{
+        normalize_relay_server, select_relay_server, RegistrationDecision, RegistrationTracker,
+        RendezvousStatus, REG_INTERVAL,
+    };
+
+    #[test]
+    fn registration_tracker_requires_an_acknowledged_response() {
+        let started_at = Instant::now();
+        let mut tracker = RegistrationTracker::new();
+
+        assert_eq!(tracker.poll(started_at), RegistrationDecision::Send);
+        tracker.mark_sent(started_at);
+        assert_eq!(
+            tracker.poll(started_at + Duration::from_secs(2)),
+            RegistrationDecision::Wait
+        );
+        assert_eq!(
+            tracker.poll(started_at + Duration::from_secs(3)),
+            RegistrationDecision::Retry {
+                consecutive_timeouts: 1
+            }
+        );
+        assert_eq!(
+            RegistrationTracker::status_after_timeout(1),
+            RendezvousStatus::Connecting
+        );
+    }
+
+    #[test]
+    fn registration_tracker_marks_four_timeouts_offline() {
+        let mut now = Instant::now();
+        let mut tracker = RegistrationTracker::new();
+
+        assert_eq!(tracker.poll(now), RegistrationDecision::Send);
+        tracker.mark_sent(now);
+
+        for (failure, timeout) in [(1, 3), (2, 6), (3, 9), (4, 12)] {
+            now += Duration::from_secs(timeout);
+            assert_eq!(
+                tracker.poll(now),
+                RegistrationDecision::Retry {
+                    consecutive_timeouts: failure
+                }
+            );
+            tracker.mark_sent(now);
+        }
+
+        assert_eq!(
+            RegistrationTracker::status_after_timeout(4),
+            RendezvousStatus::Disconnected
+        );
+    }
+
+    #[test]
+    fn registration_response_clears_in_flight_retry_state() {
+        let started_at = Instant::now();
+        let mut tracker = RegistrationTracker::new();
+
+        tracker.mark_sent(started_at);
+        let retry_at = started_at + Duration::from_secs(3);
+        assert_eq!(
+            tracker.poll(retry_at),
+            RegistrationDecision::Retry {
+                consecutive_timeouts: 1
+            }
+        );
+        tracker.mark_sent(retry_at);
+
+        let response_at = retry_at + Duration::from_millis(100);
+        tracker.mark_response(response_at);
+        assert_eq!(tracker.last_sent, None);
+        assert_eq!(tracker.consecutive_timeouts, 0);
+
+        assert_eq!(
+            tracker.poll(response_at + REG_INTERVAL - Duration::from_millis(1)),
+            RegistrationDecision::Wait
+        );
+        assert_eq!(
+            tracker.poll(response_at + REG_INTERVAL),
+            RegistrationDecision::Send
+        );
+    }
+
+    #[test]
+    fn registration_timeout_count_continues_after_backoff_reaches_its_cap() {
+        let mut now = Instant::now();
+        let mut tracker = RegistrationTracker::new();
+
+        tracker.mark_sent(now);
+        for failure in 1..=12 {
+            now += tracker.response_timeout;
+            assert_eq!(
+                tracker.poll(now),
+                RegistrationDecision::Retry {
+                    consecutive_timeouts: failure
+                }
+            );
+            tracker.mark_sent(now);
+        }
+
+        assert_eq!(tracker.response_timeout, Duration::from_secs(30));
+        assert_eq!(tracker.consecutive_timeouts, 12);
+    }
+
+    #[test]
+    fn test_normalize_relay_server() {
+        assert_eq!(normalize_relay_server(""), None);
+        assert_eq!(normalize_relay_server("   "), None);
+        assert_eq!(
+            normalize_relay_server("relay.example.com"),
+            Some("relay.example.com:21117".to_string())
+        );
+        assert_eq!(
+            normalize_relay_server("relay.example.com:22117"),
+            Some("relay.example.com:22117".to_string())
+        );
+    }
+
+    #[test]
+    fn test_select_relay_server_prefers_local() {
+        assert_eq!(
+            select_relay_server(
+                Some("local.example.com:21117"),
+                "server.example.com:21117",
+                "hbbs.example.com:21116"
+            ),
+            Some("local.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(
+                Some("local.example.com"),
+                "server.example.com:21117",
+                "hbbs.example.com:21116"
+            ),
+            Some("local.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(Some("   "), "server.example.com", "hbbs.example.com:21116"),
+            Some("server.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(None, "server.example.com:21117", "hbbs.example.com:21116"),
+            Some("server.example.com:21117".to_string())
+        );
+
+        assert_eq!(
+            select_relay_server(None, "", "hbbs.example.com:21116"),
+            Some("hbbs.example.com:21117".to_string())
+        );
+
+        assert_eq!(select_relay_server(None, "", ""), None);
+    }
 }

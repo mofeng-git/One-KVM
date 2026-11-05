@@ -1,30 +1,43 @@
 # One-KVM Runtime Image
 # This Dockerfile only packages pre-compiled binaries (no compilation)
 # Used after cross-compiling with `cross build`
-# Using Debian 11 for maximum compatibility (GLIBC 2.31)
+# Using Debian 12 to match the build images (GLIBC 2.36)
 
 ARG TARGETPLATFORM=linux/amd64
 
-FROM debian:11-slim
+FROM debian:12-slim
 
 ARG TARGETPLATFORM
+ARG APT_MIRROR=
 
 # Install runtime dependencies in a single layer
 # All codec libraries (libx264, libx265, libopus) are now statically linked
 # Only hardware acceleration drivers and core system libraries remain dynamic
-RUN apt-get update && \
+# Set APT_MIRROR=mirrors.tuna.tsinghua.edu.cn to speed up builds in China
+RUN if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s@deb.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources; \
+    fi \
+    && sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         # Core runtime (all platforms) - no codec libs needed
         ca-certificates \
+        # Bluetooth HID uses the host BlueZ system bus; btmgmt manages a dedicated adapter.
+        bluez \
         libudev1 \
         libasound2 \
+        # OTG Ethernet bridge control (nmcli talks to the host NetworkManager over D-Bus)
+        network-manager \
+        iproute2 \
+        iputils-ping \
         # v4l2 is handled by kernel, minimal userspace needed
         libv4l-0 \
         && \
     # Platform-specific hardware acceleration
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         apt-get install -y --no-install-recommends \
-            libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libxau6 libxdmcp6 libmfx1; \
+            libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libxau6 libxdmcp6 libmfx1 \
+            i965-va-driver-shaders intel-media-va-driver-non-free vainfo; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
         apt-get install -y --no-install-recommends \
             libdrm2 libva2; \

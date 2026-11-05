@@ -1,5 +1,3 @@
-//! Extension process manager
-
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::process::Stdio;
@@ -9,28 +7,40 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
 
+use super::protected_config::ProtectedConfigFile;
 use super::types::*;
+use super::validation::{
+    validate_easyfrp_config, validate_easytier_config, validate_frpc_config, validate_gostc_config,
+};
+use crate::events::EventBus;
 
-/// Maximum number of log lines to keep per extension
 const LOG_BUFFER_SIZE: usize = 200;
 
-/// Number of log lines to buffer before flushing to shared storage
-const LOG_BATCH_SIZE: usize = 16;
-
-/// Unix socket path for ttyd
+#[cfg(unix)]
 pub const TTYD_SOCKET_PATH: &str = "/var/run/one-kvm/ttyd.sock";
 
-/// Extension process with log buffer
+#[cfg(windows)]
+pub const TTYD_TCP_ADDR: &str = "127.0.0.1:7681";
+#[cfg(windows)]
+const TTYD_TCP_HOST: &str = "127.0.0.1";
+#[cfg(windows)]
+const TTYD_TCP_PORT: &str = "7681";
+
 struct ExtensionProcess {
     child: Child,
     logs: Arc<RwLock<VecDeque<String>>>,
+    _config_file: Option<ProtectedConfigFile>,
 }
 
-/// Extension manager handles lifecycle of external processes
+struct ExtensionLaunch {
+    args: Vec<String>,
+    config_file: Option<ProtectedConfigFile>,
+}
+
 pub struct ExtensionManager {
     processes: RwLock<HashMap<ExtensionId, ExtensionProcess>>,
-    /// Cached availability status (checked once at startup)
     availability: HashMap<ExtensionId, bool>,
+    event_bus: RwLock<Option<Arc<EventBus>>>,
 }
 
 impl Default for ExtensionManager {
@@ -40,78 +50,117 @@ impl Default for ExtensionManager {
 }
 
 impl ExtensionManager {
-    /// Create a new extension manager with cached availability
     pub fn new() -> Self {
-        // Check availability once at startup
         let availability = ExtensionId::all()
             .iter()
-            .map(|id| (*id, Path::new(id.binary_path()).exists()))
+            .map(|id| (*id, id.binary_path().exists()))
             .collect();
 
         Self {
             processes: RwLock::new(HashMap::new()),
             availability,
+            event_bus: RwLock::new(None),
         }
     }
 
-    /// Check if the binary for an extension is available (cached)
+    pub async fn set_event_bus(&self, event_bus: Arc<EventBus>) {
+        *self.event_bus.write().await = Some(event_bus);
+    }
+
+    async fn mark_ttyd_status_dirty(&self, id: ExtensionId) {
+        if id != ExtensionId::Ttyd {
+            return;
+        }
+
+        if let Some(ref event_bus) = *self.event_bus.read().await {
+            event_bus.mark_device_info_dirty();
+        }
+    }
+
     pub fn check_available(&self, id: ExtensionId) -> bool {
         *self.availability.get(&id).unwrap_or(&false)
     }
 
-    /// Get the current status of an extension
+    fn is_enabled_for_config(id: ExtensionId, config: &ExtensionsConfig) -> bool {
+        match id {
+            ExtensionId::Ttyd => config.ttyd.enabled,
+            ExtensionId::Gostc => {
+                config.gostc.enabled && validate_gostc_config(&config.gostc).is_ok()
+            }
+            ExtensionId::Easyfrp => {
+                config.easyfrp.enabled && validate_easyfrp_config(&config.easyfrp).is_ok()
+            }
+            ExtensionId::Easytier => {
+                config.easytier.enabled && validate_easytier_config(&config.easytier).is_ok()
+            }
+            ExtensionId::Frpc => config.frpc.enabled && validate_frpc_config(&config.frpc).is_ok(),
+        }
+    }
+
     pub async fn status(&self, id: ExtensionId) -> ExtensionStatus {
         if !self.check_available(id) {
             return ExtensionStatus::Unavailable;
         }
 
-        let processes = self.processes.read().await;
-        match processes.get(&id) {
-            Some(proc) => {
-                if let Some(pid) = proc.child.id() {
-                    ExtensionStatus::Running { pid }
-                } else {
-                    ExtensionStatus::Stopped
+        let mut processes = self.processes.write().await;
+        let exited = {
+            let Some(proc) = processes.get_mut(&id) else {
+                return ExtensionStatus::Stopped;
+            };
+
+            match proc.child.try_wait() {
+                Ok(Some(status)) => {
+                    tracing::info!("Extension {} exited with status {}", id, status);
+                    true
+                }
+                Ok(None) => {
+                    return match proc.child.id() {
+                        Some(pid) => ExtensionStatus::Running { pid },
+                        None => ExtensionStatus::Stopped,
+                    };
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to query status for {}: {}", id, e);
+                    return match proc.child.id() {
+                        Some(pid) => ExtensionStatus::Running { pid },
+                        None => ExtensionStatus::Stopped,
+                    };
                 }
             }
-            None => ExtensionStatus::Stopped,
+        };
+
+        if exited {
+            processes.remove(&id);
         }
+
+        ExtensionStatus::Stopped
     }
 
-    /// Start an extension with the given configuration
     pub async fn start(&self, id: ExtensionId, config: &ExtensionsConfig) -> Result<(), String> {
         if !self.check_available(id) {
             return Err(format!(
                 "{} not found at {}",
-                id.display_name(),
-                id.binary_path()
+                id,
+                id.binary_path().display()
             ));
         }
 
-        // Stop existing process first
         self.stop(id).await.ok();
 
-        // Build command arguments
-        let args = self.build_args(id, config).await?;
+        let launch = self.build_launch(id, config).await?;
 
-        tracing::info!(
-            "Starting extension {}: {} {}",
-            id,
-            id.binary_path(),
-            args.join(" ")
-        );
+        tracing::info!("Starting extension {}: {}", id, id.binary_path().display());
 
         let mut child = Command::new(id.binary_path())
-            .args(&args)
+            .args(&launch.args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to start {}: {}", id.display_name(), e))?;
+            .map_err(|e| format!("Failed to start {}: {}", id, e))?;
 
         let logs = Arc::new(RwLock::new(VecDeque::with_capacity(LOG_BUFFER_SIZE)));
 
-        // Spawn log collector for stdout
         if let Some(stdout) = child.stdout.take() {
             let logs_clone = logs.clone();
             let id_clone = id;
@@ -120,7 +169,6 @@ impl ExtensionManager {
             });
         }
 
-        // Spawn log collector for stderr
         if let Some(stderr) = child.stderr.take() {
             let logs_clone = logs.clone();
             let id_clone = id;
@@ -131,14 +179,27 @@ impl ExtensionManager {
 
         let pid = child.id();
         tracing::info!("Extension {} started with PID {:?}", id, pid);
+        Self::push_log(
+            &logs,
+            format!("Extension {} started with PID {:?}", id, pid),
+        )
+        .await;
 
         let mut processes = self.processes.write().await;
-        processes.insert(id, ExtensionProcess { child, logs });
+        processes.insert(
+            id,
+            ExtensionProcess {
+                child,
+                logs,
+                _config_file: launch.config_file,
+            },
+        );
+        drop(processes);
+        self.mark_ttyd_status_dirty(id).await;
 
         Ok(())
     }
 
-    /// Stop an extension
     pub async fn stop(&self, id: ExtensionId) -> Result<(), String> {
         let mut processes = self.processes.write().await;
         if let Some(mut proc) = processes.remove(&id) {
@@ -146,11 +207,12 @@ impl ExtensionManager {
             if let Err(e) = proc.child.kill().await {
                 tracing::warn!("Failed to kill {}: {}", id, e);
             }
+            drop(processes);
+            self.mark_ttyd_status_dirty(id).await;
         }
         Ok(())
     }
 
-    /// Get recent logs for an extension
     pub async fn logs(&self, id: ExtensionId, lines: usize) -> Vec<String> {
         let processes = self.processes.read().await;
         if let Some(proc) = processes.get(&id) {
@@ -162,7 +224,6 @@ impl ExtensionManager {
         }
     }
 
-    /// Collect logs from a stream with batched writes to reduce lock contention
     async fn collect_logs<R: tokio::io::AsyncRead + Unpin>(
         id: ExtensionId,
         reader: R,
@@ -170,24 +231,14 @@ impl ExtensionManager {
     ) {
         let reader = BufReader::new(reader);
         let mut lines = reader.lines();
-        let mut local_buffer = Vec::with_capacity(LOG_BATCH_SIZE);
 
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    tracing::debug!("[{}] {}", id, line);
-                    local_buffer.push(line);
-
-                    // Flush when batch is full
-                    if local_buffer.len() >= LOG_BATCH_SIZE {
-                        Self::flush_logs(&logs, &mut local_buffer).await;
-                    }
+                    tracing::info!("[{}] {}", id, line);
+                    Self::push_log(&logs, line).await;
                 }
                 Ok(None) => {
-                    // Stream ended, flush remaining logs
-                    if !local_buffer.is_empty() {
-                        Self::flush_logs(&logs, &mut local_buffer).await;
-                    }
                     break;
                 }
                 Err(e) => {
@@ -198,118 +249,263 @@ impl ExtensionManager {
         }
     }
 
-    /// Flush buffered logs to shared storage
-    async fn flush_logs(logs: &RwLock<VecDeque<String>>, buffer: &mut Vec<String>) {
+    async fn push_log(logs: &RwLock<VecDeque<String>>, line: String) {
         let mut logs = logs.write().await;
-        for line in buffer.drain(..) {
-            if logs.len() >= LOG_BUFFER_SIZE {
-                logs.pop_front();
-            }
-            logs.push_back(line);
+        if logs.len() >= LOG_BUFFER_SIZE {
+            logs.pop_front();
         }
+        logs.push_back(line);
     }
 
-    /// Build command arguments for an extension
-    async fn build_args(
+    async fn build_launch(
         &self,
         id: ExtensionId,
         config: &ExtensionsConfig,
-    ) -> Result<Vec<String>, String> {
-        match id {
+    ) -> Result<ExtensionLaunch, String> {
+        let args = match id {
             ExtensionId::Ttyd => {
                 let c = &config.ttyd;
 
-                // Prepare socket directory and clean up old socket (async)
-                Self::prepare_ttyd_socket().await?;
+                let mut args = Self::build_ttyd_listen_args().await?;
 
-                let mut args = vec![
-                    "-i".to_string(),
-                    TTYD_SOCKET_PATH.to_string(), // Unix socket
-                    "-b".to_string(),
-                    "/api/terminal".to_string(), // Base path for reverse proxy
-                    "-W".to_string(),            // Writable (allow input)
-                ];
-
-                // Add credential if set (still useful for additional security layer)
-                if let Some(ref cred) = c.credential {
-                    if !cred.is_empty() {
-                        args.extend(["-c".to_string(), cred.clone()]);
-                    }
-                }
-
-                // Add shell as last argument
                 args.push(c.shell.clone());
-                Ok(args)
+                args
             }
 
             ExtensionId::Gostc => {
                 let c = &config.gostc;
-                if c.key.is_empty() {
-                    return Err("GOSTC client key is required".into());
-                }
+                validate_gostc_config(c)?;
 
-                let mut args = Vec::new();
+                // gostc defaults to TLS, so disabling it must be explicit.
+                let mut args = vec![format!("--tls={}", c.tls)];
 
-                // Add TLS flag
-                if c.tls {
-                    args.push("--tls=true".to_string());
-                }
+                args.extend(["-addr".to_string(), c.addr.trim().to_string()]);
 
-                // Add server address
-                if !c.addr.is_empty() {
-                    args.extend(["-addr".to_string(), c.addr.clone()]);
-                }
-
-                // Add client key
                 args.extend(["-key".to_string(), c.key.clone()]);
 
-                Ok(args)
+                args
+            }
+
+            ExtensionId::Easyfrp => {
+                let c = &config.easyfrp;
+                validate_easyfrp_config(c)?;
+
+                let mut args = vec!["control".to_string()];
+                args.extend(c.control_urls.iter().map(|url| url.trim().to_string()));
+                args
             }
 
             ExtensionId::Easytier => {
-                let c = &config.easytier;
-                if c.network_name.is_empty() {
-                    return Err("EasyTier network name is required".into());
-                }
+                return Self::build_easytier_launch(&config.easytier).await;
+            }
 
-                let mut args = vec![
-                    "--network-name".to_string(),
-                    c.network_name.clone(),
-                    "--network-secret".to_string(),
-                    c.network_secret.clone(),
-                ];
+            ExtensionId::Frpc => {
+                return Self::build_frpc_launch(&config.frpc).await;
+            }
+        };
 
-                // Add peer URLs
-                for peer in &c.peer_urls {
-                    if !peer.is_empty() {
-                        args.extend(["--peers".to_string(), peer.clone()]);
-                    }
-                }
+        Ok(ExtensionLaunch {
+            args,
+            config_file: None,
+        })
+    }
 
-                // Add virtual IP: use -d for DHCP if empty, or -i for specific IP
-                if let Some(ref ip) = c.virtual_ip {
-                    if !ip.is_empty() {
-                        // Use specific IP with -i (must include CIDR, e.g., 10.0.0.1/24)
-                        args.extend(["-i".to_string(), ip.clone()]);
-                    } else {
-                        // Empty string means use DHCP
-                        args.push("-d".to_string());
-                    }
-                } else {
-                    // None means use DHCP
-                    args.push("-d".to_string());
-                }
+    async fn build_easytier_launch(config: &EasytierConfig) -> Result<ExtensionLaunch, String> {
+        validate_easytier_config(config)?;
 
-                Ok(args)
+        match config.config_mode {
+            EasytierConfigMode::Quick => Ok(ExtensionLaunch {
+                args: Self::build_easytier_quick_args(config),
+                config_file: None,
+            }),
+            EasytierConfigMode::Full => {
+                let config_file = ProtectedConfigFile::create(
+                    "EasyTier",
+                    "easytier.toml",
+                    config.custom_toml.as_str(),
+                )
+                .await?;
+
+                Ok(ExtensionLaunch {
+                    args: vec!["-c".to_string(), Self::path_to_arg(config_file.path())],
+                    config_file: Some(config_file),
+                })
             }
         }
     }
 
-    /// Prepare ttyd socket directory and clean up old socket file
-    async fn prepare_ttyd_socket() -> Result<(), String> {
-        let socket_path = Path::new(TTYD_SOCKET_PATH);
+    fn build_easytier_quick_args(config: &EasytierConfig) -> Vec<String> {
+        let mut args = vec![
+            "--network-name".to_string(),
+            config.network_name.clone(),
+            "--network-secret".to_string(),
+            config.network_secret.clone(),
+        ];
 
-        // Ensure socket directory exists
+        for peer in &config.peer_urls {
+            if !peer.is_empty() {
+                args.extend(["--peers".to_string(), peer.clone()]);
+            }
+        }
+
+        if let Some(ref ip) = config.virtual_ip {
+            if !ip.is_empty() {
+                args.extend(["-i".to_string(), ip.clone()]);
+            } else {
+                args.push("-d".to_string());
+            }
+        } else {
+            args.push("-d".to_string());
+        }
+
+        args
+    }
+
+    async fn build_frpc_launch(config: &FrpcConfig) -> Result<ExtensionLaunch, String> {
+        validate_frpc_config(config)?;
+
+        let config_text = match config.config_mode {
+            FrpcConfigMode::Quick => Self::build_frpc_quick_toml(config)?,
+            FrpcConfigMode::Full => config.custom_toml.clone(),
+        };
+
+        let config_file =
+            ProtectedConfigFile::create("FRPC", "frpc.toml", config_text.as_str()).await?;
+
+        Ok(ExtensionLaunch {
+            args: vec!["-c".to_string(), Self::path_to_arg(config_file.path())],
+            config_file: Some(config_file),
+        })
+    }
+
+    fn build_frpc_quick_toml(config: &FrpcConfig) -> Result<String, String> {
+        if config.proxy_name.trim().is_empty() {
+            return Err("FRPC proxy name is required".into());
+        }
+        if config.server_addr.trim().is_empty() {
+            return Err("FRPC server address is required".into());
+        }
+        if config.token.is_empty() {
+            return Err("FRPC token is required".into());
+        }
+        if config.local_ip.trim().is_empty() {
+            return Err("FRPC local IP is required".into());
+        }
+
+        let proxy_type = match config.proxy_type {
+            FrpProxyType::Tcp => "tcp",
+            FrpProxyType::Udp => "udp",
+            FrpProxyType::Http => "http",
+            FrpProxyType::Https => "https",
+            FrpProxyType::Stcp => "stcp",
+            FrpProxyType::Sudp => "sudp",
+            FrpProxyType::Xtcp => "xtcp",
+        };
+
+        let mut toml = String::new();
+        toml.push_str(&format!(
+            "serverAddr = {}\nserverPort = {}\n\n",
+            Self::toml_string(config.server_addr.trim()),
+            config.server_port
+        ));
+        toml.push_str("[auth]\n");
+        toml.push_str("method = \"token\"\n");
+        toml.push_str(&format!("token = {}\n\n", Self::toml_string(&config.token)));
+        toml.push_str("[transport]\n");
+        toml.push_str("protocol = \"tcp\"\n\n");
+        toml.push_str("[transport.tls]\n");
+        toml.push_str(&format!("enable = {}\n\n", config.tls));
+        toml.push_str("[[proxies]]\n");
+        toml.push_str(&format!(
+            "name = {}\ntype = {}\nlocalIP = {}\nlocalPort = {}\n",
+            Self::toml_string(config.proxy_name.trim()),
+            Self::toml_string(proxy_type),
+            Self::toml_string(config.local_ip.trim()),
+            config.local_port
+        ));
+
+        match config.proxy_type {
+            FrpProxyType::Tcp | FrpProxyType::Udp => {
+                let remote_port = config.remote_port.ok_or_else(|| {
+                    "FRPC remote port is required for TCP/UDP proxies".to_string()
+                })?;
+                toml.push_str(&format!("remotePort = {}\n", remote_port));
+            }
+            FrpProxyType::Http | FrpProxyType::Https => {
+                if let Some(domain) = config
+                    .custom_domain
+                    .as_ref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
+                    toml.push_str(&format!(
+                        "customDomains = [{}]\n",
+                        Self::toml_string(domain)
+                    ));
+                }
+            }
+            FrpProxyType::Stcp | FrpProxyType::Sudp | FrpProxyType::Xtcp => {
+                if !config.secret_key.is_empty() {
+                    toml.push_str(&format!(
+                        "secretKey = {}\n",
+                        Self::toml_string(&config.secret_key)
+                    ));
+                }
+            }
+        }
+
+        Ok(toml)
+    }
+
+    fn toml_string(value: &str) -> String {
+        serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+    }
+
+    fn path_to_arg(path: &Path) -> String {
+        path.to_string_lossy().to_string()
+    }
+
+    #[cfg(unix)]
+    async fn build_ttyd_listen_args() -> Result<Vec<String>, String> {
+        Self::prepare_ttyd_socket().await?;
+
+        Ok(vec![
+            "-i".to_string(),
+            TTYD_SOCKET_PATH.to_string(),
+            "-b".to_string(),
+            "/api/terminal".to_string(),
+            "-W".to_string(),
+        ])
+    }
+
+    #[cfg(windows)]
+    async fn build_ttyd_listen_args() -> Result<Vec<String>, String> {
+        let cwd = std::env::var("USERPROFILE")
+            .ok()
+            .filter(|path| !path.trim().is_empty())
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| ".".to_string())
+            });
+
+        Ok(vec![
+            "-i".to_string(),
+            TTYD_TCP_HOST.to_string(),
+            "-p".to_string(),
+            TTYD_TCP_PORT.to_string(),
+            "-b".to_string(),
+            "/api/terminal".to_string(),
+            "-w".to_string(),
+            cwd,
+            "-W".to_string(),
+        ])
+    }
+
+    #[cfg(unix)]
+    async fn prepare_ttyd_socket() -> Result<(), String> {
+        let socket_path = std::path::Path::new(TTYD_SOCKET_PATH);
+
         if let Some(socket_dir) = socket_path.parent() {
             if !socket_dir.exists() {
                 tokio::fs::create_dir_all(socket_dir)
@@ -318,7 +514,6 @@ impl ExtensionManager {
             }
         }
 
-        // Remove old socket file if exists
         if tokio::fs::try_exists(TTYD_SOCKET_PATH)
             .await
             .unwrap_or(false)
@@ -331,20 +526,11 @@ impl ExtensionManager {
         Ok(())
     }
 
-    /// Health check - restart crashed processes that should be running
     pub async fn health_check(&self, config: &ExtensionsConfig) {
-        // Collect extensions that need restart check
         let checks: Vec<_> = ExtensionId::all()
             .iter()
             .filter_map(|id| {
-                let should_run = match id {
-                    ExtensionId::Ttyd => config.ttyd.enabled,
-                    ExtensionId::Gostc => config.gostc.enabled && !config.gostc.key.is_empty(),
-                    ExtensionId::Easytier => {
-                        config.easytier.enabled && !config.easytier.network_name.is_empty()
-                    }
-                };
-                if should_run && self.check_available(*id) {
+                if Self::is_enabled_for_config(*id, config) && self.check_available(*id) {
                     Some(*id)
                 } else {
                     None
@@ -352,7 +538,6 @@ impl ExtensionManager {
             })
             .collect();
 
-        // Check which ones need restart (single read lock)
         let needs_restart: Vec<_> = {
             let processes = self.processes.read().await;
             checks
@@ -367,7 +552,6 @@ impl ExtensionManager {
                 .collect()
         };
 
-        // Restart all crashed extensions in parallel
         let restart_futures: Vec<_> = needs_restart
             .into_iter()
             .map(|id| async move {
@@ -381,51 +565,195 @@ impl ExtensionManager {
         futures::future::join_all(restart_futures).await;
     }
 
-    /// Start all enabled extensions in parallel
     pub async fn start_enabled(&self, config: &ExtensionsConfig) {
-        use futures::Future;
-        use std::pin::Pin;
-
-        let mut start_futures: Vec<Pin<Box<dyn Future<Output = ()> + Send + '_>>> = Vec::new();
-
-        // Collect enabled extensions
-        if config.ttyd.enabled && self.check_available(ExtensionId::Ttyd) {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Ttyd, config).await {
-                    tracing::error!("Failed to start ttyd: {}", e);
+        let start_futures: Vec<_> = ExtensionId::all()
+            .iter()
+            .filter(|id| Self::is_enabled_for_config(**id, config) && self.check_available(**id))
+            .map(|id| async move {
+                if let Err(e) = self.start(*id, config).await {
+                    tracing::error!("Failed to start {}: {}", id, e);
                 }
-            }));
-        }
+            })
+            .collect();
 
-        if config.gostc.enabled
-            && !config.gostc.key.is_empty()
-            && self.check_available(ExtensionId::Gostc)
-        {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Gostc, config).await {
-                    tracing::error!("Failed to start gostc: {}", e);
-                }
-            }));
-        }
-
-        if config.easytier.enabled
-            && !config.easytier.network_name.is_empty()
-            && self.check_available(ExtensionId::Easytier)
-        {
-            start_futures.push(Box::pin(async {
-                if let Err(e) = self.start(ExtensionId::Easytier, config).await {
-                    tracing::error!("Failed to start easytier: {}", e);
-                }
-            }));
-        }
-
-        // Start all in parallel
         futures::future::join_all(start_futures).await;
     }
 
-    /// Stop all running extensions in parallel
     pub async fn stop_all(&self) {
         let stop_futures: Vec<_> = ExtensionId::all().iter().map(|id| self.stop(*id)).collect();
         futures::future::join_all(stop_futures).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn gostc_launch_explicitly_sets_tls_and_preserves_key_argument() {
+        let mut config = ExtensionsConfig::default();
+        config.gostc.addr = " example.com:443 ".to_string();
+        config.gostc.key = "key with spaces".to_string();
+        for tls in [true, false] {
+            config.gostc.tls = tls;
+            let launch = ExtensionManager::new()
+                .build_launch(ExtensionId::Gostc, &config)
+                .await
+                .unwrap();
+            assert_eq!(
+                launch.args,
+                [
+                    format!("--tls={tls}"),
+                    "-addr".to_string(),
+                    "example.com:443".to_string(),
+                    "-key".to_string(),
+                    "key with spaces".to_string(),
+                ]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn gostc_invalid_config_cannot_launch_or_autostart() {
+        let mut config = ExtensionsConfig::default();
+        config.gostc.enabled = true;
+        assert!(!ExtensionManager::is_enabled_for_config(
+            ExtensionId::Gostc,
+            &config
+        ));
+        assert!(ExtensionManager::new()
+            .build_launch(ExtensionId::Gostc, &config)
+            .await
+            .is_err());
+        config.gostc.addr = "example.com".to_string();
+        config.gostc.key = "client-key".to_string();
+        assert!(ExtensionManager::is_enabled_for_config(
+            ExtensionId::Gostc,
+            &config
+        ));
+        assert!(!ExtensionManager::is_enabled_for_config(
+            ExtensionId::Easyfrp,
+            &config
+        ));
+    }
+
+    #[tokio::test]
+    async fn easyfrp_launch_uses_control_urls_as_separate_arguments() {
+        let mut config = ExtensionsConfig::default();
+        config.easyfrp.control_urls = vec![
+            "wss://example.com/key-one".to_string(),
+            "txt://example.net/key-two".to_string(),
+        ];
+        let launch = ExtensionManager::new()
+            .build_launch(ExtensionId::Easyfrp, &config)
+            .await
+            .unwrap();
+        assert_eq!(
+            launch.args,
+            [
+                "control",
+                "wss://example.com/key-one",
+                "txt://example.net/key-two"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn easytier_launch_revalidates_full_configuration() {
+        let config = EasytierConfig {
+            config_mode: EasytierConfigMode::Full,
+            custom_toml: "instance_name = [".to_string(),
+            ..Default::default()
+        };
+
+        let error = ExtensionManager::build_easytier_launch(&config)
+            .await
+            .err()
+            .expect("invalid full configuration should fail launch validation");
+        assert!(error.starts_with("EasyTier full configuration is not valid TOML:"));
+    }
+
+    #[test]
+    fn easytier_quick_mode_keeps_command_line_arguments() {
+        let config = EasytierConfig {
+            network_name: "one-kvm".to_string(),
+            network_secret: "secret".to_string(),
+            peer_urls: vec![
+                "tcp://peer-one:11010".to_string(),
+                String::new(),
+                "udp://peer-two:11010".to_string(),
+            ],
+            virtual_ip: Some("10.20.30.40/24".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            ExtensionManager::build_easytier_quick_args(&config),
+            vec![
+                "--network-name",
+                "one-kvm",
+                "--network-secret",
+                "secret",
+                "--peers",
+                "tcp://peer-one:11010",
+                "--peers",
+                "udp://peer-two:11010",
+                "-i",
+                "10.20.30.40/24",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn easytier_full_mode_uses_protected_temporary_config() {
+        let config_text = "instance_name = \"one-kvm\"\n";
+        let config = EasytierConfig {
+            config_mode: EasytierConfigMode::Full,
+            network_name: "ignored-quick-network".to_string(),
+            custom_toml: config_text.to_string(),
+            ..Default::default()
+        };
+
+        let launch = ExtensionManager::build_easytier_launch(&config)
+            .await
+            .expect("full EasyTier launch should build");
+        assert_eq!(launch.args[0], "-c");
+
+        let config_path = std::path::PathBuf::from(&launch.args[1]);
+        assert_eq!(
+            config_path.file_name().and_then(|name| name.to_str()),
+            Some("easytier.toml")
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(&config_path).await.unwrap(),
+            config_text
+        );
+
+        drop(launch);
+        assert!(!config_path.exists());
+    }
+
+    #[test]
+    fn easytier_auto_start_uses_fields_for_selected_mode() {
+        let mut config = ExtensionsConfig::default();
+        config.easytier.enabled = true;
+        config.easytier.network_name = "quick-network".to_string();
+        assert!(ExtensionManager::is_enabled_for_config(
+            ExtensionId::Easytier,
+            &config
+        ));
+
+        config.easytier.config_mode = EasytierConfigMode::Full;
+        assert!(!ExtensionManager::is_enabled_for_config(
+            ExtensionId::Easytier,
+            &config
+        ));
+
+        config.easytier.network_name.clear();
+        config.easytier.custom_toml = "instance_name = \"one-kvm\"".to_string();
+        assert!(ExtensionManager::is_enabled_for_config(
+            ExtensionId::Easytier,
+            &config
+        ));
     }
 }

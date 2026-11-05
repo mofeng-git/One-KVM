@@ -2,82 +2,79 @@
 //!
 //! Provides ATX power management functionality for IP-KVM.
 //! Supports flexible hardware binding with independent configuration for each action.
-//!
-//! # Features
-//!
-//! - Power button control (short press for on/graceful shutdown, long press for force off)
-//! - Reset button control
-//! - Power status monitoring via LED sensing (GPIO only)
-//! - Independent hardware binding for each action (GPIO or USB relay)
-//! - Hot-reload configuration support
-//!
-//! # Hardware Support
-//!
-//! - **GPIO**: Uses Linux GPIO character device (/dev/gpiochipX) for direct hardware control
-//! - **USB Relay**: Uses HID USB relay modules for isolated switching
-//!
-//! # Example
-//!
-//! ```ignore
-//! use one_kvm::atx::{AtxController, AtxControllerConfig, AtxKeyConfig, AtxDriverType, ActiveLevel};
-//!
-//! let config = AtxControllerConfig {
-//!     enabled: true,
-//!     power: AtxKeyConfig {
-//!         driver: AtxDriverType::Gpio,
-//!         device: "/dev/gpiochip0".to_string(),
-//!         pin: 5,
-//!         active_level: ActiveLevel::High,
-//!     },
-//!     reset: AtxKeyConfig {
-//!         driver: AtxDriverType::UsbRelay,
-//!         device: "/dev/hidraw0".to_string(),
-//!         pin: 0,
-//!         active_level: ActiveLevel::High,
-//!     },
-//!     led: Default::default(),
-//! };
-//!
-//! let controller = AtxController::new(config);
-//! controller.init().await?;
-//! controller.power_short().await?;  // Turn on or graceful shutdown
-//! ```
 
 mod controller;
+#[cfg(not(unix))]
+mod disabled_key;
 mod executor;
+#[cfg(unix)]
+mod gpio_linux;
+#[cfg(unix)]
+mod hidraw_linux;
+#[cfg(unix)]
 mod led;
+#[cfg(not(unix))]
+#[path = "disabled_led.rs"]
+mod led;
+mod serial_relay;
+mod traits;
 mod types;
 mod wol;
 
 pub use controller::{AtxController, AtxControllerConfig};
 pub use executor::timing;
 pub use types::{
-    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig, AtxPowerRequest,
-    AtxState, PowerStatus,
+    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxInputBinding, AtxKeyConfig,
+    AtxOutputBinding, AtxPowerRequest, AtxState, HddStatus, PowerStatus, LCUS_RELAY_MAX_CHANNEL,
 };
-pub use wol::send_wol;
+pub use wol::{normalize_wol_mac_address, send_wol};
+
+#[cfg(any(unix, test))]
+fn hidraw_uevent_is_usb_relay(uevent: &str) -> bool {
+    let upper = uevent.to_ascii_uppercase();
+    upper.contains("00005131:00002007")
+        || upper.contains("5131:2007")
+        || upper.contains("PRODUCT=5131/2007")
+}
+
+#[cfg(unix)]
+fn is_usb_relay_hidraw(name: &str) -> bool {
+    let uevent_path = format!("/sys/class/hidraw/{}/device/uevent", name);
+    std::fs::read_to_string(uevent_path)
+        .map(|uevent| hidraw_uevent_is_usb_relay(&uevent))
+        .unwrap_or(false)
+}
 
 /// Discover available ATX devices on the system
 ///
-/// Scans for GPIO chips and USB HID relay devices in a single pass.
+/// Scans for GPIO chips, LCUS USB HID relay devices, and serial relay ports.
 pub fn discover_devices() -> AtxDevices {
     let mut devices = AtxDevices::default();
 
-    // Single pass through /dev directory
+    devices.serial_ports = crate::utils::list_serial_ports();
+
+    #[cfg(unix)]
     if let Ok(entries) = std::fs::read_dir("/dev") {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if name_str.starts_with("gpiochip") {
                 devices.gpio_chips.push(format!("/dev/{}", name_str));
-            } else if name_str.starts_with("hidraw") {
+            }
+            #[cfg(unix)]
+            if name_str.starts_with("hidraw") && is_usb_relay_hidraw(&name_str) {
                 devices.usb_relays.push(format!("/dev/{}", name_str));
+            }
+            if name_str.starts_with("ttyUSB") || name_str.starts_with("ttyACM") {
+                devices.serial_ports.push(format!("/dev/{}", name_str));
             }
         }
     }
 
     devices.gpio_chips.sort();
     devices.usb_relays.sort();
+    devices.serial_ports.sort();
+    devices.serial_ports.dedup();
 
     devices
 }
@@ -88,19 +85,38 @@ mod tests {
 
     #[test]
     fn test_discover_devices() {
-        let devices = discover_devices();
-        // Just verify the function runs without error
-        assert!(devices.gpio_chips.len() >= 0);
-        assert!(devices.usb_relays.len() >= 0);
+        let _devices = discover_devices();
+    }
+
+    #[test]
+    fn test_hidraw_uevent_rejects_non_lcus_usb_relay_id() {
+        assert!(!hidraw_uevent_is_usb_relay(
+            "HID_ID=0003:000016C0:000005DF\nHID_NAME=www.dcttech.com USBRelay2\n"
+        ));
+    }
+
+    #[test]
+    fn test_hidraw_uevent_detects_lcus_hid_relay_id() {
+        assert!(hidraw_uevent_is_usb_relay(
+            "HID_ID=0003:00005131:00002007\n"
+        ));
+        assert!(hidraw_uevent_is_usb_relay("PRODUCT=5131/2007/100"));
+    }
+
+    #[test]
+    fn test_hidraw_uevent_rejects_unrelated_hid() {
+        assert!(!hidraw_uevent_is_usb_relay(
+            "HID_ID=0003:0000046D:0000C534\nHID_NAME=Logitech USB Receiver\n"
+        ));
     }
 
     #[test]
     fn test_module_exports() {
-        // Verify all public exports are accessible
         let _: AtxDriverType = AtxDriverType::None;
         let _: ActiveLevel = ActiveLevel::High;
         let _: AtxKeyConfig = AtxKeyConfig::default();
-        let _: AtxLedConfig = AtxLedConfig::default();
+        let _: AtxInputBinding = AtxInputBinding::default();
+        let _: AtxOutputBinding = AtxOutputBinding::default();
         let _: AtxState = AtxState::default();
         let _: AtxDevices = AtxDevices::default();
     }

@@ -4,205 +4,162 @@ use axum::{
     routing::get,
     Router,
 };
-#[cfg(debug_assertions)]
-use std::path::PathBuf;
-#[cfg(debug_assertions)]
+use rust_embed::Embed;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-// Only embed assets in release mode
-#[cfg(not(debug_assertions))]
-use rust_embed::Embed;
+const FRONTEND_DIR_ENV: &str = "ONE_KVM_FRONTEND_DIR";
 
-#[cfg(not(debug_assertions))]
-/// Embedded static assets (frontend files) - only in release mode
 #[derive(Embed)]
 #[folder = "web/dist"]
 #[prefix = ""]
 pub struct StaticAssets;
 
-/// Get the base directory for static files
-/// In debug mode: relative to executable directory
-/// In release mode: not used (embedded assets)
-#[cfg(debug_assertions)]
-fn get_static_base_dir() -> PathBuf {
-    static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-    BASE_DIR
+fn frontend_dir_override() -> Option<PathBuf> {
+    static FRONTEND_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+    FRONTEND_DIR
         .get_or_init(|| {
-            // Try to get executable directory
-            if let Ok(exe_path) = std::env::current_exe() {
-                if let Some(exe_dir) = exe_path.parent() {
-                    return exe_dir.join("web").join("dist");
+            let value = std::env::var_os(FRONTEND_DIR_ENV)?;
+            let path = PathBuf::from(value);
+
+            if path.as_os_str().is_empty() {
+                return None;
+            }
+
+            match path.canonicalize() {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    tracing::warn!(
+                        "{}='{}' is not accessible: {}",
+                        FRONTEND_DIR_ENV,
+                        path.display(),
+                        e
+                    );
+                    None
                 }
             }
-            // Fallback to current directory
-            PathBuf::from("web/dist")
         })
         .clone()
 }
 
-/// Create router for static file serving
 pub fn static_file_router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
         .route("/", get(index_handler))
-        .route("/{*path}", get(static_handler))
+        // GET-only fallback: a `/{*path}` wildcard would shadow fallbacks
+        // nested under other routers (e.g. the /api 404 handler) in axum 0.8.
+        .fallback_service(get(static_handler))
 }
 
-/// Serve index.html for root path
 async fn index_handler() -> Response<Body> {
     serve_file("index.html")
 }
 
-/// Serve static files
 async fn static_handler(uri: Uri) -> Response<Body> {
     let path = uri.path().trim_start_matches('/');
 
-    // Try to serve the exact file
     if let Some(response) = try_serve_file(path) {
         return response;
     }
 
-    // For SPA routing, serve index.html for non-asset paths
     if !path.contains('.') {
+        // SPA fallback: extensionless paths are frontend routes.
         if let Some(response) = try_serve_file("index.html") {
             return response;
         }
     }
 
-    // If no embedded assets found, return placeholder page
-    // This happens when web/dist was not built before compilation
+    not_found_response()
+}
+
+fn not_found_response() -> Response<Body> {
     Response::builder()
-        .status(StatusCode::OK)
+        .status(StatusCode::NOT_FOUND)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .body(Body::from(placeholder_html()))
+        .body(Body::from(not_found_html()))
         .unwrap()
 }
 
 fn serve_file(path: &str) -> Response<Body> {
-    try_serve_file(path).unwrap_or_else(|| {
-        // If index.html not found in embedded assets, return placeholder
-        if path == "index.html" {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-                .body(Body::from(placeholder_html()))
-                .unwrap()
-        } else {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
-                .unwrap()
-        }
-    })
+    try_serve_file(path).unwrap_or_else(|| not_found_response())
 }
 
 fn try_serve_file(path: &str) -> Option<Response<Body>> {
-    #[cfg(debug_assertions)]
-    {
-        // Debug mode: read from file system
-        let base_dir = get_static_base_dir();
-        let file_path = base_dir.join(path);
-
-        // Check if file exists and is within base directory (prevent directory traversal)
-        if !file_path.starts_with(&base_dir) {
-            tracing::warn!("Path traversal attempt blocked: {}", path);
-            return None;
-        }
-
-        // Normalize path to prevent directory traversal (only if file exists)
-        if let (Ok(normalized_path), Ok(normalized_base)) =
-            (file_path.canonicalize(), base_dir.canonicalize())
-        {
-            if !normalized_path.starts_with(&normalized_base) {
-                tracing::warn!("Path traversal attempt blocked (canonicalized): {}", path);
-                return None;
-            }
-        }
-
-        match std::fs::read(&file_path) {
-            Ok(data) => {
-                let mime = mime_guess::from_path(path)
-                    .first_or_octet_stream()
-                    .to_string();
-
-                return Some(
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, mime)
-                        .header(header::CACHE_CONTROL, "public, max-age=86400")
-                        .body(Body::from(data))
-                        .unwrap(),
-                );
-            }
-            Err(e) => {
-                tracing::debug!(
-                    "Failed to read static file '{}' from '{}': {}",
-                    path,
-                    file_path.display(),
-                    e
-                );
-                return None;
-            }
-        }
+    if let Some(base_dir) = frontend_dir_override() {
+        return try_serve_file_from_dir(&base_dir, path);
     }
 
-    #[cfg(not(debug_assertions))]
-    {
-        // Release mode: use embedded assets
-        let asset = StaticAssets::get(path)?;
+    let asset = StaticAssets::get(path)?;
+    Some(static_response(path, asset.data.to_vec()))
+}
 
-        let mime = mime_guess::from_path(path)
-            .first_or_octet_stream()
-            .to_string();
+fn try_serve_file_from_dir(base_dir: &Path, path: &str) -> Option<Response<Body>> {
+    let file_path = base_dir.join(path);
 
-        Some(
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, mime)
-                .header(header::CACHE_CONTROL, "public, max-age=86400")
-                .body(Body::from(asset.data.to_vec()))
-                .unwrap(),
-        )
+    let normalized_path = match file_path.canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::debug!(
+                "Failed to resolve static file '{}' from '{}': {}",
+                path,
+                file_path.display(),
+                e
+            );
+            return None;
+        }
+    };
+
+    if !normalized_path.starts_with(base_dir) {
+        tracing::warn!("Path traversal attempt blocked: {}", path);
+        return None;
+    }
+
+    match std::fs::read(&normalized_path) {
+        Ok(data) => Some(static_response(path, data)),
+        Err(e) => {
+            tracing::debug!(
+                "Failed to read static file '{}' from '{}': {}",
+                path,
+                normalized_path.display(),
+                e
+            );
+            None
+        }
     }
 }
 
-/// Placeholder index.html when frontend is not built
-pub fn placeholder_html() -> &'static str {
+fn static_response(path: &str, data: Vec<u8>) -> Response<Body> {
+    let mime = mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .to_string();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(data))
+        .unwrap()
+}
+
+pub fn not_found_html() -> String {
     r#"<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One-KVM</title>
+    <title>404 Not Found</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-        }
-        .container {
+            width: 35em;
+            margin: 0 auto;
             text-align: center;
-            padding: 2rem;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
         }
-        h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-        p { color: #888; font-size: 1.1rem; }
-        .version { color: #666; margin-top: 2rem; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>One-KVM</h1>
-        <p>Frontend not built yet.</p>
-        <p>Please build the frontend or access the API directly.</p>
-        <div class="version">v0.1.0</div>
-    </div>
+    <h1>404 Not Found</h1>
 </body>
 </html>"#
+        .to_string()
 }

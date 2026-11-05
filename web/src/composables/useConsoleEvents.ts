@@ -1,11 +1,9 @@
-// Console WebSocket events composable - handles all WebSocket event subscriptions
-// Extracted from ConsoleView.vue for better separation of concerns
-
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useSystemStore } from '@/stores/system'
+import { useSystemStore, type DeviceInfoEvent } from '@/stores/system'
+import type { StreamDeviceLostEventData, StreamStateChangedEventData } from '@/types/websocket'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
+import { isAudioStreamDeviceLostPayload } from '@/lib/streamSignal'
 
 export interface ConsoleEventHandlers {
   onStreamConfigChanging?: (data: { reason?: string }) => void
@@ -15,253 +13,72 @@ export interface ConsoleEventHandlers {
   onStreamModeSwitching?: (data: { transition_id: string; to_mode: string; from_mode: string }) => void
   onStreamModeReady?: (data: { transition_id: string; mode: string }) => void
   onWebRTCReady?: (data: { codec: string; hardware: boolean; transition_id?: string }) => void
-  onStreamStateChanged?: (data: { state: string; device?: string | null }) => void
-  onStreamDeviceLost?: (data: { device: string; reason: string }) => void
+  onStreamStateChanged?: (data: StreamStateChangedEventData) => void
+  onStreamDeviceLost?: (data: StreamDeviceLostEventData) => void
   onStreamReconnecting?: (data: { device: string; attempt: number }) => void
   onStreamRecovered?: (data: { device: string }) => void
-  onDeviceInfo?: (data: any) => void
-  onAudioStateChanged?: (data: { streaming: boolean; device: string | null }) => void
+  onDeviceInfo?: (data: DeviceInfoEvent) => void
 }
 
 export function useConsoleEvents(handlers: ConsoleEventHandlers) {
   const { t } = useI18n()
   const systemStore = useSystemStore()
   const { on, off, connect } = useWebSocket()
-  const unifiedAudio = getUnifiedAudio()
-  const noop = () => {}
+  let subscribed = false
 
-  // HID event handlers
-  function handleHidStateChanged(_data: unknown) {
-    // Empty handler to prevent warning - HID state handled via device_info
-  }
-
-  function handleHidDeviceLost(data: { backend: string; device?: string; reason: string; error_code: string }) {
-    const temporaryErrors = ['eagain', 'eagain_retry']
-    if (temporaryErrors.includes(data.error_code)) return
-
-    if (systemStore.hid) {
-      systemStore.hid.initialized = false
-    }
-    toast.error(t('hid.deviceLost'), {
-      description: t('hid.deviceLostDesc', { backend: data.backend, reason: data.reason }),
-      duration: 5000,
-    })
-  }
-
-  function handleHidReconnecting(data: { backend: string; attempt: number }) {
-    if (data.attempt === 1 || data.attempt % 5 === 0) {
-      toast.info(t('hid.reconnecting'), {
-        description: t('hid.reconnectingDesc', { attempt: data.attempt }),
-        duration: 3000,
-      })
-    }
-  }
-
-  function handleHidRecovered(data: { backend: string }) {
-    if (systemStore.hid) {
-      systemStore.hid.initialized = true
-    }
-    toast.success(t('hid.recovered'), {
-      description: t('hid.recoveredDesc', { backend: data.backend }),
-      duration: 3000,
-    })
-  }
-
-  // Stream device monitoring handlers
-  function handleStreamDeviceLost(data: { device: string; reason: string }) {
-    if (systemStore.stream) {
+  function handleStreamDeviceLost(data: StreamDeviceLostEventData) {
+    const audioLost = isAudioStreamDeviceLostPayload(data)
+    if (systemStore.stream && !audioLost) {
       systemStore.stream.online = false
     }
-    toast.error(t('console.deviceLost'), {
-      description: t('console.deviceLostDesc', { device: data.device, reason: data.reason }),
+    toast.error(t(audioLost ? 'audio.deviceLost' : 'console.deviceLost'), {
+      description: t(audioLost ? 'audio.deviceLostDesc' : 'console.deviceLostDesc', {
+        device: data.device,
+        reason: data.reason,
+      }),
       duration: 5000,
     })
     handlers.onStreamDeviceLost?.(data)
   }
 
-  function handleStreamReconnecting(data: { device: string; attempt: number }) {
-    if (data.attempt === 1 || data.attempt % 5 === 0) {
-      toast.info(t('console.deviceRecovering'), {
-        description: t('console.deviceRecoveringDesc', { attempt: data.attempt }),
-        duration: 3000,
-      })
-    }
-    handlers.onStreamReconnecting?.(data)
-  }
-
-  function handleStreamRecovered(_data: { device: string }) {
+  function handleStreamRecovered(data: { device: string }) {
     if (systemStore.stream) {
       systemStore.stream.online = true
     }
-    toast.success(t('console.deviceRecovered'), {
-      description: t('console.deviceRecoveredDesc'),
-      duration: 3000,
-    })
-    handlers.onStreamRecovered?.(_data)
+    handlers.onStreamRecovered?.(data)
   }
 
-  function handleStreamStateChanged(data: { state: string }) {
-    if (data.state === 'error') {
-      // Handled by video stream composable
-    }
-  }
+  // Keep registration and cleanup together so every subscription is removed.
+  const subscriptions = [
+    ['stream.config_changing', handlers.onStreamConfigChanging],
+    ['stream.config_applied', handlers.onStreamConfigApplied],
+    ['stream.stats_update', handlers.onStreamStatsUpdate],
+    ['stream.mode_changed', handlers.onStreamModeChanged],
+    ['stream.mode_switching', handlers.onStreamModeSwitching],
+    ['stream.mode_ready', handlers.onStreamModeReady],
+    ['stream.webrtc_ready', handlers.onWebRTCReady],
+    ['stream.state_changed', handlers.onStreamStateChanged],
+    ['stream.device_lost', handleStreamDeviceLost],
+    ['stream.reconnecting', handlers.onStreamReconnecting],
+    ['stream.recovered', handleStreamRecovered],
+    ['system.device_info', handlers.onDeviceInfo],
+  ] as const
 
-  function handleStreamStateChangedForward(data: { state: string; device?: string | null }) {
-    handleStreamStateChanged(data)
-    handlers.onStreamStateChanged?.(data)
-  }
-
-  // Audio device monitoring handlers
-  function handleAudioDeviceLost(data: { device?: string; reason: string; error_code: string }) {
-    if (systemStore.audio) {
-      systemStore.audio.streaming = false
-      systemStore.audio.error = data.reason
-    }
-    toast.error(t('audio.deviceLost'), {
-      description: t('audio.deviceLostDesc', { device: data.device || 'default', reason: data.reason }),
-      duration: 5000,
-    })
-  }
-
-  function handleAudioReconnecting(data: { attempt: number }) {
-    if (data.attempt === 1 || data.attempt % 5 === 0) {
-      toast.info(t('audio.reconnecting'), {
-        description: t('audio.reconnectingDesc', { attempt: data.attempt }),
-        duration: 3000,
-      })
-    }
-  }
-
-  function handleAudioRecovered(data: { device?: string }) {
-    if (systemStore.audio) {
-      systemStore.audio.error = null
-    }
-    toast.success(t('audio.recovered'), {
-      description: t('audio.recoveredDesc', { device: data.device || 'default' }),
-      duration: 3000,
-    })
-  }
-
-  async function handleAudioStateChanged(data: { streaming: boolean; device: string | null }) {
-    if (!data.streaming) {
-      unifiedAudio.disconnect()
-      return
-    }
-    handlers.onAudioStateChanged?.(data)
-  }
-
-  // MSD event handlers
-  function handleMsdStateChanged(_data: { mode: string; connected: boolean }) {
-    systemStore.fetchMsdState().catch(() => null)
-  }
-
-  function handleMsdImageMounted(data: { image_id: string; image_name: string; size: number; cdrom: boolean }) {
-    toast.success(t('msd.imageMounted', { name: data.image_name }), {
-      description: `${(data.size / 1024 / 1024).toFixed(2)} MB - ${data.cdrom ? 'CD-ROM' : 'Disk'}`,
-      duration: 3000,
-    })
-    systemStore.fetchMsdState().catch(() => null)
-  }
-
-  function handleMsdImageUnmounted() {
-    toast.info(t('msd.imageUnmounted'), {
-      duration: 2000,
-    })
-    systemStore.fetchMsdState().catch(() => null)
-  }
-
-  function handleMsdError(data: { reason: string; error_code: string }) {
-    if (systemStore.msd) {
-      systemStore.msd.error = data.reason
-    }
-    toast.error(t('msd.error'), {
-      description: t('msd.errorDesc', { reason: data.reason }),
-      duration: 5000,
-    })
-  }
-
-  function handleMsdRecovered() {
-    if (systemStore.msd) {
-      systemStore.msd.error = null
-    }
-    toast.success(t('msd.recovered'), {
-      description: t('msd.recoveredDesc'),
-      duration: 3000,
-    })
-  }
-
-  // Subscribe to all events
   function subscribe() {
-    // HID events
-    on('hid.state_changed', handleHidStateChanged)
-    on('hid.device_lost', handleHidDeviceLost)
-    on('hid.reconnecting', handleHidReconnecting)
-    on('hid.recovered', handleHidRecovered)
-
-    // Stream events
-    on('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
-    on('stream.config_applied', handlers.onStreamConfigApplied ?? noop)
-    on('stream.stats_update', handlers.onStreamStatsUpdate ?? noop)
-    on('stream.mode_changed', handlers.onStreamModeChanged ?? noop)
-    on('stream.mode_switching', handlers.onStreamModeSwitching ?? noop)
-    on('stream.mode_ready', handlers.onStreamModeReady ?? noop)
-    on('stream.webrtc_ready', handlers.onWebRTCReady ?? noop)
-    on('stream.state_changed', handleStreamStateChangedForward)
-    on('stream.device_lost', handleStreamDeviceLost)
-    on('stream.reconnecting', handleStreamReconnecting)
-    on('stream.recovered', handleStreamRecovered)
-
-    // Audio events
-    on('audio.state_changed', handleAudioStateChanged)
-    on('audio.device_lost', handleAudioDeviceLost)
-    on('audio.reconnecting', handleAudioReconnecting)
-    on('audio.recovered', handleAudioRecovered)
-
-    // MSD events
-    on('msd.state_changed', handleMsdStateChanged)
-    on('msd.image_mounted', handleMsdImageMounted)
-    on('msd.image_unmounted', handleMsdImageUnmounted)
-    on('msd.error', handleMsdError)
-    on('msd.recovered', handleMsdRecovered)
-
-    // System events
-    on('system.device_info', handlers.onDeviceInfo ?? noop)
-
-    // Connect WebSocket
+    if (subscribed) return
+    subscribed = true
+    for (const [event, handler] of subscriptions) {
+      if (handler) on(event, handler)
+    }
     connect()
   }
 
-  // Unsubscribe from all events
   function unsubscribe() {
-    off('hid.state_changed', handleHidStateChanged)
-    off('hid.device_lost', handleHidDeviceLost)
-    off('hid.reconnecting', handleHidReconnecting)
-    off('hid.recovered', handleHidRecovered)
-
-    off('stream.config_changing', handlers.onStreamConfigChanging ?? noop)
-    off('stream.config_applied', handlers.onStreamConfigApplied ?? noop)
-    off('stream.stats_update', handlers.onStreamStatsUpdate ?? noop)
-    off('stream.mode_changed', handlers.onStreamModeChanged ?? noop)
-    off('stream.mode_switching', handlers.onStreamModeSwitching ?? noop)
-    off('stream.mode_ready', handlers.onStreamModeReady ?? noop)
-    off('stream.webrtc_ready', handlers.onWebRTCReady ?? noop)
-    off('stream.state_changed', handleStreamStateChangedForward)
-    off('stream.device_lost', handleStreamDeviceLost)
-    off('stream.reconnecting', handleStreamReconnecting)
-    off('stream.recovered', handleStreamRecovered)
-
-    off('audio.state_changed', handleAudioStateChanged)
-    off('audio.device_lost', handleAudioDeviceLost)
-    off('audio.reconnecting', handleAudioReconnecting)
-    off('audio.recovered', handleAudioRecovered)
-
-    off('msd.state_changed', handleMsdStateChanged)
-    off('msd.image_mounted', handleMsdImageMounted)
-    off('msd.image_unmounted', handleMsdImageUnmounted)
-    off('msd.error', handleMsdError)
-    off('msd.recovered', handleMsdRecovered)
-
-    off('system.device_info', handlers.onDeviceInfo ?? noop)
+    if (!subscribed) return
+    subscribed = false
+    for (const [event, handler] of subscriptions) {
+      if (handler) off(event, handler)
+    }
   }
 
   return {
