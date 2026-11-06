@@ -10,6 +10,7 @@ mod hid;
 mod mcp;
 mod otg_network;
 mod stream;
+mod terminal;
 mod uac;
 mod watchdog;
 mod web;
@@ -20,6 +21,7 @@ pub use hid::*;
 pub use mcp::*;
 pub use otg_network::*;
 pub use stream::*;
+pub use terminal::*;
 pub use uac::*;
 pub use watchdog::*;
 pub use web::*;
@@ -40,6 +42,7 @@ pub struct AppConfig {
     pub stream: StreamConfig,
     pub web: WebConfig,
     pub mcp: McpConfig,
+    pub terminal: TerminalConfig,
     pub extensions: ExtensionsConfig,
     pub rustdesk: RustDeskConfig,
     pub vnc: VncConfig,

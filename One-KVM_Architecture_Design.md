@@ -510,7 +510,7 @@ One-KVM 支持多种硬件加速编码：
 One-KVM 提供多种扩展能力：
 
 - Web UI 配置，多语言支持（中文/英文）
-- 内置 Web 终端（ttyd）
+- 内置 Web 终端（服务端 PTY，无需安装 ttyd）
 - 内网穿透支持（gostc）
 - P2P 组网支持（EasyTier）
 - RustDesk 协议集成（跨平台远程访问）

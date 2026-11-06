@@ -63,7 +63,7 @@ const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
   videoMode?: VideoMode
   videoRotation?: VideoRotation
-  ttydRunning?: boolean
+  terminalRunning?: boolean
   showPower?: boolean
   atxEnabled?: boolean
   showTerminal?: boolean
@@ -566,7 +566,7 @@ const hasRightOverflow = computed(() => {
                   variant="ghost"
                   size="sm"
                   class="h-8 gap-1.5 text-xs"
-                  :disabled="!props.ttydRunning"
+                  :disabled="!props.terminalRunning"
                   :aria-label="t('actionbar.webTerminal')"
                   :aria-pressed="!!props.terminalOpen"
                   @click="emit('openTerminal')"
@@ -631,7 +631,7 @@ const hasRightOverflow = computed(() => {
             <!-- Web Terminal -->
             <DropdownMenuItem
               v-if="!isFloatingLayout && props.showTerminal !== false && !isVisible('terminal')"
-              :disabled="!props.ttydRunning"
+              :disabled="!props.terminalRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >
               <Terminal class="size-4 mr-2" />

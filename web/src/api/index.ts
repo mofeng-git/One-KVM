@@ -187,7 +187,7 @@ export const systemApi = {
     msd_enabled?: boolean
     encoder_backend?: string
     audio_device?: string
-    ttyd_enabled?: boolean
+    terminal_enabled?: boolean
     rustdesk_enabled?: boolean
   }) =>
     request<{ success: boolean; message?: string }>('/setup/init', {
@@ -760,7 +760,7 @@ export interface DeviceList {
   }>
   udc: Array<{ name: string }>
   extensions: {
-    ttyd_available: boolean
+    terminal_available: boolean
     rustdesk_available: boolean
   }
 }
@@ -831,6 +831,7 @@ export {
   vncConfigApi,
   webConfigApi,
   watchdogConfigApi,
+  terminalConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
@@ -846,6 +847,8 @@ export {
   type VncStatusResponse,
   type WebConfig,
   type WebConfigUpdate,
+  type TerminalConfigResponse,
+  type TerminalConfigUpdate,
 } from './config'
 
 export type {

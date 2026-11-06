@@ -4,6 +4,8 @@ mod handlers;
 mod logs_ws;
 pub mod openwrt_system;
 mod routes;
+#[cfg(unix)]
+mod shell_ws;
 pub(crate) mod state;
 mod static_files;
 #[cfg(unix)]

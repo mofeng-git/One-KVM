@@ -32,6 +32,7 @@ import {
   updateApi,
   usbApi,
   watchdogConfigApi,
+  terminalConfigApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type WebConfig,
@@ -55,6 +56,7 @@ import type {
   NetworkInterfaceInfo,
   OtgNetworkStatus,
   WatchdogConfigResponse,
+  TerminalConfigResponse,
 } from '@/types/generated'
 import { EasytierConfigMode, FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { toConfigFps } from '@/lib/fps'
@@ -339,6 +341,8 @@ async function loadSectionData(section: SettingsSectionId) {
       await Promise.all([loadWatchdogConfig(), fetchUsbDevices()])
       return
     case 'ext-ttyd':
+      await Promise.all([loadExtensions(), loadTerminalConfig()])
+      return
     case 'ext-remote-access':
       await loadExtensions()
       return
@@ -466,6 +470,13 @@ const showLogs = ref<Record<string, boolean>>({
 })
 
 const showTerminalDialog = ref(false)
+const terminalConfig = ref<TerminalConfigResponse>({
+  enabled: false,
+  shell: isWindows.value ? 'cmd' : '/bin/bash',
+  supported: !isWindows.value,
+})
+const terminalConfigLoading = ref(false)
+const terminalConfigSaving = ref(false)
 
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
@@ -1773,6 +1784,51 @@ async function saveAuthConfig() {
   } finally {
     authConfigLoading.value = false
   }
+}
+
+async function loadTerminalConfig() {
+  terminalConfigLoading.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.get()
+  } catch {
+  } finally {
+    terminalConfigLoading.value = false
+  }
+}
+
+async function saveTerminalConfig() {
+  if (terminalConfigSaving.value) return
+  terminalConfigSaving.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.update({
+      enabled: terminalConfig.value.enabled,
+      shell: terminalConfig.value.shell,
+    })
+    toast.success(t('settingsUi.saveDone'))
+  } catch {
+  } finally {
+    terminalConfigSaving.value = false
+  }
+}
+
+async function openBuiltinTerminal() {
+  if (!terminalConfig.value.enabled || terminalConfigSaving.value) return
+
+  // Apply the current toggle/shell before opening a session so the server
+  // does not reject the WebSocket with the previous configuration.
+  terminalConfigSaving.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.update({
+      enabled: terminalConfig.value.enabled,
+      shell: terminalConfig.value.shell,
+    })
+  } catch {
+    return
+  } finally {
+    terminalConfigSaving.value = false
+  }
+
+  showTerminalDialog.value = true
 }
 
 async function loadExtensions(only?: ExtensionConfigId) {
@@ -4638,11 +4694,67 @@ watch(isWindows, () => {
             </Card>
           </div>
 
-          <!-- ttyd Section -->
+          <!-- Web terminal Section -->
           <div v-show="activeSection === 'ext-ttyd'" class="space-y-4">
-            <Card>
+            <!-- Built-in PTY terminal (no external ttyd required) -->
+            <Card v-if="terminalConfig.supported">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.ttyd.desc')">{{
+                  t('extensions.ttyd.title')
+                }}</CardTitle>
+                <div class="settings-card-actions">
+                  <div class="settings-save-action">
+                    <Button
+                      :disabled="terminalConfigLoading || terminalConfigSaving"
+                      @click="saveTerminalConfig"
+                    >
+                      <Loader2 v-if="terminalConfigSaving" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
+                    </Button>
+                  </div>
+                </div></CardHeader
+              >
+              <CardContent class="space-y-4">
+                <div class="settings-inline-actions">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    :disabled="terminalConfigLoading || !terminalConfig.enabled"
+                    @click="openBuiltinTerminal"
+                  >
+                    <Terminal class="size-4 mr-1" />
+                    {{ t('extensions.ttyd.open') }}
+                  </Button>
+                </div>
+                <div class="settings-field-list grid gap-4">
+                  <div class="settings-toggle flex items-center justify-between gap-4">
+                    <div class="space-y-1">
+                      <Label>{{ t('extensions.ttyd.enabled') }}</Label>
+                      <p class="text-xs text-muted-foreground">
+                        {{ t('extensions.ttyd.enabledHint') }}
+                      </p>
+                    </div>
+                    <Switch v-model="terminalConfig.enabled" />
+                  </div>
+                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-start">
+                    <Label class="sm:text-right sm:pt-2">{{ t('extensions.ttyd.shell') }}</Label>
+                    <div class="space-y-1.5 sm:col-span-3">
+                      <Input
+                        v-model="terminalConfig.shell"
+                        :placeholder="isWindows ? 'cmd' : '/bin/bash'"
+                      />
+                      <p class="text-xs text-muted-foreground">
+                        {{ t('extensions.ttyd.shellHint') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <!-- Legacy ttyd fallback for platforms without a built-in PTY -->
+            <Card v-else>
+              <CardHeader class="settings-card-heading"
+                ><CardTitle :help="t('extensions.ttyd.legacyDesc')">{{
                   t('extensions.ttyd.title')
                 }}</CardTitle>
                 <div class="settings-card-actions">

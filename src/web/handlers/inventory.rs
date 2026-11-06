@@ -11,7 +11,7 @@ pub struct DeviceList {
 
 #[derive(Serialize)]
 pub struct ExtensionsAvailability {
-    pub ttyd_available: bool,
+    pub terminal_available: bool,
     pub rustdesk_available: bool,
 }
 
@@ -173,8 +173,12 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
         Err(_) => vec![],
     };
 
-    // Check extension availability
-    let ttyd_available = state
+    // The built-in terminal is always available on Unix; Windows keeps the
+    // legacy ttyd fallback.
+    #[cfg(unix)]
+    let terminal_available = true;
+    #[cfg(windows)]
+    let terminal_available = state
         .extensions
         .check_available(crate::extensions::ExtensionId::Ttyd);
 
@@ -184,7 +188,7 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
         audio: audio_devices,
         udc: udc_devices,
         extensions: ExtensionsAvailability {
-            ttyd_available,
+            terminal_available,
             rustdesk_available: platform.rustdesk.available,
         },
     })

@@ -211,6 +211,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/watchdog",
             patch(handlers::config::update_watchdog_config),
         )
+        // Built-in web terminal (PTY shell) configuration
+        .route(
+            "/config/terminal",
+            get(handlers::config::get_terminal_config),
+        )
+        .route(
+            "/config/terminal",
+            patch(handlers::config::update_terminal_config),
+        )
         .route(
             "/config/mcp",
             get(handlers::mcp_config).patch(handlers::mcp_update_config),
@@ -288,6 +297,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let user_routes = {
         user_routes
             .route("/ws/uac-audio", any(uac_audio_ws_handler))
+            // Built-in PTY-backed shell terminal (no external ttyd required)
+            .route("/terminal/shell", get(super::shell_ws::shell_ws_handler))
             .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
             .route("/config/msd", get(handlers::config::get_msd_config))
             .route("/config/msd", patch(handlers::config::update_msd_config))

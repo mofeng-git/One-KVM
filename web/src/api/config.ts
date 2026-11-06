@@ -38,6 +38,8 @@ import type {
   WebConfigUpdate,
   WatchdogConfigResponse,
   WatchdogConfigUpdate,
+  TerminalConfigResponse,
+  TerminalConfigUpdate,
 } from '@/types/generated'
 
 import { request } from './request'
@@ -54,6 +56,16 @@ export const watchdogConfigApi = {
       method: 'PATCH',
       body: JSON.stringify(config),
     }, { toastOnError: false }),
+}
+
+export const terminalConfigApi = {
+  get: () => request<TerminalConfigResponse>('/config/terminal', {}, { toastOnError: false }),
+
+  update: (config: TerminalConfigUpdate) =>
+    request<TerminalConfigResponse>('/config/terminal', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
 }
 
 export const authConfigApi = {
@@ -385,6 +397,7 @@ export const vncConfigApi = {
 export type WebConfig = WebConfigResponse
 
 export type { WebConfigUpdate }
+export type { TerminalConfigResponse, TerminalConfigUpdate }
 
 export const webConfigApi = {
   get: () => request<WebConfigResponse>('/config/web'),

@@ -184,7 +184,7 @@ audiopus = { version = "0.2", optional = true }
 one-kvm-bluetooth-hid = { path = "libs/bluetooth-hid", optional = true }
 
 # Utilities
-nix = { version = "0.31", default-features = false, features = ["fs", "socket", "net", "hostname", "poll"], optional = true }
+nix = { version = "0.31", default-features = false, features = ["fs", "socket", "net", "hostname", "poll", "term"], optional = true }
 
 # Video capture (V4L2)
 v4l2r = { path = "libs/v4l2r", optional = true }

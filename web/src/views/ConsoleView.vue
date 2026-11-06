@@ -243,13 +243,13 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const changingPassword = ref(false)
 
-const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
+const terminalStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
 const featureVisibility = useFeatureVisibility()
 const { isDark, toggleTheme } = useTheme()
 const { consoleLayout } = useConsoleLayout()
 provideConsoleAppearance(consoleLayout)
-const terminalAvailable = computed(() => ttydStatus.value?.available !== false)
+const terminalAvailable = computed(() => terminalStatus.value?.available !== false)
 const showPower = computed(() => featureVisibility.value.power)
 const showTerminal = computed(() => terminalAvailable.value && featureVisibility.value.webTerminal)
 const showPasteText = computed(() => featureVisibility.value.pasteText)
@@ -1468,7 +1468,7 @@ function handleDeviceInfo(data: any) {
   const prevAudioStreaming = systemStore.audio?.streaming ?? false
   const prevAudioDevice = systemStore.audio?.device ?? null
   systemStore.updateFromDeviceInfo(data)
-  ttydStatus.value = data.ttyd ?? null
+  terminalStatus.value = data.terminal ?? null
 
   const nextAudioStreaming = systemStore.audio?.streaming ?? false
   const nextAudioDevice = systemStore.audio?.device ?? null
@@ -2023,7 +2023,7 @@ async function handleChangePassword() {
 
 function openTerminal() {
   if (!showTerminal.value) return
-  if (!ttydStatus.value?.running) return
+  if (!terminalStatus.value?.running) return
   showTerminalDialog.value = true
 }
 
@@ -3189,7 +3189,7 @@ onUnmounted(() => {
               v-if="consoleLayout === 'floating'"
               :show-stats="showConnectionStats"
               :show-terminal="showTerminal"
-              :terminal-running="!!ttydStatus?.running"
+              :terminal-running="!!terminalStatus?.running"
               :stats-open="statsSheetOpen"
               :terminal-open="showTerminalDialog"
 
@@ -3296,7 +3296,7 @@ onUnmounted(() => {
         :mouse-mode="mouseMode"
         :video-mode="videoMode"
         :video-rotation="videoRotation"
-        :ttyd-running="ttydStatus?.running"
+        :terminal-running="terminalStatus?.running"
         :show-power="showPower"
         :atx-enabled="systemStore.atx?.available === true"
         :show-terminal="showTerminal"

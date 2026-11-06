@@ -14,6 +14,7 @@ mod redfish;
 mod rtsp;
 mod rustdesk;
 mod stream;
+mod terminal;
 #[cfg(unix)]
 mod uac;
 mod usb_update;
@@ -42,6 +43,7 @@ pub use rustdesk::{
     update_rustdesk_config,
 };
 pub use stream::{get_stream_config, update_stream_config};
+pub use terminal::{get_terminal_config, update_terminal_config};
 #[cfg(unix)]
 pub use uac::{get_uac_config, update_uac_config};
 pub use video::{get_video_config, update_video_config};

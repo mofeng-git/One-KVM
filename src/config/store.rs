@@ -56,8 +56,28 @@ impl ConfigStore {
                     removed |= auth.remove("totp_enabled").is_some();
                     removed |= auth.remove("totp_secret").is_some();
                 }
-                let config =
+                let had_terminal_config = value.get("terminal").is_some();
+                let mut config: AppConfig =
                     serde_json::from_value(value).map_err(|e| AppError::Config(e.to_string()))?;
+                if !had_terminal_config {
+                    // Preserve the previous ttyd opt-in when upgrading. The
+                    // built-in terminal replaces ttyd but must not widen access.
+                    config.terminal.enabled = config.extensions.ttyd.enabled;
+                    #[cfg(unix)]
+                    {
+                        let shell = config.extensions.ttyd.shell.trim();
+                        config.terminal.shell = if crate::config::validate_shell(shell).is_ok() {
+                            shell.to_string()
+                        } else {
+                            crate::config::default_shell().to_string()
+                        };
+                    }
+                    #[cfg(windows)]
+                    {
+                        config.terminal.shell = config.extensions.ttyd.shell.clone();
+                    }
+                    removed = true;
+                }
                 Ok((config, removed))
             }
             None => {

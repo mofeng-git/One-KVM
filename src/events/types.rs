@@ -80,7 +80,7 @@ pub struct AudioDeviceInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TtydDeviceInfo {
+pub struct TerminalDeviceInfo {
     pub available: bool,
     pub running: bool,
 }
@@ -216,7 +216,7 @@ pub enum SystemEvent {
         msd: Option<MsdDeviceInfo>,
         atx: Option<AtxDeviceInfo>,
         audio: Option<AudioDeviceInfo>,
-        ttyd: TtydDeviceInfo,
+        terminal: TerminalDeviceInfo,
     },
 
     #[serde(rename = "error")]
@@ -406,7 +406,7 @@ mod tests {
                 msd: None,
                 atx: None,
                 audio: None,
-                ttyd: TtydDeviceInfo {
+                terminal: TerminalDeviceInfo {
                     available: false,
                     running: false,
                 },

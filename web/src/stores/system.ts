@@ -146,7 +146,7 @@ export interface AudioDeviceInfo {
   error: string | null
 }
 
-export interface TtydDeviceInfo {
+export interface TerminalDeviceInfo {
   available: boolean
   running: boolean
 }
@@ -157,7 +157,7 @@ export interface DeviceInfoEvent {
   msd: MsdDeviceInfo | null
   atx: AtxDeviceInfo | null
   audio: AudioDeviceInfo | null
-  ttyd: TtydDeviceInfo
+  terminal: TerminalDeviceInfo
 }
 
 export const useSystemStore = defineStore('system', () => {
