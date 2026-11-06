@@ -667,7 +667,7 @@ export default {
     reportTitle: 'Submit a problem report',
     reportDescription: 'Problem description',
     reportPlaceholder: 'Describe the problem, steps to reproduce, or expected behavior…',
-    reportHint: 'The report uploads the latest 1000 log lines to api.mrcong.cn as an attachment.',
+    reportHint: 'The report sends logs to the author to help diagnose the problem. Please describe the issue in detail.',
     reportUploadHint: 'Up to 1000 recent lines will be sent. Do not include passwords or other secrets in the description or logs.',
     reportCancel: 'Cancel',
     reportSubmit: 'Submit report',

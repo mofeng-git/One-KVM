@@ -665,7 +665,7 @@ export default {
     reportTitle: '提交问题报告',
     reportDescription: '问题描述',
     reportPlaceholder: '请描述遇到的问题、复现步骤或预期行为…',
-    reportHint: '报告会把最近 1000 行日志作为附件发送到 api.mrcong.cn。',
+    reportHint: '报告会将日志反馈给作者以便于更好的定位问题，请详细描述故障详情。',
     reportUploadHint: '将发送最近最多 1000 行日志。请勿在描述或日志中泄露密码等敏感信息。',
     reportCancel: '取消',
     reportSubmit: '提交报告',

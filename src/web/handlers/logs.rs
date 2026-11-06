@@ -11,7 +11,8 @@ use crate::error::{AppError, Result};
 use crate::logging;
 
 /// Feedback endpoint that accepts a problem description plus a log attachment.
-pub const REPORT_ENDPOINT: &str = "http://api.mrcong.cn/report.php?app=one-kvm";
+pub const REPORT_ENDPOINT: &str =
+    "http://api.mrcong.cn:300/apps/one-kvm/report.php?app=one-kvm";
 const REPORT_DESCRIPTION_FIELD: &str = "description";
 const REPORT_LOG_FIELD: &str = "log";
 const REPORT_LOG_FILENAME: &str = "one-kvm.log";
