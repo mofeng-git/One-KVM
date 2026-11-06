@@ -167,6 +167,8 @@ import {
   PanelLeft,
   GalleryHorizontalEnd,
   ScrollText,
+  Search,
+  X,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -254,6 +256,19 @@ const navGroups = computed(() => [
     ],
   },
 ])
+
+const navQuery = ref('')
+
+const filteredNavGroups = computed(() => {
+  const query = navQuery.value.trim().toLowerCase()
+  if (!query) return navGroups.value
+  return navGroups.value
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => item.label.toLowerCase().includes(query)),
+    }))
+    .filter(group => group.items.length > 0)
+})
 
 const sectionMeta = computed(() => {
   const fallback = { icon: Info, title: t('settings.title'), description: '' }
@@ -2594,11 +2609,34 @@ watch(isWindows, () => {
         class="top-10 h-[calc(100dvh-2.5rem)] sm:top-14 sm:h-[calc(100dvh-3.5rem)]"
         collapsible="offcanvas"
       >
-        <SidebarHeader class="gap-1 px-6 pt-4 pb-2 text-foreground md:pt-6">
-          <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
+        <SidebarHeader class="gap-3 px-4 pt-4 pb-1 text-foreground md:pt-6">
+          <h1 class="px-2 text-xl font-semibold">{{ t('settings.title') }}</h1>
+          <div class="settings-nav-search relative">
+            <Search
+              class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              v-model="navQuery"
+              type="text"
+              size="sm"
+              :placeholder="t('settingsUi.searchPlaceholder')"
+              :aria-label="t('settingsUi.searchPlaceholder')"
+              class="pr-8 pl-8"
+            />
+            <button
+              v-if="navQuery"
+              type="button"
+              class="absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              :aria-label="t('settingsUi.clearSearch')"
+              @click="navQuery = ''"
+            >
+              <X class="size-3.5" />
+            </button>
+          </div>
         </SidebarHeader>
         <SidebarContent class="px-3 pb-6 md:pb-10">
-          <SidebarGroup v-for="group in navGroups" :key="group.id" class="px-0 py-1">
+          <SidebarGroup v-for="group in filteredNavGroups" :key="group.id" class="px-0 py-1">
             <SidebarGroupLabel class="text-[13px] text-muted-foreground">{{ group.title }}</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in group.items" :key="item.id">
@@ -2637,6 +2675,12 @@ watch(isWindows, () => {
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
+          <p
+            v-if="!filteredNavGroups.length"
+            class="px-3 py-8 text-center text-xs text-muted-foreground"
+          >
+            {{ t('settingsUi.searchEmpty') }}
+          </p>
         </SidebarContent>
         <div class="settings-back mx-3 pb-3">
           <Button as-child variant="ghost" class="justify-start"
@@ -2661,13 +2705,19 @@ watch(isWindows, () => {
         <div class="settings-page" :data-section="activeSection">
           <!-- Section Header -->
           <header class="settings-section-heading">
-            <div class="flex items-center gap-2.5">
-              <component :is="sectionMeta.icon" class="size-5 text-muted-foreground" />
-              <h1 class="text-xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+            <div class="flex items-start gap-3">
+              <span
+                class="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary ring-1 ring-primary/15"
+              >
+                <component :is="sectionMeta.icon" class="size-[18px]" />
+              </span>
+              <div class="min-w-0">
+                <h1 class="text-xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+                <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
+                  {{ sectionMeta.description }}
+                </p>
+              </div>
             </div>
-            <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
-              {{ sectionMeta.description }}
-            </p>
           </header>
 
           <!-- Appearance Section -->
@@ -2720,25 +2770,30 @@ watch(isWindows, () => {
                     v-for="option in consoleLayoutOptions"
                     :key="option.value"
                     type="button"
-                    class="group rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                    class="group relative rounded-xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                     :class="
                       consoleLayout === option.value
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'border-border'
+                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/60'
+                        : 'border-border bg-card'
                     "
                     :aria-pressed="consoleLayout === option.value"
                     @click="setConsoleLayout(option.value)"
                   >
-                    <ConsoleLayoutPreview :layout="option.value" class="mb-3" />
+                    <ConsoleLayoutPreview
+                      :layout="option.value"
+                      class="mb-3 transition-transform duration-200 group-hover:scale-[1.01]"
+                    />
                     <div class="flex items-center gap-2">
                       <component :is="option.icon" class="size-4 text-muted-foreground" />
                       <span class="text-sm font-medium">{{
                         t(`settings.consoleLayoutOptions.${option.value}`)
                       }}</span>
-                      <Check
+                      <span
                         v-if="consoleLayout === option.value"
-                        class="ml-auto size-4 text-primary"
-                      />
+                        class="absolute top-3 right-3 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm"
+                      >
+                        <Check class="size-3" stroke-width="3" />
+                      </span>
                     </div>
                   </button>
                 </div>

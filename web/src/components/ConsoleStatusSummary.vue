@@ -32,7 +32,7 @@ const hasError = computed(() => issues.value.some(item => item.status === 'error
 
 function dotClass(status: ConsoleStatusItem['status']) {
   return {
-    connected: 'bg-status-active',
+    connected: 'bg-status-active console-dot-live',
     connecting: 'bg-warning animate-pulse',
     disconnected: 'bg-muted-foreground',
     error: 'bg-destructive',
@@ -55,7 +55,7 @@ function dotClass(status: ConsoleStatusItem['status']) {
       >
         <AlertCircle v-if="hasError" class="size-3.5 shrink-0" />
         <Info v-else-if="issues.length" class="size-3.5 shrink-0" />
-        <span v-else class="size-2 shrink-0 rounded-full bg-status-active" />
+        <span v-else class="console-dot-live size-2 shrink-0 rounded-full bg-status-active" />
         <span class="console-status-summary__label truncate" role="status">{{ summary }}</span>
         <span v-if="showVideoInfo && !issues.length" class="hidden text-muted-foreground md:inline">{{ videoInfo }}</span>
         <ChevronDown class="size-3 shrink-0" />

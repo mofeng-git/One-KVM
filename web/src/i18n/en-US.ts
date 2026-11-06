@@ -350,7 +350,7 @@ export default {
     caps: 'Caps',
     num: 'Num',
     scroll: 'Scroll',
-    keyboardLedUnavailable: 'Keyboard LED status is disabled or unsupported',
+    keyboardLedUnavailable: 'Keyboard LED sync is off. Open HID settings to enable it.',
     toggleLock: 'Toggle {key}',
     toggleLockFailed: 'Failed to toggle keyboard lock',
   },

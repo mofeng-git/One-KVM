@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { CanonicalKey } from '@/types/generated'
 import { Badge } from '@/components/ui/badge'
@@ -81,7 +82,12 @@ const keysDisplay = computed(() => {
           </Badge>
         </div>
         <div v-else-if="!minimal" class="text-xs text-muted-foreground">
-          {{ t('infobar.keyboardLedUnavailable') }}
+          <RouterLink
+            to="/settings?tab=hid"
+            class="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+          >
+            {{ t('infobar.keyboardLedUnavailable') }}
+          </RouterLink>
         </div>
         <span v-if="captured && minimal" class="min-w-0 truncate text-xs text-muted-foreground" :title="t('infobar.pointerCaptured')">{{ t('infobar.pointerCaptured') }}</span>
         <div v-if="keysDisplay" class="text-xs text-muted-foreground truncate max-w-[200px]">
@@ -131,7 +137,12 @@ const keysDisplay = computed(() => {
             </Badge>
           </template>
           <div v-else class="px-3 py-1 text-muted-foreground/60">
-            {{ t('infobar.keyboardLedUnavailable') }}
+            <RouterLink
+              to="/settings?tab=hid"
+              class="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              {{ t('infobar.keyboardLedUnavailable') }}
+            </RouterLink>
           </div>
         </div>
       </div>

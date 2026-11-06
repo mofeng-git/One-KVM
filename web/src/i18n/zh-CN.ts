@@ -349,7 +349,7 @@ export default {
     caps: 'Caps',
     num: 'Num',
     scroll: 'Scroll',
-    keyboardLedUnavailable: '键盘状态灯功能未开启或不支持',
+    keyboardLedUnavailable: '键盘指示灯同步未启用，点击前往 HID 设置开启',
     toggleLock: '切换 {key}',
     toggleLockFailed: '切换键盘锁定状态失败',
   },
