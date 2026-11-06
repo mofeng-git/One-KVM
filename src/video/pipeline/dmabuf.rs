@@ -6,6 +6,11 @@ use crate::video::codec::registry::EncoderRegistry;
 use hwcodec::rkmpp_dmabuf::{DmaEncoder, DmaEncoderConfig, DmaFormat};
 
 pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
+    // The DMA path feeds captured frames straight into the encoder, so it
+    // cannot apply the transmission downscale. Fall back to the copy pipeline.
+    if config.is_scaling() {
+        return false;
+    }
     if std::env::var("ONE_KVM_RKMPP_DMABUF").as_deref() == Ok("0") {
         return false;
     }
@@ -168,15 +173,15 @@ fn run(
         idle_since = None;
 
         while let Ok(command) = commands.try_recv() {
-            let PipelineCmd::SetBitrate { preset } = command;
+            let PipelineCmd::SetBitrate { preset, .. } = command;
             // Preserve Custom values and preset-specific GOPs across fallback/reopen.
             config.bitrate_preset = preset;
+            let bitrate_kbps = config.bitrate_kbps();
+            let gop_size = config.gop_size().max(1);
             if let Some(capture) = active.as_mut() {
                 match capture.encoder.as_mut().expect("active encoder") {
                     CaptureEncoder::Dma(encoder) => {
-                        if let Err(error) =
-                            encoder.reconfigure(config.bitrate_kbps(), config.gop_size().max(1))
-                        {
+                        if let Err(error) = encoder.reconfigure(bitrate_kbps, gop_size) {
                             warn!(
                                 "RKMPP DMA reconfigure failed, using copy encoder: {}",
                                 error
@@ -186,9 +191,14 @@ fn run(
                             pipeline.keyframe_requested.store(true, Ordering::Release);
                         }
                     }
-                    CaptureEncoder::Copy(encoder) => {
-                        pipeline.apply_cmd(encoder, PipelineCmd::SetBitrate { preset })?
-                    }
+                    CaptureEncoder::Copy(encoder) => pipeline.apply_cmd(
+                        encoder,
+                        PipelineCmd::SetBitrate {
+                            preset,
+                            bitrate_kbps,
+                            gop_size,
+                        },
+                    )?,
                 }
             }
         }

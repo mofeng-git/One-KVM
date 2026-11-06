@@ -171,7 +171,14 @@ mod ffmpeg {
                     println!("cargo:rustc-link-lib=va-drm");
                     println!("cargo:rustc-link-lib=va-x11"); // Required for vaGetDisplay
                     println!("cargo:rustc-link-lib=mfx");
-                } else if std::env::var_os("CARGO_FEATURE_RKMPP").is_some() {
+                } else if matches!(target_arch.as_str(), "aarch64" | "arm")
+                    && (std::env::var_os("CARGO_FEATURE_RKMPP").is_some()
+                        || lib_dir.join("librockchip_mpp.a").exists())
+                {
+                    // The ARM cross images ship a static FFmpeg built with
+                    // --enable-rkmpp, so libavcodec/libavutil reference MPP
+                    // symbols even when the crate's rkmpp feature is disabled.
+                    // Link the native libraries whenever we link that FFmpeg.
                     for lib in ["rockchip_mpp", "rga"] {
                         if !lib_dir.join(format!("lib{lib}.a")).exists() {
                             panic!("missing static library: lib{lib}.a");

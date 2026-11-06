@@ -358,3 +358,101 @@ impl From<(u32, u32)> for Resolution {
         Self { width, height }
     }
 }
+
+/// Smallest supported transmission height (0 means "use the source size").
+pub const MIN_OUTPUT_MAX_HEIGHT: u32 = 144;
+/// Largest supported transmission height.
+pub const MAX_OUTPUT_MAX_HEIGHT: u32 = 4320;
+
+/// Whether `height` is a valid transmission height limit.
+///
+/// `0` is the sentinel for "no downscale, use the captured resolution".
+pub fn is_valid_output_max_height(height: u32) -> bool {
+    height == 0 || (MIN_OUTPUT_MAX_HEIGHT..=MAX_OUTPUT_MAX_HEIGHT).contains(&height)
+}
+
+fn even_dimension(value: u32) -> u32 {
+    value.max(2) & !1
+}
+
+/// Downscale `source` so that its height does not exceed `max_height`.
+///
+/// The capture resolution is never changed. The aspect ratio is preserved,
+/// both dimensions are even (required by YUV 4:2:0 encoders), and the result
+/// is never larger than the source (no upscaling).
+pub fn scale_to_max_height(source: Resolution, max_height: u32) -> Resolution {
+    if max_height == 0 || source.height <= max_height {
+        return source;
+    }
+
+    let height = even_dimension(max_height.min(source.height));
+    let ideal_width = source.width as f64 * height as f64 / source.height as f64;
+    // Round to the nearest even pixel so the aspect ratio stays as close as
+    // possible to the source (e.g. 1920×1080 → 480 gives 854×480, not 852×480).
+    let width = (((ideal_width / 2.0).round() as u32) * 2)
+        .max(2)
+        .min(source.width);
+
+    Resolution::new(width, height)
+}
+
+#[cfg(test)]
+mod output_scaling_tests {
+    use super::*;
+
+    #[test]
+    fn zero_keeps_source_resolution() {
+        assert_eq!(
+            scale_to_max_height(Resolution::HD1080, 0),
+            Resolution::HD1080
+        );
+    }
+
+    #[test]
+    fn never_upscales() {
+        assert_eq!(
+            scale_to_max_height(Resolution::HD720, 1080),
+            Resolution::HD720
+        );
+    }
+
+    #[test]
+    fn scales_1080p_to_720p() {
+        assert_eq!(
+            scale_to_max_height(Resolution::HD1080, 720),
+            Resolution::HD720
+        );
+    }
+
+    #[test]
+    fn preserves_aspect_ratio_for_16x10() {
+        assert_eq!(
+            scale_to_max_height(Resolution::WUXGA, 720),
+            Resolution::new(1152, 720)
+        );
+    }
+
+    #[test]
+    fn rounds_to_even_dimensions() {
+        assert_eq!(
+            scale_to_max_height(Resolution::new(1366, 768), 720),
+            Resolution::new(1280, 720)
+        );
+        assert_eq!(
+            scale_to_max_height(Resolution::new(854, 480), 360),
+            Resolution::new(640, 360)
+        );
+        assert_eq!(
+            scale_to_max_height(Resolution::HD1080, 480),
+            Resolution::new(854, 480)
+        );
+    }
+
+    #[test]
+    fn validates_supported_heights() {
+        assert!(is_valid_output_max_height(0));
+        assert!(is_valid_output_max_height(720));
+        assert!(!is_valid_output_max_height(1));
+        assert!(!is_valid_output_max_height(MAX_OUTPUT_MAX_HEIGHT + 1));
+    }
+}

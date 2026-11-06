@@ -180,6 +180,8 @@ export interface StreamConfig {
 	turn_server?: string;
 	turn_username?: string;
 	turn_password?: string;
+	/** Maximum height of the transmitted video. Capture resolution is never changed. `0` means "use the captured resolution". */
+	output_max_height: number;
 }
 
 export interface WebConfig {
@@ -320,6 +322,21 @@ export interface WatchdogConfig {
 	enabled: boolean;
 }
 
+/**
+ * Built-in browser terminal settings.
+ *
+ * The built-in terminal does not depend on an external `ttyd` binary; the
+ * server allocates a pseudo-terminal and runs the configured shell directly.
+ */
+export interface TerminalConfig {
+	/** Whether authenticated users may open the built-in web terminal. */
+	enabled: boolean;
+	/** Shell executable used for new sessions. Arguments are allowed, for
+	example `/bin/bash -l`. Arguments are passed directly to the process and
+	are never interpreted by a shell. */
+	shell: string;
+}
+
 /** Configuration for the USB Audio Class microphone gadget. */
 export interface UacConfig {
 	enabled: boolean;
@@ -339,6 +356,7 @@ export interface AppConfig {
 	stream: StreamConfig;
 	web: WebConfig;
 	mcp: McpConfig;
+	terminal: TerminalConfig;
 	extensions: ExtensionsConfig;
 	rustdesk: RustDeskConfig;
 	vnc: VncConfig;
@@ -667,6 +685,8 @@ export interface StreamConfigResponse {
 	turn_server?: string;
 	turn_username?: string;
 	turn_password?: string;
+	/** Maximum transmitted height (`0` = capture resolution). */
+	output_max_height: number;
 }
 
 export interface StreamConfigUpdate {
@@ -687,6 +707,8 @@ export interface StreamConfigUpdate {
 	turn_username?: string;
 	/** TURN password */
 	turn_password?: string;
+	/** Maximum transmitted height (`0` = capture resolution) */
+	output_max_height?: number;
 }
 
 export interface TtydConfigUpdate {
@@ -732,6 +754,18 @@ export interface WatchdogConfigResponse {
 	supported: boolean;
 	running: boolean;
 	reason?: string;
+}
+
+export interface TerminalConfigResponse {
+	enabled: boolean;
+	shell: string;
+	/** Whether this platform has a built-in PTY terminal implementation. */
+	supported: boolean;
+}
+
+export interface TerminalConfigUpdate {
+	enabled?: boolean;
+	shell?: string;
 }
 
 export interface WatchdogConfigUpdate {

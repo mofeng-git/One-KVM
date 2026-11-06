@@ -1,0 +1,160 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master, 'one-kvm-*' ]
+    tags: [ 'v*' ]  # 当创建标签时触发构建
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+# 同一分支连续推送时取消旧构建，避免功能分支浪费资源。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Node.js for frontend build
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Build frontend
+      working-directory: ./web
+      run: |
+        npm ci
+        npm run build
+
+    - name: Install cross-compilation tools
+      run: |
+        rustup target add ${{ matrix.target }}
+        cargo install cross --git https://github.com/cross-rs/cross
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev libasound2-dev libudev-dev clang cmake protobuf-compiler
+        
+        # Install target-specific packages if needed
+        case "${{ matrix.target }}" in
+          aarch64-unknown-linux-gnu)
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+            ;;
+          armv7-unknown-linux-gnueabihf)
+            sudo apt-get install -y gcc-arm-linux-gnueabihf
+            ;;
+        esac
+
+    - name: Build with cross
+      run: |
+        # ARM build images ship a static FFmpeg built with --enable-rkmpp, so the
+        # rkmpp feature is required for the link step as well as for the encoders.
+        features=()
+        case "${{ matrix.target }}" in
+          aarch64-*|armv7-*) features=(--features rkmpp) ;;
+        esac
+        cross build --target ${{ matrix.target }} --release "${features[@]}"
+        # Also build size-optimized version for better portability
+        cross build --target ${{ matrix.target }} --profile release-static "${features[@]}"
+
+    - name: Prepare artifacts
+      run: |
+        # Create dist directory
+        mkdir -p dist
+        
+        # Copy binaries
+        cp target/${{ matrix.target }}/release/one-kvm dist/one-kvm-${{ matrix.target }}
+        if [ -f target/${{ matrix.target }}/release-static/one-kvm ]; then
+          cp target/${{ matrix.target }}/release-static/one-kvm dist/one-kvm-${{ matrix.target }}-static
+        fi
+        
+        # Make binaries executable
+        chmod +x dist/*
+        
+        # Create version file
+        echo $(date +%Y%m%d)-$(git rev-parse --short HEAD) > dist/BUILD_INFO
+        echo "Target: ${{ matrix.target }}" >> dist/BUILD_INFO
+        echo "Version: $(git describe --tags --always --dirty)" >> dist/BUILD_INFO
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: one-kvm-${{ matrix.target }}
+        path: dist/
+        retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release_assets
+        for artifact in artifacts/*/; do
+          target_name=$(basename "$artifact")
+          echo "Processing $target_name"
+          
+          # Create archive for each target
+          cd "$artifact"
+          tar -czf "../release_assets/one-kvm-$target_name.tar.gz" .
+          cd ../..
+        done
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Release ${{ github.ref_name }}
+        tag_name: ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        files: release_assets/*
+        body: |
+          ## One-KVM Release ${{ github.ref_name }}
+
+          This release includes pre-built binaries for multiple platforms.
+
+          ### Platforms
+          - `x86_64-unknown-linux-gnu`: 64-bit x86 Linux (most desktop/server systems)
+          - `aarch64-unknown-linux-gnu`: 64-bit ARM Linux (Raspberry Pi 4, ARM servers)
+          - `armv7-unknown-linux-gnueabihf`: 32-bit ARM Linux (Raspberry Pi 3 and earlier)
+
+          ### Installation
+          1. Download the appropriate binary for your platform
+          2. Extract: `tar -xzf one-kvm-*.tar.gz`
+          3. Make executable: `chmod +x one-kvm-*`
+          4. Run: `./one-kvm-* --help` to see available options
+
+          ### Changes
+          Please see the commit history for detailed changes in this release.
+
+          ### Notes
+          - The static builds (`-static` suffix) have all dependencies included and should run on any compatible system
+          - Regular builds are smaller but may require system libraries to be installed

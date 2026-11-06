@@ -251,6 +251,13 @@ fn init_logging(level: LogLevel) {
     if let Err(err) = tracing_subscriber::registry()
         .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
+        // Mirror formatted events into the in-memory buffer served by the
+        // runtime log WebSocket, without writing them to stdout again.
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(one_kvm::logging::LogCapture),
+        )
         .try_init()
     {
         eprintln!("failed to initialize tracing: {}", err);

@@ -6,7 +6,7 @@ use self::types::EXACT_EVENT_TOPICS;
 
 pub use types::{
     AtxDeviceInfo, AudioDeviceInfo, ClientStats, HidDeviceInfo, LedState, MsdDeviceInfo,
-    MsdDeviceMediaInfo, StreamKind, SystemEvent, TtydDeviceInfo, VideoDeviceInfo,
+    MsdDeviceMediaInfo, StreamKind, SystemEvent, TerminalDeviceInfo, VideoDeviceInfo,
 };
 
 use std::sync::RwLock;

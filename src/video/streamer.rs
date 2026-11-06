@@ -1317,6 +1317,10 @@ impl Streamer {
             clients: self.mjpeg_handler.client_count(),
             target_fps: config.fps,
             fps,
+            output_resolution: None,
+            output_max_height: 0,
+            output_max_height_default: 0,
+            output_max_height_is_override: false,
         }
     }
 
@@ -1563,6 +1567,14 @@ pub struct StreamerStats {
     pub target_fps: u32,
     /// Current actual FPS
     pub fps: f32,
+    /// Resolution actually sent to clients (after optional downscaling).
+    pub output_resolution: Option<(u32, u32)>,
+    /// Effective transmission height limit (`0` = capture resolution).
+    pub output_max_height: u32,
+    /// Persisted default transmission height limit.
+    pub output_max_height_default: u32,
+    /// Whether a temporary console override is currently active.
+    pub output_max_height_is_override: bool,
 }
 
 fn probe_subdev_signal(

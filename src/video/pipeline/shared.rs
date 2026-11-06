@@ -292,6 +292,9 @@ pub struct EncodedVideoFrame {
 enum PipelineCmd {
     SetBitrate {
         preset: crate::video::codec::BitratePreset,
+        /// Preset bitrate after applying the transmission scale ratio.
+        bitrate_kbps: u32,
+        gop_size: u32,
     },
 }
 
@@ -358,6 +361,9 @@ pub struct SharedVideoPipelineConfig {
     pub fps: u32,
     /// Encoder backend (None = auto select best available)
     pub encoder_backend: Option<EncoderBackend>,
+    /// Maximum height of the encoded (transmitted) video. `0` keeps the
+    /// captured resolution. Capture geometry is never changed by this limit.
+    pub output_max_height: u32,
 }
 
 impl Default for SharedVideoPipelineConfig {
@@ -370,6 +376,7 @@ impl Default for SharedVideoPipelineConfig {
             bitrate_preset: crate::video::codec::BitratePreset::Balanced,
             fps: 30,
             encoder_backend: None,
+            output_max_height: 0,
         }
     }
 }
@@ -384,9 +391,43 @@ impl SharedVideoPipelineConfig {
         }
     }
 
-    /// Get effective bitrate in kbps
+    /// Get effective bitrate in kbps.
+    ///
+    /// When the transmission is downscaled, scale the preset by the pixel
+    /// ratio so bandwidth follows the output size instead of spending the full
+    /// capture-resolution bitrate on a smaller frame. Custom presets are used
+    /// verbatim.
     pub fn bitrate_kbps(&self) -> u32 {
-        self.bitrate_preset.bitrate_kbps()
+        let base = self.bitrate_preset.bitrate_kbps();
+        if !self.is_scaling()
+            || matches!(
+                self.bitrate_preset,
+                crate::video::codec::BitratePreset::Custom(_)
+            )
+        {
+            return base;
+        }
+
+        let source_pixels = self.resolution.pixels();
+        let output_pixels = self.output_resolution().pixels();
+        if source_pixels == 0 || output_pixels >= source_pixels {
+            return base;
+        }
+
+        ((base as u64 * output_pixels) / source_pixels)
+            .max(200)
+            .min(base as u64) as u32
+    }
+
+    /// Resolution handed to the encoder. Derived from the negotiated input
+    /// resolution so a source change automatically recomputes the scale.
+    pub fn output_resolution(&self) -> Resolution {
+        crate::video::format::scale_to_max_height(self.resolution, self.output_max_height)
+    }
+
+    /// Whether encoding happens at a lower resolution than capture.
+    pub fn is_scaling(&self) -> bool {
+        self.output_resolution() != self.resolution
     }
 
     /// Get effective GOP size
@@ -723,13 +764,20 @@ impl SharedVideoPipeline {
 
     fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
         match cmd {
-            PipelineCmd::SetBitrate { preset } => {
-                let bitrate_kbps = preset.bitrate_kbps();
+            PipelineCmd::SetBitrate {
+                preset,
+                bitrate_kbps,
+                gop_size,
+            } => {
+                debug!(
+                    "Applying bitrate {:?}: {} kbps (gop {})",
+                    preset, bitrate_kbps, gop_size
+                );
                 #[cfg(feature = "rkmpp")]
                 if state.ffmpeg_hw_enabled {
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
-                            .reconfigure(bitrate_kbps as i32, preset.gop_size(state.fps) as i32)
+                            .reconfigure(bitrate_kbps as i32, gop_size as i32)
                             .map_err(|e| {
                                 let detail = if e.is_empty() {
                                     ffmpeg_hw_last_error()
@@ -1894,6 +1942,29 @@ impl SharedVideoPipeline {
             .unwrap_or(raw_frame);
 
         let needs_yuv420p = state.encoder_needs_yuv420p;
+        let scaling = state.scaler.is_some();
+
+        // First reach the planar format the encoder expects at capture
+        // resolution, then optionally downscale it for transmission.
+        let planar_frame: &[u8] = if needs_yuv420p {
+            match state.yuv420p_converter.as_mut() {
+                Some(conv) => conv.convert(raw_frame).map_err(|e| {
+                    AppError::VideoError(format!("YUV420P conversion failed: {}", e))
+                })?,
+                None => raw_frame,
+            }
+        } else if let Some(conv) = state.nv12_converter.as_mut() {
+            conv.convert(raw_frame)
+                .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?
+        } else {
+            raw_frame
+        };
+
+        let encode_frame: &[u8] = match state.scaler.as_mut() {
+            Some(scaler) => scaler.scale(planar_frame)?,
+            None => planar_frame,
+        };
+
         let encoder = state
             .encoder
             .as_mut()
@@ -1905,33 +1976,17 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
-        let encode_result = if needs_yuv420p {
-            // Software encoder with direct input conversion to YUV420P
-            if let Some(conv) = state.yuv420p_converter.as_mut() {
-                let yuv420p_data = conv.convert(raw_frame).map_err(|e| {
-                    AppError::VideoError(format!("YUV420P conversion failed: {}", e))
-                })?;
-                encoder.encode_raw(yuv420p_data, pts_ms)
-            } else {
-                encoder.encode_raw(raw_frame, pts_ms)
-            }
-        } else if let Some(conv) = state.nv12_converter.as_mut() {
-            // Hardware encoder with input conversion to NV12
-            let nv12_data = conv
-                .convert(raw_frame)
-                .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?;
-            encoder.encode_raw(nv12_data, pts_ms)
+        let encode_result = if !scaling
+            && decoded_buf.is_none()
+            && compacted_buf.is_none()
+            && frame.format == PixelFormat::Nv12
+            && encoder.supports_owned_nv12_input()
+        {
+            // No conversion or scaling: hand the owned buffer straight to the
+            // encoder and avoid a full-frame copy.
+            encoder.encode_owned_nv12(frame.owned_data_bytes(), pts_ms)
         } else {
-            // Direct input (already in correct format)
-            if decoded_buf.is_none()
-                && compacted_buf.is_none()
-                && frame.format == PixelFormat::Nv12
-                && encoder.supports_owned_nv12_input()
-            {
-                encoder.encode_owned_nv12(frame.owned_data_bytes(), pts_ms)
-            } else {
-                encoder.encode_raw(raw_frame, pts_ms)
-            }
+            encoder.encode_raw(encode_frame, pts_ms)
         };
 
         match encode_result {
@@ -2067,11 +2122,16 @@ impl SharedVideoPipeline {
         &self,
         preset: crate::video::codec::BitratePreset,
     ) -> Result<()> {
-        {
+        let (bitrate_kbps, gop_size) = {
             let mut config = self.config.write().await;
             config.bitrate_preset = preset;
-        }
-        self.send_cmd(PipelineCmd::SetBitrate { preset });
+            (config.bitrate_kbps(), config.gop_size())
+        };
+        self.send_cmd(PipelineCmd::SetBitrate {
+            preset,
+            bitrate_kbps,
+            gop_size,
+        });
         Ok(())
     }
 
@@ -2281,7 +2341,9 @@ mod tests {
             BitratePreset::Quality,
         ] {
             pipeline.set_bitrate_preset(preset).await.unwrap();
-            let PipelineCmd::SetBitrate { preset: received } = rx.try_recv().unwrap();
+            let PipelineCmd::SetBitrate {
+                preset: received, ..
+            } = rx.try_recv().unwrap();
             assert_eq!(received, preset);
             assert_eq!(pipeline.config().await.bitrate_preset, preset);
             // Rebuilt encoders must retain the preset's policy at the new FPS.
@@ -2293,6 +2355,31 @@ mod tests {
             assert_eq!(restored.bitrate_kbps(), preset.bitrate_kbps());
             assert_eq!(restored.gop_size(), preset.gop_size(60));
         }
+    }
+
+    #[test]
+    fn downscale_scales_preset_bitrate_by_pixel_ratio() {
+        let config = SharedVideoPipelineConfig {
+            resolution: Resolution::HD1080,
+            output_max_height: 720,
+            bitrate_preset: BitratePreset::Balanced,
+            ..Default::default()
+        };
+
+        assert_eq!(config.output_resolution(), Resolution::HD720);
+        assert_eq!(config.bitrate_kbps(), 1777);
+    }
+
+    #[test]
+    fn downscale_keeps_custom_bitrate_verbatim() {
+        let config = SharedVideoPipelineConfig {
+            resolution: Resolution::HD1080,
+            output_max_height: 720,
+            bitrate_preset: BitratePreset::Custom(2500),
+            ..Default::default()
+        };
+
+        assert_eq!(config.bitrate_kbps(), 2500);
     }
 
     #[test]
@@ -2537,6 +2624,7 @@ mod tests {
             mjpeg_decoder: None,
             nv12_converter: None,
             yuv420p_converter: None,
+            scaler: None,
             encoder_needs_yuv420p: false,
             #[cfg(feature = "rkmpp")]
             ffmpeg_hw_pipeline: None,

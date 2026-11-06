@@ -55,6 +55,49 @@
   box-shadow: none;
 }
 
+/* Live status dots breathe gently so an idle console still reads as "connected". */
+.console-dot-live {
+  position: relative;
+}
+.console-dot-live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--status-active);
+  opacity: 0.45;
+  pointer-events: none;
+  animation: console-dot-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes console-dot-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  70%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-dot-live::after {
+    animation: none;
+  }
+}
+
+/* Video stage reads as a distinct surface instead of bleeding into the workspace. */
+.console-page .console-video-surface {
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent),
+    0 12px 34px rgb(0 0 0 / 16%);
+}
+.console-page .video-workspace:fullscreen .console-video-surface {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .console-page .console-status-card:not(.console-status-card--compact) :is(span, div) {
   font-size: 13px;
   line-height: 16px;
@@ -88,6 +131,21 @@
 .console-page .console-action-bar--sidebar {
   background: var(--background);
   backdrop-filter: none;
+}
+
+/* One thin divider separates device controls from view controls. */
+.console-action-bar:not(.console-action-bar--sidebar)
+  .console-action-bar__inner
+  > [data-slot='button-group']
+  + [data-slot='button-group'] {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+/* In top-bar layouts the header and action bar read as a single chrome band. */
+.console-page:has(.console-actionbar-host--current) .console-header {
+  border-bottom-color: transparent;
 }
 
 @media (max-width: 639px) {

@@ -1,0 +1,62 @@
+name: PR Check
+
+on:
+  # 功能分支推送只构建二进制（build-release.yml），不跑格式检查/check/测试。
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          # 只在一个平台上测试以节省CI时间
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Node.js for frontend build
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Build frontend
+      working-directory: ./web
+      run: |
+        npm ci
+        npm run build
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev libasound2-dev libudev-dev clang cmake protobuf-compiler
+
+    - name: Install rust target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Check formatting
+      run: |
+        rustup component add rustfmt
+        cargo fmt --check
+
+    - name: Check for warnings
+      run: |
+        RUSTFLAGS="-D warnings" cargo check --target ${{ matrix.target }}
+
+    - name: Run tests
+      run: cargo test --target ${{ matrix.target }}
+
+    - name: Build release
+      run: cargo build --target ${{ matrix.target }} --release
+
+    - name: Verify binary
+      run: |
+        file target/${{ matrix.target }}/release/one-kvm
+        ldd target/${{ matrix.target }}/release/one-kvm || echo "Binary built successfully"

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ExternalLink, Terminal, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { useSystemStore } from '@/stores/system'
 import {
   Dialog,
   DialogClose,
@@ -9,6 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+
+const EmbeddedTerminal = defineAsyncComponent(
+  () => import('@/components/EmbeddedTerminal.vue'),
+)
 
 const props = defineProps<{
   open: boolean
@@ -19,9 +25,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const systemStore = useSystemStore()
+
+// The built-in PTY terminal is available on Unix. Windows keeps using the
+// legacy ttyd iframe until a ConPTY backend is implemented.
+const useBuiltinTerminal = computed(() => systemStore.platform?.mode !== 'windows')
 
 function openTerminalInNewTab() {
-  window.open('/api/terminal/', '_blank')
+  window.open(useBuiltinTerminal.value ? '/terminal' : '/api/terminal/', '_blank')
 }
 
 function hideFrameScrollbars(event: Event) {
@@ -93,8 +104,9 @@ function hideFrameScrollbars(event: Event) {
         </DialogTitle>
       </DialogHeader>
       <div class="flex-1 min-h-0">
+        <EmbeddedTerminal v-if="props.open && useBuiltinTerminal" />
         <iframe
-          v-if="props.open"
+          v-else-if="props.open"
           src="/api/terminal/"
           class="block w-full h-full border-0"
           allow="clipboard-read; clipboard-write"

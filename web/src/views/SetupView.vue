@@ -83,8 +83,8 @@ const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 const hidSelection = ref(selectionFrom())
 const hidSelectionValid = ref(false)
 
-const ttydEnabled = ref(false)
-const ttydAvailable = ref(false)
+const terminalEnabled = ref(false)
+const terminalAvailable = ref(false)
 
 // Encoder backend settings
 const encoderBackend = ref('auto')
@@ -97,7 +97,7 @@ const devices = ref<DeviceList>({
   audio: [],
   udc: [],
   extensions: {
-    ttyd_available: false,
+    terminal_available: false,
     rustdesk_available: false,
   },
 })
@@ -224,6 +224,7 @@ onMounted(async () => {
   try {
     const status = await authStore.checkSetupStatus()
     platform.value = status.platform
+    terminalAvailable.value = status.platform.mode !== 'windows'
     if (!audioSupported.value) {
       audioEnabled.value = false
       audioDevice.value = '__none__'
@@ -249,7 +250,7 @@ onMounted(async () => {
 
     // Set extension availability from devices API
     if (result.extensions) {
-      ttydAvailable.value = result.extensions.ttyd_available
+      terminalAvailable.value = result.extensions.terminal_available
     }
   } catch {
   }
@@ -407,7 +408,7 @@ async function handleSetup() {
     setupData.audio_device = audioDevice.value
   }
 
-  setupData.ttyd_enabled = ttydEnabled.value
+  setupData.terminal_enabled = terminalEnabled.value
 
   const success = await authStore.setup(setupData)
 
@@ -703,19 +704,19 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             <HidDriverForm v-model="hidSelection" :platform="platform" @valid="hidSelectionValid = $event" />
           </div>
 
-          <!-- Step 4: Extensions Settings -->
+          <!-- Step 4: Web Terminal Settings -->
           <div v-else-if="step === 4" key="step4" class="space-y-4">
             <h3 class="text-lg font-medium text-center">{{ t('setup.stepExtensions') }}</h3>
             <p class="text-sm text-muted-foreground text-center">
               {{ t('setup.extensionsDescription') }}
             </p>
 
-            <!-- ttyd -->
-            <div class="flex items-center justify-between p-4 rounded-lg border" :class="{ 'opacity-50': !ttydAvailable }">
+            <!-- built-in web terminal -->
+            <div class="flex items-center justify-between p-4 rounded-lg border" :class="{ 'opacity-50': !terminalAvailable }">
               <div class="space-y-1">
                 <div class="flex items-center gap-2">
                   <Label class="text-base font-medium">{{ t('setup.ttydTitle') }}</Label>
-                  <span v-if="!ttydAvailable" class="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  <span v-if="!terminalAvailable" class="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                     {{ t('setup.notInstalled') }}
                   </span>
                 </div>
@@ -723,7 +724,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   {{ t('setup.ttydDescription') }}
                 </p>
               </div>
-              <Switch v-model="ttydEnabled" :disabled="!ttydAvailable" />
+              <Switch v-model="terminalEnabled" :disabled="!terminalAvailable" />
             </div>
 
             <p class="text-xs text-muted-foreground text-center pt-2">

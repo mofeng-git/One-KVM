@@ -20,8 +20,10 @@ impl RuntimeSupervisor {
         extensions: Arc<ExtensionManager>,
         config: ConfigStore,
     ) -> Self {
+        let data_dir = state.data_dir().clone();
         let mut tasks = spawn_device_info_broadcaster(state, events);
         tasks.push(spawn_extension_health_check(extensions, config));
+        tasks.push(super::heartbeat::spawn(&data_dir));
         Self { tasks }
     }
 

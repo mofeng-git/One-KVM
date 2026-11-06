@@ -1,7 +1,8 @@
 # One-KVM Runtime Image (full)
 # This Dockerfile only packages pre-compiled binaries (no compilation)
 # Used after cross-compiling with `cross build`
-# Using Debian 12 to match the build images (GLIBC 2.36)
+# Binaries are built on Debian 11 (GLIBC 2.31); this Debian 12 runtime is
+# backward compatible and also matches the Docker build images.
 
 ARG TARGETPLATFORM=linux/amd64
 

@@ -16,6 +16,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select'
 import { Monitor, RefreshCw, Loader2, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
@@ -202,6 +203,61 @@ const {
 
 const applying = ref(false)
 const applyingBitrate = ref(false)
+
+const applyingOutputResolution = ref(false)
+const outputMaxHeightDefault = ref(0)
+const outputMaxHeightOverride = ref<number | null>(null)
+
+const outputMaxHeightOptions = computed(() => {
+  const presets = [1080, 720, 480, 360]
+  const current = outputMaxHeightOverride.value ?? outputMaxHeightDefault.value
+  return current > 0 && !presets.includes(current) ? [current, ...presets] : presets
+})
+
+function maxHeightLabel(height: number): string {
+  return height === 0 ? t('settings.transmissionOriginal') : `${height}p`
+}
+
+const outputMaxHeightSelection = computed(() =>
+  outputMaxHeightOverride.value === null ? 'default' : String(outputMaxHeightOverride.value),
+)
+
+const outputMaxHeightFollowLabel = computed(() =>
+  t('actionbar.transmissionFollowDefault', {
+    resolution: maxHeightLabel(outputMaxHeightDefault.value),
+  }),
+)
+
+async function loadOutputResolution() {
+  try {
+    const status = await streamApi.status()
+    outputMaxHeightDefault.value = status.output_max_height_default ?? 0
+    outputMaxHeightOverride.value = status.output_max_height_is_override
+      ? status.output_max_height
+      : null
+  } catch {
+    // Keep whatever we already show; the popover remains usable.
+  }
+}
+
+async function handleOutputMaxHeightChange(value: unknown) {
+  if (typeof value !== 'string' || applyingOutputResolution.value) return
+  applyingOutputResolution.value = true
+  try {
+    const maxHeight = value === 'default' ? null : Number(value)
+    const status = await streamApi.setOutputMaxHeight(maxHeight)
+    outputMaxHeightDefault.value = status.output_max_height_default ?? 0
+    outputMaxHeightOverride.value = status.output_max_height_is_override
+      ? status.output_max_height
+      : null
+    toast.success(t('actionbar.transmissionApplied'))
+  } catch (e) {
+    console.info('[VideoConfig] Failed to apply transmission resolution:', e)
+    toast.error(t('actionbar.transmissionApplyFailed'))
+  } finally {
+    applyingOutputResolution.value = false
+  }
+}
 
 const currentConfig = computed(() => ({
   device: configStore.video?.device || '',
@@ -498,6 +554,8 @@ watch(() => props.open, (isOpen) => {
 
   loadConstraints()
 
+  void loadOutputResolution()
+
   Promise.all([
     configStore.refreshVideo(),
     configStore.refreshStream(),
@@ -699,6 +757,36 @@ watch(
                 <span class="text-[10px] font-medium">{{ t('actionbar.bitrateQuality') }}</span>
               </Button>
             </div>
+          </div>
+
+          <!-- Transmission resolution (temporary, reset on restart) -->
+          <div class="space-y-2">
+            <div class="flex items-center gap-1">
+              <Label class="text-xs text-muted-foreground">{{
+                t('actionbar.transmissionResolution')
+              }}</Label>
+              <HelpTooltip :content="t('help.transmissionResolution')" icon-size="sm" />
+            </div>
+            <Select
+              :model-value="outputMaxHeightSelection"
+              :disabled="applyingOutputResolution"
+              @update:model-value="handleOutputMaxHeightChange"
+            >
+              <SelectTrigger class="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">{{ outputMaxHeightFollowLabel }}</SelectItem>
+                <SelectItem value="0">{{ t('settings.transmissionOriginal') }}</SelectItem>
+                <SelectItem
+                  v-for="height in outputMaxHeightOptions"
+                  :key="height"
+                  :value="String(height)"
+                  >{{ height }}p</SelectItem
+                >
+              </SelectContent>
+            </Select>
+            <p class="text-[10px] text-muted-foreground">
+              {{ t('actionbar.transmissionTemporaryHint') }}
+            </p>
           </div>
 
         </div>

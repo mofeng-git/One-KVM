@@ -10,9 +10,11 @@ use crate::db::DatabasePool;
 use crate::events::MsdDeviceMediaInfo;
 use crate::events::{
     AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, LedState, MsdDeviceInfo, SystemEvent,
-    TtydDeviceInfo, VideoDeviceInfo,
+    TerminalDeviceInfo, VideoDeviceInfo,
 };
-use crate::extensions::{ExtensionId, ExtensionManager};
+#[cfg(windows)]
+use crate::extensions::ExtensionId;
+use crate::extensions::ExtensionManager;
 use crate::hid::HidController;
 use crate::mcp::{McpHardware, McpService};
 #[cfg(unix)]
@@ -213,13 +215,13 @@ impl AppState {
     }
 
     pub async fn get_device_info(&self) -> SystemEvent {
-        let (video, hid, msd, atx, audio, ttyd) = tokio::join!(
+        let (video, hid, msd, atx, audio, terminal) = tokio::join!(
             self.collect_video_info(),
             self.collect_hid_info(),
             self.collect_msd_info(),
             self.collect_atx_info(),
             self.collect_audio_info(),
-            self.collect_ttyd_info(),
+            self.collect_terminal_info(),
         );
 
         SystemEvent::DeviceInfo {
@@ -228,7 +230,7 @@ impl AppState {
             msd,
             atx,
             audio,
-            ttyd,
+            terminal,
         }
     }
 
@@ -351,12 +353,25 @@ impl AppState {
         })
     }
 
-    async fn collect_ttyd_info(&self) -> TtydDeviceInfo {
-        let status = self.extensions.status(ExtensionId::Ttyd).await;
+    async fn collect_terminal_info(&self) -> TerminalDeviceInfo {
+        #[cfg(unix)]
+        {
+            // The built-in PTY shell needs no daemon and is ready whenever the
+            // administrator has enabled it.
+            let enabled = self.config.get().terminal.enabled;
+            TerminalDeviceInfo {
+                available: enabled,
+                running: enabled,
+            }
+        }
 
-        TtydDeviceInfo {
-            available: self.extensions.check_available(ExtensionId::Ttyd),
-            running: status.is_running(),
+        #[cfg(windows)]
+        {
+            let status = self.extensions.status(ExtensionId::Ttyd).await;
+            TerminalDeviceInfo {
+                available: self.extensions.check_available(ExtensionId::Ttyd),
+                running: status.is_running(),
+            }
         }
     }
 }

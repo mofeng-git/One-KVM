@@ -52,6 +52,8 @@ pub struct WebRtcStreamerConfig {
     pub fps: u32,
     pub audio_enabled: bool,
     pub encoder_backend: Option<EncoderBackend>,
+    /// Maximum height of the encoded/transmitted video. `0` = source size.
+    pub output_max_height: u32,
 }
 
 impl Default for WebRtcStreamerConfig {
@@ -65,6 +67,7 @@ impl Default for WebRtcStreamerConfig {
             fps: 30,
             audio_enabled: false,
             encoder_backend: None,
+            output_max_height: 0,
         }
     }
 }
@@ -511,6 +514,7 @@ impl WebRtcStreamer {
                 bitrate_preset: config.bitrate_preset,
                 fps: config.fps,
                 encoder_backend: config.encoder_backend,
+                output_max_height: config.output_max_height,
             }
         };
 
@@ -1042,15 +1046,18 @@ impl WebRtcStreamer {
         // Ensure video pipeline is running
         let pipeline = self.ensure_video_pipeline().await?;
 
-        // Create session config
+        // Create session config from the running pipeline: it may have aligned
+        // itself with DV-negotiated capture geometry, and its encoder runs at
+        // the (possibly downscaled) transmission resolution.
+        let pipeline_config = pipeline.config().await;
         let config = self.config.read().await;
         let session_config = UniversalSessionConfig {
             webrtc: config.webrtc.clone(),
             codec: Self::codec_type_to_encoder_type(codec),
-            resolution: config.resolution,
-            input_format: config.input_format,
-            bitrate_preset: config.bitrate_preset,
-            fps: config.fps,
+            resolution: pipeline_config.output_resolution(),
+            input_format: pipeline_config.input_format,
+            bitrate_preset: pipeline_config.bitrate_preset,
+            fps: pipeline_config.fps,
             audio_enabled: *self.audio_enabled.read().await,
             video_sdp_fmtp_line: None,
         };
@@ -1322,6 +1329,85 @@ impl WebRtcStreamer {
 
         Ok(())
     }
+
+    /// Set the maximum height of the transmitted video.
+    ///
+    /// Capture geometry is untouched. If the effective transmission resolution
+    /// changes while a pipeline is running, the pipeline is restarted and the
+    /// sessions are reattached so the encoder immediately emits the new size.
+    pub async fn set_output_max_height(&self, max_height: u32) -> Result<()> {
+        let resolution_changed = {
+            let mut config = self.config.write().await;
+            if config.output_max_height == max_height {
+                return Ok(());
+            }
+
+            let previous = crate::video::format::scale_to_max_height(
+                config.resolution,
+                config.output_max_height,
+            );
+            config.output_max_height = max_height;
+            let next = crate::video::format::scale_to_max_height(config.resolution, max_height);
+            previous != next
+        };
+
+        if !resolution_changed {
+            debug!(
+                "Output max height set to {} (effective resolution unchanged)",
+                max_height
+            );
+            return Ok(());
+        }
+
+        let (pipeline_running, external_subscribers) = {
+            if let Some(ref pipeline) = *self.video_pipeline.read().await {
+                (pipeline.is_running(), pipeline.subscriber_count())
+            } else {
+                (false, 0)
+            }
+        };
+
+        if pipeline_running {
+            info!(
+                "Restarting video pipeline to apply output max height {}",
+                max_height
+            );
+
+            self.stop_video_pipeline_and_release().await?;
+
+            let has_source = self.capture_device.read().await.is_some();
+            if !has_source {
+                return Ok(());
+            }
+
+            let reconnected = self
+                .reconnect_sessions_to_current_pipeline("output resolution change")
+                .await?;
+            if reconnected > 0 {
+                info!(
+                    "Video pipeline restarted with output max height {}, reconnected {} sessions",
+                    max_height, reconnected
+                );
+            } else if external_subscribers > 0 {
+                // RTSP/RustDesk/VNC can keep the shared pipeline alive without
+                // a WebRTC session; restart it so they keep receiving frames.
+                if let Err(error) = self.ensure_video_pipeline().await {
+                    warn!(
+                        "Failed to restart video pipeline for external consumers: {}",
+                        error
+                    );
+                }
+            }
+        } else {
+            debug!(
+                "Pipeline not running, output max height {} will apply on next start",
+                max_height
+            );
+        }
+
+        self.notify_device_info_dirty().await;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -1394,6 +1480,10 @@ impl crate::video::traits::VideoOutput for WebRtcStreamer {
 
     async fn set_bitrate_preset(&self, preset: BitratePreset) -> Result<()> {
         self.set_bitrate_preset(preset).await
+    }
+
+    async fn set_output_max_height(&self, max_height: u32) -> Result<()> {
+        self.set_output_max_height(max_height).await
     }
 
     async fn request_keyframe(&self) -> Result<()> {

@@ -1,5 +1,5 @@
 use crate::error::{AppError, Result};
-use crate::video::codec::convert::{MjpegToNv12Decoder, Nv12Converter, PixelConverter};
+use crate::video::codec::convert::{FrameScaler, MjpegToNv12Decoder, Nv12Converter, PixelConverter};
 use crate::video::codec::h264::{H264Config, H264Encoder, H264InputFormat};
 use crate::video::codec::h265::{H265Config, H265Encoder, H265InputFormat};
 use crate::video::codec::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
@@ -21,6 +21,8 @@ pub(super) struct EncoderThreadState {
     pub(super) mjpeg_decoder: Option<MjpegDecoderKind>,
     pub(super) nv12_converter: Option<Nv12Converter>,
     pub(super) yuv420p_converter: Option<PixelConverter>,
+    /// Optional downscaler applied after conversion and before encoding.
+    pub(super) scaler: Option<FrameScaler>,
     pub(super) encoder_needs_yuv420p: bool,
     #[cfg(feature = "rkmpp")]
     pub(super) ffmpeg_hw_pipeline: Option<HwMjpegH26xPipeline>,
@@ -106,7 +108,7 @@ fn create_h264_encoder(
 ) -> Result<Box<dyn VideoEncoderTrait + Send>> {
     let encoder = H264Encoder::with_codec(
         H264Config {
-            base: EncoderConfig::h264(config.resolution, config.bitrate_kbps()),
+            base: EncoderConfig::h264(config.output_resolution(), config.bitrate_kbps()),
             bitrate_kbps: config.bitrate_kbps(),
             gop_size: config.gop_size(),
             fps: config.fps,
@@ -263,16 +265,21 @@ pub(super) fn build_encoder_state(
         };
 
     let needs_mjpeg_decode = config.input_format.is_compressed();
+    // Downscaling requires a format conversion pass, so the zero-copy direct
+    // input paths and the FFmpeg hardware transcode pipeline cannot be used.
+    let scaling = config.is_scaling();
     let is_rkmpp_available = registry
         .encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Rkmpp)
         .is_some();
     let rkmpp_is_allowed =
         config.encoder_backend.is_none() || config.encoder_backend == Some(EncoderBackend::Rkmpp);
-    let use_yuyv_direct = is_rkmpp_available
+    let use_yuyv_direct = !scaling
+        && is_rkmpp_available
         && rkmpp_is_allowed
         && !needs_mjpeg_decode
         && config.input_format == PixelFormat::Yuyv;
-    let use_rkmpp_direct = is_rkmpp_available
+    let use_rkmpp_direct = !scaling
+        && is_rkmpp_available
         && rkmpp_is_allowed
         && !needs_mjpeg_decode
         && matches!(
@@ -352,6 +359,7 @@ pub(super) fn build_encoder_state(
     #[cfg(feature = "rkmpp")]
     if needs_mjpeg_decode
         && is_rkmpp_encoder
+        && !scaling
         && matches!(
             config.output_codec,
             VideoEncoderType::H264 | VideoEncoderType::H265
@@ -388,6 +396,7 @@ pub(super) fn build_encoder_state(
             mjpeg_decoder: None,
             nv12_converter: None,
             yuv420p_converter: None,
+            scaler: None,
             encoder_needs_yuv420p: false,
             #[cfg(feature = "rkmpp")]
             ffmpeg_hw_pipeline: Some(pipeline),
@@ -406,17 +415,46 @@ pub(super) fn build_encoder_state(
         (None, config.input_format)
     };
 
+    // Encoder input format is determined by the *converter/scaler output*.
+    // When no downscale is configured, direct capture formats can be used;
+    // when downscaling, everything runs through the planar converter paths.
+    let mut needs_yuv420p = if selected_codec_name.contains("libx264") {
+        !matches!(
+            pipeline_input_format,
+            PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
+        )
+    } else {
+        selected_codec_name.contains("libvpx") || selected_codec_name.contains("libx265")
+    };
+
+    if scaling
+        && pipeline_input_format == PixelFormat::Yuv420
+        && selected_codec_name.contains("libx264")
+    {
+        // libx264 already accepts YUV420P directly; scale in that format
+        // instead of paying for a full-frame YUV420→NV12 conversion.
+        needs_yuv420p = true;
+    }
+
     let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
         VideoEncoderType::H264 => {
             let codec_name = selected_codec_name.clone();
             let direct_input_format = h264_direct_input_format(&codec_name, pipeline_input_format);
-            let input_format = direct_input_format.unwrap_or_else(|| {
-                if codec_name.contains("libx264") {
+            let input_format = if scaling {
+                if needs_yuv420p {
                     H264InputFormat::Yuv420p
                 } else {
                     H264InputFormat::Nv12
                 }
-            });
+            } else {
+                direct_input_format.unwrap_or_else(|| {
+                    if codec_name.contains("libx264") {
+                        H264InputFormat::Yuv420p
+                    } else {
+                        H264InputFormat::Nv12
+                    }
+                })
+            };
 
             if use_rkmpp_direct {
                 info!(
@@ -435,13 +473,21 @@ pub(super) fn build_encoder_state(
         VideoEncoderType::H265 => {
             let codec_name = selected_codec_name.clone();
             let direct_input_format = h265_direct_input_format(&codec_name, pipeline_input_format);
-            let input_format = direct_input_format.unwrap_or_else(|| {
-                if codec_name.contains("libx265") {
+            let input_format = if scaling {
+                if needs_yuv420p {
                     H265InputFormat::Yuv420p
                 } else {
                     H265InputFormat::Nv12
                 }
-            });
+            } else {
+                direct_input_format.unwrap_or_else(|| {
+                    if codec_name.contains("libx265") {
+                        H265InputFormat::Yuv420p
+                    } else {
+                        H265InputFormat::Nv12
+                    }
+                })
+            };
 
             if use_rkmpp_direct {
                 info!(
@@ -458,7 +504,7 @@ pub(super) fn build_encoder_state(
             let encoder = H265Encoder::with_codec(
                 H265Config {
                     base: EncoderConfig {
-                        resolution: config.resolution,
+                        resolution: config.output_resolution(),
                         input_format: config.input_format,
                         quality: config.bitrate_kbps(),
                         fps: config.fps,
@@ -483,7 +529,7 @@ pub(super) fn build_encoder_state(
                 );
             }
             let encoder = VP8Encoder::with_codec(
-                VP8Config::low_latency(config.resolution, config.bitrate_kbps()),
+                VP8Config::low_latency(config.output_resolution(), config.bitrate_kbps()),
                 &codec_name,
             )?;
             info!("Created VP8 encoder: {}", encoder.codec_name());
@@ -498,7 +544,7 @@ pub(super) fn build_encoder_state(
                 );
             }
             let encoder = VP9Encoder::with_codec(
-                VP9Config::low_latency(config.resolution, config.bitrate_kbps()),
+                VP9Config::low_latency(config.output_resolution(), config.bitrate_kbps()),
                 &codec_name,
             )?;
             info!("Created VP9 encoder: {}", encoder.codec_name());
@@ -507,34 +553,27 @@ pub(super) fn build_encoder_state(
     };
 
     let codec_name = encoder.codec_name();
-    let use_direct_input = if codec_name.contains("rkmpp") {
-        matches!(
-            pipeline_input_format,
-            PixelFormat::Yuyv
-                | PixelFormat::Yuv420
-                | PixelFormat::Rgb24
-                | PixelFormat::Bgr24
-                | PixelFormat::Nv12
-                | PixelFormat::Nv16
-                | PixelFormat::Nv21
-                | PixelFormat::Nv24
-        )
-    } else if codec_name.contains("libx264") {
-        matches!(
-            pipeline_input_format,
-            PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
-        )
-    } else {
-        false
-    };
-    let needs_yuv420p = if codec_name.contains("libx264") {
-        !matches!(
-            pipeline_input_format,
-            PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
-        )
-    } else {
-        codec_name.contains("libvpx") || codec_name.contains("libx265")
-    };
+    let use_direct_input = !scaling
+        && (if codec_name.contains("rkmpp") {
+            matches!(
+                pipeline_input_format,
+                PixelFormat::Yuyv
+                    | PixelFormat::Yuv420
+                    | PixelFormat::Rgb24
+                    | PixelFormat::Bgr24
+                    | PixelFormat::Nv12
+                    | PixelFormat::Nv16
+                    | PixelFormat::Nv21
+                    | PixelFormat::Nv24
+            )
+        } else if codec_name.contains("libx264") {
+            matches!(
+                pipeline_input_format,
+                PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
+            )
+        } else {
+            false
+        });
 
     info!(
         "Encoder {} needs {} format",
@@ -567,11 +606,36 @@ pub(super) fn build_encoder_state(
         needs_yuv420p,
     )?;
 
+    let scaler = if scaling {
+        // `converters_for_pipeline` always leaves data in YUV420P when the
+        // encoder needs it, otherwise NV12. Scale in that same planar format
+        // so the encoder receives exactly what it expects.
+        let plane_format = if needs_yuv420p {
+            PixelFormat::Yuv420
+        } else {
+            PixelFormat::Nv12
+        };
+        info!(
+            "Downscaling transmission video {} → {} (capture unchanged)",
+            config.resolution,
+            config.output_resolution()
+        );
+        Some(FrameScaler::new(
+            config.resolution,
+            config.output_resolution(),
+            plane_format,
+            plane_format,
+        ))
+    } else {
+        None
+    };
+
     Ok(EncoderThreadState {
         encoder: Some(encoder),
         mjpeg_decoder,
         nv12_converter,
         yuv420p_converter,
+        scaler,
         encoder_needs_yuv420p: needs_yuv420p,
         #[cfg(feature = "rkmpp")]
         ffmpeg_hw_pipeline: None,

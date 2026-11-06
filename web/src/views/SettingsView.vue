@@ -9,6 +9,7 @@ import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
 import HidDeviceSettings from '@/components/HidDeviceSettings.vue'
 import ConsoleLayoutPreview from '@/components/ConsoleLayoutPreview.vue'
+import RuntimeLogsPanel from '@/components/RuntimeLogsPanel.vue'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -31,6 +32,7 @@ import {
   updateApi,
   usbApi,
   watchdogConfigApi,
+  terminalConfigApi,
   type EncoderBackendInfo,
   type AuthConfig,
   type WebConfig,
@@ -54,6 +56,7 @@ import type {
   NetworkInterfaceInfo,
   OtgNetworkStatus,
   WatchdogConfigResponse,
+  TerminalConfigResponse,
 } from '@/types/generated'
 import { EasytierConfigMode, FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { toConfigFps } from '@/lib/fps'
@@ -163,6 +166,9 @@ import {
   PanelTop,
   PanelLeft,
   GalleryHorizontalEnd,
+  ScrollText,
+  Search,
+  X,
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
@@ -202,6 +208,7 @@ const SETTINGS_SECTION_IDS = [
   'atx',
   'environment',
   'other',
+  'logs',
   'ext-ttyd',
   'third-party-access',
   'mcp',
@@ -231,6 +238,7 @@ const navGroups = computed(() => [
       { id: 'atx', label: t('settings.atx'), icon: Power },
       { id: 'environment', label: t('settings.environment'), icon: Server },
       { id: 'other', label: t('settings.other'), icon: Wrench },
+      { id: 'logs', label: t('settings.logs'), icon: ScrollText },
     ],
   },
   {
@@ -248,6 +256,19 @@ const navGroups = computed(() => [
     ],
   },
 ])
+
+const navQuery = ref('')
+
+const filteredNavGroups = computed(() => {
+  const query = navQuery.value.trim().toLowerCase()
+  if (!query) return navGroups.value
+  return navGroups.value
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => item.label.toLowerCase().includes(query)),
+    }))
+    .filter(group => group.items.length > 0)
+})
 
 const sectionMeta = computed(() => {
   const fallback = { icon: Info, title: t('settings.title'), description: '' }
@@ -329,10 +350,14 @@ async function loadSectionData(section: SettingsSectionId) {
       return
     case 'environment':
       return
+    case 'logs':
+      return
     case 'other':
       await Promise.all([loadWatchdogConfig(), fetchUsbDevices()])
       return
     case 'ext-ttyd':
+      await Promise.all([loadExtensions(), loadTerminalConfig()])
+      return
     case 'ext-remote-access':
       await loadExtensions()
       return
@@ -460,6 +485,13 @@ const showLogs = ref<Record<string, boolean>>({
 })
 
 const showTerminalDialog = ref(false)
+const terminalConfig = ref<TerminalConfigResponse>({
+  enabled: false,
+  shell: isWindows.value ? 'cmd' : '/bin/bash',
+  supported: !isWindows.value,
+})
+const terminalConfigLoading = ref(false)
+const terminalConfigSaving = ref(false)
 
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
@@ -736,6 +768,7 @@ const config = ref({
   turn_username: '',
   turn_password: '',
   uac_enabled: false,
+  output_max_height: 0,
 })
 
 const otgNetworkInterfaces = ref<NetworkInterfaceInfo[]>([])
@@ -1474,6 +1507,19 @@ async function changePassword() {
 }
 
 const videoSaving = ref<'capture' | 'encoder' | 'connection' | null>(null)
+const outputMaxHeightPresets = [1080, 720, 480, 360]
+const outputMaxHeightOptions = computed(() => {
+  const current = config.value.output_max_height ?? 0
+  return current > 0 && !outputMaxHeightPresets.includes(current)
+    ? [current, ...outputMaxHeightPresets]
+    : outputMaxHeightPresets
+})
+const outputMaxHeightSelection = computed({
+  get: () => String(config.value.output_max_height ?? 0),
+  set: (value: string) => {
+    config.value.output_max_height = Number(value)
+  },
+})
 async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
   if (videoSaving.value) return
   videoSaving.value = card
@@ -1491,7 +1537,10 @@ async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
             },
       )
     } else if (card === 'encoder') {
-      await configStore.updateStream({ encoder: config.value.encoder_backend as any })
+      await configStore.updateStream({
+        encoder: config.value.encoder_backend as any,
+        output_max_height: config.value.output_max_height,
+      })
     } else {
       await configStore.updateStream({
         stun_server: config.value.stun_server.trim(),
@@ -1681,6 +1730,7 @@ async function loadConfig() {
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: stream.turn_password || '',
+      output_max_height: stream.output_max_height ?? 0,
     }
     if (otgNetworkInterfacesLoaded.value) {
       syncOtgNetworkInterface()
@@ -1767,6 +1817,51 @@ async function saveAuthConfig() {
   } finally {
     authConfigLoading.value = false
   }
+}
+
+async function loadTerminalConfig() {
+  terminalConfigLoading.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.get()
+  } catch {
+  } finally {
+    terminalConfigLoading.value = false
+  }
+}
+
+async function saveTerminalConfig() {
+  if (terminalConfigSaving.value) return
+  terminalConfigSaving.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.update({
+      enabled: terminalConfig.value.enabled,
+      shell: terminalConfig.value.shell,
+    })
+    toast.success(t('settingsUi.saveDone'))
+  } catch {
+  } finally {
+    terminalConfigSaving.value = false
+  }
+}
+
+async function openBuiltinTerminal() {
+  if (!terminalConfig.value.enabled || terminalConfigSaving.value) return
+
+  // Apply the current toggle/shell before opening a session so the server
+  // does not reject the WebSocket with the previous configuration.
+  terminalConfigSaving.value = true
+  try {
+    terminalConfig.value = await terminalConfigApi.update({
+      enabled: terminalConfig.value.enabled,
+      shell: terminalConfig.value.shell,
+    })
+  } catch {
+    return
+  } finally {
+    terminalConfigSaving.value = false
+  }
+
+  showTerminalDialog.value = true
 }
 
 async function loadExtensions(only?: ExtensionConfigId) {
@@ -2514,11 +2609,34 @@ watch(isWindows, () => {
         class="top-10 h-[calc(100dvh-2.5rem)] sm:top-14 sm:h-[calc(100dvh-3.5rem)]"
         collapsible="offcanvas"
       >
-        <SidebarHeader class="gap-1 px-6 pt-4 pb-2 text-foreground md:pt-6">
-          <h1 class="text-xl font-semibold">{{ t('settings.title') }}</h1>
+        <SidebarHeader class="gap-3 px-4 pt-4 pb-1 text-foreground md:pt-6">
+          <h1 class="px-2 text-xl font-semibold">{{ t('settings.title') }}</h1>
+          <div class="settings-nav-search relative">
+            <Search
+              class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              v-model="navQuery"
+              type="text"
+              size="sm"
+              :placeholder="t('settingsUi.searchPlaceholder')"
+              :aria-label="t('settingsUi.searchPlaceholder')"
+              class="pr-8 pl-8"
+            />
+            <button
+              v-if="navQuery"
+              type="button"
+              class="absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              :aria-label="t('settingsUi.clearSearch')"
+              @click="navQuery = ''"
+            >
+              <X class="size-3.5" />
+            </button>
+          </div>
         </SidebarHeader>
         <SidebarContent class="px-3 pb-6 md:pb-10">
-          <SidebarGroup v-for="group in navGroups" :key="group.id" class="px-0 py-1">
+          <SidebarGroup v-for="group in filteredNavGroups" :key="group.id" class="px-0 py-1">
             <SidebarGroupLabel class="text-[13px] text-muted-foreground">{{ group.title }}</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in group.items" :key="item.id">
@@ -2557,6 +2675,12 @@ watch(isWindows, () => {
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
+          <p
+            v-if="!filteredNavGroups.length"
+            class="px-3 py-8 text-center text-xs text-muted-foreground"
+          >
+            {{ t('settingsUi.searchEmpty') }}
+          </p>
         </SidebarContent>
         <div class="settings-back mx-3 pb-3">
           <Button as-child variant="ghost" class="justify-start"
@@ -2581,13 +2705,19 @@ watch(isWindows, () => {
         <div class="settings-page" :data-section="activeSection">
           <!-- Section Header -->
           <header class="settings-section-heading">
-            <div class="flex items-center gap-2.5">
-              <component :is="sectionMeta.icon" class="size-5 text-muted-foreground" />
-              <h1 class="text-xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+            <div class="flex items-start gap-3">
+              <span
+                class="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary ring-1 ring-primary/15"
+              >
+                <component :is="sectionMeta.icon" class="size-[18px]" />
+              </span>
+              <div class="min-w-0">
+                <h1 class="text-xl font-semibold tracking-tight">{{ sectionMeta.title }}</h1>
+                <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
+                  {{ sectionMeta.description }}
+                </p>
+              </div>
             </div>
-            <p v-if="sectionMeta.description" class="text-sm text-muted-foreground">
-              {{ sectionMeta.description }}
-            </p>
           </header>
 
           <!-- Appearance Section -->
@@ -2640,25 +2770,30 @@ watch(isWindows, () => {
                     v-for="option in consoleLayoutOptions"
                     :key="option.value"
                     type="button"
-                    class="group rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                    class="group relative rounded-xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                     :class="
                       consoleLayout === option.value
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'border-border'
+                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/60'
+                        : 'border-border bg-card'
                     "
                     :aria-pressed="consoleLayout === option.value"
                     @click="setConsoleLayout(option.value)"
                   >
-                    <ConsoleLayoutPreview :layout="option.value" class="mb-3" />
+                    <ConsoleLayoutPreview
+                      :layout="option.value"
+                      class="mb-3 transition-transform duration-200 group-hover:scale-[1.01]"
+                    />
                     <div class="flex items-center gap-2">
                       <component :is="option.icon" class="size-4 text-muted-foreground" />
                       <span class="text-sm font-medium">{{
                         t(`settings.consoleLayoutOptions.${option.value}`)
                       }}</span>
-                      <Check
+                      <span
                         v-if="consoleLayout === option.value"
-                        class="ml-auto size-4 text-primary"
-                      />
+                        class="absolute top-3 right-3 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm"
+                      >
+                        <Check class="size-3" stroke-width="3" />
+                      </span>
                     </div>
                   </button>
                 </div>
@@ -2940,6 +3075,26 @@ watch(isWindows, () => {
                       >
                     </SelectContent>
                   </Select>
+                </div>
+                <div class="settings-field space-y-2">
+                  <Label for="output-max-height">{{ t('settings.transmissionResolution') }}</Label>
+                  <Select v-model="outputMaxHeightSelection">
+                    <SelectTrigger id="output-max-height" class="w-full"
+                      ><SelectValue
+                    /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{{ t('settings.transmissionOriginal') }}</SelectItem>
+                      <SelectItem
+                        v-for="height in outputMaxHeightOptions"
+                        :key="height"
+                        :value="String(height)"
+                        >{{ height }}p</SelectItem
+                      >
+                    </SelectContent>
+                  </Select>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('settings.transmissionResolutionDesc') }}
+                  </p>
                 </div>
                 <div
                   v-if="config.encoder_backend !== 'auto' && selectedBackendFormats.length > 0"
@@ -4632,11 +4787,67 @@ watch(isWindows, () => {
             </Card>
           </div>
 
-          <!-- ttyd Section -->
+          <!-- Web terminal Section -->
           <div v-show="activeSection === 'ext-ttyd'" class="space-y-4">
-            <Card>
+            <!-- Built-in PTY terminal (no external ttyd required) -->
+            <Card v-if="terminalConfig.supported">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.ttyd.desc')">{{
+                  t('extensions.ttyd.title')
+                }}</CardTitle>
+                <div class="settings-card-actions">
+                  <div class="settings-save-action">
+                    <Button
+                      :disabled="terminalConfigLoading || terminalConfigSaving"
+                      @click="saveTerminalConfig"
+                    >
+                      <Loader2 v-if="terminalConfigSaving" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
+                    </Button>
+                  </div>
+                </div></CardHeader
+              >
+              <CardContent class="space-y-4">
+                <div class="settings-inline-actions">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    :disabled="terminalConfigLoading || !terminalConfig.enabled"
+                    @click="openBuiltinTerminal"
+                  >
+                    <Terminal class="size-4 mr-1" />
+                    {{ t('extensions.ttyd.open') }}
+                  </Button>
+                </div>
+                <div class="settings-field-list grid gap-4">
+                  <div class="settings-toggle flex items-center justify-between gap-4">
+                    <div class="space-y-1">
+                      <Label>{{ t('extensions.ttyd.enabled') }}</Label>
+                      <p class="text-xs text-muted-foreground">
+                        {{ t('extensions.ttyd.enabledHint') }}
+                      </p>
+                    </div>
+                    <Switch v-model="terminalConfig.enabled" />
+                  </div>
+                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-start">
+                    <Label class="sm:text-right sm:pt-2">{{ t('extensions.ttyd.shell') }}</Label>
+                    <div class="space-y-1.5 sm:col-span-3">
+                      <Input
+                        v-model="terminalConfig.shell"
+                        :placeholder="isWindows ? 'cmd' : '/bin/bash'"
+                      />
+                      <p class="text-xs text-muted-foreground">
+                        {{ t('extensions.ttyd.shellHint') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <!-- Legacy ttyd fallback for platforms without a built-in PTY -->
+            <Card v-else>
+              <CardHeader class="settings-card-heading"
+                ><CardTitle :help="t('extensions.ttyd.legacyDesc')">{{
                   t('extensions.ttyd.title')
                 }}</CardTitle>
                 <div class="settings-card-actions">
@@ -6251,6 +6462,10 @@ watch(isWindows, () => {
                 </p>
               </CardFooter>
             </Card>
+          </div>
+
+          <div v-if="activeSection === 'logs'" class="space-y-4">
+            <RuntimeLogsPanel />
           </div>
 
           <!-- About: usage, host identity and one upgrade card. -->

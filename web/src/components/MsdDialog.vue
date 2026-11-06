@@ -47,7 +47,6 @@ import {
   ArrowLeft,
   Globe,
   X,
-  AlertCircle,
   Info,
 } from 'lucide-vue-next'
 
@@ -160,7 +159,6 @@ const downloadProgress = ref<{
 } | null>(null)
 const downloadFailureNotifiedId = ref<string | null>(null)
 
-const TWO_POINT_TWO_GB = 2.2 * 1024 * 1024 * 1024
 const tabTriggerClass = 'h-8 rounded-md border-0 bg-transparent text-center text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
 const segmentedGroupClass = 'grid w-full grid-cols-2 items-center gap-1 rounded-md border border-border bg-muted p-0.5'
 const segmentedItemClass = 'h-8 w-full justify-center rounded-md border-0 bg-transparent px-3 text-center text-xs text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=on]:border-0 data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:hover:bg-background'
@@ -197,10 +195,6 @@ const operationInProgress = computed(() => {
 })
 
 const usbReenumerating = computed(() => systemStore.msd?.usbReenumerating || modeChanging.value)
-
-function isLargeFile(image: MsdImage): boolean {
-  return image.size > TWO_POINT_TWO_GB
-}
 
 function isIsoImage(image: MsdImage): boolean {
   return image.name.toLowerCase().endsWith('.iso')
@@ -885,20 +879,6 @@ onUnmounted(() => {
                             </Tooltip>
                             <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span class="text-xs text-muted-foreground">{{ formatBytes(image.size) }}</span>
-                              <Tooltip v-if="isLargeFile(image)">
-                                <TooltipTrigger as-child>
-                                  <Badge
-                                    variant="outline"
-                                    class="h-4 cursor-help border-warning/50 px-1.5 text-[10px] text-warning"
-                                  >
-                                    <AlertCircle class="size-2.5 mr-0.5" />
-                                    {{ t('msd.largeFileWarning') }}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{{ t('msd.largeFileTooltip') }}</p>
-                                </TooltipContent>
-                              </Tooltip>
                             </div>
                           </div>
                         </div>

@@ -18,6 +18,7 @@ use tower_http::{
 
 use super::audio_ws::audio_ws_handler;
 use super::handlers;
+use super::logs_ws::logs_ws_handler;
 #[cfg(unix)]
 use super::uac_ws::uac_audio_ws_handler;
 use super::ws::ws_handler;
@@ -70,6 +71,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/video/input-status", get(handlers::video_input_status))
         // WebSocket endpoint for real-time events
         .route("/ws", any(ws_handler))
+        // WebSocket endpoint streaming runtime log lines
+        .route("/ws/logs", any(logs_ws_handler))
+        // Runtime log report (description + recent log attachment)
+        .route("/logs/report", post(handlers::report_runtime_logs))
         // Stream control endpoints
         .route("/stream/status", get(handlers::stream_state))
         .route("/stream/start", post(handlers::stream_start))
@@ -77,6 +82,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/stream/mode", get(handlers::stream_mode_get))
         .route("/stream/mode", post(handlers::stream_mode_set))
         .route("/stream/bitrate", post(handlers::stream_set_bitrate))
+        .route(
+            "/stream/output-resolution",
+            post(handlers::stream_set_output_resolution),
+        )
         .route("/stream/codecs", get(handlers::stream_codecs_list))
         .route("/video/codecs", get(handlers::stream_codecs_list))
         .route("/stream/constraints", get(handlers::stream_constraints_get))
@@ -206,6 +215,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/watchdog",
             patch(handlers::config::update_watchdog_config),
         )
+        // Built-in web terminal (PTY shell) configuration
+        .route(
+            "/config/terminal",
+            get(handlers::config::get_terminal_config),
+        )
+        .route(
+            "/config/terminal",
+            patch(handlers::config::update_terminal_config),
+        )
         .route(
             "/config/mcp",
             get(handlers::mcp_config).patch(handlers::mcp_update_config),
@@ -283,6 +301,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let user_routes = {
         user_routes
             .route("/ws/uac-audio", any(uac_audio_ws_handler))
+            // Built-in PTY-backed shell terminal (no external ttyd required)
+            .route("/terminal/shell", get(super::shell_ws::shell_ws_handler))
             .route("/hid/otg/self-check", get(handlers::hid_otg_self_check))
             .route("/config/msd", get(handlers::config::get_msd_config))
             .route("/config/msd", patch(handlers::config::update_msd_config))

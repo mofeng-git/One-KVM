@@ -1,5 +1,6 @@
 mod builder;
 mod config_apply;
+mod heartbeat;
 mod remote_access;
 mod supervisor;
 mod usb;
