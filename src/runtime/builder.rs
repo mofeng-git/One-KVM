@@ -137,6 +137,9 @@ impl RuntimeBuilder {
         );
         stream_manager.set_event_bus(events.clone()).await;
         stream_manager.set_config_store(config_store.clone()).await;
+        stream_manager
+            .init_output_max_height(config.stream.output_max_height)
+            .await;
         connect_audio_recovery(&audio, &stream_manager).await;
 
         let initial_mode = config.stream.mode.clone();
@@ -335,6 +338,7 @@ fn build_webrtc(
             config.stream.encoder.clone(),
         ),
         webrtc: build_ice_config(config),
+        output_max_height: config.stream.output_max_height,
         ..Default::default()
     });
     tracing::info!("WebRTC streamer created");

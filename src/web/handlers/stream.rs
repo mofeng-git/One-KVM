@@ -286,6 +286,38 @@ pub async fn stream_constraints_get(
     })
 }
 
+/// Set the temporary transmission resolution for this runtime.
+///
+/// `max_height: null` clears the override and falls back to the value saved in
+/// Settings. Overrides live only in memory and disappear when the process
+/// restarts.
+#[derive(Deserialize)]
+pub struct SetOutputResolutionRequest {
+    pub max_height: Option<u32>,
+}
+
+pub async fn stream_set_output_resolution(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SetOutputResolutionRequest>,
+) -> Result<Json<StreamerStats>> {
+    if let Some(height) = req.max_height {
+        if !crate::video::format::is_valid_output_max_height(height) {
+            return Err(AppError::BadRequest(format!(
+                "max_height must be 0 (capture resolution) or between {} and {}",
+                crate::video::format::MIN_OUTPUT_MAX_HEIGHT,
+                crate::video::format::MAX_OUTPUT_MAX_HEIGHT,
+            )));
+        }
+    }
+
+    state
+        .stream_manager
+        .set_output_max_height_override(req.max_height)
+        .await?;
+
+    Ok(Json(state.stream_manager.stats().await))
+}
+
 /// Set bitrate request
 #[derive(Deserialize)]
 pub struct SetBitrateRequest {

@@ -82,6 +82,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/stream/mode", get(handlers::stream_mode_get))
         .route("/stream/mode", post(handlers::stream_mode_set))
         .route("/stream/bitrate", post(handlers::stream_set_bitrate))
+        .route(
+            "/stream/output-resolution",
+            post(handlers::stream_set_output_resolution),
+        )
         .route("/stream/codecs", get(handlers::stream_codecs_list))
         .route("/video/codecs", get(handlers::stream_codecs_list))
         .route("/stream/constraints", get(handlers::stream_constraints_get))

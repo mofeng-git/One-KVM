@@ -8,6 +8,7 @@ use bytes::Bytes;
 
 use super::traits::{EncodedFormat, EncodedFrame, EncoderConfig};
 use crate::error::{AppError, Result};
+use crate::video::codec::convert::MjpegToNv12Decoder;
 use crate::video::format::{PixelFormat, Resolution};
 
 /// JPEG encoder using libyuv + turbojpeg
@@ -16,6 +17,10 @@ use crate::video::format::{PixelFormat, Resolution};
 /// ```text
 /// YUYV/NV12/NV16/NV24/BGR24/RGB24 ──libyuv──> I420 ──turbojpeg──> JPEG
 /// ```
+///
+/// The capture format/resolution stays untouched. When
+/// [`Self::set_output_resolution`] selects a smaller size, the I420 plane is
+/// downscaled with libyuv immediately before JPEG compression.
 ///
 /// Note: This encoder is NOT thread-safe due to turbojpeg limitations.
 /// Use it from a single thread or wrap in a Mutex.
@@ -28,6 +33,18 @@ pub struct JpegEncoder {
     uv_split_buffer: Vec<u8>,
     /// BGRA buffer used when a source format needs explicit YUV matrix expansion before JPEG.
     bgra_buffer: Vec<u8>,
+    /// Resolution actually encoded (may be smaller than `config.resolution`).
+    output_resolution: Resolution,
+    /// I420 buffer at `output_resolution`, used only when downscaling.
+    scaled_i420_buffer: Vec<u8>,
+    /// Decoder used when a capture device delivers MJPEG and downscaling is required.
+    mjpeg_decoder: Option<MjpegToNv12Decoder>,
+    /// NV12 scratch buffer for MJPEG decode.
+    nv12_scratch: Vec<u8>,
+}
+
+fn i420_buffer_size(resolution: Resolution) -> usize {
+    libyuv::i420_size(resolution.width as usize, resolution.height as usize)
 }
 
 impl JpegEncoder {
@@ -42,17 +59,20 @@ impl JpegEncoder {
             .map_err(|e| AppError::VideoError(format!("Failed to set JPEG quality: {}", e)))?;
 
         Ok(Self {
+            output_resolution: config.resolution,
             config,
             compressor,
             i420_buffer: Vec::new(),
             uv_split_buffer: Vec::new(),
             bgra_buffer: Vec::new(),
+            scaled_i420_buffer: Vec::new(),
+            mjpeg_decoder: None,
+            nv12_scratch: Vec::new(),
         })
     }
 
     fn ensure_i420_buffer(&mut self) {
-        let size =
-            self.config.resolution.width as usize * self.config.resolution.height as usize * 3 / 2;
+        let size = i420_buffer_size(self.config.resolution);
         self.i420_buffer.resize(size, 0);
     }
 
@@ -71,15 +91,51 @@ impl JpegEncoder {
         Ok(())
     }
 
+    /// Select the encoded size. `None` keeps the input resolution.
+    ///
+    /// The input buffer format and resolution are unchanged; downscaling is
+    /// applied to the intermediate I420 plane right before compression.
+    pub fn set_output_resolution(&mut self, resolution: Option<Resolution>) {
+        self.output_resolution = resolution.unwrap_or(self.config.resolution);
+    }
+
     /// Encode I420 buffer to JPEG using turbojpeg's YUV encoder
     #[inline]
     fn encode_i420_to_jpeg(&mut self, sequence: u64) -> Result<EncodedFrame> {
-        let width = self.config.resolution.width as usize;
-        let height = self.config.resolution.height as usize;
+        let src_width = self.config.resolution.width as usize;
+        let src_height = self.config.resolution.height as usize;
+        let output = self.output_resolution;
+
+        let (pixels, width, height): (&[u8], usize, usize) =
+            if output != self.config.resolution {
+                let dst_size = i420_buffer_size(output);
+                if self.scaled_i420_buffer.len() < dst_size {
+                    self.scaled_i420_buffer.resize(dst_size, 0);
+                }
+
+                libyuv::i420_scale(
+                    &self.i420_buffer,
+                    src_width as i32,
+                    src_height as i32,
+                    &mut self.scaled_i420_buffer,
+                    output.width as i32,
+                    output.height as i32,
+                    libyuv::FilterMode::kFilterBox,
+                )
+                .map_err(|e| AppError::VideoError(format!("JPEG downscale failed: {}", e)))?;
+
+                (
+                    &self.scaled_i420_buffer,
+                    output.width as usize,
+                    output.height as usize,
+                )
+            } else {
+                (&self.i420_buffer, src_width, src_height)
+            };
 
         // Create YuvImage for turbojpeg (I420 = YUV420 = Sub2x2)
         let yuv_image = turbojpeg::YuvImage {
-            pixels: self.i420_buffer.as_slice(),
+            pixels,
             width,
             height,
             align: 1,                            // No padding between rows
@@ -92,11 +148,37 @@ impl JpegEncoder {
             .compress_yuv_to_vec(yuv_image)
             .map_err(|e| AppError::VideoError(format!("JPEG compression failed: {}", e)))?;
 
-        Ok(EncodedFrame::jpeg(
-            Bytes::from(jpeg_data),
-            self.config.resolution,
-            sequence,
-        ))
+        Ok(EncodedFrame::jpeg(Bytes::from(jpeg_data), output, sequence))
+    }
+
+    /// Encode an MJPEG frame, decoding it first when downscaling is required.
+    pub fn encode_mjpeg(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
+        let resolution = self.config.resolution;
+        let width = resolution.width as usize;
+        let height = resolution.height as usize;
+        let nv12_size = width * height * 3 / 2;
+
+        if self.nv12_scratch.len() < nv12_size {
+            self.nv12_scratch.resize(nv12_size, 0);
+        }
+
+        {
+            let decoder = self
+                .mjpeg_decoder
+                .get_or_insert_with(|| MjpegToNv12Decoder::new(resolution));
+            decoder.decode_into(data, &mut self.nv12_scratch)?;
+        }
+
+        self.ensure_i420_buffer();
+        libyuv::nv12_to_i420(
+            &self.nv12_scratch[..nv12_size],
+            &mut self.i420_buffer,
+            width as i32,
+            height as i32,
+        )
+        .map_err(|e| AppError::VideoError(format!("MJPEG→I420 failed: {}", e)))?;
+
+        self.encode_i420_to_jpeg(sequence)
     }
 
     /// Encode BGRA buffer to JPEG using turbojpeg's RGB path.
@@ -104,6 +186,22 @@ impl JpegEncoder {
     fn encode_bgra_to_jpeg(&mut self, sequence: u64) -> Result<EncodedFrame> {
         let width = self.config.resolution.width as usize;
         let height = self.config.resolution.height as usize;
+
+        if self.output_resolution != self.config.resolution {
+            let expected = width * height * 4;
+            if self.bgra_buffer.len() < expected {
+                self.bgra_buffer.resize(expected, 0);
+            }
+            self.ensure_i420_buffer();
+            libyuv::bgra_to_i420(
+                &self.bgra_buffer[..expected],
+                &mut self.i420_buffer,
+                width as i32,
+                height as i32,
+            )
+            .map_err(|e| AppError::VideoError(format!("BGRA→I420 failed: {}", e)))?;
+            return self.encode_i420_to_jpeg(sequence);
+        }
 
         self.compressor
             .set_subsamp(turbojpeg::Subsamp::Sub2x2)
@@ -428,5 +526,33 @@ mod tests {
         let mut nv24 = JpegEncoder::new(EncoderConfig::jpeg(resolution, 80)).unwrap();
         nv24.encode_nv24(&vec![128; pixels * 3], 0).unwrap();
         assert!(nv24.i420_buffer.is_empty());
+    }
+
+    #[test]
+    fn output_resolution_downscales_the_encoded_frame() {
+        let source = Resolution::new(16, 16);
+        let target = Resolution::new(8, 8);
+        let mut encoder = JpegEncoder::new(EncoderConfig::jpeg(source, 80)).unwrap();
+        encoder.set_output_resolution(Some(target));
+
+        let frame = encoder
+            .encode_nv12(&vec![128; 16 * 16 * 3 / 2], 0)
+            .unwrap();
+
+        assert_eq!(frame.resolution, target);
+        assert_eq!(encoder.scaled_i420_buffer.len(), 8 * 8 * 3 / 2);
+    }
+
+    #[test]
+    fn output_resolution_defaults_to_the_input_size() {
+        let resolution = Resolution::new(16, 16);
+        let mut encoder = JpegEncoder::new(EncoderConfig::jpeg(resolution, 80)).unwrap();
+        encoder.set_output_resolution(None);
+
+        let frame = encoder
+            .encode_nv12(&vec![128; 16 * 16 * 3 / 2], 0)
+            .unwrap();
+
+        assert_eq!(frame.resolution, resolution);
     }
 }

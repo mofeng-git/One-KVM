@@ -753,6 +753,7 @@ const config = ref({
   turn_username: '',
   turn_password: '',
   uac_enabled: false,
+  output_max_height: 0,
 })
 
 const otgNetworkInterfaces = ref<NetworkInterfaceInfo[]>([])
@@ -1491,6 +1492,19 @@ async function changePassword() {
 }
 
 const videoSaving = ref<'capture' | 'encoder' | 'connection' | null>(null)
+const outputMaxHeightPresets = [1080, 720, 480, 360]
+const outputMaxHeightOptions = computed(() => {
+  const current = config.value.output_max_height ?? 0
+  return current > 0 && !outputMaxHeightPresets.includes(current)
+    ? [current, ...outputMaxHeightPresets]
+    : outputMaxHeightPresets
+})
+const outputMaxHeightSelection = computed({
+  get: () => String(config.value.output_max_height ?? 0),
+  set: (value: string) => {
+    config.value.output_max_height = Number(value)
+  },
+})
 async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
   if (videoSaving.value) return
   videoSaving.value = card
@@ -1508,7 +1522,10 @@ async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
             },
       )
     } else if (card === 'encoder') {
-      await configStore.updateStream({ encoder: config.value.encoder_backend as any })
+      await configStore.updateStream({
+        encoder: config.value.encoder_backend as any,
+        output_max_height: config.value.output_max_height,
+      })
     } else {
       await configStore.updateStream({
         stun_server: config.value.stun_server.trim(),
@@ -1698,6 +1715,7 @@ async function loadConfig() {
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: stream.turn_password || '',
+      output_max_height: stream.output_max_height ?? 0,
     }
     if (otgNetworkInterfacesLoaded.value) {
       syncOtgNetworkInterface()
@@ -3002,6 +3020,26 @@ watch(isWindows, () => {
                       >
                     </SelectContent>
                   </Select>
+                </div>
+                <div class="settings-field space-y-2">
+                  <Label for="output-max-height">{{ t('settings.transmissionResolution') }}</Label>
+                  <Select v-model="outputMaxHeightSelection">
+                    <SelectTrigger id="output-max-height" class="w-full"
+                      ><SelectValue
+                    /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{{ t('settings.transmissionOriginal') }}</SelectItem>
+                      <SelectItem
+                        v-for="height in outputMaxHeightOptions"
+                        :key="height"
+                        :value="String(height)"
+                        >{{ height }}p</SelectItem
+                      >
+                    </SelectContent>
+                  </Select>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('settings.transmissionResolutionDesc') }}
+                  </p>
                 </div>
                 <div
                   v-if="config.encoder_backend !== 'auto' && selectedBackendFormats.length > 0"

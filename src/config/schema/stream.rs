@@ -138,6 +138,9 @@ pub struct StreamConfig {
     pub auto_pause_delay_secs: u64,
     #[typeshare(skip)]
     pub client_timeout_secs: u64,
+    /// Maximum height of the transmitted video. Capture resolution is never
+    /// changed. `0` means "use the captured resolution".
+    pub output_max_height: u32,
 }
 
 impl Default for StreamConfig {
@@ -153,6 +156,7 @@ impl Default for StreamConfig {
             auto_pause_enabled: false,
             auto_pause_delay_secs: 10,
             client_timeout_secs: 30,
+            output_max_height: 0,
         }
     }
 }

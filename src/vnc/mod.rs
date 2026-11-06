@@ -355,12 +355,22 @@ async fn initial_frame_size(
     match config.encoding {
         VncEncoding::TightJpeg => {
             let (_, resolution, _, _, _) = video_manager.streamer().current_capture_config().await;
-            (resolution.width as u16, resolution.height as u16)
+            // The JPEG frames come from the shared MJPEG handler, which may be
+            // downscaled for transmission. Advertise the size the client will
+            // actually receive so the first frame does not force a resize.
+            let output = crate::video::format::scale_to_max_height(
+                resolution,
+                video_manager.mjpeg_handler().output_max_height(),
+            );
+            (output.width as u16, output.height as u16)
         }
         VncEncoding::H264 => video_manager
             .get_encoding_config()
             .await
-            .map(|cfg| (cfg.resolution.width as u16, cfg.resolution.height as u16))
+            .map(|cfg| {
+                let output = cfg.output_resolution();
+                (output.width as u16, output.height as u16)
+            })
             .unwrap_or((1280, 720)),
     }
 }
@@ -428,7 +438,7 @@ async fn subscribe_frames(
             let geometry = video_manager
                 .get_encoding_config()
                 .await
-                .map(|cfg| cfg.resolution)
+                .map(|cfg| cfg.output_resolution())
                 .unwrap_or(crate::video::format::Resolution::HD720);
             let width = geometry.width as u16;
             let height = geometry.height as u16;
@@ -445,7 +455,7 @@ async fn subscribe_frames(
                     let geometry = geometry_manager
                         .get_encoding_config()
                         .await
-                        .map(|cfg| cfg.resolution)
+                        .map(|cfg| cfg.output_resolution())
                         .unwrap_or(crate::video::format::Resolution::HD720);
                     tx.send_replace(Some(RfbFrame::H264 {
                         data: Bytes::copy_from_slice(&frame.data),

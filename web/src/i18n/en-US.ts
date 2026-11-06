@@ -297,6 +297,12 @@ export default {
     bitrateSpeed: 'Speed',
     bitrateBalanced: 'Balanced',
     bitrateQuality: 'Quality',
+    transmissionResolution: 'Transmission Resolution',
+    transmissionFollowDefault: 'Follow default ({resolution})',
+    transmissionTemporaryHint:
+      'Temporary override: it is not saved and returns to the Settings default after the service restarts.',
+    transmissionApplied: 'Transmission resolution applied',
+    transmissionApplyFailed: 'Failed to apply transmission resolution',
     browserUnsupported: 'Browser unsupported',
     backendSoftware: 'Software',
     backendAuto: 'Auto',
@@ -893,6 +899,10 @@ export default {
     autoRecommended: 'Auto (Recommended)',
     software: 'Software',
     supportedFormats: 'Supported Codecs',
+    transmissionResolution: 'Transmission Resolution',
+    transmissionResolutionDesc:
+      'The encoded stream is downscaled to this height; the capture device keeps its native resolution. This value is saved as the persistent default.',
+    transmissionOriginal: 'Original (capture resolution)',
     hidSettings: 'HID Settings',
     hidSettingsDesc: 'Configure backend, device, descriptors, and functions in order',
     hidBackend: 'HID Backend',
@@ -1312,6 +1322,8 @@ export default {
   },
   help: {
     videoBitratePreset: 'Speed: lowest latency, best for slow networks. Balanced: good quality and latency. Quality: best visual, needs good bandwidth',
+    transmissionResolution:
+      'Downscales the encoded stream without changing capture resolution. Lower heights reduce bandwidth; pair it with a suitable bitrate.',
     absoluteMode: 'Absolute mode maps mouse coordinates directly, suitable for most scenarios',
     relativeMode: 'Relative mode sends mouse movement delta, for games or special software',
     mouseThrottle: 'Send interval controls mouse event frequency. Higher values reduce network load',

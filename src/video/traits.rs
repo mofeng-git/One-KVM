@@ -40,6 +40,8 @@ pub trait VideoOutput: Send + Sync {
     async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig>;
     async fn set_video_codec(&self, codec: VideoCodecType) -> Result<()>;
     async fn set_bitrate_preset(&self, preset: BitratePreset) -> Result<()>;
+    /// Set the maximum encoded video height (`0` = capture resolution).
+    async fn set_output_max_height(&self, max_height: u32) -> Result<()>;
     async fn request_keyframe(&self) -> Result<()>;
     async fn current_video_geometry(&self) -> (Resolution, PixelFormat, u32);
     async fn pipeline_stats(&self) -> Option<SharedVideoPipelineStats>;

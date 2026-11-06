@@ -106,6 +106,11 @@ pub struct VideoStreamManager {
     switching: AtomicBool,
     /// Current mode switch transaction ID (set while switching=true)
     transition_id: RwLock<Option<String>>,
+    /// Persistent ("default") transmission height limit from the config store.
+    output_max_height_default: RwLock<u32>,
+    /// Temporary override set from the console; never persisted and cleared
+    /// when the process restarts.
+    output_max_height_override: RwLock<Option<u32>>,
 }
 
 impl VideoStreamManager {
@@ -123,6 +128,8 @@ impl VideoStreamManager {
             runtime_codec_constraints: RwLock::new(None),
             switching: AtomicBool::new(false),
             transition_id: RwLock::new(None),
+            output_max_height_default: RwLock::new(0),
+            output_max_height_override: RwLock::new(None),
         })
     }
 
@@ -149,6 +156,61 @@ impl VideoStreamManager {
 
     pub async fn set_runtime_codec_constraints(&self, constraints: StreamCodecConstraints) {
         *self.runtime_codec_constraints.write().await = Some(constraints);
+    }
+
+    /// Initialize the persistent transmission height limit during startup.
+    ///
+    /// The streamers are already constructed with this value, so this only
+    /// records it and forwards it to the MJPEG handler without restarting a
+    /// pipeline.
+    pub async fn init_output_max_height(&self, max_height: u32) {
+        *self.output_max_height_default.write().await = max_height;
+        self.streamer
+            .mjpeg_handler()
+            .set_output_max_height(max_height);
+    }
+
+    /// Effective transmission height limit (temporary override wins).
+    pub async fn effective_output_max_height(&self) -> u32 {
+        let override_value = *self.output_max_height_override.read().await;
+        match override_value {
+            Some(value) => value,
+            None => *self.output_max_height_default.read().await,
+        }
+    }
+
+    /// Persistent default and the current temporary override, if any.
+    pub async fn output_max_height_state(&self) -> (u32, Option<u32>) {
+        let default = *self.output_max_height_default.read().await;
+        let override_value = *self.output_max_height_override.read().await;
+        (default, override_value)
+    }
+
+    /// Apply a persisted default. A Settings change takes effect immediately
+    /// and clears any temporary override set from the console.
+    pub async fn set_output_max_height_default(&self, max_height: u32) -> Result<()> {
+        *self.output_max_height_default.write().await = max_height;
+        *self.output_max_height_override.write().await = None;
+        self.apply_output_max_height().await
+    }
+
+    /// Set (or clear with `None`) the temporary console override.
+    pub async fn set_output_max_height_override(
+        &self,
+        max_height: Option<u32>,
+    ) -> Result<()> {
+        *self.output_max_height_override.write().await = max_height;
+        self.apply_output_max_height().await
+    }
+
+    async fn apply_output_max_height(&self) -> Result<()> {
+        let max_height = self.effective_output_max_height().await;
+        self.streamer
+            .mjpeg_handler()
+            .set_output_max_height(max_height);
+        self.webrtc_streamer
+            .set_output_max_height(max_height)
+            .await
     }
 
     /// Get current stream codec constraints derived from running services.
@@ -646,6 +708,20 @@ impl VideoStreamManager {
             }
             s.clients = self.webrtc_streamer.session_count().await as u64;
         }
+
+        let (default_max_height, override_max_height) = self.output_max_height_state().await;
+        let effective_max_height = override_max_height.unwrap_or(default_max_height);
+        s.output_max_height = effective_max_height;
+        s.output_max_height_default = default_max_height;
+        s.output_max_height_is_override = override_max_height.is_some();
+        s.output_resolution = s.resolution.map(|(width, height)| {
+            let output = crate::video::format::scale_to_max_height(
+                Resolution::new(width, height),
+                effective_max_height,
+            );
+            (output.width, output.height)
+        });
+
         s
     }
 

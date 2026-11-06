@@ -527,6 +527,140 @@ pub fn yuyv_buffer_size(resolution: Resolution) -> usize {
     (resolution.width * resolution.height * 2) as usize
 }
 
+fn planar_buffer_size(resolution: Resolution) -> usize {
+    libyuv::i420_size(resolution.width as usize, resolution.height as usize)
+}
+
+/// Downscale a planar YUV frame.
+///
+/// The source and destination formats must be `Yuv420` or `Nv12`. Buffers are
+/// allocated once and reused for every frame, which makes this cheap enough to
+/// run inline in the encoder worker.
+pub struct FrameScaler {
+    src: Resolution,
+    dst: Resolution,
+    src_format: PixelFormat,
+    dst_format: PixelFormat,
+    /// Destination buffer, in `dst_format`.
+    output: Vec<u8>,
+    /// Intermediate buffer used when the source and destination formats differ.
+    intermediate: Vec<u8>,
+}
+
+impl FrameScaler {
+    pub fn new(
+        src: Resolution,
+        dst: Resolution,
+        src_format: PixelFormat,
+        dst_format: PixelFormat,
+    ) -> Self {        debug_assert!(matches!(
+            src_format,
+            PixelFormat::Yuv420 | PixelFormat::Nv12
+        ));
+        debug_assert!(matches!(
+            dst_format,
+            PixelFormat::Yuv420 | PixelFormat::Nv12
+        ));
+
+        let dst_len = planar_buffer_size(dst);
+        let intermediate_len = dst_len.max(planar_buffer_size(src));
+
+        Self {
+            src,
+            dst,
+            src_format,
+            dst_format,
+            output: vec![0; dst_len],
+            intermediate: vec![0; intermediate_len],
+        }
+    }
+
+    /// Scale `input` and return the destination buffer.
+    pub fn scale(&mut self, input: &[u8]) -> Result<&[u8]> {
+        if self.src == self.dst && self.src_format == self.dst_format {
+            // Copy into our own buffer so the returned reference is tied to
+            // `&mut self` (matching the non-identity paths below).
+            let len = planar_buffer_size(self.src);
+            if input.len() < len {
+                return Err(AppError::VideoError(format!(
+                    "Frame buffer too small for scaling: {} < {}",
+                    input.len(),
+                    len
+                )));
+            }
+            if self.output.len() < len {
+                self.output.resize(len, 0);
+            }
+            self.output[..len].copy_from_slice(&input[..len]);
+            return Ok(&self.output);
+        }
+
+        let src_w = self.src.width as i32;
+        let src_h = self.src.height as i32;
+        let dst_w = self.dst.width as i32;
+        let dst_h = self.dst.height as i32;
+
+        match (self.src_format, self.dst_format) {
+            (PixelFormat::Yuv420, PixelFormat::Yuv420) => libyuv::i420_scale(
+                input,
+                src_w,
+                src_h,
+                &mut self.output,
+                dst_w,
+                dst_h,
+                libyuv::FilterMode::kFilterBox,
+            )
+            .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?,
+            (PixelFormat::Nv12, PixelFormat::Nv12) => libyuv::nv12_scale(
+                input,
+                src_w,
+                src_h,
+                &mut self.output,
+                dst_w,
+                dst_h,
+                libyuv::FilterMode::kFilterBox,
+            )
+            .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?,
+            (PixelFormat::Nv12, PixelFormat::Yuv420) => {
+                libyuv::nv12_scale(
+                    input,
+                    src_w,
+                    src_h,
+                    &mut self.intermediate,
+                    dst_w,
+                    dst_h,
+                    libyuv::FilterMode::kFilterBox,
+                )
+                .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?;
+                libyuv::nv12_to_i420(&self.intermediate, &mut self.output, dst_w, dst_h)
+                    .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?;
+            }
+            (PixelFormat::Yuv420, PixelFormat::Nv12) => {
+                libyuv::i420_scale(
+                    input,
+                    src_w,
+                    src_h,
+                    &mut self.intermediate,
+                    dst_w,
+                    dst_h,
+                    libyuv::FilterMode::kFilterBox,
+                )
+                .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?;
+                libyuv::i420_to_nv12(&self.intermediate, &mut self.output, dst_w, dst_h)
+                    .map_err(|e| AppError::VideoError(format!("Frame scaling failed: {}", e)))?;
+            }
+            _ => {
+                return Err(AppError::VideoError(format!(
+                    "Unsupported scaling conversion: {} → {}",
+                    self.src_format, self.dst_format
+                )))
+            }
+        }
+
+        Ok(&self.output)
+    }
+}
+
 // ============================================================================
 // NV12 Converter for VAAPI encoder (using libyuv)
 // ============================================================================
@@ -916,5 +1050,56 @@ mod tests {
         assert_eq!(decoder.decode(&jpeg).unwrap(), output.as_slice());
         let internal = decoder.decode(&jpeg).unwrap().as_ptr();
         assert_eq!(decoder.decode(&jpeg).unwrap().as_ptr(), internal);
+    }
+}
+
+#[cfg(test)]
+mod scaling_tests {
+    use super::*;
+
+    #[test]
+    fn scales_i420_to_i420() {
+        let src = Resolution::new(4, 4);
+        let dst = Resolution::new(2, 2);
+        let mut scaler = FrameScaler::new(src, dst, PixelFormat::Yuv420, PixelFormat::Yuv420);
+        let input = vec![128u8; planar_buffer_size(src)];
+
+        let output = scaler.scale(&input).unwrap();
+
+        assert_eq!(output.len(), planar_buffer_size(dst));
+    }
+
+    #[test]
+    fn scales_nv12_to_nv12() {
+        let src = Resolution::new(4, 4);
+        let dst = Resolution::new(2, 2);
+        let mut scaler = FrameScaler::new(src, dst, PixelFormat::Nv12, PixelFormat::Nv12);
+        let input = vec![64u8; planar_buffer_size(src)];
+
+        let output = scaler.scale(&input).unwrap();
+
+        assert_eq!(output.len(), planar_buffer_size(dst));
+    }
+
+    #[test]
+    fn scales_nv12_to_i420() {
+        let src = Resolution::new(4, 4);
+        let dst = Resolution::new(2, 2);
+        let mut scaler = FrameScaler::new(src, dst, PixelFormat::Nv12, PixelFormat::Yuv420);
+        let input = vec![32u8; planar_buffer_size(src)];
+
+        let output = scaler.scale(&input).unwrap();
+
+        assert_eq!(output.len(), planar_buffer_size(dst));
+    }
+
+    #[test]
+    fn same_geometry_copies_input() {
+        let resolution = Resolution::new(4, 4);
+        let mut scaler =
+            FrameScaler::new(resolution, resolution, PixelFormat::Yuv420, PixelFormat::Yuv420);
+        let input = vec![7u8; planar_buffer_size(resolution)];
+
+        assert_eq!(scaler.scale(&input).unwrap(), input.as_slice());
     }
 }

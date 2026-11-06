@@ -312,18 +312,28 @@ export interface VideoEncoderSelfCheckResponse {
   rows: VideoEncoderSelfCheckRow[]
 }
 
+export interface StreamStatusResponse {
+  state: StreamState
+  reason?: StreamSignalReason | null
+  device: string | null
+  format: string | null
+  resolution: [number, number] | null
+  /** Resolution actually transmitted (after optional downscaling). */
+  output_resolution: [number, number] | null
+  clients: number
+  target_fps: number
+  fps: number
+  /** Effective transmission height limit (`0` = capture resolution). */
+  output_max_height: number
+  /** Persisted default configured in Settings. */
+  output_max_height_default: number
+  /** Whether the console set a temporary override for this runtime. */
+  output_max_height_is_override: boolean
+}
+
 export const streamApi = {
   status: () =>
-    request<{
-      state: StreamState
-      reason?: StreamSignalReason | null
-      device: string | null
-      format: string | null
-      resolution: [number, number] | null
-      clients: number
-      target_fps: number
-      fps: number
-    }>('/stream/status'),
+    request<StreamStatusResponse>('/stream/status'),
 
   start: () =>
     request<{ success: boolean }>('/stream/start', { method: 'POST' }),
@@ -361,6 +371,20 @@ export const streamApi = {
       method: 'POST',
       body: JSON.stringify({ bitrate_preset }),
     }),
+
+  /**
+   * Set a temporary transmission height for this runtime.
+   * `null` clears the override and falls back to the Settings default.
+   */
+  setOutputMaxHeight: (max_height: number | null) =>
+    request<StreamStatusResponse>(
+      '/stream/output-resolution',
+      {
+        method: 'POST',
+        body: JSON.stringify({ max_height }),
+      },
+      { toastOnError: false },
+    ),
 }
 
 export interface IceCandidate {

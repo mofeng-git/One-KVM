@@ -297,6 +297,11 @@ export default {
     bitrateSpeed: '速度优先',
     bitrateBalanced: '均衡',
     bitrateQuality: '质量优先',
+    transmissionResolution: '传输分辨率',
+    transmissionFollowDefault: '跟随默认（{resolution}）',
+    transmissionTemporaryHint: '临时设置：不会保存，服务重启后恢复为设置页中的默认值。',
+    transmissionApplied: '传输分辨率已应用',
+    transmissionApplyFailed: '传输分辨率应用失败',
     browserUnsupported: '浏览器不支持',
     backendSoftware: '软件编码',
     backendAuto: '自动',
@@ -892,6 +897,10 @@ export default {
     autoRecommended: '自动（推荐）',
     software: '软件',
     supportedFormats: '支持的编码格式',
+    transmissionResolution: '传输分辨率',
+    transmissionResolutionDesc:
+      '编码后的视频会缩放到该高度，采集设备仍保持原始分辨率。此处保存的值会持久化，作为默认传输分辨率。',
+    transmissionOriginal: '原始（采集分辨率）',
     hidSettings: 'HID 设置',
     hidSettingsDesc: '按后端、设备、描述符和功能顺序配置',
     hidBackend: 'HID 后端',
@@ -1311,6 +1320,8 @@ export default {
   },
   help: {
     videoBitratePreset: '速度优先：最低延迟，适合网络较差的场景；均衡：画质和延迟平衡；质量优先：最佳画质，需要较好的网络带宽',
+    transmissionResolution:
+      '在不改变采集分辨率的前提下缩小编码输出。高度越低流量越小，建议同时选择合适的码率。',
     absoluteMode: '绝对定位模式直接映射鼠标坐标，适用于大多数场景',
     relativeMode: '相对定位模式发送鼠标移动增量，适用于游戏或特殊软件',
     mouseThrottle: '发送间隔控制鼠标事件的发送频率，较大的值可减少网络负载',

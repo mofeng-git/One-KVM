@@ -94,6 +94,18 @@ pub(crate) async fn apply_stream_config(
             .await?;
     }
 
+    if options.force || old_config.output_max_height != new_config.output_max_height {
+        tracing::info!(
+            "Updating transmission height limit: {} -> {}",
+            old_config.output_max_height,
+            new_config.output_max_height
+        );
+        state
+            .stream_manager
+            .set_output_max_height_default(new_config.output_max_height)
+            .await?;
+    }
+
     let ice_changed = old_config.stun_server != new_config.stun_server
         || old_config.turn_server != new_config.turn_server
         || old_config.turn_username != new_config.turn_username

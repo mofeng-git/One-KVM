@@ -159,6 +159,8 @@ pub struct StreamConfigResponse {
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
     pub turn_password: Option<String>,
+    /// Maximum transmitted height (`0` = capture resolution).
+    pub output_max_height: u32,
 }
 
 impl From<&StreamConfig> for StreamConfigResponse {
@@ -174,6 +176,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
             turn_password: config.turn_password.clone(),
+            output_max_height: config.output_max_height,
         }
     }
 }
@@ -194,6 +197,8 @@ pub struct StreamConfigUpdate {
     pub turn_username: Option<String>,
     /// TURN password
     pub turn_password: Option<String>,
+    /// Maximum transmitted height (`0` = capture resolution)
+    pub output_max_height: Option<u32>,
 }
 
 impl StreamConfigUpdate {
@@ -216,6 +221,15 @@ impl StreamConfigUpdate {
                 ));
             }
         }
+        if let Some(height) = self.output_max_height {
+            if !crate::video::format::is_valid_output_max_height(height) {
+                return Err(AppError::BadRequest(format!(
+                    "output_max_height must be 0 (capture resolution) or between {} and {}",
+                    crate::video::format::MIN_OUTPUT_MAX_HEIGHT,
+                    crate::video::format::MAX_OUTPUT_MAX_HEIGHT,
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -228,6 +242,9 @@ impl StreamConfigUpdate {
         }
         if let Some(preset) = self.bitrate_preset {
             config.bitrate_preset = preset;
+        }
+        if let Some(height) = self.output_max_height {
+            config.output_max_height = height;
         }
         // STUN/TURN settings - empty string means clear (use public servers), Some("value") means set custom
         if let Some(ref stun) = self.stun_server {

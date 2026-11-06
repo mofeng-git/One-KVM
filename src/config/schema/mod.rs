@@ -64,6 +64,9 @@ impl AppConfig {
         }
         self.atx.normalize();
         self.mcp.requests_per_second = self.mcp.requests_per_second.clamp(1, 100);
+        if !crate::video::format::is_valid_output_max_height(self.stream.output_max_height) {
+            self.stream.output_max_height = 0;
+        }
     }
 
     pub fn apply_platform_defaults(&mut self) {

@@ -6,6 +6,11 @@ use crate::video::codec::registry::EncoderRegistry;
 use hwcodec::rkmpp_dmabuf::{DmaEncoder, DmaEncoderConfig, DmaFormat};
 
 pub(super) fn eligible(config: &SharedVideoPipelineConfig) -> bool {
+    // The DMA path feeds captured frames straight into the encoder, so it
+    // cannot apply the transmission downscale. Fall back to the copy pipeline.
+    if config.is_scaling() {
+        return false;
+    }
     if std::env::var("ONE_KVM_RKMPP_DMABUF").as_deref() == Ok("0") {
         return false;
     }

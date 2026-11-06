@@ -3,7 +3,7 @@ use arc_swap::ArcSwap;
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
@@ -28,6 +28,8 @@ pub type ClientId = String;
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RawFrameFingerprint {
     resolution: crate::video::format::Resolution,
+    /// Encoded/transmitted resolution after optional downscaling.
+    output_resolution: crate::video::format::Resolution,
     format: PixelFormat,
     stride: u32,
     online: bool,
@@ -136,6 +138,8 @@ pub struct MjpegStreamHandler {
     #[cfg(feature = "desktop")]
     jpeg_encoder: ParkingMutex<Option<JpegEncoderState>>,
     jpeg_quality: AtomicU64,
+    /// Maximum transmitted height; `0` keeps the capture resolution.
+    output_max_height: AtomicU32,
 }
 
 impl MjpegStreamHandler {
@@ -159,12 +163,30 @@ impl MjpegStreamHandler {
             dropped_same_frames: AtomicU64::new(0),
             max_drop_same_frames: AtomicU64::new(max_drop),
             jpeg_quality: AtomicU64::new(80),
+            output_max_height: AtomicU32::new(0),
         }
     }
 
     pub fn set_jpeg_quality(&self, quality: u8) {
         let clamped = quality.clamp(1, 100) as u64;
         self.jpeg_quality.store(clamped, Ordering::Relaxed);
+    }
+
+    /// Set the maximum transmitted height (`0` = capture resolution).
+    pub fn set_output_max_height(&self, max_height: u32) {
+        self.output_max_height
+            .store(max_height, Ordering::Relaxed);
+    }
+
+    pub fn output_max_height(&self) -> u32 {
+        self.output_max_height.load(Ordering::Relaxed)
+    }
+
+    fn output_resolution_for(
+        &self,
+        input: crate::video::format::Resolution,
+    ) -> crate::video::format::Resolution {
+        crate::video::format::scale_to_max_height(input, self.output_max_height())
     }
 
     pub fn update_frame(&self, frame: VideoFrame) {
@@ -175,6 +197,25 @@ impl MjpegStreamHandler {
             self.online.store(frame.online, Ordering::SeqCst);
             *self.last_frame_ts.write() = Some(Instant::now());
 
+            // Cache the frame a new client will receive first. If a
+            // transmission downscale is configured, encode it now instead of
+            // letting the client start with a full-resolution frame.
+            #[cfg(feature = "desktop")]
+            let frame = if frame.format.is_compressed()
+                && self.output_resolution_for(frame.resolution) != frame.resolution
+            {
+                match self.encode_to_jpeg(&frame) {
+                    Ok(jpeg_frame) => jpeg_frame,
+                    Err(e) => {
+                        warn!("Failed to encode cached frame to JPEG: {}", e);
+                        self.current_frame.store(Arc::new(None));
+                        return;
+                    }
+                }
+            } else {
+                frame
+            };
+
             if frame.format.is_compressed() {
                 self.current_frame.store(Arc::new(Some(frame)));
             } else {
@@ -183,7 +224,8 @@ impl MjpegStreamHandler {
             return;
         }
 
-        let frame = if !frame.format.is_compressed() {
+        let needs_scale = self.output_resolution_for(frame.resolution) != frame.resolution;
+        let frame = if !frame.format.is_compressed() || needs_scale {
             #[cfg(feature = "desktop")]
             match self.encode_to_jpeg(&frame) {
                 Ok(jpeg_frame) => jpeg_frame,
@@ -236,12 +278,14 @@ impl MjpegStreamHandler {
     #[cfg(feature = "desktop")]
     fn encode_to_jpeg(&self, frame: &VideoFrame) -> Result<VideoFrame, String> {
         let resolution = frame.resolution;
+        let output_resolution = self.output_resolution_for(resolution);
         let sequence = self.sequence.load(Ordering::Relaxed);
         let desired_quality = self.jpeg_quality.load(Ordering::Relaxed) as u32;
         // Keep only a fingerprint and the encoded output, not a second raw
         // frame. Unchanged input can reuse JPEG bytes even for forced refreshes.
         let fingerprint = RawFrameFingerprint {
             resolution,
+            output_resolution,
             format: frame.format,
             stride: frame.stride,
             online: frame.online,
@@ -293,7 +337,14 @@ impl MjpegStreamHandler {
             }
         }
 
+        encoder.set_output_resolution(
+            (output_resolution != resolution).then_some(output_resolution),
+        );
+
         let encoded = match frame.format {
+            PixelFormat::Mjpeg => encoder
+                .encode_mjpeg(frame.data(), sequence)
+                .map_err(|e| format!("MJPEG encode failed: {}", e))?,
             PixelFormat::Yuyv => encoder
                 .encode_yuyv(frame.data(), sequence)
                 .map_err(|e| format!("YUYV encode failed: {}", e))?,
@@ -323,7 +374,13 @@ impl MjpegStreamHandler {
             }
         };
 
-        let mut jpeg = VideoFrame::new(encoded.data, resolution, PixelFormat::Mjpeg, 0, sequence);
+        let mut jpeg = VideoFrame::new(
+            encoded.data,
+            output_resolution,
+            PixelFormat::Mjpeg,
+            0,
+            sequence,
+        );
         jpeg.capture_ts = frame.capture_ts;
         jpeg.online = frame.online;
         state.last_input = Some(fingerprint);

@@ -180,6 +180,8 @@ export interface StreamConfig {
 	turn_server?: string;
 	turn_username?: string;
 	turn_password?: string;
+	/** Maximum height of the transmitted video. Capture resolution is never changed. `0` means "use the captured resolution". */
+	output_max_height: number;
 }
 
 export interface WebConfig {
@@ -683,6 +685,8 @@ export interface StreamConfigResponse {
 	turn_server?: string;
 	turn_username?: string;
 	turn_password?: string;
+	/** Maximum transmitted height (`0` = capture resolution). */
+	output_max_height: number;
 }
 
 export interface StreamConfigUpdate {
@@ -703,6 +707,8 @@ export interface StreamConfigUpdate {
 	turn_username?: string;
 	/** TURN password */
 	turn_password?: string;
+	/** Maximum transmitted height (`0` = capture resolution) */
+	output_max_height?: number;
 }
 
 export interface TtydConfigUpdate {
