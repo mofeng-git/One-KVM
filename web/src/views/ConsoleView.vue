@@ -956,6 +956,12 @@ function handleVideoError() {
     return
   }
 
+  // A cleared <img> while the console is cached must not schedule an
+  // MJPEG reconnect (the guard in refreshVideo would suppress it anyway).
+  if (!isConsoleActive.value) {
+    return
+  }
+
   if (isModeSwitching.value) {
     return
   }
@@ -1017,6 +1023,7 @@ function handleStreamDeviceLost(data: StreamDeviceLostEventData) {
 }
 
 function scheduleWebRTCRecovery() {
+  if (!isConsoleActive.value) return
   videoDebugLog('Scheduling WebRTC recovery check', {
     attempts: webrtcRecoveryAttempts,
     videoMode: videoMode.value,
@@ -1098,6 +1105,7 @@ function handleStreamRecovered(_data: { device: string }) {
 
   videoError.value = false
   videoErrorMessage.value = ''
+  if (!isConsoleActive.value) return
   if (videoMode.value === 'mjpeg') {
     refreshVideo()
   } else if (webrtc.isConnected.value) {
@@ -1115,6 +1123,7 @@ function handleStreamRecovered(_data: { device: string }) {
 }
 
 async function handleAudioStateChanged(data: { streaming: boolean; device: string | null }) {
+  if (!isConsoleActive.value) return
   if (!data.streaming) {
     unifiedAudio.disconnect()
     return
@@ -1188,6 +1197,11 @@ async function handleStreamConfigApplied(_data: any) {
   }, GRACE_PERIOD)
 
   videoRestarting.value = true
+
+  if (!isConsoleActive.value) {
+    videoRestarting.value = false
+    return
+  }
 
   if (isModeSwitching.value) {
     console.log('[StreamConfigApplied] Mode switch in progress, waiting for WebRTCReady')
@@ -1532,6 +1546,8 @@ function reloadPage() {
 }
 
 function refreshVideo() {
+  // Never start an HTTP MJPEG fetch while the console is cached by <KeepAlive>.
+  if (!isConsoleActive.value) return
   videoDebugLog('Refreshing MJPEG video', {
     videoMode: videoMode.value,
     previousTimestamp: mjpegTimestamp.value,
@@ -1569,6 +1585,9 @@ const mjpegUrl = computed(() => {
 })
 
 async function connectWebRTCOnly(codec: VideoMode = 'h264') {
+  // Background events (device info, config apply, recovery) must not revive
+  // the stream while the user is on another page.
+  if (!isConsoleActive.value) return
   videoDebugLog('Connecting WebRTC without mode switch', {
     codec,
     currentMode: videoMode.value,
@@ -1849,7 +1868,7 @@ watch(() => webrtc.videoTrack.value, async (track) => {
     muted: track?.muted,
     videoMode: videoMode.value,
   })
-  if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg') {
+  if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg' && isConsoleActive.value) {
     await rebindWebRTCVideo()
   }
 })
@@ -2972,6 +2991,8 @@ function unregisterInteractionListeners() {
   interactionListenersBound = false
 }
 
+let videoSuspendedByDeactivation = false
+
 async function activateConsoleView() {
   isConsoleActive.value = true
   registerInteractionListeners()
@@ -2981,6 +3002,18 @@ async function activateConsoleView() {
 
   if (!hidWs.connected.value) {
     hidWs.connect().catch(() => {})
+  }
+
+  if (videoSuspendedByDeactivation) {
+    videoSuspendedByDeactivation = false
+    if (videoMode.value === 'mjpeg') {
+      if (mjpegTimestamp.value === 0) refreshVideo()
+      return
+    }
+    // The teardown started by suspendVideoStreaming() may still be awaiting
+    // the backend close call; make sure the old session and tracks are gone
+    // before this activation creates a new peer connection.
+    await webrtc.disconnect()
   }
 
   if (videoMode.value !== 'mjpeg' && webrtc.videoTrack.value) {
@@ -3001,12 +3034,55 @@ async function activateConsoleView() {
   }
 }
 
+/**
+ * Release all video transport resources while the console is cached by
+ * <KeepAlive>. `onUnmounted` does not fire on route changes, so without this
+ * the WebRTC peer connection and the MJPEG <img> keep downloading frames
+ * after the user opens Settings/Terminal.
+ */
+function suspendVideoStreaming() {
+  videoSuspendedByDeactivation = true
+
+  cancelWebRTCRecovery()
+  if (webrtcReconnectTimeout) {
+    clearTimeout(webrtcReconnectTimeout)
+    webrtcReconnectTimeout = null
+  }
+  if (retryTimeoutId !== null) {
+    clearTimeout(retryTimeoutId)
+    retryTimeoutId = null
+  }
+  if (gracePeriodTimeoutId !== null) {
+    clearTimeout(gracePeriodTimeoutId)
+    gracePeriodTimeoutId = null
+  }
+
+  // Clearing the URL stops the in-flight multipart MJPEG request. Removing
+  // the attribute (rather than assigning "") avoids a request to the page URL.
+  mjpegTimestamp.value = 0
+  mjpegFrameReceived.value = false
+  videoLoading.value = false
+  if (videoRef.value) {
+    videoRef.value.src = ''
+    videoRef.value.removeAttribute('src')
+  }
+
+  if (webrtcVideoRef.value) {
+    webrtcVideoRef.value.pause()
+    webrtcVideoRef.value.srcObject = null
+  }
+
+  unifiedAudio.disconnect()
+  void stopWebRTCClientActivity()
+}
+
 function deactivateConsoleView() {
   isConsoleActive.value = false
   void microphone.stop()
   handleBlur()
   exitPointerLock()
   unregisterInteractionListeners()
+  suspendVideoStreaming()
 }
 
 
