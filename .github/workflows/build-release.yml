@@ -10,6 +10,11 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# 同一分支连续推送时取消旧构建，避免功能分支浪费资源。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -93,6 +98,7 @@ jobs:
       with:
         name: one-kvm-${{ matrix.target }}
         path: dist/
+        retention-days: 7
 
   release:
     needs: build

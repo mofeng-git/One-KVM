@@ -1,8 +1,7 @@
 name: PR Check
 
 on:
-  push:
-    branches: [ 'one-kvm-*' ]
+  # 功能分支推送只构建二进制（build-release.yml），不跑格式检查/check/测试。
   pull_request:
     branches: [ main, master ]
 

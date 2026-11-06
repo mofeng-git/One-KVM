@@ -1,8 +1,7 @@
 name: Build
 
 on:
-  push:
-    branches: [ 'one-kvm-*' ]
+  # 功能分支推送不跑前端/deb/Windows 构建，仅由 build-release.yml 编译二进制。
   pull_request:
   workflow_dispatch:
     inputs:
