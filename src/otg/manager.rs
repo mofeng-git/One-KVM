@@ -1,11 +1,11 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 
 use super::configfs::{
-    configfs_path, create_dir, find_udc, is_configfs_available, remove_dir, write_file,
-    write_file_if_exists, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
-    DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
+    configfs_path, create_dir, find_udc, is_configfs_available, list_dir_names, remove_dir,
+    write_file, write_file_if_exists, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE,
+    DEFAULT_USB_PRODUCT_ID, DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
 };
 use super::function::GadgetFunction;
 use super::hid::HidFunction;
@@ -178,12 +178,16 @@ impl OtgGadgetManager {
         }
 
         if self.gadget_exists() {
-            if self.is_bound() {
-                debug!("Gadget already exists and is bound, skipping setup");
-                return Ok(());
-            }
-            warn!("Gadget exists but not bound, will reconfigure");
-            self.cleanup()?;
+            // Never adopt a gadget created by another process: its function
+            // set, descriptors and bound UDC are unknown. Leaving it in place
+            // makes the subsequent UDC write fail with EBUSY, and using the
+            // in-memory function list to clean it may leave unknown functions
+            // behind.
+            warn!(
+                "Removing pre-existing OTG gadget before setup: {}",
+                self.gadget_name
+            );
+            remove_gadget_tree(&self.gadget_path)?;
         }
 
         create_dir(&self.gadget_path)?;
@@ -421,6 +425,102 @@ impl Drop for OtgGadgetManager {
     }
 }
 
+/// Remove a gadget that this process does not own.
+///
+/// Works from the on-disk configfs layout because the in-memory function list
+/// of an inherited gadget is unknown. Configfs attribute files cannot be
+/// unlinked individually, so only symlinks are unlinked and directories are
+/// removed bottom-up.
+pub fn remove_gadget_tree(gadget_path: &Path) -> Result<()> {
+    if !gadget_path.exists() {
+        return Ok(());
+    }
+
+    let mut errors: Vec<String> = Vec::new();
+
+    // A bound gadget must be unbound before its directory can be removed.
+    let udc_file = gadget_path.join("UDC");
+    let bound = fs::read_to_string(&udc_file)
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+    if bound {
+        match write_file(&udc_file, "") {
+            Ok(()) => std::thread::sleep(std::time::Duration::from_millis(REBIND_DELAY_MS)),
+            Err(error) => errors.push(format!("unbind failed: {error}")),
+        }
+    }
+
+    // RNDIS exposes an os_desc link to the configuration; remove it first.
+    // Use `fs::remove_file` directly: the wrapper's `exists()` check follows
+    // symlinks and would leave dangling links behind.
+    let os_desc_link = gadget_path.join("os_desc/c.1");
+    if is_symlink(&os_desc_link) {
+        if let Err(error) = fs::remove_file(&os_desc_link) {
+            errors.push(error.to_string());
+        }
+    }
+
+    // Function links must be unlinked before their configuration directory
+    // can be removed.
+    let configs = gadget_path.join("configs");
+    for config in list_dir_names(&configs) {
+        let config_path = configs.join(&config);
+        for name in list_dir_names(&config_path) {
+            let link = config_path.join(&name);
+            if is_symlink(&link) {
+                if let Err(error) = fs::remove_file(&link) {
+                    errors.push(error.to_string());
+                }
+            }
+        }
+    }
+
+    if let Err(error) = remove_configfs_dir(gadget_path) {
+        errors.push(format!("remove {} failed: {error}", gadget_path.display()));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(AppError::Config(format!(
+            "Failed to remove inherited OTG gadget {}: {}",
+            gadget_path.display(),
+            errors.join("; ")
+        )))
+    }
+}
+
+fn is_symlink(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
+fn remove_configfs_dir(path: &Path) -> std::io::Result<()> {
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    for entry in entries.flatten() {
+        let child = entry.path();
+        match fs::symlink_metadata(&child) {
+            Ok(meta) if meta.is_dir() => remove_configfs_dir(&child)?,
+            // Configfs attribute files cannot be unlinked; they disappear with
+            // the directory, so only best-effort cleanup is possible (and
+            // required when this helper runs against a regular filesystem).
+            Ok(_) => {
+                let _ = fs::remove_file(&child);
+            }
+            Err(_) => {}
+        }
+    }
+    match fs::remove_dir(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result,
+    }
+}
+
 pub async fn wait_for_hid_devices(device_paths: &[PathBuf], timeout_ms: u64) -> bool {
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_millis(timeout_ms);
@@ -542,5 +642,42 @@ mod tests {
         assert!(manager.add_mouse_relative().is_ok());
         assert!(manager.add_mouse_absolute().is_ok());
         assert_eq!(manager.functions.len(), 3);
+    }
+
+    #[test]
+    fn remove_gadget_tree_removes_an_inherited_bound_gadget() {
+        let temp = tempfile::tempdir().unwrap();
+        let gadget = temp.path().join("one-kvm");
+        fs::create_dir_all(gadget.join("configs/c.1/strings/0x409")).unwrap();
+        fs::create_dir_all(gadget.join("functions/hid.usb0")).unwrap();
+        fs::create_dir_all(gadget.join("functions/mass_storage.usb0/lun.0")).unwrap();
+        fs::create_dir_all(gadget.join("strings/0x409")).unwrap();
+        fs::create_dir_all(gadget.join("os_desc")).unwrap();
+        fs::write(gadget.join("UDC"), "fe800000.usb\n").unwrap();
+        fs::write(gadget.join("MaxPower"), "500").unwrap();
+        fs::write(gadget.join("configs/c.1/bmAttributes"), "0x80").unwrap();
+        std::os::unix::fs::symlink(
+            gadget.join("functions/hid.usb0"),
+            gadget.join("configs/c.1/hid.usb0"),
+        )
+        .unwrap();
+        // A dangling link must be removed as well, otherwise the configuration
+        // directory cannot be removed.
+        std::os::unix::fs::symlink("/nonexistent-uac", gadget.join("configs/c.1/uac1.usb0"))
+            .unwrap();
+        std::os::unix::fs::symlink(gadget.join("configs/c.1"), gadget.join("os_desc/c.1")).unwrap();
+
+        remove_gadget_tree(&gadget).unwrap();
+
+        assert!(
+            !gadget.exists(),
+            "inherited gadget directory should be gone"
+        );
+    }
+
+    #[test]
+    fn remove_gadget_tree_is_a_noop_for_missing_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        remove_gadget_tree(&temp.path().join("missing")).unwrap();
     }
 }

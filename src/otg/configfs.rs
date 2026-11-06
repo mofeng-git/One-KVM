@@ -64,6 +64,39 @@ pub fn list_udcs() -> Vec<String> {
     devices
 }
 
+/// Sorted entry names of a directory, or an empty list when it cannot be read.
+pub fn list_dir_names(path: &Path) -> Vec<String> {
+    let mut names = Vec::new();
+    collect_dir_names(path, &mut names);
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Returns the name of another gadget currently bound to `udc`, if any.
+///
+/// The gadget called `exclude_gadget` is ignored: callers handle their own
+/// gadget (including stale ones) separately.
+pub fn udc_owner_in(root: &Path, udc: &str, exclude_gadget: &str) -> Option<String> {
+    let entries = fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().trim().to_string();
+        if name.is_empty() || name == exclude_gadget {
+            continue;
+        }
+        let bound = fs::read_to_string(entry.path().join("UDC")).unwrap_or_default();
+        if bound.trim() == udc {
+            return Some(name);
+        }
+    }
+    None
+}
+
+/// Returns the name of another gadget bound to `udc` on the live system.
+pub fn udc_claimed_by_other_gadget(udc: &str, exclude_gadget: &str) -> Option<String> {
+    udc_owner_in(configfs_path(), udc, exclude_gadget)
+}
+
 fn collect_dir_names(path: &Path, devices: &mut Vec<String>) {
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries.flatten() {
@@ -167,4 +200,45 @@ pub fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
             e
         ))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_udc(root: &Path, gadget: &str, udc: &str) {
+        let path = root.join(gadget);
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join("UDC"), udc).unwrap();
+    }
+
+    #[test]
+    fn udc_owner_in_reports_other_gadget_bindings() {
+        let temp = tempfile::tempdir().unwrap();
+        write_udc(temp.path(), "one-kvm", "fe800000.usb\n");
+        write_udc(temp.path(), "rockchip", "fe800000.usb\n");
+        write_udc(temp.path(), "idle", "");
+
+        assert_eq!(
+            udc_owner_in(temp.path(), "fe800000.usb", "one-kvm").as_deref(),
+            Some("rockchip")
+        );
+        assert_eq!(udc_owner_in(temp.path(), "other.usb", "one-kvm"), None);
+        assert_eq!(
+            udc_owner_in(temp.path(), "fe800000.usb", "rockchip").as_deref(),
+            Some("one-kvm")
+        );
+    }
+
+    #[test]
+    fn udc_owner_in_ignores_unreadable_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        write_udc(temp.path(), "rockchip", "");
+
+        assert_eq!(udc_owner_in(temp.path(), "fe800000.usb", "one-kvm"), None);
+        assert_eq!(
+            udc_owner_in(&temp.path().join("missing"), "fe800000.usb", "one-kvm"),
+            None
+        );
+    }
 }

@@ -5,7 +5,9 @@ use tracing::{debug, info, warn};
 use typeshare::typeshare;
 
 use super::bridge::NetworkBridgeRuntime;
-use super::manager::{wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager};
+use super::manager::{
+    remove_gadget_tree, wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager,
+};
 use super::msd::{MsdFunction, MsdInquiryStrings, MsdLunConfig};
 use crate::config::{
     HidConfig, MsdConfig, OtgDescriptorConfig, OtgHidFunctions, OtgNetworkConfig, UacConfig,
@@ -196,6 +198,10 @@ impl Default for OtgServiceState {
 
 pub struct OtgService {
     manager: Mutex<Option<OtgGadgetManager>>,
+    /// Serializes complete gadget rebuilds. The manager handle alone is not
+    /// enough: setup and bind happen outside of the manager lock, so two
+    /// concurrent reconciles could both create and bind the same gadget.
+    operation: Mutex<()>,
     state: RwLock<OtgServiceState>,
     msd_function: RwLock<Option<MsdFunction>>,
     network_bridge: Mutex<Option<NetworkBridgeRuntime>>,
@@ -207,6 +213,7 @@ impl OtgService {
     pub fn new() -> Self {
         Self {
             manager: Mutex::new(None),
+            operation: Mutex::new(()),
             state: RwLock::new(OtgServiceState::default()),
             msd_function: RwLock::new(None),
             network_bridge: Mutex::new(None),
@@ -291,6 +298,9 @@ impl OtgService {
         network: &OtgNetworkConfig,
         uac: &UacConfig,
     ) -> Result<()> {
+        // Serialize the whole snapshot/apply/rollback sequence so concurrent
+        // applies cannot overwrite `desired` between the two reconciles.
+        let _operation = self.operation.lock().await;
         if !self.recovery_checked.load(Ordering::SeqCst) {
             if let Err(error) = NetworkBridgeRuntime::recover_stale_transaction() {
                 let message = format!("Failed to recover stale OTG network transaction: {error}");
@@ -308,10 +318,10 @@ impl OtgService {
             state.health = OtgRuntimeHealth::Applying;
             state.error = None;
         }
-        if let Err(error) = self.apply_desired_state(desired).await {
+        if let Err(error) = self.apply_desired_state_locked(desired).await {
             warn!("OTG apply failed, restoring previous desired state: {error}");
             self.mark_degraded(error.to_string()).await;
-            return match self.apply_desired_state(previous).await {
+            return match self.apply_desired_state_locked(previous).await {
                 Ok(()) => {
                     self.mark_healthy().await;
                     Err(error)
@@ -369,15 +379,22 @@ impl OtgService {
     }
 
     pub(crate) async fn apply_desired_state(&self, desired: OtgDesiredState) -> Result<()> {
+        let _operation = self.operation.lock().await;
+        self.apply_desired_state_locked(desired).await
+    }
+
+    /// Applies a desired state while the caller holds `self.operation`.
+    async fn apply_desired_state_locked(&self, desired: OtgDesiredState) -> Result<()> {
         {
             let mut current = self.desired.write().await;
             *current = desired;
         }
 
-        self.reconcile_gadget().await
+        self.reconcile_gadget_locked().await
     }
 
-    async fn reconcile_gadget(&self) -> Result<()> {
+    /// Reconciles the kernel gadget. The caller must hold `self.operation`.
+    async fn reconcile_gadget_locked(&self) -> Result<()> {
         let desired = self.desired.read().await.clone();
 
         debug!(
@@ -409,6 +426,21 @@ impl OtgService {
             }
         }
 
+        // Check for a foreign UDC owner before tearing down a working gadget:
+        // configfs returns a bare EBUSY on bind otherwise.
+        if let Some(udc) = desired.udc.as_deref() {
+            if let Some(owner) = super::configfs::udc_claimed_by_other_gadget(
+                udc,
+                super::configfs::DEFAULT_GADGET_NAME,
+            ) {
+                let error = format!(
+                    "UDC {udc} is already bound to another USB gadget ({owner}); stop it or select a free UDC"
+                );
+                self.state.write().await.error = Some(error.clone());
+                return Err(AppError::Config(error));
+            }
+        }
+
         let network_runtime = { self.network_bridge.lock().await.as_ref().cloned() };
         if let Some(runtime) = network_runtime {
             debug!("Restoring network before OTG gadget reconcile");
@@ -420,11 +452,32 @@ impl OtgService {
 
         {
             let mut manager = self.manager.lock().await;
-            if let Some(m) = manager.as_mut() {
-                debug!("Cleaning up existing gadget before OTG reconcile");
-                m.cleanup().map_err(|e| {
-                    AppError::Internal(format!("Failed to clean up existing OTG gadget: {e}"))
-                })?;
+            match manager.as_mut() {
+                Some(m) => {
+                    debug!("Cleaning up existing gadget before OTG reconcile");
+                    m.cleanup().map_err(|e| {
+                        AppError::Internal(format!("Failed to clean up existing OTG gadget: {e}"))
+                    })?;
+                }
+                None => {
+                    // A previous process (or a cancelled earlier reconcile) can
+                    // leave a bound gadget in configfs. There is no in-memory
+                    // manager for it, so remove it from the on-disk layout;
+                    // otherwise the later UDC write fails with EBUSY.
+                    let inherited =
+                        super::configfs::configfs_path().join(super::configfs::DEFAULT_GADGET_NAME);
+                    if inherited.exists() {
+                        info!(
+                            "Removing inherited OTG gadget before reconcile: {}",
+                            inherited.display()
+                        );
+                        remove_gadget_tree(&inherited).map_err(|e| {
+                            AppError::Internal(format!(
+                                "Failed to remove inherited OTG gadget: {e}"
+                            ))
+                        })?;
+                    }
+                }
             }
             manager.take();
         }
@@ -655,6 +708,9 @@ impl OtgService {
 
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down OTG service");
+
+        // Wait for an in-flight rebuild so setup/bind cannot race the teardown.
+        let _operation = self.operation.lock().await;
 
         {
             let mut desired = self.desired.write().await;
