@@ -1,5 +1,7 @@
 import { settingsUiEn } from './settings-ui'
+import { airferryEn } from './airferry'
 export default {
+  airferry: airferryEn,
   settingsUi: settingsUiEn,
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG composite mode',
@@ -854,6 +856,8 @@ export default {
     featureVisibilityDesc: 'Control which feature entry points are shown on the console page',
     pasteText: 'Paste Text',
     videoSettings: 'Video Capture',
+    captureActivity: 'Capture Activity',
+    keepCaptureAlive: 'Keep capture active after closing the browser',
     videoSettingsDesc: 'Select a capture device. Source-following inputs report their active mode automatically.',
     videoDevice: 'Video Device',
     selectDevice: 'Select device...',

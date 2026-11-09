@@ -174,6 +174,7 @@ export type BitratePreset =
 
 export interface StreamConfig {
 	mode: StreamMode;
+	keep_capture_alive: boolean;
 	encoder: EncoderType;
 	bitrate_preset: BitratePreset;
 	stun_server?: string;
@@ -657,6 +658,7 @@ export interface RustDeskConfigUpdate {
 /** Stream configuration response */
 export interface StreamConfigResponse {
 	mode: StreamMode;
+	keep_capture_alive: boolean;
 	encoder: EncoderType;
 	bitrate_preset: BitratePreset;
 	/** Whether public ICE servers are available (compile-time decision) */
@@ -671,6 +673,7 @@ export interface StreamConfigResponse {
 
 export interface StreamConfigUpdate {
 	mode?: StreamMode;
+	keep_capture_alive?: boolean;
 	encoder?: EncoderType;
 	bitrate_preset?: BitratePreset;
 	/**

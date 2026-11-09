@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+include("${CMAKE_CURRENT_LIST_DIR}/ZXingTargets.cmake")
+
+# this does not work: add_library(ZXing::Core ALIAS ZXing::ZXing)
+# this is a workaround available since 3.11 :
+if(NOT(CMAKE_VERSION VERSION_LESS 3.11))
+    add_library(ZXing::Core INTERFACE IMPORTED)
+    target_link_libraries(ZXing::Core INTERFACE ZXing::ZXing)
+endif()

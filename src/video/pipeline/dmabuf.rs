@@ -156,7 +156,10 @@ fn run(
     let errors = LogThrottler::with_secs(5);
 
     while pipeline.running_flag.load(Ordering::Acquire) {
-        if pipeline.subscriber_count() == 0 {
+        if pipeline
+            .capture_keep_alive
+            .is_idle(pipeline.subscriber_count())
+        {
             if idle_since.get_or_insert_with(Instant::now).elapsed()
                 >= Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS)
             {

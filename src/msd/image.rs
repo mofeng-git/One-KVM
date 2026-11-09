@@ -42,6 +42,10 @@ impl ImageManager {
         {
             let entry = entry.map_err(|error| storage_io_error("read image entry", error))?;
 
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+
             let path = entry.path();
             if path.is_file() {
                 if let Some(info) = self.get_image_info(&path) {

@@ -2409,6 +2409,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "lzma-sys"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fda04ab3764e6cde78b9974eec4f779acaba7c4e84b36eca3cf77c581b85d27"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "macaddr"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2912,6 +2923,7 @@ dependencies = [
  "libyuv",
  "mime_guess",
  "nix 0.31.3",
+ "one-kvm-airferry-core",
  "one-kvm-bluetooth-hid",
  "openssl",
  "parking_lot",
@@ -2951,6 +2963,25 @@ dependencies = [
  "webrtc",
  "windows-sys 0.61.2",
  "xxhash-rust",
+]
+
+[[package]]
+name = "one-kvm-airferry-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cmake",
+ "crc32fast",
+ "libc",
+ "lzma-sys",
+ "pkg-config",
+ "qr-protocol",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "transfer-engine",
+ "vcpkg",
 ]
 
 [[package]]
@@ -3365,6 +3396,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "qr-protocol"
+version = "1.2.8"
+dependencies = [
+ "crc32fast",
+ "raptorq-core",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+ "xz2",
+ "zstd",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3448,6 +3491,19 @@ name = "rand_core"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
+name = "raptorq"
+version = "2.0.1"
+
+[[package]]
+name = "raptorq-core"
+version = "1.2.8"
+source = "git+https://github.com/UR-SillyB/AirFerry?rev=8a72ab86dee9d8f19b74bfec56c270101c5980ba#8a72ab86dee9d8f19b74bfec56c270101c5980ba"
+dependencies = [
+ "raptorq",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "rcgen"
@@ -4823,6 +4879,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "transfer-engine"
+version = "1.2.8"
+dependencies = [
+ "qr-protocol",
+ "raptorq",
+ "raptorq-core",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5644,6 +5711,15 @@ name = "xxhash-rust"
 version = "0.8.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aee1b19627c7c60102ab80d3a9cbe18de90bfe03bfa6c3715447681f0e8c8af6"
+
+[[package]]
+name = "xz2"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388c44dc09d76f1536602ead6d325eb532f5c122f17782bd57fb47baeeb767e2"
+dependencies = [
+ "lzma-sys",
+]
 
 [[package]]
 name = "yasna"

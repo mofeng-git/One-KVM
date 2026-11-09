@@ -1,0 +1,8 @@
+libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+
+Name: ZXing
+Description: ZXing-C++ library
+Version: @PROJECT_VERSION@@ZXING_VERSION_SUFFIX@
+Libs: -L${libdir} -lZXing
+Cflags: -I${includedir} @COMPILE_FLAGS@

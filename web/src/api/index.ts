@@ -8,6 +8,35 @@ import type { StreamSignalReason, StreamState } from '@/types/websocket'
 
 const API_BASE = '/api'
 
+export interface AirferryReceivedFile {
+  name: string
+  display_name: string
+  size: number
+  modified_unix_ms: number
+}
+export interface AirferryStatus {
+  available: boolean
+  running: boolean
+  eligible: boolean
+  reason: string
+  event: {
+    state?: string
+    reason?: string
+    jpeg_ms?: number
+    qr_ms?: number
+    progress?: { file: string; received_symbols: number; total_symbols: number; decoded_fraction: number; bytes_per_second: number } | null
+  } | null
+  last_saved: { filename: string; bytes: number; receive_seconds: number; bytes_per_second: number } | null
+  files: AirferryReceivedFile[]
+}
+export const airferryApi = {
+  status: () => request<AirferryStatus>('/airferry/status', {}, { toastOnError: false }),
+  start: () => request<AirferryStatus>('/airferry/start', { method: 'POST' }, { toastOnError: false }),
+  stop: () => request<AirferryStatus>('/airferry/stop', { method: 'POST' }, { toastOnError: false }),
+  deleteFile: (name: string) => request<void>(`/airferry/files/${encodeURIComponent(name)}`, { method: 'DELETE' }, { toastOnError: false }),
+  downloadUrl: (name: string) => `${API_BASE}/airferry/files/${encodeURIComponent(name)}`,
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     request<AuthLoginResponse>(

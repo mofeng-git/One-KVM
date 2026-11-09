@@ -20,6 +20,23 @@
   margin-top: 5px;
   color: var(--muted-foreground);
 }
+.settings-quick-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.settings-page .settings-quick-control [data-slot='button'] {
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: 13px;
+}
 .settings-page > div > [data-slot='card'],
 .settings-page > [data-slot='card'] {
   margin-top: 20px;

@@ -149,6 +149,7 @@ mod video_config_update_tests {
 #[derive(Debug, serde::Serialize)]
 pub struct StreamConfigResponse {
     pub mode: StreamMode,
+    pub keep_capture_alive: bool,
     pub encoder: EncoderType,
     pub bitrate_preset: BitratePreset,
     /// Whether public ICE servers are available (compile-time decision)
@@ -166,6 +167,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
         use crate::webrtc::config::public_ice;
         Self {
             mode: config.mode.clone(),
+            keep_capture_alive: config.keep_capture_alive,
             encoder: config.encoder.clone(),
             bitrate_preset: config.bitrate_preset,
             has_public_ice_servers: public_ice::is_configured(),
@@ -182,6 +184,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
 #[derive(Debug, Deserialize)]
 pub struct StreamConfigUpdate {
     pub mode: Option<StreamMode>,
+    pub keep_capture_alive: Option<bool>,
     pub encoder: Option<EncoderType>,
     pub bitrate_preset: Option<BitratePreset>,
     /// STUN server URL (e.g., "stun:stun.l.google.com:19302")
@@ -220,6 +223,9 @@ impl StreamConfigUpdate {
     }
 
     pub fn apply_to(&self, config: &mut StreamConfig) {
+        if let Some(enabled) = self.keep_capture_alive {
+            config.keep_capture_alive = enabled;
+        }
         if let Some(mode) = self.mode.clone() {
             config.mode = mode;
         }

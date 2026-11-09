@@ -1,4 +1,5 @@
 pub mod config;
+pub mod airferry;
 pub mod devices;
 pub mod extensions;
 pub mod terminal;

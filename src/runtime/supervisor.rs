@@ -181,6 +181,9 @@ fn spawn_device_info_broadcaster(
 }
 
 async fn cleanup(state: &Arc<AppState>) {
+    if let Err(error) = state.airferry.stop().await {
+        tracing::warn!("Failed to stop AirFerry receiver: {}", error);
+    }
     state.extensions.stop_all().await;
     tracing::info!("Extensions stopped");
 

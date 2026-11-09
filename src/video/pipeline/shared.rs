@@ -521,6 +521,7 @@ struct CachedH26xParameterSets {
 
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
+    capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
     pub(crate) snapshot_slot: crate::video::snapshot::SnapshotSlot,
     config: RwLock<SharedVideoPipelineConfig>,
     subscribers: ParkingRwLock<Vec<Arc<VideoSubscriber>>>,
@@ -572,6 +573,13 @@ pub struct SharedVideoPipeline {
 impl SharedVideoPipeline {
     /// Create a new shared video pipeline
     pub fn new(config: SharedVideoPipelineConfig) -> Result<Arc<Self>> {
+        Self::with_capture_keep_alive(config, Default::default())
+    }
+
+    pub(crate) fn with_capture_keep_alive(
+        config: SharedVideoPipelineConfig,
+        capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
+    ) -> Result<Arc<Self>> {
         info!(
             "Creating shared video pipeline: {} {}x{} @ {} (input: {})",
             config.output_codec,
@@ -586,6 +594,7 @@ impl SharedVideoPipeline {
         let (h264_profile_tx, h264_profile_rx) = watch::channel(None);
 
         let pipeline = Arc::new(Self {
+            capture_keep_alive,
             snapshot_slot: Default::default(),
             config: RwLock::new(config),
             subscribers: ParkingRwLock::new(Vec::new()),
@@ -1415,7 +1424,7 @@ impl SharedVideoPipeline {
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
                     let subscriber_count = pipeline.subscriber_count();
-                    if subscriber_count == 0 {
+                    if pipeline.capture_keep_alive.is_idle(subscriber_count) {
                         if no_subscribers_since.is_none() {
                             no_subscribers_since = Some(Instant::now());
                             trace!("No subscribers, starting grace period timer");

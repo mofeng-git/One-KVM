@@ -731,6 +731,7 @@ const config = ref({
   otg_network_driver: 'ncm' as 'ncm' | 'ecm' | 'rndis',
   otg_network_interface: '',
   encoder_backend: 'auto',
+  keep_capture_alive: false,
   stun_server: '',
   turn_server: '',
   turn_username: '',
@@ -1474,6 +1475,27 @@ async function changePassword() {
 }
 
 const videoSaving = ref<'capture' | 'encoder' | 'connection' | null>(null)
+const captureKeepAliveSaving = ref(false)
+const captureKeepAliveLoaded = ref(false)
+const captureKeepAliveConfirmed = ref(false)
+
+async function updateCaptureKeepAlive(enabled: boolean) {
+  if (captureKeepAliveSaving.value || !captureKeepAliveLoaded.value) return
+  config.value.keep_capture_alive = enabled
+  captureKeepAliveSaving.value = true
+  try {
+    const response = await configStore.updateStream({ keep_capture_alive: enabled })
+    captureKeepAliveConfirmed.value = response.keep_capture_alive
+    config.value.keep_capture_alive = response.keep_capture_alive
+  } catch (error) {
+    config.value.keep_capture_alive = captureKeepAliveConfirmed.value
+    toast.error(t('settingsUi.saveFailed'), {
+      description: error instanceof Error ? error.message : undefined,
+    })
+  } finally {
+    captureKeepAliveSaving.value = false
+  }
+}
 async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
   if (videoSaving.value) return
   videoSaving.value = card
@@ -1677,11 +1699,14 @@ async function loadConfig() {
       uac_enabled: uac?.enabled ?? false,
       otg_network_interface: otgNetwork?.bridge_interface ?? '',
       encoder_backend: stream.encoder || 'auto',
+      keep_capture_alive: stream.keep_capture_alive ?? false,
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: stream.turn_password || '',
     }
+    captureKeepAliveConfirmed.value = stream.keep_capture_alive ?? false
+    captureKeepAliveLoaded.value = true
     if (otgNetworkInterfacesLoaded.value) {
       syncOtgNetworkInterface()
     }
@@ -2684,6 +2709,12 @@ watch(isWindows, () => {
               >
               <CardContent class="space-y-1">
                 <div class="settings-toggle flex items-center justify-between gap-4 px-3 py-3">
+                  <Label for="feature-airferry" class="min-w-0 font-normal">
+                    <span class="block text-sm">{{ t('airferry.setting') }}</span>
+                  </Label>
+                  <Switch id="feature-airferry" v-model="featureVisibility.airferry" />
+                </div>
+                <div class="settings-toggle flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-power" class="flex min-w-0 items-center gap-2 font-normal">
                     <Power class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ t('actionbar.power') }}</span>
@@ -2835,6 +2866,16 @@ watch(isWindows, () => {
 
           <!-- Video Section -->
           <div v-show="activeSection === 'video'" class="space-y-4">
+            <div class="settings-quick-control" data-quick-control="capture">
+              <Label for="keep-capture-alive">{{ t('settings.captureActivity') }}</Label>
+              <div class="flex items-center gap-2">
+                <Loader2 v-if="captureKeepAliveSaving" class="size-3.5 animate-spin text-muted-foreground" />
+                <Switch id="keep-capture-alive" :model-value="config.keep_capture_alive"
+                  :aria-label="t('settings.keepCaptureAlive')"
+                  :disabled="captureKeepAliveSaving || !captureKeepAliveLoaded"
+                  @update:model-value="updateCaptureKeepAlive" />
+              </div>
+            </div>
             <!-- Video Device Settings -->
             <Card>
               <CardHeader class="settings-card-heading"

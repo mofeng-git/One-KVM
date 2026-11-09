@@ -82,6 +82,7 @@ pub struct AppState {
     pub usb: Arc<UsbCoordinator>,
     pub remote_access: Arc<RemoteAccessCoordinator>,
     pub extensions: Arc<ExtensionManager>,
+    pub airferry: Arc<crate::airferry::AirferryManager>,
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
     pub update: Arc<UpdateService>,
@@ -138,6 +139,7 @@ impl AppState {
         );
 
         let atx = Arc::new(RwLock::new(atx));
+        let airferry = crate::airferry::AirferryManager::new(config.clone());
         let config_apply_locks = ConfigApplyLocks::new();
         let hardware = McpHardware {
             config: config.clone(),
@@ -173,6 +175,7 @@ impl AppState {
             usb,
             remote_access,
             extensions,
+            airferry,
             events,
             device_info_tx,
             update,

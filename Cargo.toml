@@ -73,12 +73,14 @@ desktop = [
     "dep:gpio-cdev",
     "dep:one-kvm-bluetooth-hid",
     "dep:cpal",
+    "dep:one-kvm-airferry-core",
     "dep:windows-sys",
 ]
 [dependencies]
+one-kvm-airferry-core = { path = "libs/airferry-core", optional = true }
 # Async runtime
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"], optional = true }
-tokio-util = { version = "0.7", features = ["rt"], optional = true }
+tokio-util = { version = "0.7", features = ["rt", "io"], optional = true }
 
 # Web framework
 axum = { version = "0.8", features = ["ws", "multipart", "tokio"], optional = true }
@@ -213,6 +215,8 @@ protobuf-codegen = "3.7"
 # ALSA 0.11.0 uses timespec literals that fail on 32-bit musl time64.
 alsa = { path = "vendor/alsa" }
 dtls = { path = "libs/dtls" }
+# Native AirFerry uses the ARM32 scalar fix and the pinned upstream QR protocol.
+raptorq = { path = "libs/airferry-core/vendor/raptorq" }
 
 [profile.release]
 opt-level = 3

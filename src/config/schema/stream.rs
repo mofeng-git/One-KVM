@@ -126,6 +126,7 @@ impl EncoderType {
 #[serde(default)]
 pub struct StreamConfig {
     pub mode: StreamMode,
+    pub keep_capture_alive: bool,
     pub encoder: EncoderType,
     pub bitrate_preset: BitratePreset,
     pub stun_server: Option<String>,
@@ -144,6 +145,7 @@ impl Default for StreamConfig {
     fn default() -> Self {
         Self {
             mode: StreamMode::Mjpeg,
+            keep_capture_alive: false,
             encoder: EncoderType::Auto,
             bitrate_preset: BitratePreset::Balanced,
             stun_server: None,

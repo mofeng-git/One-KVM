@@ -164,6 +164,7 @@ impl StreamerState {
 /// Video streamer service
 pub struct Streamer {
     config: RwLock<StreamerConfig>,
+    pub(crate) capture_keep_alive: super::capture_keep_alive::CaptureKeepAlive,
     mjpeg_handler: Arc<MjpegStreamHandler>,
     pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
     current_device: RwLock<Option<VideoDeviceInfo>>,
@@ -197,6 +198,7 @@ impl Streamer {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             config: RwLock::new(StreamerConfig::default()),
+            capture_keep_alive: Default::default(),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
@@ -222,6 +224,7 @@ impl Streamer {
     pub fn with_config(config: StreamerConfig) -> Arc<Self> {
         Arc::new(Self {
             config: RwLock::new(config),
+            capture_keep_alive: Default::default(),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
             current_device: RwLock::new(None),
@@ -718,7 +721,7 @@ impl Streamer {
 
                     // Check auto-pause configuration
                     let config = monitor_handler.auto_pause_config();
-                    if !config.enabled {
+                    if !config.enabled || streamer.capture_keep_alive.is_enabled() {
                         zero_since = None;
                         continue;
                     }
@@ -830,7 +833,10 @@ impl Streamer {
             if self.direct_stop.load(Ordering::Relaxed) {
                 break 'session;
             }
-            if self.mjpeg_handler.client_count() == 0 {
+            if self
+                .capture_keep_alive
+                .is_idle(self.mjpeg_handler.client_count() as usize)
+            {
                 let since = no_consumers_since.get_or_insert_with(std::time::Instant::now);
                 if since.elapsed() >= Duration::from_secs(IDLE_STOP_DELAY_SECS) {
                     info!("No MJPEG consumers during recovery; stopping capture");
@@ -1038,7 +1044,7 @@ impl Streamer {
             // ── Inner capture loop ──────────────────────────────────────────────
             'capture: while !self.direct_stop.load(Ordering::Relaxed) {
                 let mjpeg_clients = self.mjpeg_handler.client_count();
-                if mjpeg_clients == 0 {
+                if self.capture_keep_alive.is_idle(mjpeg_clients as usize) {
                     if idle_since.is_none() {
                         idle_since = Some(std::time::Instant::now());
                         trace!("No active video consumers, starting idle timer");
@@ -1526,6 +1532,7 @@ impl Streamer {
 impl Default for Streamer {
     fn default() -> Self {
         Self {
+            capture_keep_alive: Default::default(),
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),

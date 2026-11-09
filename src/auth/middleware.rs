@@ -81,13 +81,7 @@ fn is_public_endpoint(path: &str) -> bool {
     matches!(
         path,
         "/" | "/auth/login" | "/auth/login/totp" | "/health" | "/setup" | "/setup/init"
-    ) || path.starts_with("/assets/")
-        || path.starts_with("/static/")
-        || path.ends_with(".js")
-        || path.ends_with(".css")
-        || path.ends_with(".ico")
-        || path.ends_with(".png")
-        || path.ends_with(".svg")
+    )
 }
 
 fn is_setup_public_endpoint(path: &str) -> bool {
@@ -101,4 +95,22 @@ fn is_setup_public_endpoint(path: &str) -> bool {
             | "/stream/codecs"
             | "/video/codecs"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_extensions_do_not_bypass_api_authentication() {
+        for extension in ["js", "css", "ico", "png", "svg", "bin"] {
+            for prefix in ["/airferry/files/", "/msd/drive/files/"] {
+                let path = format!("{prefix}0123456789abcdef0123456789abcdef-file.{extension}");
+                assert!(!is_public_endpoint(&path), "{path}");
+                assert!(!is_setup_public_endpoint(&path), "{path}");
+            }
+        }
+        assert!(is_public_endpoint("/auth/login"));
+        assert!(is_public_endpoint("/health"));
+    }
 }

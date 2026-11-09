@@ -6,6 +6,8 @@ compile_error!("One-KVM supports Linux and Windows targets only.");
 #[cfg(feature = "desktop")]
 pub mod atx;
 #[cfg(feature = "desktop")]
+pub mod airferry;
+#[cfg(feature = "desktop")]
 pub mod audio;
 #[cfg(feature = "desktop")]
 pub mod auth;

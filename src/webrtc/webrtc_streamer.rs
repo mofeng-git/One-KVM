@@ -101,6 +101,7 @@ pub struct SessionInfo {
 }
 
 pub struct WebRtcStreamer {
+    capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
     config: RwLock<WebRtcStreamerConfig>,
     video_codec: RwLock<VideoCodecType>,
     video_pipeline: RwLock<Option<Arc<SharedVideoPipeline>>>,
@@ -121,7 +122,15 @@ impl WebRtcStreamer {
     }
 
     pub fn with_config(config: WebRtcStreamerConfig) -> Arc<Self> {
+        Self::with_capture_keep_alive(config, Default::default())
+    }
+
+    pub(crate) fn with_capture_keep_alive(
+        config: WebRtcStreamerConfig,
+        capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
+    ) -> Arc<Self> {
         let streamer = Arc::new(Self {
+            capture_keep_alive,
             config: RwLock::new(config.clone()),
             video_codec: RwLock::new(config.video_codec),
             video_pipeline: RwLock::new(None),
@@ -227,7 +236,9 @@ impl WebRtcStreamer {
         };
 
         let subscriber_count = pipeline.subscriber_count();
-        if Self::should_stop_pipeline(session_count, subscriber_count) {
+        if !self.capture_keep_alive.is_enabled()
+            && Self::should_stop_pipeline(session_count, subscriber_count)
+        {
             info!(
                 "{} stopping video pipeline (sessions={}, subscribers={})",
                 reason, session_count, subscriber_count
@@ -316,6 +327,9 @@ impl WebRtcStreamer {
         };
 
         if sessions_to_reconnect.is_empty() {
+            if self.capture_keep_alive.is_enabled() {
+                self.ensure_video_pipeline().await?;
+            }
             return Ok(0);
         }
 
@@ -515,7 +529,10 @@ impl WebRtcStreamer {
         };
 
         info!("Creating shared video pipeline for {:?}", codec);
-        let pipeline = SharedVideoPipeline::new(pipeline_config)?;
+        let pipeline = SharedVideoPipeline::with_capture_keep_alive(
+            pipeline_config,
+            self.capture_keep_alive.clone(),
+        )?;
         let capture_device = self.capture_device.read().await.clone();
         if let Some(device) = capture_device {
             pipeline.set_state_notifier(Self::build_pipeline_state_notifier(
@@ -1412,6 +1429,7 @@ impl crate::video::traits::VideoOutput for WebRtcStreamer {
 impl Default for WebRtcStreamer {
     fn default() -> Self {
         Self {
+            capture_keep_alive: Default::default(),
             config: RwLock::new(WebRtcStreamerConfig::default()),
             video_codec: RwLock::new(VideoCodecType::H264),
             video_pipeline: RwLock::new(None),

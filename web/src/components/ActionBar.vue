@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSystemStore } from '@/stores/system'
+import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
+import AirferryMenu from '@/components/AirferryMenu.vue'
 import type { VideoRotation, VideoScaleMode } from '@/composables/useVideoScaling'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -96,6 +98,8 @@ const atxEnabled = computed(() => props.atxEnabled === true)
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 const showPasteText = computed(() => props.showPasteText !== false)
 const showMic = computed(() => props.showMic === true)
+const featureVisibility = useFeatureVisibility()
+const showAirferry = computed(() => props.videoMode === 'mjpeg' && featureVisibility.value.airferry)
 
 
 const emit = defineEmits<{
@@ -518,6 +522,9 @@ const hasRightOverflow = computed(() => {
           : 'ml-1 sm:ml-2'"
         :orientation="isSidebarLayout ? 'vertical' : 'horizontal'"
       >
+        <div v-if="showAirferry" data-core-action class="flex shrink-0">
+          <AirferryMenu :side="isSidebarLayout ? 'right' : 'bottom'" :compact="isSidebarLayout || minimalDisplayControls" />
+        </div>
         <VideoDisplayControls
           :minimal="minimalDisplayControls"
           :text-only-scale="isSidebarLayout"

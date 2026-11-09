@@ -424,6 +424,11 @@ impl VideoStreamManager {
                 }
 
                 self.sync_webrtc_capture_source("for WebRTC mode").await;
+                if self.streamer.capture_keep_alive.is_enabled() {
+                    self.webrtc_streamer
+                        .ensure_video_pipeline_for_external()
+                        .await?;
+                }
 
                 let codec = self.webrtc_streamer.current_video_codec().await;
                 let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
@@ -542,6 +547,11 @@ impl VideoStreamManager {
                 }
 
                 self.sync_webrtc_capture_source("before start").await;
+                if self.streamer.capture_keep_alive.is_enabled() {
+                    self.webrtc_streamer
+                        .ensure_video_pipeline_for_external()
+                        .await?;
+                }
             }
         }
 
@@ -557,7 +567,9 @@ impl VideoStreamManager {
                 self.streamer.stop().await?;
             }
             StreamMode::WebRTC => {
-                self.webrtc_streamer.close_all_sessions().await;
+                self.webrtc_streamer
+                    .close_all_sessions_and_release_device()
+                    .await?;
                 self.streamer.stop().await?;
             }
         }

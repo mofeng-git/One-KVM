@@ -1,5 +1,7 @@
 import { settingsUiZh } from './settings-ui'
+import { airferryZh } from './airferry'
 export default {
+  airferry: airferryZh,
   settingsUi: settingsUiZh,
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG 复合模式',
@@ -853,6 +855,8 @@ export default {
     featureVisibilityDesc: '控制控制台页面显示的功能入口',
     pasteText: '粘贴文本',
     videoSettings: '视频采集',
+    captureActivity: '采集保活',
+    keepCaptureAlive: '关闭网页后保持采集',
     videoSettingsDesc: '选择视频采集设备；输入跟随型设备会自动显示当前输入模式',
     videoDevice: '视频设备',
     selectDevice: '选择设备...',

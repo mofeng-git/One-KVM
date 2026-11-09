@@ -94,7 +94,15 @@ impl RuntimeBuilder {
 
         let (video_format, video_resolution) = parse_video_config(&config);
         let streamer = build_streamer(&config, &events, video_format, video_resolution).await;
-        let webrtc = build_webrtc(&config, video_format, video_resolution);
+        streamer
+            .capture_keep_alive
+            .set_enabled(config.stream.keep_capture_alive);
+        let webrtc = build_webrtc(
+            &config,
+            video_format,
+            video_resolution,
+            streamer.capture_keep_alive.clone(),
+        );
 
         #[cfg(unix)]
         let otg_service = build_otg(&config).await;
@@ -175,6 +183,11 @@ impl RuntimeBuilder {
             data_dir.clone(),
         );
 
+        if config.stream.keep_capture_alive {
+            if let Err(error) = state.stream_manager.start().await {
+                tracing::warn!("Unable to start persistent video capture: {}", error);
+            }
+        }
         start_uac_playback(&state, &config).await;
         start_watchdog(&state, &config).await;
         extensions.set_event_bus(events.clone()).await;
@@ -325,18 +338,22 @@ fn build_webrtc(
     config: &AppConfig,
     input_format: PixelFormat,
     resolution: Resolution,
+    capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
 ) -> Arc<WebRtcStreamer> {
-    let webrtc = WebRtcStreamer::with_config(WebRtcStreamerConfig {
-        resolution,
-        input_format,
-        fps: config.video.fps,
-        bitrate_preset: config.stream.bitrate_preset,
-        encoder_backend: crate::stream_encoder::encoder_type_to_backend(
-            config.stream.encoder.clone(),
-        ),
-        webrtc: build_ice_config(config),
-        ..Default::default()
-    });
+    let webrtc = WebRtcStreamer::with_capture_keep_alive(
+        WebRtcStreamerConfig {
+            resolution,
+            input_format,
+            fps: config.video.fps,
+            bitrate_preset: config.stream.bitrate_preset,
+            encoder_backend: crate::stream_encoder::encoder_type_to_backend(
+                config.stream.encoder.clone(),
+            ),
+            webrtc: build_ice_config(config),
+            ..Default::default()
+        },
+        capture_keep_alive,
+    );
     tracing::info!("WebRTC streamer created");
     webrtc
 }

@@ -1,0 +1,20 @@
+[package]
+name = "transfer-engine"
+version = "1.2.8"
+edition = "2021"
+license = "MIT"
+description = "AirFerry transfer engine, native-only manifest"
+
+[dependencies]
+raptorq-core = { git = "https://github.com/UR-SillyB/AirFerry", rev = "8a72ab86dee9d8f19b74bfec56c270101c5980ba" }
+qr-protocol = { path = "../qr-protocol" }
+raptorq = "2.0"
+sha2 = "0.10"
+thiserror = "1"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+default = []
+sender = []
+serde = ["dep:serde", "dep:serde_json", "raptorq-core/serde", "qr-protocol/serde"]

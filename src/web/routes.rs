@@ -72,6 +72,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/ws", any(ws_handler))
         // Stream control endpoints
         .route("/stream/status", get(handlers::stream_state))
+        .route("/airferry/status", get(handlers::airferry::status))
+        .route("/airferry/start", post(handlers::airferry::start))
+        .route("/airferry/stop", post(handlers::airferry::stop))
+        .route("/airferry/files/{name}", get(handlers::airferry::download).delete(handlers::airferry::delete_file))
         .route("/stream/start", post(handlers::stream_start))
         .route("/stream/stop", post(handlers::stream_stop))
         .route("/stream/mode", get(handlers::stream_mode_get))
