@@ -18,6 +18,7 @@ use super::config::{RustDeskConfig, RustDeskMode};
 use super::connection::ConnectionManager;
 use super::protocol::{make_local_addr, make_relay_response, make_request_relay};
 use super::rendezvous::{AddrMangle, RendezvousMediator, RendezvousStatus};
+use super::{bytes_codec, crypto, punch, rendezvous};
 
 const RELAY_CONNECT_TIMEOUT_MS: u64 = 10_000;
 const SERVICE_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);

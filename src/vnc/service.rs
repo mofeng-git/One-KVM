@@ -21,7 +21,7 @@ use crate::utils::{bind_socket_addr, bind_tcp_listener};
 use crate::video::codec::{BitratePreset, VideoCodecType};
 use crate::video::stream_manager::VideoStreamManager;
 
-use super::rfb::{FrameSendOutcome, RfbClient, RfbFrame, RfbInputEvent};
+use super::rfb::{self, FrameSendOutcome, RfbClient, RfbFrame, RfbInputEvent};
 
 struct ActiveClientGuard(Arc<AtomicUsize>);
 
@@ -29,7 +29,7 @@ impl Drop for ActiveClientGuard {
     fn drop(&mut self) {
         let _ = self
             .0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 Some(count.saturating_sub(1))
             });
     }
