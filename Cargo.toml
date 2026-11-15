@@ -139,13 +139,15 @@ nix = { version = "0.31", default-features = false, features = ["fs", "socket", 
 v4l2r = { path = "libs/v4l2r" }
 
 # Audio (ALSA capture)
-alsa = { version = "0.11" }
+alsa = { version = "0.12.1" }
 
 # ATX (GPIO control)
 gpio-cdev = { version = "0.6" }
 
 [target.'cfg(windows)'.dependencies]
-cpal = { version = "0.18", default-features = false }
+# Pin upstream's ALSA 0.12 update until a compatible CPAL release is available.
+# Cargo resolves native `links` dependencies across target platforms.
+cpal = { git = "https://github.com/RustAudio/cpal", rev = "8e836f5b926283fd4c455092c4eef35c5a0da9e0", default-features = false }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
@@ -159,8 +161,6 @@ windows-sys = { version = "0.61", features = [
 protobuf-codegen = { version = "3.7", optional = true }
 
 [patch.crates-io]
-# ALSA 0.11.0 uses timespec literals that fail on 32-bit musl time64.
-alsa = { path = "vendor/alsa" }
 dtls = { path = "libs/dtls" }
 # Native AirFerry uses the ARM32 scalar fix and the pinned upstream QR protocol.
 raptorq = { path = "libs/airferry-core/vendor/raptorq" }
