@@ -42,7 +42,7 @@ Comment:
  Pre-built Ventoy boot files (boot.img, core.img, ventoy.disk.img).
  Ventoy upstream: https://github.com/ventoy/Ventoy, licensed GPL-3.0-or-later.
 
-Files: res/vcpkg/libyuv/*
+Files: libs/libyuv/*
 Copyright: The LibYuv Project Authors
 License: BSD-3-Clause
 

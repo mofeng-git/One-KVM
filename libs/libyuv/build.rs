@@ -1,4 +1,4 @@
-#[path = "../../../build/native.rs"]
+#[path = "../../build/native.rs"]
 mod native;
 
 use std::{

@@ -124,7 +124,7 @@ typeshare = { version = "1.0" }
 [target.'cfg(any(target_os = "linux", windows))'.dependencies]
 # Video encoding/decoding (FFmpeg/libjpeg-turbo/libyuv; available on Windows and Linux)
 hwcodec = { path = "libs/hwcodec", features = ["bytes"] }
-libyuv = { path = "res/vcpkg/libyuv" }
+libyuv = { path = "libs/libyuv" }
 turbojpeg = { version = "1.3" }
 # Note: audiopus links to libopus.so (unavoidable for audio support)
 audiopus = { version = "0.2" }
