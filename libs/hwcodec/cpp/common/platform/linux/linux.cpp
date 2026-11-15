@@ -93,15 +93,18 @@ int setup_parent_death_signal() {
 // Check for Rockchip MPP (Media Process Platform) support
 // Returns 0 if supported, -1 otherwise
 int linux_support_rkmpp() {
-  // Check for MPP service device (primary method)
-  if (access("/dev/mpp_service", F_OK) == 0) {
-    LOG_TRACE(std::string("RKMPP: Found /dev/mpp_service"));
-    return 0;
-  }
-  // Fallback: check for RGA (Rockchip Graphics Acceleration) device
-  if (access("/dev/rga", F_OK) == 0) {
-    LOG_TRACE(std::string("RKMPP: Found /dev/rga"));
-    return 0;
+  const char *devices[] = {
+      "/dev/mpp_service",
+      "/dev/vpu_service",
+      "/dev/rkvenc",
+      "/dev/vepu",
+      "/dev/rga",
+  };
+  for (const char *dev : devices) {
+    if (access(dev, F_OK) == 0) {
+      LOG_TRACE(std::string("RKMPP: Found ") + dev);
+      return 0;
+    }
   }
   LOG_TRACE(std::string("RKMPP: No Rockchip MPP device found"));
   return -1;
