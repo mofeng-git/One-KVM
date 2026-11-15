@@ -487,6 +487,7 @@ mod ffmpeg {
             }
             builder.file(ffmpeg_hw_dir.join("ffmpeg_hw_mjpeg_h26x.cpp"));
             builder.file(ffmpeg_hw_dir.join("rkmpp_dmabuf.cpp"));
+            builder.file(ffmpeg_hw_dir.join("rkmpp_native.cpp"));
         } else {
             println!(
                 "cargo:info=Skipping ffmpeg_hw_mjpeg_h26x.cpp (RKMPP) for arch {}",

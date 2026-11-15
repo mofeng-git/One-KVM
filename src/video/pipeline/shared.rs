@@ -31,6 +31,8 @@ use super::delivery::{
     DeliveryStats, EncodedBatch, EncodedVideoFrameReceiver, FrameMailboxHandle,
     VideoFrameReservation, VideoSubscriber,
 };
+#[cfg(feature = "rkmpp")]
+use super::encoder_state::fallback_hw_mjpeg_pipeline;
 use super::encoder_state::{build_encoder_state, should_parallel_decode_mjpeg, EncoderThreadState};
 use super::frame_mailbox::{FrameMailbox, PublishResult};
 use super::mjpeg_admission::{MjpegAdmissionPolicy, MjpegAdmissionStage, MjpegDropReason};
@@ -266,8 +268,6 @@ fn spawn_mjpeg_decode_workers(
     senders
 }
 
-#[cfg(feature = "rkmpp")]
-use hwcodec::ffmpeg_hw::last_error_message as ffmpeg_hw_last_error;
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -727,19 +727,14 @@ impl SharedVideoPipeline {
                 let bitrate_kbps = preset.bitrate_kbps();
                 #[cfg(feature = "rkmpp")]
                 if state.ffmpeg_hw_enabled {
+                    if let Some(ref mut cfg) = state.hw_mjpeg_config {
+                        cfg.bitrate_preset = preset;
+                    }
                     if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
                         pipeline
                             .reconfigure(bitrate_kbps as i32, preset.gop_size(state.fps) as i32)
                             .map_err(|e| {
-                                let detail = if e.is_empty() {
-                                    ffmpeg_hw_last_error()
-                                } else {
-                                    e
-                                };
-                                AppError::VideoError(format!(
-                                    "FFmpeg HW reconfigure failed: {}",
-                                    detail
-                                ))
+                                AppError::VideoError(format!("HW MJPEG reconfigure failed: {}", e))
                             })?;
                         return Ok(());
                     }
@@ -1832,23 +1827,45 @@ impl SharedVideoPipeline {
                     "FFmpeg HW pipeline requires MJPEG input".to_string(),
                 ));
             }
-            let pipeline = state.ffmpeg_hw_pipeline.as_mut().ok_or_else(|| {
-                AppError::VideoError("FFmpeg HW pipeline not initialized".to_string())
-            })?;
-
-            if self.keyframe_requested.swap(false, Ordering::AcqRel) {
-                pipeline.request_keyframe();
-                debug!("[Pipeline] FFmpeg HW keyframe requested");
+            let force_idr = self.keyframe_requested.swap(false, Ordering::AcqRel);
+            if force_idr {
+                debug!("[Pipeline] HW MJPEG keyframe requested");
             }
 
-            let packet = pipeline.encode(raw_frame, pts_ms).map_err(|e| {
-                let detail = if e.is_empty() {
-                    ffmpeg_hw_last_error()
-                } else {
-                    e
-                };
-                AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
-            })?;
+            let encode_result = state
+                .ffmpeg_hw_pipeline
+                .as_mut()
+                .ok_or_else(|| {
+                    AppError::VideoError("HW MJPEG pipeline not initialized".to_string())
+                })?
+                .encode(raw_frame, pts_ms, force_idr);
+
+            let packet = match encode_result {
+                Ok(packet) => packet,
+                Err(err) => {
+                    fallback_hw_mjpeg_pipeline(state, &err)?;
+                    if state.ffmpeg_hw_enabled {
+                        state
+                            .ffmpeg_hw_pipeline
+                            .as_mut()
+                            .ok_or_else(|| {
+                                AppError::VideoError(
+                                    "HW MJPEG pipeline not initialized after fallback".to_string(),
+                                )
+                            })?
+                            .encode(raw_frame, pts_ms, force_idr)
+                            .map_err(|e| {
+                                AppError::VideoError(format!("HW MJPEG encode failed: {}", e))
+                            })?
+                    } else {
+                        // Switched to libyuv MJPEG decode + encoder fallback; continue below.
+                        if force_idr {
+                            self.keyframe_requested.store(true, Ordering::Release);
+                        }
+                        return self.encode_frame_sync(state, frame);
+                    }
+                }
+            };
 
             if let Some((data, is_keyframe)) = packet {
                 let (data, is_keyframe) =
@@ -2542,6 +2559,8 @@ mod tests {
             ffmpeg_hw_pipeline: None,
             #[cfg(feature = "rkmpp")]
             ffmpeg_hw_enabled: false,
+            #[cfg(feature = "rkmpp")]
+            hw_mjpeg_config: None,
             fps: 30,
             codec: VideoEncoderType::H264,
             input_format: PixelFormat::Nv12,
