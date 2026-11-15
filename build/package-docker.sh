@@ -271,24 +271,9 @@ build_for_platform() {
     # Copy init script
     cp "$PROJECT_ROOT/build/init.sh" "$staging/init.sh"
 
-    # Copy ventoy resources (decompress xz files if needed)
+    # Ship uncompressed Ventoy images; no decompressor is needed at runtime.
     local ventoy_src="$PROJECT_ROOT/libs/ventoy-img-rs/resources"
-    if [ -d "$ventoy_src" ]; then
-        echo_info "Copying Ventoy resources..."
-        # Copy boot.img directly
-        if [ -f "$ventoy_src/boot.img" ]; then
-            cp "$ventoy_src/boot.img" "$staging/ventoy/"
-        fi
-        # Decompress xz files
-        if [ -f "$ventoy_src/core.img.xz" ]; then
-            xz -dk "$ventoy_src/core.img.xz" -c > "$staging/ventoy/core.img"
-        fi
-        if [ -f "$ventoy_src/ventoy.disk.img.xz" ]; then
-            xz -dk "$ventoy_src/ventoy.disk.img.xz" -c > "$staging/ventoy/ventoy.disk.img"
-        fi
-    else
-        echo_warn "Ventoy resources not found at $ventoy_src"
-    fi
+    cp "$ventoy_src/"*.img "$staging/ventoy/"
 
     # Copy Dockerfile
     local dockerfile="$PROJECT_ROOT/build/Dockerfile.runtime"

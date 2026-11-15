@@ -56,20 +56,8 @@ package_arch() {
     cp "$BINARY_PATH" "$PKG_DIR/usr/bin/one-kvm"
     chmod 755 "$PKG_DIR/usr/bin/one-kvm"
 
-    # Copy and process ventoy resources (decompress .xz files)
-    if [ -d "$PROJECT_DIR/libs/ventoy-img-rs/resources" ]; then
-        for file in "$PROJECT_DIR/libs/ventoy-img-rs/resources/"*; do
-            if [ -f "$file" ]; then
-                local filename=$(basename "$file")
-                if [[ "$filename" == *.xz ]]; then
-                    # Decompress xz files to target dir (not in-place)
-                    xz -d -c "$file" > "$PKG_DIR/etc/one-kvm/ventoy/${filename%.xz}"
-                else
-                    cp "$file" "$PKG_DIR/etc/one-kvm/ventoy/"
-                fi
-            fi
-        done
-    fi
+    # Ship the exact uncompressed resources consumed by the application.
+    cp "$PROJECT_DIR/libs/ventoy-img-rs/resources/"*.img "$PKG_DIR/etc/one-kvm/ventoy/"
 
     # Copy systemd service file
     if [ -f "$SCRIPT_DIR/one-kvm.service" ]; then

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Public STUN from build-time secrets; TURN is user-configured.
+/// Default public STUN server; TURN is user-configured.
 pub mod public_ice {
     #[inline]
     pub fn is_configured() -> bool {
@@ -9,7 +9,7 @@ pub mod public_ice {
 
     #[inline]
     pub fn stun_server() -> &'static str {
-        crate::secrets::ice::STUN_SERVER
+        "stun:stun.l.google.com:19302"
     }
 }
 

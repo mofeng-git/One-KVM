@@ -9,3 +9,4 @@ license = "BSD-3-Clause"
 
 [build-dependencies]
 bindgen = "0.72"
+pkg-config = "0.3"

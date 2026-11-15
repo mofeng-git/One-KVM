@@ -69,7 +69,7 @@ jobs:
         with:
           # The Docker workflow builds the same targets with the same Cross images.
           shared-key: linux-cross-release
-          key: ${{ hashFiles('Cross.toml', 'build/cross/Dockerfile.*') }}
+          key: ${{ hashFiles('Cross.toml', 'build/cross/**') }}
           cache-all-crates: true
 
       - name: Install cross
@@ -160,8 +160,10 @@ jobs:
       contents: write
     steps:
       - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          if [ -z "${{ inputs.release_tag }}" ]; then
+          if [ -z "$RELEASE_TAG" ]; then
             echo "release_tag is required when publish_release is true"
             exit 1
           fi

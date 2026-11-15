@@ -203,6 +203,7 @@ mod tests {
         assert_eq!(config.web.http_port, 9000);
     }
 
+    #[cfg(feature = "mcp")]
     #[tokio::test]
     async fn mcp_key_remains_readable_after_config_reload() {
         let dir = tempdir().unwrap();

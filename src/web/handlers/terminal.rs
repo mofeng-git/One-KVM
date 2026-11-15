@@ -26,6 +26,7 @@ use crate::extensions::TTYD_TCP_ADDR;
 use crate::state::AppState;
 
 pub async fn terminal_ws(
+    axum::Extension(auth): axum::Extension<crate::auth::Session>,
     State(_state): State<Arc<AppState>>,
     OriginalUri(original_uri): OriginalUri,
     ws: WebSocketUpgrade,
@@ -37,7 +38,7 @@ pub async fn terminal_ws(
 
     // ttyd expects the `tty` WebSocket subprotocol
     ws.protocols(["tty"])
-        .on_upgrade(move |socket| handle_terminal_websocket(socket, query_string))
+        .on_upgrade(move |socket| async move { auth.run_until_ended(handle_terminal_websocket(socket, query_string)).await })
 }
 
 async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
@@ -73,7 +74,7 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
     let (mut client_tx, mut client_rx) = client_ws.split();
     let (mut ttyd_tx, mut ttyd_rx) = ws_stream.split();
 
-    let client_to_ttyd = tokio::spawn(async move {
+    let client_to_ttyd = async move {
         while let Some(msg) = client_rx.next().await {
             let ttyd_msg = match msg {
                 Ok(AxumMessage::Text(text)) => TungsteniteMessage::Text(text.to_string().into()),
@@ -91,9 +92,9 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
                 break;
             }
         }
-    });
+    };
 
-    let ttyd_to_client = tokio::spawn(async move {
+    let ttyd_to_client = async move {
         while let Some(msg) = ttyd_rx.next().await {
             let client_msg = match msg {
                 Ok(TungsteniteMessage::Text(text)) => AxumMessage::Text(text.to_string().into()),
@@ -112,7 +113,7 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
                 break;
             }
         }
-    });
+    };
 
     tokio::select! {
         _ = client_to_ttyd => {}

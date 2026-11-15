@@ -8,11 +8,10 @@
 #pragma once
 
 #include "BarcodeFormat.h"
-#include "ContentType.h"
 #include "Error.h"
 #include "ImageView.h"
 #include "Quadrilateral.h"
-#include "ReaderOptions.h" // for TextMode
+#include "ReaderOptions.h"
 #include "Version.h" // ZXING_... macros
 
 #include <memory>
@@ -25,9 +24,7 @@ extern "C" struct zint_symbol;
 
 namespace ZXing {
 
-class CreatorOptions;
 class ReaderOptions;
-class WriterOptions;
 class Barcode;
 struct BarcodeData;
 
@@ -58,9 +55,6 @@ class Barcode
 
 	friend Barcode MergeStructuredAppendSequence(const Barcodes&);
 	friend Barcodes ReadBarcodes(const ImageView&, const ReaderOptions&);
-	friend Barcode CreateBarcode(const void*, int, int, const CreatorOptions&);
-	friend Image WriteBarcodeToImage(const Barcode&, const WriterOptions&);
-	friend std::string WriteBarcodeToSVG(const Barcode&, const WriterOptions&);
 
 public:
 	Barcode();
@@ -84,26 +78,6 @@ public:
 	 * @brief bytes is the raw / standard content without any modifications like character set conversions
 	 */
 	const std::vector<uint8_t>& bytes() const;
-
-	/**
-	 * @brief bytesECI is the raw / standard content following the ECI protocol
-	 */
-	std::vector<uint8_t> bytesECI() const;
-
-	/**
-	 * @brief text returns the bytes() content rendered to unicode/utf8 text according to specified TextMode
-	 */
-	std::string text(TextMode mode) const;
-
-	/**
-	 * @brief text returns the bytes() content rendered to unicode/utf8 text according to the TextMode set in the ReaderOptions
-	 */
-	std::string text() const;
-
-	/**
-	 * @brief contentType gives a hint to the type of content found (Text/Binary/GS1/etc.)
-	 */
-	ContentType contentType() const;
 
 	/**
 	 * @brief hasECI specifies whether or not an ECI tag was found

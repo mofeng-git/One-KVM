@@ -1,12 +1,5 @@
-#[cfg(feature = "fixtures")]
-use anyhow::Context;
 use anyhow::{bail, Result};
 use std::ffi::c_void;
-#[cfg(feature = "fixtures")]
-use std::{
-    ffi::{c_char, CString},
-    path::Path,
-};
 
 unsafe extern "C" {
     fn af_create() -> *mut c_void;
@@ -20,8 +13,6 @@ unsafe extern "C" {
         jpeg_ms: *mut f64,
         qr_ms: *mut f64,
     ) -> i32;
-    #[cfg(feature = "fixtures")]
-    fn af_write_gray_jpeg(gray: *const u8, w: i32, h: i32, path: *const c_char) -> i32;
 }
 
 pub struct Decoder {
@@ -70,17 +61,4 @@ impl Drop for Decoder {
     fn drop(&mut self) {
         unsafe { af_destroy(self.raw) }
     }
-}
-
-#[cfg(feature = "fixtures")]
-pub fn write_gray_jpeg(gray: &[u8], width: i32, height: i32, path: &Path) -> Result<()> {
-    anyhow::ensure!(
-        width > 0 && height > 0 && gray.len() == width as usize * height as usize,
-        "Invalid fixture geometry"
-    );
-    let path = CString::new(path.to_str().context("Non-UTF8 fixture path")?)?;
-    if unsafe { af_write_gray_jpeg(gray.as_ptr(), width, height, path.as_ptr()) } != 0 {
-        bail!("JPEG fixture encoding failed");
-    }
-    Ok(())
 }

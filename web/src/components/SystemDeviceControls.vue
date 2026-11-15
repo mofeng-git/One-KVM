@@ -5,8 +5,6 @@ import { Power, RotateCw, Loader2 } from 'lucide-vue-next'
 import { systemApi } from '@/api'
 import { useSystemStore } from '@/stores/system'
 import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardContent } from '@/components/ui/card'
-import CardTitle from './SettingsCardTitle.vue'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -55,12 +53,12 @@ async function confirm() {
 </script>
 
 <template>
-  <Card v-if="system.platform?.mode === 'linux'" class="system-device-controls">
-    <CardHeader class="settings-card-heading">
-      <CardTitle :help="t('settingsUi.deviceControlsHelp')">{{
-        t('settingsUi.deviceControls')
-      }}</CardTitle>
+  <div v-if="system.platform?.mode === 'linux'" class="settings-quick-control system-device-controls">
+      <span class="font-medium">{{ t('settingsUi.deviceControls') }}</span>
       <div class="settings-card-actions">
+        <span v-if="accepted" role="status" class="max-w-56 truncate text-xs text-muted-foreground">
+          {{ t(accepted === 'reboot' ? 'settingsUi.rebootSent' : 'settingsUi.poweroffSent') }}
+        </span>
         <Button
           data-device-action="reboot"
           variant="outline"
@@ -79,13 +77,6 @@ async function confirm() {
           <Power class="size-4" />{{ t('settingsUi.poweroff') }}
         </Button>
       </div>
-    </CardHeader>
-    <CardContent>
-      <p class="text-sm text-muted-foreground">{{ t('settingsUi.deviceControlsHelp') }}</p>
-      <p v-if="accepted" role="status" class="mt-2 text-sm">
-        {{ t(accepted === 'reboot' ? 'settingsUi.rebootSent' : 'settingsUi.poweroffSent') }}
-      </p>
-    </CardContent>
     <AlertDialog :open="dialogOpen" @update:open="setOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -114,5 +105,5 @@ async function confirm() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  </Card>
+  </div>
 </template>

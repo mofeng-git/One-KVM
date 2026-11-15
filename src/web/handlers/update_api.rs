@@ -31,3 +31,8 @@ pub async fn update_status(
 ) -> Result<Json<UpdateStatusResponse>> {
     Ok(Json(state.update.status().await))
 }
+
+pub async fn update_cancel(State(state): State<Arc<AppState>>) -> Result<Json<LoginResponse>> {
+    state.update.cancel_upgrade()?;
+    Ok(Json(LoginResponse { success: true, message: Some("Update cancellation requested".into()) }))
+}

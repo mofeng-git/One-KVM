@@ -45,7 +45,7 @@ jobs:
         with:
           # Reuse dependency artifacts produced by the deb job and vice versa.
           shared-key: linux-cross-release
-          key: ${{ hashFiles('Cross.toml', 'build/cross/Dockerfile.*') }}
+          key: ${{ hashFiles('Cross.toml', 'build/cross/**') }}
           cache-all-crates: true
 
       - name: Install build dependencies

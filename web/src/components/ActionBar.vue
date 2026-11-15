@@ -99,7 +99,7 @@ const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 const showPasteText = computed(() => props.showPasteText !== false)
 const showMic = computed(() => props.showMic === true)
 const featureVisibility = useFeatureVisibility()
-const showAirferry = computed(() => props.videoMode === 'mjpeg' && featureVisibility.value.airferry)
+const showAirferry = computed(() => props.videoMode === 'mjpeg' && featureVisibility.value.airferry && systemStore.platform?.compiled_features?.includes('airferry'))
 
 
 const emit = defineEmits<{
@@ -300,7 +300,7 @@ const collapsibleItems = computed(() => {
     if (item.id === 'atx' && !showAtx.value) return false
     if (item.id === 'paste' && !showPasteText.value) return false
     if (item.id === 'stats' && !showStats.value) return false
-    if (item.id === 'terminal' && props.showTerminal === false) return false
+    if (item.id === 'terminal' && (props.showTerminal === false || !systemStore.platform?.compiled_features?.includes('terminal'))) return false
     return true
   })
   return items
@@ -565,7 +565,7 @@ const hasRightOverflow = computed(() => {
         </div>
 
         <!-- Web Terminal - Adaptive -->
-        <div v-if="props.showTerminal !== false && isVisible('terminal')">
+        <div v-if="props.showTerminal !== false && systemStore.platform?.compiled_features?.includes('terminal') && isVisible('terminal')">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -637,7 +637,7 @@ const hasRightOverflow = computed(() => {
 
             <!-- Web Terminal -->
             <DropdownMenuItem
-              v-if="!isFloatingLayout && props.showTerminal !== false && !isVisible('terminal')"
+              v-if="!isFloatingLayout && props.showTerminal !== false && systemStore.platform?.compiled_features?.includes('terminal') && !isVisible('terminal')"
               :disabled="!props.ttydRunning"
               @click="openFromOverflow(() => emit('openTerminal'))"
             >

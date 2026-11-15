@@ -4,9 +4,9 @@ param(
     [string]$Triplet = "x64-windows-static",
     [string]$VcpkgRoot = $env:VCPKG_ROOT,
     [string]$VcpkgInstalledRoot = $env:VCPKG_INSTALLED_DIR,
-    [switch]$NoDefaultFeatures,
     [string[]]$Features = @(),
     [switch]$Package,
+    [switch]$NoDefaultFeatures,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$CargoArgs = @()
 )
@@ -45,16 +45,13 @@ $env:TURBOJPEG_SOURCE = "explicit"
 $env:TURBOJPEG_LIB_DIR = $turbojpegLibDir
 $env:TURBOJPEG_INCLUDE_DIR = $turbojpegIncludeDir
 
-$cargoCommand = @("build", "--target", $Target)
+$cargoCommand = @("build", "--locked", "-j16", "--target", $Target)
+if ($NoDefaultFeatures) { $cargoCommand += "--no-default-features" }
 
 if ($Configuration -eq "release") {
     $cargoCommand += "--release"
 } elseif ($Configuration -ne "debug") {
     throw "Unsupported configuration '$Configuration'. Use 'debug' or 'release'."
-}
-
-if ($NoDefaultFeatures) {
-    $cargoCommand += "--no-default-features"
 }
 
 if ($Features.Count -gt 0) {

@@ -22,5 +22,8 @@ pub async fn update_auth_config(
         })
         .await?;
 
-    Ok(Json(state.config.get().auth.clone()))
+    let auth = state.config.get().auth.clone();
+    state.sessions.set_ttl(auth.session_timeout_secs as i64);
+    state.redfish_sessions.set_ttl(auth.session_timeout_secs as i64);
+    Ok(Json(auth))
 }

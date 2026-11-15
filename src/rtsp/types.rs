@@ -1,5 +1,8 @@
+#[cfg(feature = "rtsp")]
 use rand::RngExt;
+#[cfg(feature = "rtsp")]
 use rtsp_types as rtsp;
+#[cfg(feature = "rtsp")]
 use std::collections::HashMap;
 use std::fmt;
 
@@ -22,6 +25,7 @@ impl fmt::Display for RtspServiceStatus {
     }
 }
 
+#[cfg(feature = "rtsp")]
 #[derive(Debug, Clone)]
 pub(crate) struct RtspRequest {
     pub method: rtsp::Method,
@@ -30,12 +34,14 @@ pub(crate) struct RtspRequest {
     pub headers: HashMap<String, String>,
 }
 
+#[cfg(feature = "rtsp")]
 pub(crate) struct RtspConnectionState {
     pub session_id: String,
     pub setup_done: bool,
     pub interleaved_channel: u8,
 }
 
+#[cfg(feature = "rtsp")]
 impl RtspConnectionState {
     pub fn new() -> Self {
         Self {
@@ -46,6 +52,7 @@ impl RtspConnectionState {
     }
 }
 
+#[cfg(feature = "rtsp")]
 pub(crate) fn generate_session_id() -> String {
     let mut rng = rand::rng();
     let value: u64 = rng.random();

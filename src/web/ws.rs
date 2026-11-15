@@ -14,6 +14,11 @@ use tracing::{debug, info, warn};
 use crate::events::SystemEvent;
 use crate::state::AppState;
 
+struct EventTasks(Vec<JoinHandle<()>>);
+impl Drop for EventTasks {
+    fn drop(&mut self) { for task in &self.0 { task.abort(); } }
+}
+
 enum BusMessage {
     Event(SystemEvent),
     Lagged { topic: String, count: u64 },
@@ -152,14 +157,14 @@ enum ClientMessage {
     Ping,
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, axum::Extension(auth): axum::Extension<crate::auth::Session>) -> Response {
+    ws.on_upgrade(move |socket| async move { auth.run_until_ended(handle_socket(socket, state, auth.clone())).await })
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>, auth: crate::auth::Session) {
     let (mut sender, mut receiver) = socket.split();
     let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-    let mut event_tasks: Vec<JoinHandle<()>> = Vec::new();
+    let mut event_tasks = EventTasks(Vec::new());
 
     let mut subscribed_topics: Vec<String> = vec![];
 
@@ -169,6 +174,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     loop {
         tokio::select! {
+            biased;
+            _ = auth.ended() => break,
             msg = receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
@@ -186,7 +193,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 &subscribed_topics,
                                 !had_stream_state && has_stream_state,
                                 &event_tx,
-                                &mut event_tasks,
+                                &mut event_tasks.0,
                             );
                         }
                     }
@@ -246,9 +253,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    for task in event_tasks {
-        task.abort();
-    }
+    drop(event_tasks);
 
     info!("WebSocket handler exiting");
 }

@@ -7,14 +7,14 @@ use axum::{
 };
 use tokio_util::io::ReaderStream;
 
-use crate::airferry::eligibility;
+use crate::airferry::{eligibility, AirferryDeleteResponse, AirferryStatus};
 
-pub async fn status(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>> {
+pub async fn status(State(state): State<Arc<AppState>>) -> Result<Json<AirferryStatus>> {
     let (eligible, reason) = eligibility(&state.stream_manager).await;
     Ok(Json(state.airferry.status(eligible, reason).await?))
 }
 
-pub async fn start(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>> {
+pub async fn start(State(state): State<Arc<AppState>>) -> Result<Json<AirferryStatus>> {
     let (eligible, reason) = eligibility(&state.stream_manager).await;
     if !eligible {
         return Err(AppError::BadRequest(reason.into()));
@@ -23,7 +23,7 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Result<Json<serde_json
     Ok(Json(state.airferry.status(eligible, reason).await?))
 }
 
-pub async fn stop(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>> {
+pub async fn stop(State(state): State<Arc<AppState>>) -> Result<Json<AirferryStatus>> {
     state.airferry.stop().await?;
     let (eligible, reason) = eligibility(&state.stream_manager).await;
     Ok(Json(state.airferry.status(eligible, reason).await?))
@@ -55,7 +55,7 @@ pub async fn download(
 pub async fn delete_file(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
-) -> Result<Json<serde_json::Value>> {
+) -> Result<Json<AirferryDeleteResponse>> {
     #[cfg(unix)]
     {
         let path = state.airferry.file_path(&name).await?;
@@ -65,9 +65,9 @@ pub async fn delete_file(
             let image = manager.get_by_name(&name)?;
             // Share MSD's operation lock and mounted-media protection.
             controller.delete_image(&image.id).await?;
-            return Ok(Json(serde_json::json!({"deleted":true})));
+            return Ok(Json(AirferryDeleteResponse { deleted: true }));
         }
     }
     state.airferry.delete_file(&name).await?;
-    Ok(Json(serde_json::json!({"deleted":true})))
+    Ok(Json(AirferryDeleteResponse { deleted: true }))
 }

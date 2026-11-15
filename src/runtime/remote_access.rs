@@ -6,15 +6,20 @@ use crate::audio::AudioController;
 use crate::config::{AppConfig, ConfigStore, RtspConfig, VncConfig};
 use crate::error::{AppError, Result};
 use crate::hid::HidController;
-use crate::rtsp::{RtspService, RtspServiceStatus};
+use crate::rtsp::RtspServiceStatus;
+#[cfg(feature = "rtsp")]
+use crate::rtsp::RtspService;
 use crate::rustdesk::config::RustDeskConfig;
+#[cfg(feature = "rustdesk")]
 use crate::rustdesk::RustDeskService;
 use crate::video::codec_constraints::{
     enforce_constraints_with_stream_manager, validate_third_party_codec_compatibility,
     StreamCodecConstraints,
 };
 use crate::video::VideoStreamManager;
-use crate::vnc::{VncService, VncServiceStatus};
+use crate::vnc::VncServiceStatus;
+#[cfg(feature = "vnc")]
+use crate::vnc::VncService;
 
 use super::ConfigApplyOptions;
 
@@ -31,9 +36,13 @@ pub struct RemoteAccessCoordinator {
     config: ConfigStore,
     stream_manager: Arc<VideoStreamManager>,
     hid: Arc<HidController>,
+    #[cfg(feature = "rustdesk")]
     audio: Arc<AudioController>,
+    #[cfg(feature = "rustdesk")]
     rustdesk: RwLock<Option<Arc<RustDeskService>>>,
+#[cfg(feature = "vnc")]
     vnc: RwLock<Option<Arc<VncService>>>,
+#[cfg(feature = "rtsp")]
     rtsp: RwLock<Option<Arc<RtspService>>>,
 }
 
@@ -44,14 +53,20 @@ impl RemoteAccessCoordinator {
         hid: Arc<HidController>,
         audio: Arc<AudioController>,
     ) -> Arc<Self> {
+        #[cfg(not(feature = "rustdesk"))]
+        let _ = &audio;
         Arc::new(Self {
             config,
             stream_manager,
             hid,
+            #[cfg(feature = "rustdesk")]
             audio,
-            rustdesk: RwLock::new(None),
-            vnc: RwLock::new(None),
-            rtsp: RwLock::new(None),
+            #[cfg(feature = "rustdesk")]
+    rustdesk: RwLock::new(None),
+        #[cfg(feature = "vnc")]
+    vnc: RwLock::new(None),
+        #[cfg(feature = "rtsp")]
+    rtsp: RwLock::new(None),
         })
     }
 
@@ -64,6 +79,7 @@ impl RemoteAccessCoordinator {
             return;
         }
 
+        #[cfg(feature = "rustdesk")]
         if config.rustdesk.is_valid() {
             if let Err(error) = self
                 .apply_rustdesk(
@@ -83,6 +99,7 @@ impl RemoteAccessCoordinator {
             tracing::info!("RustDesk disabled in configuration");
         }
 
+#[cfg(feature = "vnc")]
         if config.vnc.enabled {
             if let Err(error) = self
                 .apply_vnc(
@@ -98,6 +115,7 @@ impl RemoteAccessCoordinator {
             tracing::info!("VNC disabled in configuration");
         }
 
+#[cfg(feature = "rtsp")]
         if config.rtsp.enabled {
             if let Err(error) = self
                 .apply_rtsp(
@@ -120,11 +138,19 @@ impl RemoteAccessCoordinator {
 
     pub async fn runtime_config(&self) -> AppConfig {
         let mut config = self.config.get().as_ref().clone();
+        #[cfg(feature = "rustdesk")]
         let rustdesk = self.rustdesk.read().await.clone();
+#[cfg(feature = "vnc")]
         let vnc = self.vnc.read().await.clone();
+#[cfg(feature = "rtsp")]
         let rtsp = self.rtsp.read().await.clone();
 
-        config.rustdesk.enabled = rustdesk.is_some_and(|service| service.is_running());
+        #[cfg(feature = "rustdesk")]
+        { config.rustdesk.enabled = rustdesk.is_some_and(|service| service.is_running()); }
+        #[cfg(not(feature = "rustdesk"))]
+        { config.rustdesk.enabled = false; }
+        #[cfg(feature = "vnc")]
+        {
         config.vnc.enabled = match vnc {
             Some(service) => matches!(
                 service.status().await,
@@ -132,6 +158,11 @@ impl RemoteAccessCoordinator {
             ),
             None => false,
         };
+        }
+        #[cfg(not(feature = "vnc"))]
+        { config.vnc.enabled = false; }
+        #[cfg(feature = "rtsp")]
+        {
         config.rtsp.enabled = match rtsp {
             Some(service) => matches!(
                 service.status().await,
@@ -139,9 +170,13 @@ impl RemoteAccessCoordinator {
             ),
             None => false,
         };
+        }
+        #[cfg(not(feature = "rtsp"))]
+        { config.rtsp.enabled = false; }
         config
     }
 
+    #[cfg(feature = "rustdesk")]
     pub async fn rustdesk_status(&self) -> RustDeskRuntimeStatus {
         let service = self.rustdesk.read().await.clone();
         match service {
@@ -162,6 +197,17 @@ impl RemoteAccessCoordinator {
         }
     }
 
+    #[cfg(not(feature = "rustdesk"))]
+    pub async fn rustdesk_status(&self) -> RustDeskRuntimeStatus {
+        RustDeskRuntimeStatus { service_status: "unavailable".into(), rendezvous_status: None, connection_count: 0, listening: false, listen_port: None }
+    }
+
+    #[cfg(not(feature = "rustdesk"))]
+    pub async fn apply_rustdesk(&self, _old: &RustDeskConfig, new: &RustDeskConfig, _options: ConfigApplyOptions) -> Result<()> {
+        if new.enabled { Err(AppError::ServiceUnavailable("RustDesk is not compiled in".into())) } else { Ok(()) }
+    }
+
+#[cfg(feature = "vnc")]
     pub async fn vnc_status(&self) -> (VncServiceStatus, usize) {
         let service = self.vnc.read().await.clone();
         match service {
@@ -170,6 +216,7 @@ impl RemoteAccessCoordinator {
         }
     }
 
+#[cfg(feature = "rtsp")]
     pub async fn rtsp_status(&self) -> RtspServiceStatus {
         let service = self.rtsp.read().await.clone();
         match service {
@@ -189,6 +236,7 @@ impl RemoteAccessCoordinator {
         Ok(enforcement.message)
     }
 
+    #[cfg(feature = "rustdesk")]
     pub async fn apply_rustdesk(
         &self,
         old_config: &RustDeskConfig,
@@ -287,6 +335,7 @@ impl RemoteAccessCoordinator {
         Ok(())
     }
 
+#[cfg(feature = "vnc")]
     pub async fn apply_vnc(
         &self,
         old_config: &VncConfig,
@@ -372,6 +421,7 @@ impl RemoteAccessCoordinator {
         Ok(())
     }
 
+#[cfg(feature = "rtsp")]
     pub async fn apply_rtsp(
         &self,
         old_config: &RtspConfig,
@@ -434,11 +484,27 @@ impl RemoteAccessCoordinator {
         Ok(())
     }
 
+    #[cfg(not(feature = "vnc"))]
+    pub async fn apply_vnc(&self, _old: &VncConfig, new: &VncConfig, _options: ConfigApplyOptions) -> Result<()> {
+        if new.enabled { Err(AppError::ServiceUnavailable("vnc is not compiled in".into())) } else { Ok(()) }
+    }
+    #[cfg(not(feature = "vnc"))]
+    pub async fn vnc_status(&self) -> (VncServiceStatus, usize) { (VncServiceStatus::Stopped, 0) }
+    #[cfg(not(feature = "rtsp"))]
+    pub async fn apply_rtsp(&self, _old: &RtspConfig, new: &RtspConfig, _options: ConfigApplyOptions) -> Result<()> {
+        if new.enabled { Err(AppError::ServiceUnavailable("rtsp is not compiled in".into())) } else { Ok(()) }
+    }
+    #[cfg(not(feature = "rtsp"))]
+    pub async fn rtsp_status(&self) -> RtspServiceStatus { RtspServiceStatus::Stopped }
     pub async fn shutdown(&self) {
+        #[cfg(feature = "rustdesk")]
         let rustdesk = self.rustdesk.write().await.take();
+#[cfg(feature = "vnc")]
         let vnc = self.vnc.write().await.take();
+#[cfg(feature = "rtsp")]
         let rtsp = self.rtsp.write().await.take();
 
+        #[cfg(feature = "rustdesk")]
         if let Some(service) = rustdesk {
             if let Err(error) = service.stop().await {
                 tracing::warn!("Failed to stop RustDesk service: {}", error);
@@ -446,6 +512,7 @@ impl RemoteAccessCoordinator {
                 tracing::info!("RustDesk service stopped");
             }
         }
+#[cfg(feature = "vnc")]
         if let Some(service) = vnc {
             if let Err(error) = service.stop().await {
                 tracing::warn!("Failed to stop VNC service: {}", error);
@@ -453,6 +520,7 @@ impl RemoteAccessCoordinator {
                 tracing::info!("VNC service stopped");
             }
         }
+#[cfg(feature = "rtsp")]
         if let Some(service) = rtsp {
             if let Err(error) = service.stop().await {
                 tracing::warn!("Failed to stop RTSP service: {}", error);
@@ -462,6 +530,7 @@ impl RemoteAccessCoordinator {
         }
     }
 
+    #[cfg(feature = "rustdesk")]
     async fn validate_rustdesk_candidate(
         &self,
         new_config: &RustDeskConfig,
@@ -472,6 +541,7 @@ impl RemoteAccessCoordinator {
         validate_third_party_codec_compatibility(&candidate)
     }
 
+#[cfg(feature = "vnc")]
     async fn validate_vnc_candidate(
         &self,
         new_config: &VncConfig,
@@ -482,6 +552,7 @@ impl RemoteAccessCoordinator {
         validate_third_party_codec_compatibility(&candidate)
     }
 
+#[cfg(feature = "rtsp")]
     async fn validate_rtsp_candidate(
         &self,
         new_config: &RtspConfig,

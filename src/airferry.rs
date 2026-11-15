@@ -9,7 +9,7 @@ use one_kvm_airferry_core::{
     pool::{DecoderPool, RecoveryWorker},
     receiver::Receiver,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     path::{Component, Path, PathBuf},
@@ -21,6 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::MissedTickBehavior,
 };
+use typeshare::typeshare;
 
 struct Worker {
     stop: oneshot::Sender<()>,
@@ -38,12 +39,77 @@ pub struct AirferryManager {
     events: Arc<RwLock<Events>>,
 }
 
+#[typeshare]
 #[derive(Serialize)]
-pub struct ReceivedFile {
+pub struct AirferryReceivedFile {
     pub name: String,
     pub display_name: String,
+    #[typeshare(serialized_as = "U53")]
     pub size: u64,
+    #[typeshare(serialized_as = "U53")]
     pub modified_unix_ms: u64,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AirferryProgress {
+    pub file: String,
+    pub received_symbols: u32,
+    pub total_symbols: u32,
+    pub symbol_size: u32,
+    pub bytes_per_second: f64,
+    pub decoded_fraction: f64,
+    pub meta_confirmed: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AirferrySavedFile {
+    pub filename: String,
+    #[typeshare(serialized_as = "U53")]
+    pub bytes: u64,
+    pub receive_seconds: f64,
+    pub bytes_per_second: f64,
+}
+
+/// Public event fields. Native recovery details stay inside the receiver.
+#[typeshare]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AirferryEvent {
+    pub state: String,
+    pub reason: Option<String>,
+    pub jpeg_ms: Option<f64>,
+    pub qr_ms: Option<f64>,
+    #[typeshare(serialized_as = "Option<U53>")]
+    pub decoded_jpegs: Option<u64>,
+    pub progress: Option<AirferryProgress>,
+    pub received: Option<u32>,
+    pub total: Option<u32>,
+    pub filename: Option<String>,
+    pub path: Option<String>,
+    #[typeshare(serialized_as = "Option<U53>")]
+    pub bytes: Option<u64>,
+    pub sha256: Option<String>,
+    pub receive_seconds: Option<f64>,
+    pub bytes_per_second: Option<f64>,
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct AirferryStatus {
+    pub available: bool,
+    pub running: bool,
+    pub eligible: bool,
+    pub reason: String,
+    pub event: Option<AirferryEvent>,
+    pub last_saved: Option<AirferrySavedFile>,
+    pub files: Vec<AirferryReceivedFile>,
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct AirferryDeleteResponse {
+    pub deleted: bool,
 }
 
 impl AirferryManager {
@@ -55,7 +121,7 @@ impl AirferryManager {
         })
     }
 
-    pub async fn status(&self, eligible: bool, reason: &str) -> Result<Value> {
+    pub async fn status(&self, eligible: bool, reason: &str) -> Result<AirferryStatus> {
         let running = self
             .worker
             .lock()
@@ -67,10 +133,18 @@ impl AirferryManager {
             (events.latest.clone(), events.saved.clone())
         };
         let files = self.files().await?;
-        Ok(json!({
-            "available": true, "running": running, "eligible": eligible,
-            "reason": reason, "event": latest, "last_saved": saved, "files": files,
-        }))
+        Ok(AirferryStatus {
+            available: true,
+            running,
+            eligible,
+            reason: reason.into(),
+            event: serde_json::from_value(latest).map_err(internal)?,
+            last_saved: saved
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(internal)?,
+            files,
+        })
     }
 
     pub async fn start(&self, stream: Arc<VideoStreamManager>) -> Result<()> {
@@ -125,7 +199,7 @@ impl AirferryManager {
         Ok(())
     }
 
-    pub async fn files(&self) -> Result<Vec<ReceivedFile>> {
+    pub async fn files(&self) -> Result<Vec<AirferryReceivedFile>> {
         let mut files = Vec::new();
         let mut directory = match tokio::fs::read_dir(self.config.get().msd.images_dir()).await {
             Ok(d) => d,
@@ -150,7 +224,7 @@ impl AirferryManager {
                 .and_then(|v| v.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|v| v.as_millis() as u64)
                 .unwrap_or(0);
-            files.push(ReceivedFile {
+            files.push(AirferryReceivedFile {
                 name,
                 display_name,
                 size: meta.len(),
@@ -313,5 +387,34 @@ pub fn display_name(name: &str) -> String {
         name[33..].into()
     } else {
         name.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn receiver_events_preserve_the_public_response_fields() {
+        // Samples match the native recovery worker's scanning, segmented and saved events.
+        for source in [
+            json!({"state":"scanning", "jpeg_ms":1.0, "qr_ms":2.0, "decoded_jpegs":4,
+                "progress":{"file":"file.bin", "received_symbols":3, "total_symbols":8,
+                    "symbol_size":1400, "bytes_per_second":2800.0,
+                    "decoded_fraction":0.375, "meta_confirmed":true}}),
+            json!({"state":"segment_saved", "received":1, "total":2}),
+            json!({"state":"saved", "path":"/data/file.bin", "filename":"file.bin",
+                "bytes":4096, "sha256":"checksum", "receive_seconds":2.0, "bytes_per_second":2048.0}),
+            json!({"state":"error", "reason":"capture unavailable"}),
+        ] {
+            let event: AirferryEvent = serde_json::from_value(source.clone()).unwrap();
+            let serialized = serde_json::to_value(event).unwrap();
+            for (key, value) in source.as_object().unwrap() {
+                assert_eq!(&serialized[key], value, "{key}");
+            }
+        }
+        assert!(serde_json::from_value::<Option<AirferryEvent>>(Value::Null)
+            .unwrap()
+            .is_none());
     }
 }

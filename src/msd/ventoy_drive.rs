@@ -502,11 +502,9 @@ impl Drop for ChannelWriter {
 mod tests {
     use super::*;
     use crate::error::AppError;
-    use std::process::Command;
-    use std::sync::OnceLock;
     use tempfile::TempDir;
 
-    static RESOURCE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../ventoy-img-rs/resources");
+    static RESOURCE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/libs/ventoy-img-rs/resources");
 
     #[test]
     fn classifies_drive_creation_io_errors() {
@@ -541,51 +539,7 @@ mod tests {
     }
 
     fn init_ventoy_resources() -> bool {
-        static INIT: OnceLock<bool> = OnceLock::new();
-        *INIT.get_or_init(|| {
-            let resource_path = std::path::Path::new(RESOURCE_DIR);
-
-            let core_xz = resource_path.join("core.img.xz");
-            let core_img = resource_path.join("core.img");
-            if core_xz.exists() && !core_img.exists() {
-                if let Err(e) = decompress_xz(&core_xz, &core_img) {
-                    eprintln!("Failed to decompress core.img.xz: {}", e);
-                    return false;
-                }
-            }
-
-            let disk_xz = resource_path.join("ventoy.disk.img.xz");
-            let disk_img = resource_path.join("ventoy.disk.img");
-            if disk_xz.exists() && !disk_img.exists() {
-                if let Err(e) = decompress_xz(&disk_xz, &disk_img) {
-                    eprintln!("Failed to decompress ventoy.disk.img.xz: {}", e);
-                    return false;
-                }
-            }
-
-            if let Err(e) = ventoy_img::resources::init_resources(resource_path) {
-                eprintln!("Failed to init ventoy resources: {}", e);
-                return false;
-            }
-
-            true
-        })
-    }
-
-    fn decompress_xz(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-        let output = Command::new("xz")
-            .args(["-d", "-k", "-c", src.to_str().unwrap()])
-            .output()?;
-
-        if !output.status.success() {
-            return Err(std::io::Error::other(format!(
-                "xz decompress failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            )));
-        }
-
-        std::fs::write(dst, &output.stdout)?;
-        Ok(())
+        ventoy_img::resources::init_resources(std::path::Path::new(RESOURCE_DIR)).is_ok()
     }
 
     fn ensure_resources() -> bool {

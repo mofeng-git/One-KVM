@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use futures::StreamExt;
+use openssl::sha::Sha256;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{broadcast, RwLock, Semaphore};
 
@@ -112,6 +112,7 @@ pub struct UpdateService {
     base_url: String,
     status: RwLock<UpdateStatusResponse>,
     upgrade_permit: Arc<Semaphore>,
+    cancellation: parking_lot::Mutex<Option<tokio_util::sync::CancellationToken>>,
 }
 
 impl UpdateService {
@@ -122,7 +123,11 @@ impl UpdateService {
             .unwrap_or_else(|| DEFAULT_UPDATE_BASE_URL.to_string());
 
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .read_timeout(std::time::Duration::from_secs(60))
+                .build().expect("update HTTP client"),
+            cancellation: parking_lot::Mutex::new(None),
             base_url,
             status: RwLock::new(UpdateStatusResponse {
                 success: true,
@@ -211,10 +216,12 @@ impl UpdateService {
             .try_acquire_owned()
             .map_err(|_| AppError::BadRequest("Upgrade is already running".to_string()))?;
 
+        let cancel = tokio_util::sync::CancellationToken::new();
+        *self.cancellation.lock() = Some(cancel.clone());
         let service = self.clone();
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(e) = service.execute_upgrade(req, shutdown_tx).await {
+            if let Err(e) = service.execute_upgrade(req, shutdown_tx, cancel).await {
                 service
                     .set_status(
                         UpdatePhase::Failed,
@@ -225,8 +232,16 @@ impl UpdateService {
                     )
                     .await;
             }
+            service.cancellation.lock().take();
         });
 
+        Ok(())
+    }
+
+    pub fn cancel_upgrade(&self) -> Result<()> {
+        let guard = self.cancellation.lock();
+        let token = guard.as_ref().ok_or_else(|| AppError::BadRequest("No cancellable update is running".into()))?;
+        token.cancel();
         Ok(())
     }
 
@@ -234,6 +249,7 @@ impl UpdateService {
         &self,
         req: UpgradeRequest,
         shutdown_tx: broadcast::Sender<ShutdownAction>,
+        cancel: tokio_util::sync::CancellationToken,
     ) -> Result<()> {
         self.set_status(
             UpdatePhase::Checking,
@@ -244,7 +260,11 @@ impl UpdateService {
         )
         .await;
 
-        let (channels, releases) = self.fetch_manifests().await?;
+        let (channels, releases) = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(AppError::BadRequest("Update cancelled".into())),
+            result = self.fetch_manifests() => result?,
+        };
 
         let current_version = parse_version(&current_version_for_update())?;
         let target_version = if let Some(channel) = req.channel {
@@ -296,8 +316,17 @@ impl UpdateService {
         let staging_path = download_dir.path().join("tmpfile");
 
         let artifact_url = self.resolve_url(&artifact.url);
-        self.download_and_verify(&artifact_url, &staging_path, &artifact)
-            .await?;
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(AppError::BadRequest("Update cancelled".into())),
+            result = self.download_and_verify(&artifact_url, &staging_path, &artifact) => result?,
+        }
+        // Once installation begins, cancellation cannot interrupt atomic replacement.
+        {
+            let mut guard = self.cancellation.lock();
+            if cancel.is_cancelled() { return Err(AppError::BadRequest("Update cancelled".into())); }
+            guard.take();
+        }
 
         self.set_status(
             UpdatePhase::Installing,
@@ -445,6 +474,7 @@ impl UpdateService {
         let response = self
             .client
             .get(&url)
+            .timeout(std::time::Duration::from_secs(20))
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("Failed to fetch {}: {}", url, e)))?
@@ -555,7 +585,7 @@ async fn compute_file_sha256(path: &Path) -> Result<String> {
         hasher.update(&buffer[..bytes_read]);
     }
 
-    let digest = hasher.finalize();
+    let digest = hasher.finish();
     let mut checksum = String::with_capacity(digest.len() * 2);
     for byte in digest {
         write!(&mut checksum, "{byte:02x}").expect("writing to a String cannot fail");

@@ -16,7 +16,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout } from '@/composables/useConsoleLayout'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { getMicrophone } from '@/composables/useMicrophone'
-import { streamApi, hidApi, atxApi, atxConfigApi, authApi, uacApi } from '@/api'
+import { streamApi, hidApi, atxApi, atxConfigApi, uacApi } from '@/api'
 import { CanonicalKey, HidBackend } from '@/types/generated'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { keyboardEventToCanonicalKey, updateModifierMaskForKey } from '@/lib/keyboardMappings'
@@ -33,6 +33,7 @@ import type { VideoMode } from '@/components/VideoConfigPopover.vue'
 
 import StatusCard, { type StatusDetail, type ConnectionStatus } from '@/components/StatusCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import ConsoleHeaderActions from '@/components/ConsoleHeaderActions.vue'
 import { provideConsoleAppearance } from '@/composables/useConsoleAppearance'
 import ConsoleStatusSummary, { type ConsoleStatusItem } from '@/components/ConsoleStatusSummary.vue'
@@ -52,15 +53,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
   MonitorOff,
   RefreshCw,
   LogOut,
@@ -68,7 +60,6 @@ import {
   Moon,
   ChevronDown,
   KeyRound,
-  Loader2,
   Settings,
 } from 'lucide-vue-next'
 
@@ -238,10 +229,6 @@ const virtualKeyboardConsumerEnabled = computed(() => {
 })
 
 const changePasswordDialogOpen = ref(false)
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const changingPassword = ref(false)
 
 const ttydStatus = ref<{ available: boolean; running: boolean } | null>(null)
 const showTerminalDialog = ref(false)
@@ -1990,37 +1977,6 @@ async function logout() {
   router.push('/login')
 }
 
-async function handleChangePassword() {
-  if (!newPassword.value || !confirmPassword.value) {
-    toast.error(t('auth.passwordRequired'))
-    return
-  }
-
-  if (newPassword.value !== confirmPassword.value) {
-    toast.error(t('auth.passwordMismatch'))
-    return
-  }
-
-  if (newPassword.value.length < 4) {
-    toast.error(t('auth.passwordTooShort'))
-    return
-  }
-
-  changingPassword.value = true
-  try {
-    await authApi.changePassword(currentPassword.value, newPassword.value)
-
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
-    changePasswordDialogOpen.value = false
-  } catch (e) {
-    console.info('[ChangePassword] Failed:', e)
-  } finally {
-    changingPassword.value = false
-  }
-}
-
 function openTerminal() {
   if (!showTerminal.value) return
   if (!ttydStatus.value?.running) return
@@ -3588,54 +3544,7 @@ onUnmounted(() => {
       :webrtc-stats="webrtc.stats.value"
     />
     <TerminalDialog v-if="showTerminal" v-model:open="showTerminalDialog" />
-    <Dialog v-model:open="changePasswordDialogOpen">
-      <DialogContent class="w-[95vw] max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ t('auth.changePassword') }}</DialogTitle>
-        </DialogHeader>
-        <div class="space-y-3 sm:space-y-4 py-2 sm:py-4">
-          <div class="space-y-2">
-            <Label for="currentPassword">{{ t('auth.currentPassword') }}</Label>
-            <Input
-              id="currentPassword"
-              v-model="currentPassword"
-              type="password"
-              autocomplete="current-password"
-              :placeholder="t('auth.currentPasswordPlaceholder')"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="newPassword">{{ t('auth.newPassword') }}</Label>
-            <Input
-              id="newPassword"
-              v-model="newPassword"
-              type="password"
-              autocomplete="new-password"
-              :placeholder="t('auth.newPasswordPlaceholder')"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="confirmPassword">{{ t('auth.confirmPassword') }}</Label>
-            <Input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              type="password"
-              autocomplete="new-password"
-              :placeholder="t('auth.confirmPasswordPlaceholder')"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="changePasswordDialogOpen = false">
-            {{ t('common.cancel') }}
-          </Button>
-          <Button @click="handleChangePassword" :disabled="changingPassword">
-            <Loader2 v-if="changingPassword" class="size-4 mr-2 animate-spin" />
-            {{ t('common.confirm') }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ChangePasswordDialog v-model:open="changePasswordDialogOpen" />
 
   </div>
 </template>

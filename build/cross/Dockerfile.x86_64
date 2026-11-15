@@ -10,12 +10,12 @@ ARG RUSTUP_DIST_SERVER_CN=https://mirrors.ustc.edu.cn/rust-static
 ARG RUSTUP_UPDATE_ROOT_CN=https://mirrors.ustc.edu.cn/rust-static/rustup
 ARG CARGO_INDEX_CN=https://mirrors.ustc.edu.cn/crates.io-index
 ARG CARGO_REGISTRY_CN=sparse+https://mirrors.ustc.edu.cn/crates.io-index/
-ARG LIBJPEG_TURBO_VERSION=3.1.4.1
-ARG LIBYUV_REV=957f295ea946cbbd13fcfc46e7066f2efa801233
-ARG LIBVPX_VERSION=1.16.0
-ARG X265_VERSION=3.4
-ARG OPUS_VERSION=1.5.2
-ARG FFMPEG_ROCKCHIP_REV=40c412daccf08164493da0de990eb99a8948116b
+ARG LIBJPEG_TURBO_VERSION
+ARG LIBYUV_REV
+ARG LIBVPX_VERSION
+ARG X265_VERSION
+ARG OPUS_VERSION
+ARG FFMPEG_ROCKCHIP_REV
 
 # Optionally use China mirrors for builds in China.
 RUN if [ "$CHINAMIRRO" = "1" ]; then \
@@ -88,196 +88,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdmcp-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Build static libjpeg-turbo from source (needed by libyuv)
-RUN github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git init /tmp/libjpeg-turbo \
-    && cd /tmp/libjpeg-turbo \
-    && git remote add origin "${github_prefix}https://github.com/libjpeg-turbo/libjpeg-turbo.git" \
-    && git fetch --depth 1 origin "refs/tags/${LIBJPEG_TURBO_VERSION}" \
-    && git checkout --detach FETCH_HEAD \
-    && mkdir build && cd build \
-    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DCMAKE_INSTALL_LIBDIR=lib \
-        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/libjpeg-turbo
-
-# Build static libyuv from source (uses libjpeg-turbo headers)
-RUN git init /tmp/libyuv \
-    && cd /tmp/libyuv \
-    && github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git remote add origin "${github_prefix}https://github.com/lemenkov/libyuv" \
-    && git fetch --depth 1 origin ${LIBYUV_REV} \
-    && git checkout --detach FETCH_HEAD \
-    && mkdir build && cd build \
-    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DJPEG_FOUND=TRUE \
-        -DJPEG_INCLUDE_DIR=/usr/local/include \
-        -DJPEG_LIBRARY=/usr/local/lib/libjpeg.a \
-        -DCMAKE_C_FLAGS="-DHAVE_JPEG -I/usr/local/include" \
-        -DCMAKE_CXX_FLAGS="-DHAVE_JPEG -I/usr/local/include" \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/libyuv
-
-# Build static libvpx from source
-RUN github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git init /tmp/libvpx \
-    && cd /tmp/libvpx \
-    && git remote add origin "${github_prefix}https://github.com/webmproject/libvpx.git" \
-    && git fetch --depth 1 origin "refs/tags/v${LIBVPX_VERSION}" \
-    && git checkout --detach FETCH_HEAD \
-    && ./configure \
-        --enable-static --disable-shared --enable-pic \
-        --disable-examples --disable-tools --disable-docs \
-        --disable-unit-tests \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/libvpx
-
-# Build static libx264 from source
-RUN github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git clone --depth 1 "${github_prefix}https://github.com/mirror/x264.git" /tmp/x264 \
-    && cd /tmp/x264 \
-    && ./configure --enable-static --disable-cli \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/x264
-
-# Build static libx265 from source
-RUN github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git init /tmp/x265 \
-    && cd /tmp/x265 \
-    && git remote add origin "${github_prefix}https://github.com/videolan/x265.git" \
-    && git fetch --depth 1 origin "refs/tags/${X265_VERSION}" \
-    && git checkout --detach FETCH_HEAD \
-    && cd source \
-    && mkdir -p build \
-    && cd build \
-    && cmake .. -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_ASM_NASM_FLAGS="-w-macro-params-legacy" \
-        -DENABLE_SHARED=OFF \
-        -DENABLE_CLI=OFF \
-        -DBUILD_SHARED_LIBS=OFF \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/x265
-
-# Create pkg-config file for x265 (required by FFmpeg)
-# Fix: Added -lstdc++ -lm -ldl -lpthread to Libs for static linking compatibility
-RUN mkdir -p /usr/local/lib/pkgconfig && \
-    cat > /usr/local/lib/pkgconfig/x265.pc <<EOF
-prefix=/usr/local
-exec_prefix=\${prefix}
-libdir=\${exec_prefix}/lib
-includedir=\${prefix}/include
-
-Name: x265
-Description: H.265/HEVC video encoder
-Version: 199
-Libs: -L\${libdir} -lx265 -lstdc++ -lm -ldl -lpthread
-Cflags: -I\${includedir}
-EOF
-
-# Build static libopus from source
-RUN github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && wget -O /tmp/opus.tar.gz "${github_prefix}https://github.com/xiph/opus/releases/download/v${OPUS_VERSION}/opus-${OPUS_VERSION}.tar.gz" \
-    && tar -xzf /tmp/opus.tar.gz -C /tmp \
-    && mv "/tmp/opus-${OPUS_VERSION}" /tmp/opus \
-    && cd /tmp/opus \
-    && ./configure \
-        --enable-static --disable-shared \
-        --disable-doc \
-    && make -j$(nproc) \
-    && make install \
-    && rm -rf /tmp/opus /tmp/opus.tar.gz
-
-# Download and build FFmpeg with minimal configuration for encoding only
-RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
-    && github_prefix="" \
-    && if [ "$CHINAMIRRO" = "1" ]; then github_prefix="${GH_PROXY%/}/"; fi \
-    && git init ffmpeg-rockchip \
-    && cd ffmpeg-rockchip \
-    && git remote add origin "${github_prefix}https://github.com/nyanmisaka/ffmpeg-rockchip.git" \
-    && git fetch --depth 1 origin ${FFMPEG_ROCKCHIP_REV} \
-    && git checkout --detach FETCH_HEAD \
-    && ./configure \
-        --enable-gpl \
-        --enable-version3 \
-        --disable-shared \
-        --enable-static \
-        --enable-pic \
-        # Hardware acceleration
-        --enable-libdrm \
-        --enable-vaapi \
-        --enable-libmfx \
-        # Software encoding libraries
-        --enable-libx264 \
-        --enable-libx265 \
-        --enable-libvpx \
-        # Disable programs and docs
-        --disable-programs \
-        --disable-doc \
-        --disable-htmlpages \
-        --disable-manpages \
-        --disable-podpages \
-        --disable-txtpages \
-        # Disable network
-        --disable-network \
-        --disable-protocols \
-        # Disable unused libraries
-        --disable-avformat \
-        --disable-swscale \
-        --disable-swresample \
-        --disable-avfilter \
-        --disable-avdevice \
-        --disable-postproc \
-        # Disable all decoders
-        --disable-decoders \
-        # Disable all encoders, enable only needed ones
-        --disable-encoders \
-        --enable-encoder=h264_vaapi \
-        --enable-encoder=hevc_vaapi \
-        --enable-encoder=vp8_vaapi \
-        --enable-encoder=vp9_vaapi \
-        --enable-encoder=h264_qsv \
-        --enable-encoder=hevc_qsv \
-        --enable-encoder=libx264 \
-        --enable-encoder=libx265 \
-        --enable-encoder=libvpx_vp8 \
-        --enable-encoder=libvpx_vp9 \
-        # Disable muxers/demuxers
-        --disable-muxers \
-        --disable-demuxers \
-        # Disable parsers except needed ones
-        --disable-parsers \
-        --enable-parser=h264 \
-        --enable-parser=hevc \
-        --enable-parser=vp8 \
-        --enable-parser=vp9 \
-        # Disable BSFs except needed ones
-        --disable-bsfs \
-        --enable-bsf=h264_mp4toannexb \
-        --enable-bsf=hevc_mp4toannexb \
-        # Disable hardware decoding
-        --disable-hwaccels \
-        # Disable other unused features
-        --disable-indevs \
-        --disable-outdevs \
-        --disable-filters \
-        --disable-debug \
-    && make -j$(nproc) \
-    && make install \
-    && cd / \
-    && rm -rf /tmp/ffmpeg-build
+# Shared native recipes; architecture and system dependencies stay in this image.
+COPY build/cross/versions.env build/cross/build-*.sh build/cross/libyuv-pkgconfig.sh /opt/one-kvm-cross/
+COPY build/cross/patches/0001-v4l2-m2m-reject-undersized-encoder-format.patch /tmp/ffmpeg-v4l2-size.patch
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 jpeg
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 yuv
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 vpx
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 x264
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 x265
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 opus
+RUN bash /opt/one-kvm-cross/build-native.sh x86_64 ffmpeg
 
 # Add Rust target
 RUN if [ "$CHINAMIRRO" = "1" ]; then \

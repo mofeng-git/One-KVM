@@ -65,11 +65,7 @@ pub(crate) async fn apply_video_config(state: &AppState, new_config: &VideoConfi
         .await
         .map_err(|e| AppError::VideoError(format!("Failed to apply video config: {}", e)))?;
 
-    if state.config.get().stream.keep_capture_alive {
-        if let Err(error) = state.stream_manager.start().await {
-            tracing::warn!("Unable to resume persistent video capture: {}", error);
-        }
-    }
+    state.stream_manager.resume_capture_if_requested().await;
     tracing::info!("Video config applied successfully");
     Ok(())
 }
@@ -83,9 +79,7 @@ pub(crate) async fn apply_stream_config(
     tracing::info!("Applying stream config changes...");
     state
         .stream_manager
-        .streamer()
-        .capture_keep_alive
-        .set_enabled(new_config.keep_capture_alive);
+        .set_keep_capture_alive(new_config.keep_capture_alive);
 
     if options.force || old_config.encoder != new_config.encoder {
         let encoder_backend = encoder_type_to_backend(new_config.encoder.clone());
@@ -126,14 +120,7 @@ pub(crate) async fn apply_stream_config(
             .await;
     }
 
-    if new_config.keep_capture_alive {
-        if let Err(error) = state.stream_manager.start().await {
-            tracing::warn!(
-                "Persistent video capture configured; waiting for capture device: {}",
-                error
-            );
-        }
-    }
+    state.stream_manager.resume_capture_if_requested().await;
 
     tracing::info!(
         "Stream config applied: encoder={:?}, bitrate={}",

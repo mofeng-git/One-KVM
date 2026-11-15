@@ -57,26 +57,6 @@ const std::vector<uint8_t>& Barcode::bytes() const
 	return d->content.bytes;
 }
 
-std::vector<uint8_t> Barcode::bytesECI() const
-{
-	return d->content.bytesECI();
-}
-
-std::string Barcode::text(TextMode mode) const
-{
-	return d->content.text(mode);
-}
-
-std::string Barcode::text() const
-{
-	return text(d->readerOpts.textMode());
-}
-
-ContentType Barcode::contentType() const
-{
-	return d->content.type();
-}
-
 bool Barcode::hasECI() const
 {
 	return d->content.hasECI;
@@ -124,8 +104,6 @@ int Barcode::lineCount() const
 
 Barcode& Barcode::setReaderOptions(const ReaderOptions& opts)
 {
-	if (opts.characterSet() != CharacterSet::Unknown)
-		d->content.defaultCharset = opts.characterSet();
 	d->readerOpts = opts;
 	return *this;
 }
@@ -149,10 +127,9 @@ std::string Barcode::extra(std::string_view key) const
 		if (format() == BarcodeFormat::None)
 			return {};
 		auto res =
-			StrCat("{", JsonProp("Text", text(TextMode::Plain)), JsonProp("HRI", text(TextMode::HRI)),
-				   JsonProp("TextECI", text(TextMode::ECI)), JsonProp("Bytes", text(TextMode::Hex)),
+			StrCat("{", JsonProp("Bytes", ToHex(bytes())),
 				   JsonProp("Identifier", symbologyIdentifier()), JsonProp("Type", Name(format())),
-				   JsonProp("Symbology", Name(Symbology(format()))), JsonProp("ContentType", isValid() ? ToString(contentType()) : ""),
+				   JsonProp("Symbology", Name(Symbology(format()))),
 				   JsonProp("Position", ToString(position())), JsonProp("HasECI", hasECI()), JsonProp("IsMirrored", isMirrored()),
 				   JsonProp("IsInverted", isInverted()), d->extra, JsonProp("Error", ToString(error())));
 		res.back() = '}';

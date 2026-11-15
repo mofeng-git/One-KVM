@@ -71,7 +71,7 @@ impl Decoder {
         }
     }
 
-    #[cfg(all(any(test, feature = "benchmarking"), not(feature = "python")))]
+    #[cfg(test)]
     pub fn set_sparse_threshold(&mut self, value: u32) {
         for block_decoder in self.block_decoders.iter_mut() {
             block_decoder.set_sparse_threshold(value);
@@ -99,7 +99,6 @@ impl Decoder {
         Some(result)
     }
 
-    #[cfg(not(feature = "python"))]
     pub fn add_new_packet(&mut self, packet: EncodingPacket) {
         let block_number = packet.payload_id.source_block_number() as usize;
         if self.blocks[block_number].is_none() {
@@ -108,7 +107,6 @@ impl Decoder {
         }
     }
 
-    #[cfg(not(feature = "python"))]
     pub fn get_result(&self) -> Option<Vec<u8>> {
         for block in self.blocks.iter() {
             if block.is_none() {
@@ -171,7 +169,7 @@ impl SourceBlockDecoder {
         }
     }
 
-    #[cfg(any(test, feature = "benchmarking"))]
+    #[cfg(test)]
     pub fn set_sparse_threshold(&mut self, value: u32) {
         self.sparse_threshold = value;
     }
@@ -468,32 +466,26 @@ mod codec_tests {
     };
 
     use rand::Rng;
-    #[cfg(not(feature = "python"))]
     use rand::seq::SliceRandom;
 
-    #[cfg(not(feature = "python"))]
     use crate::Decoder;
     use crate::systematic_constants::{num_intermediate_symbols, num_ldpc_symbols};
-    #[cfg(not(feature = "python"))]
     use crate::{Encoder, EncoderBuilder};
     use crate::{
         ObjectTransmissionInformation, SourceBlockDecoder, SourceBlockEncoder,
         SourceBlockEncodingPlan,
     };
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn random_erasure_dense() {
         random_erasure(99_999);
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn random_erasure_sparse() {
         random_erasure(0);
     }
 
-    #[cfg(not(feature = "python"))]
     fn random_erasure(sparse_threshold: u32) {
         let elements: usize = rand::rng().random_range(1..1_000_000);
         let mut data: Vec<u8> = vec![0; elements];
@@ -526,7 +518,6 @@ mod codec_tests {
         assert_eq!(result.unwrap(), data);
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn sub_block_erasure() {
         let elements: usize = 10_000;

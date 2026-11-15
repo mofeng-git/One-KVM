@@ -78,6 +78,7 @@ impl ExtensionManager {
     }
 
     pub fn check_available(&self, id: ExtensionId) -> bool {
+        if !id.compiled() { return false; }
         *self.availability.get(&id).unwrap_or(&false)
     }
 
@@ -137,6 +138,7 @@ impl ExtensionManager {
     }
 
     pub async fn start(&self, id: ExtensionId, config: &ExtensionsConfig) -> Result<(), String> {
+        if !id.compiled() { return Err(format!("{id} is not compiled in")); }
         if !self.check_available(id) {
             return Err(format!(
                 "{} not found at {}",

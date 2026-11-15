@@ -31,7 +31,7 @@ pub async fn redfish_auth_middleware(
                 let body = RedfishError::invalid_credentials();
                 return (StatusCode::UNAUTHORIZED, axum::Json(body)).into_response();
             }
-            if let Ok(Some(session)) = state.sessions.get(token_str).await {
+            if let Ok(Some(session)) = state.redfish_sessions.get(token_str).await {
                 request.extensions_mut().insert(session);
                 return next.run(request).await;
             }

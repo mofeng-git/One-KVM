@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import {
   type HidKeyboardEvent,
   type HidMouseEvent,
@@ -24,6 +24,7 @@ const hidUnavailable = ref(false)
 
 let connectionPromise: Promise<boolean> | null = null
 let connectionResolved = false
+let settleConnection: ((connected: boolean) => void) | null = null
 
 function connect(): Promise<boolean> {
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN && connectionResolved) {
@@ -34,8 +35,13 @@ function connect(): Promise<boolean> {
     return connectionPromise
   }
 
+  if (reconnectTimeout !== null) {
+    clearTimeout(reconnectTimeout)
+    reconnectTimeout = null
+  }
   connectionResolved = false
   connectionPromise = new Promise((resolve) => {
+    settleConnection = resolve
     networkError.value = false
     networkErrorMessage.value = null
     hidUnavailable.value = false
@@ -43,16 +49,19 @@ function connect(): Promise<boolean> {
     const url = buildWsUrl('/api/ws/hid')
 
     try {
-      wsInstance = new WebSocket(url)
-      wsInstance.binaryType = 'arraybuffer'
+      const socket = new WebSocket(url)
+      wsInstance = socket
+      socket.binaryType = 'arraybuffer'
 
-      wsInstance.onopen = () => {
+      socket.onopen = () => {
+        if (wsInstance !== socket) return
         connected.value = true
         networkError.value = false
         reconnectAttempts.value = 0
       }
 
-      wsInstance.onmessage = (e) => {
+      socket.onmessage = (e) => {
+        if (wsInstance !== socket) return
         if (e.data instanceof ArrayBuffer) {
           const view = new DataView(e.data)
           if (view.byteLength >= 1) {
@@ -75,7 +84,11 @@ function connect(): Promise<boolean> {
         }
       }
 
-      wsInstance.onclose = () => {
+      socket.onclose = () => {
+        if (wsInstance !== socket) return
+        wsInstance = null
+        resolve(false)
+        settleConnection = null
         connected.value = false
         connectionResolved = false
         connectionPromise = null
@@ -93,16 +106,15 @@ function connect(): Promise<boolean> {
         reconnectTimeout = window.setTimeout(() => connect(), WS_RECONNECT_DELAY)
       }
 
-      wsInstance.onerror = () => {
+      socket.onerror = () => {
+        if (wsInstance !== socket) return
         networkError.value = true
         networkErrorMessage.value = 'Network connection failed'
-        connectionResolved = false
-        connectionPromise = null
         resolve(false)
       }
     } catch (err) {
       console.error('[HID] Failed to create connection:', err)
-      connectionResolved = false
+      connectionResolved = true
       connectionPromise = null
       resolve(false)
     }
@@ -117,12 +129,16 @@ function disconnect() {
     reconnectTimeout = null
   }
 
-  if (wsInstance) {
-    wsInstance.close()
-    wsInstance = null
-    connected.value = false
-    networkError.value = false
-  }
+  const socket = wsInstance
+  wsInstance = null
+  socket?.close()
+  settleConnection?.(false)
+  settleConnection = null
+  connected.value = false
+  networkError.value = false
+  networkErrorMessage.value = null
+  reconnectAttempts.value = 0
+  hidUnavailable.value = false
 
   connectionPromise = null
   connectionResolved = false
@@ -181,9 +197,6 @@ function sendConsumer(event: HidConsumerEvent): Promise<void> {
 }
 
 export function useHidWebSocket() {
-  onUnmounted(() => {
-  })
-
   return {
     connected,
     reconnectAttempts,

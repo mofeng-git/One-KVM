@@ -63,9 +63,9 @@ impl StreamCodecConstraints {
     }
 
     pub fn from_config(config: &AppConfig) -> Self {
-        let rustdesk_enabled = config.rustdesk.enabled;
-        let rtsp_enabled = config.rtsp.enabled;
-        let vnc_enabled = config.vnc.enabled;
+        let rustdesk_enabled = cfg!(feature = "rustdesk") && config.rustdesk.enabled;
+        let rtsp_enabled = cfg!(feature = "rtsp") && config.rtsp.enabled;
+        let vnc_enabled = cfg!(feature = "vnc") && config.vnc.enabled;
 
         let locks = third_party_locks(config);
         if let Some(first) = locks.first() {
@@ -149,7 +149,7 @@ pub fn rtsp_codec_to_video_codec(codec: RtspCodec) -> VideoCodecType {
 }
 
 fn rustdesk_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
-    if config.rustdesk.enabled {
+    if cfg!(feature = "rustdesk") && config.rustdesk.enabled {
         return Some(ThirdPartySourceLock {
             source: "RustDesk",
             lock: ThirdPartyCodecLock::H26x(rustdesk_codec_to_video(config.rustdesk.codec)),
@@ -159,7 +159,7 @@ fn rustdesk_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
 }
 
 fn rtsp_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
-    if config.rtsp.enabled {
+    if cfg!(feature = "rtsp") && config.rtsp.enabled {
         return Some(ThirdPartySourceLock {
             source: "RTSP",
             lock: ThirdPartyCodecLock::H26x(rtsp_codec_to_video_codec(config.rtsp.codec.clone())),
@@ -169,7 +169,7 @@ fn rtsp_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
 }
 
 fn vnc_lock(config: &AppConfig) -> Option<ThirdPartySourceLock> {
-    if config.vnc.enabled {
+    if cfg!(feature = "vnc") && config.vnc.enabled {
         let lock = match config.vnc.encoding {
             VncEncoding::TightJpeg => ThirdPartyCodecLock::Mjpeg,
             VncEncoding::H264 => ThirdPartyCodecLock::H26x(VideoCodecType::H264),

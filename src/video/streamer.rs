@@ -164,7 +164,7 @@ impl StreamerState {
 /// Video streamer service
 pub struct Streamer {
     config: RwLock<StreamerConfig>,
-    pub(crate) capture_keep_alive: super::capture_keep_alive::CaptureKeepAlive,
+    capture_keep_alive: super::capture_keep_alive::CaptureKeepAlive,
     mjpeg_handler: Arc<MjpegStreamHandler>,
     pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
     current_device: RwLock<Option<VideoDeviceInfo>>,
@@ -194,7 +194,12 @@ pub struct Streamer {
 }
 
 impl Streamer {
-    /// Create a new streamer
+    /// Read-only shared policy; VideoStreamManager owns configuration changes.
+    pub(crate) fn capture_policy(&self) -> super::capture_keep_alive::CaptureKeepAlive {
+        self.capture_keep_alive.clone()
+    }
+
+    /// Create a new streamer.
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             config: RwLock::new(StreamerConfig::default()),

@@ -10,7 +10,6 @@
 #include "BitMatrix.h"
 #include "BitSource.h"
 #include "ByteArray.h"
-#include "CharacterSet.h"
 #include "DecoderResult.h"
 #include "GenericGF.h"
 #include "QRBitMatrixParser.h"
@@ -59,9 +58,7 @@ static bool CorrectErrors(ByteArray& codewordBytes, int numDataCodewords)
 */
 static void DecodeHanziSegment(BitSource& bits, int count, Content& result)
 {
-	// Each character will require 2 bytes, decode as GB2312
-	// There is no ECI value for GB2312, use GB18030 which is a superset
-	result.switchEncoding(CharacterSet::GB18030);
+	// Preserve the two original GB2312 bytes for each character.
 	result.reserve(2 * count);
 
 	while (count > 0) {
@@ -83,9 +80,7 @@ static void DecodeHanziSegment(BitSource& bits, int count, Content& result)
 
 static void DecodeKanjiSegment(BitSource& bits, int count, Content& result)
 {
-	// Each character will require 2 bytes. Read the characters as 2-byte pairs
-	// and decode as Shift_JIS afterwards
-	result.switchEncoding(CharacterSet::Shift_JIS);
+	// Preserve the two original Shift-JIS bytes for each character.
 	result.reserve(2 * count);
 
 	while (count > 0) {
@@ -107,7 +102,6 @@ static void DecodeKanjiSegment(BitSource& bits, int count, Content& result)
 
 static void DecodeByteSegment(BitSource& bits, int count, Content& result)
 {
-	result.switchEncoding(CharacterSet::Unknown);
 	result.reserve(count);
 
 	for (int i = 0; i < count; i++)
@@ -159,13 +153,11 @@ static void DecodeAlphanumericSegment(BitSource& bits, int count, Content& resul
 		}
 	}
 
-	result.switchEncoding(CharacterSet::ISO8859_1);
 	result.append(buffer);
 }
 
 static void DecodeNumericSegment(BitSource& bits, int count, Content& result)
 {
-	result.switchEncoding(CharacterSet::ISO8859_1);
 	result.reserve(count);
 
 	while (count) {
@@ -176,22 +168,22 @@ static void DecodeNumericSegment(BitSource& bits, int count, Content& result)
 	}
 }
 
-static ECI ParseECIValue(BitSource& bits)
+static int ParseECIValue(BitSource& bits)
 {
 	int firstByte = bits.readBits(8);
 	if ((firstByte & 0x80) == 0) {
 		// just one byte
-		return ECI(firstByte & 0x7F);
+		return firstByte & 0x7F;
 	}
 	if ((firstByte & 0xC0) == 0x80) {
 		// two bytes
 		int secondByte = bits.readBits(8);
-		return ECI(((firstByte & 0x3F) << 8) | secondByte);
+		return ((firstByte & 0x3F) << 8) | secondByte;
 	}
 	if ((firstByte & 0xE0) == 0xC0) {
 		// three bytes
 		int secondThirdBytes = bits.readBits(16);
-		return ECI(((firstByte & 0x1F) << 16) | secondThirdBytes);
+		return ((firstByte & 0x1F) << 16) | secondThirdBytes;
 	}
 	throw FormatError("ParseECIValue: invalid value");
 }
@@ -222,7 +214,7 @@ bool IsEndOfStream(const BitSource& bits, const Version& version)
 
 /**
 * <p>QR Codes can encode text as bits in one of several modes, and can use multiple modes
-* in one QR Code. This method decodes the bits back into text.</p>
+* in one QR Code. This method unpacks the original segment bytes without text conversion.</p>
 *
 * <p>See ISO 18004:2006, 6.4.3 - 6.4.7</p>
 */
@@ -279,7 +271,9 @@ DecoderResult DecodeBitStream(ByteArray&& bytes, const Version& version, ErrorCo
 				if (version.isModel1())
 					throw FormatError("QRCode Model 1 does not support ECI");
 				// Count doesn't apply to ECI
-				result.switchEncoding(ParseECIValue(bits));
+				// Consume and validate the designator without converting the payload.
+				(void)ParseECIValue(bits);
+				result.hasECI = true;
 				break;
 			case CodecMode::HANZI: {
 				// First handle Hanzi mode which does not start with character count

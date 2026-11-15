@@ -19,8 +19,12 @@ ARCH_MAP=(
 build_arch() {
     local rust_target="$1"
     local feature_args=()
+    if [[ "${ONE_KVM_FEATURES+x}" ]]; then
+        feature_args+=(--no-default-features)
+        if [[ -n "$ONE_KVM_FEATURES" ]]; then feature_args+=(--features "$ONE_KVM_FEATURES"); fi
+    fi
     case "$rust_target" in
-        aarch64-*|armv7-*) feature_args=(--features rkmpp) ;;
+        aarch64-*|armv7-*) feature_args+=(--features rkmpp) ;;
     esac
 
     case "${CHINAMIRRO:-}" in
@@ -44,13 +48,13 @@ build_arch() {
                 CARGO_NET_GIT_FETCH_WITH_CLI=true \
                 RUSTUP_DIST_SERVER="$rust_dist" \
                 RUSTUP_UPDATE_ROOT="$rust_root" \
-                cross build --release --target "$rust_target" "${feature_args[@]}"
+                cross build --release --locked -j16 --target "$rust_target" "${feature_args[@]}"
             return
             ;;
     esac
 
     echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
-    cross build --release --target "$rust_target" "${feature_args[@]}"
+    cross build --release --locked -j16 --target "$rust_target" "${feature_args[@]}"
 }
 
 # Main

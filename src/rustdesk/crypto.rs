@@ -98,24 +98,24 @@ pub fn decrypt_box(
 }
 
 pub fn hash_password(password: &str, salt: &str) -> Vec<u8> {
-    use sha2::{Digest, Sha256};
+    use openssl::sha::Sha256;
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     hasher.update(salt.as_bytes());
-    hasher.finalize().to_vec()
+    hasher.finish().to_vec()
 }
 
 pub fn hash_password_double(password: &str, salt: &str, challenge: &str) -> Vec<u8> {
-    use sha2::{Digest, Sha256};
+    use openssl::sha::Sha256;
     let mut hasher1 = Sha256::new();
     hasher1.update(password.as_bytes());
     hasher1.update(salt.as_bytes());
-    let first_hash = hasher1.finalize();
+    let first_hash = hasher1.finish();
 
     let mut hasher2 = Sha256::new();
-    hasher2.update(first_hash);
+    hasher2.update(&first_hash);
     hasher2.update(challenge.as_bytes());
-    hasher2.finalize().to_vec()
+    hasher2.finish().to_vec()
 }
 
 pub fn verify_password(password: &str, salt: &str, expected_hash: &[u8]) -> bool {
@@ -263,5 +263,20 @@ mod tests {
 
         assert!(verify_password(password, salt, &hash1));
         assert!(!verify_password("wrong_password", salt, &hash1));
+
+        let hex = |bytes: Vec<u8>| {
+            bytes
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+        assert_eq!(
+            hex(hash_password("password", "salt")),
+            "7a37b85c8918eac19a9089c0fa5a2ab4dce3f90528dcdeec108b23ddf3607b99"
+        );
+        assert_eq!(
+            hex(hash_password_double("password", "salt", "challenge")),
+            "1ea65d82db76c42e7f674ee7f2c5df1626c8fc80b0d8f18fa61a07b083c16197"
+        );
     }
 }

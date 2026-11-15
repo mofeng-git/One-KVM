@@ -8,7 +8,6 @@
 #pragma once
 
 #include "BarcodeFormat.h"
-#include "CharacterSet.h"
 #include "Version.h"
 
 #include <string_view>
@@ -39,16 +38,6 @@ enum class EanAddOnSymbol : unsigned char // see above
 	Require, ///< Require EAN-2/EAN-5 Add-On symbol to be present
 };
 
-enum class TextMode : unsigned char // see above
-{
-	Plain,   ///< bytes() transcoded to unicode based on ECI info or guessed charset (the default mode prior to 2.0)
-	ECI,     ///< standard content following the ECI protocol with every character set ECI segment transcoded to unicode
-	HRI,     ///< Human Readable Interpretation (dependent on the ContentType)
-	Escaped, ///< Use the EscapeNonGraphical() function (e.g. ASCII 29 will be transcoded to "<GS>")
-	Hex,     ///< bytes() transcoded to ASCII string of HEX values
-	HexECI,  ///< bytesECI() transcoded to ASCII string of HEX values
-};
-
 /**
  * @class ReaderOptions
  * @brief Configuration options for barcode reading and decoding behavior.
@@ -67,7 +56,7 @@ enum class TextMode : unsigned char // see above
  * The default settings are optimized for detection rate and can be tuned
  * for speed or specific use-cases.
  *
- * @see BarcodeFormats, Binarizer, TextMode, CharacterSet, ReadBarcodes
+ * @see BarcodeFormats, Binarizer, ReadBarcodes
  */
 class ReaderOptions
 {
@@ -143,16 +132,6 @@ public:
 
 	/// Specify whether to ignore, read or require EAN-2/5 add-on symbols while scanning EAN/UPC codes
 	ZX_PROPERTY(EanAddOnSymbol, eanAddOnSymbol, setEanAddOnSymbol)
-
-	/// Specifies the TextMode that controls the return of the Barcode::text() function
-	ZX_PROPERTY(TextMode, textMode, setTextMode)
-
-	/// Specifies fallback character set to use instead of auto-detecting it (when applicable)
-	ZX_PROPERTY(CharacterSet, characterSet, setCharacterSet)
-	ReaderOptions& characterSet(std::string_view v) &;
-	ReaderOptions&& characterSet(std::string_view v) &&;
-	inline ReaderOptions& setCharacterSet(std::string_view v) & { return characterSet(v); }
-	inline ReaderOptions&& setCharacterSet(std::string_view v) && { return std::move(*this).characterSet(v); }
 
 #undef ZX_PROPERTY
 

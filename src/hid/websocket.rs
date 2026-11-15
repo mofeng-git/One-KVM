@@ -19,11 +19,14 @@ const RESP_OK: u8 = 0x00;
 const RESP_ERR_HID_UNAVAILABLE: u8 = 0x01;
 const RESP_ERR_INVALID_MESSAGE: u8 = 0x02;
 
-pub async fn ws_hid_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    ws.on_upgrade(move |socket| handle_hid_socket(socket, state))
+pub async fn ws_hid_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, axum::Extension(auth): axum::Extension<crate::auth::Session>) -> Response {
+    ws.on_upgrade(move |socket| async move {
+        auth.run_until_ended(handle_hid_socket(socket, state.clone(), auth.clone())).await;
+        if let Err(e) = state.hid.reset().await { warn!("Failed to reset HID on disconnect: {e}"); }
+    })
 }
 
-async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>, auth: crate::auth::Session) {
     let (mut sender, mut receiver) = socket.split();
     let log_throttler = LogThrottler::with_secs(5);
 
@@ -45,7 +48,9 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
         return;
     }
 
-    while let Some(msg) = receiver.next().await {
+    loop {
+        let msg = tokio::select! { biased; _ = auth.ended() => break, msg = receiver.next() => msg };
+        let Some(msg) = msg else { break; };
         match msg {
             Ok(Message::Binary(data)) => {
                 let hid_available = state.hid.is_available().await;
@@ -89,10 +94,6 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
             }
             _ => {}
         }
-    }
-
-    if let Err(e) = state.hid.reset().await {
-        warn!("Failed to reset HID on WebSocket disconnect: {}", e);
     }
 
     info!("WebSocket HID connection ended");

@@ -20,7 +20,11 @@ impl RuntimeSupervisor {
         extensions: Arc<ExtensionManager>,
         config: ConfigStore,
     ) -> Self {
+        let web_sessions = state.sessions.clone();
+        let redfish_sessions = state.redfish_sessions.clone();
         let mut tasks = spawn_device_info_broadcaster(state, events);
+        tasks.push(tokio::spawn(async move { web_sessions.reap().await }));
+        tasks.push(tokio::spawn(async move { redfish_sessions.reap().await }));
         tasks.push(spawn_extension_health_check(extensions, config));
         Self { tasks }
     }
@@ -181,6 +185,7 @@ fn spawn_device_info_broadcaster(
 }
 
 async fn cleanup(state: &Arc<AppState>) {
+    #[cfg(feature = "airferry")]
     if let Err(error) = state.airferry.stop().await {
         tracing::warn!("Failed to stop AirFerry receiver: {}", error);
     }

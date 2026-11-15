@@ -94,14 +94,11 @@ impl RuntimeBuilder {
 
         let (video_format, video_resolution) = parse_video_config(&config);
         let streamer = build_streamer(&config, &events, video_format, video_resolution).await;
-        streamer
-            .capture_keep_alive
-            .set_enabled(config.stream.keep_capture_alive);
         let webrtc = build_webrtc(
             &config,
             video_format,
             video_resolution,
-            streamer.capture_keep_alive.clone(),
+            streamer.capture_policy(),
         );
 
         #[cfg(unix)]
@@ -183,11 +180,10 @@ impl RuntimeBuilder {
             data_dir.clone(),
         );
 
-        if config.stream.keep_capture_alive {
-            if let Err(error) = state.stream_manager.start().await {
-                tracing::warn!("Unable to start persistent video capture: {}", error);
-            }
-        }
+        state
+            .stream_manager
+            .set_keep_capture_alive(config.stream.keep_capture_alive);
+        state.stream_manager.resume_capture_if_requested().await;
         start_uac_playback(&state, &config).await;
         start_watchdog(&state, &config).await;
         extensions.set_event_bus(events.clone()).await;

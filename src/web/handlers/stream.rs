@@ -430,6 +430,7 @@ pub struct MjpegStreamQuery {
 
 /// MJPEG stream endpoint
 pub async fn mjpeg_stream(
+    axum::Extension(auth): axum::Extension<crate::auth::Session>,
     State(state): State<Arc<AppState>>,
     Query(query): Query<MjpegStreamQuery>,
 ) -> impl IntoResponse {
@@ -472,6 +473,7 @@ pub async fn mjpeg_stream(
 
     let guard = crate::stream::mjpeg::ClientGuard::new(client_id, handler.clone());
     let body_stream = crate::stream::mjpeg_http::body_stream(handler, guard);
+    let body_stream = futures::StreamExt::take_until(body_stream, async move { auth.ended().await });
 
     Response::builder()
         .status(StatusCode::OK)

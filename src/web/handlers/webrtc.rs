@@ -9,6 +9,7 @@ pub struct CreateSessionResponse {
 }
 
 pub async fn webrtc_create_session(
+    axum::Extension(auth): axum::Extension<Session>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<CreateSessionResponse>> {
     // Check if WebRTC mode is active
@@ -18,12 +19,13 @@ pub async fn webrtc_create_session(
         ));
     }
 
-    let session_id = state.webrtc.create_session().await?;
+    let session_id = state.webrtc.create_session(auth.clone()).await?;
     Ok(Json(CreateSessionResponse { session_id }))
 }
 
 /// Handle WebRTC offer
 pub async fn webrtc_offer(
+    axum::Extension(auth): axum::Extension<Session>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<OfferRequest>,
 ) -> Result<Json<AnswerResponse>> {
@@ -40,12 +42,13 @@ pub async fn webrtc_offer(
     let session_id = if let Some(client_id) = &req.client_id {
         // Reuse only when it matches an active session ID.
         if webrtc.get_session(client_id).await.is_some() {
+            webrtc.require_owner(client_id, &auth).await?;
             client_id.clone()
         } else {
-            webrtc.create_session().await?
+            webrtc.create_session(auth.clone()).await?
         }
     } else {
-        webrtc.create_session().await?
+        webrtc.create_session(auth.clone()).await?
     };
 
     // Handle offer
@@ -61,9 +64,11 @@ pub async fn webrtc_offer(
 
 /// Add ICE candidate
 pub async fn webrtc_ice_candidate(
+    axum::Extension(auth): axum::Extension<Session>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<IceCandidateRequest>,
 ) -> Result<Json<LoginResponse>> {
+    state.webrtc.require_owner(&req.session_id, &auth).await?;
     state
         .webrtc
         .add_ice_candidate(&req.session_id, req.candidate)
@@ -109,9 +114,11 @@ pub struct CloseSessionRequest {
 }
 
 pub async fn webrtc_close_session(
+    axum::Extension(auth): axum::Extension<Session>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<CloseSessionRequest>,
 ) -> Result<Json<LoginResponse>> {
+    state.webrtc.require_owner(&req.session_id, &auth).await?;
     state.webrtc.close_session(&req.session_id).await?;
 
     Ok(Json(LoginResponse {

@@ -185,6 +185,7 @@ pub struct FrpcConfigUpdate {
     pub custom_toml: Option<String>,
 }
 
+#[cfg(feature = "terminal")]
 pub async fn update_ttyd_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<TtydConfigUpdate>,
@@ -222,6 +223,7 @@ pub async fn update_ttyd_config(
     Ok(Json(new_config.extensions.ttyd.clone()))
 }
 
+#[cfg(feature = "gostc")]
 pub async fn update_gostc_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<GostcConfigUpdate>,
@@ -270,6 +272,7 @@ pub async fn update_gostc_config(
     Ok(Json(new_config.extensions.gostc.clone()))
 }
 
+#[cfg(feature = "easyfrp")]
 pub async fn update_easyfrp_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EasyfrpConfigUpdate>,
@@ -312,6 +315,7 @@ pub async fn update_easyfrp_config(
     Ok(Json(new_config.extensions.easyfrp.clone()))
 }
 
+#[cfg(feature = "easytier")]
 pub async fn update_easytier_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EasytierConfigUpdate>,
@@ -370,6 +374,7 @@ pub async fn update_easytier_config(
     Ok(Json(new_config.extensions.easytier.clone()))
 }
 
+#[cfg(feature = "frpc")]
 pub async fn update_frpc_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<FrpcConfigUpdate>,

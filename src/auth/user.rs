@@ -1,6 +1,25 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
+use std::{sync::Arc, collections::VecDeque, time::{Duration, Instant}};
+use tokio::sync::Semaphore;
+use parking_lot::Mutex;
+
+#[derive(Default)]
+struct PasswordFailures(Mutex<VecDeque<Instant>>);
+impl PasswordFailures {
+    fn check(&self) -> Result<()> {
+        let mut failures = self.0.lock();
+        let now = Instant::now();
+        failures.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
+        if failures.len() >= 8 {
+            return Err(AppError::ServiceUnavailable("Password attempts temporarily limited".into()));
+        }
+        Ok(())
+    }
+    fn record(&self) { let mut failures = self.0.lock(); if failures.len() < 8 { failures.push_back(Instant::now()); } }
+}
+
 
 use super::password::{hash_password, verify_password};
 use crate::error::{AppError, Result};
@@ -29,11 +48,26 @@ impl User {
 #[derive(Clone)]
 pub struct UserStore {
     pool: Pool<Sqlite>,
+    password_workers: Arc<Semaphore>,
+    failures: Arc<PasswordFailures>,
 }
 
 impl UserStore {
     pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
+        Self { pool, password_workers: Arc::new(Semaphore::new(2)), failures: Arc::new(PasswordFailures::default()) }
+    }
+
+    async fn password_work<T: Send + 'static>(&self, work: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+        // Admission occurs before spawning: no unbounded waiting queue or blocking tasks.
+        let permit = self.password_workers.clone().try_acquire_owned()
+            .map_err(|_| AppError::ServiceUnavailable("Password service busy".into()))?;
+        tokio::task::spawn_blocking(move || { let _permit = permit; work() }).await
+            .map_err(|e| AppError::Internal(format!("Password worker failed: {e}")))?
+    }
+
+    async fn hash(&self, password: &str) -> Result<String> {
+        let password = password.to_owned();
+        self.password_work(move || hash_password(&password)).await
     }
 
     /// The single local user, or `None` if none exists. Errors if more than one row is present.
@@ -60,7 +94,7 @@ impl UserStore {
             ));
         }
 
-        let password_hash = hash_password(password)?;
+        let password_hash = self.hash(password).await?;
         let user = User {
             id: Uuid::new_v4().to_string(),
             username: username.to_string(),
@@ -83,18 +117,23 @@ impl UserStore {
     }
 
     pub async fn verify(&self, username: &str, password: &str) -> Result<Option<User>> {
+        self.failures.check()?;
         let user = match self.single_user().await? {
             Some(u) => u,
             None => return Ok(None),
         };
 
         if user.username != username {
+            self.failures.record();
             return Ok(None);
         }
 
-        if verify_password(password, &user.password_hash)? {
+        let password = password.to_owned();
+        let hash = user.password_hash.clone();
+        if self.password_work(move || verify_password(&password, &hash)).await? {
             Ok(Some(user))
         } else {
+            self.failures.record();
             Ok(None)
         }
     }
@@ -109,7 +148,7 @@ impl UserStore {
             return Err(AppError::AuthError("Invalid session".to_string()));
         }
 
-        let password_hash = hash_password(new_password)?;
+        let password_hash = self.hash(new_password).await?;
         let result = sqlx::query(
             "UPDATE users SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
         )
@@ -152,5 +191,30 @@ impl UserStore {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod password_worker_tests {
+    use super::*;
+
+    #[test]
+    fn failed_attempt_window_is_bounded_and_expires() {
+        let failures = PasswordFailures::default();
+        for _ in 0..100 { failures.record(); }
+        assert_eq!(failures.0.lock().len(), 8);
+        assert!(failures.check().is_err());
+        *failures.0.lock() = VecDeque::from([Instant::now() - Duration::from_secs(61)]);
+        assert!(failures.check().is_ok());
+    }
+
+    #[tokio::test]
+    async fn saturated_password_workers_reject_without_spawning() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new().connect_lazy("sqlite::memory:").unwrap();
+        let users = UserStore::new(pool);
+        let permits = users.password_workers.acquire_many(2).await.unwrap();
+        assert!(users.password_work(|| -> Result<()> { panic!("must not spawn") }).await.is_err());
+        drop(permits);
+        assert_eq!(users.password_work(|| Ok(42)).await.unwrap(), 42);
     }
 }

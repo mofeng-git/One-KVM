@@ -13,6 +13,7 @@ use crate::audio::uac::{
 use crate::state::AppState;
 
 pub async fn uac_audio_ws_handler(
+    axum::Extension(auth): axum::Extension<crate::auth::Session>,
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
@@ -29,10 +30,10 @@ pub async fn uac_audio_ws_handler(
         }
     };
 
-    ws.on_upgrade(move |socket| handle_uac_audio(socket, session))
+    ws.on_upgrade(move |socket| async move { auth.run_until_ended(handle_uac_audio(socket, session, auth.clone())).await })
 }
 
-async fn handle_uac_audio(mut socket: WebSocket, session: UacSession) {
+async fn handle_uac_audio(mut socket: WebSocket, session: UacSession, auth: crate::auth::Session) {
     let mut decoder = match UacOpusDecoder::new() {
         Ok(decoder) => decoder,
         Err(error) => {
@@ -53,7 +54,9 @@ async fn handle_uac_audio(mut socket: WebSocket, session: UacSession) {
         return;
     }
 
-    while let Some(message) = socket.recv().await {
+    loop {
+        let message = tokio::select! { biased; _ = auth.ended() => break, msg = socket.recv() => msg };
+        let Some(message) = message else { break; };
         let message = match message {
             Ok(message) => message,
             Err(error) => {

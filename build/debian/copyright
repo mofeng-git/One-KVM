@@ -39,7 +39,7 @@ Files: libs/ventoy-img-rs/resources/*
 Copyright: Ventoy contributors
 License: GPL-3.0+
 Comment:
- Pre-built Ventoy boot files (boot.img, core.img.xz, ventoy.disk.img.xz).
+ Pre-built Ventoy boot files (boot.img, core.img, ventoy.disk.img).
  Ventoy upstream: https://github.com/ventoy/Ventoy, licensed GPL-3.0-or-later.
 
 Files: res/vcpkg/libyuv/*

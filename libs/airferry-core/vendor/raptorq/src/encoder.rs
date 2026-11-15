@@ -503,9 +503,7 @@ mod tests {
     use crate::systematic_constants::{
         MAX_SOURCE_SYMBOLS_PER_BLOCK, calculate_p1, num_ldpc_symbols, systematic_index,
     };
-    #[cfg(not(feature = "python"))]
     use crate::{Encoder, EncoderBuilder, EncodingPacket, ObjectTransmissionInformation};
-    #[cfg(not(feature = "python"))]
     use std::collections::HashSet;
 
     const SYMBOL_SIZE: usize = 4;
@@ -633,7 +631,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn test_builder() {
         let data = vec![0, 1, 2, 3];
@@ -643,7 +640,6 @@ mod tests {
         assert_eq!(builder.build(&data), encoder);
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn padding_constraint_exact() {
         let packet_size: u16 = 1024;
@@ -652,7 +648,6 @@ mod tests {
         padding_constraint(packet_size, padding_size, data_size);
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn padding_constraint_42_bytes() {
         let packet_size: u16 = 1024;
@@ -661,7 +656,6 @@ mod tests {
         padding_constraint(packet_size, padding_size, data_size);
     }
 
-    #[cfg(not(feature = "python"))]
     fn padding_constraint(packet_size: u16, padding_size: usize, data_size: usize) {
         let data = gen_test_data(data_size);
         let encoder = Encoder::with_defaults(&data, packet_size);
@@ -682,7 +676,6 @@ mod tests {
         assert_eq!(data[..], padded_data[..data_size]);
     }
 
-    #[cfg(not(feature = "python"))]
     #[test]
     fn unique_blocks() {
         let data = gen_test_data(120);

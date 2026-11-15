@@ -34,13 +34,14 @@ use crate::state::AppState;
 const AUDIO_PACKET_TYPE: u8 = 0x02;
 
 pub async fn audio_ws_handler(
+    axum::Extension(auth): axum::Extension<crate::auth::Session>,
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_audio_socket(socket, state))
+    ws.on_upgrade(move |socket| async move { auth.run_until_ended(handle_audio_socket(socket, state, auth.clone())).await })
 }
 
-async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>, auth: crate::auth::Session) {
     let (mut sender, mut receiver) = socket.split();
 
     let opus_rx = match state.audio.subscribe_opus().await {
@@ -68,6 +69,8 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
 
     loop {
         tokio::select! {
+            biased;
+            _ = auth.ended() => break,
             opus_result = opus_rx.recv() => {
                 let frame = match opus_result {
                     Some(f) => f,

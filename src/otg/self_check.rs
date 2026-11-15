@@ -1,7 +1,9 @@
 use serde::Serialize;
+use typeshare::typeshare;
 
 use crate::utils::{list_dir_names, read_trimmed};
 
+#[typeshare]
 #[derive(Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OtgSelfCheckLevel {
@@ -10,6 +12,7 @@ pub enum OtgSelfCheckLevel {
     Error,
 }
 
+#[typeshare]
 #[derive(Serialize)]
 pub struct OtgSelfCheckItem {
     pub id: &'static str,
@@ -22,10 +25,13 @@ pub struct OtgSelfCheckItem {
     pub path: Option<String>,
 }
 
+#[typeshare]
 #[derive(Serialize)]
 pub struct OtgSelfCheckResponse {
     pub overall_ok: bool,
+    #[typeshare(serialized_as = "U53")]
     pub error_count: usize,
+    #[typeshare(serialized_as = "U53")]
     pub warning_count: usize,
     pub hid_backend: String,
     #[serde(skip_serializing_if = "Option::is_none")]

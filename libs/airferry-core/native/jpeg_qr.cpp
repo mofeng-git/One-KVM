@@ -2,7 +2,6 @@
 #include <turbojpeg.h>
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
@@ -117,24 +116,3 @@ extern "C" int af_decode(void* decoder, const uint8_t* jpeg, size_t size,
         return static_cast<int>(results.size());
     } catch (...) { return -2; }
 }
-
-#ifdef AIRFERRY_FIXTURES
-// Used only to produce deterministic end-to-end JPEG fixtures, never on capture.
-extern "C" int af_write_gray_jpeg(const uint8_t* gray, int w, int h, const char* path) noexcept {
-    auto encoder = tjInitCompress();
-    if (!encoder) return -1;
-    unsigned char* jpeg = nullptr;
-    unsigned long size = 0;
-    int rc = tjCompress2(encoder, gray, w, w, h, TJPF_GRAY, &jpeg, &size,
-                        TJSAMP_GRAY, 92, TJFLAG_FASTDCT);
-    if (rc == 0) {
-        FILE* file = std::fopen(path, "wb");
-        if (!file) rc = -1;
-        else { if (std::fwrite(jpeg, 1, size, file) != size) rc = -1; std::fclose(file); }
-    }
-    tjFree(jpeg);
-    tjDestroy(encoder);
-    return rc;
-}
-
-#endif

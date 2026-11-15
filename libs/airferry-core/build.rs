@@ -1,20 +1,13 @@
+#[path = "../../build/native.rs"]
+mod native;
+
 use std::{env, path::PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=AIRFERRY_NATIVE_DIR");
     println!("cargo:rerun-if-changed=native");
     let target = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let include_paths = if target == "msvc" {
-        vcpkg::Config::new()
-            .find_package("libjpeg-turbo")
-            .expect("Install libjpeg-turbo with vcpkg before building One-KVM")
-            .include_paths
-    } else {
-        pkg_config::Config::new()
-            .probe("libturbojpeg")
-            .expect("libjpeg-turbo development files are required for built-in AirFerry reception")
-            .include_paths
-    };
+    let include_paths = native::probe("libturbojpeg", "libjpeg-turbo", "TURBOJPEG_STATIC");
     let native = if let Some(directory) = env::var_os("AIRFERRY_NATIVE_DIR") {
         let directory = PathBuf::from(directory);
         for name in ["libairferry_native.a", "libZXing.a"] {
@@ -29,14 +22,6 @@ fn main() {
             .join(";");
         cmake::Config::new("native")
             .profile("Release")
-            .define(
-                "AIRFERRY_FIXTURES",
-                if env::var_os("CARGO_FEATURE_FIXTURES").is_some() {
-                    "ON"
-                } else {
-                    "OFF"
-                },
-            )
             .define("TURBOJPEG_INCLUDE_DIRS", includes)
             .build()
             .join("lib")

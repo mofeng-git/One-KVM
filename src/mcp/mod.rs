@@ -18,11 +18,10 @@ use axum::{
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 pub(crate) fn hash_key(key: &str) -> String {
-    Sha256::digest(key.as_bytes())
+    openssl::sha::sha256(key.as_bytes())
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
@@ -105,6 +104,10 @@ mod tests {
     use super::*;
     #[test]
     fn shared_key_and_origin_validation() {
+        assert_eq!(
+            hash_key("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
         let key = generate_key();
         let hash = hash_key(&key);
         assert!(key_matches(&key, Some(&hash)));

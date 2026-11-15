@@ -46,8 +46,6 @@ struct ReaderOptions::Data
 	uint8_t downscaleFactor       : 3 = 3; // values 2, 3, 4
 	EanAddOnSymbol eanAddOnSymbol : 2 = EanAddOnSymbol::Ignore;
 	Binarizer binarizer           : 2 = Binarizer::LocalAverage;
-	TextMode textMode             : 3 = TextMode::HRI;
-	CharacterSet characterSet     : 6 = CharacterSet::Unknown;
 
 	uint8_t minLineCount          = 2;
 	uint8_t maxNumberOfSymbols    = 0xff;
@@ -96,21 +94,8 @@ ZX_PROPERTY(uint8_t, maxNumberOfSymbols, setMaxNumberOfSymbols)
 ZX_PROPERTY(bool, validateOptionalChecksum, setValidateOptionalChecksum)
 ZX_PROPERTY(bool, returnErrors, setReturnErrors)
 ZX_PROPERTY(EanAddOnSymbol, eanAddOnSymbol, setEanAddOnSymbol)
-ZX_PROPERTY(TextMode, textMode, setTextMode)
-ZX_PROPERTY(CharacterSet, characterSet, setCharacterSet)
 
 #undef ZX_PROPERTY
-
-ReaderOptions& ReaderOptions::characterSet(std::string_view v) &
-{
-	d->characterSet = CharacterSetFromString(v);
-	return *this;
-}
-ReaderOptions&& ReaderOptions::characterSet(std::string_view v) &&
-{
-	d->characterSet = CharacterSetFromString(v);
-	return std::move(*this);
-}
 
 bool ReaderOptions::hasFormat(const BarcodeFormats& formats) const noexcept
 {

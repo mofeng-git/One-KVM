@@ -172,6 +172,8 @@ pub async fn change_password(
         .users
         .update_password(&session.user_id, &req.new_password)
         .await?;
+    revoke_other_sessions(&state, &session.id).await?;
+    state.redfish_sessions.delete_all().await?;
     info!("Password changed for user ID: {}", session.user_id);
 
     Ok(Json(LoginResponse {

@@ -138,7 +138,15 @@ fn static_response(path: &str, data: Vec<u8>) -> Response<Body> {
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, mime)
-        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        // HTML refers to versioned assets that can disappear after an upgrade.
+        .header(
+            header::CACHE_CONTROL,
+            if path.ends_with(".html") {
+                "no-cache"
+            } else {
+                "public, max-age=86400"
+            },
+        )
         .body(Body::from(data))
         .unwrap()
 }
@@ -162,4 +170,20 @@ pub fn not_found_html() -> String {
 </body>
 </html>"#
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn html_is_revalidated_but_assets_remain_cacheable() {
+        let html = static_response("index.html", vec![]);
+        assert_eq!(html.headers()[header::CACHE_CONTROL], "no-cache");
+        let asset = static_response("assets/app-123.js", vec![]);
+        assert_eq!(
+            asset.headers()[header::CACHE_CONTROL],
+            "public, max-age=86400"
+        );
+    }
 }

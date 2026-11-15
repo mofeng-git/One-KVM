@@ -121,29 +121,11 @@ symbol count = 20000, decoded 122 MB in 9.929secs using 5.0% overhead, throughpu
 symbol count = 50000, decoded 122 MB in 14.399secs using 5.0% overhead, throughput: 67.8Mbit/s
 ```
 
-### Public API
-Note that the additional classes exported by the `benchmarking` feature flag are not considered part of this
-crate's public API. Breaking changes to those classes may occur without warning. The flag is only provided
-so that internal classes can be used in this crate's benchmarks.
+## One-KVM subset
 
-## Python bindings
-
-The Python bindings are generated using [pyo3](https://github.com/PyO3/pyo3). 
-
-Some operating systems require additional packages to be installed.
-```
-$ sudo apt install python3-dev cargo
-```
-
-[maturin](https://github.com/PyO3/maturin) is recommended for building the Python bindings in this crate.
-```
-$ pip install maturin
-$ maturin build --features python
-```
-
-Alternatively, refer to the [Building and Distribution section](https://pyo3.rs/v0.8.5/building_and_distribution.html) in the [pyo3 user guide](https://pyo3.rs/v0.8.5/).
-Note, you must pass the `--cargo-extra-args="--features python"` argument to Maturin when building this crate
-to enable the Python binding features.
+This vendored copy omits Python bindings, benchmark entry points and examples.
+Encoding and decoding, no_std support and optional serde support remain.
+See [PATCHES.md](../../PATCHES.md#raptorq) for local changes.
 
 ## License
 

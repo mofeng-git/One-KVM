@@ -1228,25 +1228,6 @@ impl<T: BinaryMatrix> IntermediateSymbolDecoder<T> {
         self.debug_symbol_add_ops_by_phase.clone()
     }
 
-    #[cfg(feature = "benchmarking")]
-    pub fn get_non_symbol_bytes(&self) -> usize {
-        let mut bytes = size_of::<Self>();
-
-        bytes += self.A.size_in_bytes();
-        if let Some(ref hdpc) = self.A_hdpc_rows {
-            bytes += hdpc.size_in_bytes();
-        }
-        #[cfg(debug_assertions)]
-        {
-            bytes += self.X.size_in_bytes();
-        }
-        // Skip self.D, since we're calculating non-Symbol bytes
-        bytes += size_of::<usize>() * self.c.len();
-        bytes += size_of::<usize>() * self.d.len();
-
-        bytes
-    }
-
     // Record operation to apply operations to D.
     fn record_mul_row(&mut self, i: usize, beta: Octet) {
         self.debug_symbol_mul_ops += 1;

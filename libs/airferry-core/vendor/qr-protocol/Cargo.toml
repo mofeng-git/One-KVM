@@ -3,7 +3,7 @@ name = "qr-protocol"
 version = "1.2.8"
 edition = "2021"
 license = "MIT"
-description = "AirFerry wire protocol with optional QR generation"
+description = "AirFerry wire protocol for native reception"
 
 [dependencies]
 raptorq-core = { git = "https://github.com/UR-SillyB/AirFerry", rev = "8a72ab86dee9d8f19b74bfec56c270101c5980ba" }
@@ -11,11 +11,9 @@ crc32fast = "1.4"
 sha2 = "0.10"
 thiserror = "1"
 serde = { version = "1", features = ["derive"], optional = true }
-fast_qr = { version = "0.13", default-features = false, optional = true }
 zstd = "0.13"
 xz2 = "0.1"
 
 [features]
 default = []
-generate = ["dep:fast_qr"]
 serde = ["dep:serde", "raptorq-core/serde"]

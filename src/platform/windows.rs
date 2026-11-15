@@ -4,7 +4,8 @@ use super::{FeatureCapability, PlatformCapabilities, PlatformMode};
 
 pub fn capabilities() -> PlatformCapabilities {
     let linux_only = "unsupported on Windows";
-    PlatformCapabilities {
+    let mut capabilities = PlatformCapabilities {
+        compiled_features: PlatformCapabilities::compiled_features(),
         mode: PlatformMode::Windows,
         mode_label: PlatformMode::Windows.label(),
         video_capture: FeatureCapability::available(["directshow_uvc", "mjpeg"])
@@ -31,5 +32,8 @@ pub fn capabilities() -> PlatformCapabilities {
         diagnostics: FeatureCapability::available(["windows"]),
         extensions: FeatureCapability::available(["windows_safe"]),
         service_installation: FeatureCapability::available(["windows_service"]),
-    }
+    };
+    if !cfg!(feature = "rustdesk") { capabilities.rustdesk = FeatureCapability::unsupported("Not compiled in"); }
+    if !cfg!(feature = "vnc") { capabilities.vnc = FeatureCapability::unsupported("Not compiled in"); }
+    capabilities
 }

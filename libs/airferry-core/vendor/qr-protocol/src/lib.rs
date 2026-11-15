@@ -28,15 +28,12 @@
 //!   in JS to the same standard zstd format).
 //! - [`chunker`] — split compressed bytes into RaptorQ source blocks.
 //! - [`session`] — deterministic session-id derivation (enables resume).
-//! - [`qr_render`] — turn a frame's bytes into a QR module matrix.
 
 #![forbid(unsafe_code)]
 
 pub mod chunker;
 pub mod compress;
 pub mod frame;
-#[cfg(feature = "generate")]
-pub mod qr_render;
 pub mod session;
 
 pub use frame::{Frame, FrameHeader, FLAG_DESCRIPTOR, FRAME_FOOTER_SIZE, FRAME_HEADER_SIZE, MAGIC};

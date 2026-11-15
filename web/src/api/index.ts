@@ -1,6 +1,9 @@
 import { request, uploadRequest, ApiError } from './request'
 import type {
   CanonicalKey,
+  AirferryStatus,
+  OtgSelfCheckResponse,
+  AirferryDeleteResponse,
   Ch9329DescriptorState,
 } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
@@ -8,32 +11,13 @@ import type { StreamSignalReason, StreamState } from '@/types/websocket'
 
 const API_BASE = '/api'
 
-export interface AirferryReceivedFile {
-  name: string
-  display_name: string
-  size: number
-  modified_unix_ms: number
-}
-export interface AirferryStatus {
-  available: boolean
-  running: boolean
-  eligible: boolean
-  reason: string
-  event: {
-    state?: string
-    reason?: string
-    jpeg_ms?: number
-    qr_ms?: number
-    progress?: { file: string; received_symbols: number; total_symbols: number; decoded_fraction: number; bytes_per_second: number } | null
-  } | null
-  last_saved: { filename: string; bytes: number; receive_seconds: number; bytes_per_second: number } | null
-  files: AirferryReceivedFile[]
-}
+export type { AirferryStatus, AirferryReceivedFile } from '@/types/generated'
+
 export const airferryApi = {
   status: () => request<AirferryStatus>('/airferry/status', {}, { toastOnError: false }),
   start: () => request<AirferryStatus>('/airferry/start', { method: 'POST' }, { toastOnError: false }),
   stop: () => request<AirferryStatus>('/airferry/stop', { method: 'POST' }, { toastOnError: false }),
-  deleteFile: (name: string) => request<void>(`/airferry/files/${encodeURIComponent(name)}`, { method: 'DELETE' }, { toastOnError: false }),
+  deleteFile: (name: string) => request<AirferryDeleteResponse>(`/airferry/files/${encodeURIComponent(name)}`, { method: 'DELETE' }, { toastOnError: false }),
   downloadUrl: (name: string) => `${API_BASE}/airferry/files/${encodeURIComponent(name)}`,
 }
 
@@ -152,6 +136,7 @@ export interface FeatureCapability {
 }
 
 export interface PlatformCapabilities {
+  compiled_features: string[]
   mode: 'linux' | 'windows'
   mode_label: string
   video_capture: FeatureCapability
@@ -263,6 +248,7 @@ export interface UpdateStatusResponse {
 }
 
 export const updateApi = {
+  cancel: () => request<{ success: boolean }>('/update/cancel', { method: 'POST' }),
   overview: (channel: UpdateChannel = 'stable') =>
     request<UpdateOverviewResponse>(
       `/update/overview?channel=${encodeURIComponent(channel)}`,
@@ -478,27 +464,7 @@ export const hidApi = {
       error_code: string | null
     }>('/hid/status'),
 
-  otgSelfCheck: () =>
-    request<{
-      overall_ok: boolean
-      error_count: number
-      warning_count: number
-      hid_backend: string
-      selected_udc: string | null
-      bound_udc: string | null
-      udc_state: string | null
-      udc_speed: string | null
-      available_udcs: string[]
-      other_gadgets: string[]
-      checks: Array<{
-        id: string
-        ok: boolean
-        level: 'info' | 'warn' | 'error'
-        message: string
-        hint?: string
-        path?: string
-      }>
-    }>('/hid/otg/self-check'),
+  otgSelfCheck: () => request<OtgSelfCheckResponse>('/hid/otg/self-check'),
 
   keyboard: async (type: 'down' | 'up', key: CanonicalKey, modifier?: number) => {
     await ensureHidConnection()

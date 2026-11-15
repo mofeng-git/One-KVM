@@ -42,7 +42,7 @@ async fn session_service() -> Json<SessionService> {
 }
 
 async fn session_list(State(state): State<Arc<AppState>>) -> Response {
-    let session_ids = match state.sessions.list_ids().await {
+    let session_ids = match state.redfish_sessions.list_ids().await {
         Ok(ids) => ids,
         Err(e) => {
             return (
@@ -55,7 +55,7 @@ async fn session_list(State(state): State<Arc<AppState>>) -> Response {
 
     let mut members = Vec::new();
     for id in &session_ids {
-        if state.sessions.get(id).await.ok().flatten().is_some() {
+        if state.redfish_sessions.get(id).await.ok().flatten().is_some() {
             members.push(odata_ref(&format!(
                 "/redfish/v1/SessionService/Sessions/{}",
                 id
@@ -89,14 +89,16 @@ async fn session_create(
         }
     };
 
-    if !state.config.get().auth.single_user_allow_multiple_sessions {
-        let revoked_ids = state.sessions.list_ids().await.unwrap_or_default();
-        let _ = state.sessions.delete_all().await;
-        state.remember_revoked_sessions(revoked_ids).await;
-    }
-
-    let session = match state.sessions.create(&user.id).await {
-        Ok(s) => s,
+    let allow_multiple = state.config.get().auth.single_user_allow_multiple_sessions;
+    let session = match state
+        .redfish_sessions
+        .create_for_login(&user.id, allow_multiple)
+        .await
+    {
+        Ok((session, revoked_ids)) => {
+            state.remember_revoked_sessions(revoked_ids).await;
+            session
+        }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -133,9 +135,9 @@ async fn session_delete(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
 ) -> Response {
-    match state.sessions.get(&session_id).await {
+    match state.redfish_sessions.get(&session_id).await {
         Ok(Some(_)) => {
-            if let Err(e) = state.sessions.delete(&session_id).await {
+            if let Err(e) = state.redfish_sessions.delete(&session_id).await {
                 tracing::warn!("Redfish: Session delete failed: {}", e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,

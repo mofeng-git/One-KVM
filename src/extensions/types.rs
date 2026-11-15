@@ -15,6 +15,13 @@ pub enum ExtensionId {
 }
 
 impl ExtensionId {
+    pub fn compiled(&self) -> bool {
+        match self {
+            Self::Ttyd => cfg!(feature = "terminal"), Self::Gostc => cfg!(feature = "gostc"),
+            Self::Easyfrp => cfg!(feature = "easyfrp"), Self::Easytier => cfg!(feature = "easytier"), Self::Frpc => cfg!(feature = "frpc"),
+        }
+    }
+
     pub fn binary_path(&self) -> std::path::PathBuf {
         software::binary_path(*self)
     }

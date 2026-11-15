@@ -3,7 +3,8 @@
 use super::{FeatureCapability, PlatformCapabilities, PlatformMode};
 
 pub fn capabilities() -> PlatformCapabilities {
-    PlatformCapabilities {
+    let mut capabilities = PlatformCapabilities {
+        compiled_features: PlatformCapabilities::compiled_features(),
         mode: PlatformMode::Linux,
         mode_label: PlatformMode::Linux.label(),
         video_capture: FeatureCapability::available(["v4l2"]),
@@ -20,5 +21,8 @@ pub fn capabilities() -> PlatformCapabilities {
         diagnostics: FeatureCapability::available(["linux"]),
         extensions: FeatureCapability::available(["linux"]),
         service_installation: FeatureCapability::available(["systemd"]),
-    }
+    };
+    if !cfg!(feature = "rustdesk") { capabilities.rustdesk = FeatureCapability::unsupported("Not compiled in"); }
+    if !cfg!(feature = "vnc") { capabilities.vnc = FeatureCapability::unsupported("Not compiled in"); }
+    capabilities
 }

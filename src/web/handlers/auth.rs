@@ -90,7 +90,7 @@ async fn create_authenticated_session(
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(time::Duration::seconds(
-            config.auth.session_timeout_secs as i64,
+            (session.expires_at - session.created_at).whole_seconds(),
         ))
         .build();
 
@@ -106,12 +106,11 @@ async fn create_authenticated_session(
 
 pub async fn logout(
     State(state): State<Arc<AppState>>,
+    axum::Extension(session): axum::Extension<Session>,
     cookies: CookieJar,
 ) -> Result<(CookieJar, Json<LoginResponse>)> {
-    // Get session ID from cookie
-    if let Some(cookie) = cookies.get(SESSION_COOKIE) {
-        state.sessions.delete(cookie.value()).await?;
-    }
+    // Revoke the session selected by authentication, including Bearer tokens.
+    state.sessions.delete(&session.id).await?;
 
     // Remove cookie
     let cookie = Cookie::build((SESSION_COOKIE, ""))

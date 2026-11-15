@@ -1,7 +1,9 @@
 pub mod config;
+#[cfg(feature = "airferry")]
 pub mod airferry;
 pub mod devices;
 pub mod extensions;
+#[cfg(feature = "terminal")]
 pub mod terminal;
 
 mod account;
@@ -11,6 +13,7 @@ mod auth;
 mod hid_api;
 mod host_power;
 mod inventory;
+#[cfg(feature = "mcp")]
 mod mcp;
 #[cfg(unix)]
 mod msd_api;
@@ -27,6 +30,7 @@ pub use auth::*;
 pub use hid_api::*;
 pub use host_power::*;
 pub use inventory::*;
+#[cfg(feature = "mcp")]
 pub use mcp::*;
 #[cfg(unix)]
 pub use msd_api::*;

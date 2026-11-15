@@ -223,10 +223,6 @@ impl WebRtcStreamer {
         }
     }
 
-    fn should_stop_pipeline(session_count: usize, subscriber_count: usize) -> bool {
-        session_count == 0 && subscriber_count == 0
-    }
-
     async fn stop_pipeline_if_idle(&self, reason: &str) {
         let session_count = self.sessions.read().await.len();
         let pipeline = self.video_pipeline.read().await.clone();
@@ -236,8 +232,9 @@ impl WebRtcStreamer {
         };
 
         let subscriber_count = pipeline.subscriber_count();
-        if !self.capture_keep_alive.is_enabled()
-            && Self::should_stop_pipeline(session_count, subscriber_count)
+        if self
+            .capture_keep_alive
+            .is_idle(session_count + subscriber_count)
         {
             info!(
                 "{} stopping video pipeline (sessions={}, subscribers={})",
@@ -1052,7 +1049,8 @@ impl WebRtcStreamer {
     // === Session Management ===
 
     /// Create a new WebRTC session
-    pub async fn create_session(&self) -> Result<String> {
+    pub async fn create_session(self: &Arc<Self>, auth: crate::auth::Session) -> Result<String> {
+        if auth.is_expired() { return Err(AppError::AuthError("Session expired".into())); }
         let session_id = uuid::Uuid::new_v4().to_string();
         let codec = *self.video_codec.read().await;
 
@@ -1085,6 +1083,9 @@ impl WebRtcStreamer {
         let mut session =
             UniversalSession::new(session_config.clone(), session_id.clone(), event_bus).await?;
 
+        session.auth_session_id = auth.id.clone();
+        session.auth_session = Some(auth.clone());
+
         // Set HID controller if available
         // Note: We DON'T create a data channel here - the frontend creates it.
         // The server only receives it via on_data_channel callback set in set_hid_controller().
@@ -1094,6 +1095,7 @@ impl WebRtcStreamer {
             session.set_hid_controller(hid.clone());
         }
 
+        let mut connection_state = session.state_watch();
         let session = Arc::new(session);
 
         // Subscribe to video pipeline frames
@@ -1129,7 +1131,30 @@ impl WebRtcStreamer {
             self.sessions.read().await.len()
         );
 
+        let weak = Arc::downgrade(self);
+        let owned_id = session_id.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = auth.ended() => {},
+                _ = async {
+                    loop {
+                        if matches!(*connection_state.borrow(), ConnectionState::Closed | ConnectionState::Failed) { break; }
+                        if connection_state.changed().await.is_err() { break; }
+                    }
+                } => {},
+            }
+            if let Some(streamer) = weak.upgrade() {
+                let _ = streamer.close_session(&owned_id).await;
+            }
+        });
         Ok(session_id)
+    }
+
+    pub async fn require_owner(&self, id: &str, auth: &crate::auth::Session) -> Result<()> {
+        let sessions = self.sessions.read().await;
+        if !auth.is_expired() && sessions.get(id).is_some_and(|s| s.auth_session_id == auth.id) { return Ok(()); }
+        Err(AppError::AuthError("WebRTC session does not belong to this login".into()))
     }
 
     /// Handle SDP offer
@@ -1469,10 +1494,12 @@ mod tests {
 
     #[test]
     fn stop_pipeline_requires_no_sessions_and_no_subscribers() {
-        assert!(WebRtcStreamer::should_stop_pipeline(0, 0));
-        assert!(!WebRtcStreamer::should_stop_pipeline(1, 0));
-        assert!(!WebRtcStreamer::should_stop_pipeline(0, 1));
-        assert!(!WebRtcStreamer::should_stop_pipeline(2, 3));
+        let policy = crate::video::capture_keep_alive::CaptureKeepAlive::default();
+        for (sessions, subscribers, idle) in
+            [(0, 0, true), (1, 0, false), (0, 1, false), (2, 3, false)]
+        {
+            assert_eq!(policy.is_idle(sessions + subscribers), idle);
+        }
     }
 
     #[test]

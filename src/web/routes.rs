@@ -26,6 +26,7 @@ use crate::hid::websocket::ws_hid_handler;
 use crate::state::AppState;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
+    #[cfg(feature = "redfish")]
     let redfish_router = {
         let config = state.config.get();
         if config.redfish.enabled {
@@ -72,10 +73,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/ws", any(ws_handler))
         // Stream control endpoints
         .route("/stream/status", get(handlers::stream_state))
-        .route("/airferry/status", get(handlers::airferry::status))
-        .route("/airferry/start", post(handlers::airferry::start))
-        .route("/airferry/stop", post(handlers::airferry::stop))
-        .route("/airferry/files/{name}", get(handlers::airferry::download).delete(handlers::airferry::delete_file))
         .route("/stream/start", post(handlers::stream_start))
         .route("/stream/stop", post(handlers::stream_stop))
         .route("/stream/mode", get(handlers::stream_mode_get))
@@ -142,6 +139,81 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/audio",
             patch(handlers::config::update_audio_config),
         )
+        // Web server configuration
+        .route("/config/web", get(handlers::config::get_web_config))
+        .route("/config/web", patch(handlers::config::update_web_config))
+        .route(
+            "/config/watchdog",
+            get(handlers::config::get_watchdog_config),
+        )
+        .route(
+            "/config/watchdog",
+            patch(handlers::config::update_watchdog_config),
+        )
+        // Auth configuration
+        .route("/config/auth", get(handlers::config::get_auth_config))
+        .route("/config/auth", patch(handlers::config::update_auth_config))
+        // System control
+        .route("/system/restart", post(handlers::system_restart))
+        .route("/system/reboot", post(handlers::host_reboot))
+        .route("/system/poweroff", post(handlers::host_poweroff))
+        .route("/update/overview", get(handlers::update_overview))
+        .route("/update/upgrade", post(handlers::update_upgrade))
+        .route("/update/status", get(handlers::update_status))
+        .route("/update/cancel", post(handlers::update_cancel))
+        // ATX (Power Control) endpoints
+        .route("/atx/status", get(handlers::atx_status))
+        .route("/atx/power", post(handlers::atx_power))
+        .route("/atx/wol", post(handlers::atx_wol))
+        .route("/atx/wol/history", get(handlers::atx_wol_history))
+        // Device discovery endpoints
+        .route("/devices/atx", get(handlers::devices::list_atx_devices))
+        // Extension management endpoints
+        .route("/extensions", get(handlers::extensions::list_extensions))
+        .route("/extensions/{id}", get(handlers::extensions::get_extension))
+        .route(
+            "/extensions/{id}/start",
+            post(handlers::extensions::start_extension),
+        )
+        .route(
+            "/extensions/{id}/stop",
+            post(handlers::extensions::stop_extension),
+        )
+        .route(
+            "/extensions/{id}/logs",
+            get(handlers::extensions::get_extension_logs),
+        )
+
+
+
+
+
+;
+
+    #[cfg(feature = "airferry")]
+    let user_routes = user_routes
+        .route("/airferry/status", get(handlers::airferry::status))
+        .route("/airferry/start", post(handlers::airferry::start))
+        .route("/airferry/stop", post(handlers::airferry::stop))
+        .route("/airferry/files/{name}", get(handlers::airferry::download).delete(handlers::airferry::delete_file));
+
+    #[cfg(feature = "mcp")]
+    let user_routes = user_routes
+        .route(
+            "/config/mcp",
+            get(handlers::mcp_config).patch(handlers::mcp_update_config),
+        );
+
+    #[cfg(feature = "terminal")]
+    let user_routes = user_routes
+        // Terminal (ttyd) reverse proxy - WebSocket and HTTP
+        .route("/terminal", get(handlers::terminal::terminal_index))
+        .route("/terminal/", get(handlers::terminal::terminal_index))
+        .route("/terminal/ws", get(handlers::terminal::terminal_ws))
+        .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
+
+    #[cfg(feature = "rustdesk")]
+    let user_routes = user_routes
         // RustDesk configuration endpoints
         .route(
             "/config/rustdesk",
@@ -174,7 +246,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/config/rustdesk/stop",
             post(handlers::config::stop_rustdesk_service),
-        )
+        );
+
+    #[cfg(feature = "vnc")]
+    let user_routes = user_routes
         // VNC configuration endpoints
         .route("/config/vnc", get(handlers::config::get_vnc_config))
         .route("/config/vnc", patch(handlers::config::update_vnc_config))
@@ -183,7 +258,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/config/vnc/start",
             post(handlers::config::start_vnc_service),
         )
-        .route("/config/vnc/stop", post(handlers::config::stop_vnc_service))
+        .route("/config/vnc/stop", post(handlers::config::stop_vnc_service));
+
+    #[cfg(feature = "rtsp")]
+    let user_routes = user_routes
         // RTSP configuration endpoints
         .route("/config/rtsp", get(handlers::config::get_rtsp_config))
         .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
@@ -198,85 +276,51 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/config/rtsp/stop",
             post(handlers::config::stop_rtsp_service),
-        )
-        // Web server configuration
-        .route("/config/web", get(handlers::config::get_web_config))
-        .route("/config/web", patch(handlers::config::update_web_config))
-        .route(
-            "/config/watchdog",
-            get(handlers::config::get_watchdog_config),
-        )
-        .route(
-            "/config/watchdog",
-            patch(handlers::config::update_watchdog_config),
-        )
-        .route(
-            "/config/mcp",
-            get(handlers::mcp_config).patch(handlers::mcp_update_config),
-        )
-        // Auth configuration
-        .route("/config/auth", get(handlers::config::get_auth_config))
-        .route("/config/auth", patch(handlers::config::update_auth_config))
+        );
+
+    #[cfg(feature = "redfish")]
+    let user_routes = user_routes
         // Redfish configuration
         .route("/config/redfish", get(handlers::config::get_redfish_config))
         .route(
             "/config/redfish",
             patch(handlers::config::update_redfish_config),
-        )
-        // System control
-        .route("/system/restart", post(handlers::system_restart))
-        .route("/system/reboot", post(handlers::host_reboot))
-        .route("/system/poweroff", post(handlers::host_poweroff))
-        .route("/update/overview", get(handlers::update_overview))
-        .route("/update/upgrade", post(handlers::update_upgrade))
-        .route("/update/status", get(handlers::update_status))
-        // ATX (Power Control) endpoints
-        .route("/atx/status", get(handlers::atx_status))
-        .route("/atx/power", post(handlers::atx_power))
-        .route("/atx/wol", post(handlers::atx_wol))
-        .route("/atx/wol/history", get(handlers::atx_wol_history))
-        // Device discovery endpoints
-        .route("/devices/atx", get(handlers::devices::list_atx_devices))
-        // Extension management endpoints
-        .route("/extensions", get(handlers::extensions::list_extensions))
-        .route("/extensions/{id}", get(handlers::extensions::get_extension))
-        .route(
-            "/extensions/{id}/start",
-            post(handlers::extensions::start_extension),
-        )
-        .route(
-            "/extensions/{id}/stop",
-            post(handlers::extensions::stop_extension),
-        )
-        .route(
-            "/extensions/{id}/logs",
-            get(handlers::extensions::get_extension_logs),
-        )
+        );
+
+    #[cfg(feature = "terminal")]
+    let user_routes = user_routes
         .route(
             "/extensions/ttyd/config",
             patch(handlers::extensions::update_ttyd_config),
-        )
+        );
+
+    #[cfg(feature = "gostc")]
+    let user_routes = user_routes
         .route(
             "/extensions/gostc/config",
             patch(handlers::extensions::update_gostc_config),
-        )
+        );
+
+    #[cfg(feature = "easyfrp")]
+    let user_routes = user_routes
         .route(
             "/extensions/easyfrp/config",
             patch(handlers::extensions::update_easyfrp_config),
-        )
+        );
+
+    #[cfg(feature = "easytier")]
+    let user_routes = user_routes
         .route(
             "/extensions/easytier/config",
             patch(handlers::extensions::update_easytier_config),
-        )
+        );
+
+    #[cfg(feature = "frpc")]
+    let user_routes = user_routes
         .route(
             "/extensions/frpc/config",
             patch(handlers::extensions::update_frpc_config),
-        )
-        // Terminal (ttyd) reverse proxy - WebSocket and HTTP
-        .route("/terminal", get(handlers::terminal::terminal_index))
-        .route("/terminal/", get(handlers::terminal::terminal_index))
-        .route("/terminal/ws", get(handlers::terminal::terminal_ws))
-        .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
+        );
 
     let user_routes = user_routes.route(
         "/system/openwrt",
@@ -384,12 +428,17 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Main router
     let main_router = Router::new()
         .nest("/api", api_routes)
-        .merge(crate::mcp::router(state.mcp.clone(), state.config.clone()))
+
         .merge(static_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
-        .with_state(state);
+        .with_state(state.clone());
+    #[cfg(feature = "mcp")]
+    let main_router = main_router.merge(crate::mcp::router(state.mcp.clone(), state.config.clone()));
 
+    #[cfg(not(feature = "redfish"))]
+    return main_router;
+    #[cfg(feature = "redfish")]
     match redfish_router {
         Some(rf) => main_router.merge(rf),
         None => main_router,

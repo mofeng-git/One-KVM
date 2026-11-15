@@ -10,8 +10,9 @@ export interface WsEvent {
 type EventHandler = (data: any) => void
 
 let wsInstance: WebSocket | null = null
-let handlers = new Map<string, EventHandler[]>()
+const handlers = new Map<string, EventHandler[]>()
 let subscribedTopics: string[] = []
+let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 const connected = ref(false)
 const reconnectAttempts = ref(0)
 const networkError = ref(false)
@@ -42,17 +43,24 @@ function syncSubscriptions(force = false) {
 }
 
 function connect() {
-  if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+  if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
     syncSubscriptions()
     return
+  }
+
+  if (reconnectTimeout !== null) {
+    clearTimeout(reconnectTimeout)
+    reconnectTimeout = null
   }
 
   const url = buildWsUrl('/api/ws')
 
   try {
-    wsInstance = new WebSocket(url)
+    const socket = new WebSocket(url)
+    wsInstance = socket
 
-    wsInstance.onopen = () => {
+    socket.onopen = () => {
+      if (wsInstance !== socket) return
       connected.value = true
       networkError.value = false
       networkErrorMessage.value = null
@@ -61,7 +69,8 @@ function connect() {
       syncSubscriptions(true)
     }
 
-    wsInstance.onmessage = (e) => {
+    socket.onmessage = (e) => {
+      if (wsInstance !== socket) return
       try {
         const event: WsEvent = JSON.parse(e.data)
 
@@ -75,16 +84,19 @@ function connect() {
       }
     }
 
-    wsInstance.onclose = () => {
+    socket.onclose = () => {
+      if (wsInstance !== socket) return
+      wsInstance = null
       connected.value = false
       networkError.value = true
 
       // Auto-reconnect with infinite retry
       reconnectAttempts.value++
-      setTimeout(connect, WS_RECONNECT_DELAY)
+      reconnectTimeout = setTimeout(connect, WS_RECONNECT_DELAY)
     }
 
-    wsInstance.onerror = () => {
+    socket.onerror = () => {
+      if (wsInstance !== socket) return
       networkError.value = true
       networkErrorMessage.value = 'Network connection failed'
     }
@@ -94,10 +106,17 @@ function connect() {
 }
 
 function disconnect() {
-  if (wsInstance) {
-    wsInstance.close()
-    wsInstance = null
+  if (reconnectTimeout !== null) {
+    clearTimeout(reconnectTimeout)
+    reconnectTimeout = null
   }
+  const socket = wsInstance
+  wsInstance = null
+  socket?.close()
+  connected.value = false
+  networkError.value = false
+  networkErrorMessage.value = null
+  reconnectAttempts.value = 0
   subscribedTopics = []
 }
 

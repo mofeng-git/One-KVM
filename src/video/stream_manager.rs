@@ -90,6 +90,7 @@ impl Default for StreamManagerConfig {
 /// - **WebRtcStreamer**: High-level WebRTC manager with multi-codec support (new)
 /// - **H264SessionManager**: Legacy WebRTC manager (for backward compatibility)
 pub struct VideoStreamManager {
+    capture_keep_alive: super::capture_keep_alive::CaptureKeepAlive,
     /// Current streaming mode
     mode: RwLock<StreamMode>,
     /// MJPEG streamer (handles video capture and MJPEG distribution)
@@ -115,6 +116,7 @@ impl VideoStreamManager {
         webrtc_streamer: Arc<dyn VideoOutput>,
     ) -> Arc<Self> {
         Arc::new(Self {
+            capture_keep_alive: streamer.capture_policy(),
             mode: RwLock::new(StreamMode::Mjpeg),
             streamer,
             webrtc_streamer,
@@ -124,6 +126,21 @@ impl VideoStreamManager {
             switching: AtomicBool::new(false),
             transition_id: RwLock::new(None),
         })
+    }
+
+    /// The manager is the single writer of the shared capture policy.
+    pub fn set_keep_capture_alive(&self, enabled: bool) {
+        self.capture_keep_alive.set_enabled(enabled);
+    }
+
+    /// Start/restart persistent capture after initialization or a configuration change.
+    /// Device unavailability is recoverable and must not prevent saving configuration.
+    pub async fn resume_capture_if_requested(self: &Arc<Self>) {
+        if self.capture_keep_alive.is_enabled() {
+            if let Err(error) = self.start().await {
+                tracing::warn!("Persistent capture waiting for capture device: {}", error);
+            }
+        }
     }
 
     /// Check if mode switching is in progress
@@ -424,7 +441,7 @@ impl VideoStreamManager {
                 }
 
                 self.sync_webrtc_capture_source("for WebRTC mode").await;
-                if self.streamer.capture_keep_alive.is_enabled() {
+                if self.capture_keep_alive.is_enabled() {
                     self.webrtc_streamer
                         .ensure_video_pipeline_for_external()
                         .await?;
@@ -547,7 +564,7 @@ impl VideoStreamManager {
                 }
 
                 self.sync_webrtc_capture_source("before start").await;
-                if self.streamer.capture_keep_alive.is_enabled() {
+                if self.capture_keep_alive.is_enabled() {
                     self.webrtc_streamer
                         .ensure_video_pipeline_for_external()
                         .await?;

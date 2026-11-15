@@ -9,19 +9,13 @@ pub mod codec_constraints;
 pub mod device;
 pub mod format;
 pub mod frame;
-#[cfg(feature = "desktop")]
 pub mod pipeline;
 pub mod recovery;
 pub mod signal;
-#[cfg(feature = "desktop")]
 pub mod snapshot;
-#[cfg(feature = "desktop")]
 pub mod stream_manager;
-#[cfg(feature = "desktop")]
 pub mod streamer;
-#[cfg(feature = "desktop")]
 pub mod traits;
-#[cfg(feature = "desktop")]
 pub mod types;
 
 pub use capture::{CaptureMeta, CaptureStream};

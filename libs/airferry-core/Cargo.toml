@@ -7,7 +7,6 @@ description = "Built-in optical file reception for One-KVM"
 
 [features]
 default = []
-fixtures = ["transfer-engine/sender", "qr-protocol/generate"]
 
 [dependencies]
 anyhow = "1"
@@ -27,7 +26,6 @@ libc = "0.2"
 [build-dependencies]
 cmake = "0.1"
 pkg-config = "0.3"
-vcpkg = "0.2"
 
 [dev-dependencies]
 transfer-engine = { path = "vendor/transfer-engine", features = ["sender"] }
@@ -35,7 +33,6 @@ tokio = { version = "1", features = ["macros", "rt", "time"] }
 
 [patch.crates-io]
 raptorq = { path = "vendor/raptorq" }
-fast_qr = { git = "https://github.com/UR-SillyB/AirFerry", rev = "8a72ab86dee9d8f19b74bfec56c270101c5980ba" }
 
 [profile.release]
 opt-level = 3

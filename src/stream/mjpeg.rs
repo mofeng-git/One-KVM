@@ -1,5 +1,4 @@
 use arc_swap::ArcSwap;
-#[cfg(feature = "desktop")]
 use parking_lot::Mutex as ParkingMutex;
 use parking_lot::RwLock as ParkingRwLock;
 use std::collections::{HashMap, VecDeque};
@@ -7,24 +6,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
-#[cfg(feature = "desktop")]
 use tracing::debug;
 use tracing::{info, warn};
 
 /// Generation token paired with `client_id` so [`unregister_client`] ignores stale drops.
 pub type ClientGeneration = u64;
-
-#[cfg(feature = "desktop")]
 use crate::video::codec::traits::{Encoder, EncoderConfig};
-#[cfg(feature = "desktop")]
 use crate::video::codec::JpegEncoder;
-#[cfg(feature = "desktop")]
 use crate::video::format::PixelFormat;
 use crate::video::VideoFrame;
 
 pub type ClientId = String;
-
-#[cfg(feature = "desktop")]
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RawFrameFingerprint {
     resolution: crate::video::format::Resolution,
@@ -35,8 +27,6 @@ struct RawFrameFingerprint {
     hash: u64,
     quality: u32,
 }
-
-#[cfg(feature = "desktop")]
 struct JpegEncoderState {
     encoder: JpegEncoder,
     last_input: Option<RawFrameFingerprint>,
@@ -133,7 +123,6 @@ pub struct MjpegStreamHandler {
     last_frame_ts: ParkingRwLock<Option<Instant>>,
     dropped_same_frames: AtomicU64,
     max_drop_same_frames: AtomicU64,
-    #[cfg(feature = "desktop")]
     jpeg_encoder: ParkingMutex<Option<JpegEncoderState>>,
     jpeg_quality: AtomicU64,
 }
@@ -152,7 +141,6 @@ impl MjpegStreamHandler {
             sequence: AtomicU64::new(0),
             clients: ParkingRwLock::new(HashMap::new()),
             next_generation: AtomicU64::new(1),
-            #[cfg(feature = "desktop")]
             jpeg_encoder: ParkingMutex::new(None),
             auto_pause_config: ParkingRwLock::new(AutoPauseConfig::default()),
             last_frame_ts: ParkingRwLock::new(None),
@@ -184,18 +172,12 @@ impl MjpegStreamHandler {
         }
 
         let frame = if !frame.format.is_compressed() {
-            #[cfg(feature = "desktop")]
             match self.encode_to_jpeg(&frame) {
                 Ok(jpeg_frame) => jpeg_frame,
                 Err(e) => {
                     warn!("Failed to encode frame to JPEG: {}", e);
                     return;
                 }
-            }
-            #[cfg(not(feature = "desktop"))]
-            {
-                warn!("Dropping non-JPEG frame because this build has no JPEG encoder");
-                return;
             }
         } else {
             frame
@@ -232,8 +214,6 @@ impl MjpegStreamHandler {
 
         let _ = self.frame_notify.send(());
     }
-
-    #[cfg(feature = "desktop")]
     fn encode_to_jpeg(&self, frame: &VideoFrame) -> Result<VideoFrame, String> {
         let resolution = frame.resolution;
         let sequence = self.sequence.load(Ordering::Relaxed);
@@ -570,8 +550,6 @@ mod tests {
     use super::*;
     use crate::video::{format::Resolution, PixelFormat};
     use bytes::Bytes;
-
-    #[cfg(feature = "desktop")]
     fn raw_frame(resolution: Resolution, sequence: u64) -> VideoFrame {
         VideoFrame::new(
             Bytes::from(vec![
@@ -587,8 +565,6 @@ mod tests {
             sequence,
         )
     }
-
-    #[cfg(feature = "desktop")]
     #[test]
     fn raw_cache_reuses_bytes_but_invalidates_on_input_and_quality_changes() {
         let handler = Arc::new(MjpegStreamHandler::with_drop_limit(0));
@@ -632,8 +608,6 @@ mod tests {
             changed_pixels.data().as_ptr()
         );
     }
-
-    #[cfg(feature = "desktop")]
     #[test]
     fn raw_duplicates_skip_publication_but_forced_refresh_reuses_jpeg() {
         let handler = Arc::new(MjpegStreamHandler::new());

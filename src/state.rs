@@ -14,6 +14,7 @@ use crate::events::{
 };
 use crate::extensions::{ExtensionId, ExtensionManager};
 use crate::hid::HidController;
+#[cfg(feature = "mcp")]
 use crate::mcp::{McpHardware, McpService};
 #[cfg(unix)]
 use crate::msd::MsdController;
@@ -65,6 +66,7 @@ pub struct AppState {
     pub db: DatabasePool,
     pub config: ConfigStore,
     pub sessions: SessionStore,
+    pub redfish_sessions: SessionStore,
     pub users: UserStore,
     pub two_factor: TwoFactorService,
     #[cfg(unix)]
@@ -72,6 +74,7 @@ pub struct AppState {
     pub stream_manager: Arc<VideoStreamManager>,
     pub webrtc: Arc<WebRtcStreamer>,
     pub hid: Arc<HidController>,
+    #[cfg(feature = "mcp")]
     pub mcp: Arc<McpService>,
     #[cfg(unix)]
     pub msd: Arc<RwLock<Option<MsdController>>>,
@@ -82,6 +85,7 @@ pub struct AppState {
     pub usb: Arc<UsbCoordinator>,
     pub remote_access: Arc<RemoteAccessCoordinator>,
     pub extensions: Arc<ExtensionManager>,
+    #[cfg(feature = "airferry")]
     pub airferry: Arc<crate::airferry::AirferryManager>,
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
@@ -139,8 +143,10 @@ impl AppState {
         );
 
         let atx = Arc::new(RwLock::new(atx));
+        #[cfg(feature = "airferry")]
         let airferry = crate::airferry::AirferryManager::new(config.clone());
         let config_apply_locks = ConfigApplyLocks::new();
+        #[cfg(feature = "mcp")]
         let hardware = McpHardware {
             config: config.clone(),
             atx: atx.clone(),
@@ -150,13 +156,16 @@ impl AppState {
             #[cfg(unix)]
             otg_lock: config_apply_locks.otg.clone(),
         };
+        #[cfg(feature = "mcp")]
         let mcp = McpService::new(
             config.clone(),
             hid.clone(),
             stream_manager.clone(),
             hardware,
         );
+        let redfish_sessions = SessionStore::new(config.get().auth.session_timeout_secs as i64);
         Arc::new(Self {
+            redfish_sessions,
             db,
             config,
             sessions,
@@ -167,6 +176,7 @@ impl AppState {
             stream_manager,
             webrtc,
             hid,
+            #[cfg(feature = "mcp")]
             mcp,
             #[cfg(unix)]
             msd,
@@ -175,6 +185,7 @@ impl AppState {
             usb,
             remote_access,
             extensions,
+            #[cfg(feature = "airferry")]
             airferry,
             events,
             device_info_tx,

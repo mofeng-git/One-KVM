@@ -4,6 +4,12 @@ import '@/styles/settings.css'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import SidebarMenuButton from '@/components/SettingsSidebarButton.vue'
 import AboutSystemCards from '@/components/AboutSystemCards.vue'
+import UpdateSettingsCard from '@/components/UpdateSettingsCard.vue'
+import AccountSettings from '@/components/AccountSettings.vue'
+import WatchdogControl from '@/components/WatchdogControl.vue'
+import UsbDevicesCard from '@/components/UsbDevicesCard.vue'
+import DeviceDiagnosticsSettings from '@/components/DeviceDiagnosticsSettings.vue'
+import VideoSettings from '@/components/VideoSettings.vue'
 import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
@@ -13,31 +19,18 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { ApiError } from '@/api/request'
 import { useSystemStore } from '@/stores/system'
 import { useConfigStore } from '@/stores/config'
-import { useAuthStore } from '@/stores/auth'
 import {
-  authApi,
   configApi,
   otgNetworkApi,
   uacApi,
   hidApi,
-  streamApi,
   atxConfigApi,
   extensionsApi,
   redfishConfigApi,
   systemApi,
-  updateApi,
-  usbApi,
-  watchdogConfigApi,
-  type EncoderBackendInfo,
-  type AuthConfig,
   type WebConfig,
-  type UpdateOverviewResponse,
-  type UpdateStatusResponse,
-  type UpdateChannel,
-  type VideoEncoderSelfCheckResponse,
   type DeviceList,
 } from '@/api'
 import type {
@@ -53,24 +46,17 @@ import type {
   Ch9329DescriptorState,
   NetworkInterfaceInfo,
   OtgNetworkStatus,
-  WatchdogConfigResponse,
 } from '@/types/generated'
 import { EasytierConfigMode, FrpProxyType, FrpcConfigMode } from '@/types/generated'
-import { toConfigFps } from '@/lib/fps'
 import { useClipboard } from '@/composables/useClipboard'
 import { useRemoteAccessSettings } from '@/composables/settings/useRemoteAccessSettings'
 import { formatHostForUrl } from '@/lib/url'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
 import { useConsoleLayout, type ConsoleLayout } from '@/composables/useConsoleLayout'
-import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
-import { getVideoFormatState } from '@/lib/video-format-support'
-import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
-import TotpSettingsCard from '@/components/TotpSettingsCard.vue'
-import VideoInputFields from '@/components/VideoInputFields.vue'
 import ExtensionConfigModeEditor from '@/components/ExtensionConfigModeEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
@@ -78,7 +64,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -86,17 +71,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Sidebar,
@@ -119,16 +94,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import {
   ArrowLeft,
   Monitor,
@@ -170,7 +135,6 @@ const route = useRoute()
 const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
-const authStore = useAuthStore()
 const featureVisibility = useFeatureVisibility()
 const { theme, setTheme } = useTheme()
 const { consoleLayout, setConsoleLayout } = useConsoleLayout()
@@ -187,8 +151,6 @@ const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 const isWindows = computed(() => systemStore.platform?.mode === 'windows')
 const otgSupported = computed(() => systemStore.platform?.otg.available === true)
 const msdSupported = computed(() => systemStore.platform?.msd.available === true)
-const usbResetSupported = computed(() => systemStore.platform?.mode === 'linux')
-const onlineUpgradeSupported = computed(() => systemStore.platform?.mode === 'linux')
 
 const activeSection = ref<SettingsSectionId>('appearance')
 const loading = ref(false)
@@ -210,6 +172,8 @@ const SETTINGS_SECTION_IDS = [
 ] as const
 type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number]
 const SETTINGS_SECTION_ID_SET = new Set<string>(SETTINGS_SECTION_IDS)
+
+function hasFeature(name: string) { return systemStore.platform?.compiled_features?.includes(name) === true }
 
 const navGroups = computed(() => [
   {
@@ -247,7 +211,12 @@ const navGroups = computed(() => [
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
     ],
   },
-])
+].map(group => ({ ...group, items: group.items.filter(item => {
+  if (item.id === 'mcp') return hasFeature('mcp')
+  if (item.id === 'ext-ttyd') return hasFeature('terminal')
+  if (item.id === 'ext-remote-access') return ['gostc', 'easyfrp', 'easytier', 'frpc'].some(hasFeature)
+  return true
+}) })).filter(group => group.items.length > 0))
 
 const sectionMeta = computed(() => {
   const fallback = { icon: Info, title: t('settings.title'), description: '' }
@@ -313,24 +282,21 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'appearance':
       return
     case 'account':
-      await loadAuthConfig()
       return
     case 'network':
       await loadWebServerConfig()
       return
     case 'video':
-      await Promise.all([loadConfig(), loadDeviceConfig(), loadBackends()])
       return
     case 'hid':
-      await Promise.all([loadConfig(), loadHidDeviceOptions()])
+      await Promise.all([loadHidConfig(), loadHidDeviceOptions()])
       return
     case 'atx':
-      await Promise.all([loadConfig(), loadAtxConfig(), loadAtxDevices()])
+      await Promise.all([loadHidConfig(), loadAtxConfig(), loadAtxDevices()])
       return
     case 'environment':
       return
     case 'other':
-      await Promise.all([loadWatchdogConfig(), fetchUsbDevices()])
       return
     case 'ext-ttyd':
     case 'ext-remote-access':
@@ -339,109 +305,19 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'third-party-access':
       await Promise.all([
         loadWebServerConfig(),
-        loadRedfishConfig(),
-        loadRustdeskConfig(),
-        loadRustdeskPassword(),
-        loadRtspConfig(),
-        loadVncConfig(),
+        hasFeature('redfish') ? loadRedfishConfig() : Promise.resolve(),
+        systemStore.platform?.rustdesk.available ? loadRustdeskConfig() : Promise.resolve(),
+        systemStore.platform?.rustdesk.available ? loadRustdeskPassword() : Promise.resolve(),
+        hasFeature('rtsp') ? loadRtspConfig() : Promise.resolve(),
+        hasFeature('vnc') ? loadVncConfig() : Promise.resolve(),
       ])
       return
     case 'about':
-      await Promise.all([loadUpdateOverview(), refreshUpdateStatus()])
       return
   }
 }
 
-const usernameInput = ref('')
-const usernamePassword = ref('')
-const usernameSaving = ref(false)
-const usernameSaved = ref(false)
-const usernameError = ref('')
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const passwordSaving = ref(false)
-const passwordSaved = ref(false)
-const passwordError = ref('')
 const showPasswords = ref(false)
-const authConfig = ref<AuthConfig>({
-  session_timeout_secs: 3600 * 24,
-  single_user_allow_multiple_sessions: false,
-})
-const authConfigLoading = ref(false)
-
-const watchdogStatus = ref<WatchdogConfigResponse | null>(null)
-const watchdogLoading = ref(false)
-const watchdogError = ref('')
-
-const watchdogStatusKey = computed(() => {
-  const status = watchdogStatus.value
-  if (!status) return 'closed'
-  if (!status.supported) return status.enabled ? 'error' : 'unsupported'
-  if (status.running) return 'running'
-  if (status.enabled) return 'error'
-  return 'closed'
-})
-
-const watchdogDisplayReason = computed(() => {
-  const reason = watchdogStatus.value?.reason
-  if (!reason) return ''
-  if (reason.includes('No hardware watchdog device found'))
-    return t('settings.watchdog.unsupportedReason')
-  if (reason.includes('discover')) return t('settings.watchdog.discoveryFailed')
-  if (reason.includes('open a hardware watchdog')) return t('settings.watchdog.openFailed')
-  if (reason.includes('keepalive')) return t('settings.watchdog.feedFailed')
-  if (reason.includes('safely disabled') || reason.includes('nowayout'))
-    return t('settings.watchdog.disableFailed')
-  return t('settings.watchdog.abnormalReason')
-})
-
-function watchdogRequestError(error: unknown, action: 'enable' | 'disable'): string {
-  const message = error instanceof Error ? error.message : ''
-  if (message.includes('No hardware watchdog device found'))
-    return t('settings.watchdog.unsupportedReason')
-  if (message.includes('cannot be safely disabled') || message.includes('nowayout')) {
-    return t('settings.watchdog.disableFailed')
-  }
-  return t(
-    action === 'enable' ? 'settings.watchdog.enableFailed' : 'settings.watchdog.toggleFailed',
-  )
-}
-
-const watchdogDraft = ref(false)
-
-async function loadWatchdogConfig() {
-  watchdogLoading.value = true
-  watchdogError.value = ''
-  try {
-    watchdogStatus.value = await watchdogConfigApi.get()
-    watchdogDraft.value = watchdogStatus.value.enabled
-  } catch (error) {
-    watchdogError.value = error instanceof Error ? error.message : t('settings.watchdog.loadFailed')
-  } finally {
-    watchdogLoading.value = false
-  }
-}
-
-async function updateWatchdog(enabled: boolean) {
-  if (!watchdogStatus.value || watchdogLoading.value) return
-  watchdogLoading.value = true
-  watchdogError.value = ''
-  try {
-    watchdogStatus.value = await watchdogConfigApi.update({ enabled })
-    watchdogDraft.value = watchdogStatus.value.enabled
-  } catch (error) {
-    watchdogError.value = watchdogRequestError(error, enabled ? 'enable' : 'disable')
-    try {
-      watchdogStatus.value = await watchdogConfigApi.get()
-    } catch {
-      // Preserve the last confirmed state when status refresh also fails.
-    }
-  } finally {
-    watchdogLoading.value = false
-  }
-}
-
 const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
 const extensionLogs = ref<Record<string, string[]>>({
@@ -629,24 +505,6 @@ const autoRestartFailed = ref(false)
 // For HTTPS targets: can't poll (self-signed cert), show manual link instead
 const autoRestartManualUrl = ref<string | null>(null)
 const autoRestartCountdown = ref(0)
-const updateChannel = ref<UpdateChannel>('stable')
-const updateOverview = ref<UpdateOverviewResponse | null>(null)
-const updateStatus = ref<UpdateStatusResponse | null>(null)
-const updateLoading = ref(false)
-const updateSawRestarting = ref(false)
-const updateSawRequestFailure = ref(false)
-const updateAutoReloadTriggered = ref(false)
-const updateRunning = computed(() => {
-  const phase = updateStatus.value?.phase
-  return (
-    phase === 'checking' ||
-    phase === 'downloading' ||
-    phase === 'verifying' ||
-    phase === 'installing' ||
-    phase === 'restarting'
-  )
-})
-let updateStatusTimer: number | null = null
 type BindMode = 'all' | 'loopback' | 'custom'
 const bindMode = ref<BindMode>('all')
 const bindAllIpv6 = ref(false)
@@ -698,19 +556,13 @@ function openPreviewUrl() {
   window.open(previewAccessUrl.value, '_blank', 'noopener,noreferrer')
 }
 
-const devices = ref<Pick<DeviceList, 'video' | 'serial' | 'audio' | 'udc'>>({
-  video: [],
+const devices = ref<Pick<DeviceList, 'serial' | 'audio' | 'udc'>>({
   serial: [],
   audio: [],
   udc: [],
 })
 
 const config = ref({
-  video_device: '',
-  video_format: '',
-  video_width: 1920,
-  video_height: 1080,
-  video_fps: 30,
   hid_backend: 'ch9329',
   hid_serial_device: '',
   hid_serial_baudrate: 9600,
@@ -730,12 +582,6 @@ const config = ref({
   otg_network_enabled: false,
   otg_network_driver: 'ncm' as 'ncm' | 'ecm' | 'rndis',
   otg_network_interface: '',
-  encoder_backend: 'auto',
-  keep_capture_alive: false,
-  stun_server: '',
-  turn_server: '',
-  turn_username: '',
-  turn_password: '',
   uac_enabled: false,
 })
 
@@ -752,320 +598,6 @@ function syncOtgNetworkInterface() {
   if (!selectedInterfaceExists) {
     config.value.otg_network_interface = firstInterface
   }
-}
-
-type OtgSelfCheckLevel = 'info' | 'warn' | 'error'
-type OtgCheckGroupStatus = 'ok' | 'warn' | 'error' | 'skipped'
-
-interface OtgSelfCheckItem {
-  id: string
-  ok: boolean
-  level: OtgSelfCheckLevel
-  message: string
-  hint?: string
-  path?: string
-}
-
-interface OtgSelfCheckResult {
-  overall_ok: boolean
-  error_count: number
-  warning_count: number
-  hid_backend: string
-  selected_udc: string | null
-  bound_udc: string | null
-  udc_state: string | null
-  udc_speed: string | null
-  available_udcs: string[]
-  other_gadgets: string[]
-  checks: OtgSelfCheckItem[]
-}
-
-interface OtgCheckGroupDef {
-  id: string
-  titleKey: string
-  checkIds: string[]
-}
-
-interface OtgCheckGroup {
-  id: string
-  titleKey: string
-  status: OtgCheckGroupStatus
-  okCount: number
-  warningCount: number
-  errorCount: number
-  items: OtgSelfCheckItem[]
-}
-
-const otgSelfCheckLoading = ref(false)
-const otgSelfCheckResult = ref<OtgSelfCheckResult | null>(null)
-const otgSelfCheckError = ref('')
-const otgRunButtonPressed = ref(false)
-
-const otgCheckGroupDefs: OtgCheckGroupDef[] = [
-  {
-    id: 'udc',
-    titleKey: 'settings.otgSelfCheck.groups.udc',
-    checkIds: ['udc_dir_exists', 'udc_has_entries', 'configured_udc_valid'],
-  },
-  {
-    id: 'gadget_config',
-    titleKey: 'settings.otgSelfCheck.groups.gadgetConfig',
-    checkIds: ['configfs_mounted', 'usb_gadget_dir_exists', 'libcomposite_loaded'],
-  },
-  {
-    id: 'one_kvm',
-    titleKey: 'settings.otgSelfCheck.groups.oneKvm',
-    checkIds: ['one_kvm_gadget_exists', 'one_kvm_bound_udc', 'other_gadgets', 'udc_conflict'],
-  },
-  {
-    id: 'functions',
-    titleKey: 'settings.otgSelfCheck.groups.functions',
-    checkIds: [
-      'hid_functions_present',
-      'config_c1_exists',
-      'function_links_ok',
-      'hid_device_nodes',
-    ],
-  },
-  {
-    id: 'link',
-    titleKey: 'settings.otgSelfCheck.groups.link',
-    checkIds: ['udc_state', 'udc_speed'],
-  },
-]
-
-const otgCheckGroups = computed<OtgCheckGroup[]>(() => {
-  const items = otgSelfCheckResult.value?.checks || []
-  return otgCheckGroupDefs.map((group) => {
-    const groupItems = items.filter((item) => group.checkIds.includes(item.id))
-    const errorCount = groupItems.filter((item) => item.level === 'error').length
-    const warningCount = groupItems.filter((item) => item.level === 'warn').length
-    const okCount = Math.max(0, groupItems.length - errorCount - warningCount)
-    let status: OtgCheckGroupStatus = 'skipped'
-    if (groupItems.length > 0) {
-      if (errorCount > 0) status = 'error'
-      else if (warningCount > 0) status = 'warn'
-      else status = 'ok'
-    }
-
-    return {
-      id: group.id,
-      titleKey: group.titleKey,
-      status,
-      okCount,
-      warningCount,
-      errorCount,
-      items: groupItems,
-    }
-  })
-})
-
-function otgCheckLevelClass(level: OtgSelfCheckLevel): string {
-  if (level === 'error') return 'bg-destructive'
-  if (level === 'warn') return 'bg-warning'
-  return 'bg-info'
-}
-
-function otgCheckStatusText(level: OtgSelfCheckLevel): string {
-  if (level === 'error') return t('common.error')
-  if (level === 'warn') return t('common.warning')
-  return t('common.info')
-}
-
-function otgGroupStatusClass(status: OtgCheckGroupStatus): string {
-  if (status === 'error') return 'bg-destructive'
-  if (status === 'warn') return 'bg-warning'
-  if (status === 'ok') return 'bg-status-active'
-  return 'bg-muted-foreground/40'
-}
-
-function otgGroupStatusText(status: OtgCheckGroupStatus): string {
-  return t(`settings.otgSelfCheck.status.${status}`)
-}
-
-function otgGroupSummary(group: OtgCheckGroup): string {
-  if (group.items.length === 0) {
-    return t('settings.otgSelfCheck.notRun')
-  }
-  return t('settings.otgSelfCheck.groupCounts', {
-    ok: group.okCount,
-    warnings: group.warningCount,
-    errors: group.errorCount,
-  })
-}
-
-function otgCheckMessage(item: OtgSelfCheckItem): string {
-  const key = `settings.otgSelfCheck.messages.${item.id}`
-  const label = te(key) ? t(key) : item.message
-  const result = otgSelfCheckResult.value
-  if (!result) return label
-
-  const value = (name: string) => t(`settings.otgSelfCheck.values.${name}`)
-
-  switch (item.id) {
-    case 'udc_has_entries':
-      return `${label}：${result.available_udcs.length ? result.available_udcs.join(', ') : value('missing')}`
-    case 'configured_udc_valid':
-      if (!result.selected_udc) return `${label}：${value('notConfigured')}`
-      return `${label}：${item.ok ? result.selected_udc : `${value('missing')}/${result.selected_udc}`}`
-    case 'configfs_mounted':
-      return `${label}：${item.ok ? value('mounted') : value('unmounted')}`
-    case 'usb_gadget_dir_exists':
-      return `${label}：${item.ok ? value('available') : value('unavailable')}`
-    case 'libcomposite_loaded':
-      return `${label}：${item.ok ? value('available') : value('unavailable')}`
-    case 'one_kvm_gadget_exists':
-      return `${label}：${item.ok ? value('exists') : value('missing')}`
-    case 'other_gadgets':
-      return `${label}：${result.other_gadgets.length ? result.other_gadgets.join(', ') : value('none')}`
-    case 'one_kvm_bound_udc':
-      return `${label}：${result.bound_udc || value('unbound')}`
-    case 'udc_conflict':
-      return `${label}：${item.ok ? value('noConflict') : value('conflict')}`
-    case 'udc_state':
-      return `${label}：${result.udc_state || value('unknown')}`
-    case 'udc_speed':
-      return `${label}：${result.udc_speed || value('unknown')}`
-    default:
-      return `${label}：${item.ok ? value('normal') : value('abnormal')}`
-  }
-}
-
-function otgCheckHint(item: OtgSelfCheckItem): string {
-  if (!item.hint) return ''
-  const key = `settings.otgSelfCheck.hints.${item.id}`
-  return te(key) ? t(key) : item.hint
-}
-
-async function runOtgSelfCheck() {
-  if (!otgSupported.value) return
-  otgSelfCheckLoading.value = true
-  otgSelfCheckError.value = ''
-  try {
-    otgSelfCheckResult.value = await hidApi.otgSelfCheck()
-  } catch {
-    otgSelfCheckError.value = t('settings.otgSelfCheck.failed')
-  } finally {
-    otgSelfCheckLoading.value = false
-  }
-}
-
-async function onRunOtgSelfCheckClick() {
-  if (!otgSelfCheckLoading.value) {
-    otgRunButtonPressed.value = true
-    window.setTimeout(() => {
-      otgRunButtonPressed.value = false
-    }, 160)
-  }
-  await runOtgSelfCheck()
-}
-
-type VideoEncoderSelfCheckCell = VideoEncoderSelfCheckResponse['rows'][number]['cells'][number]
-type VideoEncoderSelfCheckRow = VideoEncoderSelfCheckResponse['rows'][number]
-
-const videoEncoderSelfCheckLoading = ref(false)
-const videoEncoderSelfCheckResult = ref<VideoEncoderSelfCheckResponse | null>(null)
-const videoEncoderSelfCheckError = ref('')
-const videoEncoderRunButtonPressed = ref(false)
-
-function videoEncoderCell(
-  row: VideoEncoderSelfCheckRow,
-  codecId: string,
-): VideoEncoderSelfCheckCell | undefined {
-  return row.cells.find((cell) => cell.codec_id === codecId)
-}
-
-const currentHardwareEncoderText = computed(() =>
-  videoEncoderSelfCheckResult.value?.current_hardware_encoder === 'None'
-    ? t('settings.encoderSelfCheck.none')
-    : videoEncoderSelfCheckResult.value?.current_hardware_encoder ||
-      t('settings.encoderSelfCheck.none'),
-)
-
-function videoEncoderCodecLabel(codecId: string, codecName: string): string {
-  return codecId === 'h265' ? 'H.265' : codecName
-}
-
-function videoEncoderCellClass(ok: boolean | undefined): string {
-  return ok ? 'text-success' : 'text-destructive'
-}
-
-function videoEncoderCellSymbol(ok: boolean | undefined): string {
-  return ok ? '✓' : '✗'
-}
-
-function videoEncoderCellTime(cell: VideoEncoderSelfCheckCell | undefined): string {
-  if (!cell || typeof cell.elapsed_ms !== 'number') return '-'
-  return `${cell.elapsed_ms}ms`
-}
-
-async function runVideoEncoderSelfCheck() {
-  videoEncoderSelfCheckLoading.value = true
-  videoEncoderSelfCheckError.value = ''
-  try {
-    videoEncoderSelfCheckResult.value = await streamApi.encoderSelfCheck()
-  } catch {
-    videoEncoderSelfCheckError.value = t('settings.encoderSelfCheck.failed')
-  } finally {
-    videoEncoderSelfCheckLoading.value = false
-  }
-}
-
-async function onRunVideoEncoderSelfCheckClick() {
-  if (!videoEncoderSelfCheckLoading.value) {
-    videoEncoderRunButtonPressed.value = true
-    window.setTimeout(() => {
-      videoEncoderRunButtonPressed.value = false
-    }, 160)
-  }
-  await runVideoEncoderSelfCheck()
-}
-
-const usbDevices = ref<import('@/api').UsbDeviceInfo[]>([])
-const usbDevicesLoading = ref(false)
-const usbDevicesError = ref('')
-const usbResetTarget = ref<import('@/api').UsbDeviceInfo | null>(null)
-const usbResetLoading = ref(false)
-
-async function fetchUsbDevices() {
-  if (!usbResetSupported.value) {
-    usbDevices.value = []
-    return
-  }
-  usbDevicesLoading.value = true
-  usbDevicesError.value = ''
-  try {
-    usbDevices.value = await usbApi.listDevices()
-  } catch {
-    usbDevicesError.value = t('settings.usbDevices.loadFailed')
-  } finally {
-    usbDevicesLoading.value = false
-  }
-}
-
-async function confirmUsbReset() {
-  if (!usbResetSupported.value || !usbResetTarget.value) return
-  usbResetLoading.value = true
-  try {
-    await usbApi.resetDevice(usbResetTarget.value.bus_num, usbResetTarget.value.dev_num)
-  } catch {
-  } finally {
-    usbResetLoading.value = false
-    usbResetTarget.value = null
-    setTimeout(() => fetchUsbDevices(), 1500)
-  }
-}
-
-function usbSpeedLabel(speed?: string): string {
-  if (!speed) return '-'
-  const map: Record<string, string> = {
-    '1.5': '1.5 Mbps',
-    '12': '12 Mbps',
-    '480': '480 Mbps',
-    '5000': '5 Gbps',
-    '10000': '10 Gbps',
-  }
-  return map[speed] || `${speed} Mbps`
 }
 
 const effectiveOtgFunctions = computed(() => ({ ...config.value.hid_otg_functions }))
@@ -1306,232 +838,6 @@ const atxDriverOptions = computed(() => {
     : options
 })
 
-const availableBackends = ref<EncoderBackendInfo[]>([])
-
-const selectedBackendFormats = computed(() => {
-  if (config.value.encoder_backend === 'auto') return []
-  const backend = availableBackends.value.find((b) => b.id === config.value.encoder_backend)
-  return backend?.supported_formats || []
-})
-
-const videoDeviceSelection = computed({
-  get: () => config.value.video_device,
-  set: (value) => {
-    config.value.video_device = value
-  },
-})
-const videoFormatSelection = computed({
-  get: () => config.value.video_format,
-  set: (value) => {
-    config.value.video_format = value
-  },
-})
-const videoResolutionSelection = computed({
-  get: () => `${config.value.video_width}x${config.value.video_height}`,
-  set: (value) => {
-    const [width, height] = value.split('x').map(Number)
-    if (width && height) {
-      config.value.video_width = width
-      config.value.video_height = height
-    }
-  },
-})
-const videoFpsSelection = computed<number | null>({
-  get: () => config.value.video_fps,
-  set: (value) => {
-    if (value !== null) config.value.video_fps = value
-  },
-})
-
-const videoConfiguration = useVideoDeviceConfiguration({
-  devices: computed(() => devices.value.video),
-  selection: {
-    device: videoDeviceSelection,
-    format: videoFormatSelection,
-    resolution: videoResolutionSelection,
-    fps: videoFpsSelection,
-  },
-  active: computed(() => activeSection.value === 'video'),
-  listenForStreamEvents: true,
-  preferredFormat: (device) =>
-    device.formats.find(
-      (format) =>
-        getVideoFormatState(format.format, 'config', config.value.encoder_backend) !==
-        'unsupported',
-    )?.format,
-})
-const {
-  selectedDevice,
-  isSourceFollowing,
-  availableFormats,
-  availableResolutions,
-  availableFps,
-  refreshInputStatus,
-  refreshingInputStatus,
-} = videoConfiguration
-
-const availableFormatOptions = computed(() => {
-  return availableFormats.value.map((format) => {
-    const state = getVideoFormatState(format.format, 'config', config.value.encoder_backend)
-    return {
-      ...format,
-      state,
-      disabled: state === 'unsupported',
-    }
-  })
-})
-
-const selectableFormats = computed(() => {
-  return availableFormatOptions.value.filter((format) => !format.disabled)
-})
-
-watch(
-  selectableFormats,
-  () => {
-    if (selectableFormats.value.length === 0) {
-      config.value.video_format = ''
-      return
-    }
-
-    const isValid = selectableFormats.value.some((f) => f.format === config.value.video_format)
-    if (!isValid) {
-      config.value.video_format = selectableFormats.value[0]?.format || ''
-    }
-  },
-  { deep: true },
-)
-
-watch(
-  () => authStore.user,
-  (value) => {
-    if (value) {
-      usernameInput.value = value
-    }
-  },
-)
-
-async function changeUsername() {
-  usernameError.value = ''
-  usernameSaved.value = false
-
-  if (usernameInput.value.length < 2) {
-    usernameError.value = t('auth.enterUsername')
-    return
-  }
-  if (!usernamePassword.value) {
-    usernameError.value = t('auth.enterPassword')
-    return
-  }
-
-  usernameSaving.value = true
-  try {
-    await authApi.changeUsername(usernameInput.value, usernamePassword.value)
-    usernameSaved.value = true
-    usernamePassword.value = ''
-    await authStore.checkAuth()
-    usernameInput.value = authStore.user || usernameInput.value
-    setTimeout(() => {
-      usernameSaved.value = false
-    }, 2000)
-  } catch (e) {
-    usernameError.value = t('auth.invalidPassword')
-  } finally {
-    usernameSaving.value = false
-  }
-}
-
-async function changePassword() {
-  passwordError.value = ''
-  passwordSaved.value = false
-
-  if (!currentPassword.value) {
-    passwordError.value = t('auth.enterPassword')
-    return
-  }
-  if (newPassword.value.length < 4) {
-    passwordError.value = t('setup.passwordHint')
-    return
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = t('setup.passwordMismatch')
-    return
-  }
-
-  passwordSaving.value = true
-  try {
-    await authApi.changePassword(currentPassword.value, newPassword.value)
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
-    passwordSaved.value = true
-    setTimeout(() => {
-      passwordSaved.value = false
-    }, 2000)
-  } catch (e) {
-    passwordError.value = t('auth.invalidPassword')
-  } finally {
-    passwordSaving.value = false
-  }
-}
-
-const videoSaving = ref<'capture' | 'encoder' | 'connection' | null>(null)
-const captureKeepAliveSaving = ref(false)
-const captureKeepAliveLoaded = ref(false)
-const captureKeepAliveConfirmed = ref(false)
-
-async function updateCaptureKeepAlive(enabled: boolean) {
-  if (captureKeepAliveSaving.value || !captureKeepAliveLoaded.value) return
-  config.value.keep_capture_alive = enabled
-  captureKeepAliveSaving.value = true
-  try {
-    const response = await configStore.updateStream({ keep_capture_alive: enabled })
-    captureKeepAliveConfirmed.value = response.keep_capture_alive
-    config.value.keep_capture_alive = response.keep_capture_alive
-  } catch (error) {
-    config.value.keep_capture_alive = captureKeepAliveConfirmed.value
-    toast.error(t('settingsUi.saveFailed'), {
-      description: error instanceof Error ? error.message : undefined,
-    })
-  } finally {
-    captureKeepAliveSaving.value = false
-  }
-}
-async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
-  if (videoSaving.value) return
-  videoSaving.value = card
-  try {
-    if (card === 'capture') {
-      await configStore.updateVideo(
-        isSourceFollowing.value
-          ? { device: config.value.video_device || undefined }
-          : {
-              device: config.value.video_device || undefined,
-              format: config.value.video_format || undefined,
-              width: config.value.video_width,
-              height: config.value.video_height,
-              fps: toConfigFps(config.value.video_fps),
-            },
-      )
-    } else if (card === 'encoder') {
-      await configStore.updateStream({ encoder: config.value.encoder_backend as any })
-    } else {
-      await configStore.updateStream({
-        stun_server: config.value.stun_server.trim(),
-        turn_server: config.value.turn_server.trim(),
-        turn_username: config.value.turn_username.trim(),
-        turn_password: config.value.turn_password.trim(),
-      })
-    }
-    toast.success(t('settingsUi.saveDone'))
-  } catch (error) {
-    toast.error(t('settingsUi.saveFailed'), {
-      description: error instanceof Error ? error.message : undefined,
-    })
-  } finally {
-    videoSaving.value = null
-  }
-}
-
 const hidSaveScope = ref<'features' | 'identity'>('features')
 async function saveHidSettings(scope: 'features' | 'identity' = 'features') {
   if (loading.value) return
@@ -1651,11 +957,9 @@ const hidFeaturesDirty = computed(
       (!!otgIdentityBaseline.value && otgIdentityBaseline.value !== otgIdentitySnapshot())),
 )
 
-async function loadConfig() {
+async function loadHidConfig() {
   try {
-    const [video, stream, hid, msd, otgNetwork, uac] = await Promise.all([
-      configStore.refreshVideo(),
-      configStore.refreshStream(),
+    const [hid, msd, otgNetwork, uac] = await Promise.all([
       configStore.refreshHid(),
       msdSupported.value ? configStore.refreshMsd() : Promise.resolve(null),
       otgSupported.value
@@ -1673,11 +977,6 @@ async function loadConfig() {
     ])
 
     config.value = {
-      video_device: video.device || '',
-      video_format: video.format || '',
-      video_width: video.width || 1920,
-      video_height: video.height || 1080,
-      video_fps: video.fps || 30,
       hid_backend: hid.backend || 'none',
       hid_serial_device: hid.ch9329_port || '',
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
@@ -1698,15 +997,7 @@ async function loadConfig() {
       otg_network_driver: otgNetwork?.driver_mode ?? 'ncm',
       uac_enabled: uac?.enabled ?? false,
       otg_network_interface: otgNetwork?.bridge_interface ?? '',
-      encoder_backend: stream.encoder || 'auto',
-      keep_capture_alive: stream.keep_capture_alive ?? false,
-      stun_server: stream.stun_server || '',
-      turn_server: stream.turn_server || '',
-      turn_username: stream.turn_username || '',
-      turn_password: stream.turn_password || '',
     }
-    captureKeepAliveConfirmed.value = stream.keep_capture_alive ?? false
-    captureKeepAliveLoaded.value = true
     if (otgNetworkInterfacesLoaded.value) {
       syncOtgNetworkInterface()
     }
@@ -1763,35 +1054,6 @@ async function loadOtgNetworkInterfaces() {
 
 async function loadHidDeviceOptions() {
   await Promise.all([loadDeviceConfig(), loadOtgNetworkInterfaces()])
-}
-
-async function loadBackends() {
-  try {
-    const result = await streamApi.getCodecs()
-    availableBackends.value = result.backends || []
-  } catch {}
-}
-
-async function loadAuthConfig() {
-  authConfigLoading.value = true
-  try {
-    authConfig.value = await configStore.refreshAuth()
-  } catch {
-  } finally {
-    authConfigLoading.value = false
-  }
-}
-
-async function saveAuthConfig() {
-  authConfigLoading.value = true
-  try {
-    authConfig.value = await configStore.updateAuth({
-      single_user_allow_multiple_sessions: authConfig.value.single_user_allow_multiple_sessions,
-    })
-  } catch {
-  } finally {
-    authConfigLoading.value = false
-  }
 }
 
 async function loadExtensions(only?: ExtensionConfigId) {
@@ -2354,122 +1616,6 @@ async function triggerAutoRestart() {
   }
 }
 
-async function loadUpdateOverview() {
-  updateLoading.value = true
-  try {
-    updateOverview.value = await updateApi.overview(updateChannel.value)
-  } catch (e) {
-    const message = e instanceof Error ? e.message : t('settings.updateOverviewLoadFailed')
-    toast.error(t('settings.updateOverviewLoadFailed'), {
-      description: message,
-      duration: 4000,
-    })
-  } finally {
-    updateLoading.value = false
-  }
-}
-
-async function refreshUpdateStatus() {
-  try {
-    updateStatus.value = await updateApi.status()
-
-    if (updateSawRestarting.value && !updateAutoReloadTriggered.value) {
-      if (updateSawRequestFailure.value || updateStatus.value.phase === 'idle') {
-        updateAutoReloadTriggered.value = true
-        router.replace('/login')
-      }
-    }
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
-      updateAutoReloadTriggered.value = true
-      authStore.isAuthenticated = false
-      authStore.user = null
-      stopUpdatePolling()
-      router.replace('/login')
-      return
-    }
-    if (updateSawRestarting.value) {
-      updateSawRequestFailure.value = true
-    }
-  }
-}
-
-function stopUpdatePolling() {
-  if (updateStatusTimer !== null) {
-    window.clearInterval(updateStatusTimer)
-    updateStatusTimer = null
-  }
-}
-
-function startUpdatePolling() {
-  if (updateStatusTimer !== null) return
-  updateStatusTimer = window.setInterval(async () => {
-    await refreshUpdateStatus()
-    if (updateStatus.value?.phase === 'restarting') {
-      updateSawRestarting.value = true
-    }
-    if (!updateRunning.value) {
-      stopUpdatePolling()
-      await loadUpdateOverview()
-    }
-  }, 1000)
-}
-
-async function startOnlineUpgrade() {
-  if (!onlineUpgradeSupported.value) return
-  try {
-    updateSawRestarting.value = false
-    updateSawRequestFailure.value = false
-    updateAutoReloadTriggered.value = false
-    await updateApi.upgrade({ channel: updateChannel.value })
-    await refreshUpdateStatus()
-    startUpdatePolling()
-  } catch {}
-}
-
-function updatePhaseText(phase?: string): string {
-  switch (phase) {
-    case 'idle':
-      return t('settings.updatePhaseIdle')
-    case 'checking':
-      return t('settings.updatePhaseChecking')
-    case 'downloading':
-      return t('settings.updatePhaseDownloading')
-    case 'verifying':
-      return t('settings.updatePhaseVerifying')
-    case 'installing':
-      return t('settings.updatePhaseInstalling')
-    case 'restarting':
-      return t('settings.updatePhaseRestarting')
-    case 'success':
-      return t('settings.updatePhaseSuccess')
-    case 'failed':
-      return t('settings.updatePhaseFailed')
-    default:
-      return t('common.unknown')
-  }
-}
-
-function localizeUpdateMessage(message?: string): string | null {
-  if (!message) return null
-
-  if (message === 'Checking for updates') return t('settings.updateMsgChecking')
-  if (message.startsWith('Downloading binary')) {
-    return message.replace('Downloading binary', t('settings.updateMsgDownloading'))
-  }
-  if (message === 'Verifying sha256') return t('settings.updateMsgVerifying')
-  if (message === 'Replacing binary') return t('settings.updateMsgInstalling')
-  if (message === 'Restarting service') return t('settings.updateMsgRestarting')
-
-  return message
-}
-
-function updateStatusBadgeText(): string {
-  return (
-    localizeUpdateMessage(updateStatus.value?.message) || updatePhaseText(updateStatus.value?.phase)
-  )
-}
-
 onMounted(async () => {
   const initialSection = normalizeSettingsSection(route.query.tab)
   if (initialSection) {
@@ -2478,25 +1624,13 @@ onMounted(async () => {
 
   await systemStore.fetchSystemInfo()
   ensureVisibleSection()
-  usernameInput.value = authStore.user || ''
   await loadSectionData(activeSection.value)
 
-  if (updateRunning.value) {
-    startUpdatePolling()
-  }
-})
-
-watch(updateChannel, async () => {
-  if (activeSection.value === 'about') {
-    await loadUpdateOverview()
-  }
 })
 
 watch(
   () => config.value.hid_backend,
   () => {
-    otgSelfCheckResult.value = null
-    otgSelfCheckError.value = ''
     if (usesCh9329(config.value.hid_backend)) {
       void loadCh9329Descriptor()
     } else {
@@ -2746,334 +1880,11 @@ watch(isWindows, () => {
           </div>
 
           <!-- Account Section -->
-          <McpSettingsCard v-if="activeSection === 'mcp'" />
+          <McpSettingsCard v-if="activeSection === 'mcp' && hasFeature('mcp')" />
 
-          <div v-show="activeSection === 'account'" class="space-y-4">
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.usernameDesc')">{{
-                  t('settings.username')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-save-action">
-                    <Button @click="changeUsername" :disabled="usernameSaving">
-                      <Loader2 v-if="usernameSaving" class="size-4 mr-2 animate-spin" />
-                      <Save v-else class="size-4 mr-2" />
-                      {{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field space-y-2">
-                  <Label for="account-username">{{ t('settings.username') }}</Label>
-                  <Input id="account-username" v-model="usernameInput" autocomplete="username" />
-                </div>
-                <div class="settings-field space-y-2">
-                  <Label for="account-username-password">{{ t('settings.currentPassword') }}</Label>
-                  <Input
-                    id="account-username-password"
-                    v-model="usernamePassword"
-                    type="password"
-                    autocomplete="current-password"
-                  />
-                </div>
-                <p v-if="usernameError" class="text-xs text-destructive">{{ usernameError }}</p>
-                <p v-else-if="usernameSaved" class="flex items-center gap-1.5 text-xs text-success">
-                  <Check class="size-3.5" />{{ t('common.success') }}
-                </p>
-              </CardContent>
-            </Card>
+          <AccountSettings :active="activeSection === 'account'" />
 
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.passwordDesc')">{{
-                  t('settings.changePassword')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-save-action">
-                    <Button @click="changePassword" :disabled="passwordSaving">
-                      <Loader2 v-if="passwordSaving" class="size-4 mr-2 animate-spin" />
-                      <Save v-else class="size-4 mr-2" />
-                      {{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field space-y-2">
-                  <Label for="account-current-password">{{ t('settings.currentPassword') }}</Label>
-                  <Input
-                    id="account-current-password"
-                    v-model="currentPassword"
-                    type="password"
-                    autocomplete="current-password"
-                  />
-                </div>
-                <div class="settings-field space-y-2">
-                  <Label for="account-new-password">{{ t('settings.newPassword') }}</Label>
-                  <Input
-                    id="account-new-password"
-                    v-model="newPassword"
-                    type="password"
-                    autocomplete="new-password"
-                  />
-                </div>
-                <div class="settings-field space-y-2">
-                  <Label for="account-confirm-password">{{ t('auth.confirmPassword') }}</Label>
-                  <Input
-                    id="account-confirm-password"
-                    v-model="confirmPassword"
-                    type="password"
-                    autocomplete="new-password"
-                  />
-                </div>
-                <p v-if="passwordError" class="text-xs text-destructive">{{ passwordError }}</p>
-                <p v-else-if="passwordSaved" class="flex items-center gap-1.5 text-xs text-success">
-                  <Check class="size-3.5" />{{ t('common.success') }}
-                </p>
-              </CardContent>
-            </Card>
-
-            <TotpSettingsCard />
-
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.authSettingsDesc')">{{
-                  t('settings.authSettings')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-save-action">
-                    <Button @click="saveAuthConfig" :disabled="authConfigLoading">
-                      <Loader2 v-if="authConfigLoading" class="size-4 mr-2 animate-spin" />
-                      <Save v-else class="size-4 mr-2" />
-                      {{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-toggle flex items-start justify-between gap-4">
-                  <Label>{{ t('settings.allowMultipleSessions') }}</Label>
-                  <Switch
-                    v-model="authConfig.single_user_allow_multiple_sessions"
-                    :disabled="authConfigLoading"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <!-- Video Section -->
-          <div v-show="activeSection === 'video'" class="space-y-4">
-            <div class="settings-quick-control" data-quick-control="capture">
-              <Label for="keep-capture-alive">{{ t('settings.captureActivity') }}</Label>
-              <div class="flex items-center gap-2">
-                <Loader2 v-if="captureKeepAliveSaving" class="size-3.5 animate-spin text-muted-foreground" />
-                <Switch id="keep-capture-alive" :model-value="config.keep_capture_alive"
-                  :aria-label="t('settings.keepCaptureAlive')"
-                  :disabled="captureKeepAliveSaving || !captureKeepAliveLoaded"
-                  @update:model-value="updateCaptureKeepAlive" />
-              </div>
-            </div>
-            <!-- Video Device Settings -->
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.videoSettingsDesc')">{{
-                  t('settings.videoSettings')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    :aria-label="t('common.refresh')"
-                    @click="loadDeviceConfig"
-                  >
-                    <RefreshCw class="size-4" />
-                  </Button>
-                  <div class="settings-save-action">
-                    <Button :disabled="videoSaving !== null" @click="saveVideoCard('capture')"
-                      ><Loader2 v-if="videoSaving === 'capture'" class="size-4 animate-spin" /><Save
-                        v-else
-                        class="size-4"
-                      />{{ t('settingsUi.saveCapture') }}</Button
-                    >
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field space-y-2">
-                  <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
-                  <Select
-                    :model-value="config.video_device"
-                    @update:model-value="
-                      (value) =>
-                        (config.video_device = value === EMPTY_SELECT_VALUE ? '' : String(value))
-                    "
-                  >
-                    <SelectTrigger id="video-device" class="w-full"
-                      ><SelectValue :placeholder="t('settings.selectDevice')"
-                    /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem :value="EMPTY_SELECT_VALUE">{{
-                        t('settings.selectDevice')
-                      }}</SelectItem>
-                      <SelectItem v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{
-                        formatVideoDeviceLabel(dev)
-                      }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <VideoInputFields
-                  v-if="selectedDevice"
-                  :device="selectedDevice"
-                  :formats="availableFormatOptions"
-                  :resolutions="availableResolutions"
-                  :fps-options="availableFps"
-                  :format="config.video_format"
-                  :resolution="videoResolutionSelection"
-                  :fps="config.video_fps"
-                  :refreshing="refreshingInputStatus"
-                  @update:format="config.video_format = $event"
-                  @update:resolution="videoResolutionSelection = $event"
-                  @update:fps="config.video_fps = $event"
-                  @refresh="refreshInputStatus"
-                />
-              </CardContent>
-            </Card>
-
-            <!-- Encoder Settings -->
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.encoderBackendDesc')">{{
-                  t('settings.encoderBackend')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-save-action">
-                    <Button :disabled="videoSaving !== null" @click="saveVideoCard('encoder')"
-                      ><Loader2 v-if="videoSaving === 'encoder'" class="size-4 animate-spin" /><Save
-                        v-else
-                        class="size-4"
-                      />{{ t('settingsUi.saveEncoder') }}</Button
-                    >
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field space-y-2">
-                  <Label for="encoder-backend">{{ t('settings.backend') }}</Label>
-                  <Select v-model="config.encoder_backend">
-                    <SelectTrigger id="encoder-backend" class="w-full"
-                      ><SelectValue
-                    /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">{{ t('settings.autoRecommended') }}</SelectItem>
-                      <SelectItem
-                        v-for="backend in availableBackends"
-                        :key="backend.id"
-                        :value="backend.id"
-                        >{{ backend.name }}
-                        {{
-                          backend.is_hardware
-                            ? `(${t('settings.hardware')})`
-                            : `(${t('settings.software')})`
-                        }}</SelectItem
-                      >
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div
-                  v-if="config.encoder_backend !== 'auto' && selectedBackendFormats.length > 0"
-                  class="settings-field space-y-2"
-                >
-                  <Label>{{ t('settings.supportedFormats') }}</Label>
-                  <div class="flex flex-wrap gap-2">
-                    <Badge
-                      v-for="format in selectedBackendFormats"
-                      :key="format"
-                      variant="outline"
-                      >{{ format.toUpperCase() }}</Badge
-                    >
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <!-- WebRTC/STUN/TURN Settings -->
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.webrtcSettingsDesc')">{{
-                  t('settings.webrtcSettings')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-save-action">
-                    <Button :disabled="videoSaving !== null" @click="saveVideoCard('connection')"
-                      ><Loader2
-                        v-if="videoSaving === 'connection'"
-                        class="size-4 animate-spin"
-                      /><Save v-else class="size-4" />{{ t('settingsUi.saveConnection') }}</Button
-                    >
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field space-y-2">
-                  <Label for="stun-server">{{ t('settings.stunServer') }}</Label>
-                  <Input
-                    id="stun-server"
-                    v-model="config.stun_server"
-                    :placeholder="t('settings.stunServerPlaceholder')"
-                  />
-                </div>
-                <Separator />
-                <div class="settings-field space-y-2">
-                  <Label for="turn-server">{{ t('settings.turnServer') }}</Label>
-                  <Input
-                    id="turn-server"
-                    v-model="config.turn_server"
-                    :placeholder="t('settings.turnServerPlaceholder')"
-                  />
-                </div>
-                <div class="settings-field-list grid gap-4 sm:grid-cols-2">
-                  <div class="settings-field space-y-2">
-                    <Label for="turn-username">{{ t('settings.turnUsername') }}</Label>
-                    <Input
-                      id="turn-username"
-                      v-model="config.turn_username"
-                      :disabled="!config.stun_server && !config.turn_server"
-                    />
-                  </div>
-                  <div class="settings-field space-y-2">
-                    <Label for="turn-password">{{ t('settings.turnPassword') }}</Label>
-                    <div class="relative">
-                      <Input
-                        id="turn-password"
-                        v-model="config.turn_password"
-                        :type="showPasswords ? 'text' : 'password'"
-                        autocomplete="off"
-                        :disabled="!config.stun_server && !config.turn_server"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        :aria-label="
-                          showPasswords
-                            ? t('extensions.rustdesk.hidePassword')
-                            : t('extensions.rustdesk.showPassword')
-                        "
-                        @click="showPasswords = !showPasswords"
-                      >
-                        <Eye v-if="!showPasswords" class="size-4" />
-                        <EyeOff v-else class="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <VideoSettings :active="activeSection === 'video'" />
 
           <!-- HID Section -->
           <div v-show="activeSection === 'hid'" class="space-y-4">
@@ -3081,8 +1892,8 @@ watch(isWindows, () => {
               v-if="activeSection === 'hid'"
               :active="activeSection === 'hid'"
               :dirty="hidFeaturesDirty"
-              @applied="loadConfig"
-              @discard="loadConfig"
+              @applied="loadHidConfig"
+              @discard="loadHidConfig"
             />
             <Card v-if="supportsOtgFunctions(configStore.hid?.backend)" class="hid-feature-card"
               ><CardHeader class="settings-card-heading"
@@ -3514,401 +2325,13 @@ watch(isWindows, () => {
             >
           </div>
 
-          <!-- Environment Section -->
-          <div v-show="activeSection === 'environment'" class="settings-environment">
-            <Card v-if="otgSupported" :class="{ 'settings-wide': otgSelfCheckResult }">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.otgSelfCheck.desc')">{{
-                  t('settings.otgSelfCheck.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="otgSelfCheckLoading"
-                    :class="[
-                      'transition-all duration-150 active:scale-95 active:brightness-95',
-                      otgRunButtonPressed ? 'scale-95 brightness-95' : '',
-                    ]"
-                    @click="onRunOtgSelfCheckClick"
-                  >
-                    <RefreshCw
-                      class="size-4 mr-2"
-                      :class="{ 'animate-spin': otgSelfCheckLoading }"
-                    />
-                    {{ t('settings.otgSelfCheck.run') }}
-                  </Button>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-3">
-                <p v-if="otgSelfCheckError" class="text-xs text-destructive">
-                  {{ otgSelfCheckError }}
-                </p>
-
-                <template v-if="otgSelfCheckResult">
-                  <div class="flex flex-wrap gap-2 text-xs">
-                    <Badge
-                      :variant="otgSelfCheckResult.overall_ok ? 'default' : 'destructive'"
-                      class="font-medium"
-                    >
-                      {{ t('settings.otgSelfCheck.overall') }}：{{
-                        otgSelfCheckResult.overall_ok
-                          ? t('settings.otgSelfCheck.ok')
-                          : t('settings.otgSelfCheck.hasIssues')
-                      }}
-                    </Badge>
-                    <Badge variant="outline" class="font-normal">
-                      {{
-                        t('settings.otgSelfCheck.counts', {
-                          errors: otgSelfCheckResult.error_count,
-                          warnings: otgSelfCheckResult.warning_count,
-                        })
-                      }}
-                    </Badge>
-                    <Badge variant="secondary" class="font-normal">
-                      {{ t('settings.otgSelfCheck.selectedUdc') }}：{{
-                        otgSelfCheckResult.selected_udc || '-'
-                      }}
-                    </Badge>
-                    <Badge variant="secondary" class="font-normal">
-                      {{ t('settings.otgSelfCheck.boundUdc') }}：{{
-                        otgSelfCheckResult.bound_udc || '-'
-                      }}
-                    </Badge>
-                  </div>
-
-                  <div class="rounded-md border divide-y">
-                    <details
-                      v-for="group in otgCheckGroups"
-                      :key="group.id"
-                      :open="group.status === 'error' || group.status === 'warn'"
-                      class="group"
-                    >
-                      <summary
-                        class="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/40"
-                      >
-                        <div class="flex items-center gap-2 min-w-0">
-                          <span
-                            class="inline-block size-2 rounded-full shrink-0"
-                            :class="otgGroupStatusClass(group.status)"
-                          />
-                          <span class="text-sm font-medium truncate leading-6">{{
-                            t(group.titleKey)
-                          }}</span>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                          <span class="text-xs text-muted-foreground">{{
-                            otgGroupSummary(group)
-                          }}</span>
-                          <Badge variant="outline" class="text-[10px] h-5 px-1.5">{{
-                            otgGroupStatusText(group.status)
-                          }}</Badge>
-                        </div>
-                      </summary>
-
-                      <div v-if="group.items.length > 0" class="border-t bg-muted/20">
-                        <div
-                          v-for="item in group.items"
-                          :key="item.id"
-                          class="px-4 py-3 border-b last:border-b-0"
-                        >
-                          <div class="flex items-start gap-2">
-                            <span
-                              class="inline-block size-2 rounded-full mt-1.5 shrink-0"
-                              :class="otgCheckLevelClass(item.level)"
-                            />
-                            <div class="min-w-0 space-y-1">
-                              <div class="flex items-center gap-2">
-                                <p class="text-sm leading-5">{{ otgCheckMessage(item) }}</p>
-                                <span class="text-[11px] text-muted-foreground shrink-0">{{
-                                  otgCheckStatusText(item.level)
-                                }}</span>
-                              </div>
-                              <div
-                                class="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground"
-                              >
-                                <span v-if="item.hint">{{ otgCheckHint(item) }}</span>
-                                <code v-if="item.path" class="font-mono break-all">{{
-                                  item.path
-                                }}</code>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        v-else
-                        class="border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground"
-                      >
-                        {{ t('settings.otgSelfCheck.notRun') }}
-                      </div>
-                    </details>
-                  </div>
-                </template>
-                <p v-else-if="otgSelfCheckLoading" class="text-xs text-muted-foreground">
-                  {{ t('common.loading') }}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card :class="{ 'settings-wide': videoEncoderSelfCheckResult }">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.encoderSelfCheck.desc')">{{
-                  t('settings.encoderSelfCheck.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="videoEncoderSelfCheckLoading"
-                    :class="[
-                      'transition-all duration-150 active:scale-95 active:brightness-95',
-                      videoEncoderRunButtonPressed ? 'scale-95 brightness-95' : '',
-                    ]"
-                    @click="onRunVideoEncoderSelfCheckClick"
-                  >
-                    <RefreshCw
-                      class="size-4 mr-2"
-                      :class="{ 'animate-spin': videoEncoderSelfCheckLoading }"
-                    />
-                    {{ t('settings.encoderSelfCheck.run') }}
-                  </Button>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-3">
-                <p v-if="videoEncoderSelfCheckError" class="text-xs text-destructive">
-                  {{ videoEncoderSelfCheckError }}
-                </p>
-
-                <template v-if="videoEncoderSelfCheckResult">
-                  <div class="text-sm">
-                    {{ t('settings.encoderSelfCheck.currentHardwareEncoder') }}：{{
-                      currentHardwareEncoderText
-                    }}
-                  </div>
-
-                  <div class="rounded-md border bg-card">
-                    <Table class="table-fixed">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead class="w-[18%] px-2">{{
-                            t('settings.encoderSelfCheck.resolution')
-                          }}</TableHead>
-                          <TableHead
-                            v-for="codec in videoEncoderSelfCheckResult.codecs"
-                            :key="codec.id"
-                            class="w-[20.5%] px-2 text-center"
-                          >
-                            {{ videoEncoderCodecLabel(codec.id, codec.name) }}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow
-                          v-for="row in videoEncoderSelfCheckResult.rows"
-                          :key="row.resolution_id"
-                        >
-                          <TableCell class="px-2 py-3 align-middle">
-                            <div class="font-medium">{{ row.resolution_label }}</div>
-                          </TableCell>
-                          <TableCell
-                            v-for="codec in videoEncoderSelfCheckResult.codecs"
-                            :key="`${row.resolution_id}-${codec.id}`"
-                            class="px-2 py-3 align-middle"
-                          >
-                            <div
-                              class="flex flex-col items-center justify-center gap-1"
-                              :class="videoEncoderCellClass(videoEncoderCell(row, codec.id)?.ok)"
-                            >
-                              <div class="text-lg leading-none font-semibold">
-                                {{ videoEncoderCellSymbol(videoEncoderCell(row, codec.id)?.ok) }}
-                              </div>
-                              <div class="text-[11px] leading-4 text-foreground/70">
-                                {{ videoEncoderCellTime(videoEncoderCell(row, codec.id)) }}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
-                </template>
-                <p v-else-if="videoEncoderSelfCheckLoading" class="text-xs text-muted-foreground">
-                  {{ t('common.loading') }}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <DeviceDiagnosticsSettings :active="activeSection === 'environment'" :hid-backend="config.hid_backend" />
 
           <div v-show="activeSection === 'other'" class="space-y-4">
             <SystemDeviceControls />
-            <Card>
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.watchdog.description')">{{
-                  t('settings.watchdog.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    :disabled="
-                      watchdogLoading ||
-                      !watchdogStatus ||
-                      (!watchdogStatus.supported && !watchdogStatus.enabled)
-                    "
-                    @click="updateWatchdog(watchdogDraft)"
-                    ><Loader2 v-if="watchdogLoading" class="size-4 animate-spin" /><Save
-                      v-else
-                      class="size-4"
-                    />{{ t('common.save') }}</Button
-                  >
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-toggle">
-                  <Label for="watchdog-enabled">{{ t('settingsUi.watchdogAutoReset') }}</Label
-                  ><Switch
-                    id="watchdog-enabled"
-                    v-model="watchdogDraft"
-                    :disabled="
-                      watchdogLoading ||
-                      !watchdogStatus ||
-                      (!watchdogStatus.supported && !watchdogStatus.enabled)
-                    "
-                  />
-                </div>
-                <p
-                  v-if="watchdogError || watchdogDisplayReason"
-                  class="text-sm"
-                  :class="
-                    watchdogStatusKey === 'error' || watchdogError
-                      ? 'text-destructive'
-                      : 'text-muted-foreground'
-                  "
-                >
-                  {{ watchdogError || watchdogDisplayReason }}
-                </p>
-              </CardContent>
-            </Card>
+            <WatchdogControl :active="activeSection === 'other'" />
 
-            <Card v-if="usbResetSupported">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('settings.usbDevices.desc')">{{
-                  t('settings.usbDevices.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="usbDevicesLoading"
-                    @click="fetchUsbDevices()"
-                  >
-                    <RefreshCw class="size-4 mr-2" :class="{ 'animate-spin': usbDevicesLoading }" />
-                    {{ t('settings.usbDevices.refresh') }}
-                  </Button>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-3">
-                <p v-if="usbDevicesError" class="text-xs text-destructive">
-                  {{ usbDevicesError }}
-                </p>
-
-                <template v-if="usbDevices.length > 0">
-                  <div class="rounded-md border overflow-hidden">
-                    <Table class="min-w-[540px]">
-                      <TableHeader>
-                        <TableRow class="bg-muted/40 hover:bg-muted/40">
-                          <TableHead>{{ t('settings.usbDevices.colDevice') }}</TableHead>
-                          <TableHead>VID:PID</TableHead>
-                          <TableHead>{{ t('settings.usbDevices.colSpeed') }}</TableHead>
-                          <TableHead>{{ t('settings.usbDevices.colVideo') }}</TableHead>
-                          <TableHead class="text-right">{{
-                            t('settings.usbDevices.colAction')
-                          }}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow v-for="dev in usbDevices" :key="`${dev.bus_num}-${dev.dev_num}`">
-                          <TableCell>
-                            <div
-                              class="font-medium truncate max-w-[180px]"
-                              :title="
-                                dev.product ||
-                                dev.manufacturer ||
-                                `${dev.id_vendor}:${dev.id_product}`
-                              "
-                            >
-                              {{
-                                dev.product ||
-                                dev.manufacturer ||
-                                `${dev.id_vendor}:${dev.id_product}`
-                              }}
-                            </div>
-                          </TableCell>
-                          <TableCell class="font-mono text-xs"
-                            >{{ dev.id_vendor }}:{{ dev.id_product }}</TableCell
-                          >
-                          <TableCell class="text-xs">{{ usbSpeedLabel(dev.speed) }}</TableCell>
-                          <TableCell class="text-xs">
-                            <code v-if="dev.video_device">{{ dev.video_device }}</code>
-                            <span v-else class="text-muted-foreground">-</span>
-                          </TableCell>
-                          <TableCell class="text-right">
-                            <Button
-                              v-if="dev.authorized != null"
-                              variant="outline"
-                              size="sm"
-                              class="text-xs"
-                              :disabled="usbResetLoading"
-                              @click="usbResetTarget = dev"
-                            >
-                              {{ t('settings.usbDevices.reset') }}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
-                </template>
-                <Skeleton v-else-if="usbDevicesLoading" class="h-24 w-full" />
-                <Empty v-else class="py-6">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon"><Monitor /></EmptyMedia>
-                    <EmptyDescription>{{ t('settings.usbDevices.noDevices') }}</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </CardContent>
-            </Card>
-
-            <!-- USB Reset Confirmation Dialog -->
-            <AlertDialog v-if="usbResetSupported" :open="usbResetTarget != null">
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{{
-                    t('settings.usbDevices.resetConfirmTitle')
-                  }}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {{
-                      t('settings.usbDevices.resetConfirmDesc', {
-                        device:
-                          usbResetTarget?.product ||
-                          `${usbResetTarget?.id_vendor}:${usbResetTarget?.id_product}`,
-                      })
-                    }}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel @click="usbResetTarget = null">{{
-                    t('common.cancel')
-                  }}</AlertDialogCancel>
-                  <AlertDialogAction
-                    :disabled="usbResetLoading"
-                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    @click="confirmUsbReset()"
-                  >
-                    {{ t('settings.usbDevices.resetAction') }}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <UsbDevicesCard :active="activeSection === 'other'" />
           </div>
           <div v-show="activeSection === 'network'" class="space-y-4">
             <!-- Auto-restart: restarting progress -->
@@ -4807,7 +3230,7 @@ watch(isWindows, () => {
 
           <!-- Remote Access Section -->
           <div v-show="activeSection === 'ext-remote-access'" class="settings-section-services">
-            <Card>
+            <Card v-if="hasFeature('gostc')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.gostc.desc')">{{
                   t('extensions.gostc.title')
@@ -4963,7 +3386,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card v-if="hasFeature('easyfrp')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.easyfrp.desc')">{{
                   t('extensions.easyfrp.title')
@@ -5098,7 +3521,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card v-if="systemStore.platform?.compiled_features?.includes('easytier')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.easytier.desc')">{{
                   t('extensions.easytier.title')
@@ -5301,7 +3724,7 @@ watch(isWindows, () => {
               </CardContent>
             </Card>
             <!-- FRPC -->
-            <Card>
+            <Card v-if="hasFeature('frpc')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.frpc.desc')">{{
                   t('extensions.frpc.title')
@@ -5600,7 +4023,7 @@ watch(isWindows, () => {
 
           <!-- RTSP Section -->
           <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card>
+            <Card v-if="hasFeature('rtsp')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.rtsp.desc')">{{
                   t('extensions.rtsp.title')
@@ -5767,7 +4190,7 @@ watch(isWindows, () => {
 
           <!-- VNC Section -->
           <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card>
+            <Card v-if="hasFeature('vnc')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.vnc.desc')">{{
                   t('extensions.vnc.title')
@@ -5925,7 +4348,7 @@ watch(isWindows, () => {
 
           <!-- RustDesk Section -->
           <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card>
+            <Card v-if="systemStore.platform?.rustdesk.available">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('extensions.rustdesk.desc')">{{
                   t('extensions.rustdesk.title')
@@ -6253,7 +4676,7 @@ watch(isWindows, () => {
               </AlertDescription>
             </Alert>
 
-            <Card>
+            <Card v-if="hasFeature('redfish')">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('settings.redfishDesc')">{{
                   t('settings.redfishTitle')
@@ -6297,111 +4720,7 @@ watch(isWindows, () => {
           <!-- About: usage, host identity and one upgrade card. -->
           <div v-show="activeSection === 'about'" class="space-y-4">
             <AboutSystemCards :active="activeSection === 'about'" />
-            <Card class="update-card">
-              <CardHeader
-                ><CardTitle :help="t('settings.onlineUpgradeDesc')">{{
-                  t('settings.onlineUpgrade')
-                }}</CardTitle></CardHeader
-              >
-              <CardContent class="space-y-5">
-                <div class="settings-field">
-                  <Label>{{ t('settings.updateChannel') }}</Label
-                  ><Select v-model="updateChannel" :disabled="updateRunning"
-                    ><SelectTrigger class="w-full"><SelectValue /></SelectTrigger
-                    ><SelectContent
-                      ><SelectItem value="stable">Stable</SelectItem
-                      ><SelectItem value="beta">Beta</SelectItem></SelectContent
-                    ></Select
-                  >
-                </div>
-                <div class="settings-field">
-                  <Label>{{ t('settings.latestVersion') }}</Label>
-                  <div class="flex min-w-0 items-center justify-between gap-4">
-                    <span class="text-sm text-muted-foreground">{{
-                      updateOverview?.latest_version || t('common.unknown')
-                    }}</span
-                    ><Button
-                      variant="outline"
-                      :disabled="updateRunning || updateLoading"
-                      @click="loadUpdateOverview"
-                      ><RefreshCw class="size-4" :class="{ 'animate-spin': updateLoading }" />{{
-                        t('settingsUi.checkUpdates')
-                      }}</Button
-                    >
-                  </div>
-                </div>
-                <div
-                  v-if="
-                    updateRunning ||
-                    updateStatus?.phase === 'failed' ||
-                    updateStatus?.phase === 'success'
-                  "
-                  class="space-y-2"
-                  role="status"
-                >
-                  <p class="text-sm">{{ updateStatusBadgeText() }}</p>
-                  <div class="h-2 overflow-hidden rounded bg-muted">
-                    <div
-                      class="h-full bg-primary transition-all"
-                      :style="{
-                        width: `${Math.max(0, Math.min(100, updateStatus?.progress || 0))}%`,
-                      }"
-                    />
-                  </div>
-                  <p v-if="updateStatus?.last_error" class="text-sm text-destructive">
-                    {{ updateStatus.last_error }}
-                  </p>
-                </div>
-                <section class="update-release-notes">
-                  <div class="flex items-center justify-between gap-4">
-                    <h3 class="text-sm font-semibold">{{ t('settings.releaseNotes') }}</h3>
-                    <a
-                      href="https://github.com/mofeng-git/One-KVM/releases"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:underline"
-                      >{{ t('settingsUi.project') }}<ExternalLink class="size-3.5"
-                    /></a>
-                  </div>
-                  <p v-if="updateLoading" class="text-sm text-muted-foreground">
-                    {{ t('common.loading') }}
-                  </p>
-                  <p
-                    v-else-if="!updateOverview?.notes_between?.length"
-                    class="text-sm text-muted-foreground"
-                  >
-                    {{ t('settings.noUpdates') }}
-                  </p>
-                  <div v-else class="max-h-80 space-y-4 overflow-y-auto">
-                    <article
-                      v-for="item in updateOverview.notes_between"
-                      :key="item.version"
-                      class="space-y-2 border-b pb-4 last:border-0"
-                    >
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="text-sm font-medium">v{{ item.version }}</span
-                        ><span class="text-sm text-muted-foreground">{{ item.published_at }}</span>
-                      </div>
-                      <ul class="list-disc space-y-1 pl-5 text-sm">
-                        <li v-for="(note, idx) in item.notes" :key="idx">{{ note }}</li>
-                      </ul>
-                    </article>
-                  </div>
-                </section>
-                <p v-if="!onlineUpgradeSupported" class="text-sm text-muted-foreground">
-                  {{ t('settings.onlineUpgradeUnsupported') }}
-                </p>
-              </CardContent>
-              <CardFooter v-if="onlineUpgradeSupported" class="justify-end border-t"
-                ><Button
-                  :disabled="updateRunning || !updateOverview?.upgrade_available"
-                  @click="startOnlineUpgrade"
-                  ><RefreshCw v-if="updateRunning" class="size-4 animate-spin" />{{
-                    t('settings.startUpgrade')
-                  }}</Button
-                ></CardFooter
-              >
-            </Card>
+            <UpdateSettingsCard v-if="activeSection === 'about'" />
           </div>
         </div>
       </SidebarInset>

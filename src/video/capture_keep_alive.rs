@@ -6,7 +6,7 @@ use std::sync::Arc;
 pub struct CaptureKeepAlive(Arc<AtomicBool>);
 
 impl CaptureKeepAlive {
-    pub fn set_enabled(&self, enabled: bool) {
+    pub(in crate::video) fn set_enabled(&self, enabled: bool) {
         self.0.store(enabled, Ordering::Release);
     }
 

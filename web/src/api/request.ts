@@ -272,12 +272,13 @@ export function uploadRequest<T>(
       const data: unknown = (() => {
         try { return JSON.parse(xhr.responseText) } catch { return null }
       })()
-      if (xhr.status >= 200 && xhr.status < 300 && data !== null) {
+      const backendFailed = data !== null && typeof data === 'object' && (data as { success?: unknown }).success === false
+      if (xhr.status >= 200 && xhr.status < 300 && data !== null && !backendFailed) {
         resolve(data as T)
         return
       }
 
-      const { message, code } = getErrorDetails(data, `HTTP ${xhr.status}`)
+      const { message, code } = getErrorDetails(data, data === null && xhr.status >= 200 && xhr.status < 300 ? t('api.parseResponseFailed') : backendFailed ? t('api.operationFailedDesc') : `HTTP ${xhr.status}`)
       const error = new ApiError(xhr.status, message, code)
       if (
         config.toastOnError !== false

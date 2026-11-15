@@ -102,6 +102,8 @@ fn encoder_type_to_video_codec(encoder_type: VideoEncoderType) -> VideoCodec {
 }
 
 pub struct UniversalSession {
+    pub(crate) auth_session_id: String,
+    pub(crate) auth_session: Option<crate::auth::Session>,
     pub session_id: String,
     codec: VideoEncoderType,
     pc: Arc<RTCPeerConnection>,
@@ -336,6 +338,8 @@ impl UniversalSession {
         let (state_tx, state_rx) = watch::channel(ConnectionState::New);
 
         let session = Self {
+            auth_session_id: String::new(),
+            auth_session: None,
             session_id,
             codec: config.codec,
             pc,
@@ -465,12 +469,14 @@ impl UniversalSession {
 
     pub fn set_hid_controller(&mut self, hid: Arc<HidController>) {
         let hid_clone = hid.clone();
+        let auth = self.auth_session.clone();
         let data_channel = self.data_channel.clone();
 
         self.pc
             .on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
                 let data_channel = data_channel.clone();
                 let hid = hid_clone.clone();
+                let auth = auth.clone();
 
                 Box::pin(async move {
                     info!("Data channel with HID support: {}", dc.label());
@@ -478,9 +484,11 @@ impl UniversalSession {
 
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let hid = hid.clone();
+                        let auth = auth.clone();
 
                         // webrtc-rs won't poll this future; spawn HID work for latency.
                         tokio::spawn(async move {
+                            if auth.as_ref().is_some_and(|session| session.is_expired()) { return; }
                             if let Some(event) = parse_hid_message(&msg.data) {
                                 match event {
                                     HidChannelEvent::Keyboard(kb_event) => {
