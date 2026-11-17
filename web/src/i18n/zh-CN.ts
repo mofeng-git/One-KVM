@@ -681,6 +681,124 @@ export default {
       isoConversionFailed: '镜像转换失败，请检查系统日志。',
     },
   },
+  authorPage: {
+    back: '返回',
+    breadcrumb: '关于 · About',
+    badge: '独立开发者 · 软硬件全栈交付',
+    hero: {
+      line1: '从芯片到云端',
+      line2: '一站式软硬件定制',
+      description: '提供嵌入式固件、工业总线、上位机 / 桌面软件、云平台与数据可视化的定制开发。从一个 Modbus 采集模块，到完整的设备调试与远程运维系统，按需求交付可落地的方案。',
+      ctaPrimary: '扫码沟通需求',
+      ctaSecondary: '原作者主页',
+    },
+    tags: {
+      embedded: '嵌入式固件',
+      bus: 'Modbus / RS-485',
+      desktop: 'Tauri 桌面端',
+      acquisition: '数据采集与曲线',
+      cloud: '云平台',
+      localization: '国产信创适配',
+    },
+    contact: {
+      title: '扫码添加微信',
+      description: '沟通需求、评估方案、获取报价',
+      items: {
+        analysis: '需求梳理与方案评估',
+        prototype: '样机联调与小批量交付',
+        maintenance: '长期维护与私有化部署',
+      },
+      note: '定制服务由当前 One-KVM 设备运营者提供',
+      qrAlt: '微信二维码',
+    },
+    signal: {
+      status: '链路已建立',
+      hint: '芯片 → 设备 → 云端',
+      chip: '芯片',
+      device: '设备',
+      cloud: '云端',
+    },
+    capabilities: {
+      eyebrow: 'CAPABILITIES',
+      title: '能做什么',
+      subtitle: '软硬件一体设计与交付',
+      items: {
+        embedded: {
+          title: '嵌入式 / 固件',
+          description: 'STM32 / ESP32 / C 与 C++，RTOS 与裸机驱动，通信协议栈与低功耗设计。',
+        },
+        bus: {
+          title: '工业总线 / 硬件',
+          description: 'Modbus RTU / TCP / ASCII、RS-485、CAN，采集板卡与传感器接入。',
+        },
+        host: {
+          title: '上位机 / 桌面端',
+          description: 'Rust + Tauri、Vue、C# / Qt，设备调试、数据采集、实时曲线与报表。',
+        },
+        cloud: {
+          title: '云平台 / 可视化',
+          description: '设备接入、数据看板、远程运维与移动端配套，打通端到端链路。',
+        },
+      },
+    },
+    ecosystem: {
+      eyebrow: 'LOCALIZATION',
+      badge: '国产化 · 信创适配',
+      watermark: '信创',
+      title: '面向国产软硬件环境\n交付与迁移',
+      description: '可配合信创项目完成桌面端、设备端与数据链路的适配、打包和现场联调，让现有采集与调试能力平滑迁移到国产化环境。',
+      note: '当前版本提供 Windows x64 与 Linux 构建；麒麟、统信 UOS 及国产 CPU 环境可按项目需求提供适配构建与联调支持，具体平台和版本以评估结果为准。',
+      os: {
+        title: '国产操作系统',
+        items: {
+          kylin: '麒麟软件',
+          uos: '统信 UOS',
+          openEuler: 'openEuler',
+          nfs: '中标麒麟 / 中科方德',
+        },
+      },
+      cpu: {
+        title: '国产 CPU 架构',
+        items: {
+          loongarch: '龙芯 LoongArch',
+          phtium: '飞腾 ARM64',
+          kunpeng: '鲲鹏 ARM64',
+          hygon: '海光 / 兆芯 x86_64',
+        },
+      },
+      delivery: {
+        title: '信创交付能力',
+        items: {
+          cross: '交叉编译',
+          package: '国产化打包',
+          debug: '外设与总线联调',
+          private: '私有化部署',
+        },
+      },
+    },
+    license: {
+      eyebrow: 'OPEN SOURCE & LICENSE',
+      title: '开源归属与授权说明',
+      description: 'One-KVM 由 SilentWind（mofeng-git）创建并以 AGPL-3.0-only 许可证开源。本页面属于 One-KVM 网页源码的一部分，同样按 AGPL-3.0-only 发布；页面中的服务信息不改变原项目的版权与许可声明。',
+      disclaimer: '本页所列的软硬件定制服务由当前 One-KVM 设备的运营者提供，与 One-KVM 原作者无隶属关系，也不代表原作者背书。请通过二维码直接与运营者沟通。',
+      links: {
+        author: '原作者主页',
+        source: '项目源代码',
+        license: 'AGPL-3.0 许可证',
+        issues: '问题反馈',
+      },
+    },
+    footer: {
+      copyright: 'One-KVM © SilentWind 与贡献者 · 本页面按 AGPL-3.0-only 发布',
+      license: 'AGPL-3.0-only',
+    },
+    promo: {
+      eyebrow: 'ABOUT & SERVICES',
+      title: '关于作者与定制服务',
+      description: '嵌入式固件、工业总线、上位机、云平台与国产化适配，按项目需求评估与交付。',
+      action: '查看详情',
+    },
+  },
   runtimeLogs: {
     title: '运行日志',
     description: '实时查看 One-KVM 最近 1000 行运行日志，或将日志附在问题描述中提交给开发者。',

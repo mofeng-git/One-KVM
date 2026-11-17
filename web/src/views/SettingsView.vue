@@ -4,6 +4,7 @@ import '@/styles/settings.css'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import SidebarMenuButton from '@/components/SettingsSidebarButton.vue'
 import AboutSystemCards from '@/components/AboutSystemCards.vue'
+import AuthorPromoCard from '@/components/AuthorPromoCard.vue'
 import SystemDeviceControls from '@/components/SystemDeviceControls.vue'
 
 import McpSettingsCard from '@/components/McpSettingsCard.vue'
@@ -6471,6 +6472,7 @@ watch(isWindows, () => {
           <!-- About: usage, host identity and one upgrade card. -->
           <div v-show="activeSection === 'about'" class="space-y-4">
             <AboutSystemCards :active="activeSection === 'about'" />
+            <AuthorPromoCard />
             <Card class="update-card">
               <CardHeader
                 ><CardTitle :help="t('settings.onlineUpgradeDesc')">{{

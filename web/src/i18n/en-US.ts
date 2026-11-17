@@ -683,6 +683,124 @@ export default {
       isoConversionFailed: 'Image conversion failed. Check the system logs.',
     },
   },
+  authorPage: {
+    back: 'Back',
+    breadcrumb: 'About',
+    badge: 'Independent developer · full-stack hardware & software',
+    hero: {
+      line1: 'From silicon to cloud',
+      line2: 'End-to-end custom systems',
+      description: 'Custom embedded firmware, industrial buses, desktop/host software, cloud platforms and data visualization. From a Modbus acquisition module to a complete device debugging and remote operations system, delivered as a practical solution.',
+      ctaPrimary: 'Chat on WeChat',
+      ctaSecondary: 'Original author',
+    },
+    tags: {
+      embedded: 'Embedded firmware',
+      bus: 'Modbus / RS-485',
+      desktop: 'Tauri desktop',
+      acquisition: 'Data acquisition',
+      cloud: 'Cloud platform',
+      localization: 'China ecosystem',
+    },
+    contact: {
+      title: 'Scan to add WeChat',
+      description: 'Discuss requirements, evaluate options, get a quote',
+      items: {
+        analysis: 'Requirement analysis & solution design',
+        prototype: 'Prototype integration & small-batch delivery',
+        maintenance: 'Long-term maintenance & private deployment',
+      },
+      note: 'Custom services are provided by the operator of this One-KVM instance',
+      qrAlt: 'WeChat QR code',
+    },
+    signal: {
+      status: 'LINK ESTABLISHED',
+      hint: 'CHIP → DEVICE → CLOUD',
+      chip: 'CHIP',
+      device: 'DEVICE',
+      cloud: 'CLOUD',
+    },
+    capabilities: {
+      eyebrow: 'CAPABILITIES',
+      title: 'What I build',
+      subtitle: 'Integrated hardware and software delivery',
+      items: {
+        embedded: {
+          title: 'Embedded / firmware',
+          description: 'STM32 / ESP32 / C and C++, RTOS and bare-metal drivers, communication stacks and low-power design.',
+        },
+        bus: {
+          title: 'Industrial buses / hardware',
+          description: 'Modbus RTU / TCP / ASCII, RS-485, CAN, acquisition boards and sensor integration.',
+        },
+        host: {
+          title: 'Host / desktop software',
+          description: 'Rust + Tauri, Vue, C# / Qt: device debugging, data acquisition, live charts and reports.',
+        },
+        cloud: {
+          title: 'Cloud / visualization',
+          description: 'Device onboarding, dashboards, remote operations and companion mobile apps, end to end.',
+        },
+      },
+    },
+    ecosystem: {
+      eyebrow: 'LOCALIZATION',
+      badge: 'China ecosystem · compatibility',
+      watermark: 'LOCAL',
+      title: 'Delivery and migration for the domestic hardware and software ecosystem',
+      description: 'Work with localization projects to adapt, package and on-site integrate desktop, device and data-path components, so existing acquisition and debugging capabilities can move smoothly to domestic environments.',
+      note: 'Current builds target Windows x64 and Linux. Kylin, UOS and domestic CPU environments can be supported through project-specific builds and integration; exact platforms and versions are subject to evaluation.',
+      os: {
+        title: 'Operating systems',
+        items: {
+          kylin: 'Kylin',
+          uos: 'UOS',
+          openEuler: 'openEuler',
+          nfs: 'NeoKylin / Zhongke Fangde',
+        },
+      },
+      cpu: {
+        title: 'Domestic CPU architectures',
+        items: {
+          loongarch: 'Loongson LoongArch',
+          phtium: 'Phytium ARM64',
+          kunpeng: 'Kunpeng ARM64',
+          hygon: 'Hygon / Zhaoxin x86_64',
+        },
+      },
+      delivery: {
+        title: 'Delivery capabilities',
+        items: {
+          cross: 'Cross-compilation',
+          package: 'Localized packaging',
+          debug: 'Peripheral & bus bring-up',
+          private: 'Private deployment',
+        },
+      },
+    },
+    license: {
+      eyebrow: 'OPEN SOURCE & LICENSE',
+      title: 'Attribution and license',
+      description: 'One-KVM was created by SilentWind (mofeng-git) and is licensed under AGPL-3.0-only. This page is part of the One-KVM web source and is distributed under the same license. The service information on this page does not change the original project’s copyright or license notices.',
+      disclaimer: 'The customization services listed here are provided by the operator of this One-KVM instance. They are not affiliated with, or endorsed by, the original One-KVM author. Please contact the operator directly via the QR code.',
+      links: {
+        author: 'Original author',
+        source: 'Source code',
+        license: 'AGPL-3.0 license',
+        issues: 'Issue tracker',
+      },
+    },
+    footer: {
+      copyright: 'One-KVM © SilentWind and contributors · This page is released under AGPL-3.0-only',
+      license: 'AGPL-3.0-only',
+    },
+    promo: {
+      eyebrow: 'ABOUT & SERVICES',
+      title: 'About the developer & custom services',
+      description: 'Embedded firmware, industrial buses, host software, cloud platforms and domestic-platform adaptation, evaluated and delivered per project.',
+      action: 'View details',
+    },
+  },
   runtimeLogs: {
     title: 'Runtime Logs',
     description: 'Watch the latest 1000 runtime log lines in real time, or attach them to a problem report.',
