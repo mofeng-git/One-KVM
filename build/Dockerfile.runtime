@@ -33,6 +33,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         iputils-ping \
         # v4l2 is handled by kernel, minimal userspace needed
         libv4l-0 \
+        # Re-masters UDF-only / Joliet-less ISO images for the virtual CD-ROM
+        xorriso \
         && \
     # Platform-specific hardware acceleration
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \

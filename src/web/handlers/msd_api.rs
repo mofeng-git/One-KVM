@@ -2,9 +2,9 @@ use super::*;
 use crate::runtime::try_apply_lock;
 
 use crate::msd::{
-    DiskModeRequest, DownloadProgress, DriveFile, DriveFileAccess, DriveInfo, DriveInitRequest,
-    ImageDownloadRequest, ImageInfo, ImageManager, ImageMountRequest, MsdErrorCode, MsdState,
-    MsdStateResponse, VentoyDrive, MIN_DRIVE_SIZE_MB,
+    ConversionProgress, DiskModeRequest, DownloadProgress, DriveFile, DriveFileAccess, DriveInfo,
+    DriveInitRequest, ImageDownloadRequest, ImageInfo, ImageManager, ImageMountRequest,
+    MsdErrorCode, MsdState, MsdStateResponse, VentoyDrive, MIN_DRIVE_SIZE_MB,
 };
 #[cfg(unix)]
 use axum::body::Body;
@@ -182,6 +182,71 @@ pub async fn msd_image_get(
 
     let image = manager.get(&id)?;
     Ok(Json(image))
+}
+
+/// List in-flight and recently finished ISO image conversions.
+#[cfg(unix)]
+pub async fn msd_image_conversions(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<ConversionProgress>>> {
+    let msd_guard = state.msd.read().await;
+    let controller = msd_controller(&msd_guard)?;
+    Ok(Json(controller.image_conversions().await))
+}
+
+/// Start converting an ISO image that Windows cannot read through the virtual
+/// CD-ROM drive (UDF-only shell or missing Joliet directory).
+#[cfg(unix)]
+pub async fn msd_image_convert(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<ConversionProgress>> {
+    let config = state.config.get();
+    let manager = ImageManager::new(config.msd.images_dir());
+    let image = manager.get(&id)?;
+
+    let msd_guard = state.msd.read().await;
+    let controller = msd_controller(&msd_guard)?;
+    let progress = controller
+        .start_image_conversion(&image)
+        .await
+        .map_err(|error| operation_failed("start image conversion", error))?;
+
+    Ok(Json(progress))
+}
+
+/// Get the current conversion state for an image.
+#[cfg(unix)]
+pub async fn msd_image_conversion_status(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<ConversionProgress>> {
+    let msd_guard = state.msd.read().await;
+    let controller = msd_controller(&msd_guard)?;
+    controller
+        .image_conversion(&id)
+        .await
+        .map(Json)
+        .ok_or_else(|| MsdErrorCode::MsdResourceNotFound.into())
+}
+
+/// Cancel a running image conversion.
+#[cfg(unix)]
+pub async fn msd_image_conversion_cancel(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<LoginResponse>> {
+    let msd_guard = state.msd.read().await;
+    let controller = msd_controller(&msd_guard)?;
+    controller
+        .cancel_image_conversion(&id)
+        .await
+        .map_err(|error| operation_failed("cancel image conversion", error))?;
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Image conversion cancelled".to_string()),
+    }))
 }
 
 /// Delete image by ID

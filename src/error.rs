@@ -28,10 +28,15 @@ pub enum MsdErrorCode {
     MsdStoragePermissionDenied,
     MsdMediumRemovalPrevented,
     MsdDisconnectFailed,
+    MsdIsoConversionNotNeeded,
+    MsdIsoConversionUnsupported,
+    MsdIsoToolsMissing,
+    MsdIsoMountFailed,
+    MsdIsoConversionFailed,
 }
 
 impl MsdErrorCode {
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 28] = [
         Self::MsdUnavailable,
         Self::MsdOperationInProgress,
         Self::MsdOperationFailed,
@@ -55,6 +60,11 @@ impl MsdErrorCode {
         Self::MsdStoragePermissionDenied,
         Self::MsdMediumRemovalPrevented,
         Self::MsdDisconnectFailed,
+        Self::MsdIsoConversionNotNeeded,
+        Self::MsdIsoConversionUnsupported,
+        Self::MsdIsoToolsMissing,
+        Self::MsdIsoMountFailed,
+        Self::MsdIsoConversionFailed,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -82,6 +92,11 @@ impl MsdErrorCode {
             Self::MsdStoragePermissionDenied => "MSD_STORAGE_PERMISSION_DENIED",
             Self::MsdMediumRemovalPrevented => "MSD_MEDIUM_REMOVAL_PREVENTED",
             Self::MsdDisconnectFailed => "MSD_DISCONNECT_FAILED",
+            Self::MsdIsoConversionNotNeeded => "MSD_ISO_CONVERSION_NOT_NEEDED",
+            Self::MsdIsoConversionUnsupported => "MSD_ISO_CONVERSION_UNSUPPORTED",
+            Self::MsdIsoToolsMissing => "MSD_ISO_TOOLS_MISSING",
+            Self::MsdIsoMountFailed => "MSD_ISO_MOUNT_FAILED",
+            Self::MsdIsoConversionFailed => "MSD_ISO_CONVERSION_FAILED",
         }
     }
 
@@ -118,6 +133,17 @@ impl MsdErrorCode {
                 "The controlled computer prevented removal of the virtual medium."
             }
             Self::MsdDisconnectFailed => "The virtual medium could not be disconnected.",
+            Self::MsdIsoConversionNotNeeded => {
+                "The image already has a readable Joliet or ISO 9660 file system."
+            }
+            Self::MsdIsoConversionUnsupported => {
+                "The image does not contain a convertible UDF or ISO 9660 file system."
+            }
+            Self::MsdIsoToolsMissing => {
+                "The ISO conversion tool is not installed and could not be installed automatically."
+            }
+            Self::MsdIsoMountFailed => "The image could not be mounted for conversion.",
+            Self::MsdIsoConversionFailed => "The image conversion failed.",
         }
     }
 
@@ -146,14 +172,21 @@ impl MsdErrorCode {
             Self::MsdStoragePermissionDenied => "MsdStoragePermissionDenied",
             Self::MsdMediumRemovalPrevented => "MsdMediumRemovalPrevented",
             Self::MsdDisconnectFailed => "MsdDisconnectFailed",
+            Self::MsdIsoConversionNotNeeded => "MsdIsoConversionNotNeeded",
+            Self::MsdIsoConversionUnsupported => "MsdIsoConversionUnsupported",
+            Self::MsdIsoToolsMissing => "MsdIsoToolsMissing",
+            Self::MsdIsoMountFailed => "MsdIsoMountFailed",
+            Self::MsdIsoConversionFailed => "MsdIsoConversionFailed",
         }
     }
 
     pub const fn severity(self) -> &'static str {
         match self {
-            Self::MsdUnavailable | Self::MsdOperationFailed | Self::MsdDisconnectFailed => {
-                "Critical"
-            }
+            Self::MsdUnavailable
+            | Self::MsdOperationFailed
+            | Self::MsdDisconnectFailed
+            | Self::MsdIsoMountFailed
+            | Self::MsdIsoConversionFailed => "Critical",
             _ => "Warning",
         }
     }
@@ -196,6 +229,21 @@ impl MsdErrorCode {
             Self::MsdStorageReadOnly => "Make virtual media storage writable, then retry.",
             Self::MsdStoragePermissionDenied => {
                 "Correct virtual media storage permissions, then retry."
+            }
+            Self::MsdIsoConversionNotNeeded => {
+                "Mount the image directly; no conversion is required."
+            }
+            Self::MsdIsoConversionUnsupported => {
+                "Verify that the image is a valid ISO 9660 or UDF image, or replace it."
+            }
+            Self::MsdIsoToolsMissing => {
+                "Install the xorriso package on the One-KVM host, then retry."
+            }
+            Self::MsdIsoMountFailed => {
+                "Verify that loop devices and the UDF kernel module are available, then retry."
+            }
+            Self::MsdIsoConversionFailed => {
+                "Retry the conversion. If the problem persists, check the One-KVM system logs."
             }
             Self::MsdOperationFailed | Self::MsdDisconnectFailed => {
                 "Retry the operation. If the problem persists, check the One-KVM system logs."
@@ -424,6 +472,31 @@ mod tests {
                 MsdDisconnectFailed,
                 "MSD_DISCONNECT_FAILED",
                 "The virtual medium could not be disconnected.",
+            ),
+            (
+                MsdIsoConversionNotNeeded,
+                "MSD_ISO_CONVERSION_NOT_NEEDED",
+                "The image already has a readable Joliet or ISO 9660 file system.",
+            ),
+            (
+                MsdIsoConversionUnsupported,
+                "MSD_ISO_CONVERSION_UNSUPPORTED",
+                "The image does not contain a convertible UDF or ISO 9660 file system.",
+            ),
+            (
+                MsdIsoToolsMissing,
+                "MSD_ISO_TOOLS_MISSING",
+                "The ISO conversion tool is not installed and could not be installed automatically.",
+            ),
+            (
+                MsdIsoMountFailed,
+                "MSD_ISO_MOUNT_FAILED",
+                "The image could not be mounted for conversion.",
+            ),
+            (
+                MsdIsoConversionFailed,
+                "MSD_ISO_CONVERSION_FAILED",
+                "The image conversion failed.",
             ),
         ];
 

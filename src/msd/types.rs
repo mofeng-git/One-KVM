@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::OffsetDateTime;
 
+use super::iso::IsoCompatibility;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DiskMode {
@@ -19,6 +21,9 @@ pub struct ImageInfo {
     pub size: u64,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    /// ISO 9660 / Joliet / UDF compatibility, probed for `.iso` images only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iso: Option<IsoCompatibility>,
 }
 
 impl ImageInfo {
@@ -29,6 +34,7 @@ impl ImageInfo {
             path,
             size,
             created_at: OffsetDateTime::now_utc(),
+            iso: None,
         }
     }
 
@@ -253,6 +259,73 @@ pub struct DownloadProgress {
     pub total_bytes: Option<u64>,
     pub progress_pct: Option<f32>,
     pub status: DownloadStatus,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversionStage {
+    Preparing,
+    InstallingTools,
+    Mounting,
+    Remastering,
+    Verifying,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl ConversionStage {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Preparing => "preparing",
+            Self::InstallingTools => "installing_tools",
+            Self::Mounting => "mounting",
+            Self::Remastering => "remastering",
+            Self::Verifying => "verifying",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversionStatus {
+    Started,
+    InProgress,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl ConversionStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::InProgress => "in_progress",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    pub const fn is_running(self) -> bool {
+        matches!(self, Self::Started | Self::InProgress)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversionProgress {
+    pub conversion_id: String,
+    pub image_id: String,
+    pub source_name: String,
+    pub output_name: Option<String>,
+    pub stage: ConversionStage,
+    pub status: ConversionStatus,
+    pub progress_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
 }
 

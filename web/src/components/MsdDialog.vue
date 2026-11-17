@@ -3,7 +3,15 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useSystemStore } from '@/stores/system'
-import { msdApi, type MsdImage, type DriveFile, type DriveInfo, type MountedMedia, type DiskMode } from '@/api'
+import {
+  msdApi,
+  type MsdImage,
+  type DriveFile,
+  type DriveInfo,
+  type MountedMedia,
+  type DiskMode,
+  type ConversionProgress,
+} from '@/api'
 import { ApiError, localizeMsdErrorCode } from '@/api/request'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
@@ -48,6 +56,7 @@ import {
   Globe,
   X,
   Info,
+  Wand2,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -73,6 +82,9 @@ const uploading = ref(false)
 const uploadProgressPercent = computed(() =>
   Math.round(Math.min(100, Math.max(0, uploadProgress.value))),
 )
+
+const conversions = ref<Record<string, ConversionProgress>>({})
+const conversionStartingId = ref<string | null>(null)
 
 const mountMode = ref<'cdrom' | 'flash'>('flash')
 // Default to readwrite for flash mode; cdrom forces readonly anyway
@@ -204,6 +216,97 @@ function mountedImage(imageId: string): MountedMedia | null {
   return mountedMedia.value.find(media => media.kind === 'image' && media.id === imageId) ?? null
 }
 
+function conversionFor(image: MsdImage): ConversionProgress | null {
+  return conversions.value[image.id] ?? null
+}
+
+function isConversionRunning(conversion: ConversionProgress | null): boolean {
+  return conversion?.status === 'started' || conversion?.status === 'in_progress'
+}
+
+function isoBadgeLabel(image: MsdImage): string {
+  if (image.iso?.format === 'udf_only') return t('msd.isoUdfOnly')
+  if (image.iso?.format === 'missing_joliet') return t('msd.isoMissingJoliet')
+  return t('msd.isoUnsupported')
+}
+
+function isoBadgeHint(image: MsdImage): string {
+  if (image.iso?.format === 'udf_only') return t('msd.isoUdfOnlyHint')
+  if (image.iso?.format === 'missing_joliet') return t('msd.isoMissingJolietHint')
+  return t('msd.isoUnsupportedHint')
+}
+
+const convertibleImageCount = computed(() =>
+  images.value.filter(
+    image => image.iso?.needs_conversion && conversionFor(image)?.status !== 'completed',
+  ).length,
+)
+
+const anyConversionRunning = computed(() =>
+  Object.values(conversions.value).some(conversion => isConversionRunning(conversion)),
+)
+
+async function loadConversions() {
+  try {
+    const list = await msdApi.listConversions()
+    conversions.value = Object.fromEntries(list.map(item => [item.image_id, item]))
+  } catch (e) {
+    console.error('Failed to load image conversions:', e)
+  }
+}
+
+async function startImageConversion(image: MsdImage) {
+  if (conversionStartingId.value || anyConversionRunning.value || isConversionRunning(conversionFor(image))) return
+
+  conversionStartingId.value = image.id
+  try {
+    const progress = await msdApi.convertImage(image.id)
+    conversions.value = { ...conversions.value, [progress.image_id]: progress }
+  } catch (e) {
+    console.error('Failed to start image conversion:', e)
+  } finally {
+    conversionStartingId.value = null
+  }
+}
+
+async function cancelImageConversion(image: MsdImage) {
+  try {
+    await msdApi.cancelConversion(image.id)
+  } catch (e) {
+    console.error('Failed to cancel image conversion:', e)
+  }
+}
+
+function clearConversionForOutput(outputName: string | undefined) {
+  if (!outputName) return
+
+  const next = { ...conversions.value }
+  for (const [imageId, conversion] of Object.entries(next)) {
+    if (conversion.output_name === outputName) {
+      delete next[imageId]
+    }
+  }
+  conversions.value = next
+}
+
+function handleConversionProgress(data: ConversionProgress) {
+  conversions.value = { ...conversions.value, [data.image_id]: data }
+
+  if (data.status === 'completed') {
+    toast.success(t('msd.conversionComplete', {
+      name: data.output_name ?? data.source_name,
+    }))
+    loadImages()
+    refreshDiskSpace()
+  } else if (data.status === 'failed') {
+    toast.error(t('msd.conversionFailed'), {
+      description: localizeMsdErrorCode(data.error_code ?? undefined),
+    })
+  } else if (data.status === 'cancelled') {
+    toast.info(t('msd.conversionCancelled'))
+  }
+}
+
 function updateMountMode(value: unknown) {
   const next = Array.isArray(value) ? value[0] : value
   if (next !== 'cdrom' && next !== 'flash') return
@@ -252,7 +355,7 @@ async function refreshDiskSpace() {
 async function loadData() {
   await refreshDiskSpace()
   await refreshMsdState()
-  await loadImages()
+  await Promise.all([loadImages(), loadConversions()])
   await loadDriveInfo()
   if (driveFilesAvailable.value) {
     await loadDriveFiles()
@@ -308,6 +411,11 @@ async function handleImageUpload(e: Event) {
 async function connectImage(image: MsdImage) {
   if (operationInProgress.value) {
     toast.warning(t('msd.operationInProgress'))
+    return
+  }
+
+  if (isConversionRunning(conversionFor(image))) {
+    toast.warning(t('msd.conversionInProgress'))
     return
   }
 
@@ -423,6 +531,7 @@ async function executeDelete() {
   try {
     if (deleteTarget.value.type === 'image') {
       await msdApi.deleteImage(deleteTarget.value.id)
+      clearConversionForOutput(deleteTarget.value.name)
       images.value = images.value.filter(i => i.id !== deleteTarget.value!.id)
       await refreshDiskSpace()
     } else {
@@ -698,10 +807,12 @@ onMounted(async () => {
     await loadData()
   }
   on('msd.download_progress', handleDownloadProgress)
+  on('msd.conversion_progress', handleConversionProgress)
 })
 
 onUnmounted(() => {
   off('msd.download_progress', handleDownloadProgress)
+  off('msd.conversion_progress', handleConversionProgress)
 })
 </script>
 
@@ -837,6 +948,14 @@ onUnmounted(() => {
                     </span>
                   </div>
 
+                  <div
+                    v-if="!loadingImages && convertibleImageCount > 0"
+                    class="flex shrink-0 items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-2.5"
+                  >
+                    <Info class="mt-0.5 size-3.5 shrink-0 text-warning" />
+                    <p class="text-xs text-muted-foreground">{{ t('msd.isoFixHint') }}</p>
+                  </div>
+
                   <Skeleton v-if="loadingImages" class="h-24 w-full" />
                   <div
                     v-else-if="imagesError"
@@ -879,10 +998,57 @@ onUnmounted(() => {
                             </Tooltip>
                             <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span class="text-xs text-muted-foreground">{{ formatBytes(image.size) }}</span>
+                              <Tooltip v-if="image.iso && image.iso.format !== 'ok'">
+                                <TooltipTrigger as-child>
+                                  <Badge
+                                    variant="outline"
+                                    class="h-5 cursor-help px-1.5 text-[10px] font-normal"
+                                    :class="image.iso?.needs_conversion
+                                      ? 'border-warning/50 text-warning'
+                                      : 'border-destructive/40 text-destructive'"
+                                  >
+                                    {{ isoBadgeLabel(image) }}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p class="max-w-xs">{{ isoBadgeHint(image) }}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
                         </div>
-                        <div class="flex shrink-0 items-center justify-end gap-1.5">
+                        <div class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                          <template v-if="conversionFor(image)?.status === 'completed'">
+                            <Badge
+                              variant="outline"
+                              class="h-8 border-success/40 px-2 text-xs text-success"
+                            >
+                              {{ t('msd.converted') }}
+                            </Badge>
+                          </template>
+                          <template v-else-if="isConversionRunning(conversionFor(image))">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              class="h-8 text-xs"
+                              @click="cancelImageConversion(image)"
+                            >
+                              <X class="size-3.5 mr-1" />
+                              {{ t('msd.cancelConversion') }}
+                            </Button>
+                          </template>
+                          <Button
+                            v-else-if="image.iso?.convertible"
+                            variant="outline"
+                            size="sm"
+                            class="h-8 text-xs"
+                            :disabled="!!conversionStartingId || anyConversionRunning"
+                            @click="startImageConversion(image)"
+                          >
+                            <Wand2 class="size-3.5 mr-1" />
+                            <span v-if="conversionStartingId === image.id">{{ t('msd.converting') }}...</span>
+                            <span v-else>{{ t('msd.convertImage') }}</span>
+                          </Button>
                           <template v-if="mountedImage(image.id)">
                             <Button
                               variant="outline"
@@ -900,7 +1066,7 @@ onUnmounted(() => {
                               variant="default"
                               size="sm"
                               class="h-8 text-xs"
-                              :disabled="operationInProgress || mediaSlotsFull"
+                              :disabled="operationInProgress || mediaSlotsFull || isConversionRunning(conversionFor(image))"
                               @click="connectImage(image)"
                             >
                               <Link v-if="!connecting" class="size-3.5 mr-1" />
@@ -912,12 +1078,50 @@ onUnmounted(() => {
                             variant="ghost"
                             size="icon"
                             class="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            :disabled="operationInProgress || !!mountedImage(image.id)"
+                            :disabled="operationInProgress || !!mountedImage(image.id) || isConversionRunning(conversionFor(image))"
                             @click="confirmDelete('image', image.id, image.name)"
                           >
                             <Trash2 class="size-3.5" />
                           </Button>
                         </div>
+                      </div>
+
+                      <div
+                        v-if="conversionFor(image)"
+                        class="mt-2 space-y-1.5 border-t border-border/60 pt-2"
+                      >
+                        <div class="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                          <span class="truncate">{{ t(`msd.conversionStages.${conversionFor(image)?.stage}`) }}</span>
+                          <span
+                            v-if="isConversionRunning(conversionFor(image))"
+                            class="shrink-0 tabular-nums"
+                          >
+                            {{ Math.round(conversionFor(image)?.progress_pct ?? 0) }}%
+                          </span>
+                        </div>
+                        <Progress
+                          v-if="isConversionRunning(conversionFor(image))"
+                          :model-value="conversionFor(image)?.progress_pct ?? 0"
+                          class="h-1"
+                        />
+                        <p
+                          v-else-if="conversionFor(image)?.status === 'completed'"
+                          class="text-[11px] text-success"
+                        >
+                          {{ t('msd.conversionDoneHint', { name: conversionFor(image)?.output_name ?? '' }) }}
+                        </p>
+                        <p
+                          v-else-if="conversionFor(image)?.status === 'failed'"
+                          class="text-[11px] text-destructive"
+                        >
+                          {{ localizeMsdErrorCode(conversionFor(image)?.error_code ?? undefined) }}
+                        </p>
+                        <p
+                          v-else-if="conversionFor(image)?.status === 'cancelled'"
+                          class="text-[11px] text-muted-foreground"
+                        >
+                          {{ t('msd.conversionCancelled') }}
+                        </p>
                       </div>
                     </div>
                   </template>

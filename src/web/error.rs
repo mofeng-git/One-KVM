@@ -80,11 +80,16 @@ pub(crate) fn msd_status_code(code: crate::error::MsdErrorCode) -> StatusCode {
         | MsdStorageSpaceUnavailable
         | MsdStorageFull
         | MsdStorageReadOnly
-        | MsdStoragePermissionDenied => StatusCode::BAD_REQUEST,
+        | MsdStoragePermissionDenied
+        | MsdIsoConversionNotNeeded
+        | MsdIsoConversionUnsupported => StatusCode::BAD_REQUEST,
         MsdOperationFailed
         | MsdRemoteDownloadFailed
         | MsdDownloadIncomplete
-        | MsdDisconnectFailed => StatusCode::INTERNAL_SERVER_ERROR,
+        | MsdDisconnectFailed
+        | MsdIsoToolsMissing
+        | MsdIsoMountFailed
+        | MsdIsoConversionFailed => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
@@ -167,6 +172,11 @@ mod tests {
             (MsdStoragePermissionDenied, StatusCode::BAD_REQUEST),
             (MsdMediumRemovalPrevented, StatusCode::CONFLICT),
             (MsdDisconnectFailed, StatusCode::INTERNAL_SERVER_ERROR),
+            (MsdIsoConversionNotNeeded, StatusCode::BAD_REQUEST),
+            (MsdIsoConversionUnsupported, StatusCode::BAD_REQUEST),
+            (MsdIsoToolsMissing, StatusCode::INTERNAL_SERVER_ERROR),
+            (MsdIsoMountFailed, StatusCode::INTERNAL_SERVER_ERROR),
+            (MsdIsoConversionFailed, StatusCode::INTERNAL_SERVER_ERROR),
         ];
         assert_eq!(cases.len(), crate::error::MsdErrorCode::ALL.len());
         for (code, expected_status) in cases {

@@ -381,11 +381,16 @@ fn msd_error_response(code: MsdErrorCode) -> Response {
         | MsdStorageSpaceUnavailable
         | MsdStorageFull
         | MsdStorageReadOnly
-        | MsdStoragePermissionDenied => StatusCode::BAD_REQUEST,
+        | MsdStoragePermissionDenied
+        | MsdIsoConversionNotNeeded
+        | MsdIsoConversionUnsupported => StatusCode::BAD_REQUEST,
         MsdOperationFailed
         | MsdRemoteDownloadFailed
         | MsdDownloadIncomplete
-        | MsdDisconnectFailed => StatusCode::INTERNAL_SERVER_ERROR,
+        | MsdDisconnectFailed
+        | MsdIsoToolsMissing
+        | MsdIsoMountFailed
+        | MsdIsoConversionFailed => StatusCode::INTERNAL_SERVER_ERROR,
     };
     (status, Json(RedfishError::msd(code))).into_response()
 }

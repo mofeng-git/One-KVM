@@ -90,6 +90,11 @@ const msdErrorKeys: Record<string, string> = {
   MSD_STORAGE_PERMISSION_DENIED: 'msd.errors.storagePermissionDenied',
   MSD_MEDIUM_REMOVAL_PREVENTED: 'msd.errors.mediumRemovalPrevented',
   MSD_DISCONNECT_FAILED: 'msd.errors.disconnectFailed',
+  MSD_ISO_CONVERSION_NOT_NEEDED: 'msd.errors.isoConversionNotNeeded',
+  MSD_ISO_CONVERSION_UNSUPPORTED: 'msd.errors.isoConversionUnsupported',
+  MSD_ISO_TOOLS_MISSING: 'msd.errors.isoToolsMissing',
+  MSD_ISO_MOUNT_FAILED: 'msd.errors.isoMountFailed',
+  MSD_ISO_CONVERSION_FAILED: 'msd.errors.isoConversionFailed',
 }
 
 export function localizeMsdErrorCode(code?: string, fallback?: string): string {

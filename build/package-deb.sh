@@ -140,7 +140,7 @@ Section: admin
 Priority: optional
 Architecture: $DEB_ARCH
 Depends: $DEPS
-Recommends: bluez
+Recommends: bluez, xorriso
 Maintainer: SilentWind <admin@mofeng.run>
 Description: A open and lightweight IP-KVM solution
  Enables BIOS-level remote management of servers and workstations.

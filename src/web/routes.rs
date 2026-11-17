@@ -328,6 +328,16 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                 "/msd/images/download/cancel",
                 post(handlers::msd_image_download_cancel),
             )
+            .route(
+                "/msd/images/conversions",
+                get(handlers::msd_image_conversions),
+            )
+            .route(
+                "/msd/images/{id}/convert",
+                get(handlers::msd_image_conversion_status)
+                    .post(handlers::msd_image_convert)
+                    .delete(handlers::msd_image_conversion_cancel),
+            )
             .route("/msd/images/{id}", get(handlers::msd_image_get))
             .route("/msd/images/{id}", delete(handlers::msd_image_delete))
             .route("/msd/disk-mode", put(handlers::msd_disk_mode_put))

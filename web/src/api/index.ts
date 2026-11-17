@@ -579,11 +579,49 @@ export const atxApi = {
     }),
 }
 
+export type IsoFormat = 'ok' | 'missing_joliet' | 'udf_only' | 'unsupported'
+
+export interface IsoCompatibility {
+  format: IsoFormat
+  needs_conversion: boolean
+  convertible: boolean
+  has_joliet: boolean
+  has_udf: boolean
+  has_el_torito: boolean
+  iso9660_files: number | null
+  file_count_truncated: boolean
+}
+
 export interface MsdImage {
   id: string
   name: string
   size: number
   created_at: string
+  /** ISO 9660 / Joliet / UDF compatibility, present for .iso images only. */
+  iso?: IsoCompatibility | null
+}
+
+export type ConversionStage =
+  | 'preparing'
+  | 'installing_tools'
+  | 'mounting'
+  | 'remastering'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type ConversionStatus = 'started' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+
+export interface ConversionProgress {
+  conversion_id: string
+  image_id: string
+  source_name: string
+  output_name?: string | null
+  stage: ConversionStage
+  status: ConversionStatus
+  progress_pct: number | null
+  error_code?: string | null
 }
 
 export interface DriveFile {
@@ -630,6 +668,30 @@ export const msdApi = {
     }>('/msd/status', {}, { toastOnError: false }),
 
   listImages: () => request<MsdImage[]>('/msd/images', {}, { toastOnError: false }),
+
+  listConversions: () =>
+    request<ConversionProgress[]>('/msd/images/conversions', {}, { toastOnError: false }),
+
+  convertImage: (id: string) =>
+    request<ConversionProgress>(
+      `/msd/images/${id}/convert`,
+      { method: 'POST' },
+      { errorTitleKey: 'msd.operations.convertImage' },
+    ),
+
+  conversionStatus: (id: string) =>
+    request<ConversionProgress>(
+      `/msd/images/${id}/convert`,
+      {},
+      { toastOnError: false },
+    ),
+
+  cancelConversion: (id: string) =>
+    request<{ success: boolean }>(
+      `/msd/images/${id}/convert`,
+      { method: 'DELETE' },
+      { errorTitleKey: 'msd.operations.cancelConversion' },
+    ),
 
   uploadImage: async (file: File, onProgress?: (progress: number) => void) => {
     const formData = new FormData()

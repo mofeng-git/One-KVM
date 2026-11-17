@@ -209,6 +209,21 @@ pub enum SystemEvent {
         error_code: Option<String>,
     },
 
+    #[serde(rename = "msd.conversion_progress")]
+    MsdConversionProgress {
+        conversion_id: String,
+        image_id: String,
+        source_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_name: Option<String>,
+        stage: String,
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        progress_pct: Option<f32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+    },
+
     #[serde(rename = "system.device_info")]
     DeviceInfo {
         video: VideoDeviceInfo,
@@ -240,6 +255,7 @@ pub(crate) const EXACT_EVENT_TOPICS: &[&str] = &[
     "webrtc.ice_complete",
     "msd.upload_progress",
     "msd.download_progress",
+    "msd.conversion_progress",
     "system.device_info",
     "error",
 ];
@@ -262,6 +278,7 @@ impl SystemEvent {
             Self::WebRTCIceComplete { .. } => "webrtc.ice_complete",
             Self::MsdUploadProgress { .. } => "msd.upload_progress",
             Self::MsdDownloadProgress { .. } => "msd.download_progress",
+            Self::MsdConversionProgress { .. } => "msd.conversion_progress",
             Self::DeviceInfo { .. } => "system.device_info",
             Self::Error { .. } => "error",
         }
@@ -377,6 +394,16 @@ mod tests {
                 total_bytes: None,
                 progress_pct: None,
                 status: String::new(),
+                error_code: None,
+            },
+            SystemEvent::MsdConversionProgress {
+                conversion_id: String::new(),
+                image_id: String::new(),
+                source_name: String::new(),
+                output_name: None,
+                stage: String::new(),
+                status: String::new(),
+                progress_pct: None,
                 error_code: None,
             },
             SystemEvent::DeviceInfo {

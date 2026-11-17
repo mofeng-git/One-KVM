@@ -6,10 +6,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::image::ImageManager;
+use super::iso_fix::IsoConversionManager;
 use super::monitor::MsdHealthMonitor;
 use super::types::{
-    DiskMode, DownloadProgress, DownloadStatus, DriveFileAccess, DriveInfo, ImageInfo,
-    MountedMedia, MountedMediaKind, MsdState,
+    ConversionProgress, DiskMode, DownloadProgress, DownloadStatus, DriveFileAccess, DriveInfo,
+    ImageInfo, MountedMedia, MountedMediaKind, MsdState,
 };
 use super::ventoy_drive::VentoyDrive;
 use crate::error::{AppError, MsdErrorCode, Result};
@@ -24,6 +25,7 @@ pub struct MsdController {
     drive_path: PathBuf,
     events: tokio::sync::RwLock<Option<Arc<crate::events::EventBus>>>,
     downloads: Arc<RwLock<HashMap<String, CancellationToken>>>,
+    conversions: IsoConversionManager,
     operation_lock: Arc<RwLock<()>>,
     monitor: Arc<MsdHealthMonitor>,
 }
@@ -34,6 +36,7 @@ impl MsdController {
         let images_path = msd_dir.join("images");
         let ventoy_dir = msd_dir.join("ventoy");
         let drive_path = ventoy_dir.join("ventoy.img");
+        let conversions = IsoConversionManager::new(images_path.clone());
         Self {
             otg_service,
             msd_function: RwLock::new(None),
@@ -43,6 +46,7 @@ impl MsdController {
             drive_path,
             events: tokio::sync::RwLock::new(None),
             downloads: Arc::new(RwLock::new(HashMap::new())),
+            conversions,
             operation_lock: Arc::new(RwLock::new(())),
             monitor: Arc::new(MsdHealthMonitor::with_defaults()),
         }
@@ -104,7 +108,34 @@ impl MsdController {
     }
 
     pub async fn set_event_bus(&self, events: std::sync::Arc<crate::events::EventBus>) {
+        self.conversions.set_event_bus(events.clone()).await;
         *self.events.write().await = Some(events);
+    }
+
+    pub async fn start_image_conversion(&self, image: &ImageInfo) -> Result<ConversionProgress> {
+        {
+            let state = self.state.read().await;
+            if state
+                .mounted_media
+                .iter()
+                .any(|media| media.kind == MountedMediaKind::Image && media.id == image.id)
+            {
+                return Err(MsdErrorCode::MsdMediaInUse.into());
+            }
+        }
+        self.conversions.start(image).await
+    }
+
+    pub async fn image_conversion(&self, image_id: &str) -> Option<ConversionProgress> {
+        self.conversions.get(image_id).await
+    }
+
+    pub async fn image_conversions(&self) -> Vec<ConversionProgress> {
+        self.conversions.list().await
+    }
+
+    pub async fn cancel_image_conversion(&self, image_id: &str) -> Result<()> {
+        self.conversions.cancel(image_id).await
     }
 
     async fn publish_event(&self, event: crate::events::SystemEvent) {
@@ -147,6 +178,10 @@ impl MsdController {
         let previous_state = state.clone();
 
         self.assert_available(&state).await?;
+
+        if self.conversions.is_running(&image.id).await {
+            return Err(MsdErrorCode::MsdOperationInProgress.into());
+        }
 
         if !image.path.exists() {
             let error_msg = format!("Image file not found: {}", image.path.display());
@@ -537,6 +572,9 @@ impl MsdController {
 
     pub async fn delete_image(&self, image_id: &str) -> Result<()> {
         let _op_guard = self.try_operation()?;
+        if self.conversions.is_running(image_id).await {
+            return Err(MsdErrorCode::MsdOperationInProgress.into());
+        }
         let state = self.state.read().await;
         if state
             .mounted_media
@@ -702,6 +740,8 @@ impl MsdController {
 
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down MSD controller");
+
+        self.conversions.cancel_all().await;
 
         if let Err(e) = self.disconnect().await {
             warn!("Error disconnecting during shutdown: {}", e);

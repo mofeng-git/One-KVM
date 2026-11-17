@@ -6,7 +6,7 @@ Maintainer: SilentWind <admin@mofeng.run>
 Package: one-kvm
 Architecture: {arch}
 Depends: ${{auto}}, ca-certificates{distsuffix}
-Recommends: bluez
+Recommends: bluez, xorriso
 Description: A open and lightweight IP-KVM solution written in Rust
  Enables BIOS-level remote management of servers and workstations.
  .

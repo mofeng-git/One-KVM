@@ -43,6 +43,15 @@ impl ImageManager {
             let entry = entry.map_err(|error| storage_io_error("read image entry", error))?;
 
             let path = entry.path();
+            // Upload/download/conversion staging files are hidden dot-files and
+            // must not appear as user-selectable images.
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with('.'))
+            {
+                continue;
+            }
             if path.is_file() {
                 if let Some(info) = self.get_image_info(&path) {
                     images.push(info);
@@ -71,12 +80,29 @@ impl ImageManager {
             })
             .unwrap_or_else(OffsetDateTime::now_utc);
 
+        let iso = if name.to_ascii_lowercase().ends_with(".iso") {
+            match super::iso::probe_iso(path) {
+                Ok(probe) => Some(probe.compatibility),
+                Err(error) => {
+                    warn!(
+                        image = %name,
+                        %error,
+                        "Failed to probe ISO compatibility"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Some(ImageInfo {
             id,
             name,
             path: path.to_path_buf(),
             size: metadata.len(),
             created_at,
+            iso,
         })
     }
 
