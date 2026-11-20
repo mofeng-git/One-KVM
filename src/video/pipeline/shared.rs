@@ -1197,6 +1197,19 @@ impl SharedVideoPipeline {
         }
         let mut encoder_state = build_encoder_state(&encoder_config)?;
         let frame_mailbox = Arc::new(VideoFrameMailbox::new());
+        #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+        let mut hw_mjpeg_input = encoder_state.ffmpeg_hw_pipeline.as_mut().and_then(|hw| {
+            let mailbox = frame_mailbox.clone();
+            match hw.start_worker(move || mailbox.notify()) {
+                Ok(input) => Some(input),
+                Err(error) => {
+                    warn!("Using synchronous hardware MJPEG transcode: {error}");
+                    None
+                }
+            }
+        });
+        #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+        let use_hw_mjpeg_worker = hw_mjpeg_input.is_some();
         *self.frame_mailbox.lock() = Some(frame_mailbox.clone());
         self.mjpeg_decoded_frames.store(0, Ordering::Relaxed);
         self.mjpeg_dropped_before_decode.store(0, Ordering::Relaxed);
@@ -1252,9 +1265,27 @@ impl SharedVideoPipeline {
                 let mut suppressed_encode_errors: HashMap<String, u64> = HashMap::new();
 
                 while pipeline.running_flag.load(Ordering::Acquire) {
-                    let Some((frame, reservations)) =
-                        frame_mailbox.receive_when(|| pipeline.reserve_outputs())
-                    else {
+                    let wait_for_capture = || {
+                        frame_mailbox
+                            .receive_when(|| pipeline.reserve_outputs())
+                            .map(|(frame, reservations)| (Some(frame), reservations))
+                    };
+                    #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+                    let next = if use_hw_mjpeg_worker {
+                        frame_mailbox.wait_for_event(|| {
+                            let hw = encoder_state.ffmpeg_hw_pipeline.as_ref()?;
+                            if hw.has_decoded_frame() {
+                                pipeline.reserve_outputs().map(|reservations| (None, reservations))
+                            } else {
+                                None
+                            }
+                        })
+                    } else {
+                        wait_for_capture()
+                    };
+                    #[cfg(not(all(target_os = "linux", feature = "rkmpp")))]
+                    let next = wait_for_capture();
+                    let Some((frame, reservations)) = next else {
                         break;
                     };
                     if !pipeline.running_flag.load(Ordering::Acquire) {
@@ -1262,6 +1293,12 @@ impl SharedVideoPipeline {
                     }
 
                     if reservations.is_empty() {
+                        #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+                        if frame.is_none() {
+                            if let Some(hw) = encoder_state.ffmpeg_hw_pipeline.as_mut() {
+                                hw.discard_decoded_frame();
+                            }
+                        }
                         if parallel_mjpeg_decode {
                             pipeline
                                 .decoded_frames_not_encoded
@@ -1279,7 +1316,16 @@ impl SharedVideoPipeline {
                     pipeline
                         .encoded_input_frames
                         .fetch_add(1, Ordering::Relaxed);
-                    let encode_result = pipeline.encode_frame_sync(&mut encoder_state, &frame);
+                    let encode_result = if let Some(frame) = frame {
+                        pipeline.encode_frame_sync(&mut encoder_state, &frame)
+                    } else {
+                        #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+                        {
+                            pipeline.encode_hw_mjpeg(&mut encoder_state, None)
+                        }
+                        #[cfg(not(all(target_os = "linux", feature = "rkmpp")))]
+                        unreachable!("capture input is required without a hardware decode worker");
+                    };
 
                     match encode_result {
                         Ok(encoded_frames) => {
@@ -1704,6 +1750,8 @@ impl SharedVideoPipeline {
                         continue;
                     }
 
+                    #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+                    let capture_time = Instant::now();
                     owned.truncate(frame_size);
                     capture_sequence = capture_sequence.wrapping_add(1);
                     if pipeline.snapshot_slot.pending() {
@@ -1734,6 +1782,19 @@ impl SharedVideoPipeline {
                         pixel_format,
                         active_fps,
                     ));
+
+                    #[cfg(all(target_os = "linux", feature = "rkmpp"))]
+                    if let Some(input) = hw_mjpeg_input.as_mut() {
+                        if let Err(error) = input.submit(&owned, pipeline.pts_ms_at(capture_time)) {
+                            if pipeline.running_flag.load(Ordering::Acquire)
+                                && capture_error_throttler.should_log("hw_mjpeg_submit")
+                            {
+                                warn!("Dropping MJPEG capture frame: {error}");
+                            }
+                        }
+                        buffer_pool.put(owned);
+                        continue;
+                    }
 
                     if let Some(senders) = mjpeg_decode_senders.as_mut() {
                         let mut pending = Some(MjpegDecodeJob {
@@ -1821,6 +1882,55 @@ impl SharedVideoPipeline {
         Ok(())
     }
 
+    #[cfg(feature = "rkmpp")]
+    fn encode_hw_mjpeg(
+        &self,
+        state: &mut EncoderThreadState,
+        input: Option<(&[u8], i64)>,
+    ) -> Result<Vec<EncodedVideoFrame>> {
+        if state.input_format != PixelFormat::Mjpeg {
+            return Err(AppError::VideoError("FFmpeg HW pipeline requires MJPEG input".into()));
+        }
+        let fps = state.fps;
+        let codec = state.codec;
+        let pipeline = state.ffmpeg_hw_pipeline.as_mut().ok_or_else(|| {
+            AppError::VideoError("FFmpeg HW pipeline not initialized".to_string())
+        })?;
+
+        if self.keyframe_requested.swap(false, Ordering::AcqRel) {
+            pipeline.request_keyframe();
+            debug!("[Pipeline] FFmpeg HW keyframe requested");
+        }
+
+        let packet = match input {
+            Some((data, pts_ms)) => pipeline.encode(data, pts_ms),
+            None => pipeline.encode_ready(),
+        }
+        .map_err(|e| {
+            let detail = if e.is_empty() {
+                ffmpeg_hw_last_error()
+            } else {
+                e
+            };
+            AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
+        })?;
+
+        if let Some((data, is_keyframe, pts_ms)) = packet {
+            let (data, is_keyframe) =
+                self.inspect_and_parameterize_packet(codec, Bytes::from(data), is_keyframe);
+            let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
+            return Ok(vec![EncodedVideoFrame {
+                data,
+                pts_ms,
+                is_keyframe,
+                sequence,
+                duration: Duration::from_millis(1000 / fps as u64),
+                codec,
+            }]);
+        }
+        Ok(Vec::new())
+    }
+
     /// Encode a single frame (synchronous, no async locks)
     fn encode_frame_sync(
         &self,
@@ -1836,44 +1946,7 @@ impl SharedVideoPipeline {
 
         #[cfg(feature = "rkmpp")]
         if state.ffmpeg_hw_enabled {
-            if input_format != PixelFormat::Mjpeg {
-                return Err(AppError::VideoError(
-                    "FFmpeg HW pipeline requires MJPEG input".to_string(),
-                ));
-            }
-            let pipeline = state.ffmpeg_hw_pipeline.as_mut().ok_or_else(|| {
-                AppError::VideoError("FFmpeg HW pipeline not initialized".to_string())
-            })?;
-
-            if self.keyframe_requested.swap(false, Ordering::AcqRel) {
-                pipeline.request_keyframe();
-                debug!("[Pipeline] FFmpeg HW keyframe requested");
-            }
-
-            let packet = pipeline.encode(raw_frame, pts_ms).map_err(|e| {
-                let detail = if e.is_empty() {
-                    ffmpeg_hw_last_error()
-                } else {
-                    e
-                };
-                AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
-            })?;
-
-            if let Some((data, is_keyframe)) = packet {
-                let (data, is_keyframe) =
-                    self.inspect_and_parameterize_packet(codec, Bytes::from(data), is_keyframe);
-                let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                return Ok(vec![EncodedVideoFrame {
-                    data,
-                    pts_ms,
-                    is_keyframe,
-                    sequence,
-                    duration: Duration::from_millis(1000 / fps as u64),
-                    codec,
-                }]);
-            }
-
-            return Ok(Vec::new());
+            return self.encode_hw_mjpeg(state, Some((raw_frame, pts_ms)));
         }
 
         let decoded_buf = if input_format.is_compressed() {
@@ -1972,25 +2045,30 @@ impl SharedVideoPipeline {
     }
 
     fn pts_ms(&self) -> i64 {
-        let current_ts_us = PROCESS_START
-            .get_or_init(Instant::now)
-            .elapsed()
+        self.pts_ms_at(Instant::now())
+    }
+
+    fn pts_ms_at(&self, timestamp: Instant) -> i64 {
+        let current_ts_us = timestamp
+            .saturating_duration_since(*PROCESS_START.get_or_init(|| timestamp))
             .as_micros() as i64;
         let start_ts_us = self.pipeline_start_time_us.load(Ordering::Acquire);
         let start_ts_us = if start_ts_us == 0 {
+            // Store the timestamp plus one so zero remains an unset marker.
+            let initial = current_ts_us.saturating_add(1);
             match self.pipeline_start_time_us.compare_exchange(
                 0,
-                current_ts_us,
+                initial,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
-                Ok(_) => current_ts_us,
+                Ok(_) => initial,
                 Err(existing) => existing,
             }
         } else {
             start_ts_us
         };
-        current_ts_us.saturating_sub(start_ts_us) / 1000
+        current_ts_us.saturating_sub(start_ts_us - 1).max(0) / 1000
     }
 
     /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)

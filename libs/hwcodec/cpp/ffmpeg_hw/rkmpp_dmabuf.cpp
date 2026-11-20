@@ -11,6 +11,7 @@
 #define HAVE_MPP_DMA 1
 #include <cerrno>
 #include <linux/dma-buf.h>
+#include <linux/videodev2.h>
 #include <sys/ioctl.h>
 extern "C" {
 #include <rockchip/rk_mpi.h>
@@ -84,6 +85,61 @@ static bool set_cfg(RkmppDmaEncoder *e, const char *key, int value) {
     return ret == 0;
 }
 
+static bool set_color(RkmppDmaEncoder *e, MppFrameColorRange range,
+                      MppFrameColorSpace matrix, MppFrameColorPrimaries primaries,
+                      MppFrameColorTransferCharacteristic transfer) {
+    return set_cfg(e, "prep:colorrange", range) &&
+           set_cfg(e, "prep:colorspace", matrix) &&
+           set_cfg(e, "prep:colorprim", primaries) &&
+           set_cfg(e, "prep:colortrc", transfer);
+}
+
+static bool set_capture_color(RkmppDmaEncoder *e, const RkmppDmaV4l2Color &color,
+                              bool rgb) {
+    const auto encoding = color.ycbcr_encoding == V4L2_YCBCR_ENC_DEFAULT
+        ? V4L2_MAP_YCBCR_ENC_DEFAULT(color.colorspace) : color.ycbcr_encoding;
+    const auto quantization = color.quantization == V4L2_QUANTIZATION_DEFAULT
+        ? V4L2_MAP_QUANTIZATION_DEFAULT(rgb, color.colorspace, encoding) : color.quantization;
+    const auto transfer = color.transfer == V4L2_XFER_FUNC_DEFAULT
+        ? V4L2_MAP_XFER_FUNC_DEFAULT(color.colorspace) : color.transfer;
+
+    auto matrix = MPP_FRAME_SPC_UNSPECIFIED;
+    switch (encoding) {
+    case V4L2_YCBCR_ENC_601: matrix = MPP_FRAME_SPC_SMPTE170M; break;
+    case V4L2_YCBCR_ENC_709: matrix = MPP_FRAME_SPC_BT709; break;
+    case V4L2_YCBCR_ENC_BT2020: matrix = MPP_FRAME_SPC_BT2020_NCL; break;
+    case V4L2_YCBCR_ENC_BT2020_CONST_LUM: matrix = MPP_FRAME_SPC_BT2020_CL; break;
+    case V4L2_YCBCR_ENC_SMPTE240M: matrix = MPP_FRAME_SPC_SMPTE240M; break;
+    }
+    auto primaries = MPP_FRAME_PRI_UNSPECIFIED;
+    switch (color.colorspace) {
+    case V4L2_COLORSPACE_SMPTE170M: primaries = MPP_FRAME_PRI_SMPTE170M; break;
+    case V4L2_COLORSPACE_SMPTE240M: primaries = MPP_FRAME_PRI_SMPTE240M; break;
+    case V4L2_COLORSPACE_470_SYSTEM_M: primaries = MPP_FRAME_PRI_BT470M; break;
+    case V4L2_COLORSPACE_470_SYSTEM_BG: primaries = MPP_FRAME_PRI_BT470BG; break;
+    case V4L2_COLORSPACE_REC709:
+    case V4L2_COLORSPACE_SRGB:
+    case V4L2_COLORSPACE_JPEG: primaries = MPP_FRAME_PRI_BT709; break;
+    case V4L2_COLORSPACE_BT2020: primaries = MPP_FRAME_PRI_BT2020; break;
+    case V4L2_COLORSPACE_DCI_P3: primaries = MPP_FRAME_PRI_SMPTE431; break;
+    }
+    auto trc = MPP_FRAME_TRC_UNSPECIFIED;
+    switch (transfer) {
+    case V4L2_XFER_FUNC_709: trc = MPP_FRAME_TRC_BT709; break;
+    case V4L2_XFER_FUNC_SRGB: trc = MPP_FRAME_TRC_IEC61966_2_1; break;
+    case V4L2_XFER_FUNC_SMPTE240M: trc = MPP_FRAME_TRC_SMPTE240M; break;
+    case V4L2_XFER_FUNC_NONE: trc = MPP_FRAME_TRC_LINEAR; break;
+    case V4L2_XFER_FUNC_SMPTE2084: trc = MPP_FRAME_TRC_SMPTEST2084; break;
+    }
+    // RGB input has no YCbCr matrix. Request BT.601 for the hardware CSC
+    // and signal that conversion in the encoded stream.
+    if (rgb)
+        matrix = MPP_FRAME_SPC_SMPTE170M;
+    return set_color(e, quantization == V4L2_QUANTIZATION_FULL_RANGE
+                         ? MPP_FRAME_RANGE_JPEG : MPP_FRAME_RANGE_MPEG,
+                     matrix, primaries, trc);
+}
+
 extern "C" int rkmpp_dma_reconfigure(RkmppDmaEncoder *e, int kbps, int gop) {
     if (!e || !e->ctx || kbps <= 0 || kbps > 1000000 || gop <= 0)
         return fail("invalid DMA encoder configuration", -1);
@@ -98,13 +154,19 @@ extern "C" int rkmpp_dma_reconfigure(RkmppDmaEncoder *e, int kbps, int gop) {
 
 extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     int width, int height, int stride, int format, int codec, int fps,
-    int kbps, int gop, const int *fds, const size_t *sizes, size_t count) {
+    int kbps, int gop, const int *fds, const size_t *sizes, size_t count,
+    const RkmppDmaV4l2Color *color) {
     if (width <= 0 || height <= 0 || width > 8192 || height > 8192 ||
         (width & 1) || (height & 1) || format < 0 || format > 4 ||
         codec < 0 || codec > 1 || fps <= 0 || fps > 240 ||
         (format != 4 && stride < width * (format == 1 || format == 3 ? 3 : format == 2 ? 2 : 1)) ||
         (format == 2 && stride % 16 != 0) || !fds || !sizes || !count || count > 16) {
         fail("invalid DMA frame layout", -1); return nullptr;
+    }
+    // VEPU accepts a visible height smaller than the padded allocation.
+    // The capture buffer does not promise that padding or plane layout.
+    if (format != 4 && (height & 15)) {
+        fail("unaligned DMA source height", -1); return nullptr;
     }
     auto *e = new (std::nothrow) RkmppDmaEncoder;
     if (!e) { fail("allocate DMA encoder", -1); return nullptr; }
@@ -143,6 +205,9 @@ extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     const int level = int64_t(width) * height * fps <= int64_t(1920) * 1080 * 60 ? 42 : 52;
     if (!codec && (!set_cfg(e, "h264:profile", 66) || !set_cfg(e, "h264:level", level) ||
                    !set_cfg(e, "h264:cabac_en", 0) || !set_cfg(e, "h264:trans8x8", 0))) {
+        delete e; return nullptr;
+    }
+    if (!e->jpeg && color && !set_capture_color(e, *color, format == 1 || format == 3)) {
         delete e; return nullptr;
     }
     if (rkmpp_dma_reconfigure(e, kbps, gop)) { delete e; return nullptr; }
@@ -254,6 +319,20 @@ static int decode_jpeg(RkmppDmaEncoder *e, size_t index, size_t bytes_used) {
         return fail("invalid JPEG decoded stride", -1);
     if (!e->decoded_layout_set) {
         if (!set_cfg(e, "prep:hor_stride", hs) || !set_cfg(e, "prep:ver_stride", vs)) return -1;
+        const auto range = mpp_frame_get_color_range(result);
+        const auto matrix = mpp_frame_get_colorspace(result);
+        const auto primaries = mpp_frame_get_color_primaries(result);
+        const auto transfer = mpp_frame_get_color_trc(result);
+        if (!set_color(e,
+                       range == MPP_FRAME_RANGE_UNSPECIFIED ? MPP_FRAME_RANGE_JPEG : range,
+                       matrix == MPP_FRAME_SPC_UNSPECIFIED || matrix == MPP_FRAME_SPC_RGB ||
+                           matrix == MPP_FRAME_SPC_RESERVED ? MPP_FRAME_SPC_SMPTE170M : matrix,
+                       primaries == MPP_FRAME_PRI_UNSPECIFIED ||
+                           primaries == MPP_FRAME_PRI_RESERVED0 || primaries == MPP_FRAME_PRI_RESERVED
+                           ? MPP_FRAME_PRI_BT709 : primaries,
+                       transfer == MPP_FRAME_TRC_UNSPECIFIED ||
+                           transfer == MPP_FRAME_TRC_RESERVED0 || transfer == MPP_FRAME_TRC_RESERVED
+                           ? MPP_FRAME_TRC_IEC61966_2_1 : transfer)) return -1;
         ret = e->api->control(e->ctx, MPP_ENC_SET_CFG, e->cfg);
         if (ret) return fail("JPEG encoder layout", ret);
         e->decoded_stride = hs; e->decoded_vstride = vs; e->decoded_layout_set = true;
@@ -319,7 +398,7 @@ extern "C" int rkmpp_dma_encode(RkmppDmaEncoder *e, size_t index, size_t bytes_u
 }
 extern "C" void rkmpp_dma_free(RkmppDmaEncoder *e) { delete e; }
 #else
-extern "C" RkmppDmaEncoder *rkmpp_dma_new(int,int,int,int,int,int,int,int,const int*,const size_t*,size_t) {
+extern "C" RkmppDmaEncoder *rkmpp_dma_new(int,int,int,int,int,int,int,int,const int*,const size_t*,size_t,const RkmppDmaV4l2Color*) {
     fail("RKMPP DMA support not built", -1); return nullptr;
 }
 extern "C" int rkmpp_dma_encode(RkmppDmaEncoder*,size_t,size_t,int,int64_t,int,const uint8_t**,size_t*) { return -1; }

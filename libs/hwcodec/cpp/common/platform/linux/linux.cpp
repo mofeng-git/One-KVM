@@ -93,6 +93,11 @@ int setup_parent_death_signal() {
 // Check for Rockchip MPP (Media Process Platform) support
 // Returns 0 if supported, -1 otherwise
 int linux_support_rkmpp() {
+  if (access("/dev/dri/renderD128", R_OK | W_OK) != 0 &&
+      access("/dev/dri/card0", R_OK | W_OK) != 0) {
+    LOG_TRACE(std::string("RKMPP: No accessible DRM node for frame allocation"));
+    return -1;
+  }
   // Check for MPP service device (primary method)
   if (access("/dev/mpp_service", F_OK) == 0) {
     LOG_TRACE(std::string("RKMPP: Found /dev/mpp_service"));

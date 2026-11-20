@@ -7,11 +7,15 @@ extern "C" {
 #endif
 
 typedef struct RkmppDmaEncoder RkmppDmaEncoder;
+typedef struct RkmppDmaV4l2Color {
+    uint32_t colorspace, ycbcr_encoding, quantization, transfer;
+} RkmppDmaV4l2Color;
 // format: 0=NV12, 1=BGR24, 2=YUYV, 3=RGB24 (byte stride), 4=MJPEG (stride ignored).
 // codec: 0=H264, 1=HEVC. MJPEG is decoded to hardware NV12, then encoded.
 RkmppDmaEncoder *rkmpp_dma_new(int width, int height, int stride, int format,
                               int codec, int fps, int kbps, int gop,
-                              const int *fds, const size_t *sizes, size_t count);
+                              const int *fds, const size_t *sizes, size_t count,
+                              const RkmppDmaV4l2Color *color);
 // Synchronous input-completion boundary. On failure the encoder is destroyed
 // internally BEFORE returning, so it cannot keep reading the capture buffer.
 // Output is borrowed until the next call or destruction; copy before reusing it.

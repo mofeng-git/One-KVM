@@ -10,7 +10,7 @@ use crate::video::format::{PixelFormat, Resolution};
 use bytes::Bytes;
 #[cfg(feature = "rkmpp")]
 use hwcodec::ffmpeg_hw::{
-    last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline,
+    HwMjpegH26xConfig, HwMjpegH26xPipeline, last_error_message as ffmpeg_hw_last_error,
 };
 use tracing::info;
 

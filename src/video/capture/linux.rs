@@ -402,6 +402,40 @@ impl CaptureStream {
         self.format
     }
 
+    #[cfg(feature = "rkmpp")]
+    pub(crate) fn dma_color(&self) -> Option<hwcodec::rkmpp_dmabuf::DmaV4l2Color> {
+        use hwcodec::rkmpp_dmabuf::DmaV4l2Color;
+
+        if self.format.is_compressed() {
+            return None;
+        }
+        let raw = ioctl::g_fmt::<v4l2r::bindings::v4l2_format>(&self.fd, self.queue).ok()?;
+        // The queue determines which member of fmt is initialized by G_FMT.
+        unsafe {
+            match self.queue {
+                QueueType::VideoCapture => {
+                    let pix = raw.fmt.pix;
+                    Some(DmaV4l2Color {
+                        colorspace: pix.colorspace,
+                        ycbcr_encoding: pix.__bindgen_anon_1.ycbcr_enc,
+                        quantization: pix.quantization,
+                        transfer: pix.xfer_func,
+                    })
+                }
+                QueueType::VideoCaptureMplane => {
+                    let pix = raw.fmt.pix_mp;
+                    Some(DmaV4l2Color {
+                        colorspace: pix.colorspace,
+                        ycbcr_encoding: u32::from(pix.__bindgen_anon_1.ycbcr_enc),
+                        quantization: u32::from(pix.quantization),
+                        transfer: u32::from(pix.xfer_func),
+                    })
+                }
+                _ => None,
+            }
+        }
+    }
+
     pub fn source_fps(&self) -> Option<f64> {
         self.source_fps
     }

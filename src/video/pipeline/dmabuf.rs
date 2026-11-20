@@ -53,6 +53,7 @@ pub(super) fn prepare(
             fps: config.fps,
             bitrate_kbps: config.bitrate_kbps(),
             gop: config.gop_size().max(1),
+            color: stream.dma_color(),
         },
         buffers,
     )

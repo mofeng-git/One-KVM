@@ -18,6 +18,7 @@ unsafe extern "C" {
         fds: *const c_int,
         sizes: *const usize,
         count: usize,
+        color: *const DmaV4l2Color,
     ) -> *mut c_void;
     fn rkmpp_dma_encode(
         encoder: *mut c_void,
@@ -44,6 +45,14 @@ pub enum DmaFormat {
     Mjpeg = 4,
 }
 
+#[repr(C)]
+pub struct DmaV4l2Color {
+    pub colorspace: u32,
+    pub ycbcr_encoding: u32,
+    pub quantization: u32,
+    pub transfer: u32,
+}
+
 pub struct DmaEncoderConfig {
     pub width: u32,
     pub height: u32,
@@ -53,6 +62,7 @@ pub struct DmaEncoderConfig {
     pub fps: u32,
     pub bitrate_kbps: u32,
     pub gop: u32,
+    pub color: Option<DmaV4l2Color>,
 }
 
 pub struct DmaEncoder {
@@ -104,6 +114,7 @@ impl DmaEncoder {
                 fds.as_ptr(),
                 sizes.as_ptr(),
                 buffers.len(),
+                config.color.as_ref().map_or(std::ptr::null(), |color| color),
             )
         };
         Ok(Self {

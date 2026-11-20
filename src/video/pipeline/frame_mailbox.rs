@@ -54,15 +54,32 @@ impl<Frame> FrameMailbox<Frame> {
         &self,
         mut ready: impl FnMut() -> Option<Ready>,
     ) -> Option<(Frame, Ready)> {
+        self.wait_until_ready(|pending| {
+            pending.as_ref()?;
+            let output = ready()?;
+            pending.take().map(|frame| (frame, output))
+        })
+    }
+
+    #[cfg(any(test, all(target_os = "linux", feature = "rkmpp")))]
+    pub(super) fn wait_for_event<Ready>(
+        &self,
+        mut ready: impl FnMut() -> Option<Ready>,
+    ) -> Option<Ready> {
+        self.wait_until_ready(|_| ready())
+    }
+
+    fn wait_until_ready<Ready>(
+        &self,
+        mut ready: impl FnMut(&mut Option<Frame>) -> Option<Ready>,
+    ) -> Option<Ready> {
         let mut state = self.state.lock().expect("frame mailbox lock poisoned");
         loop {
             if state.closed {
                 return None;
             }
-            if state.pending.is_some() {
-                if let Some(ready) = ready() {
-                    return state.pending.take().map(|frame| (frame, ready));
-                }
+            if let Some(ready) = ready(&mut state.pending) {
+                return Some(ready);
             }
             state = self
                 .available
@@ -96,7 +113,37 @@ impl<Frame> FrameMailbox<Frame> {
 mod tests {
     use super::*;
     use std::sync::{mpsc, Arc};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
+
+    #[test]
+    fn decoder_event_wakes_encoder_without_a_capture_frame() {
+        let mailbox = Arc::new(FrameMailbox::<()>::new());
+        let ready = Arc::new(AtomicBool::new(false));
+        let (checking, encoder_waiting) = mpsc::channel();
+        let (finished, output) = mpsc::channel();
+        let worker = {
+            let mailbox = mailbox.clone();
+            let ready = ready.clone();
+            std::thread::spawn(move || {
+                let mut checking = Some(checking);
+                let result = mailbox.wait_for_event(|| {
+                    if let Some(checking) = checking.take() {
+                        checking.send(()).unwrap();
+                    }
+                    ready.load(Ordering::Acquire).then_some(())
+                });
+                finished.send(result).unwrap();
+            })
+        };
+        encoder_waiting.recv_timeout(Duration::from_secs(1)).unwrap();
+        ready.store(true, Ordering::Release);
+        mailbox.notify();
+        let result = output.recv_timeout(Duration::from_secs(1));
+        mailbox.close();
+        worker.join().unwrap();
+        assert_eq!(result.unwrap(), Some(()));
+    }
 
     #[test]
     fn pending_frame_is_replaced_by_latest() {
