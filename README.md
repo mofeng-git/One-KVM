@@ -345,3 +345,4 @@ One-KVM 已上架飞牛 **应用市场**，在 NAS 上直接搜索安装即可�
   <img height="128" alt="BTBT" src="https://github.com/user-attachments/assets/c442d5f5-d72f-4a07-b9f4-400a6a0c3f1e" />
 
   远程电脑、消费级GPU服务器、独服物理机，全自动在线交付。
+原生控制台支持同一电脑多采集卡、独立源配置、多种布局及画面优先模式：[多屏使用说明](MULTIVIEW.md)。

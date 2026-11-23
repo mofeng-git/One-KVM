@@ -7,6 +7,18 @@ export interface AuthConfig {
 	single_user_allow_multiple_sessions: boolean;
 }
 
+export interface VideoSourceConfig {
+	id: string;
+	enabled: boolean;
+	format: string;
+	quality: number;
+	label: string;
+	device: string;
+	width: number;
+	height: number;
+	fps: number;
+}
+
 export interface VideoConfig {
 	device?: string;
 	format?: string;
@@ -14,6 +26,13 @@ export interface VideoConfig {
 	height: number;
 	fps: number;
 	quality: number;
+	sources: VideoSourceConfig[];
+	primary_source_id?: string;
+}
+
+export interface MouseJigglerConfig {
+	enabled: boolean;
+	interval_secs: number;
 }
 
 export interface BluetoothHidConfig {
@@ -59,11 +78,6 @@ export interface Ch9329DescriptorConfig {
 	manufacturer: string;
 	product: string;
 	serial_number?: string;
-}
-
-export interface MouseJigglerConfig {
-	enabled: boolean;
-	interval_secs: number;
 }
 
 export interface HidConfig {
@@ -190,6 +204,11 @@ export interface WebConfig {
 	https_enabled: boolean;
 	ssl_cert_path?: string;
 	ssl_key_path?: string;
+}
+
+export interface McpConfig {
+	enabled: boolean;
+	requests_per_second: number;
 }
 
 export interface TtydConfig {
@@ -414,6 +433,24 @@ export interface Ch9329DescriptorState {
 	config_mode_available: boolean;
 }
 
+export interface EasyfrpConfigUpdate {
+	enabled?: boolean;
+	control_urls?: string[];
+}
+
+export type ExtensionStatus = 
+	| { state: "unavailable", data?: undefined }
+	| { state: "stopped", data?: undefined }
+	| { state: "running", data: {
+	pid: number;
+}};
+
+export interface EasyfrpInfo {
+	available: boolean;
+	status: ExtensionStatus;
+	config: EasyfrpConfig;
+}
+
 export interface EasytierConfigUpdate {
 	enabled?: boolean;
 	config_mode?: EasytierConfigMode;
@@ -423,13 +460,6 @@ export interface EasytierConfigUpdate {
 	virtual_ip?: string;
 	custom_toml?: string;
 }
-
-export type ExtensionStatus = 
-	| { state: "unavailable", data?: undefined }
-	| { state: "stopped", data?: undefined }
-	| { state: "running", data: {
-	pid: number;
-}};
 
 export interface EasytierInfo {
 	available: boolean;
@@ -465,12 +495,6 @@ export interface GostcInfo {
 	available: boolean;
 	status: ExtensionStatus;
 	config: GostcConfig;
-}
-
-export interface EasyfrpInfo {
-	available: boolean;
-	status: ExtensionStatus;
-	config: EasyfrpConfig;
 }
 
 export interface FrpcInfo {
@@ -511,9 +535,9 @@ export interface GostcConfigUpdate {
 	tls?: boolean;
 }
 
-export interface EasyfrpConfigUpdate {
+export interface MouseJigglerConfigUpdate {
 	enabled?: boolean;
-	control_urls?: string[];
+	interval_secs?: number;
 }
 
 /** OTG USB device descriptor configuration update */
@@ -532,13 +556,9 @@ export interface OtgHidFunctionsUpdate {
 	consumer?: boolean;
 }
 
-export interface MouseJigglerConfigUpdate {
-	enabled?: boolean;
-	interval_secs?: number;
-}
-
 export interface HidConfigUpdate {
 	jiggler?: MouseJigglerConfigUpdate;
+	/** Request-only; never persisted or replayed during startup. */
 	bluetooth_reset_pairing?: boolean;
 	bluetooth?: BluetoothHidConfig;
 	backend?: HidBackend;
@@ -584,20 +604,11 @@ export interface OtgNetworkStatus {
 	error?: string;
 }
 
-export interface OtgRuntimeStatus {
-	enabled: boolean;
-	health: OtgRuntimeHealth;
-	gadget_active: boolean;
-	udc?: string;
-	udc_state?: string;
-	error?: string;
-}
-
 export interface OtgConfigResponse {
-	uac: UacConfig;
 	hid: HidConfig;
 	msd: MsdConfig;
 	network: OtgNetworkConfig;
+	uac: UacConfig;
 	status: OtgNetworkStatus;
 }
 
@@ -610,10 +621,19 @@ export interface OtgNetworkConfigUpdate {
 }
 
 export interface OtgConfigUpdate {
-	uac?: UacConfig;
 	hid?: HidConfigUpdate;
 	msd?: MsdConfigUpdate;
 	network?: OtgNetworkConfigUpdate;
+	uac?: UacConfig;
+}
+
+export interface OtgRuntimeStatus {
+	enabled: boolean;
+	health: OtgRuntimeHealth;
+	gadget_active: boolean;
+	udc?: string;
+	udc_state?: string;
+	error?: string;
 }
 
 export interface RtspConfigResponse {
@@ -652,6 +672,19 @@ export interface RustDeskConfigUpdate {
 	relay_server?: string;
 	relay_key?: string;
 	device_password?: string;
+}
+
+export interface SourceInfo {
+	id: string;
+	label: string;
+	device: string;
+	format: string;
+	width: number;
+	height: number;
+	fps: number;
+	quality: number;
+	enabled: boolean;
+	primary: boolean;
 }
 
 /** Stream configuration response */
@@ -701,6 +734,8 @@ export interface VideoConfigUpdate {
 	height?: number;
 	fps?: number;
 	quality?: number;
+	sources?: VideoSourceConfig[];
+	primary_source_id?: string;
 }
 
 export interface VncConfigResponse {
@@ -885,10 +920,4 @@ export enum CanonicalKey {
 	ShiftRight = "ShiftRight",
 	AltRight = "AltRight",
 	MetaRight = "MetaRight",
-}
-
-
-export interface McpConfig {
-	enabled: boolean;
-	requests_per_second: number;
 }

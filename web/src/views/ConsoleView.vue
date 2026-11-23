@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { useConfigStore } from '@/stores/config'
 import { useAuthStore } from '@/stores/auth'
@@ -10,6 +10,9 @@ import { useConsoleEvents } from '@/composables/useConsoleEvents'
 import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
+import { useVideoSources } from '@/composables/useVideoSources'
+import type { VideoSource } from '@/api/videoSources'
+import NativeVideoStage from '@/components/NativeVideoStage.vue'
 import { useVideoScaling, type VideoRotation } from '@/composables/useVideoScaling'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
@@ -74,6 +77,29 @@ import {
 
 const { t, te } = useI18n()
 const router = useRouter()
+const route = useRoute()
+const { sources, primarySourceId, activeSourceId, refreshSources, discoveryError, authExpired } = useVideoSources()
+const nativeStage = ref<InstanceType<typeof NativeVideoStage> | null>(null)
+const enabledSources = computed(() => sources.value.filter(source => source.enabled))
+const isMultisource = computed(() => enabledSources.value.length > 1)
+// Disabling a preview does not establish a single-monitor host input mapping.
+const hasMultipleBindings = computed(() => sources.value.length > 1)
+const presentationKey = `nativeConsole:${location.host}`
+let storedPresentation: { pictureFirst?: boolean; single?: boolean } = {}
+try { storedPresentation = JSON.parse(localStorage.getItem(presentationKey) || '{}') } catch { /* Optional preferences. */ }
+const pictureFirst = ref(storedPresentation.pictureFirst !== false)
+const singlePresentation = ref(storedPresentation.single === true)
+const toolsExpanded = ref(false)
+const hideTools = computed(() => isMultisource.value && pictureFirst.value && !toolsExpanded.value)
+const primaryId = computed(() => primarySourceId.value || '__native_primary__')
+const stageSources = computed<VideoSource[]>(() => enabledSources.value.length ? enabledSources.value : [{
+  id: primaryId.value, label: '', enabled: true, primary: true, device: '', format: '', quality: 80,
+  width: videoSourceSize.value?.width || 1920, height: videoSourceSize.value?.height || 1080, fps: 0,
+}])
+const stageSingle = computed(() => route.query.single === '1' || singlePresentation.value)
+watch([pictureFirst, singlePresentation], () => {
+  try { localStorage.setItem(presentationKey, JSON.stringify({ pictureFirst: pictureFirst.value, single: singlePresentation.value })) } catch { /* Optional preferences. */ }
+})
 const systemStore = useSystemStore()
 const configStore = useConfigStore()
 const authStore = useAuthStore()
@@ -113,14 +139,20 @@ const videoRotation = ref<VideoRotation>(
 )
 
 function setVideoRotation(rotation: VideoRotation) {
+  if (isMultisource.value && activeSourceId.value !== primaryId.value) {
+    nativeStage.value?.setRotation(activeSourceId.value, rotation)
+    return
+  }
   if (!VIDEO_ROTATIONS.includes(rotation)) return
   videoRotation.value = rotation
-  localStorage.setItem('videoRotation', String(rotation))
+  if (isMultisource.value) nativeStage.value?.setRotation(primaryId.value, rotation)
+  else localStorage.setItem('videoRotation', String(rotation))
 }
 
 const videoRef = ref<HTMLImageElement | null>(null)
 const webrtcVideoRef = ref<HTMLVideoElement | null>(null)
 const videoContainerRef = ref<HTMLDivElement | null>(null)
+const primaryContainerRef = ref<HTMLDivElement | null>(null)
 const isFullscreen = ref(false)
 const videoLoading = ref(true)
 const videoError = ref(false)
@@ -217,6 +249,7 @@ let interactionListenersBound = false
 const isConsoleActive = ref(false)
 
 function syncMouseModeFromConfig() {
+  if (hasMultipleBindings.value) { mouseMode.value = 'relative'; return }
   const mouseAbsolute = configStore.hid?.mouse_absolute
   if (typeof mouseAbsolute !== 'boolean') return
   const nextMode: 'absolute' | 'relative' = mouseAbsolute && configStore.hid?.backend !== 'bluetooth' ? 'absolute' : 'relative'
@@ -833,6 +866,8 @@ function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise
 function shouldSuppressAutoReconnect(): boolean {
   return videoMode.value === 'mjpeg'
     || !isConsoleActive.value
+    || !authStore.isAuthenticated
+    || authExpired.value
     || videoSession.localSwitching.value
     || videoSession.backendSwitching.value
     || videoRestarting.value
@@ -946,12 +981,13 @@ function handleVideoLoad() {
   clearFrameOverlay()
 
   const container = videoContainerRef.value
-  if (container && typeof container.focus === 'function') {
+  if (!isMultisource.value && container && typeof container.focus === 'function') {
     container.focus()
   }
 }
 
 function handleVideoError() {
+  if (!authStore.isAuthenticated || authExpired.value) return
   if (videoMode.value !== 'mjpeg') {
     return
   }
@@ -1532,6 +1568,7 @@ function reloadPage() {
 }
 
 function refreshVideo() {
+  if (!authStore.isAuthenticated || authExpired.value) return
   videoDebugLog('Refreshing MJPEG video', {
     videoMode: videoMode.value,
     previousTimestamp: mjpegTimestamp.value,
@@ -1556,7 +1593,7 @@ function refreshVideo() {
 
 const mjpegTimestamp = ref(0)
 const mjpegUrl = computed(() => {
-  if (videoMode.value !== 'mjpeg') {
+  if (!authStore.isAuthenticated || authExpired.value || videoMode.value !== 'mjpeg') {
     return ''
   }
   if (mjpegTimestamp.value === 0) {
@@ -1975,9 +2012,8 @@ watch(() => webrtc.state.value, (newState, oldState) => {
 })
 
 async function toggleFullscreen() {
-  if (!videoWorkspaceRef.value) return
   if (!document.fullscreenElement) {
-    await videoWorkspaceRef.value.requestFullscreen()
+    await document.documentElement.requestFullscreen()
     isFullscreen.value = true
   } else {
     await document.exitFullscreen()
@@ -2063,6 +2099,7 @@ function handleHidError(_error: any, _operation: string) {
 }
 
 async function transmitKeyboardEvent(type: 'down' | 'up', key: CanonicalKey, modifier?: number) {
+  if (type === 'down' && (!isConsoleActive.value || !authStore.isAuthenticated || hidStatus.value !== 'connected')) return
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidKeyboardEvent = {
       type: type === 'down' ? 'keydown' : 'keyup',
@@ -2116,10 +2153,7 @@ async function executeShortcut(shortcut: KeyboardShortcut) {
 }
 
 watch(hidStatus, status => {
-  if (status !== 'connected') shortcutController?.abort(new Error('HID disconnected'))
-}, { flush: 'sync' })
-watch([hidWs.connected, hidWs.networkError, hidWs.hidUnavailable], ([connected, error, unavailable]) => {
-  if (!connected || error || unavailable) shortcutController?.abort(new Error('HID WebSocket disconnected'))
+  if (status !== 'connected') releaseControl()
 }, { flush: 'sync' })
 watch([videoMode, consoleLayout], cancelShortcut, { flush: 'sync' })
 
@@ -2143,6 +2177,8 @@ async function toggleKeyboardLock(key: CanonicalKey.CapsLock | CanonicalKey.NumL
 }
 
 function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
+  if ((!isConsoleActive.value || !authStore.isAuthenticated || hidStatus.value !== 'connected') && data.type !== 'up') return
+  if (hasMultipleBindings.value && data.type === 'move_abs') return
   if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
     const event: HidMouseEvent = {
       type: data.type === 'move_abs' ? 'moveabs' : data.type,
@@ -2174,12 +2210,17 @@ function shouldBlockKey(e: KeyboardEvent): boolean {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && (isMultisource.value || isPointerLocked.value)) {
+    releaseControl(); videoContainerRef.value?.blur(); return
+  }
+  if (!isConsoleActive.value || !authStore.isAuthenticated || hidStatus.value !== 'connected') return
+  if (isLocalConsoleTarget(e.target) || document.querySelector('[role="dialog"], [role="alertdialog"], [data-state="open"][role="menu"]')) return
   if (shortcutBusy.value || document.querySelector('[data-keyboard-shortcuts]')
     || (e.target instanceof Element && e.target.closest('[data-shortcut-surface]'))) return
   const container = videoContainerRef.value
   if (!container) return
 
-  if (!isFullscreen.value && !container.contains(document.activeElement)) return
+  if (!container.contains(document.activeElement) && !isPointerLocked.value) return
 
   if (shouldBlockKey(e)) {
     e.preventDefault()
@@ -2225,23 +2266,17 @@ function handleKeyUp(e: KeyboardEvent) {
 }
 
 function getActiveVideoElement(): HTMLImageElement | HTMLVideoElement | null {
+  if (isMultisource.value && activeSourceId.value !== primaryId.value) {
+    return videoContainerRef.value?.querySelector<HTMLImageElement>('img') || null
+  }
   return videoMode.value !== 'mjpeg' ? webrtcVideoRef.value : videoRef.value
 }
 
 function getActiveVideoAspectRatio(): number | null {
-  if (videoMode.value !== 'mjpeg') {
-    const video = webrtcVideoRef.value
-    if (video?.videoWidth && video.videoHeight) {
-      return video.videoWidth / video.videoHeight
-    }
-  } else {
-    const image = videoRef.value
-    if (image?.naturalWidth && image.naturalHeight) {
-      return image.naturalWidth / image.naturalHeight
-    }
-  }
-
-  const source = videoSourceSize.value
+  const element = getActiveVideoElement()
+  if (element instanceof HTMLVideoElement && element.videoWidth && element.videoHeight) return element.videoWidth / element.videoHeight
+  if (element instanceof HTMLImageElement && element.naturalWidth && element.naturalHeight) return element.naturalWidth / element.naturalHeight
+  const source = isMultisource.value ? stageSources.value.find(source => source.id === activeSourceId.value) : videoSourceSize.value
   return source ? source.width / source.height : null
 }
 
@@ -2255,7 +2290,7 @@ function getRenderedVideoRect() {
   // For a quarter turn, the transformed element already describes the exact
   // visible portrait frame. Its original landscape aspect ratio must not be
   // used to add artificial letterboxing here.
-  if (videoRotation.value === 90 || videoRotation.value === 270) {
+  if (selectedRotation.value === 90 || selectedRotation.value === 270) {
     return rect
   }
 
@@ -2302,7 +2337,7 @@ function rotateAbsolutePosition(x: number, y: number) {
 }
 
 function rotateRelativeDelta(dx: number, dy: number) {
-  switch (videoRotation.value) {
+  switch (selectedRotation.value) {
     case 90:
       return { dx: dy, dy: -dx }
     case 180:
@@ -2647,10 +2682,11 @@ function handleTouchPointerCancel(e: PointerEvent) {
 }
 
 function handleMouseMove(e: MouseEvent) {
+  if (isMultisource.value && !isPointerLocked.value) return
   updateLocalCrosshairFromEvent(e)
 
   const videoElement = getActiveVideoElement()
-  if (!videoElement) return
+  if (!videoElement && !hasMultipleBindings.value) return
 
   if (mouseMode.value === 'absolute') {
     const absolutePosition = getAbsoluteMousePosition(e)
@@ -2842,11 +2878,16 @@ function requestPointerLock() {
   const container = videoContainerRef.value
   if (!container) return
 
-  container.requestPointerLock().catch((err: Error) => {
+  const failed = (err: Error) => {
     toast.error(t('console.pointerLockFailed'), {
       description: err.message,
     })
-  })
+  }
+  try {
+    Promise.resolve(container.requestPointerLock()).catch(failed)
+  } catch (err) {
+    failed(err instanceof Error ? err : new Error(String(err)))
+  }
 }
 
 function exitPointerLock() {
@@ -2856,9 +2897,11 @@ function exitPointerLock() {
 }
 
 function handlePointerLockChange() {
+  const wasLocked = isPointerLocked.value
   const container = videoContainerRef.value
   isPointerLocked.value = document.pointerLockElement === container
 
+  if (wasLocked && !isPointerLocked.value) { handleBlur(); container?.blur() }
   if (isPointerLocked.value) {
     mousePosition.value = { x: 0, y: 0 }
     if (cursorVisible.value && container) {
@@ -2875,6 +2918,7 @@ function handlePointerLockChange() {
 
 function handlePointerLockError() {
   isPointerLocked.value = false
+  handleBlur()
 }
 
 function handleFullscreenChange() {
@@ -2884,8 +2928,12 @@ function handleFullscreenChange() {
 function handleBlur() {
   cancelShortcut()
   resetTouchInput()
+  for (const key of pressedKeys.value) sendKeyboardEvent('up', key, 0)
   pressedKeys.value = []
   activeModifierMask.value = 0
+  pendingMouseMove = null
+  accumulatedDelta = { x: 0, y: 0 }
+  if (mouseFlushTimer !== null) { clearTimeout(mouseFlushTimer); mouseFlushTimer = null }
   if (pressedMouseButton.value !== null) {
     const button = pressedMouseButton.value
     pressedMouseButton.value = null
@@ -2950,6 +2998,9 @@ function registerInteractionListeners() {
   document.addEventListener('pointerlockchange', handlePointerLockChange)
   document.addEventListener('pointerlockerror', handlePointerLockError)
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('focusin', handleLocalFocus)
+  document.addEventListener('pointerdown', handleLocalPointer, true)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   interactionListenersBound = true
 }
@@ -2968,11 +3019,16 @@ function unregisterInteractionListeners() {
   document.removeEventListener('pointerlockchange', handlePointerLockChange)
   document.removeEventListener('pointerlockerror', handlePointerLockError)
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('focusin', handleLocalFocus)
+  document.removeEventListener('pointerdown', handleLocalPointer, true)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 
   interactionListenersBound = false
 }
 
 async function activateConsoleView() {
+  if (!authStore.isAuthenticated || authExpired.value || isConsoleActive.value) return
+  void refreshSources()
   isConsoleActive.value = true
   registerInteractionListeners()
 
@@ -3025,6 +3081,7 @@ function handleVirtualKeyUp(key: CanonicalKey) {
 }
 
 function handleToggleMouseMode() {
+  if (hasMultipleBindings.value) { toast.info(t('multisource.relativeOnly')); return }
   resetTouchInput()
 
   if (mouseMode.value === 'relative' && isPointerLocked.value) {
@@ -3057,7 +3114,9 @@ watch(microphoneTransferEnabled, enabled => {
 })
 
 onMounted(async () => {
+  void activateConsoleView()
   await refreshUacAvailability()
+  if (!isConsoleActive.value || !authStore.isAuthenticated) return
 
   consoleEvents.subscribe()
 
@@ -3074,6 +3133,7 @@ onMounted(async () => {
   }, { immediate: true })
 
   await systemStore.startStream().catch(() => {})
+  if (!isConsoleActive.value || !authStore.isAuthenticated) return
   const initialStreamStatus = await streamApi.status().catch(() => null)
   if (initialStreamStatus) {
     handleStreamStateChanged(initialStreamStatus)
@@ -3090,6 +3150,7 @@ onMounted(async () => {
     syncMouseModeFromConfig()
   })
 
+  if (!isConsoleActive.value || !authStore.isAuthenticated) return
   try {
     const modeResp = await streamApi.getMode()
     const serverMode = normalizeServerMode(modeResp?.mode)
@@ -3144,10 +3205,72 @@ onUnmounted(() => {
 
   exitPointerLock()
 })
+const selectedRotation = computed(() => isMultisource.value && activeSourceId.value !== primaryId.value
+  ? (nativeStage.value?.rotations[activeSourceId.value] || 0) as VideoRotation : videoRotation.value)
+const selectedScaleMode = computed(() => isMultisource.value && activeSourceId.value !== primaryId.value
+  ? nativeStage.value?.actual[activeSourceId.value] ? 'actual' : 'fit' : videoScaleMode.value)
+function setSelectedScaleMode(mode: 'fit' | 'actual') {
+  if (isMultisource.value && activeSourceId.value !== primaryId.value) nativeStage.value?.setActual(activeSourceId.value, mode === 'actual')
+  else {
+    setVideoScaleMode(mode)
+    if (isMultisource.value) nativeStage.value?.setActual(primaryId.value, mode === 'actual')
+  }
+}
+function selectSource(id: string) {
+  if (activeSourceId.value !== id) { releaseControl(); activeSourceId.value = id }
+}
+function setInputTarget(element: HTMLDivElement | null) {
+  videoContainerRef.value = isMultisource.value ? element : primaryContainerRef.value || element
+}
+watch(primaryContainerRef, element => { if (!isMultisource.value && element) videoContainerRef.value = element })
+function releaseControl() { handleBlur(); exitPointerLock() }
+function isLocalConsoleTarget(target: EventTarget | null) {
+  return target instanceof Element && !!target.closest('input, textarea, select, button, a, [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"], [data-local-console-tools], [data-shortcut-surface]')
+}
+function handleLocalFocus(event: FocusEvent) {
+  if (event.target instanceof Element && event.target.closest('[data-console-input]')) return
+  if (isLocalConsoleTarget(event.target)) releaseControl()
+}
+function handleLocalPointer(event: PointerEvent) {
+  if (event.target instanceof Element && event.target.closest('[data-console-input]')) return
+  if (event.target instanceof Element && !event.target.closest('.native-source-tile')) releaseControl()
+}
+function handleVisibilityChange() { if (document.hidden) releaseControl() }
+watch(isMultisource, () => { releaseControl(); syncMouseModeFromConfig() })
+watch(hasMultipleBindings, () => { releaseControl(); syncMouseModeFromConfig() })
+watch([isMultisource, primaryId, sourceSizeAvailable], async () => {
+  if (!isMultisource.value) return
+  await nextTick()
+  const rotation = nativeStage.value?.rotations[primaryId.value]
+  if (rotation !== undefined && VIDEO_ROTATIONS.includes(rotation as VideoRotation)) videoRotation.value = rotation as VideoRotation
+  setVideoScaleMode(nativeStage.value?.actual[primaryId.value] ? 'actual' : 'fit')
+}, { flush: 'post' })
+watch(activeSourceId, () => releaseControl(), { flush: 'sync' })
+watch([statsSheetOpen, showTerminalDialog, changePasswordDialogOpen, virtualKeyboardVisible], () => releaseControl())
+watch(() => authStore.isAuthenticated, authenticated => {
+  if (authenticated) return
+  releaseControl()
+  deactivateConsoleView()
+  cancelWebRTCRecovery()
+  if (retryTimeoutId !== null) { clearTimeout(retryTimeoutId); retryTimeoutId = null }
+  hidWs.disconnect()
+  void microphone.stop()
+  unifiedAudio.disconnect()
+  void webrtc.disconnect()
+  void router.replace({ name: 'Login', query: { redirect: route.fullPath } })
+}, { flush: 'sync' })
+
 </script>
 
 <template>
-  <div class="console-page relative h-screen h-dvh flex flex-col bg-background">
+  <div class="console-page relative h-screen h-dvh flex flex-col bg-background" :class="{ 'picture-first': isMultisource && pictureFirst, 'tools-collapsed': hideTools }">
+    <div v-if="isMultisource" class="native-console-handle" data-local-console-tools>
+      <button :aria-expanded="!hideTools" @click="releaseControl(); hideTools ? toolsExpanded = true : (pictureFirst = true, toolsExpanded = false)">{{ t(hideTools ? 'multisource.showTools' : 'multisource.hideTools') }}</button>
+      <template v-if="!hideTools">
+        <button :aria-pressed="pictureFirst" @click="pictureFirst = !pictureFirst">{{ t('multisource.pictureFirst') }}</button>
+        <button :aria-pressed="stageSingle" @click="singlePresentation = !stageSingle; router.replace({ query: { ...route.query, single: undefined } })">{{ t(stageSingle ? 'multisource.allSources' : 'multisource.primaryOnly') }}</button>
+      </template>
+    </div>
     <header class="console-header shrink-0 border-b bg-background" :class="consoleLayout === 'floating' && 'console-header--floating'">
       <div class="px-2 sm:px-4">
         <div class="console-header__row h-10 sm:h-14 flex items-center justify-between">
@@ -3295,7 +3418,7 @@ onUnmounted(() => {
         :layout="consoleLayout"
         :mouse-mode="mouseMode"
         :video-mode="videoMode"
-        :video-rotation="videoRotation"
+        :video-rotation="selectedRotation"
         :ttyd-running="ttydStatus?.running"
         :show-power="showPower"
         :atx-enabled="systemStore.atx?.available === true"
@@ -3303,8 +3426,8 @@ onUnmounted(() => {
 
         :show-paste-text="showPasteText"
         :show-mic="microphoneTransferEnabled"
-        :scale-mode="videoScaleMode"
-        :source-size-available="sourceSizeAvailable"
+        :scale-mode="selectedScaleMode"
+        :source-size-available="isMultisource || sourceSizeAvailable"
         :keyboard-visible="virtualKeyboardVisible"
         :fullscreen="isFullscreen"
         :stats-open="statsSheetOpen"
@@ -3315,7 +3438,7 @@ onUnmounted(() => {
         @execute-shortcut="executeShortcut"
         @cancel-shortcut="cancelShortcut"
         @toggle-fullscreen="toggleFullscreen"
-        @update:scale-mode="setVideoScaleMode"
+        @update:scale-mode="setSelectedScaleMode"
         @toggle-stats="openStatsSheet"
         @toggle-virtual-keyboard="handleToggleVirtualKeyboard"
         @toggle-mouse-mode="handleToggleMouseMode"
@@ -3331,7 +3454,7 @@ onUnmounted(() => {
     </div>
     <div
       class="flex-1 overflow-hidden relative transition-[padding] duration-300"
-      :class="consoleLayout === 'sidebar' && 'pl-14 sm:pl-16'"
+      :class="consoleLayout === 'sidebar' && !hideTools && 'pl-14 sm:pl-16'"
     >
       <div class="absolute inset-0 dot-grid-bg" />
       <div class="relative flex h-full w-full min-w-0 items-stretch gap-3">
@@ -3339,30 +3462,30 @@ onUnmounted(() => {
           class="flex min-w-0 flex-1 items-center justify-center transition-all duration-300"
         >
         <div
-          ref="videoWorkspaceRef"
+          :ref="el => { videoWorkspaceRef = el as HTMLDivElement | null }"
           class="video-workspace relative h-full w-full min-h-[120px] overflow-auto fullscreen:bg-black"
         >
-          <div
-            class="relative grid place-items-center"
-            :class="videoStageClass"
-          >
+          <NativeVideoStage ref="nativeStage" :sources="stageSources" :primary-source-id="primaryId"
+            :active-source-id="activeSourceId || primaryId" :primary-size="videoSourceSize"
+            :primary-client-id="myClientId" :primary-mjpeg="videoMode === 'mjpeg'" :primary-url="mjpegUrl"
+            :primary-rotation="videoRotation" :primary-actual="videoScaleMode === 'actual'" :single="stageSingle"
+            :captured="isPointerLocked"
+            @select="selectSource" @input-target="setInputTarget" @local-tools="releaseControl"
+            @capture="requestPointerLock" @reconnect="refreshVideo"
+            @mouseleave="handleMouseLeaveVideo" @mousemove="handleMouseMove"
+            @mousedown="handleMouseDown" @mouseup="handleMouseUp" @wheel="handleWheel" @contextmenu="handleContextMenu"
+            @pointerdown="handleTouchPointerDown" @pointermove="handleTouchPointerMove"
+            @pointerup="handleTouchPointerUp" @pointercancel="handleTouchPointerCancel">
+            <template #default="{ multisource, primaryContentStyle }">
+            <div class="relative grid place-items-center" :class="multisource ? 'h-full w-full' : videoStageClass">
             <div
-              ref="videoContainerRef"
-              class="relative flex shrink-0 cursor-none items-center justify-center overflow-hidden bg-black touch-none"
-              :style="videoContainerStyle"
-              tabindex="0"
-              @mouseleave="handleMouseLeaveVideo"
-              @pointerdown="handleTouchPointerDown"
-              @pointermove="handleTouchPointerMove"
-              @pointerup="handleTouchPointerUp"
-              @pointercancel="handleTouchPointerCancel"
-              @mousemove="handleMouseMove"
-              @mousedown="handleMouseDown"
-              @mouseup="handleMouseUp"
-              @wheel.prevent="handleWheel"
-              @contextmenu="handleContextMenu"
+              ref="primaryContainerRef"
+              :tabindex="isMultisource ? -1 : 0"
+              class="primary-source-container relative flex shrink-0 items-center justify-center overflow-auto bg-black touch-none"
+              :class="isMultisource && !isPointerLocked ? 'cursor-default' : 'cursor-none'"
+              :style="multisource ? { width: '100%', height: '100%' } : videoContainerStyle"
             >
-              <div class="relative shrink-0" :style="videoContentStyle">
+              <div class="relative shrink-0" :style="multisource ? primaryContentStyle : videoContentStyle">
                 <img
                   v-show="videoMode === 'mjpeg'"
                   ref="videoRef"
@@ -3391,7 +3514,7 @@ onUnmounted(() => {
                 />
               </div>
           <div
-            v-if="cursorVisible && localCrosshairPos"
+            v-if="!isMultisource && cursorVisible && localCrosshairPos"
             class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
             :style="{
               left: `${localCrosshairPos.x}px`,
@@ -3544,6 +3667,62 @@ onUnmounted(() => {
           </Transition>
             </div>
           </div>
+            </template>
+            <template #cursor>
+          <div
+            v-if="cursorVisible && localCrosshairPos"
+            class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
+            :style="{
+              left: `${localCrosshairPos.x}px`,
+              top: `${localCrosshairPos.y}px`,
+            }"
+            aria-hidden="true"
+          >
+            <svg
+              width="23"
+              height="23"
+              viewBox="-11.5 -11.5 23 23"
+              class="overflow-visible"
+            >
+              <g stroke-linecap="square">
+                <line
+                  x1="0"
+                  y1="-10"
+                  x2="0"
+                  y2="10"
+                  stroke="rgba(0,0,0,0.88)"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-10"
+                  y1="0"
+                  x2="10"
+                  y2="0"
+                  stroke="rgba(0,0,0,0.88)"
+                  stroke-width="3"
+                />
+                <line
+                  x1="0"
+                  y1="-10"
+                  x2="0"
+                  y2="10"
+                  stroke="rgba(255,255,255,0.95)"
+                  stroke-width="1"
+                />
+                <line
+                  x1="-10"
+                  y1="0"
+                  x2="10"
+                  y2="0"
+                  stroke="rgba(255,255,255,0.95)"
+                  stroke-width="1"
+                />
+              </g>
+            </svg>
+          </div>
+            </template>
+          </NativeVideoStage>
+          <div v-if="discoveryError && isMultisource" class="source-discovery-error" role="status">{{ discoveryError }}</div>
         </div>
         </div>
 
@@ -3641,6 +3820,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.primary-source-container { align-items: safe center; justify-content: safe center; }
+.native-console-handle { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; max-width: 100%; gap: 3px; }
+.native-console-handle button { padding: 2px 6px; border: 1px solid var(--border); background: var(--background); color: var(--foreground); border-radius: 4px; font-size: 11px; white-space: nowrap; }
+.picture-first:not(.tools-collapsed) .native-console-handle { top: auto; bottom: 2px; }
+.tools-collapsed > .console-header, .tools-collapsed > .console-actionbar-host, .tools-collapsed > .console-info-bar { display: none; }
+.source-discovery-error { position: absolute; bottom: 4px; left: 4px; padding: 4px; background: #400e; color: #fecaca; font-size: 12px; }
 /* Keep the action bar in one DOM location while changing only its placement.
    Moving a live Teleport target during a layout switch can leave stale portal
    nodes behind when the target is conditionally rendered. */

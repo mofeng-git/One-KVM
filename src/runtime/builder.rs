@@ -82,6 +82,8 @@ impl RuntimeBuilder {
         } = self;
         let (db, config_store, mut config) = load_runtime_config(&data_dir).await?;
         config.hid.validate_platform()?;
+
+        crate::video::multiview::validate_sources(&config.video, &[])?;
         web_overrides.apply(&mut config);
 
         let sessions = SessionStore::new(config.auth.session_timeout_secs as i64);
@@ -137,6 +139,7 @@ impl RuntimeBuilder {
         );
         stream_manager.set_event_bus(events.clone()).await;
         stream_manager.set_config_store(config_store.clone()).await;
+        configure_startup_sources(&stream_manager, &config.video).await;
         connect_audio_recovery(&audio, &stream_manager).await;
 
         let initial_mode = config.stream.mode.clone();
@@ -299,26 +302,26 @@ async fn build_streamer(
     );
     let streamer = Streamer::new();
     streamer.set_event_bus(events.clone()).await;
-    if let Some(device_path) = config.video.device.as_ref() {
-        if let Err(error) = streamer
-            .apply_video_config(device_path, format, resolution, config.video.fps)
-            .await
-        {
-            tracing::warn!(
-                "Failed to initialize video with config: {}, will auto-detect",
-                error
-            );
-        } else {
-            tracing::info!(
-                "Video configured: {} @ {}x{} {}",
-                device_path,
-                resolution.width,
-                resolution.height,
-                format
-            );
-        }
-    }
+    streamer.set_device_recovery_policy(
+        config
+            .video
+            .device
+            .as_deref()
+            .is_some_and(|p| !p.eq_ignore_ascii_case("auto")),
+    );
+    streamer.set_jpeg_quality(config.video.quality as u8).await;
+    // configure_sources owns all hardware application, including the primary,
+    // so disabled sources stay unopened and failures have per-source status.
     streamer
+}
+
+async fn configure_startup_sources(
+    manager: &Arc<VideoStreamManager>,
+    video: &crate::config::VideoConfig,
+) {
+    if let Err(error) = manager.configure_sources(video, true).await {
+        tracing::warn!(%error, "Video runtime partially applied; continuing startup for configuration repair");
+    }
 }
 
 fn build_webrtc(
@@ -536,6 +539,89 @@ async fn start_watchdog(state: &Arc<AppState>, config: &AppConfig) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn disabled_primary_is_not_probed_during_startup() {
+        let mut config = AppConfig::default();
+        config.video.sources = vec![crate::config::VideoSourceConfig {
+            id: "primary".into(),
+            device: "/dev/offline-disabled-startup-test".into(),
+            enabled: false,
+            ..Default::default()
+        }];
+        config.video.primary_source_id = Some("primary".into());
+        config.video.project_primary();
+        let events = Arc::new(EventBus::new());
+        let (format, resolution) = parse_video_config(&config);
+        let streamer = build_streamer(&config, &events, format, resolution).await;
+        let manager = VideoStreamManager::with_webrtc_streamer(
+            streamer.clone(),
+            crate::webrtc::WebRtcStreamer::new(),
+        );
+        configure_startup_sources(&manager, &config.video).await;
+        manager
+            .init_with_mode(crate::config::StreamMode::WebRTC)
+            .await
+            .unwrap();
+        assert!(streamer.current_capture_config().await.0.is_none());
+        assert!(streamer.current_device().await.is_none());
+        assert!(!manager.is_webrtc_enabled().await);
+    }
+
+    #[tokio::test]
+    async fn startup_keeps_all_sources_manageable_after_apply_failures() {
+        let primary = Streamer::new();
+        let extra = Streamer::new();
+        let manager = VideoStreamManager::with_webrtc_streamer(
+            primary.clone(),
+            crate::webrtc::WebRtcStreamer::new(),
+        );
+        let mut video = crate::config::VideoConfig::default();
+        video.sources = vec![
+            crate::config::VideoSourceConfig {
+                id: "primary".into(),
+                device: "/dev/offline-primary-test".into(),
+                ..Default::default()
+            },
+            crate::config::VideoSourceConfig {
+                id: "extra".into(),
+                device: "/dev/offline-extra-test".into(),
+                ..Default::default()
+            },
+        ];
+        video.primary_source_id = Some("primary".into());
+        video.project_primary();
+        *manager.sources.write().await = vec![
+            crate::video::multiview::Source::new(video.sources[0].clone(), true, primary.clone()),
+            crate::video::multiview::Source::new(video.sources[1].clone(), false, extra.clone()),
+        ];
+        *primary.test_apply_error.lock() = Some("primary busy".into());
+        *extra.test_apply_error.lock() = Some("extra busy".into());
+        configure_startup_sources(&manager, &video).await;
+        assert_eq!(manager.sources().await.len(), 2);
+        assert_eq!(
+            manager.source_status("primary", None).await.unwrap()["state"],
+            "error"
+        );
+        assert_eq!(
+            manager.source_status("extra", None).await.unwrap()["state"],
+            "error"
+        );
+        // Initial mode selection must not silently retry/auto-open a failed primary.
+        manager
+            .init_with_mode(crate::config::StreamMode::WebRTC)
+            .await
+            .unwrap();
+        assert!(!manager.is_webrtc_enabled().await);
+        assert!(primary.current_capture_config().await.0.is_none());
+        manager.configure_sources(&video, false).await.unwrap();
+        assert!(manager
+            .sources
+            .read()
+            .await
+            .iter()
+            .all(|s| s.apply_error.is_none()));
+    }
 
     #[test]
     fn web_overrides_only_replace_explicit_values() {

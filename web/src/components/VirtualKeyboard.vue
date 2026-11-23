@@ -561,7 +561,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Keyboard body -->
-      <div class="vkb-body">
+      <div class="vkb-body" data-console-input>
         <!-- Media keys row -->
         <div v-if="props.consumerEnabled !== false" class="vkb-media-row">
           <Button

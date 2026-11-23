@@ -30,12 +30,14 @@ function hasTranslation(key: string): boolean {
 export class ApiError extends Error {
   status: number
   code?: string
+  data?: unknown
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, data?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.data = data
   }
 }
 
@@ -106,7 +108,7 @@ function getErrorDetails(data: unknown, fallback: string): { message: string; co
       return { message: localizeMsdErrorCode(normalizedCode), code: normalizedCode }
     }
 
-    const message = (data as any).message
+    const message = (data as any).message ?? (data as any).error
     if (typeof message === 'string' && message.trim()) {
       return { message: localizeBackendErrorMessage(message), code: normalizedCode }
     }
@@ -209,7 +211,7 @@ export async function request<T>(
           duration: 4000,
         })
       }
-      throw new ApiError(response.status, message, code)
+      throw new ApiError(response.status, message, code, data)
     }
 
     // Handle backend "success=false" convention (even when HTTP is 200)
@@ -223,7 +225,7 @@ export async function request<T>(
         })
       }
 
-      throw new ApiError(response.status, message, code)
+      throw new ApiError(response.status, message, code, data)
     }
 
     // If response body isn't JSON (or empty), treat as failure for callers expecting JSON.
@@ -278,7 +280,7 @@ export function uploadRequest<T>(
       }
 
       const { message, code } = getErrorDetails(data, `HTTP ${xhr.status}`)
-      const error = new ApiError(xhr.status, message, code)
+      const error = new ApiError(xhr.status, message, code, data)
       if (
         config.toastOnError !== false
         && shouldShowToast(getToastKey(endpoint, config))

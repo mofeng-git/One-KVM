@@ -47,6 +47,8 @@ pub struct VideoConfigUpdate {
     pub height: Option<u32>,
     pub fps: Option<u32>,
     pub quality: Option<u32>,
+    pub sources: Option<Vec<VideoSourceConfig>>,
+    pub primary_source_id: Option<String>,
 }
 
 impl VideoConfigUpdate {
@@ -97,6 +99,20 @@ impl VideoConfigUpdate {
     }
 
     pub fn apply_to(&self, config: &mut VideoConfig) {
+        if let Some(sources) = &self.sources {
+            config.sources = sources.clone();
+            // Preserve the old primary on reorder. Removing it requires an explicit replacement.
+            if config.sources.is_empty() {
+                config.primary_source_id = None;
+            } else if config.primary_source_id.is_none() {
+                config.primary_source_id = config.sources.first().map(|s| s.id.clone());
+            }
+        }
+        if let Some(id) = &self.primary_source_id {
+            config.primary_source_id = Some(id.clone());
+        }
+        // Project first, so a simultaneous legacy patch modifies the newly selected primary.
+        config.project_primary();
         if let Some(ref device) = self.device {
             config.device = Some(device.clone());
         }
@@ -115,12 +131,64 @@ impl VideoConfigUpdate {
         if let Some(quality) = self.quality {
             config.quality = quality;
         }
+        let primary_id = config.primary_id().to_string();
+        if let Some(source) = config.sources.iter_mut().find(|s| s.id == primary_id) {
+            if let Some(device) = &self.device {
+                source.device = device.clone();
+            }
+            if let Some(format) = &self.format {
+                source.format = format.clone();
+            }
+            if let Some(width) = self.width {
+                source.width = width;
+            }
+            if let Some(height) = self.height {
+                source.height = height;
+            }
+            if let Some(fps) = self.fps {
+                source.fps = fps;
+            }
+            if let Some(quality) = self.quality {
+                source.quality = quality;
+            }
+        }
+        config.project_primary();
     }
 }
 
 #[cfg(test)]
 mod video_config_update_tests {
     use super::VideoConfigUpdate;
+
+    #[test]
+    fn legacy_patch_and_primary_switch_keep_one_canonical_config() {
+        let mut config = crate::config::VideoConfig::default();
+        let update: VideoConfigUpdate = serde_json::from_value(serde_json::json!({
+            "sources": [{"id":"a", "device":"/dev/a"}, {"id":"b", "device":"/dev/b"}],
+            "primary_source_id":"b"
+        }))
+        .unwrap();
+        update.apply_to(&mut config);
+        let patch: VideoConfigUpdate =
+            serde_json::from_value(serde_json::json!({"width":1280, "quality":55})).unwrap();
+        patch.apply_to(&mut config);
+        assert_eq!(config.sources[0].width, 1920);
+        assert_eq!(config.sources[1].width, 1280);
+        assert_eq!(config.sources[1].quality, 55);
+        assert_eq!((config.width, config.quality), (1280, 55));
+        let switch: VideoConfigUpdate =
+            serde_json::from_value(serde_json::json!({"primary_source_id":"a"})).unwrap();
+        switch.apply_to(&mut config);
+        assert_eq!(config.device.as_deref(), Some("/dev/a"));
+        assert_eq!(config.width, 1920);
+        let reorder: VideoConfigUpdate = serde_json::from_value(
+            serde_json::json!({"sources":[config.sources[1],config.sources[0]]}),
+        )
+        .unwrap();
+        reorder.apply_to(&mut config);
+        assert_eq!(config.primary_id(), "a");
+        assert_eq!(config.sources[0].id, "b");
+    }
 
     #[test]
     fn source_following_parameters_are_silently_discarded() {
@@ -131,6 +199,8 @@ mod video_config_update_tests {
             height: Some(4320),
             fps: Some(120),
             quality: Some(90),
+            sources: None,
+            primary_source_id: None,
         };
         update.ignore_source_following_parameters();
 

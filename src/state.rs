@@ -223,6 +223,7 @@ impl AppState {
         );
 
         SystemEvent::DeviceInfo {
+            video_sources: self.stream_manager.sources().await,
             video,
             hid,
             msd,

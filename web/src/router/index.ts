@@ -24,6 +24,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/multiview',
+    name: 'Multiview',
+    redirect: to => ({ path: '/', query: to.query, hash: to.hash }),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/SettingsView.vue'),
@@ -94,6 +100,7 @@ router.beforeEach(async (to, _from, next) => {
     }
 
   }
+
 
   next()
 })

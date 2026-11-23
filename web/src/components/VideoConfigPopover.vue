@@ -16,6 +16,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select'
 import { Monitor, RefreshCw, Loader2, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
@@ -35,6 +36,9 @@ import { useConfigStore } from '@/stores/config'
 import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
 import type { VideoRotation } from '@/composables/useVideoScaling'
 import VideoInputFields from '@/components/VideoInputFields.vue'
+import VideoSourceFields from '@/components/VideoSourceFields.vue'
+import type { VideoSourceConfig } from '@/types/generated'
+import { useVideoSources } from '@/composables/useVideoSources'
 
 export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
 
@@ -53,6 +57,48 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const configStore = useConfigStore()
+const { activeSourceId } = useVideoSources()
+const sourceDraft = ref<VideoSourceConfig | null>(null)
+const applyError = ref('')
+const configuredSources = computed(() => configStore.video?.sources ?? [])
+const editingSourceId = ref('')
+
+function sourceLabel(source: VideoSourceConfig) {
+  return `${source.label || source.id}${source.id === configStore.video?.primary_source_id ? ` · ${t('multisource.primarySource')}` : ''}`
+}
+
+function syncSourceDraft() {
+  const sources = configuredSources.value
+  const selected = sources.find(source => source.id === editingSourceId.value)
+    ?? sources.find(source => source.id === activeSourceId.value)
+    ?? sources.find(source => source.id === configStore.video?.primary_source_id)
+    ?? sources[0]
+  editingSourceId.value = selected?.id ?? ''
+  sourceDraft.value = selected ? { ...selected } : null
+}
+watch(editingSourceId, () => {
+  const selected = configuredSources.value.find(source => source.id === editingSourceId.value)
+  sourceDraft.value = selected ? { ...selected } : null
+})
+watch(activeSourceId, id => { if (props.open) editingSourceId.value = id })
+
+async function applySourceConfig() {
+  if (!sourceDraft.value || applying.value) return
+  const previousConfig = configStore.video
+  applying.value = true
+  applyError.value = ''
+  try {
+    const draft = sourceDraft.value
+    await configStore.updateVideo({ sources: configuredSources.value.map(source =>
+      source.id === draft.id ? { ...draft } : { ...source }) })
+    toast.success(t('multisource.sourcesSaved'))
+  } catch (error) {
+    applyError.value = error instanceof Error ? error.message : t('settingsUi.saveFailed')
+  } finally {
+    if (configStore.video !== previousConfig) syncSourceDraft()
+    applying.value = false
+  }
+}
 
 // Device list
 const devices = ref<VideoDevice[]>([])
@@ -456,7 +502,9 @@ function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
 async function applyVideoConfig() {
   const [width, height] = selectedResolution.value.split('x').map(Number)
 
+  const previousConfig = configStore.video
   applying.value = true
+  applyError.value = ''
   try {
     await configStore.updateVideo(isSourceFollowing.value
       ? { device: selectedDevice.value }
@@ -471,13 +519,15 @@ async function applyVideoConfig() {
     isDirty.value = false
     // Stream state will be updated via WebSocket system.device_info event
   } catch (e) {
-    console.info('[VideoConfig] Failed to apply config:', e)
+    applyError.value = e instanceof Error ? e.message : t('settingsUi.saveFailed')
   } finally {
+    if (configStore.video !== previousConfig) initializeFromCurrent()
     applying.value = false
   }
 }
 
 watch(() => props.open, (isOpen) => {
+  applyError.value = ''
   if (!isOpen) {
     isDirty.value = false
     return
@@ -505,6 +555,8 @@ watch(() => props.open, (isOpen) => {
     configStore.refreshRustdeskStatus(),
   ]).then(() => {
     initializeFromCurrent()
+    editingSourceId.value = activeSourceId.value
+    syncSourceDraft()
   }).catch(() => {
     initializeFromCurrent()
   })
@@ -557,7 +609,7 @@ watch(
     </PopoverTrigger>
     <PopoverContent
       @open-auto-focus="focusConsolePanel"
-      class="console-config-panel w-[min(320px,92vw)] p-3"
+      class="console-config-panel w-[min(320px,92vw)] max-h-(--reka-popover-content-available-height) overflow-y-auto p-3"
       align="start"
       :side="props.side ?? 'bottom'"
     >
@@ -569,6 +621,7 @@ watch(
         <!-- Stream Settings Section -->
         <div class="space-y-3">
           <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.streamSettings') }}</h5>
+          <p v-if="configuredSources.length" class="text-xs text-muted-foreground">{{ t('multisource.primaryTransport') }}</p>
 
           <!-- Mode Selection -->
           <div class="space-y-2">
@@ -706,7 +759,25 @@ watch(
         <!-- Device Settings Section -->
         <Separator />
 
-        <div class="space-y-3">
+        <div v-if="configuredSources.length && sourceDraft" class="space-y-3">
+          <Label class="text-xs text-muted-foreground">{{ t('multisource.captureSource') }}</Label>
+          <Select v-model="editingSourceId">
+            <SelectTrigger size="sm" class="w-full"><SelectValue>{{ sourceLabel(sourceDraft) }}</SelectValue></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="source in configuredSources" :key="source.id" :value="source.id">
+                {{ sourceLabel(source) }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-xs text-muted-foreground">{{ t('multisource.primaryHelp') }}</p>
+          <VideoSourceFields v-model="sourceDraft" :devices="devices" :active="open" compact
+            :primary="editingSourceId === configStore.video?.primary_source_id" :video-mode="props.videoMode" />
+          <Button class="w-full" size="sm" :disabled="applying || !sourceDraft.device" @click="applySourceConfig">
+            <Loader2 v-if="applying" class="size-3.5 animate-spin" />{{ t('common.apply') }}
+          </Button>
+          <p v-if="applyError" class="whitespace-pre-line break-words text-xs text-destructive" role="alert">{{ applyError }}</p>
+        </div>
+        <div v-else class="space-y-3">
           <p v-if="videoParamWarningMessage" class="text-xs text-warning">
             {{ videoParamWarningMessage }}
           </p>
@@ -781,6 +852,7 @@ watch(
             <Loader2 v-if="applying" class="size-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
+          <p v-if="applyError" class="whitespace-pre-line break-words text-xs text-destructive" role="alert">{{ applyError }}</p>
           </div>
       </div>
     </PopoverContent>

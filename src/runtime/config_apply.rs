@@ -39,34 +39,10 @@ pub fn try_apply_lock(lock: &Arc<Mutex<()>>, domain: &str) -> Result<OwnedMutexG
 }
 
 pub(crate) async fn apply_video_config(state: &AppState, new_config: &VideoConfig) -> Result<()> {
-    tracing::info!("Applying video config changes...");
-
-    let device = new_config
-        .device
-        .as_deref()
-        .ok_or_else(|| AppError::BadRequest("video_device is required".to_string()))?;
-
-    let format = new_config
-        .format
-        .as_ref()
-        .and_then(|f| {
-            serde_json::from_value::<crate::video::format::PixelFormat>(serde_json::Value::String(
-                f.clone(),
-            ))
-            .ok()
-        })
-        .unwrap_or(crate::video::format::PixelFormat::Mjpeg);
-
-    let resolution = crate::video::format::Resolution::new(new_config.width, new_config.height);
-
     state
         .stream_manager
-        .apply_video_config(device, format, resolution, new_config.fps)
+        .configure_sources(new_config, false)
         .await
-        .map_err(|e| AppError::VideoError(format!("Failed to apply video config: {}", e)))?;
-
-    tracing::info!("Video config applied successfully");
-    Ok(())
 }
 
 pub(crate) async fn apply_stream_config(

@@ -118,6 +118,11 @@ function disconnect() {
   }
 
   if (wsInstance) {
+    // An intentional disconnect (logout) must not schedule an automatic reconnect.
+    wsInstance.onclose = null
+    wsInstance.onmessage = null
+    wsInstance.onerror = null
+    wsInstance.onopen = null
     wsInstance.close()
     wsInstance = null
     connected.value = false

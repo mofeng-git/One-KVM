@@ -59,6 +59,8 @@ fn spawn_device_info_broadcaster(
     }
 
     const DEVICE_INFO_TOPICS: &[&str] = &[
+        "video.source.state_changed",
+        "video.sources_changed",
         "stream.state_changed",
         "stream.config_applied",
         "stream.mode_ready",
@@ -181,6 +183,7 @@ fn spawn_device_info_broadcaster(
 }
 
 async fn cleanup(state: &Arc<AppState>) {
+    state.stream_manager.shutdown_sources().await;
     state.extensions.stop_all().await;
     tracing::info!("Extensions stopped");
 

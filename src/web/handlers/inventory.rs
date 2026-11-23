@@ -18,8 +18,11 @@ pub struct ExtensionsAvailability {
 #[derive(Serialize)]
 pub struct VideoDevice {
     pub path: String,
+    pub canonical_path: String,
+    pub aliases: Vec<String>,
     pub name: String,
     pub driver: String,
+    pub bus_info: String,
     pub formats: Vec<VideoFormat>,
     pub usb_bus: Option<String>,
     pub has_signal: bool,
@@ -94,8 +97,45 @@ fn extract_usb_bus_from_bus_info(bus_info: &str) -> Option<String> {
     None
 }
 
+fn video_alias_candidates() -> Vec<std::path::PathBuf> {
+    ["/dev/v4l/by-path", "/dev/v4l/by-id"]
+        .into_iter()
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect()
+}
+
+fn video_aliases_for_target(
+    target: &std::path::Path,
+    candidates: &[std::path::PathBuf],
+) -> Vec<String> {
+    let target = crate::video::multiview::canonical_device(target);
+    let mut aliases: Vec<_> = candidates
+        .iter()
+        .filter(|path| {
+            // Match actual targets, never USB serial strings shared by cheap cards.
+            std::fs::canonicalize(path).is_ok_and(|resolved| resolved == target)
+        })
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    aliases.sort();
+    aliases.dedup();
+    aliases
+}
+
 pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList> {
     let platform = PlatformCapabilities::current();
+    let mut aliases = video_alias_candidates();
+    aliases.extend(
+        state
+            .config
+            .get()
+            .video
+            .effective_sources()
+            .into_iter()
+            .map(|source| std::path::PathBuf::from(source.device)),
+    );
 
     // Detect video devices
     let video_devices = match state.stream_manager.list_devices().await {
@@ -106,9 +146,14 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
                 // or "usb-xhci-hcd.0-1.2" -> "1.2"
                 let usb_bus = extract_usb_bus_from_bus_info(&d.bus_info);
                 VideoDevice {
+                    canonical_path: crate::video::multiview::canonical_device(&d.path)
+                        .display()
+                        .to_string(),
+                    aliases: video_aliases_for_target(&d.path, &aliases),
                     path: d.path.to_string_lossy().to_string(),
                     name: d.name,
                     driver: d.driver,
+                    bus_info: d.bus_info,
                     formats: d
                         .formats
                         .iter()
@@ -192,7 +237,8 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
 
 #[cfg(unix)]
 fn validated_video_node(path: &str, sysfs_root: &std::path::Path) -> Option<std::path::PathBuf> {
-    let path = std::path::Path::new(path);
+    let resolved = crate::video::multiview::canonical_device(path);
+    let path = resolved.as_path();
     let name = path.file_name()?.to_str()?;
     if path.parent() != Some(std::path::Path::new("/dev"))
         || !name.starts_with("video")
@@ -241,6 +287,39 @@ pub async fn video_input_status(
 #[cfg(all(test, unix))]
 mod tests {
     use super::validated_video_node;
+
+    #[test]
+    fn video_aliases_match_live_canonical_targets_and_skip_dangling_links() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let first = root.path().join("video0");
+        let second = root.path().join("video4");
+        std::fs::write(&first, []).unwrap();
+        std::fs::write(&second, []).unwrap();
+        let port = root.path().join("by-path-port1");
+        let serial = root.path().join("by-id-duplicate-serial");
+        let dangling = root.path().join("dangling");
+        symlink(&first, &port).unwrap();
+        symlink(&second, &serial).unwrap();
+        symlink(root.path().join("missing"), &dangling).unwrap();
+        let candidates = vec![port.clone(), serial.clone(), dangling, port.clone()];
+        assert_eq!(
+            super::video_aliases_for_target(&first, &candidates),
+            vec![port.to_string_lossy().into_owned()]
+        );
+        assert_eq!(
+            super::video_aliases_for_target(&second, &candidates),
+            vec![serial.to_string_lossy().into_owned()]
+        );
+        // The stable port alias follows a renumbered target, never a serial guess.
+        std::fs::remove_file(&port).unwrap();
+        symlink(&second, &port).unwrap();
+        assert!(super::video_aliases_for_target(&first, &candidates).is_empty());
+        assert_eq!(
+            super::video_aliases_for_target(&second, &candidates).len(),
+            2
+        );
+    }
 
     #[test]
     fn only_accepts_dev_video_nodes_present_in_sysfs() {

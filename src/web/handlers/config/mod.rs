@@ -1,4 +1,5 @@
 mod types;
+pub(crate) use types::VideoConfigUpdate;
 
 mod atx;
 mod audio;

@@ -163,6 +163,8 @@ impl StreamerState {
 
 /// Video streamer service
 pub struct Streamer {
+    #[cfg(test)]
+    pub(crate) test_apply_error: parking_lot::Mutex<Option<String>>,
     config: RwLock<StreamerConfig>,
     mjpeg_handler: Arc<MjpegStreamHandler>,
     pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
@@ -173,8 +175,12 @@ pub struct Streamer {
     direct_active: AtomicBool,
     direct_handle: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     current_fps: AtomicU32,
+    capture_frames: AtomicU64,
+    strict_device_recovery: AtomicBool,
+    recovery_generation: AtomicU64,
     /// Event bus for broadcasting state changes (optional)
     events: RwLock<Option<Arc<EventBus>>>,
+    source_event_id: RwLock<Option<String>>,
     last_published_state: RwLock<Option<(String, Option<String>, Option<u64>)>>,
     next_retry_ms: AtomicU64,
     /// Flag to indicate config is being changed (prevents auto-start during config change)
@@ -196,6 +202,8 @@ impl Streamer {
     /// Create a new streamer
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
+            #[cfg(test)]
+            test_apply_error: Default::default(),
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -206,7 +214,11 @@ impl Streamer {
             direct_active: AtomicBool::new(false),
             direct_handle: tokio::sync::Mutex::new(None),
             current_fps: AtomicU32::new(0),
+            capture_frames: AtomicU64::new(0),
+            strict_device_recovery: AtomicBool::new(false),
+            recovery_generation: AtomicU64::new(0),
             events: RwLock::new(None),
+            source_event_id: RwLock::new(None),
             last_published_state: RwLock::new(None),
             next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
@@ -221,6 +233,8 @@ impl Streamer {
     /// Create with specific config
     pub fn with_config(config: StreamerConfig) -> Arc<Self> {
         Arc::new(Self {
+            #[cfg(test)]
+            test_apply_error: Default::default(),
             config: RwLock::new(config),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -231,7 +245,11 @@ impl Streamer {
             direct_active: AtomicBool::new(false),
             direct_handle: tokio::sync::Mutex::new(None),
             current_fps: AtomicU32::new(0),
+            capture_frames: AtomicU64::new(0),
+            strict_device_recovery: AtomicBool::new(false),
+            recovery_generation: AtomicU64::new(0),
             events: RwLock::new(None),
+            source_event_id: RwLock::new(None),
             last_published_state: RwLock::new(None),
             next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
@@ -265,7 +283,18 @@ impl Streamer {
 
     /// Set event bus for broadcasting state changes
     pub async fn set_event_bus(&self, events: Arc<EventBus>) {
+        *self.source_event_id.write().await = None;
         *self.events.write().await = Some(events);
+    }
+
+    pub async fn set_source_event_bus(&self, events: Arc<EventBus>, id: String) {
+        *self.source_event_id.write().await = Some(id);
+        *self.events.write().await = Some(events);
+    }
+
+    pub async fn set_jpeg_quality(&self, quality: u8) {
+        self.config.write().await.jpeg_quality = quality;
+        self.mjpeg_handler.set_jpeg_quality(quality);
     }
 
     /// Get current state
@@ -317,6 +346,10 @@ impl Streamer {
         resolution: Resolution,
         fps: u32,
     ) -> Result<()> {
+        #[cfg(test)]
+        if let Some(error) = self.test_apply_error.lock().take() {
+            return Err(AppError::VideoError(error));
+        }
         // Set config_changing flag to prevent frontend mode sync during config change
         self.config_changing
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -357,15 +390,42 @@ impl Streamer {
 
         let devices = enumerate_devices()?;
         let device = if device_path.eq_ignore_ascii_case("auto") {
+            if self.strict_device_recovery.load(Ordering::Relaxed) {
+                return Err(AppError::BadRequest(
+                    "auto is forbidden for an explicitly bound source".into(),
+                ));
+            }
             devices
                 .into_iter()
                 .next()
                 .ok_or_else(|| AppError::VideoError("No video devices found".to_string()))?
         } else {
-            devices
+            let resolved_path =
+                std::fs::canonicalize(device_path).unwrap_or_else(|_| PathBuf::from(device_path));
+            match devices
                 .into_iter()
-                .find(|d| d.path.to_string_lossy() == device_path)
-                .ok_or_else(|| AppError::VideoError("Video device not found".to_string()))?
+                .find(|d| d.path == resolved_path || d.path.to_string_lossy() == device_path)
+            {
+                Some(mut device) => {
+                    device.path = PathBuf::from(device_path);
+                    device
+                }
+                None => {
+                    // Retain the desired binding even when unplugged. A later start probes
+                    // this same alias; it never falls back to another card.
+                    self.stop().await?;
+                    let mut cfg = self.config.write().await;
+                    cfg.device_path = Some(PathBuf::from(device_path));
+                    cfg.format = format;
+                    cfg.resolution = resolution;
+                    cfg.fps = fps;
+                    drop(cfg);
+                    *self.current_device.write().await = None;
+                    *self.state.write().await = StreamerState::DeviceLost;
+                    self.publish_event(self.current_state_event().await).await;
+                    return Ok(());
+                }
+            }
         };
 
         let resolved = self.resolve_capture_config(&device, format, resolution, fps)?;
@@ -424,6 +484,11 @@ impl Streamer {
 
     /// Initialize with auto-detected device
     pub async fn init_auto(self: &Arc<Self>) -> Result<()> {
+        if self.strict_device_recovery.load(Ordering::Relaxed) {
+            return Err(AppError::VideoError(
+                "Automatic device selection is disabled for a configured multiview source".into(),
+            ));
+        }
         info!("Auto-detecting video device...");
 
         let device = find_best_device()?;
@@ -591,9 +656,16 @@ impl Streamer {
     }
 
     /// Restart capture for recovery (direct capture path)
-    async fn restart_capture(self: &Arc<Self>) -> Result<()> {
-        self.direct_stop.store(false, Ordering::SeqCst);
-        self.start().await?;
+    async fn restart_capture(self: &Arc<Self>, generation: u64) -> Result<()> {
+        {
+            let _lock = self.start_lock.lock().await;
+            if self.recovery_generation.load(Ordering::SeqCst) != generation {
+                return Err(AppError::ServiceUnavailable(
+                    "Capture recovery was superseded".into(),
+                ));
+            }
+            self.start_inner().await?;
+        }
 
         // Wait briefly for the capture thread to initialize the device.
         // If it fails immediately, the state will flip to Error/DeviceLost.
@@ -620,7 +692,15 @@ impl Streamer {
     /// Start streaming
     pub async fn start(self: &Arc<Self>) -> Result<()> {
         let _lock = self.start_lock.lock().await;
+        self.start_inner().await
+    }
 
+    async fn start_inner(self: &Arc<Self>) -> Result<()> {
+        if self.is_config_changing() {
+            return Err(AppError::ServiceUnavailable(
+                "Capture configuration is changing".into(),
+            ));
+        }
         let state = self.state().await;
         if state == StreamerState::Streaming {
             return Ok(());
@@ -640,6 +720,13 @@ impl Streamer {
         if state == StreamerState::Uninitialized {
             // Auto-initialize if not done
             self.init_auto().await?;
+        }
+
+        if self.current_device.read().await.is_none() {
+            let cfg = self.config.read().await.clone();
+            if let Some(path) = cfg.device_path {
+                self.re_init_device(&path.to_string_lossy()).await?;
+            }
         }
 
         let device = self
@@ -765,13 +852,16 @@ impl Streamer {
 
     /// Stop streaming
     pub async fn stop(&self) -> Result<()> {
+        let _lock = self.start_lock.lock().await;
+        self.recovery_generation.fetch_add(1, Ordering::SeqCst);
         self.direct_stop.store(true, Ordering::SeqCst);
+        self.snapshot_slot.cancel();
         if let Some(handle) = self.direct_handle.lock().await.take() {
             let _ = handle.await;
         }
         self.direct_active.store(false, Ordering::SeqCst);
 
-        self.mjpeg_handler.set_offline();
+        self.mjpeg_handler.disconnect_non_vnc_clients();
         *self.state.write().await = StreamerState::Ready;
 
         // Publish state change event so DeviceInfo broadcaster can update frontend
@@ -1229,6 +1319,7 @@ impl Streamer {
                     });
                 }
 
+                self.capture_frames.fetch_add(1, Ordering::Relaxed);
                 self.snapshot_slot.publish(&frame);
                 self.mjpeg_handler.update_frame(frame);
 
@@ -1274,7 +1365,30 @@ impl Streamer {
     pub async fn re_init_device(self: &Arc<Self>, device_path: &str) -> Result<()> {
         let device = VideoDevice::open_readonly(device_path)
             .map_err(|e| AppError::VideoError(format!("Cannot open device for re-init: {}", e)))?;
-        let device_info = device.info()?;
+        self.apply_reprobed_device(device.info()?).await
+    }
+
+    async fn apply_reprobed_device(&self, mut device_info: VideoDeviceInfo) -> Result<()> {
+        if self.strict_device_recovery.load(Ordering::Relaxed) {
+            if let Some(previous) = self.current_device.read().await.as_ref() {
+                if !previous.bus_info.trim().is_empty() && previous.bus_info != device_info.bus_info
+                {
+                    return Err(AppError::VideoError(
+                        "Recovered node belongs to a different physical port".into(),
+                    ));
+                }
+            }
+        }
+        // Preserve an alias only while it still resolves to this recovered node.
+        // A raw /dev/videoN binding may now name a completely different card.
+        let configured_path = self.config.read().await.device_path.clone();
+        if let Some(path) = configured_path {
+            if super::multiview::canonical_device(&path)
+                == super::multiview::canonical_device(&device_info.path)
+            {
+                device_info.path = path;
+            }
+        }
 
         let resolved = {
             let config = self.config.read().await;
@@ -1302,6 +1416,28 @@ impl Streamer {
         Ok(())
     }
 
+    pub fn set_strict_device_recovery(&self) {
+        self.set_device_recovery_policy(true);
+    }
+
+    pub fn set_device_recovery_policy(&self, strict: bool) {
+        self.strict_device_recovery.store(strict, Ordering::Relaxed);
+    }
+
+    pub fn capture_frames(&self) -> u64 {
+        self.capture_frames.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn capture_generation(&self) -> u64 {
+        self.recovery_generation.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn set_test_streaming(&self) {
+        // Exercise snapshot waiting without spawning a hardware capture thread.
+        *self.state.write().await = StreamerState::Streaming;
+    }
+
     /// Get stream statistics
     pub async fn stats(&self) -> StreamerStats {
         let config = self.config.read().await;
@@ -1323,6 +1459,30 @@ impl Streamer {
     /// Dedupes `StreamStateChanged` on `(state, reason, next_retry_ms)`.
     async fn publish_event(&self, event: SystemEvent) {
         if let Some(events) = self.events.read().await.as_ref() {
+            if let Some(id) = self.source_event_id.read().await.clone() {
+                // Old stream.* subscribers have primary-only semantics. Extras must
+                // never reach those topics, including config, recovery and stats.
+                if !matches!(event, SystemEvent::StreamStatsUpdate { .. }) {
+                    if let SystemEvent::StreamStateChanged {
+                        state,
+                        device,
+                        reason,
+                        next_retry_ms,
+                        ..
+                    } = self.current_state_event().await
+                    {
+                        events.publish(SystemEvent::VideoSourceStateChanged {
+                            source_id: id,
+                            state,
+                            device,
+                            reason,
+                            next_retry_ms,
+                        });
+                    }
+                    events.mark_device_info_dirty();
+                }
+                return;
+            }
             if let SystemEvent::StreamStateChanged {
                 ref state,
                 ref reason,
@@ -1379,6 +1539,7 @@ impl Streamer {
             .await
             .clone()
             .unwrap_or_else(|| "Device lost".to_string());
+        let generation = self.recovery_generation.load(Ordering::SeqCst);
         let recovery_hint = self
             .current_device
             .read()
@@ -1452,6 +1613,9 @@ impl Streamer {
                 };
                 tokio::time::sleep(wait).await;
 
+                if streamer.recovery_generation.load(Ordering::SeqCst) != generation {
+                    break;
+                }
                 let devices = match enumerate_devices() {
                     Ok(devices) => devices,
                     Err(e) => {
@@ -1460,11 +1624,18 @@ impl Streamer {
                     }
                 };
 
-                let Some(device) = select_recovery_device(&devices, &recovery_hint) else {
+                let recovered = if streamer.strict_device_recovery.load(Ordering::Relaxed) {
+                    super::device::select_bound_recovery_device(&devices, &recovery_hint)
+                } else {
+                    select_recovery_device(&devices, &recovery_hint)
+                };
+                let Some(device) = recovered else {
                     debug!("No matching video device present yet for recovery");
                     continue;
                 };
 
+                // The selector already established physical identity. Do not undo
+                // bus-based renumber recovery with a comparison to the old node.
                 let device_path = device.path.display().to_string();
                 if device_path != original_device_path {
                     info!(
@@ -1484,11 +1655,12 @@ impl Streamer {
                         "Failed to re-probe device format (attempt {}): {}",
                         attempt, e
                     );
-                    // Don't skip – device exists, try restart anyway
+                    // Never restart with stale device metadata after a failed probe.
+                    continue;
                 }
 
                 // Try to restart capture
-                match streamer.restart_capture().await {
+                match streamer.restart_capture(generation).await {
                     Ok(_) => {
                         info!(
                             "Video device {} recovered after {} attempts",
@@ -1526,6 +1698,8 @@ impl Streamer {
 impl Default for Streamer {
     fn default() -> Self {
         Self {
+            #[cfg(test)]
+            test_apply_error: Default::default(),
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -1536,7 +1710,11 @@ impl Default for Streamer {
             direct_active: AtomicBool::new(false),
             direct_handle: tokio::sync::Mutex::new(None),
             current_fps: AtomicU32::new(0),
+            capture_frames: AtomicU64::new(0),
+            strict_device_recovery: AtomicBool::new(false),
+            recovery_generation: AtomicU64::new(0),
             events: RwLock::new(None),
+            source_event_id: RwLock::new(None),
             last_published_state: RwLock::new(None),
             next_retry_ms: AtomicU64::new(0),
             config_changing: std::sync::atomic::AtomicBool::new(false),
@@ -1590,5 +1768,97 @@ impl serde::Serialize for StreamerState {
         S: serde::Serializer,
     {
         serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    fn device(path: PathBuf, bus: &str) -> VideoDeviceInfo {
+        VideoDeviceInfo {
+            path,
+            name: "fixture".into(),
+            driver: "uvcvideo".into(),
+            bus_info: bus.into(),
+            card: "identical capture card".into(),
+            formats: Vec::new(),
+            capabilities: Default::default(),
+            is_capture_card: true,
+            priority: 0,
+            has_signal: true,
+            control_mode: VideoControlMode::Configurable,
+            input_status: super::super::device::VideoInputStatus::unavailable(),
+            subdev_path: None,
+            bridge_kind: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn recovered_bus_identity_reaches_runtime_capture_path_after_renumber() {
+        let streamer = Streamer::new();
+        streamer.set_strict_device_recovery();
+        let original = device("/dev/video1000".into(), "usb-fixture-port1");
+        *streamer.config.write().await = StreamerConfig {
+            device_path: Some(original.path.clone()),
+            ..Default::default()
+        };
+        *streamer.current_device.write().await = Some(original.clone());
+        let wrong = device(original.path.clone(), "usb-fixture-port2");
+        let recovered = device("/dev/video1004".into(), "usb-fixture-port1");
+        let selected = super::super::device::select_bound_recovery_device(
+            &[wrong.clone(), recovered.clone()],
+            &VideoDeviceRecoveryHint::from(&original),
+        )
+        .unwrap();
+        // Exercise the re-probe application seam used by re_init_device, not just selection.
+        streamer.apply_reprobed_device(selected).await.unwrap();
+        assert_eq!(
+            streamer.current_capture_config().await.0,
+            Some(recovered.path.clone()),
+        );
+        assert_eq!(
+            streamer.current_device().await.unwrap().path,
+            recovered.path
+        );
+        assert!(streamer.apply_reprobed_device(wrong).await.is_err());
+        assert_eq!(
+            streamer.current_device().await.unwrap().bus_info,
+            original.bus_info
+        );
+    }
+
+    #[tokio::test]
+    async fn reprobe_keeps_only_aliases_that_still_resolve_to_the_recovered_node() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let first = root.path().join("video0");
+        let second = root.path().join("video4");
+        let alias = root.path().join("by-path-port1");
+        std::fs::write(&first, []).unwrap();
+        std::fs::write(&second, []).unwrap();
+        symlink(&first, &alias).unwrap();
+        let streamer = Streamer::new();
+        streamer.set_strict_device_recovery();
+        streamer.config.write().await.device_path = Some(alias.clone());
+        *streamer.current_device.write().await = Some(device(alias.clone(), "usb-fixture-port1"));
+        std::fs::remove_file(&alias).unwrap();
+        symlink(&second, &alias).unwrap();
+        streamer
+            .apply_reprobed_device(device(second.clone(), "usb-fixture-port1"))
+            .await
+            .unwrap();
+        assert_eq!(
+            streamer.current_capture_config().await.0,
+            Some(alias.clone())
+        );
+        // An alias which was reassigned to a different card must not override bus recovery.
+        std::fs::remove_file(&alias).unwrap();
+        symlink(&first, &alias).unwrap();
+        streamer
+            .apply_reprobed_device(device(second.clone(), "usb-fixture-port1"))
+            .await
+            .unwrap();
+        assert_eq!(streamer.current_capture_config().await.0, Some(second));
     }
 }

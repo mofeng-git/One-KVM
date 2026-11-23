@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
   const needsSetup = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const setupWarnings = ref<string[]>([])
   let pendingUsername: string | null = null
 
   async function checkSetupStatus() {
@@ -108,10 +109,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function setup(data: Parameters<typeof systemApi.setup>[0]) {
     loading.value = true
     error.value = null
+    setupWarnings.value = []
 
     try {
       const result = await systemApi.setup(data)
       if (result.success) {
+        if (result.partial) setupWarnings.value = result.errors?.length ? result.errors : [result.message || 'Setup completed with runtime errors']
         initialized.value = true
         needsSetup.value = false
         return true
@@ -134,6 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
     needsSetup,
     loading,
     error,
+    setupWarnings,
     checkSetupStatus,
     checkAuth,
     beginLogin,

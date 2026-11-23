@@ -19,6 +19,7 @@ use crate::video::device::VideoDeviceInfo;
 /// circular import.
 #[async_trait::async_trait]
 pub trait VideoOutput: Send + Sync {
+    fn set_device_recovery_policy(&self, _strict: bool) {}
     async fn set_event_bus(&self, events: Arc<EventBus>);
     async fn update_video_config(&self, resolution: Resolution, format: PixelFormat, fps: u32);
     async fn set_capture_device(

@@ -87,6 +87,13 @@ pub async fn stream_mode_set(
     Json(req): Json<SetStreamModeRequest>,
 ) -> Result<Json<StreamModeResponse>> {
     use crate::video::codec::VideoCodecType;
+    let _video_guard = crate::runtime::try_apply_lock(&state.config_apply_locks.video, "video")?;
+    let _stream_guard = crate::runtime::try_apply_lock(&state.config_apply_locks.stream, "stream")?;
+    if state.stream_manager.is_config_changing() {
+        return Err(AppError::ServiceUnavailable(
+            "Video configuration is changing".into(),
+        ));
+    }
 
     let constraints = state.stream_manager.codec_constraints().await;
 
@@ -489,18 +496,13 @@ pub async fn mjpeg_stream(
 
 /// Single JPEG snapshot
 pub async fn snapshot(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let handler = state.stream_manager.mjpeg_handler();
-
-    match handler.current_frame() {
-        Some(frame) if frame.is_valid_jpeg() => Response::builder()
+    match state.stream_manager.capture_snapshot(None).await {
+        Ok(snapshot) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/jpeg")
-            .header(header::CACHE_CONTROL, "no-cache")
-            .body(Body::from(frame.owned_data_bytes()))
+            .header(header::CACHE_CONTROL, "no-store")
+            .body(Body::from(snapshot.jpeg))
             .unwrap(),
-        _ => Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .body(Body::from("No frame available"))
-            .unwrap(),
+        Err(error) => error.into_response(),
     }
 }

@@ -8,6 +8,7 @@ pub mod codec_constraints;
 pub mod device;
 pub mod format;
 pub mod frame;
+pub mod multiview;
 #[cfg(feature = "desktop")]
 pub mod pipeline;
 pub mod recovery;

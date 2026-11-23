@@ -333,6 +333,7 @@ impl MjpegStreamHandler {
 
     pub fn set_offline(&self) {
         self.online.store(false, Ordering::SeqCst);
+        self.current_frame.store(Arc::new(None));
         let _ = self.frame_notify.send(());
     }
 
@@ -346,6 +347,10 @@ impl MjpegStreamHandler {
 
     pub fn client_count(&self) -> u64 {
         self.clients.read().len() as u64
+    }
+
+    pub fn has_client(&self, client_id: &str) -> bool {
+        self.clients.read().contains_key(client_id)
     }
 
     /// Connects `client_id`; return value must be passed to [`unregister_client`].
@@ -458,6 +463,14 @@ impl ClientGuard {
         }
     }
 
+    pub fn is_active(&self) -> bool {
+        self.handler
+            .clients
+            .read()
+            .get(&self.client_id)
+            .is_some_and(|s| s.generation == self.generation)
+    }
+
     pub fn id(&self) -> &ClientId {
         &self.client_id
     }
@@ -472,12 +485,16 @@ impl Drop for ClientGuard {
 
 impl MjpegStreamHandler {
     pub fn start_cleanup_task(self: Arc<Self>) {
-        let handler = self.clone();
+        let handler_ref = Arc::downgrade(&self);
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
 
             loop {
                 interval.tick().await;
+
+                let Some(handler) = handler_ref.upgrade() else {
+                    break;
+                };
 
                 let timeout_secs = handler.auto_pause_config().client_timeout_secs;
                 let timeout = Duration::from_secs(timeout_secs);
@@ -570,6 +587,17 @@ mod tests {
     use super::*;
     use crate::video::{format::Resolution, PixelFormat};
     use bytes::Bytes;
+
+    #[tokio::test]
+    async fn cleanup_does_not_own_a_removed_handler() {
+        let handler = Arc::new(MjpegStreamHandler::new());
+        let weak = Arc::downgrade(&handler);
+        handler.clone().start_cleanup_task();
+        // Allow the spawned task to run its first tick before dropping the owner.
+        tokio::task::yield_now().await;
+        drop(handler);
+        assert!(weak.upgrade().is_none());
+    }
 
     #[cfg(feature = "desktop")]
     fn raw_frame(resolution: Resolution, sequence: u64) -> VideoFrame {
