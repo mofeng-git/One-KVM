@@ -1,10 +1,14 @@
 //! One-shot capture at the current source resolution. No resize or browser dependency.
 use super::codec::{Encoder, EncoderConfig, JpegEncoder, PixelConverter};
-use super::{format::PixelFormat, frame::VideoFrame, VideoStreamManager};
+use super::format::PixelFormat;
+use super::frame::VideoFrame;
+use super::pipeline::PipelineLifecycle;
+use super::VideoStreamManager;
 use crate::config::StreamMode;
 use crate::error::{AppError, Result};
 use bytes::Bytes;
 use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
@@ -101,6 +105,7 @@ impl VideoStreamManager {
                 "quality must be between 1 and 100".into(),
             ));
         }
+        let mut pipeline_for_snapshot = None;
         let capture = async {
             let mode = if source.info.primary {
                 self.current_mode().await
@@ -129,9 +134,11 @@ impl VideoStreamManager {
                     let _consumer = pipeline.subscribe();
                     let rx = pipeline.snapshot_slot.request()?;
                     drop(startup_guard);
-                    rx.await.map_err(|_| {
+                    let frame = rx.await.map_err(|_| {
                         AppError::ServiceUnavailable("Capture stopped before snapshot".into())
-                    })?
+                    })?;
+                    pipeline_for_snapshot = Some(pipeline);
+                    frame
                 }
             };
             let quality = quality
@@ -147,6 +154,28 @@ impl VideoStreamManager {
             .map_err(|_| {
                 AppError::ServiceUnavailable("Timed out waiting for a fresh video frame".into())
             })??;
+        if let Some(pipeline) = pipeline_for_snapshot {
+            // The pipeline can be replaced without stopping the MJPEG Streamer
+            // (codec/encoder rebuild), so `capture_generation` alone cannot see
+            // that this request belongs to a retired pipeline.
+            if !Arc::ptr_eq(
+                &pipeline,
+                &self
+                    .webrtc_streamer
+                    .current_video_pipeline()
+                    .await
+                    .ok_or_else(|| {
+                        AppError::ServiceUnavailable(
+                            "Video pipeline changed during snapshot".into(),
+                        )
+                    })?,
+            ) || pipeline.lifecycle() != PipelineLifecycle::Running
+            {
+                return Err(AppError::ServiceUnavailable(
+                    "Video pipeline changed during snapshot; retry later".into(),
+                ));
+            }
+        }
         let sources = self.sources.read().await;
         if self.is_switching()
             || self.is_config_changing()

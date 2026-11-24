@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use typeshare::typeshare;
 
 use crate::config::{StreamMode, VideoConfig, VideoSourceConfig};
@@ -10,6 +11,7 @@ use crate::error::{AppError, Result};
 use crate::events::SystemEvent;
 use crate::video::device::{self, VideoControlMode, VideoDeviceInfo};
 use crate::video::format::{PixelFormat, Resolution};
+use crate::video::streamer::NO_AUTO_DEVICE_MESSAGE;
 use crate::video::{Streamer, VideoStreamManager};
 
 #[typeshare]
@@ -373,6 +375,11 @@ impl VideoStreamManager {
                         || capture_changed(&s.config, &source_config)
                         || s.apply_error.is_some()
                 });
+            // A legacy implicit single source keeps the historical hot-plug contract:
+            // no card at startup is a normal state, not a configuration error, and the
+            // first successful start must still be reachable once a card appears.
+            let implicit_auto =
+                config.sources.is_empty() && source_config.device.eq_ignore_ascii_case("auto");
             let mut apply_error = None;
             let quality_changed = old.is_none_or(|s| s.config.quality != source_config.quality);
             if quality_changed {
@@ -404,10 +411,23 @@ impl VideoStreamManager {
                         )
                         .await
                 };
-                if let Err(error) = result {
-                    let message = format!("{}: {}", source_config.id, error);
-                    failures.push(message.clone());
-                    apply_error = Some(message);
+                match result {
+                    Ok(()) => {}
+                    // `auto` with no camera present is recoverable by later `init_auto`;
+                    // recording it as an apply failure would permanently block 503-free
+                    // start/snapshot after a capture card is plugged in.
+                    Err(AppError::VideoError(message))
+                        if implicit_auto && message == NO_AUTO_DEVICE_MESSAGE =>
+                    {
+                        debug!(
+                            "No capture device for implicit auto source; deferring to auto-detect"
+                        );
+                    }
+                    Err(error) => {
+                        let message = format!("{}: {}", source_config.id, error);
+                        failures.push(message.clone());
+                        apply_error = Some(message);
+                    }
                 }
             }
             if primary {
@@ -528,6 +548,60 @@ mod tests {
         }
         manager.shutdown_sources().await;
     }
+
+    /// Legacy implicit single-source configs keep their hot-plug contract: booting
+    /// without a capture card must not latch `primary_apply_failed`, which would
+    /// make every later start/snapshot return 503 even after a card appears.
+    #[tokio::test]
+    async fn implicit_auto_startup_without_a_card_does_not_poison_primary_apply() {
+        let primary = Streamer::new();
+        let manager = VideoStreamManager::with_webrtc_streamer(
+            primary.clone(),
+            crate::webrtc::WebRtcStreamer::new(),
+        );
+        let video = VideoConfig::default();
+        assert!(video.sources.is_empty() && video.device.is_none());
+        assert_eq!(
+            video.effective_sources()[0].device.as_str(),
+            "auto",
+            "legacy configs synthesize an implicit auto source"
+        );
+
+        *primary.test_device_inventory.lock() = Some(vec![]);
+        manager.configure_sources(&video, true).await.unwrap();
+
+        let registry = manager.sources.read().await;
+        assert_eq!(registry.len(), 1);
+        assert!(
+            registry[0].apply_error.is_none(),
+            "no card at boot is an offline state, not an apply failure"
+        );
+        drop(registry);
+        // Startup must leave the implicit source startable (503-free) so the
+        // first card that is plugged in can be opened by init_auto.
+        manager.ensure_primary_enabled().unwrap();
+        assert!(!primary.is_config_changing());
+        assert_eq!(
+            primary.state().await,
+            crate::video::StreamerState::Uninitialized
+        );
+        assert!(
+            primary.current_capture_config().await.0.is_none(),
+            "no hardware was touched while no card existed"
+        );
+        // A real apply failure must still latch, so the exemption stays narrow.
+        let mut explicit = video.clone();
+        explicit.sources = vec![VideoSourceConfig {
+            id: "primary".into(),
+            device: "auto".into(),
+            fps: 25,
+            ..Default::default()
+        }];
+        *primary.test_apply_error.lock() = Some("fixture apply failure".into());
+        assert!(manager.configure_sources(&explicit, false).await.is_err());
+        assert!(manager.ensure_primary_enabled().is_err());
+    }
+
     fn config() -> VideoConfig {
         let mut c = VideoConfig::default();
         c.sources = (1..=3)

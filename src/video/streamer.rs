@@ -34,6 +34,11 @@ use crate::video::recovery::{wait_for_source_change, CaptureRecoveryPolicy};
 
 const MIN_CAPTURE_FRAME_SIZE: usize = 128;
 
+/// `apply_video_config("auto")` failure when no capture device is present.
+/// Callers treat this as "not plugged in yet" only for legacy implicit auto
+/// sources; explicit bindings report an offline `DeviceLost` state instead.
+pub(crate) const NO_AUTO_DEVICE_MESSAGE: &str = "No video devices found";
+
 /// Streamer configuration
 #[derive(Debug, Clone)]
 pub struct StreamerConfig {
@@ -165,6 +170,8 @@ impl StreamerState {
 pub struct Streamer {
     #[cfg(test)]
     pub(crate) test_apply_error: parking_lot::Mutex<Option<String>>,
+    #[cfg(test)]
+    pub(crate) test_device_inventory: parking_lot::Mutex<Option<Vec<VideoDeviceInfo>>>,
     config: RwLock<StreamerConfig>,
     mjpeg_handler: Arc<MjpegStreamHandler>,
     pub(crate) snapshot_slot: super::snapshot::SnapshotSlot,
@@ -204,6 +211,8 @@ impl Streamer {
         Arc::new(Self {
             #[cfg(test)]
             test_apply_error: Default::default(),
+            #[cfg(test)]
+            test_device_inventory: Default::default(),
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -235,6 +244,8 @@ impl Streamer {
         Arc::new(Self {
             #[cfg(test)]
             test_apply_error: Default::default(),
+            #[cfg(test)]
+            test_device_inventory: Default::default(),
             config: RwLock::new(config),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -388,6 +399,12 @@ impl Streamer {
         *self.state.write().await = StreamerState::Busy;
         self.publish_event(self.current_state_event().await).await;
 
+        #[cfg(test)]
+        let devices = match self.test_device_inventory.lock().take() {
+            Some(devices) => devices,
+            None => enumerate_devices()?,
+        };
+        #[cfg(not(test))]
         let devices = enumerate_devices()?;
         let device = if device_path.eq_ignore_ascii_case("auto") {
             if self.strict_device_recovery.load(Ordering::Relaxed) {
@@ -395,10 +412,23 @@ impl Streamer {
                     "auto is forbidden for an explicitly bound source".into(),
                 ));
             }
-            devices
-                .into_iter()
-                .next()
-                .ok_or_else(|| AppError::VideoError("No video devices found".to_string()))?
+            match devices.into_iter().next() {
+                Some(device) => device,
+                None => {
+                    self.stop().await?;
+                    let mut cfg = self.config.write().await;
+                    cfg.device_path = None;
+                    cfg.format = format;
+                    cfg.resolution = resolution;
+                    cfg.fps = fps;
+                    drop(cfg);
+                    *self.current_device.write().await = None;
+                    // A later start must re-run init_auto after hot-plug.
+                    *self.state.write().await = StreamerState::Uninitialized;
+                    self.publish_event(self.current_state_event().await).await;
+                    return Err(AppError::VideoError(NO_AUTO_DEVICE_MESSAGE.to_string()));
+                }
+            }
         } else {
             let resolved_path =
                 std::fs::canonicalize(device_path).unwrap_or_else(|_| PathBuf::from(device_path));
@@ -725,7 +755,13 @@ impl Streamer {
         if self.current_device.read().await.is_none() {
             let cfg = self.config.read().await.clone();
             if let Some(path) = cfg.device_path {
-                self.re_init_device(&path.to_string_lossy()).await?;
+                // Already under `start_lock`; probing must not retake it, and this
+                // path deliberately adopts the *current* configured binding.
+                let device = VideoDevice::open_readonly(&path).map_err(|e| {
+                    AppError::VideoError(format!("Cannot open device for re-init: {}", e))
+                })?;
+                let info = device.info()?;
+                self.re_init_device_checked_locked(info, None).await?;
             }
         }
 
@@ -1362,12 +1398,53 @@ impl Streamer {
         s == StreamerState::Streaming || s.is_no_signal_like()
     }
 
-    pub async fn re_init_device(self: &Arc<Self>, device_path: &str) -> Result<()> {
+    /// Re-probe `device_path` and adopt it only while `generation` (when given)
+    /// still matches the configured generation, checked under `start_lock`.
+    ///
+    /// A recovery task may enumerate devices for a long time; meanwhile the user
+    /// can re-bind this source (which bumps the generation and clears
+    /// `current_device`). Writing the stale recovered node back would silently
+    /// point the next `start()` at the old card.
+    ///
+    /// `start_lock` is taken here, so callers already holding it must use
+    /// [`Self::re_init_device_checked_locked`] instead (nested acquisition
+    /// deadlocks, and `start_inner` runs under that lock).
+    async fn re_init_device_checked(
+        &self,
+        device_path: &str,
+        generation: Option<u64>,
+    ) -> Result<()> {
+        // Serialize before probing: the probe result is only meaningful if the
+        // binding it is compared against (and the generation) cannot change
+        // between the read and the write-back.
+        let _lock = self.start_lock.lock().await;
         let device = VideoDevice::open_readonly(device_path)
             .map_err(|e| AppError::VideoError(format!("Cannot open device for re-init: {}", e)))?;
-        self.apply_reprobed_device(device.info()?).await
+        let info = device.info()?;
+        self.re_init_device_checked_locked(info, generation).await
     }
 
+    /// Adopt an already probed device, guarded by the capture generation.
+    ///
+    /// Expects `start_lock` to be held by the caller.
+    async fn re_init_device_checked_locked(
+        &self,
+        info: VideoDeviceInfo,
+        generation: Option<u64>,
+    ) -> Result<()> {
+        if let Some(generation) = generation {
+            if self.recovery_generation.load(Ordering::SeqCst) != generation {
+                return Err(AppError::ServiceUnavailable(
+                    "Capture recovery was superseded".into(),
+                ));
+            }
+        }
+        self.apply_reprobed_device(info).await
+    }
+
+    /// Write a re-probed device into `config`/`current_device`.
+    ///
+    /// Unguarded: prefer [`Self::re_init_device_checked`] from recovery paths.
     async fn apply_reprobed_device(&self, mut device_info: VideoDeviceInfo) -> Result<()> {
         if self.strict_device_recovery.load(Ordering::Relaxed) {
             if let Some(previous) = self.current_device.read().await.as_ref() {
@@ -1649,8 +1726,13 @@ impl Streamer {
                     continue;
                 }
 
-                // Re-probe device to pick up resolution/format changes
-                if let Err(e) = streamer.re_init_device(&device_path).await {
+                // Re-probe device to pick up resolution/format changes. The probe
+                // must not adopt this node if the source was re-bound while we were
+                // enumerating, so the generation is re-checked under `start_lock`.
+                if let Err(e) = streamer
+                    .re_init_device_checked(&device_path, Some(generation))
+                    .await
+                {
                     debug!(
                         "Failed to re-probe device format (attempt {}): {}",
                         attempt, e
@@ -1700,6 +1782,8 @@ impl Default for Streamer {
         Self {
             #[cfg(test)]
             test_apply_error: Default::default(),
+            #[cfg(test)]
+            test_device_inventory: Default::default(),
             config: RwLock::new(StreamerConfig::default()),
             mjpeg_handler: Arc::new(MjpegStreamHandler::new()),
             snapshot_slot: Default::default(),
@@ -1811,7 +1895,7 @@ mod tests {
             &VideoDeviceRecoveryHint::from(&original),
         )
         .unwrap();
-        // Exercise the re-probe application seam used by re_init_device, not just selection.
+        // Exercise the re-probe application seam used by recovery, not just selection.
         streamer.apply_reprobed_device(selected).await.unwrap();
         assert_eq!(
             streamer.current_capture_config().await.0,
@@ -1860,5 +1944,104 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(streamer.current_capture_config().await.0, Some(second));
+    }
+
+    /// A recovery task captured `generation` before enumerating. If the source is
+    /// re-bound meanwhile (bumped generation, cleared `current_device`), adopting
+    /// the stale node would point the next `start()` at the old card.
+    #[tokio::test]
+    async fn stale_recovery_reprobe_cannot_override_a_rebound_offline_source() {
+        let streamer = Streamer::new();
+        streamer.set_strict_device_recovery();
+        let card_a = device("/dev/video1000".into(), "usb-fixture-card-a");
+        *streamer.config.write().await = StreamerConfig {
+            device_path: Some(card_a.path.clone()),
+            ..Default::default()
+        };
+        *streamer.current_device.write().await = Some(card_a.clone());
+        let generation = streamer.capture_generation();
+
+        // User re-binds to offline card B while the recovery task enumerates.
+        let card_b = PathBuf::from("/dev/offline-card-b");
+        streamer
+            .apply_video_config(
+                &card_b.to_string_lossy(),
+                PixelFormat::Mjpeg,
+                Resolution::HD1080,
+                30,
+            )
+            .await
+            .unwrap();
+        assert_eq!(streamer.state().await, StreamerState::DeviceLost);
+        assert!(streamer.capture_generation() != generation);
+
+        let recovered_a = device(card_a.path.clone(), "usb-fixture-card-a");
+        let error = streamer
+            .re_init_device_checked_locked(recovered_a.clone(), Some(generation))
+            .await
+            .expect_err("stale generation must be rejected");
+        assert!(matches!(error, AppError::ServiceUnavailable(_)));
+        assert_eq!(
+            streamer.current_capture_config().await.0,
+            Some(card_b.clone()),
+            "the re-bound offline path must survive a stale recovery probe"
+        );
+        assert!(streamer.current_device().await.is_none());
+
+        // The current generation still applies, so recovery is not permanently dead.
+        let current = streamer.capture_generation();
+        streamer
+            .re_init_device_checked_locked(recovered_a.clone(), Some(current))
+            .await
+            .unwrap();
+        assert_eq!(
+            streamer.current_device().await.unwrap().path,
+            recovered_a.path
+        );
+    }
+
+    /// `start_inner` calls the adopt seam *while holding* `start_lock`. That seam
+    /// must therefore be lock-free itself (`_locked`); routing it through the
+    /// locking probe below would deadlock every start.
+    #[tokio::test]
+    async fn locked_device_adopt_does_not_retake_the_start_lock() {
+        let streamer = Streamer::new();
+        let _held = streamer.start_lock.lock().await;
+        let adopted = tokio::time::timeout(
+            Duration::from_secs(1),
+            streamer
+                .re_init_device_checked_locked(device("/dev/video-fixture".into(), "bus"), None),
+        )
+        .await;
+        assert!(
+            adopted.is_ok(),
+            "the adopt seam used by start_inner must not re-acquire start_lock"
+        );
+        assert_eq!(
+            streamer.current_device().await.unwrap().path,
+            PathBuf::from("/dev/video-fixture")
+        );
+    }
+
+    /// Recovery must serialize the probe against `start()`/`restart_capture()`:
+    /// the locking entry acquires `start_lock` before any adoption happens.
+    #[tokio::test]
+    async fn recovery_reprobe_waits_for_the_start_lock() {
+        let streamer = Streamer::new();
+        let node = tempfile::NamedTempFile::new().unwrap();
+        let path = node.path().to_string_lossy().into_owned();
+        let _held = streamer.start_lock.lock().await;
+        let probing = streamer.clone();
+        let probe = tokio::spawn(async move {
+            let _ = probing.re_init_device_checked(&path, None).await;
+        });
+        // The probe must be parked on `start_lock`, not merely failing earlier.
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(!probe.is_finished(), "probe must wait for start_lock");
+        drop(_held);
+        tokio::time::timeout(Duration::from_secs(2), probe)
+            .await
+            .expect("probe must proceed once the lock is released")
+            .unwrap();
     }
 }

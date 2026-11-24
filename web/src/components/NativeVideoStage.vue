@@ -51,6 +51,9 @@ const root = ref<HTMLDivElement | null>(null)
 const { width, height } = useElementSize(root)
 const targets = new Map<string, HTMLDivElement>()
 const multisource = computed(() => props.sources.length > 1)
+// Captured/local-console affordances follow the rendered tile, not the tile count:
+// the sole enabled secondary (primary disabled) is captured directly as well.
+const pointTarget = computed(() => multisource.value || props.activeSourceId !== props.primarySourceId)
 const singleSourceId = computed(() => props.sources.some(source => source.id === props.primarySourceId)
   ? props.primarySourceId : props.sources.find(source => source.id === props.activeSourceId)?.id || props.sources[0]?.id || '')
 const visibleId = computed(() => props.single ? singleSourceId.value : focusedSourceId.value)
@@ -94,16 +97,17 @@ function tileStyle(id: string) {
     left: `${(width.value - geometry.value.width * scale.value) / 2 + rect.x * scale.value}px`,
     top: `${(height.value - geometry.value.height * scale.value) / 2 + rect.y * scale.value}px` }
 }
+/** Programmatic focus of the tile that owns pointer input. */
+function select(id: string) {
+  if (props.activeSourceId !== id) emit('select', id)
+  emit('inputTarget', targets.get(id) || null)
+}
 function bindTarget(id: string, el: unknown) {
   if (el instanceof HTMLDivElement) targets.set(id, el)
   else targets.delete(id)
   if (id === props.activeSourceId || (!props.activeSourceId && id === props.primarySourceId)) {
     emit('inputTarget', targets.get(id) || null)
   }
-}
-function select(id: string) {
-  if (props.activeSourceId !== id) emit('select', id)
-  emit('inputTarget', targets.get(id) || null)
 }
 function down(source: VideoSource, event: MouseEvent) {
   select(source.id)
@@ -131,7 +135,7 @@ function focusSource(id: string) {
 }
 function setRotation(id: string, rotation: number) { rotations[id] = rotation }
 function setActual(id: string, value: boolean) { actual[id] = value }
-defineExpose({ setRotation, setActual, rotations, actual })
+defineExpose({ select, setRotation, setActual, rotations, actual })
 watch([preset, rotations, actual, focusedSourceId], () => {
   try { localStorage.setItem(storageKey, JSON.stringify({ preset: preset.value, rotations, actual, focusedSourceId: focusedSourceId.value })) } catch { /* Storage may be disabled. */ }
 }, { deep: true })
@@ -145,7 +149,7 @@ watch(() => [props.single, singleSourceId.value], () => {
 </script>
 
 <template>
-  <div ref="root" class="native-video-stage" :class="{ multisource, captured }">
+  <div ref="root" class="native-video-stage" :class="{ multisource, 'point-target': pointTarget, captured }">
     <div v-if="multisource" class="stage-layout-tools" data-local-console-tools @pointerdown.stop="emit('localTools')">
       <button v-for="layout in (['horizontal', 'vertical', 'grid', 'auto'] as const)" :key="layout"
         :aria-pressed="preset === layout" @click="preset = layout">{{ t(`multisource.${layout}`) }}</button>
@@ -166,16 +170,17 @@ watch(() => [props.single, singleSourceId.value], () => {
       <NativeSourceVideo :source="source" :primary="source.id === primarySourceId"
         :primary-client-id="primaryClientId" :primary-mjpeg="primaryMjpeg" :primary-url="primaryUrl"
         :rotation="rotations[source.id] || 0" :actual="!!actual[source.id]"
-        :show-status="multisource" :monitor="multisource && source.id !== '__native_primary__'"
+        :show-status="pointTarget && (multisource || source.id === activeSourceId)"
+        :monitor="source.id !== '__native_primary__' && (multisource || source.id === activeSourceId)"
         :frame-size="source.id === primarySourceId ? primarySize : null"
         @size="(w, h) => sizes[source.id] = { width: w, height: h }" @reconnect="emit('reconnect')">
         <slot :multisource="multisource" :primary-content-style="primaryContentStyle" />
       </NativeSourceVideo>
-      <slot v-if="multisource && source.id === activeSourceId" name="cursor" />
-      <span v-if="multisource && captured && source.id === activeSourceId" class="capture-state" role="status">{{ t('multisource.captured') }}</span>
-      <div v-if="multisource && !captured" class="tile-controls" data-local-console-tools
+      <slot v-if="pointTarget && source.id === activeSourceId" name="cursor" />
+      <span v-if="pointTarget && captured && source.id === activeSourceId" class="capture-state" role="status">{{ t('multisource.captured') }}</span>
+      <div v-if="pointTarget && !captured" class="tile-controls" data-local-console-tools
         @pointerdown.stop="emit('localTools')" @mousedown.stop @mouseup.stop @dblclick.stop @wheel.stop @mousemove.stop>
-        <button @click="focusSource(source.id)" :aria-label="t(focusedSourceId === source.id ? 'multisource.restore' : 'multisource.enlarge')">⛶</button>
+        <button v-if="multisource" @click="focusSource(source.id)" :aria-label="t(focusedSourceId === source.id ? 'multisource.restore' : 'multisource.enlarge')">⛶</button>
         <button @click="capture(source.id)" :title="t('multisource.relativeOnly')">{{ t('multisource.capture') }}</button>
       </div>
     </div>
@@ -185,7 +190,7 @@ watch(() => [props.single, singleSourceId.value], () => {
 <style scoped>
 .native-video-stage { position: relative; width: 100%; height: 100%; min-height: 120px; overflow: auto; }
 .native-source-tile { position: relative; background: black; overflow: visible; outline: none; touch-action: none; cursor: none; }
-.multisource:not(.captured) .native-source-tile { cursor: default; }
+.point-target:not(.captured) .native-source-tile { cursor: default; }
 .capture-state { position: absolute; top: 3px; right: 4px; z-index: 20; color: white; background: #075985d9; padding: 2px 5px; border-radius: 3px; font-size: 10px; pointer-events: none; }
 .multisource .native-source-tile { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .multisource .native-source-tile.selected { outline: 1px solid #38bdf8; outline-offset: -1px; }

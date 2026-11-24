@@ -84,6 +84,12 @@ const enabledSources = computed(() => sources.value.filter(source => source.enab
 const isMultisource = computed(() => enabledSources.value.length > 1)
 // Disabling a preview does not establish a single-monitor host input mapping.
 const hasMultipleBindings = computed(() => sources.value.length > 1)
+const primaryId = computed(() => primarySourceId.value || '__native_primary__')
+// A single enabled secondary (primary disabled) renders outside the primary slot,
+// so it needs the same cursor/controls/status path as a multi-tile stage, while
+// the toolbar and relative-mouse decisions still follow the multi-binding mode.
+const rendersSecondary = computed(() => activeSourceId.value !== primaryId.value)
+const usesStageControls = computed(() => isMultisource.value || rendersSecondary.value)
 const presentationKey = `nativeConsole:${location.host}`
 let storedPresentation: { pictureFirst?: boolean; single?: boolean } = {}
 try { storedPresentation = JSON.parse(localStorage.getItem(presentationKey) || '{}') } catch { /* Optional preferences. */ }
@@ -91,7 +97,6 @@ const pictureFirst = ref(storedPresentation.pictureFirst !== false)
 const singlePresentation = ref(storedPresentation.single === true)
 const toolsExpanded = ref(false)
 const hideTools = computed(() => isMultisource.value && pictureFirst.value && !toolsExpanded.value)
-const primaryId = computed(() => primarySourceId.value || '__native_primary__')
 const stageSources = computed<VideoSource[]>(() => enabledSources.value.length ? enabledSources.value : [{
   id: primaryId.value, label: '', enabled: true, primary: true, device: '', format: '', quality: 80,
   width: videoSourceSize.value?.width || 1920, height: videoSourceSize.value?.height || 1080, fps: 0,
@@ -139,7 +144,8 @@ const videoRotation = ref<VideoRotation>(
 )
 
 function setVideoRotation(rotation: VideoRotation) {
-  if (isMultisource.value && activeSourceId.value !== primaryId.value) {
+  if (rendersSecondary.value) {
+    if (!VIDEO_ROTATIONS.includes(rotation)) return
     nativeStage.value?.setRotation(activeSourceId.value, rotation)
     return
   }
@@ -2266,7 +2272,7 @@ function handleKeyUp(e: KeyboardEvent) {
 }
 
 function getActiveVideoElement(): HTMLImageElement | HTMLVideoElement | null {
-  if (isMultisource.value && activeSourceId.value !== primaryId.value) {
+  if (rendersSecondary.value) {
     return videoContainerRef.value?.querySelector<HTMLImageElement>('img') || null
   }
   return videoMode.value !== 'mjpeg' ? webrtcVideoRef.value : videoRef.value
@@ -3205,12 +3211,12 @@ onUnmounted(() => {
 
   exitPointerLock()
 })
-const selectedRotation = computed(() => isMultisource.value && activeSourceId.value !== primaryId.value
-  ? (nativeStage.value?.rotations[activeSourceId.value] || 0) as VideoRotation : videoRotation.value)
-const selectedScaleMode = computed(() => isMultisource.value && activeSourceId.value !== primaryId.value
-  ? nativeStage.value?.actual[activeSourceId.value] ? 'actual' : 'fit' : videoScaleMode.value)
+const selectedRotation = computed(() => (rendersSecondary.value
+  ? (nativeStage.value?.rotations[activeSourceId.value] || 0) : videoRotation.value) as VideoRotation)
+const selectedScaleMode = computed(() => (rendersSecondary.value
+  ? nativeStage.value?.actual[activeSourceId.value] ? 'actual' : 'fit' : videoScaleMode.value) as 'fit' | 'actual')
 function setSelectedScaleMode(mode: 'fit' | 'actual') {
-  if (isMultisource.value && activeSourceId.value !== primaryId.value) nativeStage.value?.setActual(activeSourceId.value, mode === 'actual')
+  if (rendersSecondary.value) nativeStage.value?.setActual(activeSourceId.value, mode === 'actual')
   else {
     setVideoScaleMode(mode)
     if (isMultisource.value) nativeStage.value?.setActual(primaryId.value, mode === 'actual')
@@ -3220,9 +3226,10 @@ function selectSource(id: string) {
   if (activeSourceId.value !== id) { releaseControl(); activeSourceId.value = id }
 }
 function setInputTarget(element: HTMLDivElement | null) {
-  videoContainerRef.value = isMultisource.value ? element : primaryContainerRef.value || element
+  videoContainerRef.value = usesStageControls.value ? element : primaryContainerRef.value || element
 }
-watch(primaryContainerRef, element => { if (!isMultisource.value && element) videoContainerRef.value = element })
+watch(primaryContainerRef, element => { if (!usesStageControls.value && element) videoContainerRef.value = element })
+watch(usesStageControls, () => { if (!usesStageControls.value && primaryContainerRef.value) videoContainerRef.value = primaryContainerRef.value })
 function releaseControl() { handleBlur(); exitPointerLock() }
 function isLocalConsoleTarget(target: EventTarget | null) {
   return target instanceof Element && !!target.closest('input, textarea, select, button, a, [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"], [data-local-console-tools], [data-shortcut-surface]')
@@ -3244,6 +3251,13 @@ watch([isMultisource, primaryId, sourceSizeAvailable], async () => {
   const rotation = nativeStage.value?.rotations[primaryId.value]
   if (rotation !== undefined && VIDEO_ROTATIONS.includes(rotation as VideoRotation)) videoRotation.value = rotation as VideoRotation
   setVideoScaleMode(nativeStage.value?.actual[primaryId.value] ? 'actual' : 'fit')
+}, { flush: 'post' })
+// The sole enabled secondary is captured from its own tile, so the local input
+// target follows the primary mount state, not the multi-binding mode.
+watch([primaryId, rendersSecondary], async () => {
+  await nextTick()
+  if (usesStageControls.value) nativeStage.value?.select(activeSourceId.value)
+  else videoContainerRef.value = primaryContainerRef.value || videoContainerRef.value
 }, { flush: 'post' })
 watch(activeSourceId, () => releaseControl(), { flush: 'sync' })
 watch([statsSheetOpen, showTerminalDialog, changePasswordDialogOpen, virtualKeyboardVisible], () => releaseControl())
@@ -3427,7 +3441,7 @@ watch(() => authStore.isAuthenticated, authenticated => {
         :show-paste-text="showPasteText"
         :show-mic="microphoneTransferEnabled"
         :scale-mode="selectedScaleMode"
-        :source-size-available="isMultisource || sourceSizeAvailable"
+        :source-size-available="usesStageControls || sourceSizeAvailable"
         :keyboard-visible="virtualKeyboardVisible"
         :fullscreen="isFullscreen"
         :stats-open="statsSheetOpen"
@@ -3480,7 +3494,7 @@ watch(() => authStore.isAuthenticated, authenticated => {
             <div class="relative grid place-items-center" :class="multisource ? 'h-full w-full' : videoStageClass">
             <div
               ref="primaryContainerRef"
-              :tabindex="isMultisource ? -1 : 0"
+              :tabindex="usesStageControls ? -1 : 0"
               class="primary-source-container relative flex shrink-0 items-center justify-center overflow-auto bg-black touch-none"
               :class="isMultisource && !isPointerLocked ? 'cursor-default' : 'cursor-none'"
               :style="multisource ? { width: '100%', height: '100%' } : videoContainerStyle"
@@ -3514,7 +3528,7 @@ watch(() => authStore.isAuthenticated, authenticated => {
                 />
               </div>
           <div
-            v-if="!isMultisource && cursorVisible && localCrosshairPos"
+            v-if="!rendersSecondary && cursorVisible && localCrosshairPos"
             class="pointer-events-none absolute z-[15] -translate-x-1/2 -translate-y-1/2"
             :style="{
               left: `${localCrosshairPos.x}px`,
@@ -3722,7 +3736,7 @@ watch(() => authStore.isAuthenticated, authenticated => {
           </div>
             </template>
           </NativeVideoStage>
-          <div v-if="discoveryError && isMultisource" class="source-discovery-error" role="status">{{ discoveryError }}</div>
+          <div v-if="discoveryError && usesStageControls" class="source-discovery-error" role="status">{{ discoveryError }}</div>
         </div>
         </div>
 

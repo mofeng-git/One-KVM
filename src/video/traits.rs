@@ -38,6 +38,8 @@ pub trait VideoOutput: Send + Sync {
     async fn is_audio_enabled(&self) -> bool;
     async fn reconnect_audio_sources(&self);
     async fn ensure_video_pipeline_for_external(&self) -> Result<Arc<SharedVideoPipeline>>;
+    /// Pipeline currently owned by this output, used to detect replacement.
+    async fn current_video_pipeline(&self) -> Option<Arc<SharedVideoPipeline>>;
     async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig>;
     async fn set_video_codec(&self, codec: VideoCodecType) -> Result<()>;
     async fn set_bitrate_preset(&self, preset: BitratePreset) -> Result<()>;

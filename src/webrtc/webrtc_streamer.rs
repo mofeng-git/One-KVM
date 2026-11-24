@@ -706,6 +706,15 @@ impl WebRtcStreamer {
         }
     }
 
+    /// Identity of the pipeline currently owned by this streamer, if any.
+    ///
+    /// External consumers (e.g. one-shot snapshots) compare this against the
+    /// pipeline they obtained earlier so a pipeline rebuilt while they waited
+    /// cannot be mistaken for a still-current capture source.
+    pub async fn current_video_pipeline(&self) -> Option<Arc<SharedVideoPipeline>> {
+        self.video_pipeline.read().await.clone()
+    }
+
     pub async fn current_video_geometry(&self) -> (Resolution, PixelFormat, u32) {
         if let Some(cfg) = self.get_pipeline_config().await {
             (cfg.resolution, cfg.input_format, cfg.fps)
@@ -1420,6 +1429,10 @@ impl crate::video::traits::VideoOutput for WebRtcStreamer {
 
     async fn ensure_video_pipeline_for_external(&self) -> Result<Arc<SharedVideoPipeline>> {
         self.ensure_video_pipeline_for_external().await
+    }
+
+    async fn current_video_pipeline(&self) -> Option<Arc<SharedVideoPipeline>> {
+        self.current_video_pipeline().await
     }
 
     async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig> {
