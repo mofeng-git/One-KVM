@@ -2,8 +2,6 @@
 
 #[cfg(not(any(target_os = "linux", windows)))]
 compile_error!("One-KVM supports Linux and Windows targets only.");
-#[cfg(feature = "airferry")]
-pub mod airferry;
 pub mod atx;
 pub mod audio;
 pub mod auth;
@@ -21,18 +19,16 @@ pub mod msd;
 #[cfg(unix)]
 pub mod otg;
 pub mod platform;
+pub mod plugins;
 #[cfg(feature = "redfish")]
 pub mod redfish;
-pub mod rtsp;
 pub mod runtime;
-pub mod rustdesk;
 pub mod state;
 pub mod stream;
 pub mod stream_encoder;
 pub mod update;
 pub mod utils;
 pub mod video;
-pub mod vnc;
 pub mod watchdog;
 pub mod web;
 pub mod webrtc;

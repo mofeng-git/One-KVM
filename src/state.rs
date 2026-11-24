@@ -20,7 +20,7 @@ use crate::mcp::{McpHardware, McpService};
 use crate::msd::MsdController;
 #[cfg(unix)]
 use crate::otg::OtgService;
-use crate::runtime::{RemoteAccessCoordinator, UsbCoordinator};
+use crate::runtime::{UsbCoordinator};
 use crate::update::UpdateService;
 use crate::video::VideoStreamManager;
 use crate::watchdog::WatchdogController;
@@ -33,9 +33,6 @@ pub struct ConfigApplyLocks {
     pub otg: Arc<Mutex<()>>,
     pub audio: Arc<Mutex<()>>,
     pub atx: Arc<Mutex<()>>,
-    pub rustdesk: Arc<Mutex<()>>,
-    pub vnc: Arc<Mutex<()>>,
-    pub rtsp: Arc<Mutex<()>>,
     pub watchdog: Arc<Mutex<()>>,
 }
 
@@ -53,9 +50,6 @@ impl ConfigApplyLocks {
             otg: Arc::new(Mutex::new(())),
             audio: Arc::new(Mutex::new(())),
             atx: Arc::new(Mutex::new(())),
-            rustdesk: Arc::new(Mutex::new(())),
-            vnc: Arc::new(Mutex::new(())),
-            rtsp: Arc::new(Mutex::new(())),
             watchdog: Arc::new(Mutex::new(())),
         }
     }
@@ -83,10 +77,8 @@ pub struct AppState {
     #[cfg(unix)]
     pub uac_playback: Arc<RwLock<Option<crate::audio::uac::UacPlayback>>>,
     pub usb: Arc<UsbCoordinator>,
-    pub remote_access: Arc<RemoteAccessCoordinator>,
+    pub plugins: Arc<crate::plugins::PluginManager>,
     pub extensions: Arc<ExtensionManager>,
-    #[cfg(feature = "airferry")]
-    pub airferry: Arc<crate::airferry::AirferryManager>,
     pub events: Arc<EventBus>,
     device_info_tx: watch::Sender<Option<SystemEvent>>,
     pub update: Arc<UpdateService>,
@@ -119,13 +111,8 @@ impl AppState {
         data_dir: std::path::PathBuf,
     ) -> Arc<Self> {
         let (device_info_tx, _device_info_rx) = watch::channel(None);
+        let plugins = Arc::new(crate::plugins::PluginManager::new(data_dir.join("plugins")));
 
-        let remote_access = RemoteAccessCoordinator::new(
-            config.clone(),
-            stream_manager.clone(),
-            hid.clone(),
-            audio.clone(),
-        );
         #[cfg(unix)]
         let msd = Arc::new(RwLock::new(msd));
         #[cfg(unix)]
@@ -143,8 +130,6 @@ impl AppState {
         );
 
         let atx = Arc::new(RwLock::new(atx));
-        #[cfg(feature = "airferry")]
-        let airferry = crate::airferry::AirferryManager::new(config.clone());
         let config_apply_locks = ConfigApplyLocks::new();
         #[cfg(feature = "mcp")]
         let hardware = McpHardware {
@@ -183,10 +168,8 @@ impl AppState {
             atx,
             audio,
             usb,
-            remote_access,
+            plugins,
             extensions,
-            #[cfg(feature = "airferry")]
-            airferry,
             events,
             device_info_tx,
             update,

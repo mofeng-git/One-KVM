@@ -185,14 +185,10 @@ fn spawn_device_info_broadcaster(
 }
 
 async fn cleanup(state: &Arc<AppState>) {
-    #[cfg(feature = "airferry")]
-    if let Err(error) = state.airferry.stop().await {
-        tracing::warn!("Failed to stop AirFerry receiver: {}", error);
-    }
     state.extensions.stop_all().await;
     tracing::info!("Extensions stopped");
 
-    state.remote_access.shutdown().await;
+    state.plugins.shutdown().await;
 
     if let Err(error) = state.stream_manager.stop().await {
         tracing::warn!("Failed to stop streamer: {}", error);

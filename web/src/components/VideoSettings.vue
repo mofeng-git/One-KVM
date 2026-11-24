@@ -391,8 +391,8 @@ watch(() => props.active, async (active) => {
               class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
               :aria-label="
                 showPasswords
-                  ? t('extensions.rustdesk.hidePassword')
-                  : t('extensions.rustdesk.showPassword')
+                  ? t('common.hidePassword')
+                  : t('common.showPassword')
               "
               @click="showPasswords = !showPasswords"
             >

@@ -1,0 +1,110 @@
+{
+  "abi": 1,
+  "id": "rtsp",
+  "name": {
+    "en-US": "RTSP",
+    "zh-CN": "RTSP 视频流"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "RTSP over TCP with H.264 or H.265 video.",
+    "zh-CN": "使用 RTSP 通过 TCP 传输 H.264 或 H.265 视频。"
+  },
+  "menu": "third_party_access",
+  "capabilities": [
+    "video",
+    "video_control"
+  ],
+  "config_schema": [
+    {
+      "key": "bind",
+      "label": {
+        "en-US": "Listen address",
+        "zh-CN": "监听地址"
+      },
+      "kind": "text",
+      "default": "0.0.0.0"
+    },
+    {
+      "key": "port",
+      "label": {
+        "en-US": "Port",
+        "zh-CN": "端口"
+      },
+      "kind": "integer",
+      "default": 8554,
+      "min": 1,
+      "max": 65535
+    },
+    {
+      "key": "path",
+      "label": {
+        "en-US": "Stream path",
+        "zh-CN": "串流路径"
+      },
+      "kind": "text",
+      "default": "live"
+    },
+    {
+      "key": "codec",
+      "label": {
+        "en-US": "Video codec",
+        "zh-CN": "视频编码"
+      },
+      "kind": "select",
+      "default": "h264",
+      "choices": [
+        "h264",
+        "h265"
+      ],
+      "choice_labels": {
+        "h264": {
+          "en-US": "H.264",
+          "zh-CN": "H.264"
+        },
+        "h265": {
+          "en-US": "H.265",
+          "zh-CN": "H.265"
+        }
+      }
+    },
+    {
+      "key": "allow_one_client",
+      "label": {
+        "en-US": "Allow only one client",
+        "zh-CN": "仅允许一个客户端"
+      },
+      "kind": "boolean",
+      "default": true
+    },
+    {
+      "key": "username",
+      "label": {
+        "en-US": "Username",
+        "zh-CN": "用户名"
+      },
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "password",
+      "label": {
+        "en-US": "Password",
+        "zh-CN": "密码"
+      },
+      "kind": "password",
+      "default": ""
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "endpoint",
+      "label": {
+        "en-US": "Stream URL",
+        "zh-CN": "串流地址"
+      }
+    }
+  ],
+  "actions": []
+}

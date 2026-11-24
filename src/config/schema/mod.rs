@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 pub use crate::extensions::ExtensionsConfig;
-pub use crate::rustdesk::config::RustDeskConfig;
 
 mod atx;
 mod common;
@@ -41,9 +40,6 @@ pub struct AppConfig {
     pub web: WebConfig,
     pub mcp: McpConfig,
     pub extensions: ExtensionsConfig,
-    pub rustdesk: RustDeskConfig,
-    pub vnc: VncConfig,
-    pub rtsp: RtspConfig,
     pub redfish: RedfishConfig,
     pub watchdog: WatchdogConfig,
     pub uac: UacConfig,

@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
             echo "  # Build for current platform and load locally"
             echo "  $0 --platform linux/arm64 --load"
             echo ""
-            echo "  # Build full image (includes GOSTC + EasyFrp + EasyTier + frpc)"
+            echo "  # Build full image (includes the GOSTC plugin package)"
             echo "  $0 --variant full --platform linux/arm64 --load"
             echo ""
             echo "  # Build and push single platform"
@@ -220,12 +220,6 @@ download_tools() {
         dl "$TTYD_URL" "$staging/ttyd"
         chmod +x "$staging/ttyd"
     fi
-
-    if [ "$INCLUDE_THIRD_PARTY" = true ]; then
-        python3 "$PROJECT_ROOT/build/download-remote-tools.py" \
-            --platform "$platform" --output "$staging"
-
-    fi
 }
 
 # Build and package for a single platform
@@ -278,6 +272,9 @@ build_for_platform() {
     # Copy Dockerfile
     local dockerfile="$PROJECT_ROOT/build/Dockerfile.runtime"
     if [ "$INCLUDE_THIRD_PARTY" = true ]; then
+        CARGO_TARGET_DIR="$PROJECT_ROOT/target" ONE_KVM_PLUGIN_CARGO=cross \
+            bash "$PROJECT_ROOT/build/package-plugins.sh" "$target" gostc
+        cp "$PROJECT_ROOT/target/plugins/one-kvm-gostc-$target.onepkg" "$staging/gostc.onepkg"
         dockerfile="$PROJECT_ROOT/build/Dockerfile.runtime-full"
     fi
     cp "$dockerfile" "$staging/Dockerfile"

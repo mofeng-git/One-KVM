@@ -12,7 +12,6 @@ pub struct DeviceList {
 #[derive(Serialize)]
 pub struct ExtensionsAvailability {
     pub ttyd_available: bool,
-    pub rustdesk_available: bool,
 }
 
 #[derive(Serialize)]
@@ -95,7 +94,6 @@ fn extract_usb_bus_from_bus_info(bus_info: &str) -> Option<String> {
 }
 
 pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList> {
-    let platform = PlatformCapabilities::current();
 
     // Detect video devices
     let video_devices = match state.stream_manager.list_devices().await {
@@ -185,7 +183,6 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
         udc: udc_devices,
         extensions: ExtensionsAvailability {
             ttyd_available,
-            rustdesk_available: platform.rustdesk.available,
         },
     })
 }

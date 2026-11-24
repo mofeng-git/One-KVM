@@ -1,0 +1,36 @@
+{
+  "abi": 1,
+  "id": "easyfrp",
+  "name": {
+    "en-US": "EasyFrp",
+    "zh-CN": "EasyFrp 内网穿透"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "Connect using one or more EasyFrp control URLs.",
+    "zh-CN": "使用一条或多条 EasyFrp 控制 URL 建立连接。"
+  },
+  "menu": "remote_access",
+  "capabilities": [],
+  "config_schema": [
+    {
+      "key": "control_urls",
+      "label": {
+        "en-US": "Control URLs (one per line)",
+        "zh-CN": "控制 URL（每行一条）"
+      },
+      "kind": "string_list",
+      "default": []
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "pid",
+      "label": {
+        "en-US": "Client PID",
+        "zh-CN": "客户端 PID"
+      }
+    }
+  ]
+}

@@ -36,6 +36,7 @@ impl IntoResponse for AppError {
 fn status_code(error: &AppError) -> StatusCode {
     match error {
         AppError::AuthError(_) | AppError::Unauthorized => StatusCode::UNAUTHORIZED,
+        AppError::Forbidden(_) => StatusCode::FORBIDDEN,
         AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
         AppError::Conflict(_) => StatusCode::CONFLICT,
         AppError::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,

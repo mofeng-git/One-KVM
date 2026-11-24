@@ -52,7 +52,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 COPY --chmod=755 init.sh /init.sh
 
 # Copy binaries (these are placed by the build script)
-COPY --chmod=755 one-kvm ttyd gostc easyfrpc easytier-core easytier-cli frpc /usr/bin/
+COPY --chmod=755 one-kvm ttyd /usr/bin/
+COPY gostc.onepkg /usr/share/one-kvm/plugins/gostc.onepkg
 
 # Copy ventoy resources if they exist
 COPY ventoy/ /etc/one-kvm/ventoy/

@@ -40,7 +40,6 @@ pub struct SetupRequest {
     pub msd_enabled: Option<bool>,
     // Extension settings
     pub ttyd_enabled: Option<bool>,
-    pub rustdesk_enabled: Option<bool>,
 }
 
 impl SetupRequest {
@@ -181,9 +180,6 @@ pub async fn setup_init(
             if let Some(enabled) = req.ttyd_enabled {
                 config.extensions.ttyd.enabled = enabled;
             }
-            if let Some(enabled) = req.rustdesk_enabled {
-                config.rustdesk.enabled = enabled;
-            }
         })
         .await?;
 
@@ -192,12 +188,6 @@ pub async fn setup_init(
     if let Err(e) = state.usb.apply_config(&old_config, &new_config).await {
         tracing::warn!("Failed to apply USB config during setup: {}", e);
     }
-
-    tracing::info!(
-        "Extension config after save: ttyd.enabled={}, rustdesk.enabled={}",
-        new_config.extensions.ttyd.enabled,
-        new_config.rustdesk.enabled
-    );
 
     // Start extensions if enabled
     if new_config.extensions.ttyd.enabled {
@@ -209,42 +199,6 @@ pub async fn setup_init(
             tracing::warn!("Failed to start ttyd during setup: {}", e);
         } else {
             tracing::info!("ttyd started during setup");
-        }
-    }
-
-    // Start RustDesk if enabled
-    if new_config.rustdesk.enabled {
-        let empty_config = crate::rustdesk::config::RustDeskConfig::default();
-        if let Err(e) = state
-            .remote_access
-            .apply_rustdesk(
-                &empty_config,
-                &new_config.rustdesk,
-                ConfigApplyOptions::default(),
-            )
-            .await
-        {
-            tracing::warn!("Failed to start RustDesk during setup: {}", e);
-        } else {
-            tracing::info!("RustDesk started during setup");
-        }
-    }
-
-    // Start RTSP if enabled
-    if new_config.rtsp.enabled {
-        let empty_config = crate::config::RtspConfig::default();
-        if let Err(e) = state
-            .remote_access
-            .apply_rtsp(
-                &empty_config,
-                &new_config.rtsp,
-                ConfigApplyOptions::default(),
-            )
-            .await
-        {
-            tracing::warn!("Failed to start RTSP during setup: {}", e);
-        } else {
-            tracing::info!("RTSP started during setup");
         }
     }
 

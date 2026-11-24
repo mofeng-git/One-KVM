@@ -19,6 +19,7 @@ pub async fn update_stream_config(
     req.validate()?;
 
     let _apply_guard = try_apply_lock(&state.config_apply_locks.stream, "stream")?;
+    let _format_guard = state.stream_manager.format_lock.lock().await;
     let old_stream_config = state.config.get().stream.clone();
 
     state
@@ -38,7 +39,12 @@ pub async fn update_stream_config(
     )
     .await?;
 
-    state.remote_access.enforce_codec_constraints().await?;
+    let constraints = state.stream_manager.codec_constraints().await;
+    crate::video::codec_constraints::enforce_constraints_with_stream_manager(
+        &state.stream_manager,
+        &constraints,
+    )
+    .await?;
 
     Ok(Json(StreamConfigResponse::from(&new_stream_config)))
 }

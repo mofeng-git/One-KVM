@@ -1,0 +1,223 @@
+{
+  "abi": 1,
+  "id": "rustdesk",
+  "name": {
+    "en-US": "RustDesk",
+    "zh-CN": "RustDesk 远程控制"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "RustDesk remote access via direct IP or a rendezvous server.",
+    "zh-CN": "支持通过 ID 服务器或 IP 直连访问 KVM。"
+  },
+  "menu": "third_party_access",
+  "capabilities": [
+    "video",
+    "video_control",
+    "audio",
+    "hid"
+  ],
+  "config_schema": [
+    {
+      "key": "mode",
+      "label": {
+        "en-US": "Connection mode",
+        "zh-CN": "连接模式"
+      },
+      "kind": "select",
+      "default": "id",
+      "choices": [
+        "id",
+        "direct_ip"
+      ],
+      "choice_labels": {
+        "id": {
+          "en-US": "ID server",
+          "zh-CN": "ID 服务器"
+        },
+        "direct_ip": {
+          "en-US": "Direct IP",
+          "zh-CN": "IP 直连"
+        }
+      }
+    },
+    {
+      "key": "codec",
+      "label": {
+        "en-US": "Video codec",
+        "zh-CN": "视频编码"
+      },
+      "kind": "select",
+      "default": "h264",
+      "choices": [
+        "h264",
+        "h265"
+      ],
+      "choice_labels": {
+        "h264": {
+          "en-US": "H.264",
+          "zh-CN": "H.264"
+        },
+        "h265": {
+          "en-US": "H.265",
+          "zh-CN": "H.265"
+        }
+      }
+    },
+    {
+      "key": "direct_access_port",
+      "label": {
+        "en-US": "Direct IP port",
+        "zh-CN": "IP 直连端口"
+      },
+      "kind": "integer",
+      "default": 21118,
+      "min": 1,
+      "max": 65535,
+      "when": {
+        "key": "mode",
+        "equals": "direct_ip"
+      }
+    },
+    {
+      "key": "rendezvous_server",
+      "label": {
+        "en-US": "Rendezvous server",
+        "zh-CN": "ID 服务器"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "mode",
+        "equals": "id"
+      }
+    },
+    {
+      "key": "relay_server",
+      "label": {
+        "en-US": "Relay server",
+        "zh-CN": "中继服务器"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "mode",
+        "equals": "id"
+      }
+    },
+    {
+      "key": "relay_key",
+      "label": {
+        "en-US": "Relay key",
+        "zh-CN": "中继密钥"
+      },
+      "kind": "password",
+      "default": "",
+      "when": {
+        "key": "mode",
+        "equals": "id"
+      }
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "service",
+      "label": {
+        "en-US": "Service",
+        "zh-CN": "服务状态"
+      },
+      "value_labels": {
+        "running": {
+          "en-US": "Running",
+          "zh-CN": "运行中"
+        },
+        "starting": {
+          "en-US": "Starting",
+          "zh-CN": "启动中"
+        },
+        "stopped": {
+          "en-US": "Stopped",
+          "zh-CN": "已停止"
+        },
+        "error": {
+          "en-US": "Error",
+          "zh-CN": "出错"
+        }
+      }
+    },
+    {
+      "key": "rendezvous",
+      "label": {
+        "en-US": "Rendezvous",
+        "zh-CN": "注册状态"
+      },
+      "value_labels": {
+        "disconnected": {
+          "en-US": "Disconnected",
+          "zh-CN": "未连接"
+        },
+        "connecting": {
+          "en-US": "Connecting",
+          "zh-CN": "连接中"
+        },
+        "registered": {
+          "en-US": "Registered",
+          "zh-CN": "已注册"
+        },
+        "error": {
+          "en-US": "Error",
+          "zh-CN": "出错"
+        }
+      }
+    },
+    {
+      "key": "clients",
+      "label": {
+        "en-US": "Connected clients",
+        "zh-CN": "已连接客户端"
+      }
+    },
+    {
+      "key": "port",
+      "label": {
+        "en-US": "Listening port",
+        "zh-CN": "监听端口"
+      }
+    },
+    {
+      "key": "device_id",
+      "available_offline": true,
+      "label": {
+        "en-US": "Device ID",
+        "zh-CN": "设备 ID"
+      }
+    },
+    {
+      "key": "device_password",
+      "available_offline": true,
+      "label": {
+        "en-US": "Device password",
+        "zh-CN": "设备密码"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "regenerate_id",
+      "label": {
+        "en-US": "Regenerate device ID",
+        "zh-CN": "重新生成设备 ID"
+      },
+      "confirm": true
+    },
+    {
+      "id": "regenerate_password",
+      "label": {
+        "en-US": "Regenerate password",
+        "zh-CN": "重新生成密码"
+      },
+      "confirm": true
+    }
+  ]
+}

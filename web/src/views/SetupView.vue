@@ -98,7 +98,6 @@ const devices = ref<DeviceList>({
   udc: [],
   extensions: {
     ttyd_available: false,
-    rustdesk_available: false,
   },
 })
 
@@ -527,7 +526,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                   variant="ghost"
                   size="icon-sm"
                   class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  :aria-label="showPassword ? t('extensions.rustdesk.hidePassword') : t('extensions.rustdesk.showPassword')"
+                  :aria-label="showPassword ? t('common.hidePassword') : t('common.showPassword')"
                   @click="showPassword = !showPassword"
                 >
                   <Eye v-if="!showPassword" class="w-4 h-4" />

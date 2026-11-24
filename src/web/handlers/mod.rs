@@ -1,6 +1,4 @@
 pub mod config;
-#[cfg(feature = "airferry")]
-pub mod airferry;
 pub mod devices;
 pub mod extensions;
 #[cfg(feature = "terminal")]
@@ -54,7 +52,6 @@ use crate::config::StreamMode;
 use crate::diagnostics::{get_device_info, get_disk_space, DeviceInfo, DiskSpaceInfo};
 use crate::error::{AppError, Result};
 use crate::platform::PlatformCapabilities;
-use crate::runtime::ConfigApplyOptions;
 use crate::state::AppState;
 use crate::update::{UpdateChannel, UpdateOverviewResponse, UpdateStatusResponse, UpgradeRequest};
 use crate::utils::list_serial_ports;

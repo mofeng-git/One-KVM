@@ -31,6 +31,8 @@ Thumbs.db
 /dist/
 /build-staging
 /.tmp/
+build/remote-access.lock.json
+scripts/build-update-site.sh
 
 # Frontend (built files)
 /web/node_modules/
@@ -41,4 +43,8 @@ CLAUDE.md
 # Secrets (compile-time configuration)
 secrets.toml
 .env
-/docs/
+/docs/*
+!/docs/plugins.md
+
+# Local inputs for plugin packaging
+/build/.plugin-build/

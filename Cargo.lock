@@ -2905,7 +2905,6 @@ dependencies = [
  "bytes",
  "clap",
  "cpal",
- "des",
  "futures",
  "gpio-cdev",
  "hwcodec",
@@ -2913,24 +2912,19 @@ dependencies = [
  "libyuv",
  "mime_guess",
  "nix 0.31.3",
- "one-kvm-airferry-core",
  "one-kvm-bluetooth-hid",
+ "one-kvm-plugin-sdk",
  "openssl",
  "parking_lot",
- "protobuf",
- "protobuf-codegen",
  "rand 0.10.3",
  "rcgen 0.14.10",
  "reqwest",
  "rmcp",
  "rtp",
- "rtsp-types",
  "rust-embed",
- "sdp-types",
  "serde",
  "serde_json",
  "serialport",
- "sodiumoxide",
  "sqlx",
  "tempfile",
  "thiserror 2.0.20",
@@ -2938,7 +2932,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
- "toml_edit",
  "totp-rs",
  "tower-http",
  "tracing",
@@ -2981,6 +2974,141 @@ dependencies = [
  "dbus-crossroads",
  "dbus-tokio",
  "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "one-kvm-plugin-airferry"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "one-kvm-airferry-core",
+ "one-kvm-plugin-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "one-kvm-plugin-easyfrp"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "one-kvm-plugin-sdk",
+ "serde",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "one-kvm-plugin-easytier"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "one-kvm-plugin-sdk",
+ "serde",
+ "tokio",
+ "toml_edit",
+]
+
+[[package]]
+name = "one-kvm-plugin-frpc"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "one-kvm-plugin-sdk",
+ "serde",
+ "tokio",
+ "toml_edit",
+]
+
+[[package]]
+name = "one-kvm-plugin-gostc"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "one-kvm-plugin-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "one-kvm-plugin-rtsp"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "one-kvm-plugin-sdk",
+ "rand 0.10.3",
+ "rtp",
+ "rtsp-types",
+ "sdp-types",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "webrtc-util",
+]
+
+[[package]]
+name = "one-kvm-plugin-rustdesk"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "one-kvm-plugin-sdk",
+ "openssl",
+ "parking_lot",
+ "protobuf",
+ "protobuf-codegen",
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "sodiumoxide",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "one-kvm-plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "futures",
+ "libc",
+ "reqwest",
+ "rtp",
+ "serde",
+ "serde_json",
+ "socket2 0.6.5",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing-subscriber",
+ "typeshare",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "one-kvm-plugin-vnc"
+version = "0.2.9"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "des",
+ "one-kvm-plugin-sdk",
+ "rand 0.10.3",
  "serde",
  "serde_json",
  "tokio",

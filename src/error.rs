@@ -241,6 +241,9 @@ pub enum AppError {
     #[error("Not authenticated")]
     Unauthorized,
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 

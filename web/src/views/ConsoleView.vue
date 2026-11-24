@@ -33,6 +33,7 @@ import type { VideoMode } from '@/components/VideoConfigPopover.vue'
 
 import StatusCard, { type StatusDetail, type ConnectionStatus } from '@/components/StatusCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
+import { usePluginPolling } from '@/composables/usePluginPolling'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import ConsoleHeaderActions from '@/components/ConsoleHeaderActions.vue'
 import { provideConsoleAppearance } from '@/composables/useConsoleAppearance'
@@ -64,6 +65,7 @@ import {
 } from 'lucide-vue-next'
 
 const { t, te } = useI18n()
+usePluginPolling()
 const router = useRouter()
 const systemStore = useSystemStore()
 const configStore = useConfigStore()

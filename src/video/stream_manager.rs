@@ -27,7 +27,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -103,6 +103,7 @@ pub struct VideoStreamManager {
     config_store: RwLock<Option<ConfigStore>>,
     /// Codec constraints derived from services that are actually running.
     runtime_codec_constraints: RwLock<Option<StreamCodecConstraints>>,
+    pub(crate) format_lock: Mutex<()>,
     /// Mode switching lock to prevent concurrent switch requests
     switching: AtomicBool,
     /// Current mode switch transaction ID (set while switching=true)
@@ -123,6 +124,7 @@ impl VideoStreamManager {
             events: RwLock::new(None),
             config_store: RwLock::new(None),
             runtime_codec_constraints: RwLock::new(None),
+            format_lock: Mutex::new(()),
             switching: AtomicBool::new(false),
             transition_id: RwLock::new(None),
         })
@@ -174,12 +176,7 @@ impl VideoStreamManager {
             return constraints.clone();
         }
 
-        if let Some(ref config_store) = *self.config_store.read().await {
-            let config = config_store.get();
-            StreamCodecConstraints::from_config(&config)
-        } else {
-            StreamCodecConstraints::unrestricted()
-        }
+        StreamCodecConstraints::unrestricted()
     }
 
     /// Get current streaming mode
@@ -462,9 +459,7 @@ impl VideoStreamManager {
 
         // 5. Update configuration store if available
         if let Some(ref config_store) = *self.config_store.read().await {
-            let mut config = (*config_store.get()).clone();
-            config.stream.mode = new_mode.clone();
-            if let Err(e) = config_store.set(config).await {
+            if let Err(e) = config_store.update(|config| config.stream.mode = new_mode.clone()).await {
                 warn!("Failed to persist stream mode to config: {}", e);
             }
         }

@@ -12,17 +12,11 @@ mod otg;
 mod otg_network;
 #[cfg(feature = "redfish")]
 mod redfish;
-#[cfg(feature = "rtsp")]
-mod rtsp;
-#[cfg(feature = "rustdesk")]
-mod rustdesk;
 mod stream;
 #[cfg(unix)]
 mod uac;
 mod usb_update;
 pub(crate) mod video;
-#[cfg(feature = "vnc")]
-mod vnc;
 mod watchdog;
 mod web;
 
@@ -38,24 +32,10 @@ pub use otg::update_otg_config;
 pub use otg_network::{get_otg_network_config, get_otg_network_status, update_otg_network_config};
 #[cfg(feature = "redfish")]
 pub use redfish::{get_redfish_config, update_redfish_config};
-#[cfg(feature = "rtsp")]
-pub use rtsp::{
-    get_rtsp_config, get_rtsp_status, start_rtsp_service, stop_rtsp_service, update_rtsp_config,
-};
-#[cfg(feature = "rustdesk")]
-pub use rustdesk::{
-    get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,
-    regenerate_device_password, start_rustdesk_service, stop_rustdesk_service,
-    update_rustdesk_config,
-};
 pub use stream::{get_stream_config, update_stream_config};
 #[cfg(unix)]
 pub use uac::{get_uac_config, update_uac_config};
 pub use video::{get_video_config, update_video_config};
-#[cfg(feature = "vnc")]
-pub use vnc::{
-    get_vnc_config, get_vnc_status, start_vnc_service, stop_vnc_service, update_vnc_config,
-};
 pub use watchdog::{get_watchdog_config, update_watchdog_config};
 pub use web::{get_web_config, update_web_config};
 
@@ -69,16 +49,6 @@ fn sanitize_config_for_api(config: &mut AppConfig) {
     config.stream.turn_password = None;
     config.mcp.api_key_hash = None;
     config.mcp.api_key = None;
-
-    config.rustdesk.device_password.clear();
-    config.rustdesk.relay_key = None;
-    config.rustdesk.public_key = None;
-    config.rustdesk.private_key = None;
-    config.rustdesk.signing_public_key = None;
-    config.rustdesk.signing_private_key = None;
-
-    config.rtsp.password = None;
-    config.vnc.password = None;
 }
 
 pub async fn get_all_config(State(state): State<Arc<AppState>>) -> Json<AppConfig> {

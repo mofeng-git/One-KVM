@@ -7,22 +7,22 @@ Files: *
 Copyright: 2025 One-KVM contributors
 License: AGPL-3.0-only
 
-Files: protos/*
+Files: plugins/rustdesk/protos/*
 Copyright: the RustDesk contributors
            2025 One-KVM contributors
 License: AGPL-3.0-only
 Comment:
  Protocol definition files derived from RustDesk
  (https://github.com/rustdesk/rustdesk). Modified for One-KVM.
- See protos/NOTICE for the full attribution.
+ See plugins/rustdesk/protos/NOTICE for the full attribution.
 
-Files: src/rustdesk/*
+Files: plugins/rustdesk/src/rustdesk/*
 Copyright: the RustDesk contributors
            2025 One-KVM contributors
 License: AGPL-3.0-only
 Comment:
  Code derived from the RustDesk project, modified for One-KVM.
- See src/rustdesk/NOTICE for the full attribution.
+ See plugins/rustdesk/src/rustdesk/NOTICE for the full attribution.
 
 Files: libs/hwcodec/*
 Copyright: the RustDesk contributors

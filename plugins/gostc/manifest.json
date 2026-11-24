@@ -1,0 +1,42 @@
+{
+  "abi": 1,
+  "id": "gostc",
+  "name": {
+    "en-US": "GOSTC",
+    "zh-CN": "GOSTC 内网穿透"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "Connect to a GOST server for remote access.",
+    "zh-CN": "连接 GOST 服务端实现内网穿透。"
+  },
+  "menu": "remote_access",
+  "capabilities": [],
+  "config_schema": [
+    {
+      "key": "addr",
+      "label": { "en-US": "Server address", "zh-CN": "服务器地址" },
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "key",
+      "label": { "en-US": "Client key", "zh-CN": "客户端密钥" },
+      "kind": "password",
+      "default": ""
+    },
+    {
+      "key": "tls",
+      "label": { "en-US": "Use TLS", "zh-CN": "启用 TLS" },
+      "kind": "boolean",
+      "default": true
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "pid",
+      "label": { "en-US": "Client PID", "zh-CN": "客户端 PID" }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[package]
+name = "one-kvm-plugin-rtsp"
+version = "0.2.9"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+one-kvm-plugin-sdk = { path = "../../libs/plugin-sdk", features = ["runtime"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+bytes = "1"
+base64 = "0.22"
+rand = "0.10"
+rtp = "0.17"
+rtsp-types = "0.1"
+sdp-types = "0.1"
+webrtc-util = "0.17"

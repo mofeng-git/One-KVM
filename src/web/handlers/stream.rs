@@ -88,6 +88,7 @@ pub async fn stream_mode_set(
 ) -> Result<Json<StreamModeResponse>> {
     use crate::video::codec::VideoCodecType;
 
+    let _format_guard = state.stream_manager.format_lock.lock().await;
     let constraints = state.stream_manager.codec_constraints().await;
 
     let mode_lower = req.mode.to_lowercase();
@@ -243,16 +244,9 @@ pub struct StreamConstraintsResponse {
     pub allowed_codecs: Vec<String>,
     pub locked_codec: Option<String>,
     pub disallow_mjpeg: bool,
-    pub sources: ConstraintSources,
+    pub sources: Vec<String>,
     pub reason: String,
     pub current_mode: String,
-}
-
-#[derive(Serialize)]
-pub struct ConstraintSources {
-    pub rustdesk: bool,
-    pub rtsp: bool,
-    pub vnc: bool,
 }
 
 /// Get stream codec constraints derived from enabled services.
@@ -276,11 +270,7 @@ pub async fn stream_constraints_get(
             .map(codec_to_id)
             .map(str::to_string),
         disallow_mjpeg: !constraints.allow_mjpeg,
-        sources: ConstraintSources {
-            rustdesk: constraints.rustdesk_enabled,
-            rtsp: constraints.rtsp_enabled,
-            vnc: constraints.vnc_enabled,
-        },
+        sources: constraints.sources,
         reason: constraints.reason,
         current_mode,
     })

@@ -74,8 +74,6 @@ pub struct PlatformCapabilities {
     pub msd: FeatureCapability,
     pub otg: FeatureCapability,
     pub audio: FeatureCapability,
-    pub rustdesk: FeatureCapability,
-    pub vnc: FeatureCapability,
     pub diagnostics: FeatureCapability,
     pub extensions: FeatureCapability,
     pub service_installation: FeatureCapability,
@@ -83,8 +81,15 @@ pub struct PlatformCapabilities {
 
 impl PlatformCapabilities {
     pub fn compiled_features() -> Vec<String> {
-        [("airferry", cfg!(feature = "airferry")), ("rustdesk", cfg!(feature = "rustdesk")), ("easytier", cfg!(feature = "easytier")), ("vnc", cfg!(feature = "vnc")), ("rtsp", cfg!(feature = "rtsp")), ("redfish", cfg!(feature = "redfish")), ("mcp", cfg!(feature = "mcp")), ("terminal", cfg!(feature = "terminal")), ("gostc", cfg!(feature = "gostc")), ("easyfrp", cfg!(feature = "easyfrp")), ("frpc", cfg!(feature = "frpc"))]
-            .into_iter().filter(|(_, enabled)| *enabled).map(|(name, _)| name.to_string()).collect()
+        [
+            ("redfish", cfg!(feature = "redfish")),
+            ("mcp", cfg!(feature = "mcp")),
+            ("terminal", cfg!(feature = "terminal")),
+        ]
+        .into_iter()
+        .filter(|(_, enabled)| *enabled)
+        .map(|(name, _)| name.to_string())
+        .collect()
     }
 
     pub fn current() -> Self {

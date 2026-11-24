@@ -1,0 +1,93 @@
+{
+  "abi": 1,
+  "id": "vnc",
+  "name": {
+    "en-US": "VNC",
+    "zh-CN": "VNC 远程控制"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "RFB server with Tight JPEG and H.264 video.",
+    "zh-CN": "内置 RFB 服务，支持 Tight JPEG 和 H.264。"
+  },
+  "menu": "third_party_access",
+  "capabilities": [
+    "video",
+    "video_control",
+    "hid"
+  ],
+  "config_schema": [
+    {
+      "key": "bind",
+      "label": {
+        "en-US": "Listen address",
+        "zh-CN": "监听地址"
+      },
+      "kind": "text",
+      "default": "0.0.0.0"
+    },
+    {
+      "key": "port",
+      "label": {
+        "en-US": "Port",
+        "zh-CN": "端口"
+      },
+      "kind": "integer",
+      "default": 5900,
+      "min": 1,
+      "max": 65535
+    },
+    {
+      "key": "encoding",
+      "label": {
+        "en-US": "Encoding",
+        "zh-CN": "编码格式"
+      },
+      "kind": "select",
+      "default": "tight_jpeg",
+      "choices": [
+        "tight_jpeg",
+        "h264"
+      ],
+      "choice_labels": {
+        "tight_jpeg": {
+          "en-US": "Tight JPEG",
+          "zh-CN": "Tight JPEG"
+        },
+        "h264": {
+          "en-US": "H.264",
+          "zh-CN": "H.264"
+        }
+      }
+    },
+    {
+      "key": "allow_one_client",
+      "label": {
+        "en-US": "Allow only one client",
+        "zh-CN": "仅允许一个客户端"
+      },
+      "kind": "boolean",
+      "default": true
+    },
+    {
+      "key": "password",
+      "label": {
+        "en-US": "VNC password",
+        "zh-CN": "密码"
+      },
+      "kind": "password",
+      "default": ""
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "clients",
+      "label": {
+        "en-US": "Connected clients",
+        "zh-CN": "已连接客户端"
+      }
+    }
+  ],
+  "actions": []
+}

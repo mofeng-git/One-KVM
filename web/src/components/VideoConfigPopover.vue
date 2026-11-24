@@ -65,38 +65,18 @@ const loadingCodecs = ref(false)
 const backends = ref<EncoderBackendInfo[]>([])
 const constraints = ref<StreamConstraintsResponse | null>(null)
 const currentEncoderBackend = computed(() => configStore.stream?.encoder || 'auto')
-const isServiceActive = (status: string | undefined) => status === 'starting' || status === 'running'
-const isRtspEnabled = computed(() => isServiceActive(configStore.rtspStatus?.service_status))
-const isRustdeskEnabled = computed(() => isServiceActive(configStore.rustdeskStatus?.service_status))
-const isRtspCodecLocked = computed(() => isRtspEnabled.value)
-const isRustdeskWebrtcLocked = computed(() => !isRtspEnabled.value && isRustdeskEnabled.value)
-const codecLockSources = computed(() => {
-  if (isRtspCodecLocked.value) {
-    return isRustdeskEnabled.value ? 'RTSP/RustDesk' : 'RTSP'
-  }
-  if (isRustdeskWebrtcLocked.value) return 'RustDesk'
-  return ''
-})
-const codecLockMessage = computed(() => {
-  if (!codecLockSources.value) return ''
-  return t('actionbar.multiSourceCodecLocked', { sources: codecLockSources.value })
-})
-const videoParamWarningSources = computed(() => {
-  if (isRtspEnabled.value && isRustdeskEnabled.value) return 'RTSP/RustDesk'
-  if (isRtspEnabled.value) return 'RTSP'
-  if (isRustdeskEnabled.value) return 'RustDesk'
-  return ''
-})
-const videoParamWarningMessage = computed(() => {
-  if (!videoParamWarningSources.value) return ''
-  return t('actionbar.multiSourceVideoParamsWarning', { sources: videoParamWarningSources.value })
-})
-const isCodecLocked = computed(() => !!codecLockMessage.value)
+const codecLockSources = computed(() => constraints.value?.sources?.join(', ') || '')
+const codecLockMessage = computed(() => codecLockSources.value
+  ? t('actionbar.multiSourceCodecLocked', { sources: codecLockSources.value })
+  : '')
+const videoParamWarningMessage = computed(() => codecLockSources.value
+  ? t('actionbar.multiSourceVideoParamsWarning', { sources: codecLockSources.value })
+  : '')
+const isCodecLocked = computed(() => !!codecLockSources.value)
 
-const isCodecOptionDisabled = (codecId: string): boolean => {
-  if (!isBrowserSupported(codecId)) return true
-  if (isRustdeskWebrtcLocked.value && codecId === 'mjpeg') return true
-  return false
+function isCodecOptionDisabled(codecId: string): boolean {
+  return !isBrowserSupported(codecId) ||
+    (!!constraints.value && !constraints.value.allowed_codecs.includes(codecId))
 }
 
 // Browser supported codecs (WebRTC receive capabilities)
@@ -337,16 +317,6 @@ function syncFromCurrentIfChanged() {
 function handleVideoModeChange(mode: unknown) {
   if (typeof mode !== 'string') return
 
-  if (isRtspCodecLocked.value) {
-    toast.warning(codecLockMessage.value)
-    return
-  }
-
-  if (isRustdeskWebrtcLocked.value && mode === 'mjpeg') {
-    toast.warning(codecLockMessage.value)
-    return
-  }
-
   if (constraints.value?.allowed_codecs?.length && !constraints.value.allowed_codecs.includes(mode)) {
     toast.error(constraints.value.reason || t('actionbar.selectMode'))
     return
@@ -501,8 +471,6 @@ watch(() => props.open, (isOpen) => {
   Promise.all([
     configStore.refreshVideo(),
     configStore.refreshStream(),
-    configStore.refreshRtspStatus(),
-    configStore.refreshRustdeskStatus(),
   ]).then(() => {
     initializeFromCurrent()
   }).catch(() => {
@@ -579,7 +547,7 @@ watch(
             <Select
               :model-value="props.videoMode"
               @update:model-value="handleVideoModeChange"
-              :disabled="loadingCodecs || availableCodecs.length === 0 || isRtspCodecLocked"
+              :disabled="loadingCodecs || availableCodecs.length === 0 || isCodecLocked"
             >
               <SelectTrigger size="sm" class="w-full text-xs">
                 <div v-if="selectedCodecInfo" class="flex items-center gap-1.5 truncate">

@@ -1,0 +1,251 @@
+{
+  "abi": 1,
+  "id": "frpc",
+  "name": {
+    "en-US": "frp",
+    "zh-CN": "frp 内网穿透"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "FRP client with quick settings or a complete frpc.toml configuration.",
+    "zh-CN": "支持快速配置和完整 frpc.toml 的 FRP 客户端。"
+  },
+  "menu": "remote_access",
+  "capabilities": [],
+  "config_schema": [
+    {
+      "key": "config_mode",
+      "label": {
+        "en-US": "Configuration mode",
+        "zh-CN": "配置方式"
+      },
+      "kind": "select",
+      "default": "quick",
+      "choices": [
+        "quick",
+        "full"
+      ],
+      "choice_labels": {
+        "quick": {
+          "en-US": "Quick configuration",
+          "zh-CN": "快速配置"
+        },
+        "full": {
+          "en-US": "Full TOML",
+          "zh-CN": "完整 TOML"
+        }
+      }
+    },
+    {
+      "key": "proxy_type",
+      "label": {
+        "en-US": "Proxy type",
+        "zh-CN": "代理类型"
+      },
+      "kind": "select",
+      "default": "tcp",
+      "choices": [
+        "tcp",
+        "udp",
+        "http",
+        "https",
+        "stcp",
+        "sudp",
+        "xtcp"
+      ],
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      },
+      "choice_labels": {
+        "tcp": {
+          "en-US": "TCP",
+          "zh-CN": "TCP"
+        },
+        "udp": {
+          "en-US": "UDP",
+          "zh-CN": "UDP"
+        },
+        "http": {
+          "en-US": "HTTP",
+          "zh-CN": "HTTP"
+        },
+        "https": {
+          "en-US": "HTTPS",
+          "zh-CN": "HTTPS"
+        },
+        "stcp": {
+          "en-US": "STCP",
+          "zh-CN": "STCP"
+        },
+        "sudp": {
+          "en-US": "SUDP",
+          "zh-CN": "SUDP"
+        },
+        "xtcp": {
+          "en-US": "XTCP",
+          "zh-CN": "XTCP"
+        }
+      }
+    },
+    {
+      "key": "proxy_name",
+      "label": {
+        "en-US": "Proxy name",
+        "zh-CN": "代理名称"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "server_addr",
+      "label": {
+        "en-US": "Server address",
+        "zh-CN": "服务器地址"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "server_port",
+      "label": {
+        "en-US": "Server port",
+        "zh-CN": "服务器端口"
+      },
+      "kind": "integer",
+      "default": 7000,
+      "min": 1,
+      "max": 65535,
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "token",
+      "label": {
+        "en-US": "Token",
+        "zh-CN": "访问令牌"
+      },
+      "kind": "password",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "local_ip",
+      "label": {
+        "en-US": "Local IP",
+        "zh-CN": "本地 IP"
+      },
+      "kind": "text",
+      "default": "127.0.0.1",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "local_port",
+      "label": {
+        "en-US": "Local port",
+        "zh-CN": "本地端口"
+      },
+      "kind": "integer",
+      "default": 22,
+      "min": 1,
+      "max": 65535,
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "remote_port",
+      "label": {
+        "en-US": "Remote port (TCP/UDP)",
+        "zh-CN": "远端端口（TCP/UDP）"
+      },
+      "kind": "integer",
+      "default": 0,
+      "min": 0,
+      "max": 65535,
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "custom_domain",
+      "label": {
+        "en-US": "Custom domain (HTTP/HTTPS)",
+        "zh-CN": "自定义域名（HTTP/HTTPS）"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "secret_key",
+      "label": {
+        "en-US": "Secret key (STCP/SUDP/XTCP)",
+        "zh-CN": "访问密钥（STCP/SUDP/XTCP）"
+      },
+      "kind": "password",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "tls",
+      "label": {
+        "en-US": "TLS",
+        "zh-CN": "启用 TLS"
+      },
+      "kind": "boolean",
+      "default": true,
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "custom_toml",
+      "label": {
+        "en-US": "Complete TOML configuration",
+        "zh-CN": "完整 TOML 配置"
+      },
+      "kind": "textarea",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "full"
+      }
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "pid",
+      "label": {
+        "en-US": "Client PID",
+        "zh-CN": "客户端 PID"
+      }
+    }
+  ]
+}

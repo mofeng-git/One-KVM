@@ -1,0 +1,116 @@
+{
+  "abi": 1,
+  "id": "easytier",
+  "name": {
+    "en-US": "EasyTier",
+    "zh-CN": "EasyTier 组网"
+  },
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "EasyTier private networking with quick settings or a complete TOML configuration.",
+    "zh-CN": "支持快速配置和完整 TOML 配置的 EasyTier 私有组网。"
+  },
+  "menu": "remote_access",
+  "capabilities": [],
+  "config_schema": [
+    {
+      "key": "config_mode",
+      "label": {
+        "en-US": "Configuration mode",
+        "zh-CN": "配置方式"
+      },
+      "kind": "select",
+      "default": "quick",
+      "choices": [
+        "quick",
+        "full"
+      ],
+      "choice_labels": {
+        "quick": {
+          "en-US": "Quick configuration",
+          "zh-CN": "快速配置"
+        },
+        "full": {
+          "en-US": "Full TOML",
+          "zh-CN": "完整 TOML"
+        }
+      }
+    },
+    {
+      "key": "network_name",
+      "label": {
+        "en-US": "Network name",
+        "zh-CN": "网络名称"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "network_secret",
+      "label": {
+        "en-US": "Network secret",
+        "zh-CN": "网络密钥"
+      },
+      "kind": "password",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "peer_urls",
+      "label": {
+        "en-US": "Peers (one URL per line)",
+        "zh-CN": "对等节点（每行一个 URL）"
+      },
+      "kind": "string_list",
+      "default": [],
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "virtual_ip",
+      "label": {
+        "en-US": "Virtual IP",
+        "zh-CN": "虚拟 IP"
+      },
+      "kind": "text",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "quick"
+      }
+    },
+    {
+      "key": "custom_toml",
+      "label": {
+        "en-US": "Complete TOML configuration",
+        "zh-CN": "完整 TOML 配置"
+      },
+      "kind": "textarea",
+      "default": "",
+      "when": {
+        "key": "config_mode",
+        "equals": "full"
+      }
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "pid",
+      "label": {
+        "en-US": "EasyTier core PID",
+        "zh-CN": "客户端 PID"
+      }
+    }
+  ],
+  "actions": []
+}

@@ -1,25 +1,13 @@
 import { request, uploadRequest, ApiError } from './request'
 import type {
   CanonicalKey,
-  AirferryStatus,
   OtgSelfCheckResponse,
-  AirferryDeleteResponse,
   Ch9329DescriptorState,
 } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 import type { StreamSignalReason, StreamState } from '@/types/websocket'
 
 const API_BASE = '/api'
-
-export type { AirferryStatus, AirferryReceivedFile } from '@/types/generated'
-
-export const airferryApi = {
-  status: () => request<AirferryStatus>('/airferry/status', {}, { toastOnError: false }),
-  start: () => request<AirferryStatus>('/airferry/start', { method: 'POST' }, { toastOnError: false }),
-  stop: () => request<AirferryStatus>('/airferry/stop', { method: 'POST' }, { toastOnError: false }),
-  deleteFile: (name: string) => request<AirferryDeleteResponse>(`/airferry/files/${encodeURIComponent(name)}`, { method: 'DELETE' }, { toastOnError: false }),
-  downloadUrl: (name: string) => `${API_BASE}/airferry/files/${encodeURIComponent(name)}`,
-}
 
 export const authApi = {
   login: (username: string, password: string) =>
@@ -146,8 +134,6 @@ export interface PlatformCapabilities {
   msd: FeatureCapability
   otg: FeatureCapability
   audio: FeatureCapability
-  rustdesk: FeatureCapability
-  vnc: FeatureCapability
   diagnostics: FeatureCapability
   extensions: FeatureCapability
   service_installation: FeatureCapability
@@ -166,8 +152,6 @@ export const systemApi = {
         msd: { available: boolean; backend?: string; reason?: string }
         atx: { available: boolean; backend?: string; reason?: string }
         audio: { available: boolean; backend?: string; reason?: string }
-        rustdesk: { available: boolean; backend?: string; reason?: string }
-        vnc: { available: boolean; backend?: string; reason?: string }
       }
       disk_space?: {
         total: number
@@ -202,7 +186,6 @@ export const systemApi = {
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean
-    rustdesk_enabled?: boolean
   }) =>
     request<{ success: boolean; message?: string }>('/setup/init', {
       method: 'POST',
@@ -293,11 +276,7 @@ export interface StreamConstraintsResponse {
   allowed_codecs: string[]
   locked_codec: string | null
   disallow_mjpeg: boolean
-  sources: {
-    rustdesk: boolean
-    rtsp: boolean
-    vnc: boolean
-  }
+  sources: string[]
   reason: string
   current_mode: string
 }
@@ -756,7 +735,6 @@ export interface DeviceList {
   udc: Array<{ name: string }>
   extensions: {
     ttyd_available: boolean
-    rustdesk_available: boolean
   }
 }
 
@@ -821,24 +799,10 @@ export {
   audioConfigApi,
   extensionsApi,
   redfishConfigApi,
-  rustdeskConfigApi,
-  rtspConfigApi,
-  vncConfigApi,
   webConfigApi,
   watchdogConfigApi,
-  type RustDeskConfigResponse,
-  type RustDeskStatusResponse,
-  type RustDeskConfigUpdate,
-  type RustDeskPasswordResponse,
-  type RtspConfigResponse,
   type RedfishConfigResponse,
   type RedfishConfigUpdate,
-  type RtspConfigUpdate,
-  type RtspStatusResponse,
-  type VncConfigResponse,
-  type VncConfigUpdate,
-  type VncEncoding,
-  type VncStatusResponse,
   type WebConfig,
   type WebConfigUpdate,
 } from './config'

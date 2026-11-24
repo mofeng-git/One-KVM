@@ -78,6 +78,23 @@ struct CliArgs {
 enum CliCommand {
     /// Manage local users
     User(UserCommand),
+    /// Install packages while the One-KVM service is stopped
+    Plugin(PluginCommand),
+}
+
+#[derive(Args, Debug)]
+struct PluginCommand {
+    #[command(subcommand)]
+    action: PluginAction,
+}
+
+#[derive(Subcommand, Debug)]
+enum PluginAction {
+    /// Install or upgrade one or more local .onepkg files
+    Install {
+        #[arg(required = true)]
+        packages: Vec<PathBuf>,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -339,14 +356,22 @@ fn restart_current_process(exe_path: Option<PathBuf>) -> anyhow::Result<()> {
 }
 
 async fn run_cli_command(command: CliCommand, data_dir: PathBuf) -> anyhow::Result<()> {
-    let db = open_database_pool(&data_dir).await?;
-    let users = UserStore::new(db.clone_pool());
-    let two_factor = TwoFactorService::new(db.clone_pool());
-    let sessions = SessionStore::new(0);
-
     match command {
         CliCommand::User(user) => {
+            let db = open_database_pool(&data_dir).await?;
+            let users = UserStore::new(db.clone_pool());
+            let two_factor = TwoFactorService::new(db.clone_pool());
+            let sessions = SessionStore::new(0);
             run_user_action(user.action, &users, &sessions, &two_factor).await
+        }
+        CliCommand::Plugin(PluginCommand {
+            action: PluginAction::Install { packages },
+        }) => {
+            let manager = one_kvm::plugins::PluginManager::new(data_dir.join("plugins"));
+            for package in packages {
+                println!("Installed plugin {}", manager.provision(package).await?);
+            }
+            Ok(())
         }
     }
 }

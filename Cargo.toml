@@ -1,3 +1,18 @@
+[workspace]
+members = ["libs/plugin-sdk", "plugins/rustdesk", "plugins/vnc", "plugins/rtsp", "plugins/easytier", "plugins/airferry", "plugins/easyfrp", "plugins/frpc", "plugins/gostc"]
+default-members = ["."]
+exclude = [
+    "libs/airferry-core",
+    "libs/airferry-core/vendor/qr-protocol",
+    "libs/airferry-core/vendor/transfer-engine",
+    "libs/bluetooth-hid",
+    "libs/hwcodec",
+    "libs/libyuv",
+    "libs/v4l2r",
+    "libs/ventoy-img-rs",
+]
+resolver = "2"
+
 [package]
 name = "one-kvm"
 version = "0.2.9"
@@ -10,22 +25,14 @@ keywords = ["kvm", "ipkvm", "remote-management", "embedded"]
 categories = ["embedded", "network-programming"]
 
 [features]
-default = ["airferry", "rustdesk", "easytier", "vnc", "rtsp", "redfish", "mcp", "terminal", "gostc", "easyfrp", "frpc"]
-airferry = ["dep:one-kvm-airferry-core"]
-rustdesk = ["dep:protobuf", "dep:protobuf-codegen", "dep:sodiumoxide"]
-easytier = []
-vnc = ["dep:des"]
-rtsp = ["dep:rtsp-types", "dep:sdp-types"]
+default = ["redfish", "mcp", "terminal"]
 redfish = []
 mcp = ["dep:rmcp"]
 terminal = ["dep:tokio-tungstenite"]
-gostc = []
-easyfrp = []
-frpc = []
 rkmpp = ["hwcodec/rkmpp"]
 
 [dependencies]
-one-kvm-airferry-core = { path = "libs/airferry-core", optional = true }
+one-kvm-plugin-sdk = { path = "libs/plugin-sdk" }
 # Async runtime
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["rt", "io"] }
@@ -43,7 +50,6 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-toml_edit = { version = "0.25" }
 
 # Logging
 tracing = { version = "0.1" }
@@ -103,8 +109,6 @@ arc-swap = { version = "1.8" }
 # WebRTC
 webrtc = { version = "0.17", features = ["vendored-openssl"] }
 rtp = { version = "0.17" }
-rtsp-types = { optional = true, version = "0.1" }
-sdp-types = { optional = true, version = "0.1" }
 
 # HID (serial port for CH9329)
 serialport = { version = "4" }
@@ -114,10 +118,6 @@ libc = { version = "0.2" }
 # Ventoy bootable image support
 ventoy-img = { path = "libs/ventoy-img-rs" }
 
-# RustDesk protocol support
-protobuf = { version = "3.7", features = ["with-bytes"], optional = true }
-sodiumoxide = { version = "0.2", optional = true }
-des = { optional = true, version = "0.9" }
 # TypeScript type generation
 typeshare = { version = "1.0" }
 
@@ -156,9 +156,6 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
-
-[build-dependencies]
-protobuf-codegen = { version = "3.7", optional = true }
 
 [patch.crates-io]
 dtls = { path = "libs/dtls" }

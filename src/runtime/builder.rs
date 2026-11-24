@@ -187,7 +187,9 @@ impl RuntimeBuilder {
         start_uac_playback(&state, &config).await;
         start_watchdog(&state, &config).await;
         extensions.set_event_bus(events.clone()).await;
-        state.remote_access.start_configured(&config).await;
+        if let Err(error) = state.plugins.start(&state).await {
+            tracing::error!(%error, "Could not initialize plugin manager");
+        }
 
         let extension_config = config_store.get();
         extensions.start_enabled(&extension_config.extensions).await;

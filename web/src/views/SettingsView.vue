@@ -47,9 +47,11 @@ import type {
   NetworkInterfaceInfo,
   OtgNetworkStatus,
 } from '@/types/generated'
-import { EasytierConfigMode, FrpProxyType, FrpcConfigMode } from '@/types/generated'
 import { useClipboard } from '@/composables/useClipboard'
-import { useRemoteAccessSettings } from '@/composables/settings/useRemoteAccessSettings'
+import PluginManagement from '@/components/PluginManagement.vue'
+import PluginCard from '@/components/PluginCard.vue'
+import { usePluginPolling } from '@/composables/usePluginPolling'
+import { pluginMenuId, pluginMenuLabel, pluginSettingsSection } from '@/lib/pluginNavigation'
 import { formatHostForUrl } from '@/lib/url'
 import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
 import { useTheme } from '@/composables/useTheme'
@@ -57,7 +59,6 @@ import { useConsoleLayout, type ConsoleLayout } from '@/composables/useConsoleLa
 import AppLayout from '@/components/AppLayout.vue'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
-import ExtensionConfigModeEditor from '@/components/ExtensionConfigModeEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -96,13 +97,13 @@ import {
 } from '@/components/ui/dialog'
 import {
   ArrowLeft,
+  FolderOpen,
+  Puzzle,
   Monitor,
   Keyboard,
   Info,
   Sun,
   Moon,
-  Eye,
-  EyeOff,
   Save,
   Check,
   Power,
@@ -130,7 +131,7 @@ import {
   GalleryHorizontalEnd,
 } from 'lucide-vue-next'
 
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const systemStore = useSystemStore()
@@ -168,10 +169,33 @@ const SETTINGS_SECTION_IDS = [
   'third-party-access',
   'mcp',
   'ext-remote-access',
+  'plugin-management',
   'about',
 ] as const
-type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number]
+type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number] | `plugin-menu-${string}`
 const SETTINGS_SECTION_ID_SET = new Set<string>(SETTINGS_SECTION_IDS)
+
+const pluginStore = usePluginPolling()
+const pluginSections = computed(() => {
+  const sections = new Map<string, { menuId: string; plugins: typeof pluginStore.installed }>()
+  for (const plugin of pluginStore.installed) {
+    const menuId = pluginMenuId(plugin)
+    const section = pluginSettingsSection(menuId)
+    if (!section) continue
+    const existing = sections.get(section)
+    if (existing) existing.plugins.push(plugin)
+    else sections.set(section, { menuId, plugins: [plugin] })
+  }
+  return sections
+})
+const activePlugins = computed(() => pluginSections.value.get(activeSection.value)?.plugins ?? [])
+const customPluginItems = computed(() => Array.from(pluginSections.value)
+  .filter(([section]) => section.startsWith('plugin-menu-'))
+  .map(([id, { menuId }]) => ({
+    id,
+    label: pluginMenuLabel(pluginStore.installed, menuId, locale.value, t),
+    icon: FolderOpen,
+  })))
 
 function hasFeature(name: string) { return systemStore.platform?.compiled_features?.includes(name) === true }
 
@@ -209,12 +233,16 @@ const navGroups = computed(() => [
         icon: ScreenShare,
       },
       { id: 'ext-remote-access', label: t('extensions.remoteAccess.title'), icon: ExternalLink },
+      ...customPluginItems.value,
+      { id: 'plugin-management', label: t('plugins.title'), icon: Puzzle },
     ],
   },
 ].map(group => ({ ...group, items: group.items.filter(item => {
+  if (pluginSections.value.has(item.id)) return true
   if (item.id === 'mcp') return hasFeature('mcp')
   if (item.id === 'ext-ttyd') return hasFeature('terminal')
-  if (item.id === 'ext-remote-access') return ['gostc', 'easyfrp', 'easytier', 'frpc'].some(hasFeature)
+  if (item.id === 'third-party-access') return hasFeature('redfish')
+  if (item.id === 'ext-remote-access') return false
   return true
 }) })).filter(group => group.items.length > 0))
 
@@ -249,7 +277,7 @@ function sectionSubtitleKey(id: string): string {
 }
 
 function isSettingsSectionId(value: string): value is SettingsSectionId {
-  return SETTINGS_SECTION_ID_SET.has(value)
+  return SETTINGS_SECTION_ID_SET.has(value) || /^plugin-menu-[a-z][a-z0-9_-]{0,63}$/.test(value)
 }
 
 function selectSection(id: string) {
@@ -263,17 +291,16 @@ function selectSection(id: string) {
 function normalizeSettingsSection(value: unknown): SettingsSectionId | null {
   if (typeof value !== 'string') return null
   if (value === 'access-control') return 'account'
-  if (value === 'ext-frpc') return 'ext-remote-access'
   if (value === 'redfish') return 'third-party-access'
   if (value === 'msd') return 'hid'
-  if (value === 'ext-rustdesk' || value === 'ext-vnc' || value === 'ext-rtsp')
-    return 'third-party-access'
   return isSettingsSectionId(value) ? value : null
 }
 
 function ensureVisibleSection() {
-  if (!SETTINGS_SECTION_ID_SET.has(activeSection.value)) {
-    activeSection.value = 'appearance'
+  if (pluginStore.loaded
+      && (activeSection.value === 'ext-remote-access' || activeSection.value.startsWith('plugin-menu-'))
+      && !pluginSections.value.has(activeSection.value)) {
+    selectSection('plugin-management')
   }
 }
 
@@ -299,190 +326,37 @@ async function loadSectionData(section: SettingsSectionId) {
     case 'other':
       return
     case 'ext-ttyd':
-    case 'ext-remote-access':
       await loadExtensions()
       return
     case 'third-party-access':
       await Promise.all([
         loadWebServerConfig(),
         hasFeature('redfish') ? loadRedfishConfig() : Promise.resolve(),
-        systemStore.platform?.rustdesk.available ? loadRustdeskConfig() : Promise.resolve(),
-        systemStore.platform?.rustdesk.available ? loadRustdeskPassword() : Promise.resolve(),
-        hasFeature('rtsp') ? loadRtspConfig() : Promise.resolve(),
-        hasFeature('vnc') ? loadVncConfig() : Promise.resolve(),
       ])
       return
+    case 'ext-remote-access':
+    case 'plugin-management':
     case 'about':
       return
   }
 }
 
-const showPasswords = ref(false)
 const extensions = ref<ExtensionsStatus | null>(null)
 const extensionsLoading = ref(false)
 const extensionLogs = ref<Record<string, string[]>>({
   ttyd: [],
-  gostc: [],
-  easyfrp: [],
-  easytier: [],
-  frpc: [],
 })
 const showLogs = ref<Record<string, boolean>>({
   ttyd: false,
-  gostc: false,
-  easyfrp: false,
-  easytier: false,
-  frpc: false,
 })
 
 const showTerminalDialog = ref(false)
 
 const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash' },
-  gostc: { enabled: false, addr: '', key: '', tls: true },
-  easyfrp: { enabled: false, control_urls: [] as string[] },
-  easytier: {
-    enabled: false,
-    config_mode: EasytierConfigMode.Quick,
-    network_name: '',
-    network_secret: '',
-    peer_urls: [] as string[],
-    virtual_ip: '',
-    custom_toml: '',
-  },
-  frpc: {
-    enabled: false,
-    config_mode: FrpcConfigMode.Quick,
-    proxy_name: '',
-    proxy_type: FrpProxyType.Tcp,
-    server_addr: '',
-    server_port: 7000,
-    token: '',
-    local_ip: '127.0.0.1',
-    local_port: 22,
-    remote_port: undefined as number | undefined,
-    custom_domain: '',
-    secret_key: '',
-    tls: true,
-    custom_toml: '',
-  },
-})
-
-const gostcValidationMessage = computed(() => {
-  if (!extConfig.value.gostc.addr.trim()) return t('extensions.gostc.addrRequired')
-  if (!extConfig.value.gostc.key) return t('extensions.gostc.keyRequired')
-  return ''
-})
-
-const easyfrpUrlsText = computed({
-  get: () => extConfig.value.easyfrp.control_urls.join('\n'),
-  set: (value: string) => {
-    extConfig.value.easyfrp.control_urls = value
-      .split(/\r?\n/)
-      .map((url) => url.trim())
-      .filter(Boolean)
-  },
-})
-
-const easyfrpValidationMessage = computed(() => {
-  const urls = extConfig.value.easyfrp.control_urls
-  if (urls.length === 0) return t('extensions.easyfrp.urlsRequired')
-  for (const value of urls) {
-    try {
-      const url = new URL(value)
-      if (
-        /\s/.test(value) ||
-        !['ws:', 'wss:', 'http:', 'https:', 'txt:'].includes(url.protocol) ||
-        !url.hostname ||
-        !url.pathname.replace(/\//g, '') ||
-        url.username ||
-        url.password ||
-        url.hash
-      ) {
-        return t('extensions.easyfrp.urlsInvalid')
-      }
-    } catch {
-      return t('extensions.easyfrp.urlsInvalid')
-    }
-  }
-  return ''
-})
-
-const easytierValidationMessage = computed(() => {
-  if (extConfig.value.easytier.config_mode === EasytierConfigMode.Full) {
-    if (!extConfig.value.easytier.custom_toml?.trim())
-      return t('extensions.easytier.fullConfigRequired')
-    return ''
-  }
-  if (!extConfig.value.easytier.network_name?.trim())
-    return t('extensions.easytier.networkNameRequired')
-  return ''
-})
-
-const frpcRemotePortRequired = computed(() =>
-  ['tcp', 'udp'].includes(extConfig.value.frpc.proxy_type),
-)
-const showFrpcRemotePort = computed(() =>
-  ['tcp', 'udp', 'stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type),
-)
-const showFrpcCustomDomain = computed(() =>
-  ['http', 'https'].includes(extConfig.value.frpc.proxy_type),
-)
-const showFrpcSecretKey = computed(() =>
-  ['stcp', 'sudp', 'xtcp'].includes(extConfig.value.frpc.proxy_type),
-)
-const frpcQuickMode = computed(() => extConfig.value.frpc.config_mode === FrpcConfigMode.Quick)
-
-const frpcValidationMessage = computed(() => {
-  if (extConfig.value.frpc.config_mode === FrpcConfigMode.Full) {
-    if (!extConfig.value.frpc.custom_toml?.trim()) return t('extensions.frpc.fullConfigRequired')
-    return ''
-  }
-  if (!extConfig.value.frpc.proxy_name?.trim()) return t('extensions.frpc.proxyNameRequired')
-  if (!extConfig.value.frpc.server_addr?.trim()) return t('extensions.frpc.serverAddrRequired')
-  if (!extConfig.value.frpc.token) return t('extensions.frpc.tokenRequired')
-  if (!extConfig.value.frpc.local_ip?.trim()) return t('extensions.frpc.localIpRequired')
-  if (frpcRemotePortRequired.value && !extConfig.value.frpc.remote_port)
-    return t('extensions.frpc.remotePortRequired')
-  return ''
 })
 
 const { copy: clipboardCopy } = useClipboard()
-const {
-  rustdeskConfig,
-  rustdeskStatus,
-  rustdeskPassword,
-  rustdeskLoading,
-  rustdeskCopied,
-  rustdeskLocalConfig,
-  rustdeskValidationMessage,
-  rtspStatus,
-  rtspLoading,
-  rtspLocalConfig,
-  vncStatus,
-  vncLoading,
-  vncLocalConfig,
-  rtspStreamUrl,
-  vncStreamUrl,
-  serviceSaving,
-  loadRustdeskConfig,
-  loadRustdeskPassword,
-  saveRustdeskConfig,
-  regenerateRustdeskId,
-  regenerateRustdeskPassword,
-  startRustdesk,
-  stopRustdesk,
-  copyToClipboard,
-  loadRtspConfig,
-  saveRtspConfig,
-  startRtsp,
-  stopRtsp,
-  loadVncConfig,
-  saveVncConfig,
-  startVnc,
-  stopVnc,
-} = useRemoteAccessSettings({ loading, showValidationError })
-
 const webServerConfig = ref<WebConfig>({
   http_port: 8080,
   https_port: 8443,
@@ -1067,42 +941,6 @@ async function loadExtensions(only?: ExtensionConfigId) {
           enabled: ttyd.enabled,
           shell: ttyd.shell,
         }
-      if (!only || only === 'gostc')
-        extConfig.value.gostc = {
-          ...extensions.value.gostc.config,
-          key: extensions.value.gostc.config.key || '',
-        }
-      if (!only || only === 'easyfrp')
-        extConfig.value.easyfrp = { ...extensions.value.easyfrp.config }
-      const easytier = extensions.value.easytier.config
-      if (!only || only === 'easytier')
-        extConfig.value.easytier = {
-          enabled: easytier.enabled,
-          config_mode: easytier.config_mode || EasytierConfigMode.Quick,
-          network_name: easytier.network_name,
-          network_secret: easytier.network_secret,
-          peer_urls: easytier.peer_urls || [],
-          virtual_ip: easytier.virtual_ip || '',
-          custom_toml: easytier.custom_toml || '',
-        }
-      const frpc = extensions.value.frpc.config
-      if (!only || only === 'frpc')
-        extConfig.value.frpc = {
-          enabled: frpc.enabled,
-          config_mode: frpc.config_mode || FrpcConfigMode.Quick,
-          proxy_name: frpc.proxy_name,
-          proxy_type: frpc.proxy_type,
-          server_addr: frpc.server_addr,
-          server_port: frpc.server_port,
-          token: frpc.token,
-          local_ip: frpc.local_ip,
-          local_port: frpc.local_port,
-          remote_port: frpc.remote_port,
-          custom_domain: frpc.custom_domain || '',
-          secret_key: frpc.secret_key,
-          tls: frpc.tls,
-          custom_toml: frpc.custom_toml || '',
-        }
     }
   } catch {
   } finally {
@@ -1110,23 +948,17 @@ async function loadExtensions(only?: ExtensionConfigId) {
   }
 }
 
-type ExtensionConfigId = 'ttyd' | 'gostc' | 'easyfrp' | 'easytier' | 'frpc'
-type ValidatedExtensionConfigId = Exclude<ExtensionConfigId, 'ttyd'>
+type ExtensionConfigId = 'ttyd'
 
 const extensionBusy = ref<Record<ExtensionConfigId, boolean>>({
   ttyd: false,
-  gostc: false,
-  easyfrp: false,
-  easytier: false,
-  frpc: false,
 })
 async function startExtension(id: ExtensionConfigId) {
   if (extensionBusy.value[id]) return
-  if (id !== 'ttyd' && !validateExtensionConfig(id)) return
 
   extensionBusy.value[id] = true
   try {
-    await persistExtensionConfig(id)
+    await persistExtensionConfig()
     await extensionsApi.start(id)
     await loadExtensions(id)
   } catch {
@@ -1154,43 +986,16 @@ async function refreshExtensionLogs(id: ExtensionConfigId) {
   } catch {}
 }
 
-async function persistExtensionConfig(id: ExtensionConfigId) {
-  if (id === 'ttyd') {
-    await extensionsApi.updateTtyd(extConfig.value.ttyd)
-  } else if (id === 'gostc') {
-    await extensionsApi.updateGostc(extConfig.value.gostc)
-  } else if (id === 'easyfrp') {
-    await extensionsApi.updateEasyfrp(extConfig.value.easyfrp)
-  } else if (id === 'easytier') {
-    await extensionsApi.updateEasytier(extConfig.value.easytier)
-  } else if (id === 'frpc') {
-    const frpc = extConfig.value.frpc
-    await extensionsApi.updateFrpc({
-      ...frpc,
-      remote_port: frpcQuickMode.value && showFrpcRemotePort.value ? frpc.remote_port : undefined,
-      custom_domain:
-        frpcQuickMode.value && showFrpcCustomDomain.value
-          ? frpc.custom_domain || undefined
-          : undefined,
-      secret_key: frpcQuickMode.value && showFrpcSecretKey.value ? frpc.secret_key : '',
-    })
-  }
+async function persistExtensionConfig() {
+  await extensionsApi.updateTtyd(extConfig.value.ttyd)
 }
 
 async function saveExtensionConfig(id: ExtensionConfigId) {
   if (extensionBusy.value[id]) return
-  if (id !== 'ttyd') {
-    const shouldValidate =
-      extConfig.value[id].enabled ||
-      (id === 'easytier' && extConfig.value.easytier.config_mode === EasytierConfigMode.Full) ||
-      (id === 'frpc' && extConfig.value.frpc.config_mode === FrpcConfigMode.Full)
-    if (shouldValidate && !validateExtensionConfig(id)) return
-  }
-
   loading.value = true
   extensionBusy.value[id] = true
   try {
-    await persistExtensionConfig(id)
+    await persistExtensionConfig()
     await loadExtensions(id)
     toast.success(t('settingsUi.saveDone'))
   } catch {
@@ -1206,19 +1011,6 @@ function isExtRunning(status: ExtensionStatus | undefined): boolean {
 
 function openTerminal() {
   showTerminalDialog.value = true
-}
-
-function addEasytierPeer() {
-  if (!extConfig.value.easytier.peer_urls) {
-    extConfig.value.easytier.peer_urls = []
-  }
-  extConfig.value.easytier.peer_urls.push('')
-}
-
-function removeEasytierPeer(index: number) {
-  if (extConfig.value.easytier.peer_urls) {
-    extConfig.value.easytier.peer_urls.splice(index, 1)
-  }
 }
 
 async function loadAtxConfig() {
@@ -1377,29 +1169,6 @@ watch(
     clearAtxSerialDeviceConflicts()
   },
 )
-
-function showValidationError(message: string): boolean {
-  toast.error(t('api.operationFailed'), {
-    description: message,
-    duration: 4000,
-  })
-  return false
-}
-
-function validateExtensionConfig(id: ValidatedExtensionConfigId): boolean {
-  let message = ''
-  if (id === 'gostc') {
-    message = gostcValidationMessage.value
-  } else if (id === 'easyfrp') {
-    message = easyfrpValidationMessage.value
-  } else if (id === 'easytier') {
-    message = easytierValidationMessage.value
-  } else {
-    message = frpcValidationMessage.value
-  }
-
-  return !message || showValidationError(message)
-}
 
 function normalizeBindAddresses(addresses: string[]): string[] {
   return addresses.map((addr) => addr.trim()).filter(Boolean)
@@ -1658,9 +1427,7 @@ watch(
   },
 )
 
-watch(isWindows, () => {
-  ensureVisibleSection()
-})
+watch([() => pluginStore.loaded, pluginSections, activeSection], ensureVisibleSection)
 </script>
 
 <template>
@@ -1748,6 +1515,10 @@ watch(isWindows, () => {
               {{ sectionMeta.description }}
             </p>
           </header>
+
+          <div v-if="activePlugins.length" class="settings-section-services">
+            <PluginCard v-for="plugin in activePlugins" :key="plugin.manifest.id" :plugin="plugin" />
+          </div>
 
           <!-- Appearance Section -->
           <div v-show="activeSection === 'appearance'" class="space-y-4">
@@ -1842,12 +1613,6 @@ watch(isWindows, () => {
                 }}</CardTitle></CardHeader
               >
               <CardContent class="space-y-1">
-                <div class="settings-toggle flex items-center justify-between gap-4 px-3 py-3">
-                  <Label for="feature-airferry" class="min-w-0 font-normal">
-                    <span class="block text-sm">{{ t('airferry.setting') }}</span>
-                  </Label>
-                  <Switch id="feature-airferry" v-model="featureVisibility.airferry" />
-                </div>
                 <div class="settings-toggle flex items-center justify-between gap-4 px-3 py-3">
                   <Label for="feature-power" class="flex min-w-0 items-center gap-2 font-normal">
                     <Power class="size-4 shrink-0 text-muted-foreground" />
@@ -3228,1396 +2993,8 @@ watch(isWindows, () => {
             </Card>
           </div>
 
-          <!-- Remote Access Section -->
-          <div v-show="activeSection === 'ext-remote-access'" class="settings-section-services">
-            <Card v-if="hasFeature('gostc')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.gostc.desc')">{{
-                  t('extensions.gostc.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-service-actions" v-if="extensions?.gostc?.available">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.gostc.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !!gostcValidationMessage ||
-                        isExtRunning(extensions?.gostc?.status) ||
-                        extensionBusy.gostc
-                      "
-                      size="sm"
-                      @click="startExtension('gostc')"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.gostc.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !isExtRunning(extensions?.gostc?.status) ||
-                        extensionBusy.gostc
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopExtension('gostc')"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action" v-if="extensions?.gostc?.available">
-                    <Button
-                      :disabled="
-                        loading ||
-                        isExtRunning(extensions?.gostc?.status) ||
-                        extensionBusy.gostc
-                      "
-                      @click="saveExtensionConfig('gostc')"
-                    >
-                      <Loader2 v-if="extensionBusy.gostc" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div
-                  v-if="!extensions?.gostc?.available"
-                  class="text-sm text-muted-foreground bg-muted p-3 rounded-md"
-                >
-                  {{
-                    t('extensions.binaryNotFound', {
-                      path: isWindows ? 'gostc.exe' : '/usr/bin/gostc',
-                    })
-                  }}
-                </div>
-                <template v-else>
-                  <!-- Status and controls -->
-
-                  <!-- Config -->
-                  <div class="settings-field-list grid gap-4">
-                    <div class="settings-toggle flex items-center justify-between">
-                      <Label>{{ t('extensions.autoStart') }}</Label>
-                      <Switch
-                        v-model="extConfig.gostc.enabled"
-                        :disabled="isExtRunning(extensions?.gostc?.status)"
-                      />
-                    </div>
-                    <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
-                      <div class="sm:col-span-3 space-y-1">
-                        <Input
-                          v-model="extConfig.gostc.addr"
-                          type="text"
-                          autocomplete="off"
-                          :placeholder="t('extensions.gostc.addrPlaceholder')"
-                          :disabled="isExtRunning(extensions?.gostc?.status)"
-                        />
-                        <p
-                          v-if="extConfig.gostc.enabled && !extConfig.gostc.addr.trim()"
-                          class="text-xs text-destructive"
-                        >
-                          {{ t('extensions.gostc.addrRequired') }}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
-                      <div class="sm:col-span-3 space-y-1">
-                        <Input
-                          v-model="extConfig.gostc.key"
-                          type="password"
-                          autocomplete="off"
-                          :placeholder="t('extensions.gostc.keyPlaceholder')"
-                          :disabled="isExtRunning(extensions?.gostc?.status)"
-                        />
-                        <p
-                          v-if="extConfig.gostc.enabled && !extConfig.gostc.key"
-                          class="text-xs text-destructive"
-                        >
-                          {{ t('extensions.gostc.keyRequired') }}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="settings-toggle flex items-center justify-between">
-                      <Label>{{ t('extensions.gostc.tls') }}</Label>
-                      <Switch
-                        v-model="extConfig.gostc.tls"
-                        :disabled="isExtRunning(extensions?.gostc?.status)"
-                      />
-                    </div>
-                  </div>
-                  <!-- Logs -->
-                  <div class="space-y-2">
-                    <Collapsible
-                      v-model:open="showLogs.gostc"
-                      @update:open="(open) => open && refreshExtensionLogs('gostc')"
-                    >
-                      <CollapsibleTrigger as-child
-                        ><Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          class="gap-2 text-muted-foreground"
-                          ><ChevronRight
-                            :class="[
-                              'size-4 transition-transform',
-                              showLogs.gostc ? 'rotate-90' : '',
-                            ]"
-                          />{{ t('extensions.viewLogs') }}</Button
-                        ></CollapsibleTrigger
-                      >
-                      <CollapsibleContent class="space-y-2 pt-2">
-                        <pre
-                          class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono"
-                          >{{
-                            (extensionLogs.gostc || []).join('\n') || t('extensions.noLogs')
-                          }}</pre
-                        >
-                        <Button variant="ghost" size="sm" @click="refreshExtensionLogs('gostc')">
-                          <RefreshCw class="size-3 mr-1" />
-                          {{ t('common.refresh') }}
-                        </Button>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                </template>
-              </CardContent>
-            </Card>
-
-            <Card v-if="hasFeature('easyfrp')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.easyfrp.desc')">{{
-                  t('extensions.easyfrp.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-service-actions" v-if="extensions?.easyfrp?.available">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.easyfrp.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !!easyfrpValidationMessage ||
-                        isExtRunning(extensions?.easyfrp?.status) ||
-                        extensionBusy.easyfrp
-                      "
-                      size="sm"
-                      @click="startExtension('easyfrp')"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.easyfrp.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !isExtRunning(extensions?.easyfrp?.status) ||
-                        extensionBusy.easyfrp
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopExtension('easyfrp')"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action" v-if="extensions?.easyfrp?.available">
-                    <Button
-                      :disabled="
-                        loading ||
-                        isExtRunning(extensions?.easyfrp?.status) ||
-                        extensionBusy.easyfrp
-                      "
-                      @click="saveExtensionConfig('easyfrp')"
-                    >
-                      <Loader2 v-if="extensionBusy.easyfrp" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div
-                  v-if="!extensions?.easyfrp?.available"
-                  class="text-sm text-muted-foreground bg-muted p-3 rounded-md"
-                >
-                  {{
-                    t('extensions.binaryNotFound', {
-                      path: isWindows ? 'easyfrpc.exe' : '/usr/bin/easyfrpc',
-                    })
-                  }}
-                </div>
-                <template v-else>
-                  <!-- Status and controls -->
-
-                  <!-- Config -->
-                  <div class="settings-field-list grid gap-4">
-                    <div class="settings-toggle flex items-center justify-between">
-                      <Label>{{ t('extensions.autoStart') }}</Label>
-                      <Switch
-                        v-model="extConfig.easyfrp.enabled"
-                        :disabled="isExtRunning(extensions?.easyfrp?.status)"
-                      />
-                    </div>
-                    <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                      <Label class="sm:text-right">{{ t('extensions.easyfrp.urls') }}</Label>
-                      <div class="sm:col-span-3 space-y-1">
-                        <Textarea
-                          v-model="easyfrpUrlsText"
-                          :rows="3"
-                          autocomplete="off"
-                          :spellcheck="false"
-                          :placeholder="t('extensions.easyfrp.urlsPlaceholder')"
-                          :disabled="isExtRunning(extensions?.easyfrp?.status)"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                          {{ t('extensions.easyfrp.urlsHint') }}
-                        </p>
-                        <p
-                          v-if="extConfig.easyfrp.enabled && easyfrpValidationMessage"
-                          class="text-xs text-destructive"
-                        >
-                          {{ easyfrpValidationMessage }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- Logs -->
-                  <div class="space-y-2">
-                    <Collapsible
-                      v-model:open="showLogs.easyfrp"
-                      @update:open="(open) => open && refreshExtensionLogs('easyfrp')"
-                    >
-                      <CollapsibleTrigger as-child
-                        ><Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          class="gap-2 text-muted-foreground"
-                          ><ChevronRight
-                            :class="[
-                              'size-4 transition-transform',
-                              showLogs.easyfrp ? 'rotate-90' : '',
-                            ]"
-                          />{{ t('extensions.viewLogs') }}</Button
-                        ></CollapsibleTrigger
-                      >
-                      <CollapsibleContent class="space-y-2 pt-2">
-                        <pre
-                          class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono"
-                          >{{
-                            (extensionLogs.easyfrp || []).join('\n') || t('extensions.noLogs')
-                          }}</pre
-                        >
-                        <Button variant="ghost" size="sm" @click="refreshExtensionLogs('easyfrp')">
-                          <RefreshCw class="size-3 mr-1" />
-                          {{ t('common.refresh') }}
-                        </Button>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                </template>
-              </CardContent>
-            </Card>
-
-            <Card v-if="systemStore.platform?.compiled_features?.includes('easytier')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.easytier.desc')">{{
-                  t('extensions.easytier.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-service-actions" v-if="extensions?.easytier?.available">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.easytier.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !!easytierValidationMessage ||
-                        isExtRunning(extensions?.easytier?.status) ||
-                        extensionBusy.easytier
-                      "
-                      size="sm"
-                      @click="startExtension('easytier')"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.easytier.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !isExtRunning(extensions?.easytier?.status) ||
-                        extensionBusy.easytier
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopExtension('easytier')"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action" v-if="extensions?.easytier?.available">
-                    <Button
-                      :disabled="
-                        loading ||
-                        isExtRunning(extensions?.easytier?.status) ||
-                        extensionBusy.easytier
-                      "
-                      @click="saveExtensionConfig('easytier')"
-                    >
-                      <Loader2 v-if="extensionBusy.easytier" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div
-                  v-if="!extensions?.easytier?.available"
-                  class="text-sm text-muted-foreground bg-muted p-3 rounded-md"
-                >
-                  {{
-                    t('extensions.binaryNotFound', {
-                      path: isWindows ? 'easytier-core.exe' : '/usr/bin/easytier-core',
-                    })
-                  }}
-                </div>
-                <template v-else>
-                  <!-- Status and controls -->
-
-                  <!-- Config -->
-                  <div class="grid gap-4">
-                    <div class="settings-toggle flex items-center justify-between">
-                      <Label>{{ t('extensions.autoStart') }}</Label>
-                      <Switch
-                        v-model="extConfig.easytier.enabled"
-                        :disabled="isExtRunning(extensions?.easytier?.status)"
-                      />
-                    </div>
-                    <ExtensionConfigModeEditor
-                      v-model:mode="extConfig.easytier.config_mode"
-                      v-model:config="extConfig.easytier.custom_toml"
-                      :disabled="isExtRunning(extensions?.easytier?.status)"
-                      :quick-label="t('extensions.easytier.quickConfig')"
-                      :full-label="t('extensions.easytier.fullConfig')"
-                      :full-config-hint="t('extensions.easytier.fullConfigHint')"
-                      :full-config-required="t('extensions.easytier.fullConfigRequired')"
-                    >
-                      <template #quick>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{
-                            t('extensions.easytier.networkName')
-                          }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.easytier.network_name"
-                              :disabled="isExtRunning(extensions?.easytier?.status)"
-                            />
-                            <p
-                              v-if="
-                                extConfig.easytier.enabled &&
-                                !extConfig.easytier.network_name?.trim()
-                              "
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.easytier.networkNameRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{
-                            t('extensions.easytier.networkSecret')
-                          }}</Label>
-                          <Input
-                            v-model="extConfig.easytier.network_secret"
-                            type="password"
-                            autocomplete="off"
-                            class="sm:col-span-3"
-                            :disabled="isExtRunning(extensions?.easytier?.status)"
-                          />
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.easytier.peers') }}</Label>
-                          <div class="sm:col-span-3 space-y-2">
-                            <div
-                              v-for="(_, i) in extConfig.easytier.peer_urls"
-                              :key="i"
-                              class="flex gap-2"
-                            >
-                              <Input
-                                v-model="extConfig.easytier.peer_urls[i]"
-                                placeholder="tcp://1.2.3.4:11010"
-                                :disabled="isExtRunning(extensions?.easytier?.status)"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                :aria-label="t('common.delete')"
-                                @click="removeEasytierPeer(i)"
-                                :disabled="isExtRunning(extensions?.easytier?.status)"
-                              >
-                                <Trash2 class="size-4" />
-                              </Button>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              @click="addEasytierPeer"
-                              :disabled="isExtRunning(extensions?.easytier?.status)"
-                            >
-                              <Plus class="size-4 mr-1" />
-                              {{ t('extensions.easytier.addPeer') }}
-                            </Button>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{
-                            t('extensions.easytier.virtualIp')
-                          }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.easytier.virtual_ip"
-                              placeholder="10.0.0.1/24"
-                              :disabled="isExtRunning(extensions?.easytier?.status)"
-                            />
-                          </div>
-                        </div>
-                      </template>
-                    </ExtensionConfigModeEditor>
-                  </div>
-                  <!-- Logs -->
-                  <div class="space-y-2">
-                    <Collapsible
-                      v-model:open="showLogs.easytier"
-                      @update:open="(open) => open && refreshExtensionLogs('easytier')"
-                    >
-                      <CollapsibleTrigger as-child
-                        ><Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          class="gap-2 text-muted-foreground"
-                          ><ChevronRight
-                            :class="[
-                              'size-4 transition-transform',
-                              showLogs.easytier ? 'rotate-90' : '',
-                            ]"
-                          />{{ t('extensions.viewLogs') }}</Button
-                        ></CollapsibleTrigger
-                      >
-                      <CollapsibleContent class="space-y-2 pt-2">
-                        <pre
-                          class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono"
-                          >{{
-                            (extensionLogs.easytier || []).join('\n') || t('extensions.noLogs')
-                          }}</pre
-                        >
-                        <Button variant="ghost" size="sm" @click="refreshExtensionLogs('easytier')">
-                          <RefreshCw class="size-3 mr-1" />
-                          {{ t('common.refresh') }}
-                        </Button>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                </template>
-              </CardContent>
-            </Card>
-            <!-- FRPC -->
-            <Card v-if="hasFeature('frpc')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.frpc.desc')">{{
-                  t('extensions.frpc.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <div class="settings-service-actions" v-if="extensions?.frpc?.available">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.frpc.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !!frpcValidationMessage ||
-                        isExtRunning(extensions?.frpc?.status) ||
-                        extensionBusy.frpc
-                      "
-                      size="sm"
-                      @click="startExtension('frpc')"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.frpc.title')"
-                      :disabled="
-                        extensionsLoading ||
-                        !isExtRunning(extensions?.frpc?.status) ||
-                        extensionBusy.frpc
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopExtension('frpc')"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action" v-if="extensions?.frpc?.available">
-                    <Button
-                      :disabled="
-                        loading || isExtRunning(extensions?.frpc?.status) || extensionBusy.frpc
-                      "
-                      @click="saveExtensionConfig('frpc')"
-                    >
-                      <Loader2 v-if="extensionBusy.frpc" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div
-                  v-if="!extensions?.frpc?.available"
-                  class="text-sm text-muted-foreground bg-muted p-3 rounded-md"
-                >
-                  {{
-                    t('extensions.binaryNotFound', {
-                      path: isWindows ? 'frpc.exe' : '/usr/bin/frpc',
-                    })
-                  }}
-                </div>
-                <template v-else>
-                  <div class="grid gap-4">
-                    <div class="settings-toggle flex items-center justify-between">
-                      <Label>{{ t('extensions.autoStart') }}</Label>
-                      <Switch
-                        v-model="extConfig.frpc.enabled"
-                        :disabled="isExtRunning(extensions?.frpc?.status)"
-                      />
-                    </div>
-                    <ExtensionConfigModeEditor
-                      v-model:mode="extConfig.frpc.config_mode"
-                      v-model:config="extConfig.frpc.custom_toml"
-                      :disabled="isExtRunning(extensions?.frpc?.status)"
-                      :quick-label="t('extensions.frpc.quickConfig')"
-                      :full-label="t('extensions.frpc.fullConfig')"
-                      :full-config-hint="t('extensions.frpc.fullConfigHint')"
-                      :full-config-required="t('extensions.frpc.fullConfigRequired')"
-                    >
-                      <template #quick>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.proxyType') }}</Label>
-                          <div class="sm:col-span-3">
-                            <RadioGroup
-                              v-model="extConfig.frpc.proxy_type"
-                              class="flex flex-wrap gap-4"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            >
-                              <div
-                                v-for="type in [
-                                  'tcp',
-                                  'udp',
-                                  'http',
-                                  'https',
-                                  'stcp',
-                                  'sudp',
-                                  'xtcp',
-                                ]"
-                                :key="type"
-                                class="flex items-center space-x-2"
-                              >
-                                <RadioGroupItem :value="type" :id="`frpc-${type}`" />
-                                <Label :for="`frpc-${type}`" class="cursor-pointer uppercase">{{
-                                  type
-                                }}</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.proxyName') }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.frpc.proxy_name"
-                              :placeholder="t('extensions.frpc.proxyNamePlaceholder')"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                            <p
-                              v-if="extConfig.frpc.enabled && !extConfig.frpc.proxy_name?.trim()"
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.frpc.proxyNameRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.serverAddr') }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.frpc.server_addr"
-                              :placeholder="t('extensions.frpc.serverAddrPlaceholder')"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                            <p
-                              v-if="extConfig.frpc.enabled && !extConfig.frpc.server_addr?.trim()"
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.frpc.serverAddrRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.serverPort') }}</Label>
-                          <Input
-                            v-model.number="extConfig.frpc.server_port"
-                            class="sm:col-span-3"
-                            type="number"
-                            min="1"
-                            max="65535"
-                            :disabled="isExtRunning(extensions?.frpc?.status)"
-                          />
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.token') }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.frpc.token"
-                              type="password"
-                              autocomplete="off"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                            <p
-                              v-if="extConfig.frpc.enabled && !extConfig.frpc.token"
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.frpc.tokenRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.localIp') }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model="extConfig.frpc.local_ip"
-                              placeholder="127.0.0.1"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                            <p
-                              v-if="extConfig.frpc.enabled && !extConfig.frpc.local_ip?.trim()"
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.frpc.localIpRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.localPort') }}</Label>
-                          <Input
-                            v-model.number="extConfig.frpc.local_port"
-                            class="sm:col-span-3"
-                            type="number"
-                            min="1"
-                            max="65535"
-                            :disabled="isExtRunning(extensions?.frpc?.status)"
-                          />
-                        </div>
-                        <div
-                          v-if="showFrpcRemotePort"
-                          class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                        >
-                          <Label class="sm:text-right">{{ t('extensions.frpc.remotePort') }}</Label>
-                          <div class="sm:col-span-3 space-y-1">
-                            <Input
-                              v-model.number="extConfig.frpc.remote_port"
-                              type="number"
-                              min="1"
-                              max="65535"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                            <p
-                              v-if="
-                                extConfig.frpc.enabled &&
-                                frpcRemotePortRequired &&
-                                !extConfig.frpc.remote_port
-                              "
-                              class="text-xs text-destructive"
-                            >
-                              {{ t('extensions.frpc.remotePortRequired') }}
-                            </p>
-                          </div>
-                        </div>
-                        <div
-                          v-if="showFrpcCustomDomain"
-                          class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                        >
-                          <Label class="sm:text-right">{{
-                            t('extensions.frpc.customDomain')
-                          }}</Label>
-                          <Input
-                            v-model="extConfig.frpc.custom_domain"
-                            class="sm:col-span-3"
-                            :placeholder="t('extensions.frpc.customDomainPlaceholder')"
-                            :disabled="isExtRunning(extensions?.frpc?.status)"
-                          />
-                        </div>
-                        <div
-                          v-if="showFrpcSecretKey"
-                          class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                        >
-                          <Label class="sm:text-right">{{ t('extensions.frpc.secretKey') }}</Label>
-                          <Input
-                            v-model="extConfig.frpc.secret_key"
-                            class="sm:col-span-3"
-                            type="password"
-                            autocomplete="off"
-                            :disabled="isExtRunning(extensions?.frpc?.status)"
-                          />
-                        </div>
-                        <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                          <Label class="sm:text-right">{{ t('extensions.frpc.tls') }}</Label>
-                          <div class="settings-toggle sm:col-span-3">
-                            <Switch
-                              v-model="extConfig.frpc.tls"
-                              :disabled="isExtRunning(extensions?.frpc?.status)"
-                            />
-                          </div>
-                        </div>
-                      </template>
-                    </ExtensionConfigModeEditor>
-                  </div>
-                  <div class="space-y-2">
-                    <Collapsible
-                      v-model:open="showLogs.frpc"
-                      @update:open="(open) => open && refreshExtensionLogs('frpc')"
-                    >
-                      <CollapsibleTrigger as-child
-                        ><Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          class="gap-2 text-muted-foreground"
-                          ><ChevronRight
-                            :class="[
-                              'size-4 transition-transform',
-                              showLogs.frpc ? 'rotate-90' : '',
-                            ]"
-                          />{{ t('extensions.viewLogs') }}</Button
-                        ></CollapsibleTrigger
-                      >
-                      <CollapsibleContent class="space-y-2 pt-2">
-                        <pre
-                          class="p-3 bg-muted rounded-md text-xs max-h-48 overflow-auto font-mono"
-                          >{{
-                            (extensionLogs.frpc || []).join('\n') || t('extensions.noLogs')
-                          }}</pre
-                        >
-                        <Button variant="ghost" size="sm" @click="refreshExtensionLogs('frpc')">
-                          <RefreshCw class="size-3 mr-1" />
-                          {{ t('common.refresh') }}
-                        </Button>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                </template>
-              </CardContent>
-            </Card>
-          </div>
-
-          <!-- RTSP Section -->
-          <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card v-if="hasFeature('rtsp')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.rtsp.desc')">{{
-                  t('extensions.rtsp.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    :aria-label="t('common.refresh')"
-                    @click="loadRtspConfig"
-                    :disabled="rtspLoading"
-                  >
-                    <RefreshCw :class="['size-4', rtspLoading ? 'animate-spin' : '']" />
-                  </Button>
-                  <div class="settings-service-actions">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.rtsp.title')"
-                      :disabled="
-                        rtspLoading ||
-                        rtspStatus?.service_status === 'running' ||
-                        rtspStatus?.service_status === 'starting'
-                      "
-                      size="sm"
-                      @click="startRtsp"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.rtsp.title')"
-                      :disabled="
-                        rtspLoading ||
-                        !(
-                          rtspStatus?.service_status === 'running' ||
-                          rtspStatus?.service_status === 'starting'
-                        )
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopRtsp"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action">
-                    <Button
-                      class="shrink-0"
-                      :disabled="loading || rtspLoading"
-                      @click="saveRtspConfig"
-                    >
-                      <Loader2 v-if="serviceSaving === 'rtsp'" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field-list grid gap-4">
-                  <div class="settings-toggle flex items-center justify-between">
-                    <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rtspLocalConfig.enabled" />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.bind') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rtspLocalConfig.bind"
-                        placeholder="0.0.0.0 / ::"
-                        :disabled="rtspStatus?.service_status === 'running'"
-                      />
-                    </div>
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.port') }}</Label>
-                    <Input
-                      v-model.number="rtspLocalConfig.port"
-                      class="sm:col-span-3"
-                      type="number"
-                      min="1"
-                      max="65535"
-                      :disabled="rtspStatus?.service_status === 'running'"
-                    />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.path') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rtspLocalConfig.path"
-                        :placeholder="t('extensions.rtsp.pathPlaceholder')"
-                        :disabled="rtspStatus?.service_status === 'running'"
-                      />
-                    </div>
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.codec') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Select
-                        v-model="rtspLocalConfig.codec"
-                        :disabled="rtspStatus?.service_status === 'running'"
-                      >
-                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent
-                          ><SelectItem value="h264">H.264</SelectItem
-                          ><SelectItem value="h265">H.265</SelectItem></SelectContent
-                        >
-                      </Select>
-                    </div>
-                  </div>
-                  <div class="settings-toggle flex items-center justify-between">
-                    <Label>{{ t('extensions.rtsp.allowOneClient') }}</Label>
-                    <Switch
-                      v-model="rtspLocalConfig.allow_one_client"
-                      :disabled="rtspStatus?.service_status === 'running'"
-                    />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.username') }}</Label>
-                    <Input
-                      v-model="rtspLocalConfig.username"
-                      class="sm:col-span-3"
-                      :placeholder="t('extensions.rtsp.usernamePlaceholder')"
-                      :disabled="rtspStatus?.service_status === 'running'"
-                    />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rtsp.password') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <div class="relative">
-                        <Input
-                          v-model="rtspLocalConfig.password"
-                          :type="showPasswords ? 'text' : 'password'"
-                          :placeholder="t('extensions.rtsp.passwordPlaceholder')"
-                          :disabled="rtspStatus?.service_status === 'running'"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          :aria-label="
-                            showPasswords
-                              ? t('extensions.rustdesk.hidePassword')
-                              : t('extensions.rustdesk.showPassword')
-                          "
-                          @click="showPasswords = !showPasswords"
-                        >
-                          <Eye v-if="!showPasswords" class="size-4" />
-                          <EyeOff v-else class="size-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span class="shrink-0 font-medium">{{ t('extensions.rtsp.urlPreview') }}</span>
-                  <code class="truncate font-mono">{{ rtspStreamUrl }}</code>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-
-          <!-- VNC Section -->
-          <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card v-if="hasFeature('vnc')">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.vnc.desc')">{{
-                  t('extensions.vnc.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    :aria-label="t('common.refresh')"
-                    @click="loadVncConfig"
-                    :disabled="vncLoading"
-                  >
-                    <RefreshCw :class="['size-4', vncLoading ? 'animate-spin' : '']" />
-                  </Button>
-                  <div class="settings-service-actions">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.vnc.title')"
-                      :disabled="
-                        vncLoading ||
-                        vncStatus?.service_status === 'running' ||
-                        vncStatus?.service_status === 'starting'
-                      "
-                      size="sm"
-                      @click="startVnc"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.vnc.title')"
-                      :disabled="
-                        vncLoading ||
-                        !(
-                          vncStatus?.service_status === 'running' ||
-                          vncStatus?.service_status === 'starting'
-                        )
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopVnc"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action">
-                    <Button
-                      class="shrink-0"
-                      :disabled="loading || vncLoading"
-                      @click="saveVncConfig"
-                    >
-                      <Loader2 v-if="serviceSaving === 'vnc'" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <div class="settings-field-list grid gap-4">
-                  <div class="settings-toggle flex items-center justify-between">
-                    <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="vncLocalConfig.enabled" />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.vnc.bind') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="vncLocalConfig.bind"
-                        placeholder="0.0.0.0 / ::"
-                        :disabled="vncStatus?.service_status === 'running'"
-                      />
-                    </div>
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.vnc.port') }}</Label>
-                    <Input
-                      v-model.number="vncLocalConfig.port"
-                      class="sm:col-span-3"
-                      type="number"
-                      min="1"
-                      max="65535"
-                      :disabled="vncStatus?.service_status === 'running'"
-                    />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.vnc.encoding') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Select
-                        v-model="vncLocalConfig.encoding"
-                        :disabled="vncStatus?.service_status === 'running'"
-                      >
-                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent
-                          ><SelectItem value="tight_jpeg">{{
-                            t('extensions.vnc.encodingTightJpeg')
-                          }}</SelectItem
-                          ><SelectItem value="h264">{{
-                            t('extensions.vnc.encodingH264')
-                          }}</SelectItem></SelectContent
-                        >
-                      </Select>
-                    </div>
-                  </div>
-                  <div class="settings-toggle flex items-center justify-between">
-                    <Label>{{ t('extensions.vnc.allowOneClient') }}</Label>
-                    <Switch
-                      v-model="vncLocalConfig.allow_one_client"
-                      :disabled="vncStatus?.service_status === 'running'"
-                    />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.vnc.password') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <div class="relative">
-                        <Input
-                          v-model="vncLocalConfig.password"
-                          :type="showPasswords ? 'text' : 'password'"
-                          maxlength="8"
-                          autocomplete="off"
-                          :placeholder="
-                            vncStatus?.config.has_password
-                              ? t('extensions.vnc.passwordPlaceholder')
-                              : t('extensions.vnc.passwordRequiredPlaceholder')
-                          "
-                          :disabled="vncStatus?.service_status === 'running'"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          :aria-label="
-                            showPasswords
-                              ? t('extensions.rustdesk.hidePassword')
-                              : t('extensions.rustdesk.showPassword')
-                          "
-                          @click="showPasswords = !showPasswords"
-                        >
-                          <Eye v-if="!showPasswords" class="size-4" />
-                          <EyeOff v-else class="size-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter class="flex items-center justify-between gap-3 border-t pt-4">
-                <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span class="shrink-0 font-medium">{{ t('extensions.vnc.urlPreview') }}</span>
-                  <code class="truncate font-mono">{{ vncStreamUrl }}</code>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-
-          <!-- RustDesk Section -->
-          <div v-show="activeSection === 'third-party-access'" class="settings-section-services">
-            <Card v-if="systemStore.platform?.rustdesk.available">
-              <CardHeader class="settings-card-heading"
-                ><CardTitle :help="t('extensions.rustdesk.desc')">{{
-                  t('extensions.rustdesk.title')
-                }}</CardTitle>
-                <div class="settings-card-actions">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    :aria-label="t('common.refresh')"
-                    @click="loadRustdeskConfig"
-                    :disabled="rustdeskLoading"
-                  >
-                    <RefreshCw :class="['size-4', rustdeskLoading ? 'animate-spin' : '']" />
-                  </Button>
-                  <div class="settings-service-actions">
-                    <Button
-                      variant="outline"
-                      :aria-label="t('extensions.start') + ' ' + t('extensions.rustdesk.title')"
-                      :disabled="
-                        rustdeskLoading ||
-                        rustdeskStatus?.service_status === 'running' ||
-                        rustdeskStatus?.service_status === 'starting'
-                      "
-                      size="sm"
-                      @click="startRustdesk"
-                    >
-                      <Play class="size-4 mr-1" />
-                      {{ t('extensions.start') }}
-                    </Button>
-                    <Button
-                      :aria-label="t('extensions.stop') + ' ' + t('extensions.rustdesk.title')"
-                      :disabled="
-                        rustdeskLoading ||
-                        !(
-                          rustdeskStatus?.service_status === 'running' ||
-                          rustdeskStatus?.service_status === 'starting'
-                        )
-                      "
-                      size="sm"
-                      variant="outline"
-                      @click="stopRustdesk"
-                    >
-                      <Square class="size-4 mr-1" />
-                      {{ t('extensions.stop') }}
-                    </Button>
-                  </div>
-                  <div class="settings-save-action">
-                    <Button :disabled="loading || rustdeskLoading" @click="saveRustdeskConfig">
-                      <Loader2 v-if="serviceSaving === 'rustdesk'" class="size-4 mr-2 animate-spin" /><Save v-else class="size-4 mr-2" />{{ t('common.save') }}
-                    </Button>
-                  </div>
-                </div></CardHeader
-              >
-              <CardContent class="space-y-4">
-                <!-- Status and controls -->
-
-                <!-- Config -->
-                <div class="settings-field-list grid gap-4">
-                  <div class="settings-toggle flex items-center justify-between">
-                    <Label>{{ t('extensions.autoStart') }}</Label>
-                    <Switch v-model="rustdeskLocalConfig.enabled" />
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.mode') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Select
-                        v-model="rustdeskLocalConfig.mode"
-                        :disabled="rustdeskStatus?.service_status === 'running'"
-                      >
-                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="id">{{ t('extensions.rustdesk.modeId') }}</SelectItem>
-                          <SelectItem value="direct_ip">{{
-                            t('extensions.rustdesk.modeDirectIp')
-                          }}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p class="text-xs text-muted-foreground">
-                        {{
-                          rustdeskLocalConfig.mode === 'id'
-                            ? t('extensions.rustdesk.modeIdDesc')
-                            : t('extensions.rustdesk.modeDirectIpDesc')
-                        }}
-                      </p>
-                    </div>
-                  </div>
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.codec') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Select
-                        v-model="rustdeskLocalConfig.codec"
-                        :disabled="rustdeskStatus?.service_status === 'running'"
-                      >
-                        <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent
-                          ><SelectItem value="h264">H.264</SelectItem
-                          ><SelectItem value="h265">H.265</SelectItem></SelectContent
-                        >
-                      </Select>
-                    </div>
-                  </div>
-                  <div
-                    v-if="rustdeskLocalConfig.mode === 'id'"
-                    class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                  >
-                    <Label class="sm:text-right">{{
-                      t('extensions.rustdesk.rendezvousServer')
-                    }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rustdeskLocalConfig.rendezvous_server"
-                        :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
-                        :disabled="rustdeskStatus?.service_status === 'running'"
-                      />
-                      <p
-                        v-if="rustdeskLocalConfig.enabled && rustdeskValidationMessage"
-                        class="text-xs text-destructive"
-                      >
-                        {{ rustdeskValidationMessage }}
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    v-if="rustdeskLocalConfig.mode === 'id'"
-                    class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                  >
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model="rustdeskLocalConfig.relay_server"
-                        :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
-                        :disabled="
-                          !rustdeskLocalConfig.rendezvous_server ||
-                          rustdeskStatus?.service_status === 'running'
-                        "
-                      />
-                    </div>
-                  </div>
-                  <div
-                    v-if="rustdeskLocalConfig.mode === 'id'"
-                    class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                  >
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <div class="relative">
-                        <Input
-                          v-model="rustdeskLocalConfig.relay_key"
-                          :type="showPasswords ? 'text' : 'password'"
-                          :disabled="
-                            !rustdeskLocalConfig.rendezvous_server ||
-                            rustdeskStatus?.service_status === 'running'
-                          "
-                          maxlength="44"
-                          autocomplete="off"
-                          spellcheck="false"
-                          class="font-mono"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          :aria-label="
-                            showPasswords
-                              ? t('extensions.rustdesk.hidePassword')
-                              : t('extensions.rustdesk.showPassword')
-                          "
-                          @click="showPasswords = !showPasswords"
-                        >
-                          <Eye v-if="!showPasswords" class="size-4" />
-                          <EyeOff v-else class="size-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    v-if="rustdeskLocalConfig.mode === 'direct_ip'"
-                    class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                  >
-                    <Label class="sm:text-right">{{
-                      t('extensions.rustdesk.directAccessPort')
-                    }}</Label>
-                    <div class="sm:col-span-3 space-y-1">
-                      <Input
-                        v-model.number="rustdeskLocalConfig.direct_access_port"
-                        type="number"
-                        min="1"
-                        max="65535"
-                        :disabled="rustdeskStatus?.service_status === 'running'"
-                      />
-                      <p v-if="rustdeskValidationMessage" class="text-xs text-destructive">
-                        {{ rustdeskValidationMessage }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <Separator />
-
-                <!-- Device Info -->
-                <div class="settings-field-list space-y-3">
-                  <!-- Device ID -->
-                  <div
-                    v-if="rustdeskLocalConfig.mode === 'id'"
-                    class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center"
-                  >
-                    <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
-                    <div class="sm:col-span-3 flex items-center gap-2">
-                      <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{
-                        rustdeskConfig?.device_id || '-'
-                      }}</code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="size-8"
-                        :aria-label="t('extensions.rustdesk.copyId')"
-                        @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
-                        :disabled="!rustdeskConfig?.device_id"
-                      >
-                        <Check v-if="rustdeskCopied === 'id'" class="size-4 text-success" />
-                        <Copy v-else class="size-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        @click="regenerateRustdeskId"
-                        :disabled="rustdeskLoading"
-                      >
-                        <RefreshCw class="size-4 mr-1" />
-                        {{ t('extensions.rustdesk.regenerateId') }}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <!-- Device Password (shown directly) -->
-                  <div class="settings-field grid gap-2 sm:grid-cols-4 sm:items-center">
-                    <Label class="sm:text-right">{{
-                      t('extensions.rustdesk.devicePassword')
-                    }}</Label>
-                    <div class="sm:col-span-3 flex items-center gap-2">
-                      <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{
-                        rustdeskPassword?.device_password || '-'
-                      }}</code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="size-8"
-                        :aria-label="t('extensions.rustdesk.copyPassword')"
-                        @click="
-                          copyToClipboard(rustdeskPassword?.device_password || '', 'password')
-                        "
-                        :disabled="!rustdeskPassword?.device_password"
-                      >
-                        <Check v-if="rustdeskCopied === 'password'" class="size-4 text-success" />
-                        <Copy v-else class="size-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        @click="regenerateRustdeskPassword"
-                        :disabled="rustdeskLoading"
-                      >
-                        <RefreshCw class="size-4 mr-1" />
-                        {{ t('extensions.rustdesk.regeneratePassword') }}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div v-if="activeSection === 'plugin-management'" class="settings-section-services">
+            <PluginManagement />
           </div>
 
           <!-- Redfish Section -->

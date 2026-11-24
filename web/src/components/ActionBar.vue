@@ -2,8 +2,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSystemStore } from '@/stores/system'
-import { useFeatureVisibility } from '@/composables/useFeatureVisibility'
-import AirferryMenu from '@/components/AirferryMenu.vue'
 import type { VideoRotation, VideoScaleMode } from '@/composables/useVideoScaling'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -42,6 +40,9 @@ import {
   ChevronDown,
   Keyboard,
   Scaling,
+  Puzzle,
+  ScanLine,
+  Wrench,
 } from 'lucide-vue-next'
 import PasteModal from '@/components/PasteModal.vue'
 import AtxPopover from '@/components/AtxPopover.vue'
@@ -51,11 +52,18 @@ import AudioConfigPopover from '@/components/AudioConfigPopover.vue'
 import MsdDialog from '@/components/MsdDialog.vue'
 import VideoDisplayControls from '@/components/VideoDisplayControls.vue'
 import KeyboardShortcutsPopover from '@/components/KeyboardShortcutsPopover.vue'
+import PluginCard from '@/components/PluginCard.vue'
+import { usePluginStore } from '@/stores/plugins'
+import { consoleToolbarMenu, pluginMenuId, pluginText } from '@/lib/pluginNavigation'
 import type { KeyboardShortcut } from '@/lib/keyboardShortcuts'
 import type { ConsoleLayout } from '@/composables/useConsoleLayout'
 
 const { t, locale } = useI18n()
 const systemStore = useSystemStore()
+const pluginStore = usePluginStore()
+const toolbarPlugins = computed(() => pluginStore.installed.filter(plugin => pluginMenuId(plugin) === consoleToolbarMenu))
+const openTool = ref<string | null>(null)
+const toolbarIcons = { scan_line: ScanLine, wrench: Wrench }
 
 const overflowMenuOpen = ref(false)
 
@@ -98,8 +106,6 @@ const atxEnabled = computed(() => props.atxEnabled === true)
 const showStats = computed(() => (props.videoMode ?? 'mjpeg') !== 'mjpeg')
 const showPasteText = computed(() => props.showPasteText !== false)
 const showMic = computed(() => props.showMic === true)
-const featureVisibility = useFeatureVisibility()
-const showAirferry = computed(() => props.videoMode === 'mjpeg' && featureVisibility.value.airferry && systemStore.platform?.compiled_features?.includes('airferry'))
 
 
 const emit = defineEmits<{
@@ -255,6 +261,11 @@ onUnmounted(() => {
   layoutResizeObserver?.disconnect()
 })
 
+watch(() => toolbarPlugins.value.map(plugin => plugin.manifest.id).join(','), () => {
+  if (!toolbarPlugins.value.some(plugin => plugin.manifest.id === openTool.value)) openTool.value = null
+  void observeLayout()
+})
+
 watch(locale, () => {
   measurementReady.value = false
   void measureLayout()
@@ -266,6 +277,7 @@ watch([() => props.layout, floatingCollapsed, minimalDisplayControls], () => {
   // the document after the new layout is painted.
   overflowMenuOpen.value = false
   pasteOpen.value = false
+  openTool.value = null
   atxOpen.value = false
   videoPopoverOpen.value = false
   hidPopoverOpen.value = false
@@ -512,6 +524,23 @@ const hasRightOverflow = computed(() => {
           </Popover>
         </div>
 
+        <div v-for="plugin in toolbarPlugins" :key="plugin.manifest.id" data-core-action class="flex shrink-0">
+          <Popover :open="openTool === plugin.manifest.id"
+            @update:open="openTool = $event ? plugin.manifest.id : null">
+            <PopoverTrigger as-child>
+              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"
+                :aria-label="pluginText(plugin.manifest.name, locale)"
+                :title="pluginText(plugin.manifest.name, locale)">
+                <component :is="plugin.manifest.toolbar_icon ? toolbarIcons[plugin.manifest.toolbar_icon] : Puzzle"
+                  class="size-4" aria-hidden="true" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent :side="isSidebarLayout ? 'right' : 'bottom'" align="start"
+              class="max-h-[70dvh] w-[min(420px,calc(100vw-4.5rem))] overflow-y-auto p-0">
+              <PluginCard :plugin="plugin" compact />
+            </PopoverContent>
+          </Popover>
+        </div>
       </ButtonGroup>
 
       <!-- Right side buttons -->
@@ -522,9 +551,6 @@ const hasRightOverflow = computed(() => {
           : 'ml-1 sm:ml-2'"
         :orientation="isSidebarLayout ? 'vertical' : 'horizontal'"
       >
-        <div v-if="showAirferry" data-core-action class="flex shrink-0">
-          <AirferryMenu :side="isSidebarLayout ? 'right' : 'bottom'" :compact="isSidebarLayout || minimalDisplayControls" />
-        </div>
         <VideoDisplayControls
           :minimal="minimalDisplayControls"
           :text-only-scale="isSidebarLayout"

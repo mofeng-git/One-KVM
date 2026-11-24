@@ -1,0 +1,12 @@
+[package]
+name = "one-kvm-plugin-easytier"
+version = "0.2.9"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+one-kvm-plugin-sdk = { path = "../../libs/plugin-sdk", features = ["embedded"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+toml_edit = "0.25"

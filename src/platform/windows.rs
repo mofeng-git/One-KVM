@@ -4,7 +4,7 @@ use super::{FeatureCapability, PlatformCapabilities, PlatformMode};
 
 pub fn capabilities() -> PlatformCapabilities {
     let linux_only = "unsupported on Windows";
-    let mut capabilities = PlatformCapabilities {
+    PlatformCapabilities {
         compiled_features: PlatformCapabilities::compiled_features(),
         mode: PlatformMode::Windows,
         mode_label: PlatformMode::Windows.label(),
@@ -25,15 +25,8 @@ pub fn capabilities() -> PlatformCapabilities {
         otg: FeatureCapability::unsupported(linux_only),
         audio: FeatureCapability::available(["wasapi", "opus"])
             .with_selected_backend(Some("wasapi".to_string())),
-        rustdesk: FeatureCapability::available(["builtin", "tcp_direct", "relay"])
-            .with_selected_backend(Some("builtin".to_string())),
-        vnc: FeatureCapability::available(["builtin", "tight_jpeg", "h264"])
-            .with_selected_backend(Some("builtin".to_string())),
         diagnostics: FeatureCapability::available(["windows"]),
         extensions: FeatureCapability::available(["windows_safe"]),
         service_installation: FeatureCapability::available(["windows_service"]),
-    };
-    if !cfg!(feature = "rustdesk") { capabilities.rustdesk = FeatureCapability::unsupported("Not compiled in"); }
-    if !cfg!(feature = "vnc") { capabilities.vnc = FeatureCapability::unsupported("Not compiled in"); }
-    capabilities
+    }
 }

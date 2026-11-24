@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch the pinned GOSTC, EasyFrp, EasyTier and frp clients for full Docker images."""
+"""Fetch the pinned GOSTC, EasyFrp, EasyTier and frp clients for plugin builds."""
 import argparse
 import hashlib
 import json
@@ -13,10 +13,11 @@ import urllib.request
 import zipfile
 
 
-def install(platform, output):
+def install(platform, output, names=None):
     architecture = {'linux/amd64': 'x86_64', 'linux/arm64': 'aarch64',
                     'linux/arm/v7': 'arm'}[platform]
     lock = json.loads(Path(__file__).with_name('remote-access.lock.json').read_text())
+    tools = [lock['tools'][name] for name in names] if names else list(lock['tools'].values())
     output.mkdir(parents=True, exist_ok=True)
     expected = {'arm': (1, 40), 'aarch64': (2, 183), 'x86_64': (2, 62)}[architecture]
     opener = urllib.request.build_opener(
@@ -25,7 +26,7 @@ def install(platform, output):
     # Validate the entire download before replacing any staged executable.
     with tempfile.TemporaryDirectory(prefix='one-kvm-remote-tools-') as temporary:
         staging = Path(temporary)
-        for spec in lock['tools'].values():
+        for spec in tools:
             asset = spec['assets'][architecture]
             archive = staging / asset['archive']
             prefix = os.environ.get('GHPROXY_PREFIX', '').rstrip('/')
@@ -55,7 +56,7 @@ def install(platform, output):
                 path = staging / name
                 path.write_bytes(data)
                 path.chmod(0o755)
-        for spec in lock['tools'].values():
+        for spec in tools:
             for name in spec['binaries']:
                 shutil.copy2(staging / name, output / name)
 
@@ -64,5 +65,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--platform', required=True, choices=('linux/amd64', 'linux/arm64', 'linux/arm/v7'))
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--tool', action='append', choices=('gostc', 'easyfrp', 'easytier', 'frp'))
     args = parser.parse_args()
-    install(args.platform, args.output)
+    install(args.platform, args.output, args.tool)

@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn file_extensions_do_not_bypass_api_authentication() {
         for extension in ["js", "css", "ico", "png", "svg", "bin"] {
-            for prefix in ["/airferry/files/", "/msd/drive/files/"] {
+            for prefix in ["/plugins/test/files/", "/msd/drive/files/"] {
                 let path = format!("{prefix}0123456789abcdef0123456789abcdef-file.{extension}");
                 assert!(!is_public_endpoint(&path), "{path}");
                 assert!(!is_setup_public_endpoint(&path), "{path}");

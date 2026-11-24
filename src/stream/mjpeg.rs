@@ -37,6 +37,7 @@ struct JpegEncoderState {
 pub struct ClientSession {
     pub id: ClientId,
     pub generation: ClientGeneration,
+    keep_on_reconfigure: bool,
     pub connected_at: Instant,
     pub last_activity: Instant,
     pub frames_sent: u64,
@@ -49,6 +50,7 @@ impl ClientSession {
         Self {
             id,
             generation,
+            keep_on_reconfigure: false,
             connected_at: now,
             last_activity: now,
             frames_sent: 0,
@@ -330,8 +332,13 @@ impl MjpegStreamHandler {
 
     /// Connects `client_id`; return value must be passed to [`unregister_client`].
     pub fn register_client(&self, client_id: ClientId) -> ClientGeneration {
+        self.register(client_id, false)
+    }
+
+    fn register(&self, client_id: ClientId, keep_on_reconfigure: bool) -> ClientGeneration {
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
-        let session = ClientSession::new(client_id.clone(), generation);
+        let mut session = ClientSession::new(client_id.clone(), generation);
+        session.keep_on_reconfigure = keep_on_reconfigure;
         self.clients.write().insert(client_id.clone(), session);
         info!(
             "Client {} connected (total: {})",
@@ -402,11 +409,11 @@ impl MjpegStreamHandler {
         self.frame_notify.subscribe()
     }
 
-    pub fn disconnect_non_vnc_clients(&self) {
+    pub fn disconnect_http_clients(&self) {
         let count = {
             let mut clients = self.clients.write();
             let before = clients.len();
-            clients.retain(|id, _| id.starts_with("vnc-"));
+            clients.retain(|_, session| session.keep_on_reconfigure);
             before - clients.len()
         };
         let remaining = self.client_count();
@@ -417,7 +424,7 @@ impl MjpegStreamHandler {
             );
         }
         // Wake all subscribers. HTTP MJPEG clients will close, while persistent
-        // consumers such as VNC wait for the next frame after capture restarts.
+        // plugin subscribers wait for the next frame after capture restarts.
         self.set_offline();
     }
 }
@@ -436,6 +443,11 @@ impl ClientGuard {
             generation,
             handler,
         }
+    }
+
+    pub(crate) fn persistent(client_id: ClientId, handler: Arc<MjpegStreamHandler>) -> Self {
+        let generation = handler.register(client_id.clone(), true);
+        Self { client_id, generation, handler }
     }
 
     pub fn id(&self) -> &ClientId {

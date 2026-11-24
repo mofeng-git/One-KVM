@@ -16,7 +16,7 @@ echo "Output file: $OUTPUT_FILE"
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
 # 运行 typeshare
-typeshare "$PROJECT_ROOT/src" \
+typeshare "$PROJECT_ROOT/src" "$PROJECT_ROOT/libs/plugin-sdk/src" \
   --lang=typescript \
   --output-file="$OUTPUT_FILE"
 

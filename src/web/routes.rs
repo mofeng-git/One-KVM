@@ -182,27 +182,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/extensions/{id}/logs",
             get(handlers::extensions::get_extension_logs),
-        )
-
-
-
-
-
-;
-
-    #[cfg(feature = "airferry")]
-    let user_routes = user_routes
-        .route("/airferry/status", get(handlers::airferry::status))
-        .route("/airferry/start", post(handlers::airferry::start))
-        .route("/airferry/stop", post(handlers::airferry::stop))
-        .route("/airferry/files/{name}", get(handlers::airferry::download).delete(handlers::airferry::delete_file));
+        );
 
     #[cfg(feature = "mcp")]
-    let user_routes = user_routes
-        .route(
-            "/config/mcp",
-            get(handlers::mcp_config).patch(handlers::mcp_update_config),
-        );
+    let user_routes = user_routes.route(
+        "/config/mcp",
+        get(handlers::mcp_config).patch(handlers::mcp_update_config),
+    );
 
     #[cfg(feature = "terminal")]
     let user_routes = user_routes
@@ -211,72 +197,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal/", get(handlers::terminal::terminal_index))
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
         .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
-
-    #[cfg(feature = "rustdesk")]
-    let user_routes = user_routes
-        // RustDesk configuration endpoints
-        .route(
-            "/config/rustdesk",
-            get(handlers::config::get_rustdesk_config),
-        )
-        .route(
-            "/config/rustdesk",
-            patch(handlers::config::update_rustdesk_config),
-        )
-        .route(
-            "/config/rustdesk/status",
-            get(handlers::config::get_rustdesk_status),
-        )
-        .route(
-            "/config/rustdesk/password",
-            get(handlers::config::get_device_password),
-        )
-        .route(
-            "/config/rustdesk/regenerate-id",
-            post(handlers::config::regenerate_device_id),
-        )
-        .route(
-            "/config/rustdesk/regenerate-password",
-            post(handlers::config::regenerate_device_password),
-        )
-        .route(
-            "/config/rustdesk/start",
-            post(handlers::config::start_rustdesk_service),
-        )
-        .route(
-            "/config/rustdesk/stop",
-            post(handlers::config::stop_rustdesk_service),
-        );
-
-    #[cfg(feature = "vnc")]
-    let user_routes = user_routes
-        // VNC configuration endpoints
-        .route("/config/vnc", get(handlers::config::get_vnc_config))
-        .route("/config/vnc", patch(handlers::config::update_vnc_config))
-        .route("/config/vnc/status", get(handlers::config::get_vnc_status))
-        .route(
-            "/config/vnc/start",
-            post(handlers::config::start_vnc_service),
-        )
-        .route("/config/vnc/stop", post(handlers::config::stop_vnc_service));
-
-    #[cfg(feature = "rtsp")]
-    let user_routes = user_routes
-        // RTSP configuration endpoints
-        .route("/config/rtsp", get(handlers::config::get_rtsp_config))
-        .route("/config/rtsp", patch(handlers::config::update_rtsp_config))
-        .route(
-            "/config/rtsp/status",
-            get(handlers::config::get_rtsp_status),
-        )
-        .route(
-            "/config/rtsp/start",
-            post(handlers::config::start_rtsp_service),
-        )
-        .route(
-            "/config/rtsp/stop",
-            post(handlers::config::stop_rtsp_service),
-        );
 
     #[cfg(feature = "redfish")]
     let user_routes = user_routes
@@ -288,39 +208,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         );
 
     #[cfg(feature = "terminal")]
-    let user_routes = user_routes
-        .route(
-            "/extensions/ttyd/config",
-            patch(handlers::extensions::update_ttyd_config),
-        );
-
-    #[cfg(feature = "gostc")]
-    let user_routes = user_routes
-        .route(
-            "/extensions/gostc/config",
-            patch(handlers::extensions::update_gostc_config),
-        );
-
-    #[cfg(feature = "easyfrp")]
-    let user_routes = user_routes
-        .route(
-            "/extensions/easyfrp/config",
-            patch(handlers::extensions::update_easyfrp_config),
-        );
-
-    #[cfg(feature = "easytier")]
-    let user_routes = user_routes
-        .route(
-            "/extensions/easytier/config",
-            patch(handlers::extensions::update_easytier_config),
-        );
-
-    #[cfg(feature = "frpc")]
-    let user_routes = user_routes
-        .route(
-            "/extensions/frpc/config",
-            patch(handlers::extensions::update_frpc_config),
-        );
+    let user_routes = user_routes.route(
+        "/extensions/ttyd/config",
+        patch(handlers::extensions::update_ttyd_config),
+    );
 
     let user_routes = user_routes.route(
         "/system/openwrt",
@@ -391,7 +282,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     };
 
     // Protected routes (all authenticated users)
-    let protected_routes = user_routes;
+    let protected_routes = user_routes.merge(crate::plugins::web::routes());
 
     // Stream endpoints (accessible with auth, but typically embedded in pages)
     let stream_routes = Router::new()
@@ -428,13 +319,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Main router
     let main_router = Router::new()
         .nest("/api", api_routes)
-
         .merge(static_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state.clone());
     #[cfg(feature = "mcp")]
-    let main_router = main_router.merge(crate::mcp::router(state.mcp.clone(), state.config.clone()));
+    let main_router =
+        main_router.merge(crate::mcp::router(state.mcp.clone(), state.config.clone()));
 
     #[cfg(not(feature = "redfish"))]
     return main_router;

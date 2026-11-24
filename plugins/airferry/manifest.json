@@ -1,0 +1,156 @@
+{
+  "abi": 1,
+  "id": "airferry",
+  "name": "AirFerry",
+  "version": "0.2.9",
+  "author": "SilentWind",
+  "description": {
+    "en-US": "Receive files from QR codes in a native MJPEG capture stream.",
+    "zh-CN": "从原生 MJPEG 采集画面中的二维码接收文件。"
+  },
+  "menu": "console_toolbar",
+  "capabilities": [
+    "video",
+    "images"
+  ],
+  "config_schema": [
+    {
+      "key": "import_images",
+      "label": {
+        "en-US": "Copy received files to virtual media storage",
+        "zh-CN": "将收到的文件复制到虚拟媒体存储"
+      },
+      "kind": "boolean",
+      "default": true
+    }
+  ],
+  "status_fields": [
+    {
+      "key": "receiving",
+      "label": {
+        "en-US": "Receiving",
+        "zh-CN": "正在接收"
+      }
+    },
+    {
+      "key": "capture",
+      "label": {
+        "en-US": "Capture",
+        "zh-CN": "采集状态"
+      },
+      "value_labels": {
+        "ready": {
+          "en-US": "Ready",
+          "zh-CN": "可以接收"
+        },
+        "mjpeg_required": {
+          "en-US": "Switch to MJPEG mode",
+          "zh-CN": "请切换到 MJPEG 模式"
+        },
+        "native_jpeg_required": {
+          "en-US": "Native MJPEG capture required",
+          "zh-CN": "采集设备需输出原生 MJPEG"
+        },
+        "capture_unavailable": {
+          "en-US": "Capture unavailable",
+          "zh-CN": "采集画面不可用"
+        }
+      }
+    },
+    {
+      "key": "event",
+      "label": {
+        "en-US": "Receiver status",
+        "zh-CN": "接收状态"
+      },
+      "value_labels": {
+        "running": {
+          "en-US": "Running",
+          "zh-CN": "运行中"
+        },
+        "starting": {
+          "en-US": "Starting",
+          "zh-CN": "启动中"
+        },
+        "stopped": {
+          "en-US": "Stopped",
+          "zh-CN": "已停止"
+        },
+        "error": {
+          "en-US": "Error",
+          "zh-CN": "出错"
+        },
+        "waiting": {
+          "en-US": "Waiting for QR codes",
+          "zh-CN": "等待二维码"
+        },
+        "paused": {
+          "en-US": "Paused",
+          "zh-CN": "已暂停"
+        },
+        "scanning": {
+          "en-US": "Scanning",
+          "zh-CN": "扫描中"
+        },
+        "segment_saved": {
+          "en-US": "Segment received",
+          "zh-CN": "已接收分段"
+        },
+        "saved": {
+          "en-US": "File received",
+          "zh-CN": "文件已保存"
+        }
+      }
+    },
+    {
+      "key": "progress",
+      "label": {
+        "en-US": "Progress",
+        "zh-CN": "接收进度"
+      },
+      "format": "percent"
+    },
+    {
+      "key": "last_saved",
+      "label": {
+        "en-US": "Last received file",
+        "zh-CN": "最近收到的文件"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "start_receive",
+      "label": {
+        "en-US": "Start receiving",
+        "zh-CN": "开始接收"
+      },
+      "when_status": [
+        {
+          "key": "receiving",
+          "equals": false
+        },
+        {
+          "key": "capture",
+          "equals": "ready"
+        }
+      ]
+    },
+    {
+      "id": "stop_receive",
+      "label": {
+        "en-US": "Stop receiving",
+        "zh-CN": "停止接收"
+      },
+      "when_status": [
+        {
+          "key": "receiving",
+          "equals": true
+        }
+      ]
+    }
+  ],
+  "files": true,
+  "default_enabled": true,
+  "toolbar_icon": "scan_line"
+}

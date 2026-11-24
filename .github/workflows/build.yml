@@ -81,6 +81,22 @@ jobs:
       - name: Package deb
         run: bash build/package-deb.sh
 
+      - name: Build plugin packages
+        env:
+          ONE_KVM_PLUGIN_CARGO: cross
+        run: |
+          for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu armv7-unknown-linux-gnueabihf; do
+            bash build/package-plugins.sh "$target"
+          done
+
+      - name: Upload Linux plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-linux-plugins
+          path: target/plugins/*.onepkg
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
@@ -143,6 +159,18 @@ jobs:
         shell: pwsh
         run: .\build\windows\build.ps1 -Configuration release -Package
 
+      - name: Build Windows plugin packages
+        shell: bash
+        run: bash build/package-plugins.sh x86_64-pc-windows-msvc rustdesk vnc rtsp airferry
+
+      - name: Upload Windows plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-kvm-windows-plugins
+          path: target/plugins/*.onepkg
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
@@ -180,6 +208,13 @@ jobs:
           name: one-kvm-windows-exe
           path: release-artifacts/windows
 
+      - name: Download plugin packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: one-kvm-*-plugins
+          path: release-artifacts/plugins
+          merge-multiple: true
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -189,3 +224,4 @@ jobs:
           files: |
             release-artifacts/deb/*.deb
             release-artifacts/windows/*.exe
+            release-artifacts/plugins/*.onepkg
