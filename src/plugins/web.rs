@@ -200,7 +200,8 @@ async fn file(
     State(state): State<Arc<AppState>>,
     Path((id, name)): Path<(String, String)>,
 ) -> Result<Response> {
-    let file = state.plugins.open_file(&id, &name).await?;
+    let images = state.config.get().msd.images_dir();
+    let (file, download_name) = state.plugins.open_file(&id, &name, &images).await?;
     Response::builder()
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header(header::CONTENT_LENGTH, file.metadata().await?.len())
@@ -209,7 +210,7 @@ async fn file(
             header::CONTENT_DISPOSITION,
             format!(
                 "attachment; filename*=UTF-8''{}",
-                urlencoding::encode(&name)
+                urlencoding::encode(&download_name)
             ),
         )
         .body(Body::from_stream(ReaderStream::new(file)))
@@ -222,7 +223,8 @@ async fn remove_file(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Value>> {
     check_mutation(&headers)?;
-    state.plugins.remove_file(&id, &name).await?;
+    let images = state.config.get().msd.images_dir();
+    state.plugins.remove_file(&id, &name, &images).await?;
     Ok(Json(serde_json::json!({"success":true})))
 }
 

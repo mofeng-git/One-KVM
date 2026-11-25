@@ -169,7 +169,8 @@ python3 "$repo/scripts/pack-plugin.py" \
 | 保存重启后还要用的数据 | 写到 `client.data` 下。升级时保留，卸载时清理。配置用 `client.read_config()` 读取。保存新配置时，正在运行的插件会重启并重新读取配置。 |
 | 接收视频、音频或控制键鼠 | 在 `capabilities` 中声明需要的能力，然后调用 [SDK 的 `Client`](src/runtime.rs)。例如订阅视频需要 `video`，发送键鼠需要 `hid`。 |
 | 把现成的程序做成插件 | 用 SDK 的 `embedded` 功能管理子进程。可以参考 [GOSTC 插件](../../plugins/gostc/src/main.rs)。 |
-| 让用户下载插件生成的文件 | 设置 `"files": true`，把文件放进 `client.data/files/`，并在状态的 `files` 中返回文件列表。每项包含 `name`，也可以带 `display_name`。参考 [AirFerry 插件](../../plugins/airferry/src/main.rs)。 |
+| 让用户下载插件生成的文件 | 设置 `"files": true`，把文件放进 `client.data/files/`，并在状态的 `files` 中返回文件列表。每项包含 `name`，也可以带 `display_name`。 |
+| 直接在虚拟媒体目录保存文件 | 声明 `images` 能力，用 `client.images_dir()` 获取当前目录。要从插件界面下载或删除文件，再设置 `"files": true` 和 `"files_in_images": true`，并返回插件所属文件的列表。参考 [AirFerry 插件](../../plugins/airferry/src/main.rs)。 |
 
 ### 遇到问题先看这里
 

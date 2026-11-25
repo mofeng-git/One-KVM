@@ -8,22 +8,7 @@ use one_kvm_plugin_sdk::{
     Status,
 };
 use receiver::{eligibility, AirferryManager};
-use serde::Deserialize;
 use serde_json::{json, Value};
-
-#[derive(Deserialize)]
-#[serde(default)]
-struct Config {
-    import_images: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            import_images: true,
-        }
-    }
-}
 
 struct Plugin {
     client: Client,
@@ -33,10 +18,7 @@ struct Plugin {
 #[tokio::main]
 async fn main() -> Result<()> {
     run(|client| async move {
-        let config: Config = client.read_config().await?;
-        let output = client.data.join("files");
-        tokio::fs::create_dir_all(&output).await?;
-        let receiver = AirferryManager::new(output, config.import_images);
+        let receiver = AirferryManager::new();
         Ok(Plugin { client, receiver })
     })
     .await
@@ -44,27 +26,19 @@ async fn main() -> Result<()> {
 
 impl Service for Plugin {
     async fn status(&self) -> Result<Status> {
-        let (eligible, reason) = eligibility(&self.client).await;
-        let status = self.receiver.status(eligible, reason).await?;
+        let ((_, reason), output) =
+            tokio::join!(eligibility(&self.client), self.client.images_dir());
+        let status = self.receiver.status(reason, &output?).await?;
         let fields = [
             ("receiving", json!(status.running)),
             ("capture", json!(status.reason)),
             (
                 "event",
-                json!(status.event.as_ref().map(|event| &event.state)),
+                json!(status.event.as_ref().map(|event| json!({
+                    "state": event.state, "reason": event.reason, "progress": event.progress,
+                }))),
             ),
-            (
-                "progress",
-                json!(status
-                    .event
-                    .as_ref()
-                    .and_then(|event| event.progress.as_ref())
-                    .map(|progress| progress.decoded_fraction.clamp(0.0, 1.0))),
-            ),
-            (
-                "last_saved",
-                json!(status.last_saved.as_ref().map(|file| &file.filename)),
-            ),
+            ("last_saved", json!(status.last_saved)),
             ("files", json!(status.files)),
         ];
         Ok(Status {
@@ -83,7 +57,8 @@ impl Service for Plugin {
                 if !eligible {
                     bail!("{reason}");
                 }
-                self.receiver.start(self.client.clone()).await?;
+                let output = self.client.images_dir().await?;
+                self.receiver.start(self.client.clone(), output).await?;
             }
             "stop_receive" => self.receiver.stop().await?,
             _ => bail!("Unknown action"),

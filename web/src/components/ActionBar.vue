@@ -41,6 +41,7 @@ import {
   Keyboard,
   Scaling,
   Puzzle,
+  QrCode,
   ScanLine,
   Wrench,
 } from 'lucide-vue-next'
@@ -53,6 +54,7 @@ import MsdDialog from '@/components/MsdDialog.vue'
 import VideoDisplayControls from '@/components/VideoDisplayControls.vue'
 import KeyboardShortcutsPopover from '@/components/KeyboardShortcutsPopover.vue'
 import PluginCard from '@/components/PluginCard.vue'
+import AirferryMenu from '@/components/AirferryMenu.vue'
 import { usePluginStore } from '@/stores/plugins'
 import { consoleToolbarMenu, pluginMenuId, pluginText } from '@/lib/pluginNavigation'
 import type { KeyboardShortcut } from '@/lib/keyboardShortcuts'
@@ -528,16 +530,25 @@ const hasRightOverflow = computed(() => {
           <Popover :open="openTool === plugin.manifest.id"
             @update:open="openTool = $event ? plugin.manifest.id : null">
             <PopoverTrigger as-child>
-              <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs"
+              <Button variant="ghost" size="sm" class="console-plugin-trigger h-8 gap-1.5 text-xs"
+                :data-testid="plugin.manifest.id === 'airferry' ? 'airferry-menu' : undefined"
                 :aria-label="pluginText(plugin.manifest.name, locale)"
                 :title="pluginText(plugin.manifest.name, locale)">
-                <component :is="plugin.manifest.toolbar_icon ? toolbarIcons[plugin.manifest.toolbar_icon] : Puzzle"
-                  class="size-4" aria-hidden="true" />
+                <span class="console-plugin-icon relative shrink-0" aria-hidden="true">
+                  <component :is="plugin.manifest.id === 'airferry' ? QrCode : plugin.manifest.toolbar_icon ? toolbarIcons[plugin.manifest.toolbar_icon] : Puzzle"
+                    class="size-4" />
+                  <span v-if="plugin.manifest.id === 'airferry' && plugin.runtime.fields.receiving === true"
+                    class="absolute -right-1 -top-0.5 size-1.5 rounded-full bg-emerald-600" />
+                </span>
+                <span class="console-plugin-label truncate">{{ pluginText(plugin.manifest.name, locale) }}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent :side="isSidebarLayout ? 'right' : 'bottom'" align="start"
-              class="max-h-[70dvh] w-[min(420px,calc(100vw-4.5rem))] overflow-y-auto p-0">
-              <PluginCard :plugin="plugin" compact />
+              :class="plugin.manifest.id === 'airferry'
+                ? 'w-[min(400px,calc(100vw-2rem))] overflow-hidden p-0'
+                : 'max-h-[70dvh] w-[min(420px,calc(100vw-4.5rem))] overflow-y-auto p-0'">
+              <AirferryMenu v-if="plugin.manifest.id === 'airferry'" :plugin="plugin" />
+              <PluginCard v-else :plugin="plugin" compact />
             </PopoverContent>
           </Popover>
         </div>
@@ -801,6 +812,23 @@ const hasRightOverflow = computed(() => {
   display: none;
 }
 
+.console-action-bar--sidebar :deep(.console-plugin-trigger) {
+  flex-direction: column;
+  gap: 2px;
+  padding-inline: 2px;
+}
+
+.console-action-bar--sidebar :deep(.console-plugin-trigger > .console-plugin-label) {
+  display: block;
+  max-width: 100%;
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.console-action-bar--sidebar :deep(.console-plugin-trigger > .console-plugin-icon) {
+  display: block;
+}
+
 .console-action-bar--sidebar .console-action-bar__inner {
   overflow-y: auto;
   gap: 1rem;
@@ -835,6 +863,10 @@ const hasRightOverflow = computed(() => {
   .console-action-bar--floating .console-action-bar__inner :deep(button) {
     width: 36px;
     padding-inline: 0;
+  }
+  .console-action-bar--floating .console-action-bar__inner :deep(.console-plugin-trigger) {
+    width: auto;
+    padding-inline: 6px;
   }
 }
 

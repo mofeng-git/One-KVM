@@ -342,40 +342,77 @@ impl PluginManager {
         Ok(value)
     }
 
-    pub(super) async fn open_file(&self, id: &str, name: &str) -> Result<fs::File> {
+    pub(super) async fn open_file(
+        &self,
+        id: &str,
+        name: &str,
+        images: &Path,
+    ) -> Result<(fs::File, String)> {
         let plugins = self.plugins.lock().await;
         let plugin = plugins.get(id).ok_or_else(not_found)?;
-        Ok(fs::File::open(self.file_path(plugin, name).await?).await?)
+        let (path, download_name) = self.resolve_file(plugin, name, images).await?;
+        Ok((fs::File::open(path).await?, download_name))
     }
 
-    pub(super) async fn remove_file(&self, id: &str, name: &str) -> Result<()> {
+    pub(super) async fn remove_file(&self, id: &str, name: &str, images: &Path) -> Result<()> {
         let plugins = self.plugins.lock().await;
         let plugin = plugins.get(id).ok_or_else(not_found)?;
-        fs::remove_file(self.file_path(plugin, name).await?).await?;
+        let (path, _) = self.resolve_file(plugin, name, images).await?;
+        fs::remove_file(path).await?;
         Ok(())
     }
 
-    async fn file_path(&self, plugin: &Installed, name: &str) -> Result<PathBuf> {
+    async fn resolve_file(
+        &self,
+        plugin: &Installed,
+        name: &str,
+        images: &Path,
+    ) -> Result<(PathBuf, String)> {
+        use super::capabilities::valid_filename;
+
         let missing = || AppError::NotFound("Plugin file not found".into());
-        if !plugin.manifest.files || !super::capabilities::valid_filename(name) {
+        if !plugin.manifest.files || !valid_filename(name) {
             return Err(missing());
         }
-        let base = self
-            .root
-            .join(&plugin.manifest.id)
-            .join("data")
-            .join("files");
+        let (base, download_name) = if plugin.manifest.files_in_images {
+            let runtime = plugin.runtime.read().await;
+            let file = runtime
+                .status
+                .fields
+                .get("files")
+                .and_then(Value::as_array)
+                .and_then(|files| {
+                    files
+                        .iter()
+                        .find(|file| file["name"].as_str() == Some(name))
+                })
+                .ok_or_else(missing)?;
+            let download_name = file["display_name"]
+                .as_str()
+                .filter(|name| valid_filename(name))
+                .unwrap_or(name);
+            (images.to_owned(), download_name.to_owned())
+        } else {
+            (
+                self.root
+                    .join(&plugin.manifest.id)
+                    .join("data")
+                    .join("files"),
+                name.to_owned(),
+            )
+        };
         let path = base.join(name);
-        if !fs::symlink_metadata(&base)
-            .await
-            .is_ok_and(|metadata| metadata.is_dir())
+        if (!plugin.manifest.files_in_images
+            && !fs::symlink_metadata(&base)
+                .await
+                .is_ok_and(|metadata| metadata.is_dir()))
             || !fs::symlink_metadata(&path)
                 .await
                 .is_ok_and(|metadata| metadata.is_file())
         {
             return Err(missing());
         }
-        Ok(path)
+        Ok((path, download_name))
     }
 
     async fn start_worker(&self, plugin: &mut Installed) {

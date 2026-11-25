@@ -65,6 +65,11 @@ pub(super) fn validate(manifest: &Manifest) -> Result<()> {
         || !valid_id(manifest.menu.id())
         || manifest.version.trim().is_empty()
         || manifest.author.trim().is_empty()
+        || (manifest.files_in_images
+            && (!manifest.files
+                || !manifest
+                    .capabilities
+                    .contains(&one_kvm_plugin_sdk::Capability::Images)))
         || !valid_fields(
             manifest
                 .config_schema

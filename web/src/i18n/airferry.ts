@@ -1,0 +1,24 @@
+export const airferryZh = {
+  title: 'AirFerry', start: '开始接收', stop: '停止接收', refresh: '刷新',
+  files: '已接收文件', download: '下载', downloadNamed: '下载 {name}', identifying: '正在识别文件',
+  empty: '接收完成后，文件会显示在这里。',
+  progress: '文件接收进度', symbols: '数据块', loadFailed: '无法获取接收状态', actionFailed: '操作失败，请重试',
+  speedHint: '最近 3 秒新增数据块的估算速度，不计重复块。',
+  delete: '删除', deleteNamed: '删除 {name}',
+  deleteFailed: '删除失败，请重试',
+  completedSummary: '{seconds} 秒 · 平均 {speed} KB/s',
+  phases: { loading: '正在获取状态', idle: '尚未开始', receiving: '正在接收文件', waiting: '等待二维码', completed: '接收完成，已自动停止',
+    capture_unavailable: '等待采集信号', mjpeg_required: '请使用 MJPEG 模式', native_jpeg_required: '需要采集卡输出 MJPEG / JPEG', error: '接收连接中断，请停止后重试' },
+}
+export const airferryEn = {
+  title: 'AirFerry', start: 'Start receiving', stop: 'Stop receiving', refresh: 'Refresh',
+  files: 'Received files', download: 'Download', downloadNamed: 'Download {name}', identifying: 'Identifying file',
+  empty: 'Completed transfers will appear here.',
+  progress: 'File reception progress', symbols: 'symbols', loadFailed: 'Unable to load receiver status', actionFailed: 'The action failed. Please try again.',
+  speedHint: 'Estimated from new unique symbols over the last 3 seconds.',
+  delete: 'Delete', deleteNamed: 'Delete {name}',
+  deleteFailed: 'Unable to delete the file. Please try again.',
+  completedSummary: '{seconds} s · Average {speed} KB/s',
+  phases: { loading: 'Loading status', idle: 'Ready to receive', receiving: 'Receiving file', waiting: 'Waiting for QR codes', completed: 'File received. Automatically stopped.',
+    capture_unavailable: 'Waiting for capture signal', mjpeg_required: 'MJPEG mode is required', native_jpeg_required: 'A native MJPEG / JPEG input is required', error: 'Connection interrupted. Stop and try again.' },
+}

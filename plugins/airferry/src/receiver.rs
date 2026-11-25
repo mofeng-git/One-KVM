@@ -1,4 +1,4 @@
-//! Built-in optical file reception from the existing MJPEG frame buffer.
+//! Optical file reception from the existing MJPEG frame buffer.
 use anyhow::{anyhow, Result};
 use one_kvm_airferry_core::{
     pool::{DecoderPool, RecoveryWorker},
@@ -7,7 +7,11 @@ use one_kvm_airferry_core::{
 use one_kvm_plugin_sdk::{runtime::Client, Codec};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
     sync::{oneshot, Mutex, RwLock},
     task::JoinHandle,
@@ -25,8 +29,6 @@ struct Events {
 }
 
 pub struct AirferryManager {
-    output: PathBuf,
-    import_images: bool,
     worker: Mutex<Option<Worker>>,
     events: Arc<RwLock<Events>>,
 }
@@ -85,9 +87,7 @@ pub struct AirferryEvent {
 
 #[derive(Serialize)]
 pub struct AirferryStatus {
-    pub available: bool,
     pub running: bool,
-    pub eligible: bool,
     pub reason: String,
     pub event: Option<AirferryEvent>,
     pub last_saved: Option<AirferrySavedFile>,
@@ -95,16 +95,14 @@ pub struct AirferryStatus {
 }
 
 impl AirferryManager {
-    pub fn new(output: PathBuf, import_images: bool) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            output,
-            import_images,
             worker: Mutex::new(None),
             events: Arc::new(RwLock::new(Events::default())),
         })
     }
 
-    pub async fn status(&self, eligible: bool, reason: &str) -> Result<AirferryStatus> {
+    pub async fn status(&self, reason: &str, output: &Path) -> Result<AirferryStatus> {
         let running = self
             .worker
             .lock()
@@ -115,11 +113,9 @@ impl AirferryManager {
             let events = self.events.read().await;
             (events.latest.clone(), events.saved.clone())
         };
-        let files = self.files().await?;
+        let files = Self::files(output).await?;
         Ok(AirferryStatus {
-            available: true,
             running,
-            eligible,
             reason: reason.into(),
             event: serde_json::from_value(latest).map_err(internal)?,
             last_saved: saved
@@ -130,7 +126,7 @@ impl AirferryManager {
         })
     }
 
-    pub async fn start(&self, stream: Client) -> Result<()> {
+    pub async fn start(&self, stream: Client, output: PathBuf) -> Result<()> {
         let mut worker = self.worker.lock().await;
         if worker
             .as_ref()
@@ -141,7 +137,6 @@ impl AirferryManager {
         if let Some(previous) = worker.take() {
             let _ = previous.task.await;
         }
-        let output = self.output.clone();
         let receiver =
             tokio::task::spawn_blocking(move || Receiver::new(&output, 64 * 1024 * 1024))
                 .await
@@ -155,29 +150,9 @@ impl AirferryManager {
         };
         let (stop, stopped) = oneshot::channel();
         let events = self.events.clone();
-        let import_images = self.import_images;
-        let output = self.output.clone();
         let task = tokio::spawn(async move {
             let mut pool = pool;
             let result = receive(&stream, stopped, &events, &mut pool, &recovery).await;
-            if let Ok(Some(name)) = &result {
-                if import_images {
-                    let imported = async {
-                        if !is_received_name(name) || name.contains(['/', '\\']) {
-                            return Err(anyhow!("Invalid received filename"));
-                        }
-                        let file = tokio::fs::File::open(output.join(name)).await?;
-                        stream.put_image(name, file).await
-                    }
-                    .await;
-                    if let Err(error) = imported {
-                        tracing::warn!(
-                            "File received but could not be imported into virtual media: {error}"
-                        );
-                        events.write().await.latest = json!({"state":"saved", "reason": format!("Virtual media import failed: {error}")});
-                    }
-                }
-            }
             // Wait for every native decoder to release its buffers before running=false.
             let _ = tokio::task::spawn_blocking(move || {
                 pool.shutdown();
@@ -202,9 +177,9 @@ impl AirferryManager {
         Ok(())
     }
 
-    pub async fn files(&self) -> Result<Vec<AirferryReceivedFile>> {
+    async fn files(output: &Path) -> Result<Vec<AirferryReceivedFile>> {
         let mut files = Vec::new();
-        let mut directory = match tokio::fs::read_dir(self.output.clone()).await {
+        let mut directory = match tokio::fs::read_dir(output).await {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(files),
             Err(e) => return Err(e.into()),
@@ -274,7 +249,7 @@ async fn receive(
     events: &RwLock<Events>,
     pool: &mut DecoderPool,
     recovery: &RecoveryWorker,
-) -> Result<Option<String>> {
+) -> Result<()> {
     let mut gate_timer = tokio::time::interval(Duration::from_secs(1));
     gate_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut frames: Option<tokio::sync::mpsc::Receiver<one_kvm_plugin_sdk::Frame>> = None;
@@ -289,7 +264,7 @@ async fn receive(
         tokio::select! {
             _ = &mut stop => {
                 events.write().await.latest = json!({"state":"stopped"});
-                return Ok(None);
+                return Ok(());
             }
             _ = gate_timer.tick() => {
                 let (eligible, next_reason) = eligibility(&stream).await;
@@ -351,11 +326,8 @@ async fn receive(
                 for update in recovered.updates {
                     if update["state"] == "saved" {
                         state.saved = Some(update.clone());
-                        let name = update["path"].as_str().and_then(|path| {
-                            std::path::Path::new(path).file_name()?.to_str().map(str::to_owned)
-                        });
                         state.latest = update;
-                        return Ok(name);
+                        return Ok(());
                     }
                     state.latest = update;
                 }

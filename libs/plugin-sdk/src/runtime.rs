@@ -113,6 +113,10 @@ impl Client {
         self.post("/v1/hid/reset", &()).await
     }
 
+    pub async fn images_dir(&self) -> Result<PathBuf> {
+        Ok(self.get("/v1/images").await?.json().await?)
+    }
+
     pub async fn put_image(&self, name: &str, file: tokio::fs::File) -> Result<()> {
         let mut url = reqwest::Url::parse(&format!("{}/v1/images/", self.url))?;
         url.path_segments_mut()

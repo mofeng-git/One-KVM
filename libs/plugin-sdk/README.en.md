@@ -167,7 +167,8 @@ Installing another package with the same ID upgrades the existing plugin and kee
 | Keep data across restarts | Write it under `client.data`. Upgrades keep this directory, and uninstalling clears it. Read settings with `client.read_config()`. When settings change, a running plugin restarts and reads the new values. |
 | Receive video or audio, or send keyboard and mouse input | Declare what you need in `capabilities` and use the [SDK's `Client`](src/runtime.rs). For example, video subscriptions need `video`, and keyboard or mouse input needs `hid`. |
 | Wrap an existing program | Use the SDK's `embedded` feature to manage the child process. See the [GOSTC plugin](../../plugins/gostc/src/main.rs) for an example. |
-| Let users download files from the plugin | Set `"files": true`, write files to `client.data/files/`, and return an array under the `files` status key. Each entry has a `name` and can include a `display_name`. See the [AirFerry plugin](../../plugins/airferry/src/main.rs) for an example. |
+| Let users download files from the plugin | Set `"files": true`, write files to `client.data/files/`, and return an array under the `files` status key. Each entry has a `name` and can include a `display_name`. |
+| Save files directly to virtual media storage | Declare the `images` capability and call `client.images_dir()` for the current path. To let users download or delete the files from the plugin UI, set both `"files": true` and `"files_in_images": true` and list the files your plugin owns. See the [AirFerry plugin](../../plugins/airferry/src/main.rs). |
 
 ### Troubleshooting
 

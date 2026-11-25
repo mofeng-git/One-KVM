@@ -72,6 +72,8 @@ pub struct Manifest {
     pub actions: Vec<Action>,
     #[serde(default)]
     pub files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub files_in_images: bool,
     #[serde(default)]
     pub default_enabled: bool,
 }

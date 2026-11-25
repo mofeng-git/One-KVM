@@ -13,17 +13,7 @@
     "video",
     "images"
   ],
-  "config_schema": [
-    {
-      "key": "import_images",
-      "label": {
-        "en-US": "Copy received files to virtual media storage",
-        "zh-CN": "将收到的文件复制到虚拟媒体存储"
-      },
-      "kind": "boolean",
-      "default": true
-    }
-  ],
+  "config_schema": [],
   "status_fields": [
     {
       "key": "receiving",
@@ -62,53 +52,7 @@
       "label": {
         "en-US": "Receiver status",
         "zh-CN": "接收状态"
-      },
-      "value_labels": {
-        "running": {
-          "en-US": "Running",
-          "zh-CN": "运行中"
-        },
-        "starting": {
-          "en-US": "Starting",
-          "zh-CN": "启动中"
-        },
-        "stopped": {
-          "en-US": "Stopped",
-          "zh-CN": "已停止"
-        },
-        "error": {
-          "en-US": "Error",
-          "zh-CN": "出错"
-        },
-        "waiting": {
-          "en-US": "Waiting for QR codes",
-          "zh-CN": "等待二维码"
-        },
-        "paused": {
-          "en-US": "Paused",
-          "zh-CN": "已暂停"
-        },
-        "scanning": {
-          "en-US": "Scanning",
-          "zh-CN": "扫描中"
-        },
-        "segment_saved": {
-          "en-US": "Segment received",
-          "zh-CN": "已接收分段"
-        },
-        "saved": {
-          "en-US": "File received",
-          "zh-CN": "文件已保存"
-        }
       }
-    },
-    {
-      "key": "progress",
-      "label": {
-        "en-US": "Progress",
-        "zh-CN": "接收进度"
-      },
-      "format": "percent"
     },
     {
       "key": "last_saved",
@@ -152,5 +96,6 @@
   ],
   "files": true,
   "default_enabled": true,
-  "toolbar_icon": "scan_line"
+  "toolbar_icon": "scan_line",
+  "files_in_images": true
 }

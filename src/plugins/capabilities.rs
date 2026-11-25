@@ -105,6 +105,7 @@ impl Capabilities {
             .route("/v1/hid/mouse", post(mouse))
             .route("/v1/hid/reset", post(reset))
             .route("/v1/events", get(events))
+            .route("/v1/images", get(images_dir))
             .route(
                 "/v1/images/{name}",
                 put(put_image).layer(DefaultBodyLimit::disable()),
@@ -578,6 +579,16 @@ pub(super) fn valid_filename(name: &str) -> bool {
         && !name.chars().any(char::is_control)
         && matches!(components.next(), Some(Component::Normal(_)))
         && components.next().is_none()
+}
+
+async fn images_dir(
+    State(api): State<Arc<Capabilities>>,
+    Extension(session): Extension<Arc<Session>>,
+) -> Result<Json<std::path::PathBuf>> {
+    session.require(Capability::Images)?;
+    Ok(Json(std::path::absolute(
+        api.app().await?.config.get().msd.images_dir(),
+    )?))
 }
 
 async fn put_image(
