@@ -56,16 +56,17 @@ fn write_with_wait<Writer: Write>(
     timeout_ms: u16,
     mut wait: impl FnMut(&Writer, u16) -> std::io::Result<bool>,
 ) -> std::io::Result<bool> {
-    let mut deadline = None;
+    let deadline = Instant::now() + Duration::from_millis(u64::from(timeout_ms));
     while !data.is_empty() {
+        // EINTR and partial-write retries share the same budget as EAGAIN.
+        if Instant::now() >= deadline {
+            return Ok(false);
+        }
         match writer.write(data) {
             Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
             Ok(written) => data = &data[written..],
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                let deadline = deadline.get_or_insert_with(|| {
-                    Instant::now() + Duration::from_millis(u64::from(timeout_ms))
-                });
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 if remaining.is_zero()
                     || !wait(
@@ -159,5 +160,20 @@ mod tests {
                 .kind(),
             ErrorKind::BrokenPipe
         );
+    }
+    #[test]
+    fn interrupted_writer_cannot_escape_timeout_budget() {
+        struct Interrupted;
+        impl Write for Interrupted {
+            fn write(&mut self, _: &[u8]) -> Result<usize> {
+                Err(ErrorKind::Interrupted.into())
+            }
+            fn flush(&mut self) -> Result<()> {
+                Ok(())
+            }
+        }
+        let start = Instant::now();
+        assert!(!write_with_wait(&mut Interrupted, &[1], 2, |_, _| panic!("no poll")).unwrap());
+        assert!(start.elapsed() < Duration::from_secs(1));
     }
 }

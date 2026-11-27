@@ -89,6 +89,7 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
 
 let peerConnection: RTCPeerConnection | null = null
 let dataChannel: RTCDataChannel | null = null
+let dataChannelRetry: number | null = null
 let sessionId: string | null = null
 const sessionIdRef = ref<string | null>(null)
 let statsInterval: number | null = null
@@ -157,6 +158,7 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   const pc = new RTCPeerConnection(config)
 
   pc.onconnectionstatechange = () => {
+    if (peerConnection !== pc) return
     switch (pc.connectionState) {
       case 'connecting':
         state.value = 'connecting'
@@ -166,6 +168,7 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
         setConnectStage('connected')
         error.value = null
         startStatsCollection()
+        if (!dataChannel) retryDataChannel(pc)
         break
       case 'disconnected':
       case 'closed':
@@ -222,24 +225,46 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   }
 
   pc.ondatachannel = (event) => {
-    setupDataChannel(event.channel)
+    if (peerConnection === pc) setupDataChannel(pc, event.channel)
   }
 
   return pc
 }
 
-function setupDataChannel(channel: RTCDataChannel) {
+function retryDataChannel(pc: RTCPeerConnection) {
+  if (peerConnection !== pc || pc.connectionState !== 'connected' || dataChannelRetry !== null) return
+  dataChannelRetry = window.setTimeout(() => {
+    dataChannelRetry = null
+    if (peerConnection === pc && pc.connectionState === 'connected' && !dataChannel) {
+      try {
+        createDataChannel(pc)
+      } catch (err) {
+        videoDebugLog('Failed to reopen HID data channel', { error: err, sessionId })
+        retryDataChannel(pc)
+      }
+    }
+  }, 1000)
+}
+
+function setupDataChannel(pc: RTCPeerConnection, channel: RTCDataChannel) {
   dataChannel = channel
+  channel.binaryType = 'arraybuffer'
 
   channel.onopen = () => {
+    if (dataChannel !== channel) return
     dataChannelReady.value = true
   }
 
   channel.onclose = () => {
+    if (dataChannel !== channel) return
+    dataChannel = null
     dataChannelReady.value = false
+    retryDataChannel(pc)
   }
 
   channel.onerror = (event) => {
+    if (dataChannel === channel) dataChannelReady.value = false
+    channel.close()
     videoDebugLog('WebRTC data channel error', {
       label: channel.label,
       readyState: channel.readyState,
@@ -248,16 +273,20 @@ function setupDataChannel(channel: RTCDataChannel) {
     })
   }
 
-  channel.onmessage = () => {
+  channel.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer && new Uint8Array(event.data)[0] === 0x01) {
+      if (dataChannel === channel) dataChannelReady.value = false
+      channel.close()
+    }
   }
 }
 
 function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
   const channel = pc.createDataChannel('hid', {
     ordered: true,
-    maxRetransmits: 3,
+    // HID edges must not be abandoned after a retransmission limit.
   })
-  setupDataChannel(channel)
+  setupDataChannel(pc, channel)
   return channel
 }
 
@@ -561,6 +590,10 @@ async function disconnect() {
   connectAbortController?.abort()
   connectAbortController = null
   stopStatsCollection()
+  if (dataChannelRetry !== null) {
+    window.clearTimeout(dataChannelRetry)
+    dataChannelRetry = null
+  }
 
   // Clear state FIRST to prevent ICE candidates from being sent
   const oldSessionId = sessionId
@@ -570,11 +603,10 @@ async function disconnect() {
   pendingIceCandidates = []
   seenRemoteCandidates.clear()
 
-  if (dataChannel) {
-    dataChannel.close()
-    dataChannel = null
-    dataChannelReady.value = false
-  }
+  const oldDataChannel = dataChannel
+  dataChannel = null
+  dataChannelReady.value = false
+  oldDataChannel?.close()
 
   if (peerConnection) {
     peerConnection.close()
@@ -627,6 +659,8 @@ function sendKeyboard(event: HidKeyboardEvent): boolean {
     dataChannel.send(buffer)
     return true
   } catch {
+    dataChannelReady.value = false
+    dataChannel?.close()
     return false
   }
 }
@@ -641,6 +675,8 @@ function sendMouse(event: HidMouseEvent): boolean {
     dataChannel.send(buffer)
     return true
   } catch {
+    dataChannelReady.value = false
+    dataChannel?.close()
     return false
   }
 }

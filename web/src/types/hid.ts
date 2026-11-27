@@ -46,6 +46,7 @@ export const MS_EVENT_SCROLL = 0x04
 export const RESP_OK = 0x00
 export const RESP_ERR_HID_UNAVAILABLE = 0x01
 export const RESP_ERR_INVALID_MESSAGE = 0x02
+export const RESP_RETRY_AFTER_RESET = 0x03
 
 /** Encode keyboard event to binary format (4 bytes) */
 export function encodeKeyboardEvent(event: HidKeyboardEvent): ArrayBuffer {
