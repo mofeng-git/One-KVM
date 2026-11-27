@@ -2065,7 +2065,7 @@ function handleHidError(_error: unknown, _operation: string) {
   if (now - lastHidErrorAt < 2000) return
   lastHidErrorAt = now
   toast.error('Input connection unavailable', {
-    description: 'Input was not sent. Reconnect the console before continuing.',
+    description: 'Input was not sent. Wait for the HID connection to recover.',
   })
 }
 
@@ -2437,7 +2437,7 @@ function schedulePendingTouchTap(mode: 'absolute' | 'relative', x: number, y: nu
   pendingTouchTap = tap
 }
 
-function clearTouchPointer() {
+function clearTouchPointer(releaseButton = true) {
   const activePointer = touchPointer
   touchPointer = null
 
@@ -2457,14 +2457,14 @@ function clearTouchPointer() {
     }
   }
 
-  if (activePointer.leftButtonDown) {
+  if (releaseButton && activePointer.leftButtonDown) {
     flushPendingMouseMovesImmediately()
     sendMouseEvent({ type: 'up', button: 'left' })
   }
 }
 
-function resetTouchInput() {
-  clearTouchPointer()
+function resetTouchInput(releaseButton = true) {
+  clearTouchPointer(releaseButton)
   clearPendingTouchTap(false)
 }
 
@@ -2901,6 +2901,19 @@ function handleBlur() {
     sendMouseEvent({ type: 'up', button })
   }
 }
+
+watch(
+  () => videoMode.value === 'mjpeg' ? hidWs.connected.value : webrtc.dataChannelReady.value,
+  (ready, wasReady) => {
+    if (ready || !wasReady) return
+    resetTouchInput(false)
+    pressedKeys.value = []
+    activeModifierMask.value = 0
+    pressedMouseButton.value = null
+    pendingMouseMove = null
+    accumulatedDelta = { x: 0, y: 0 }
+  },
+)
 
 function handleCursorVisibilityChange(e: Event) {
   const customEvent = e as CustomEvent<{ visible: boolean }>

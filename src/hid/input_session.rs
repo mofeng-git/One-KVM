@@ -113,7 +113,16 @@ impl HidInputSession {
         if state.closed {
             return Err(AppError::BadRequest("HID connection closed".into()));
         }
-        sink.admit(event.clone()).await?;
+        if let Err(error) = sink.admit(event.clone()).await {
+            if matches!(error, AppError::ServiceUnavailable(_)) {
+                // The controller's recovery resets all held input before it
+                // accepts a replacement session. A late close must not release
+                // keys that the replacement has already pressed.
+                state.closed = true;
+                state.held = HeldInputs::default();
+            }
+            return Err(error);
+        }
         state.held.observe(&event);
         Ok(())
     }
@@ -138,10 +147,14 @@ mod tests {
     struct Sink {
         events: Mutex<Vec<HidChannelEvent>>,
         fail: AtomicBool,
+        recovering: AtomicBool,
     }
     #[async_trait::async_trait]
     impl InputSink for Sink {
         async fn admit(&self, e: HidChannelEvent) -> Result<()> {
+            if self.recovering.load(Ordering::Acquire) {
+                return Err(AppError::ServiceUnavailable("injected recovery".into()));
+            }
             if self.fail.load(Ordering::Acquire) {
                 return Err(AppError::BadRequest("injected".into()));
             }
@@ -257,6 +270,21 @@ mod tests {
             .dispatch(&sink, HidChannelEvent::Mouse(MouseEvent::move_abs(1, 2)))
             .await
             .is_err());
+    }
+    #[tokio::test]
+    async fn old_session_does_not_release_replacement_input_after_queue_reset() {
+        let sink = Sink::default();
+        let old = HidInputSession::default();
+        let replacement = HidInputSession::default();
+        let down = HidChannelEvent::Mouse(MouseEvent::button_down(MouseButton::Left));
+        old.dispatch(&sink, down.clone()).await.unwrap();
+        sink.recovering.store(true, Ordering::Release);
+        let movement = HidChannelEvent::Mouse(MouseEvent::move_abs(1, 2));
+        assert!(old.dispatch(&sink, movement).await.is_err());
+        sink.recovering.store(false, Ordering::Release);
+        replacement.dispatch(&sink, down).await.unwrap();
+        old.close(&sink).await.unwrap();
+        assert_eq!(sink.events.lock().await.len(), 2);
     }
     #[tokio::test]
     async fn keyboard_and_modifier_disconnect_release_owned_state() {

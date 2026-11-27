@@ -9,6 +9,7 @@ import {
   RESP_OK,
   RESP_ERR_HID_UNAVAILABLE,
   RESP_ERR_INVALID_MESSAGE,
+  RESP_RETRY_AFTER_RESET,
 } from '@/types/hid'
 import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
 
@@ -68,6 +69,10 @@ function connect(): Promise<boolean> {
               networkError.value = false
               connectionResolved = true
               resolve(true)
+            } else if (code === RESP_RETRY_AFTER_RESET) {
+              // The server closes this session. Allow the normal reconnect
+              // path to open a fresh one when the controller has recovered.
+              hidUnavailable.value = false
             } else if (code === RESP_ERR_INVALID_MESSAGE) {
               console.warn('[HID] Server rejected message as invalid')
             }

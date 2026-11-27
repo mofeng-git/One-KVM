@@ -220,7 +220,9 @@ enum WorkerCommand {
     ReadDescriptor {
         result_tx: oneshot::Sender<Result<Ch9329DescriptorState>>,
     },
-    ResetState,
+    ResetState {
+        result_tx: Option<oneshot::Sender<Result<()>>>,
+    },
     Shutdown,
 }
 
@@ -845,7 +847,12 @@ impl Ch9329Backend {
             | WorkerCommand::ReadDescriptor { result_tx } => {
                 let _ = result_tx.send(Err(err()));
             }
-            WorkerCommand::Packet { .. } | WorkerCommand::ResetState | WorkerCommand::Shutdown => {}
+            WorkerCommand::ResetState {
+                result_tx: Some(result_tx),
+            } => {
+                let _ = result_tx.send(Err(err()));
+            }
+            _ => {}
         }
     }
 
@@ -854,13 +861,18 @@ impl Ch9329Backend {
             (cmd::SEND_KB_GENERAL_DATA, vec![0; 8]),
             (cmd::SEND_MS_REL_DATA, vec![0x01, 0, 0, 0, 0]),
             (cmd::SEND_MS_ABS_DATA, vec![0x02, 0, 0, 0, 0, 0, 0]),
+            (cmd::SEND_KB_MEDIA_DATA, vec![0x02, 0, 0, 0]),
         ];
 
+        let mut result = Ok(());
         for (cmd, data) in reset_sequence {
-            Self::xfer_packet(port, address, cmd, &data)?;
+            let release = Self::xfer_packet(port, address, cmd, &data)
+                .and_then(Self::ensure_success)
+                .map(|_| ());
+            result = result.and(release);
         }
 
-        Ok(())
+        result
     }
 
     fn clear_local_state(
@@ -1092,16 +1104,23 @@ impl Ch9329Backend {
                         port = new_port;
                     }
                 }
-                Ok(WorkerCommand::ResetState) => {
-                    Self::clear_local_state(&keyboard_state, &mouse_state);
-                    if let Err(err) = Self::release_state_on_port(port.as_mut(), address) {
-                        Self::record_runtime_error(&runtime, &err);
+                Ok(WorkerCommand::ResetState { result_tx }) => {
+                    let result = Self::release_state_on_port(port.as_mut(), address);
+                    let success = result.is_ok();
+                    if let Err(ref err) = result {
+                        Self::record_runtime_error(&runtime, err);
+                    } else {
+                        Self::clear_local_state(&keyboard_state, &mouse_state);
+                        runtime.set_online();
+                    }
+                    if let Some(result_tx) = result_tx {
+                        let _ = result_tx.send(result);
+                    }
+                    if !success {
                         let Some(new_port) = recover_port(port) else {
                             break;
                         };
                         port = new_port;
-                    } else {
-                        runtime.set_online();
                     }
                 }
                 Ok(WorkerCommand::Shutdown) => break,
@@ -1334,23 +1353,14 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn reset(&self) -> Result<()> {
-        {
-            let mut state = self.keyboard_state.lock();
-            state.clear();
-            let report = state.clone();
-            drop(state);
-            self.send_keyboard_report(&report)?;
-        }
-
-        let mut mouse = self.mouse_state.lock();
-        // Preserve CH9329's existing reset-to-origin and both-output release.
-        mouse.release_buttons();
-        *mouse = MouseState::default();
+        let (result_tx, result_rx) = oneshot::channel();
+        self.enqueue_command(WorkerCommand::ResetState {
+            result_tx: Some(result_tx),
+        })?;
+        result_rx
+            .await
+            .map_err(|_| Self::backend_error("CH9329 worker stopped", "worker_stopped"))??;
         self.macos_drag_state.lock().reset();
-        self.send_mouse_relative(0, 0, 0, 0)?;
-        self.send_mouse_absolute(0, 0, 0, 0)?;
-
-        let _ = self.release_media_keys();
 
         info!("CH9329 HID state reset");
         Ok(())
@@ -1361,7 +1371,7 @@ impl HidBackend for Ch9329Backend {
             // No mouse event may enter the queue between final release and
             // shutdown. Drop this guard before joining: the worker clears state.
             let _mouse = self.mouse_state.lock();
-            let _ = self.enqueue_command(WorkerCommand::ResetState);
+            let _ = self.enqueue_command(WorkerCommand::ResetState { result_tx: None });
             let sender = self.worker_tx.lock().take();
             if let Some(sender) = sender {
                 let _ = sender.send(WorkerCommand::Shutdown);
@@ -1752,7 +1762,6 @@ mod tests {
             backend.send_mouse(event).await.unwrap();
         }
         assert_eq!(backend.mouse_state.lock().absolute(), (8192, 12288));
-        backend.reset().await.unwrap();
         assert_eq!(
             mouse_packets(&rx),
             vec![
@@ -1761,11 +1770,36 @@ mod tests {
                 (cmd::SEND_MS_ABS_DATA, vec![2, 1, 204, 8, 0, 8, 255]),
                 (cmd::SEND_MS_ABS_DATA, vec![2, 1, 0, 4, 0, 6, 0]),
                 (cmd::SEND_MS_ABS_DATA, vec![2, 0, 0, 4, 0, 6, 0]),
-                (cmd::SEND_MS_REL_DATA, vec![1, 0, 0, 0, 0]),
-                (cmd::SEND_MS_ABS_DATA, vec![2, 0, 0, 0, 0, 0, 0]),
             ]
         );
+        let reset = backend.reset();
+        tokio::pin!(reset);
+        assert!(futures::poll!(&mut reset).is_pending());
+        let WorkerCommand::ResetState {
+            result_tx: Some(result_tx),
+        } = rx.try_recv().unwrap()
+        else {
+            panic!("expected a reset that requires an acknowledgement");
+        };
+        Ch9329Backend::clear_local_state(&backend.keyboard_state, &backend.mouse_state);
+        result_tx.send(Ok(())).unwrap();
+        reset.await.unwrap();
         assert_eq!(backend.mouse_state.lock().absolute(), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn reset_rejected_during_reconnect_is_reported_as_failed() {
+        let backend = Ch9329Backend::new("/dev/null").unwrap();
+        let (tx, rx) = mpsc::channel();
+        *backend.worker_tx.lock() = Some(tx);
+        let reset = backend.reset();
+        tokio::pin!(reset);
+        assert!(futures::poll!(&mut reset).is_pending());
+        Ch9329Backend::reject_command_while_reconnecting(rx.try_recv().unwrap());
+        assert!(matches!(
+            reset.await,
+            Err(AppError::HidError { error_code, .. }) if error_code == "reconnecting"
+        ));
     }
 
     #[tokio::test]

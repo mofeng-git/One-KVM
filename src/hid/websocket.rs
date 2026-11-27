@@ -13,12 +13,14 @@ use tracing::{debug, error, info, warn};
 
 use super::datachannel::parse_hid_message;
 use super::input_session::HidInputSession;
+use crate::error::AppError;
 use crate::state::AppState;
 use crate::utils::LogThrottler;
 
 const RESP_OK: u8 = 0x00;
 const RESP_ERR_HID_UNAVAILABLE: u8 = 0x01;
 const RESP_ERR_INVALID_MESSAGE: u8 = 0x02;
+const RESP_RETRY_AFTER_RESET: u8 = 0x03;
 
 pub async fn ws_hid_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(move |socket| handle_hid_socket(socket, state))
@@ -61,13 +63,22 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
                     continue;
                 }
 
-                if let Err(e) = handle_binary_message(&data, &state, &input).await {
+                let Some(event) = parse_hid_message(&data) else {
+                    let _ = sender
+                        .send(Message::Binary(vec![RESP_ERR_INVALID_MESSAGE].into()))
+                        .await;
+                    continue;
+                };
+                if let Err(e) = input.dispatch(state.hid.as_ref(), event).await {
                     if log_throttler.should_log("binary_hid_error") {
                         warn!("Binary HID message error: {}", e);
                     }
-                    let _ = sender
-                        .send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE].into()))
-                        .await;
+                    let response = if matches!(e, AppError::ServiceUnavailable(_)) {
+                        RESP_RETRY_AFTER_RESET
+                    } else {
+                        RESP_ERR_HID_UNAVAILABLE
+                    };
+                    let _ = sender.send(Message::Binary(vec![response].into())).await;
                     break;
                 }
             }
@@ -100,20 +111,9 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
     if let Err(e) = input.close(state.hid.as_ref()).await {
         warn!("Failed to release owned HID on WebSocket disconnect: {}", e);
     }
+    let _ = sender.close().await;
 
     info!("WebSocket HID connection ended");
-}
-
-async fn handle_binary_message(
-    data: &[u8],
-    state: &AppState,
-    input: &HidInputSession,
-) -> Result<(), String> {
-    let event = parse_hid_message(data).ok_or("Invalid binary HID message")?;
-    input
-        .dispatch(state.hid.as_ref(), event)
-        .await
-        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

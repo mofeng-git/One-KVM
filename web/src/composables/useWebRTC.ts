@@ -89,6 +89,7 @@ async function fetchIceServers(): Promise<RTCIceServer[]> {
 
 let peerConnection: RTCPeerConnection | null = null
 let dataChannel: RTCDataChannel | null = null
+let dataChannelRetry: number | null = null
 let sessionId: string | null = null
 const sessionIdRef = ref<string | null>(null)
 let statsInterval: number | null = null
@@ -157,6 +158,7 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   const pc = new RTCPeerConnection(config)
 
   pc.onconnectionstatechange = () => {
+    if (peerConnection !== pc) return
     switch (pc.connectionState) {
       case 'connecting':
         state.value = 'connecting'
@@ -166,6 +168,7 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
         setConnectStage('connected')
         error.value = null
         startStatsCollection()
+        if (!dataChannel) retryDataChannel(pc)
         break
       case 'disconnected':
       case 'closed':
@@ -222,13 +225,28 @@ function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
   }
 
   pc.ondatachannel = (event) => {
-    setupDataChannel(event.channel)
+    if (peerConnection === pc) setupDataChannel(pc, event.channel)
   }
 
   return pc
 }
 
-function setupDataChannel(channel: RTCDataChannel) {
+function retryDataChannel(pc: RTCPeerConnection) {
+  if (peerConnection !== pc || pc.connectionState !== 'connected' || dataChannelRetry !== null) return
+  dataChannelRetry = window.setTimeout(() => {
+    dataChannelRetry = null
+    if (peerConnection === pc && pc.connectionState === 'connected' && !dataChannel) {
+      try {
+        createDataChannel(pc)
+      } catch (err) {
+        videoDebugLog('Failed to reopen HID data channel', { error: err, sessionId })
+        retryDataChannel(pc)
+      }
+    }
+  }, 1000)
+}
+
+function setupDataChannel(pc: RTCPeerConnection, channel: RTCDataChannel) {
   dataChannel = channel
   channel.binaryType = 'arraybuffer'
 
@@ -239,7 +257,9 @@ function setupDataChannel(channel: RTCDataChannel) {
 
   channel.onclose = () => {
     if (dataChannel !== channel) return
+    dataChannel = null
     dataChannelReady.value = false
+    retryDataChannel(pc)
   }
 
   channel.onerror = (event) => {
@@ -266,7 +286,7 @@ function createDataChannel(pc: RTCPeerConnection): RTCDataChannel {
     ordered: true,
     // HID edges must not be abandoned after a retransmission limit.
   })
-  setupDataChannel(channel)
+  setupDataChannel(pc, channel)
   return channel
 }
 
@@ -570,6 +590,10 @@ async function disconnect() {
   connectAbortController?.abort()
   connectAbortController = null
   stopStatsCollection()
+  if (dataChannelRetry !== null) {
+    window.clearTimeout(dataChannelRetry)
+    dataChannelRetry = null
+  }
 
   // Clear state FIRST to prevent ICE candidates from being sent
   const oldSessionId = sessionId
@@ -579,11 +603,10 @@ async function disconnect() {
   pendingIceCandidates = []
   seenRemoteCandidates.clear()
 
-  if (dataChannel) {
-    dataChannel.close()
-    dataChannel = null
-    dataChannelReady.value = false
-  }
+  const oldDataChannel = dataChannel
+  dataChannel = null
+  dataChannelReady.value = false
+  oldDataChannel?.close()
 
   if (peerConnection) {
     peerConnection.close()
