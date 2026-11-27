@@ -160,6 +160,7 @@ struct RkmppNativeMjpegH264 {
     MppBuffer dec_buf[2] = {nullptr, nullptr};
     MppFrame dec_frame[2] = {nullptr, nullptr};
     int dec_slot = 0;
+    bool failed = false;
 
     MppCtx enc_ctx = nullptr;
     MppApi *enc_api = nullptr;
@@ -195,6 +196,7 @@ struct RkmppNativeMjpegH264 {
     // Completed packet (read by caller when !job_busy)
     std::vector<uint8_t> ready_pkt;
     int ready_keyframe = 0;
+    int64_t ready_pts_us = 0;
     int ready_status = 0;
     char ready_error[192] = {};
     std::vector<uint8_t> caller_pkt;
@@ -280,21 +282,22 @@ struct RkmppNativeMjpegH264 {
                 } else {
                     MppPacket enc_packet = nullptr;
                     ret = enc_api->encode_get_packet(enc_ctx, &enc_packet);
-                    if (ret == MPP_ERR_TIMEOUT || !enc_packet) {
-                        // Non-fatal empty output
-                    } else if (ret != MPP_OK) {
+                    if (ret != MPP_OK || !enc_packet) {
                         set_err("encode_get_packet", ret);
+                    } else if (mpp_packet_is_partition(enc_packet) ||
+                               !mpp_packet_get_pos(enc_packet) ||
+                               !mpp_packet_get_length(enc_packet)) {
+                        set_err("incomplete native MJPEG encoder output", -1);
                     } else {
                         const auto *pkt_data = static_cast<const uint8_t *>(mpp_packet_get_pos(enc_packet));
                         const size_t pkt_len = mpp_packet_get_length(enc_packet);
-                        if (pkt_data && pkt_len > 0) {
-                            out_pkt.assign(pkt_data, pkt_data + pkt_len);
-                            out_key = is_h264_idr(pkt_data, pkt_len);
-                        }
-                        mpp_packet_deinit(&enc_packet);
+                        out_pkt.assign(pkt_data, pkt_data + pkt_len);
+                        out_key = is_h264_idr(pkt_data, pkt_len);
                     }
+                    if (enc_packet) mpp_packet_deinit(&enc_packet);
                 }
             }
+            mpp_buffer_put(buf);
 
             const auto t1 = std::chrono::steady_clock::now();
             const uint64_t enc_us = static_cast<uint64_t>(
@@ -304,6 +307,7 @@ struct RkmppNativeMjpegH264 {
                 std::lock_guard<std::mutex> lock(mtx);
                 ready_pkt = std::move(out_pkt);
                 ready_keyframe = out_key;
+                ready_pts_us = pts_us;
                 ready_status = status;
                 std::memcpy(ready_error, err_buf, sizeof(ready_error));
                 stat_enc_us += enc_us;
@@ -322,13 +326,13 @@ struct RkmppNativeMjpegH264 {
             cv_job.notify_all();
             enc_thread.join();
         }
-        if (enc_frame) {
-            mpp_frame_deinit(&enc_frame);
-        }
         if (enc_ctx) {
             if (enc_api) enc_api->reset(enc_ctx);
             mpp_destroy(enc_ctx);
             enc_ctx = nullptr;
+        }
+        if (enc_frame) {
+            mpp_frame_deinit(&enc_frame);
         }
         if (enc_cfg) {
             mpp_enc_cfg_deinit(enc_cfg);
@@ -390,8 +394,10 @@ extern "C" RkmppNativeMjpegH264 *rkmpp_native_mjpeg_h264_new(
     int ret = mpp_create(&p->dec_ctx, &p->dec_api);
     if (ret) return abort_init("mpp_create JPEG decoder", ret);
     RK_S64 dec_timeout = 200;
-    (void)p->dec_api->control(p->dec_ctx, MPP_SET_INPUT_TIMEOUT, &dec_timeout);
-    (void)p->dec_api->control(p->dec_ctx, MPP_SET_OUTPUT_TIMEOUT, &dec_timeout);
+    ret = p->dec_api->control(p->dec_ctx, MPP_SET_INPUT_TIMEOUT, &dec_timeout);
+    if (ret) return abort_init("JPEG MPP_SET_INPUT_TIMEOUT", ret);
+    ret = p->dec_api->control(p->dec_ctx, MPP_SET_OUTPUT_TIMEOUT, &dec_timeout);
+    if (ret) return abort_init("JPEG MPP_SET_OUTPUT_TIMEOUT", ret);
 
     ret = mpp_init(p->dec_ctx, MPP_CTX_DEC, MPP_VIDEO_CodingMJPEG);
     if (ret) return abort_init("mpp_init JPEG decoder", ret);
@@ -434,8 +440,10 @@ extern "C" RkmppNativeMjpegH264 *rkmpp_native_mjpeg_h264_new(
     ret = mpp_create(&p->enc_ctx, &p->enc_api);
     if (ret) return abort_init("mpp_create H264 encoder", ret);
     RK_S64 enc_timeout = 2000;
-    (void)p->enc_api->control(p->enc_ctx, MPP_SET_INPUT_TIMEOUT, &enc_timeout);
-    (void)p->enc_api->control(p->enc_ctx, MPP_SET_OUTPUT_TIMEOUT, &enc_timeout);
+    ret = p->enc_api->control(p->enc_ctx, MPP_SET_INPUT_TIMEOUT, &enc_timeout);
+    if (ret) return abort_init("MPP_SET_INPUT_TIMEOUT", ret);
+    ret = p->enc_api->control(p->enc_ctx, MPP_SET_OUTPUT_TIMEOUT, &enc_timeout);
+    if (ret) return abort_init("MPP_SET_OUTPUT_TIMEOUT", ret);
 
     ret = mpp_init(p->enc_ctx, MPP_CTX_ENC, MPP_VIDEO_CodingAVC);
     if (ret) return abort_init("mpp_init H264 encoder", ret);
@@ -468,14 +476,16 @@ extern "C" int rkmpp_native_mjpeg_h264_encode(
     int force_idr,
     const uint8_t **out_data,
     size_t *out_size,
-    int *out_keyframe) {
-    if (!p || !p->dec_ctx || !p->enc_ctx || !jpeg_data || jpeg_len < 2 ||
-        !out_data || !out_size || !out_keyframe) {
+    int *out_keyframe,
+    int64_t *out_pts_us) {
+    if (!p || p->failed || !p->dec_ctx || !p->enc_ctx || !jpeg_data || jpeg_len < 2 ||
+        !out_data || !out_size || !out_keyframe || !out_pts_us) {
         return fail("invalid native MJPEG->H264 encode call", -1);
     }
     *out_data = nullptr;
     *out_size = 0;
     *out_keyframe = 0;
+    *out_pts_us = 0;
 
     if (jpeg_data[0] != 0xFF || jpeg_data[1] != 0xD8) {
         return fail("invalid JPEG SOI header", -1);
@@ -514,16 +524,17 @@ extern "C" int rkmpp_native_mjpeg_h264_encode(
 
     ret = p->dec_api->decode_put_packet(p->dec_ctx, dec_pkt);
     mpp_packet_deinit(&dec_pkt);
-    if (ret != MPP_OK) return fail("JPEG decode_put_packet", ret);
+    if (ret != MPP_OK) {
+        p->failed = true;
+        return fail("JPEG decode_put_packet", ret);
+    }
 
     MppFrame decoded = nullptr;
     ret = p->dec_api->decode_get_frame(p->dec_ctx, &decoded);
-    if (ret == MPP_ERR_TIMEOUT || !decoded) {
-        return 0;
-    }
-    if (ret != MPP_OK || mpp_frame_get_errinfo(decoded) ||
+    if (ret != MPP_OK || !decoded || mpp_frame_get_errinfo(decoded) ||
         mpp_frame_get_discard(decoded) || mpp_frame_get_info_change(decoded)) {
-        if (decoded != p->dec_frame[slot]) mpp_frame_deinit(&decoded);
+        p->failed = true;
+        if (decoded && decoded != p->dec_frame[slot]) mpp_frame_deinit(&decoded);
         return fail("JPEG decode_get_frame", ret);
     }
 
@@ -533,10 +544,18 @@ extern "C" int rkmpp_native_mjpeg_h264_encode(
     const int vs = static_cast<int>(mpp_frame_get_ver_stride(decoded));
     const MppFrameFormat fmt = mpp_frame_get_fmt(decoded);
     MppBuffer out_buf = mpp_frame_get_buffer(decoded);
-    if (decoded != p->dec_frame[slot]) mpp_frame_deinit(&decoded);
-
     if (!out_buf || fw != p->width || fh != p->height || hs < fw || vs < fh) {
+        p->failed = true;
+        if (decoded != p->dec_frame[slot]) mpp_frame_deinit(&decoded);
         return fail("unexpected JPEG decoded geometry", -1);
+    }
+    // The decoder may return a frame it owns instead of the supplied slot.
+    // Keep its buffer alive independently until the encoder worker takes it.
+    ret = mpp_buffer_inc_ref(out_buf);
+    if (decoded != p->dec_frame[slot]) mpp_frame_deinit(&decoded);
+    if (ret != MPP_OK) {
+        p->failed = true;
+        return fail("retain JPEG decoded buffer", ret);
     }
 
     const auto t_dec1 = std::chrono::steady_clock::now();
@@ -557,6 +576,7 @@ extern "C" int rkmpp_native_mjpeg_h264_encode(
             *out_data = p->caller_pkt.data();
             *out_size = p->caller_pkt.size();
             *out_keyframe = p->ready_keyframe;
+            *out_pts_us = p->ready_pts_us;
         }
         p->ready_pkt.clear();
         p->ready_keyframe = 0;
@@ -589,6 +609,8 @@ extern "C" int rkmpp_native_mjpeg_h264_encode(
         }
     }
     if (prev_status != 0) {
+        p->failed = true;
+        mpp_buffer_put(out_buf);
         return -1;
     }
     p->cv_job.notify_one();
@@ -626,6 +648,11 @@ struct RkmppNativeEncoder {
     int format = 0; // 0: NV12, 1: YUYV422, 2: YUV420P
 
     void close() {
+        if (ctx) {
+            if (api) api->reset(ctx);
+            mpp_destroy(ctx);
+            ctx = nullptr;
+        }
         if (packet) mpp_packet_deinit(&packet);
         if (frame) mpp_frame_deinit(&frame);
         if (frm_buf) {
@@ -639,11 +666,6 @@ struct RkmppNativeEncoder {
         if (cfg) {
             mpp_enc_cfg_deinit(cfg);
             cfg = nullptr;
-        }
-        if (ctx) {
-            if (api) api->reset(ctx);
-            mpp_destroy(ctx);
-            ctx = nullptr;
         }
     }
 
@@ -678,8 +700,10 @@ extern "C" RkmppNativeEncoder *rkmpp_native_enc_new(
     int ret = mpp_create(&e->ctx, &e->api);
     if (ret) return abort_init("mpp_create", ret);
     RK_S64 timeout = 2000;
-    (void)e->api->control(e->ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
-    (void)e->api->control(e->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
+    ret = e->api->control(e->ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
+    if (ret) return abort_init("MPP_SET_INPUT_TIMEOUT", ret);
+    ret = e->api->control(e->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
+    if (ret) return abort_init("MPP_SET_OUTPUT_TIMEOUT", ret);
 
     ret = mpp_init(e->ctx, MPP_CTX_ENC, MPP_VIDEO_CodingAVC);
     if (ret) return abort_init("mpp_init", ret);
@@ -808,22 +832,25 @@ extern "C" int rkmpp_native_enc_encode(
     mpp_frame_set_eos(e->frame, 0);
     mpp_frame_set_pts(e->frame, pts_us);
 
+    // Only a complete packet proves that MPP has consumed the input. Reset
+    // before the next call can write to the same staging buffer.
+    auto abort_encode = [e](const char *op, int ret) {
+        if (e->api->reset(e->ctx) != MPP_OK) e->close();
+        return fail(op, ret);
+    };
     int ret = e->api->encode_put_frame(e->ctx, e->frame);
-    if (ret != MPP_OK) return fail("encode_put_frame", ret);
+    if (ret != MPP_OK) return abort_encode("encode_put_frame", ret);
 
     ret = e->api->encode_get_packet(e->ctx, &e->packet);
-    if (ret == MPP_ERR_TIMEOUT || !e->packet) {
-        return 0;
-    }
-    if (ret != MPP_OK) return fail("encode_get_packet", ret);
+    if (ret != MPP_OK || !e->packet) return abort_encode("encode_get_packet", ret);
 
     const auto *pkt_data = static_cast<const uint8_t *>(mpp_packet_get_pos(e->packet));
     const size_t pkt_len = mpp_packet_get_length(e->packet);
-    if (pkt_data && pkt_len > 0) {
-        *out_data = pkt_data;
-        *out_size = pkt_len;
-        *out_keyframe = is_h264_idr(pkt_data, pkt_len);
-    }
+    if (mpp_packet_is_partition(e->packet) || !pkt_data || !pkt_len)
+        return abort_encode("incomplete native encoder output", -1);
+    *out_data = pkt_data;
+    *out_size = pkt_len;
+    *out_keyframe = is_h264_idr(pkt_data, pkt_len);
     return 0;
 }
 
@@ -847,7 +874,7 @@ extern "C" RkmppNativeMjpegH264 *rkmpp_native_mjpeg_h264_new(int, int, int, int,
 }
 extern "C" int rkmpp_native_mjpeg_h264_encode(
     RkmppNativeMjpegH264 *, const uint8_t *, size_t, int64_t, int,
-    const uint8_t **, size_t *, int *) {
+    const uint8_t **, size_t *, int *, int64_t *) {
     return -1;
 }
 extern "C" int rkmpp_native_mjpeg_h264_reconfigure(RkmppNativeMjpegH264 *, int, int) { return -1; }

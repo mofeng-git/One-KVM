@@ -43,19 +43,21 @@ impl HwMjpegPipeline {
         data: &[u8],
         pts_ms: i64,
         force_idr: bool,
-    ) -> std::result::Result<Option<(Vec<u8>, bool)>, String> {
+    ) -> std::result::Result<Option<(Vec<u8>, bool, i64)>, String> {
         match self {
             Self::Ffmpeg(p) => {
                 if force_idr {
                     p.request_keyframe();
                 }
-                p.encode(data, pts_ms).map_err(|e| {
-                    if e.is_empty() {
-                        ffmpeg_hw_last_error()
-                    } else {
-                        e
-                    }
-                })
+                p.encode(data, pts_ms)
+                    .map(|packet| packet.map(|(data, keyframe)| (data, keyframe, pts_ms)))
+                    .map_err(|e| {
+                        if e.is_empty() {
+                            ffmpeg_hw_last_error()
+                        } else {
+                            e
+                        }
+                    })
             }
             #[cfg(target_os = "linux")]
             Self::NativeMpp(p) => p.encode(data, pts_ms, force_idr).map_err(|e| {
@@ -68,7 +70,11 @@ impl HwMjpegPipeline {
         }
     }
 
-    pub(super) fn reconfigure(&mut self, bitrate_kbps: i32, gop: i32) -> std::result::Result<(), String> {
+    pub(super) fn reconfigure(
+        &mut self,
+        bitrate_kbps: i32,
+        gop: i32,
+    ) -> std::result::Result<(), String> {
         match self {
             Self::Ffmpeg(p) => p.reconfigure(bitrate_kbps, gop).map_err(|e| {
                 if e.is_empty() {
@@ -180,6 +186,7 @@ impl VideoEncoderTrait for H264EncoderWrapper {
 struct NativeMppEncoderWrapper {
     inner: NativeMppEncoder,
     force_idr: bool,
+    gop: u32,
 }
 
 #[cfg(all(target_os = "linux", feature = "rkmpp"))]
@@ -188,7 +195,12 @@ impl NativeMppEncoderWrapper {
         let fmt = match input_format {
             H264InputFormat::Yuyv422 => NativeMppPixelFormat::Yuyv422,
             H264InputFormat::Yuv420p => NativeMppPixelFormat::Yuv420p,
-            _ => NativeMppPixelFormat::Nv12,
+            H264InputFormat::Nv12 => NativeMppPixelFormat::Nv12,
+            _ => {
+                return Err(AppError::VideoError(
+                    "Unsupported native MPP input format".into(),
+                ))
+            }
         };
         let inner = NativeMppEncoder::new(
             NativeMppConfig {
@@ -204,6 +216,7 @@ impl NativeMppEncoderWrapper {
         Ok(Self {
             inner,
             force_idr: false,
+            gop: config.gop_size().max(1),
         })
     }
 }
@@ -219,16 +232,18 @@ impl VideoEncoderTrait for NativeMppEncoderWrapper {
                 pts: pts_ms,
             }]),
             Ok(None) => Ok(Vec::new()),
-            Err(e) => Err(AppError::VideoError(format!(
-                "Native MPP H264 encode failed: {}",
-                e
-            ))),
+            Err(e) => {
+                self.force_idr = true;
+                Err(AppError::VideoError(format!(
+                    "Native MPP H264 encode failed: {e}"
+                )))
+            }
         }
     }
 
     fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
         self.inner
-            .reconfigure(bitrate_kbps, 60)
+            .reconfigure(bitrate_kbps, self.gop)
             .map_err(|e| AppError::VideoError(format!("Native MPP reconfigure failed: {}", e)))
     }
 
@@ -266,15 +281,6 @@ fn is_rk33xx_soc() -> bool {
     }
 }
 
-#[cfg(all(target_os = "linux", feature = "rkmpp"))]
-fn to_native_rkmpp_format(input_format: H264InputFormat) -> H264InputFormat {
-    match input_format {
-        H264InputFormat::Yuyv422 => H264InputFormat::Yuyv422,
-        H264InputFormat::Yuv420p => H264InputFormat::Yuv420p,
-        _ => H264InputFormat::Nv12,
-    }
-}
-
 fn create_h264_encoder(
     config: &SharedVideoPipelineConfig,
     input_format: H264InputFormat,
@@ -288,9 +294,7 @@ fn create_h264_encoder(
         && is_rk33xx_soc()
         && std::env::var("ONE_KVM_RKMPP_MODE").as_deref() != Ok("ffmpeg")
     {
-        if let Ok(native) =
-            NativeMppEncoderWrapper::new(config, to_native_rkmpp_format(input_format))
-        {
+        if let Ok(native) = NativeMppEncoderWrapper::new(config, input_format) {
             info!(
                 "Created H264 encoder: {} (RK33xx aligned native MPP)",
                 native.codec_name()
@@ -319,14 +323,14 @@ fn create_h264_encoder(
         }
         Err(err) => {
             #[cfg(all(target_os = "linux", feature = "rkmpp"))]
-            if codec_name.contains("rkmpp") {
+            if codec_name.contains("rkmpp")
+                && std::env::var("ONE_KVM_RKMPP_MODE").as_deref() != Ok("ffmpeg")
+            {
                 warn!(
                     "FFmpeg RKMPP encoder ({}) failed ({}), falling back to native MPP C API",
                     codec_name, err
                 );
-                if let Ok(native) =
-                    NativeMppEncoderWrapper::new(config, to_native_rkmpp_format(input_format))
-                {
+                if let Ok(native) = NativeMppEncoderWrapper::new(config, input_format) {
                     info!("Created H264 encoder: {}", native.codec_name());
                     return Ok(Box::new(native));
                 }
@@ -891,9 +895,6 @@ pub(super) fn fallback_hw_mjpeg_pipeline(
         "Hardware MJPEG pipeline failed ({}), falling back to libyuv MJPEG decode + encoder",
         reason
     );
-    state.ffmpeg_hw_pipeline = None;
-    state.ffmpeg_hw_enabled = false;
-
     let (mjpeg_decoder, _) = create_mjpeg_decoder(config.resolution)?;
     #[cfg(target_os = "linux")]
     let encoder: Box<dyn VideoEncoderTrait + Send> =
@@ -931,6 +932,8 @@ pub(super) fn fallback_hw_mjpeg_pipeline(
         needs_yuv420p,
     )?;
 
+    state.ffmpeg_hw_pipeline = None;
+    state.ffmpeg_hw_enabled = false;
     state.mjpeg_decoder = Some(mjpeg_decoder);
     state.encoder = Some(encoder);
     state.nv12_converter = None;

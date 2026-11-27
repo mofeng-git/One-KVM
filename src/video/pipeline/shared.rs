@@ -268,7 +268,6 @@ fn spawn_mjpeg_decode_workers(
     senders
 }
 
-
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
 pub struct EncodedVideoFrame {
@@ -1867,7 +1866,7 @@ impl SharedVideoPipeline {
                 }
             };
 
-            if let Some((data, is_keyframe)) = packet {
+            if let Some((data, is_keyframe, pts_ms)) = packet {
                 let (data, is_keyframe) =
                     self.inspect_and_parameterize_packet(codec, Bytes::from(data), is_keyframe);
                 let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;

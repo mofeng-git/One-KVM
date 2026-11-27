@@ -162,8 +162,10 @@ extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     int ret = mpp_create(&e->ctx, &e->api);
     if (ret) return abort_init("mpp_create", ret);
     RK_S64 timeout = 2000;
-    (void)e->api->control(e->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
-    (void)e->api->control(e->ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
+    ret = e->api->control(e->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
+    if (ret) return abort_init("MPP_SET_OUTPUT_TIMEOUT", ret);
+    ret = e->api->control(e->ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
+    if (ret) return abort_init("MPP_SET_INPUT_TIMEOUT", ret);
     ret = mpp_init(e->ctx, MPP_CTX_ENC, codec ? MPP_VIDEO_CodingHEVC : MPP_VIDEO_CodingAVC);
     if (ret) return abort_init("mpp_init", ret);
     ret = mpp_enc_cfg_init(&e->cfg);
