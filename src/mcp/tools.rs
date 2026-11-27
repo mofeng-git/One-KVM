@@ -16,17 +16,21 @@ use std::sync::Arc;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScreenshotParams {
+    /// Stable source ID from get_status; omitted means the primary source.
+    pub source_id: Option<String>,
     /// Optional JPEG quality, 1 to 100. Native width and height are always preserved.
     pub quality: Option<u8>,
 }
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionsParams {
-    /// One to 32 actions. Pointer x/y values are normalized to [0,1] over the whole screen.
+    /// One to 32 actions. Absolute x/y are [0,1] in single-source mode; unmapped multisource rejects the whole absolute batch.
     pub actions: Vec<Action>,
     /// Return a fresh native-resolution JPEG after executing the batch.
     #[serde(default)]
     pub return_screenshot: bool,
+    /// Optional source for the post-action screenshot; defaults to primary.
+    pub screenshot_source_id: Option<String>,
 }
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -86,24 +90,30 @@ impl McpTools {
 
     #[tool(
         name = "one_kvm_screenshot",
-        description = "Capture a fresh JPEG at the current source resolution, without resizing or cropping. No browser is needed. Coordinates for pointer actions are normalized to [0,1] over this whole image."
+        description = "Capture a fresh native-resolution JPEG from source_id (default primary), with source ID, size and frame age. A source image does not define multi-monitor HID coordinates."
     )]
     async fn screenshot(&self, Parameters(params): Parameters<ScreenshotParams>) -> CallToolResult {
         if params.quality.is_some_and(|q| !(1..=100).contains(&q)) {
             return failure("invalid_arguments", "quality must be between 1 and 100", 0);
         }
-        self.service.call(Command::Screenshot(params.quality)).await
+        self.service
+            .call(Command::Screenshot(params.source_id, params.quality))
+            .await
     }
 
     #[tool(
         name = "one_kvm_execute_actions",
-        description = "Execute a bounded batch of physical HID actions in global FIFO order. Pointer coordinates are normalized: (0,0) top-left, (1,1) bottom-right. Positive vertical_steps scrolls down. Text uses the target's US keyboard layout (ASCII, newline, tab); no clipboard or arbitrary Unicode. All parameters are checked before input. No client ownership, tasks or cancellation. On connection failure, inspect the screen before retrying: actions may already have executed."
+        description = "Execute a bounded batch of physical HID actions in global FIFO order. Absolute coordinates are normalized to [0,1] for single-source setups. Multisource absolute batches require a verified host mapping and are rejected before any action. Use bounded move_relative (dx/dy -127..127 HID units), click_current and scroll_current without a mapping. Positive vertical_steps scrolls down. Text uses the target's US keyboard layout (ASCII, newline, tab); no clipboard or arbitrary Unicode. All parameters are checked before input. No client ownership, tasks or cancellation. On connection failure, inspect the screen before retrying: actions may already have executed."
     )]
     async fn actions(&self, Parameters(params): Parameters<ActionsParams>) -> CallToolResult {
         match actions::prepare(params.actions) {
             Ok(actions) => {
                 self.service
-                    .call(Command::Actions(actions, params.return_screenshot))
+                    .call(Command::Actions(
+                        actions,
+                        params.return_screenshot,
+                        params.screenshot_source_id,
+                    ))
                     .await
             }
             Err(message) => failure("invalid_arguments", &message, 0),
@@ -204,6 +214,25 @@ impl ServerHandler for McpTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_selection_and_relative_actions_are_in_the_public_schema() {
+        let screenshot: ScreenshotParams =
+            serde_json::from_value(serde_json::json!({"source_id":"3", "quality":60})).unwrap();
+        assert_eq!(screenshot.source_id.as_deref(), Some("3"));
+        let params: ActionsParams = serde_json::from_value(serde_json::json!({"actions":[
+            {"type":"move_relative", "dx":12, "dy":-3},
+            {"type":"click_current", "button":"left"},
+            {"type":"scroll_current", "vertical_steps":2}],
+            "return_screenshot":true, "screenshot_source_id":"2"}))
+        .unwrap();
+        assert_eq!(params.screenshot_source_id.as_deref(), Some("2"));
+        assert!(
+            !actions::prepare(params.actions)
+                .unwrap()
+                .needs_absolute_mouse
+        );
+    }
+
     #[test]
     fn screenshot_accepts_native_resolution_only() {
         assert!(serde_json::from_value::<ScreenshotParams>(serde_json::json!({})).is_ok());

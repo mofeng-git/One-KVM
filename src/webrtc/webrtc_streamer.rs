@@ -110,6 +110,9 @@ pub struct WebRtcStreamer {
     audio_controller: RwLock<Option<Arc<AudioController>>>,
     hid_controller: RwLock<Option<Arc<HidController>>>,
     events: RwLock<Option<Arc<EventBus>>>,
+    strict_device_recovery: AtomicBool,
+    recovery_generation: std::sync::atomic::AtomicU64,
+    recovery_lifecycle: tokio::sync::Mutex<()>,
     recovery_in_progress: AtomicBool,
     signal_recovery_pending: Arc<AtomicBool>,
     self_weak: StdRwLock<Option<std::sync::Weak<Self>>>,
@@ -131,6 +134,9 @@ impl WebRtcStreamer {
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
             events: RwLock::new(None),
+            strict_device_recovery: AtomicBool::new(false),
+            recovery_generation: std::sync::atomic::AtomicU64::new(0),
+            recovery_lifecycle: tokio::sync::Mutex::new(()),
             recovery_in_progress: AtomicBool::new(false),
             signal_recovery_pending: Arc::new(AtomicBool::new(false)),
             self_weak: StdRwLock::new(None),
@@ -390,6 +396,7 @@ impl WebRtcStreamer {
         }
         self.signal_recovery_pending.store(true, Ordering::Release);
 
+        let generation = self.recovery_generation.load(Ordering::SeqCst);
         let streamer = self.clone();
         tokio::spawn(async move {
             let original_device = hint.path.display().to_string();
@@ -426,6 +433,10 @@ impl WebRtcStreamer {
 
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
+                if streamer.recovery_generation.load(Ordering::SeqCst) != generation {
+                    streamer.recovery_in_progress.store(false, Ordering::SeqCst);
+                    return;
+                }
                 let devices = match enumerate_devices() {
                     Ok(devices) => devices,
                     Err(e) => {
@@ -434,7 +445,17 @@ impl WebRtcStreamer {
                     }
                 };
 
-                let Some(device) = select_recovery_device(&devices, &hint) else {
+                let _lifecycle = streamer.recovery_lifecycle.lock().await;
+                if streamer.recovery_generation.load(Ordering::SeqCst) != generation {
+                    streamer.recovery_in_progress.store(false, Ordering::SeqCst);
+                    return;
+                }
+                let recovered = if streamer.strict_device_recovery.load(Ordering::SeqCst) {
+                    crate::video::device::select_bound_recovery_device(&devices, &hint)
+                } else {
+                    select_recovery_device(&devices, &hint)
+                };
+                let Some(device) = recovered else {
                     debug!("No matching WebRTC video device found during recovery");
                     continue;
                 };
@@ -685,6 +706,15 @@ impl WebRtcStreamer {
         }
     }
 
+    /// Identity of the pipeline currently owned by this streamer, if any.
+    ///
+    /// External consumers (e.g. one-shot snapshots) compare this against the
+    /// pipeline they obtained earlier so a pipeline rebuilt while they waited
+    /// cannot be mistaken for a still-current capture source.
+    pub async fn current_video_pipeline(&self) -> Option<Arc<SharedVideoPipeline>> {
+        self.video_pipeline.read().await.clone()
+    }
+
     pub async fn current_video_geometry(&self) -> (Resolution, PixelFormat, u32) {
         if let Some(cfg) = self.get_pipeline_config().await {
             (cfg.resolution, cfg.input_format, cfg.fps)
@@ -774,6 +804,7 @@ impl WebRtcStreamer {
         jpeg_quality: u8,
         device_info: Option<VideoDeviceInfo>,
     ) {
+        let _lifecycle = self.recovery_lifecycle.lock().await;
         let (subdev_path, bridge_kind, control_mode, recovery_hint) = match device_info {
             Some(info) => (
                 info.subdev_path.clone(),
@@ -800,6 +831,17 @@ impl WebRtcStreamer {
             "Setting direct capture device for WebRTC: {:?} (subdev={:?}, kind={:?}, mode={:?})",
             device_path, subdev_path, bridge_kind, control_mode
         );
+        let mut recovery_hint = recovery_hint;
+        recovery_hint.path = device_path.clone();
+        if self
+            .capture_device
+            .read()
+            .await
+            .as_ref()
+            .is_none_or(|c| c.device_path != device_path)
+        {
+            self.recovery_generation.fetch_add(1, Ordering::SeqCst);
+        }
         *self.capture_device.write().await = Some(CaptureDeviceConfig {
             device_path,
             buffer_count: DEFAULT_CAPTURE_BUFFER_COUNT,
@@ -1170,6 +1212,8 @@ impl WebRtcStreamer {
     /// capture device. Use this when the caller needs the V4L2 device immediately
     /// afterwards (e.g. switching to MJPEG mode).
     pub async fn close_all_sessions_and_release_device(&self) -> Result<usize> {
+        let _lifecycle = self.recovery_lifecycle.lock().await;
+        self.recovery_generation.fetch_add(1, Ordering::SeqCst);
         let count = self.close_all_sessions().await;
 
         self.stop_video_pipeline_and_release().await?;
@@ -1326,6 +1370,9 @@ impl WebRtcStreamer {
 
 #[async_trait::async_trait]
 impl crate::video::traits::VideoOutput for WebRtcStreamer {
+    fn set_device_recovery_policy(&self, strict: bool) {
+        self.strict_device_recovery.store(strict, Ordering::SeqCst);
+    }
     async fn set_event_bus(&self, events: Arc<EventBus>) {
         self.set_event_bus(events).await;
     }
@@ -1384,6 +1431,10 @@ impl crate::video::traits::VideoOutput for WebRtcStreamer {
         self.ensure_video_pipeline_for_external().await
     }
 
+    async fn current_video_pipeline(&self) -> Option<Arc<SharedVideoPipeline>> {
+        self.current_video_pipeline().await
+    }
+
     async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig> {
         self.get_pipeline_config().await
     }
@@ -1421,6 +1472,9 @@ impl Default for WebRtcStreamer {
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
             events: RwLock::new(None),
+            strict_device_recovery: AtomicBool::new(false),
+            recovery_generation: std::sync::atomic::AtomicU64::new(0),
+            recovery_lifecycle: tokio::sync::Mutex::new(()),
             recovery_in_progress: AtomicBool::new(false),
             signal_recovery_pending: Arc::new(AtomicBool::new(false)),
             self_weak: StdRwLock::new(None),

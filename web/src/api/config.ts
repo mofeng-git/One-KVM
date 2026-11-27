@@ -69,11 +69,13 @@ export const authConfigApi = {
 export const videoConfigApi = {
   get: () => request<VideoConfig>('/config/video'),
 
+  // A runtime apply failure (503) still persists the desired config; the caller
+  // enriches the message with per-source state, so no raw duplicate toast.
   update: (config: VideoConfigUpdate) =>
     request<VideoConfig>('/config/video', {
       method: 'PATCH',
       body: JSON.stringify(config),
-    }),
+    }, { toastOnError: false }),
 }
 
 export const streamConfigApi = {

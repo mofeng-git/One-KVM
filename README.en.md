@@ -352,3 +352,5 @@ This project is supported by the following sponsors:
   <img height="128" alt="BTBT" src="https://github.com/user-attachments/assets/c442d5f5-d72f-4a07-b9f4-400a6a0c3f1e" />
 
   Remote computers, consumer GPU servers, and dedicated physical machines with fully automated online delivery.
+
+Native console with multiple capture inputs, source settings, layout presets and picture-first mode: [Multiple capture inputs](MULTIVIEW.md).

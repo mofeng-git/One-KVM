@@ -29,7 +29,8 @@ impl ConfigStore {
     pub async fn load(&self) -> Result<()> {
         let (mut config, removed_legacy_fields) = Self::load_config(&self.pool).await?;
         config.enforce_invariants();
-        if removed_legacy_fields {
+        let normalized_video = config.video.normalize_sources();
+        if removed_legacy_fields || normalized_video {
             Self::save_config_to_db(&self.pool, &config).await?;
         }
         self.cache.store(Arc::new(config));
@@ -143,6 +144,50 @@ mod tests {
     use super::*;
     use crate::db::DatabasePool;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn legacy_source_ids_are_persisted_once_without_resetting_mode() {
+        let dir = tempdir().unwrap();
+        let db = DatabasePool::new(&dir.path().join("sources.db"))
+            .await
+            .unwrap();
+        db.init_schema().await.unwrap();
+        let pool = db.clone_pool();
+        let legacy =
+            serde_json::json!({"video":{"sources":[{"device":"/dev/a"},{"device":"/dev/b"}]},
+            "stream":{"mode":"webrtc"}})
+            .to_string();
+        sqlx::query("INSERT INTO config (key,value) VALUES ('app_config',?1)")
+            .bind(legacy)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let store = ConfigStore::new(pool.clone());
+        store.load().await.unwrap();
+        assert_eq!(store.get().video.sources[0].id, "1");
+        assert_eq!(store.get().stream.mode, crate::config::StreamMode::WebRTC);
+        let (saved,): (String,) = sqlx::query_as("SELECT value FROM config WHERE key='app_config'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(value["video"]["sources"][1]["id"], "2");
+        let reloaded = ConfigStore::new(pool.clone());
+        reloaded.load().await.unwrap();
+        let (again,): (String,) = sqlx::query_as("SELECT value FROM config WHERE key='app_config'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(saved, again);
+        store.update(|c| c.video.sources.reverse()).await.unwrap();
+        reloaded.load().await.unwrap();
+        assert_eq!(reloaded.get().video.sources[0].id, "2");
+        assert_eq!(reloaded.get().video.primary_id(), "1");
+        assert_eq!(
+            reloaded.get().stream.mode,
+            crate::config::StreamMode::WebRTC
+        );
+    }
 
     #[tokio::test]
     async fn jiggler_defaults_and_preferences_survive_restart() {

@@ -7,6 +7,17 @@ pub struct SetupStatus {
     pub platform: PlatformCapabilities,
 }
 
+#[derive(Serialize)]
+pub struct SetupResponse {
+    pub success: bool,
+    pub message: String,
+    pub initialized: bool,
+    pub partial: bool,
+    pub errors: Vec<String>,
+    pub desired: crate::config::VideoConfig,
+    pub applied: Vec<serde_json::Value>,
+}
+
 pub async fn setup_status(State(state): State<Arc<AppState>>) -> Json<SetupStatus> {
     let initialized = state.config.is_initialized();
     Json(SetupStatus {
@@ -27,6 +38,10 @@ pub struct SetupRequest {
     pub video_width: Option<u32>,
     pub video_height: Option<u32>,
     pub video_fps: Option<u32>,
+    #[serde(alias = "sources")]
+    pub video_sources: Option<Vec<crate::config::VideoSourceConfig>>,
+    #[serde(alias = "video_primary_source_id")]
+    pub primary_source_id: Option<String>,
     // Audio settings
     pub audio_device: Option<String>,
     // HID settings
@@ -80,7 +95,7 @@ impl SetupRequest {
 pub async fn setup_init(
     State(state): State<Arc<AppState>>,
     Json(mut req): Json<SetupRequest>,
-) -> Result<Json<LoginResponse>> {
+) -> Result<Json<SetupResponse>> {
     // Check if already initialized
     if state.config.is_initialized() {
         return Err(AppError::BadRequest("Already initialized".to_string()));
@@ -100,6 +115,8 @@ pub async fn setup_init(
         ));
     }
 
+    let _video_guard = crate::runtime::try_apply_lock(&state.config_apply_locks.video, "video")?;
+    let _stream_guard = crate::runtime::try_apply_lock(&state.config_apply_locks.stream, "stream")?;
     if let Some(path) = req.video_device.as_deref() {
         let source_following = state
             .stream_manager
@@ -107,9 +124,10 @@ pub async fn setup_init(
             .await
             .ok()
             .and_then(|devices| {
-                devices
-                    .into_iter()
-                    .find(|device| device.path.to_string_lossy() == path)
+                devices.into_iter().find(|device| {
+                    crate::video::multiview::canonical_device(&device.path)
+                        == crate::video::multiview::canonical_device(path)
+                })
             })
             .is_some_and(|device| {
                 device.control_mode == crate::video::device::VideoControlMode::SourceFollowing
@@ -132,6 +150,27 @@ pub async fn setup_init(
     }
 
     let old_config = state.config.get();
+    let mut video_config = old_config.video.clone();
+    if let Some(sources) = req.video_sources.clone() {
+        video_config.sources = sources;
+        video_config.primary_source_id = req
+            .primary_source_id
+            .clone()
+            .or_else(|| video_config.sources.first().map(|s| s.id.clone()));
+    } else {
+        // Setup's legacy fields are a primary-only compatibility update.
+        let update = serde_json::json!({"device": req.video_device, "format": req.video_format,
+            "width": req.video_width, "height": req.video_height, "fps": req.video_fps,
+            "primary_source_id": req.primary_source_id});
+        let update: super::config::VideoConfigUpdate = serde_json::from_value(update)?;
+        update.validate()?;
+        update.apply_to(&mut video_config);
+    }
+    video_config.project_primary();
+    state
+        .stream_manager
+        .validate_video_config(&video_config)
+        .await?;
     // Validate the selected HID configuration before creating the one-time account.
     let hid_config = req.hid_config(&old_config.hid)?;
 
@@ -147,22 +186,7 @@ pub async fn setup_init(
         .update(|config| {
             config.initialized = true;
 
-            // Video settings
-            if let Some(device) = req.video_device.clone() {
-                config.video.device = Some(device);
-            }
-            if let Some(format) = req.video_format.clone() {
-                config.video.format = Some(format);
-            }
-            if let Some(width) = req.video_width {
-                config.video.width = width;
-            }
-            if let Some(height) = req.video_height {
-                config.video.height = height;
-            }
-            if let Some(fps) = req.video_fps {
-                config.video.fps = fps;
-            }
+            config.video = video_config.clone();
 
             // Audio settings
             if let Some(device) = req.audio_device.clone() {
@@ -189,8 +213,18 @@ pub async fn setup_init(
 
     // Apply the complete USB runtime configuration, including the MSD controller.
     let new_config = state.config.get();
+    let mut errors = Vec::new();
+    if let Err(error) = state
+        .stream_manager
+        .configure_sources(&new_config.video, false)
+        .await
+    {
+        tracing::warn!(%error, "Setup saved desired video configuration, but runtime apply failed");
+        errors.push(format!("video: {error}"));
+    }
     if let Err(e) = state.usb.apply_config(&old_config, &new_config).await {
         tracing::warn!("Failed to apply USB config during setup: {}", e);
+        errors.push(format!("usb: {e}"));
     }
 
     tracing::info!(
@@ -207,6 +241,7 @@ pub async fn setup_init(
             .await
         {
             tracing::warn!("Failed to start ttyd during setup: {}", e);
+            errors.push(format!("ttyd: {e}"));
         } else {
             tracing::info!("ttyd started during setup");
         }
@@ -225,6 +260,7 @@ pub async fn setup_init(
             .await
         {
             tracing::warn!("Failed to start RustDesk during setup: {}", e);
+            errors.push(format!("rustdesk: {e}"));
         } else {
             tracing::info!("RustDesk started during setup");
         }
@@ -243,6 +279,7 @@ pub async fn setup_init(
             .await
         {
             tracing::warn!("Failed to start RTSP during setup: {}", e);
+            errors.push(format!("rtsp: {e}"));
         } else {
             tracing::info!("RTSP started during setup");
         }
@@ -250,16 +287,22 @@ pub async fn setup_init(
 
     // Start audio streaming if audio device was selected during setup
     if new_config.audio.enabled {
-        let audio_config = crate::audio::AudioControllerConfig {
-            enabled: true,
-            device: new_config.audio.device.clone(),
-            quality: new_config
-                .audio
-                .quality
-                .parse::<crate::audio::AudioQuality>()?,
+        let audio_config = new_config
+            .audio
+            .quality
+            .parse::<crate::audio::AudioQuality>()
+            .map(|quality| crate::audio::AudioControllerConfig {
+                enabled: true,
+                device: new_config.audio.device.clone(),
+                quality,
+            });
+        let audio_result = match audio_config {
+            Ok(config) => state.audio.update_config(config).await,
+            Err(error) => Err(error),
         };
-        if let Err(e) = state.audio.update_config(audio_config).await {
+        if let Err(e) = audio_result {
             tracing::warn!("Failed to start audio during setup: {}", e);
+            errors.push(format!("audio: {e}"));
         } else {
             tracing::info!(
                 "Audio started during setup: device={}",
@@ -269,14 +312,37 @@ pub async fn setup_init(
         // Also enable WebRTC audio
         if let Err(e) = state.stream_manager.set_webrtc_audio_enabled(true).await {
             tracing::warn!("Failed to enable WebRTC audio during setup: {}", e);
+            errors.push(format!("webrtc_audio: {e}"));
         }
     }
 
     tracing::info!("System initialized successfully");
 
-    Ok(Json(LoginResponse {
+    let mut applied = Vec::new();
+    for source in state.stream_manager.sources().await {
+        let status = state
+            .stream_manager
+            .source_status(&source.id, None)
+            .await
+            .ok();
+        applied.push(serde_json::json!({"source_id": source.id, "status": status}));
+    }
+    let partial = !errors.is_empty();
+    // Account creation is complete even if hardware needs repair. Returning 2xx
+    // preserves the setup client's login/exit path; partial state stays explicit.
+    Ok(Json(SetupResponse {
         success: true,
-        message: Some("Setup completed".to_string()),
+        message: if partial {
+            "Setup completed; some runtime settings need attention"
+        } else {
+            "Setup completed"
+        }
+        .into(),
+        initialized: true,
+        partial,
+        errors,
+        desired: new_config.video.clone(),
+        applied,
     }))
 }
 
@@ -285,6 +351,94 @@ mod tests {
     use super::*;
     use crate::config::{AppConfig, HidBackend, HidConfig, OtgHidProfile};
     use serde_json::{json, Value};
+
+    #[tokio::test]
+    async fn setup_video_failure_still_attempts_usb_and_extensions_and_exits_setup() {
+        use crate::auth::{SessionStore, TwoFactorService, UserStore};
+        use crate::config::ConfigStore;
+        use crate::hid::{HidBackendType, HidController};
+        let root = tempfile::tempdir().unwrap();
+        let db = crate::db::open_database_pool(root.path()).await.unwrap();
+        let config = ConfigStore::new(db.clone_pool());
+        config.load().await.unwrap();
+        config
+            .update(|c| {
+                c.initialized = false;
+                c.hid.backend = HidBackend::None;
+                c.audio.enabled = false;
+                c.rtsp.enabled = false;
+                c.rustdesk.enabled = false;
+            })
+            .await
+            .unwrap();
+        let streamer = crate::video::Streamer::new();
+        *streamer.test_apply_error.lock() = Some("video fixture busy".into());
+        let webrtc = crate::webrtc::WebRtcStreamer::new();
+        let manager =
+            crate::video::VideoStreamManager::with_webrtc_streamer(streamer, webrtc.clone());
+        #[cfg(unix)]
+        let otg = Arc::new(crate::otg::OtgService::new());
+        let hid = Arc::new(HidController::new(
+            HidBackendType::None,
+            #[cfg(unix)]
+            Some(otg.clone()),
+        ));
+        let extensions = Arc::new(crate::extensions::ExtensionManager::new());
+        *extensions.test_start_error.lock() = Some("extension fixture unavailable".into());
+        let (shutdown, _) = tokio::sync::broadcast::channel(1);
+        let state = AppState::new(
+            db.clone(),
+            config,
+            SessionStore::new(3600),
+            UserStore::new(db.clone_pool()),
+            TwoFactorService::new(db.clone_pool()),
+            #[cfg(unix)]
+            otg,
+            manager,
+            webrtc,
+            hid,
+            #[cfg(unix)]
+            None,
+            None,
+            Arc::new(crate::audio::AudioController::new(Default::default())),
+            extensions,
+            Arc::new(crate::events::EventBus::new()),
+            Arc::new(crate::update::UpdateService::new()),
+            shutdown,
+            root.path().to_path_buf(),
+        );
+        *state.usb.test_apply_error.lock() = Some("usb fixture unavailable".into());
+        let Json(response) = setup_init(
+            State(state.clone()),
+            Json(request(json!({
+                "video_device": "/dev/offline-setup-test", "hid_backend": "none",
+                "msd_enabled": false, "ttyd_enabled": true
+            }))),
+        )
+        .await
+        .unwrap();
+        assert!(response.success && response.initialized && response.partial);
+        for prefix in ["video:", "usb:", "ttyd:"] {
+            assert!(
+                response.errors.iter().any(|e| e.starts_with(prefix)),
+                "{prefix}"
+            );
+        }
+        assert!(state.usb.test_apply_error.lock().is_none());
+        assert!(state.extensions.test_start_error.lock().is_none());
+        assert_eq!(
+            response.desired.device.as_deref(),
+            Some("/dev/offline-setup-test")
+        );
+        assert_eq!(response.applied[0]["status"]["state"], "error");
+        assert!(!setup_status(State(state.clone())).await.0.needs_setup);
+        assert!(state
+            .users
+            .verify("admin", "test-password")
+            .await
+            .unwrap()
+            .is_some());
+    }
 
     fn request(mut hid: Value) -> SetupRequest {
         hid["username"] = json!("admin");

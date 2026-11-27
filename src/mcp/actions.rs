@@ -33,6 +33,17 @@ pub struct Point {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
+    MoveRelative {
+        dx: i32,
+        dy: i32,
+    },
+    ClickCurrent {
+        #[serde(default)]
+        button: Button,
+    },
+    ScrollCurrent {
+        vertical_steps: i32,
+    },
     Click {
         x: f64,
         y: f64,
@@ -188,6 +199,32 @@ pub(super) fn prepare(actions: Vec<Action>) -> Result<PreparedActions, String> {
     for action in actions {
         let mut steps = Vec::new();
         match action {
+            Action::MoveRelative { dx, dy } => {
+                if !(-127..=127).contains(&dx) || !(-127..=127).contains(&dy) {
+                    return Err("Relative dx/dy must be between -127 and 127 HID units".into());
+                }
+                steps.push(Step::Mouse(MouseEvent::move_rel(dx, dy)));
+            }
+            Action::ClickCurrent { button } => {
+                // Select relative reports on backends that remember an absolute mode.
+                steps.push(Step::Mouse(MouseEvent::move_rel(0, 0)));
+                steps.push(Step::Mouse(MouseEvent::button_down(button.into())));
+                steps.push(Step::Pause(35));
+                steps.push(Step::Mouse(MouseEvent::button_up(button.into())));
+                steps.push(Step::Pause(35));
+            }
+            Action::ScrollCurrent { vertical_steps } => {
+                steps.push(Step::Mouse(MouseEvent::move_rel(0, 0)));
+                if !(-100..=100).contains(&vertical_steps) {
+                    return Err("vertical_steps must be between -100 and 100".into());
+                }
+                for _ in 0..vertical_steps.unsigned_abs() {
+                    steps.push(Step::Mouse(MouseEvent::scroll(
+                        -vertical_steps.signum() as i8
+                    )));
+                    steps.push(Step::Pause(35));
+                }
+            }
             Action::Click { x, y, button } | Action::DoubleClick { x, y, button } => {
                 let count = if matches!(action, Action::DoubleClick { .. }) {
                     2
@@ -295,6 +332,28 @@ pub(super) async fn execute(hid: &HidController, steps: Vec<Step>) -> crate::Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn relative_primitives_are_bounded_and_do_not_require_absolute_mapping() {
+        let prepared = prepare(vec![
+            Action::MoveRelative { dx: -127, dy: 127 },
+            Action::ClickCurrent {
+                button: Button::Right,
+            },
+            Action::ScrollCurrent { vertical_steps: 2 },
+        ])
+        .unwrap();
+        assert!(!prepared.needs_absolute_mouse);
+        match &prepared.actions[0][0] {
+            Step::Mouse(event) => assert_eq!((event.x, event.y), (-127, 127)),
+            _ => panic!(),
+        }
+        assert!(prepare(vec![Action::MoveRelative { dx: 128, dy: 0 }]).is_err());
+        assert!(prepare(vec![Action::ScrollCurrent {
+            vertical_steps: 101
+        }])
+        .is_err());
+    }
+
     #[test]
     fn validates_entire_batch_before_any_hid_input() {
         assert!(prepare(vec![

@@ -38,6 +38,8 @@ struct ExtensionLaunch {
 }
 
 pub struct ExtensionManager {
+    #[cfg(test)]
+    pub(crate) test_start_error: parking_lot::Mutex<Option<String>>,
     processes: RwLock<HashMap<ExtensionId, ExtensionProcess>>,
     availability: HashMap<ExtensionId, bool>,
     event_bus: RwLock<Option<Arc<EventBus>>>,
@@ -57,6 +59,8 @@ impl ExtensionManager {
             .collect();
 
         Self {
+            #[cfg(test)]
+            test_start_error: Default::default(),
             processes: RwLock::new(HashMap::new()),
             availability,
             event_bus: RwLock::new(None),
@@ -137,6 +141,10 @@ impl ExtensionManager {
     }
 
     pub async fn start(&self, id: ExtensionId, config: &ExtensionsConfig) -> Result<(), String> {
+        #[cfg(test)]
+        if let Some(error) = self.test_start_error.lock().take() {
+            return Err(error);
+        }
         if !self.check_available(id) {
             return Err(format!(
                 "{} not found at {}",

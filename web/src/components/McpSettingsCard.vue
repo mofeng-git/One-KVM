@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import CardTitle from './SettingsCardTitle.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { videoSourcesApi, type VideoSource } from '@/api/videoSources'
 
 const clipboard = useClipboard()
 const { t } = useI18n()
@@ -19,6 +20,7 @@ const enabled = ref(false)
 const rate = ref(5)
 const apiKey = ref('')
 const busy = ref(false)
+const sources = ref<VideoSource[]>([])
 const endpoint = computed(
   () => new URL(config.value?.endpoint ?? '/mcp', window.location.origin).href,
 )
@@ -65,7 +67,10 @@ async function copy(value: string) {
   if (await clipboard.copy(value)) toast.success(t('mcp.copied'))
   else toast.error(t('mcp.copyFailed'))
 }
-onMounted(load)
+onMounted(() => {
+  void load()
+  void videoSourcesApi.list().then(result => { sources.value = result.sources }).catch(() => {})
+})
 </script>
 
 <template>
@@ -83,6 +88,16 @@ onMounted(load)
       </div>
     </CardHeader>
     <CardContent class="space-y-5">
+      <div v-if="sources.length" class="space-y-2 rounded-lg border p-3 text-sm">
+        <p class="font-medium">{{ t('multisource.videoSources') }}</p>
+        <p class="text-xs text-muted-foreground">{{ t('multisource.mcpSourcesHelp') }}</p>
+        <ul class="space-y-1 text-xs">
+          <li v-for="source in sources" :key="source.id" class="flex flex-wrap justify-between gap-2">
+            <span>{{ source.label || source.id }} · {{ source.id }}</span>
+            <span>{{ source.width }}×{{ source.height }}{{ source.primary ? ` · ${t('multisource.primarySource')}` : '' }}{{ !source.enabled ? ` · ${t('multisource.disabled')}` : '' }}</span>
+          </li>
+        </ul>
+      </div>
       <div class="settings-toggle">
         <Label for="mcp-enabled">{{ t('mcp.enabled') }}</Label>
         <Switch id="mcp-enabled" v-model="enabled" :disabled="busy || !config" />

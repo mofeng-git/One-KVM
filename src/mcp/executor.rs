@@ -15,8 +15,8 @@ use tokio::sync::{mpsc, oneshot};
 
 pub(super) enum Command {
     Status,
-    Screenshot(Option<u8>),
-    Actions(PreparedActions, bool),
+    Screenshot(Option<String>, Option<u8>),
+    Actions(PreparedActions, bool, Option<String>),
     Hardware(HardwareCommand),
 }
 struct Job {
@@ -85,20 +85,39 @@ impl McpService {
                             let h = hid.snapshot().await;
                             let v = video.stats().await;
                             let devices = hardware.status().await;
+                            let sources = video.sources().await;
+                            let primary = sources
+                                .iter()
+                                .find(|s| s.primary)
+                                .map(|s| s.id.clone())
+                                .unwrap_or_else(|| "primary".into());
+                            let mut video_sources = Vec::new();
+                            for source in &sources {
+                                let mut value = serde_json::to_value(source).unwrap();
+                                value["status"] = video
+                                    .source_status(&source.id, None)
+                                    .await
+                                    .unwrap_or(Value::Null);
+                                value["capabilities"] = json!({"snapshot": source.enabled, "mjpeg": source.enabled && (!source.primary || video.is_mjpeg_enabled().await), "webrtc": source.enabled && source.primary && video.is_webrtc_enabled().await});
+                                video_sources.push(value);
+                            }
                             output(
-                                json!({ "version": env!("CARGO_PKG_VERSION"), "video": {"state": v.state, "resolution": v.resolution, "format": v.format}, "hid": {"initialized": h.initialized, "online": h.online, "backend": h.backend, "supports_absolute_mouse": h.supports_absolute_mouse}, "atx": devices["atx"], "media": devices["media"], "queue_length": rx.len() }),
+                                json!({ "video_sources": video_sources, "primary_source_id": primary, "coordinate_space": coordinate_space(sources.len()), "version": env!("CARGO_PKG_VERSION"), "video": {"state": v.state, "resolution": v.resolution, "format": v.format}, "hid": {"initialized": h.initialized, "online": h.online, "backend": h.backend, "supports_absolute_mouse": h.supports_absolute_mouse}, "atx": devices["atx"], "media": devices["media"], "queue_length": rx.len() }),
                                 false,
                             )
                         }
-                        Command::Screenshot(quality) => match video.capture_snapshot(quality).await
+                        Command::Screenshot(source_id, quality) => match video
+                            .capture_source_snapshot(source_id.as_deref(), quality)
+                            .await
                         {
                             Ok(snapshot) => {
                                 with_snapshot(output(json!({"success": true}), false), snapshot)
                             }
                             Err(error) => failure("screenshot_failed", &error.to_string(), 0),
                         },
-                        Command::Actions(prepared, screenshot) => {
-                            run_actions(&hid, &video, prepared, screenshot).await
+                        Command::Actions(prepared, screenshot, source_id) => {
+                            run_actions(&hid, &video, prepared, screenshot, source_id.as_deref())
+                                .await
                         }
                         Command::Hardware(command) => hardware.execute(command).await,
                     }
@@ -137,12 +156,47 @@ impl McpService {
     }
 }
 
+fn coordinate_space(source_count: usize) -> Value {
+    json!({"type": if source_count > 1 { "unmapped_multisource" } else { "single_source_normalized" },
+        "absolute_actions": source_count <= 1, "mapping_verified": false,
+        "relative_actions": true, "relative_units": "HID counts", "layout_inference": false})
+}
+
 async fn run_actions(
     hid: &HidController,
     video: &VideoStreamManager,
     prepared: PreparedActions,
     screenshot: bool,
+    source_id: Option<&str>,
 ) -> CallToolResult {
+    // Hold the registry stable across validation and execution, so configuration
+    // cannot turn a single-source absolute batch into an unmapped multi-source batch.
+    let sources = video.sources.read().await;
+    if prepared.needs_absolute_mouse && sources.len() > 1 {
+        return failure("unmapped_coordinate_space", "Absolute actions require a verified host desktop/HID mapping for multisource video; use relative primitives", 0);
+    }
+    if let Some(id) = source_id {
+        if !sources.iter().any(|s| s.info.id == id && s.info.enabled) {
+            return failure(
+                "invalid_source",
+                "Screenshot source is unknown or disabled; no action executed",
+                0,
+            );
+        }
+    }
+    if video.is_config_changing() || video.is_switching() {
+        return failure(
+            "video_changing",
+            "Video configuration is changing; no action executed",
+            0,
+        );
+    }
+    let screenshot_source_id = source_id.map(str::to_owned).or_else(|| {
+        sources
+            .iter()
+            .find(|s| s.info.primary)
+            .map(|s| s.info.id.clone())
+    });
     let state = hid.snapshot().await;
     if !state.initialized || (prepared.needs_absolute_mouse && !state.supports_absolute_mouse) {
         return failure("hid_unavailable", "Actions require an initialized HID backend; pointer actions require absolute mouse support", 0);
@@ -185,8 +239,12 @@ async fn run_actions(
         refresh_text(&mut response);
         return response;
     }
+    drop(sources);
     if screenshot {
-        match video.capture_snapshot(None).await {
+        match video
+            .capture_source_snapshot(screenshot_source_id.as_deref(), None)
+            .await
+        {
             Ok(snapshot) => response = with_snapshot(response, snapshot),
             Err(error) => {
                 if let Some(Value::Object(value)) = response.structured_content.as_mut() {
@@ -220,7 +278,7 @@ fn with_snapshot(mut result: CallToolResult, snapshot: Snapshot) -> CallToolResu
     if let Some(Value::Object(value)) = result.structured_content.as_mut() {
         value.insert(
             "screenshot".into(),
-            json!({"width": snapshot.width, "height": snapshot.height, "age_ms": snapshot.age_ms}),
+            json!({"source_id": snapshot.source_id, "width": snapshot.width, "height": snapshot.height, "age_ms": snapshot.age_ms}),
         );
     }
     refresh_text(&mut result);
@@ -234,6 +292,25 @@ fn with_snapshot(mut result: CallToolResult, snapshot: Snapshot) -> CallToolResu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_metadata_and_coordinate_space_are_explicit() {
+        let result = with_snapshot(
+            output(json!({"success":true}), false),
+            Snapshot {
+                source_id: "3".into(),
+                jpeg: bytes::Bytes::new(),
+                width: 3840,
+                height: 2160,
+                age_ms: 8,
+            },
+        );
+        let value = result.structured_content.unwrap();
+        assert_eq!(value["screenshot"]["source_id"], "3");
+        assert_eq!(value["screenshot"]["width"], 3840);
+        assert_eq!(coordinate_space(3)["absolute_actions"], false);
+        assert_eq!(coordinate_space(1)["absolute_actions"], true);
+    }
+
     #[test]
     fn global_bucket_has_bounded_burst_and_recovers() {
         let now = Instant::now();
@@ -344,6 +421,7 @@ mod integration_tests {
             Command::Actions(
                 actions::prepare(vec![actions::Action::Type { text: text.into() }]).unwrap(),
                 false,
+                None,
             )
         };
         let s = service.clone();
@@ -401,6 +479,7 @@ mod integration_tests {
                 ])
                 .unwrap(),
                 false,
+                None,
             ))
             .await;
         assert_eq!(partial.is_error, Some(true));
@@ -416,6 +495,7 @@ mod integration_tests {
             .call(Command::Actions(
                 actions::prepare(vec![actions::Action::Type { text: "B".into() }]).unwrap(),
                 true,
+                None,
             ))
             .await;
         assert_eq!(screenshot_failure.is_error, Some(false));
@@ -425,6 +505,64 @@ mod integration_tests {
         assert!(value.get("screenshot_error").is_some());
         assert_eq!(backend.events.lock().last().unwrap(), "KeyB:Up");
         drop(pending_snapshot);
+        let source = crate::config::VideoSourceConfig {
+            id: "2".into(),
+            device: "/dev/offline-second".into(),
+            ..Default::default()
+        };
+        video
+            .sources
+            .write()
+            .await
+            .push(crate::video::multiview::Source::new(
+                source,
+                false,
+                crate::video::Streamer::new(),
+            ));
+        let count = backend.events.lock().len();
+        let rejected = service
+            .call(Command::Actions(
+                actions::prepare(vec![
+                    actions::Action::Type { text: "B".into() },
+                    actions::Action::Move { x: 0.5, y: 0.5 },
+                ])
+                .unwrap(),
+                false,
+                None,
+            ))
+            .await;
+        assert_eq!(
+            rejected.structured_content.unwrap()["error"],
+            "unmapped_coordinate_space"
+        );
+        assert_eq!(backend.events.lock().len(), count);
+        let invalid_source = service
+            .call(Command::Actions(
+                actions::prepare(vec![actions::Action::Type { text: "B".into() }]).unwrap(),
+                true,
+                Some("missing".into()),
+            ))
+            .await;
+        assert_eq!(
+            invalid_source.structured_content.unwrap()["completed_actions"],
+            0
+        );
+        assert_eq!(backend.events.lock().len(), count);
+        let relative = service
+            .call(Command::Actions(
+                actions::prepare(vec![
+                    actions::Action::MoveRelative { dx: 10, dy: -10 },
+                    actions::Action::ClickCurrent {
+                        button: actions::Button::Left,
+                    },
+                    actions::Action::ScrollCurrent { vertical_steps: 1 },
+                ])
+                .unwrap(),
+                false,
+                None,
+            ))
+            .await;
+        assert_eq!(relative.structured_content.unwrap()["completed_actions"], 3);
         hid.shutdown().await.unwrap();
     }
 }

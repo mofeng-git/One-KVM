@@ -105,6 +105,19 @@ pub enum StreamKind {
 #[serde(tag = "event", content = "data")]
 #[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
+    #[serde(rename = "video.source.state_changed")]
+    VideoSourceStateChanged {
+        source_id: String,
+        state: String,
+        device: Option<String>,
+        reason: Option<String>,
+        next_retry_ms: Option<u64>,
+    },
+    #[serde(rename = "video.sources_changed")]
+    VideoSourcesChanged {
+        sources: Vec<crate::video::multiview::SourceInfo>,
+        primary_source_id: String,
+    },
     #[serde(rename = "stream.mode_switching")]
     StreamModeSwitching {
         transition_id: String,
@@ -212,6 +225,8 @@ pub enum SystemEvent {
     #[serde(rename = "system.device_info")]
     DeviceInfo {
         video: VideoDeviceInfo,
+        #[serde(default)]
+        video_sources: Vec<crate::video::multiview::SourceInfo>,
         hid: HidDeviceInfo,
         msd: Option<MsdDeviceInfo>,
         atx: Option<AtxDeviceInfo>,
@@ -225,6 +240,8 @@ pub enum SystemEvent {
 
 /// One entry per [`SystemEvent::event_name`]. `EventBus` builds `*.`-wildcard channels from the first segment; names without `.` (e.g. `error`) have no wildcard channel.
 pub(crate) const EXACT_EVENT_TOPICS: &[&str] = &[
+    "video.source.state_changed",
+    "video.sources_changed",
     "stream.mode_switching",
     "stream.state_changed",
     "stream.config_changing",
@@ -247,6 +264,8 @@ pub(crate) const EXACT_EVENT_TOPICS: &[&str] = &[
 impl SystemEvent {
     pub fn event_name(&self) -> &'static str {
         match self {
+            Self::VideoSourceStateChanged { .. } => "video.source.state_changed",
+            Self::VideoSourcesChanged { .. } => "video.sources_changed",
             Self::StreamModeSwitching { .. } => "stream.mode_switching",
             Self::StreamStateChanged { .. } => "stream.state_changed",
             Self::StreamConfigChanging { .. } => "stream.config_changing",
@@ -379,7 +398,19 @@ mod tests {
                 status: String::new(),
                 error_code: None,
             },
+            SystemEvent::VideoSourceStateChanged {
+                source_id: "2".into(),
+                state: "ready".into(),
+                device: None,
+                reason: None,
+                next_retry_ms: None,
+            },
+            SystemEvent::VideoSourcesChanged {
+                sources: vec![],
+                primary_source_id: "primary".into(),
+            },
             SystemEvent::DeviceInfo {
+                video_sources: vec![],
                 video: VideoDeviceInfo {
                     available: false,
                     device: None,

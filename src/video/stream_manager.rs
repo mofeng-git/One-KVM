@@ -92,18 +92,23 @@ impl Default for StreamManagerConfig {
 pub struct VideoStreamManager {
     /// Current streaming mode
     mode: RwLock<StreamMode>,
+    pub(crate) sources: RwLock<Vec<super::multiview::Source>>,
+    pub(crate) sources_apply: tokio::sync::Mutex<()>,
+    pub(crate) sources_changing: AtomicBool,
     /// MJPEG streamer (handles video capture and MJPEG distribution)
     streamer: Arc<Streamer>,
     /// WebRTC output (unified WebRTC manager with multi-codec support)
-    webrtc_streamer: Arc<dyn VideoOutput>,
+    pub(crate) webrtc_streamer: Arc<dyn VideoOutput>,
     /// Event bus for notifications
-    events: RwLock<Option<Arc<EventBus>>>,
+    pub(crate) events: RwLock<Option<Arc<EventBus>>>,
     /// Configuration store
     config_store: RwLock<Option<ConfigStore>>,
     /// Codec constraints derived from services that are actually running.
     runtime_codec_constraints: RwLock<Option<StreamCodecConstraints>>,
     /// Mode switching lock to prevent concurrent switch requests
     switching: AtomicBool,
+    pub(crate) primary_enabled: AtomicBool,
+    pub(crate) primary_apply_failed: AtomicBool,
     /// Current mode switch transaction ID (set while switching=true)
     transition_id: RwLock<Option<String>>,
 }
@@ -116,12 +121,23 @@ impl VideoStreamManager {
     ) -> Arc<Self> {
         Arc::new(Self {
             mode: RwLock::new(StreamMode::Mjpeg),
+            sources: RwLock::new(vec![super::multiview::Source::new(
+                crate::config::VideoConfig::default()
+                    .effective_sources()
+                    .remove(0),
+                true,
+                streamer.clone(),
+            )]),
+            sources_apply: tokio::sync::Mutex::new(()),
+            sources_changing: AtomicBool::new(false),
             streamer,
             webrtc_streamer,
             events: RwLock::new(None),
             config_store: RwLock::new(None),
             runtime_codec_constraints: RwLock::new(None),
             switching: AtomicBool::new(false),
+            primary_enabled: AtomicBool::new(true),
+            primary_apply_failed: AtomicBool::new(false),
             transition_id: RwLock::new(None),
         })
     }
@@ -172,12 +188,31 @@ impl VideoStreamManager {
 
     /// Check if MJPEG mode is active
     pub async fn is_mjpeg_enabled(&self) -> bool {
-        *self.mode.read().await == StreamMode::Mjpeg
+        self.primary_enabled.load(Ordering::SeqCst)
+            && !self.primary_apply_failed.load(Ordering::SeqCst)
+            && *self.mode.read().await == StreamMode::Mjpeg
     }
 
     /// Check if WebRTC mode is active
     pub async fn is_webrtc_enabled(&self) -> bool {
-        *self.mode.read().await == StreamMode::WebRTC
+        self.primary_enabled.load(Ordering::SeqCst)
+            && !self.primary_apply_failed.load(Ordering::SeqCst)
+            && *self.mode.read().await == StreamMode::WebRTC
+    }
+
+    pub fn ensure_primary_enabled(&self) -> Result<()> {
+        if self.primary_apply_failed.load(Ordering::SeqCst) {
+            return Err(crate::error::AppError::ServiceUnavailable(
+                "Primary source configuration was not applied; retry the configuration update"
+                    .into(),
+            ));
+        }
+        if !self.primary_enabled.load(Ordering::SeqCst) {
+            return Err(crate::error::AppError::ServiceUnavailable(
+                "Primary source is disabled".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Get the underlying streamer (for MJPEG mode)
@@ -194,10 +229,14 @@ impl VideoStreamManager {
     pub async fn init_with_mode(self: &Arc<Self>, mode: StreamMode) -> Result<()> {
         info!("Initializing video stream manager with mode: {:?}", mode);
         *self.mode.write().await = mode.clone();
+        if !self.primary_enabled.load(Ordering::SeqCst)
+            || self.primary_apply_failed.load(Ordering::SeqCst)
+        {
+            return Ok(());
+        }
 
-        // A failed fixed-device configuration can leave the streamer in a transient
-        // state without a capture device. Treat that the same as an uninitialized
-        // streamer so the advertised auto-detection fallback actually runs.
+        // Only legacy auto selection may detect a device here. Explicit bindings
+        // reject init_auto and retain their desired path while offline.
         let state = self.streamer.state().await;
         let (device_path, _, _, _, _) = self.streamer.current_capture_config().await;
         let needs_init = state == StreamerState::Uninitialized || device_path.is_none();
@@ -219,6 +258,23 @@ impl VideoStreamManager {
         self: &Arc<Self>,
         new_mode: StreamMode,
     ) -> Result<ModeSwitchTransaction> {
+        let _sources_apply = self.sources_apply.lock().await;
+        self.ensure_primary_enabled()?;
+        if self.is_config_changing() {
+            return Err(crate::error::AppError::ServiceUnavailable(
+                "Video configuration is changing".into(),
+            ));
+        }
+        let constraints = self.codec_constraints().await;
+        if (new_mode == StreamMode::Mjpeg && !constraints.is_mjpeg_allowed())
+            || (new_mode == StreamMode::WebRTC
+                && !constraints.is_webrtc_codec_allowed(self.current_video_codec().await))
+        {
+            return Err(crate::error::AppError::BadRequest(format!(
+                "Stream mode conflicts with codec constraints: {}",
+                constraints.reason
+            )));
+        }
         let current_mode = self.mode.read().await.clone();
 
         if current_mode == new_mode {
@@ -470,6 +526,11 @@ impl VideoStreamManager {
         );
 
         if mode == StreamMode::WebRTC {
+            // A device change can keep identical geometry. Release the old pipeline
+            // explicitly; update_video_config alone is a no-op in that case.
+            self.webrtc_streamer
+                .close_all_sessions_and_release_device()
+                .await?;
             // Stop the shared pipeline before replacing the capture source so WebRTC
             // sessions do not stay attached to a stale frame source.
             self.webrtc_streamer
@@ -483,12 +544,13 @@ impl VideoStreamManager {
             .apply_video_config(device_path, format, resolution, fps)
             .await?;
 
-        if mode != StreamMode::WebRTC {
-            if let Err(e) = self.start().await {
-                error!("Failed to start streamer after config change: {}", e);
-            } else {
-                info!("Streamer started after config change");
-            }
+        if mode != StreamMode::WebRTC
+            && self.primary_enabled.load(Ordering::SeqCst)
+            && self.streamer.current_device().await.is_some()
+        {
+            // Missing cards remain configured/offline. Actual application failures
+            // must propagate to the desired/applied response.
+            self.streamer.start().await?;
         }
 
         // Update WebRTC config if in WebRTC mode
@@ -529,6 +591,7 @@ impl VideoStreamManager {
 
     /// Start streaming (based on current mode)
     pub async fn start(self: &Arc<Self>) -> Result<()> {
+        self.ensure_primary_enabled()?;
         let mode = self.mode.read().await.clone();
 
         match mode {
@@ -557,7 +620,9 @@ impl VideoStreamManager {
                 self.streamer.stop().await?;
             }
             StreamMode::WebRTC => {
-                self.webrtc_streamer.close_all_sessions().await;
+                self.webrtc_streamer
+                    .close_all_sessions_and_release_device()
+                    .await?;
                 self.streamer.stop().await?;
             }
         }
@@ -583,15 +648,19 @@ impl VideoStreamManager {
         };
 
         VideoDeviceInfo {
-            available: state != StreamerState::Uninitialized,
+            available: !self.primary_apply_failed.load(Ordering::SeqCst)
+                && state != StreamerState::Uninitialized,
             device: device.map(|d| d.path.display().to_string()),
             format: stats.format,
             resolution: stats.resolution,
             fps: stats.target_fps,
-            online: state == StreamerState::Streaming,
+            online: !self.primary_apply_failed.load(Ordering::SeqCst)
+                && state == StreamerState::Streaming,
             stream_mode,
             config_changing: self.streamer.is_config_changing(),
-            error: if state == StreamerState::Error {
+            error: if self.primary_apply_failed.load(Ordering::SeqCst) {
+                Some("Desired primary video configuration has not been applied".into())
+            } else if state == StreamerState::Error {
                 Some("Video stream error".to_string())
             } else if state.is_no_signal_like() {
                 Some("No video signal".to_string())
@@ -646,12 +715,16 @@ impl VideoStreamManager {
             }
             s.clients = self.webrtc_streamer.session_count().await as u64;
         }
+        if self.primary_apply_failed.load(Ordering::SeqCst) {
+            s.state = "error".into();
+            s.reason = Some("configuration_apply_failed".into());
+        }
         s
     }
 
     /// Check if config is being changed
     pub fn is_config_changing(&self) -> bool {
-        self.streamer.is_config_changing()
+        self.sources_changing.load(Ordering::SeqCst) || self.streamer.is_config_changing()
     }
 
     /// Check if streaming is active
@@ -670,6 +743,9 @@ impl VideoStreamManager {
     pub async fn subscribe_encoded_frames(
         &self,
     ) -> Option<crate::video::pipeline::EncodedVideoFrameReceiver> {
+        if self.ensure_primary_enabled().is_err() {
+            return None;
+        }
         // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");
@@ -707,6 +783,7 @@ impl VideoStreamManager {
     pub(crate) async fn snapshot_pipeline(
         &self,
     ) -> Result<Arc<crate::video::pipeline::SharedVideoPipeline>> {
+        self.ensure_primary_enabled()?;
         // Preserve a running pipeline's negotiated/source-following geometry.
         // Syncing the MJPEG configuration on every snapshot could restart WebRTC viewers.
         if self.webrtc_streamer.get_pipeline_config().await.is_none() {
@@ -820,7 +897,7 @@ impl VideoStreamManager {
     }
 
     /// Publish event to event bus
-    async fn publish_event(&self, event: SystemEvent) {
+    pub(crate) async fn publish_event(&self, event: SystemEvent) {
         if let Some(ref events) = *self.events.read().await {
             events.publish(event);
         }
@@ -841,6 +918,31 @@ fn codec_to_string(codec: crate::video::codec::VideoCodecType) -> String {
 mod tests {
     use super::*;
     use crate::video::codec::VideoCodecType;
+
+    #[tokio::test]
+    async fn mode_switch_respects_codec_locks_and_configuration_gate() {
+        let manager = VideoStreamManager::with_webrtc_streamer(
+            Streamer::new(),
+            crate::webrtc::WebRtcStreamer::new(),
+        );
+        let mut constraints = StreamCodecConstraints::unrestricted();
+        constraints.allow_mjpeg = false;
+        manager.set_runtime_codec_constraints(constraints).await;
+        assert!(manager
+            .switch_mode_transaction(StreamMode::Mjpeg)
+            .await
+            .is_err());
+        assert!(!manager.is_switching());
+        manager
+            .set_runtime_codec_constraints(StreamCodecConstraints::unrestricted())
+            .await;
+        manager.sources_changing.store(true, Ordering::SeqCst);
+        assert!(manager
+            .switch_mode_transaction(StreamMode::WebRTC)
+            .await
+            .is_err());
+        assert!(!manager.is_switching());
+    }
 
     #[test]
     fn test_codec_to_string() {

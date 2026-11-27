@@ -2,6 +2,7 @@ import { request, uploadRequest, ApiError } from './request'
 import type {
   CanonicalKey,
   Ch9329DescriptorState,
+  VideoSourceConfig,
 } from '@/types/generated'
 import { useHidWebSocket, type HidKeyboardEvent, type HidMouseEvent } from '@/composables/useHidWebSocket'
 import type { StreamSignalReason, StreamState } from '@/types/websocket'
@@ -177,6 +178,8 @@ export const systemApi = {
     video_width?: number
     video_height?: number
     video_fps?: number
+    video_sources?: VideoSourceConfig[]
+    primary_source_id?: string
     hid_backend?: 'otg' | 'ch9329' | 'ch9329_otg' | 'bluetooth' | 'none'
     hid_bluetooth?: { adapter: string; name: string }
     hid_ch9329_port?: string
@@ -190,7 +193,7 @@ export const systemApi = {
     ttyd_enabled?: boolean
     rustdesk_enabled?: boolean
   }) =>
-    request<{ success: boolean; message?: string }>('/setup/init', {
+    request<{ success: boolean; message?: string; partial?: boolean; errors?: string[] }>('/setup/init', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -740,6 +743,9 @@ export interface VideoFormat {
 
 export interface VideoDevice {
   path: string
+  canonical_path?: string
+  aliases?: string[]
+  bus_info?: string
   name: string
   driver: string
   formats: VideoFormat[]

@@ -16,6 +16,8 @@ use crate::otg::OtgService;
 use super::ConfigApplyOptions;
 
 pub struct UsbCoordinator {
+    #[cfg(test)]
+    pub(crate) test_apply_error: parking_lot::Mutex<Option<String>>,
     hid: Arc<HidController>,
     #[cfg(unix)]
     otg: Arc<OtgService>,
@@ -38,6 +40,8 @@ impl UsbCoordinator {
         data_dir: PathBuf,
     ) -> Arc<Self> {
         Arc::new(Self {
+            #[cfg(test)]
+            test_apply_error: Default::default(),
             hid,
             #[cfg(unix)]
             otg,
@@ -51,6 +55,10 @@ impl UsbCoordinator {
     }
 
     pub async fn apply_config(&self, old_config: &AppConfig, new_config: &AppConfig) -> Result<()> {
+        #[cfg(test)]
+        if let Some(error) = self.test_apply_error.lock().take() {
+            return Err(AppError::Config(error));
+        }
         new_config.hid.validate_platform()?;
         // Also runs for config-only updates and rollback; never forces a USB reload.
         self.hid.configure_jiggler(&new_config.hid);

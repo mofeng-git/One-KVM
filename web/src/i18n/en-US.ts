@@ -1,6 +1,29 @@
 import { settingsUiEn } from './settings-ui'
+import { multisourceEn } from './multisource'
 export default {
+  multisource: multisourceEn,
   settingsUi: settingsUiEn,
+  multiview: {
+    title: 'Multiple displays',
+    nativeConsole: 'Native console',
+    settings: 'Settings',
+    logout: 'Log out',
+    loading: 'Loading video sources…',
+    retry: 'Retry',
+    enlarge: 'Enlarge',
+    restore: 'Restore layout',
+    enableInput: 'Enable keyboard / mouse',
+    disableInput: 'Disable input',
+    lockMouse: 'Lock relative mouse',
+    unlockMouse: 'Release mouse',
+    inputHint: 'Enable input, then click a preview for keyboard focus. Explicitly lock the mouse for relative movement. Esc or leaving focus releases held input. Double-click a preview to enlarge / restore.',
+    lockError: 'Pointer lock failed or is unsupported. Try again in a supported browser.',
+    streamError: 'Video stream failed. Retrying this source…',
+    statusError: 'Unable to read capture status.',
+    frozen: 'Capture frames stopped advancing. Reopening this stream…',
+    restarting: 'Capture restarted. Reopening this stream…',
+    previewLabel: '{label} preview — click to focus; double-click to enlarge',
+  },
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG composite mode',
     compositeHelp: 'CH9329 handles keyboard and mouse. OTG provides virtual media, USB networking and USB audio. Enable advanced functions in their settings.',

@@ -2003,6 +2003,10 @@ impl SharedVideoPipeline {
     /// Stop the pipeline (non-blocking, does not wait for capture thread to exit)
     pub fn stop(&self) {
         let was_running = self.running_flag.swap(false, Ordering::AcqRel);
+        // Lifecycle invalidation, not only capture teardown: a one-shot snapshot
+        // request holds a strong pipeline reference, so nothing else would ever
+        // drop its oneshot sender. Without this cancel the waiter can only time out.
+        self.snapshot_slot.cancel();
         if let Some(frame_mailbox) = self.frame_mailbox.lock().as_ref() {
             frame_mailbox.close();
         }
@@ -2883,6 +2887,39 @@ mod tests {
         pipeline.stop();
         assert!(receiver.recv_timeout(Duration::from_secs(2)).unwrap());
         worker.join().unwrap();
+    }
+
+    /// A pending one-shot snapshot holds a strong pipeline reference, so nothing
+    /// else would drop its oneshot sender: `stop()` must cancel it explicitly or
+    /// the waiter hangs until its own timeout.
+    #[tokio::test]
+    async fn stop_cancels_a_pending_snapshot_and_invalidates_lifecycle() {
+        let pipeline = SharedVideoPipeline::new(SharedVideoPipelineConfig::h264(
+            Resolution::HD720,
+            BitratePreset::Balanced,
+        ))
+        .unwrap();
+        let _ = pipeline.running.send(true);
+        pipeline.running_flag.store(true, Ordering::Release);
+        assert_eq!(pipeline.lifecycle(), PipelineLifecycle::Running);
+
+        let rx = pipeline.snapshot_slot.request().unwrap();
+        assert!(pipeline.snapshot_slot.pending());
+
+        pipeline.stop();
+
+        assert!(
+            rx.await.is_err(),
+            "stop must fail the pending snapshot instead of letting it time out"
+        );
+        assert!(!pipeline.snapshot_slot.pending());
+        assert_eq!(pipeline.lifecycle(), PipelineLifecycle::Stopping);
+
+        // The capture thread's cleanup tail must not resurrect the request.
+        let _ = pipeline.running.send(false);
+        let _ = pipeline.snapshot_slot.request().unwrap();
+        pipeline.stop();
+        assert!(!pipeline.snapshot_slot.pending());
     }
 
     #[test]

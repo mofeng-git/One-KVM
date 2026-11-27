@@ -105,6 +105,32 @@ pub(crate) fn is_rkcif_driver(driver: &str) -> bool {
     driver.to_ascii_lowercase().starts_with("rkcif")
 }
 
+/// An explicit binding never borrows another port, even for identical UVC cards.
+pub fn select_bound_recovery_device(
+    devices: &[VideoDeviceInfo],
+    hint: &VideoDeviceRecoveryHint,
+) -> Option<VideoDeviceInfo> {
+    let expected = super::multiview::canonical_device(&hint.path);
+    devices
+        .iter()
+        .find(|d| {
+            if hint.bus_info.trim().is_empty() {
+                super::multiview::canonical_device(&d.path) == expected
+            } else {
+                // A fixed physical port may be assigned a different /dev/videoN.
+                // Keep the port identity even if the old node is now another card.
+                hint.bus_info == d.bus_info
+            }
+        })
+        .cloned()
+        .map(|mut d| {
+            if super::multiview::canonical_device(&d.path) == expected {
+                d.path = hint.path.clone();
+            }
+            d
+        })
+}
+
 pub fn control_mode(driver: &str, card: &str) -> VideoControlMode {
     if is_rkcif_driver(driver) || is_rk_hdmirx_driver(driver, card) {
         VideoControlMode::SourceFollowing
@@ -170,6 +196,27 @@ pub fn resolve_video_input_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn bound_recovery_keeps_port_identity_across_node_renumbering() {
+        let mut original = device(
+            VideoControlMode::Configurable,
+            VideoInputStatus::unavailable(),
+        );
+        original.path = "/dev/video1000".into();
+        original.bus_info = "usb-fixture-1.2".into();
+        let hint = VideoDeviceRecoveryHint::from(&original);
+        let mut wrong = original.clone();
+        wrong.bus_info = "usb-fixture-1.3".into();
+        let mut recovered = original;
+        recovered.path = "/dev/video1002".into();
+        let result =
+            select_bound_recovery_device(&[wrong.clone(), recovered.clone()], &hint).unwrap();
+        assert_eq!(result.path, recovered.path);
+        assert_eq!(result.bus_info, hint.bus_info);
+        assert!(select_bound_recovery_device(&[wrong], &hint).is_none());
+    }
 
     #[cfg(unix)]
     use super::linux::FormatInfo;

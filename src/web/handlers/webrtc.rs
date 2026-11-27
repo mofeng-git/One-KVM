@@ -11,6 +11,11 @@ pub struct CreateSessionResponse {
 pub async fn webrtc_create_session(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<CreateSessionResponse>> {
+    if state.stream_manager.is_config_changing() || state.stream_manager.is_switching() {
+        return Err(AppError::ServiceUnavailable(
+            "Video configuration is changing".into(),
+        ));
+    }
     // Check if WebRTC mode is active
     if !state.stream_manager.is_webrtc_enabled().await {
         return Err(AppError::ServiceUnavailable(
@@ -27,6 +32,11 @@ pub async fn webrtc_offer(
     State(state): State<Arc<AppState>>,
     Json(req): Json<OfferRequest>,
 ) -> Result<Json<AnswerResponse>> {
+    if state.stream_manager.is_config_changing() || state.stream_manager.is_switching() {
+        return Err(AppError::ServiceUnavailable(
+            "Video configuration is changing".into(),
+        ));
+    }
     // Check if WebRTC mode is active
     if !state.stream_manager.is_webrtc_enabled().await {
         return Err(AppError::ServiceUnavailable(

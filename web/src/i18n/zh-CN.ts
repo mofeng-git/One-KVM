@@ -1,6 +1,29 @@
 import { settingsUiZh } from './settings-ui'
+import { multisourceZh } from './multisource'
 export default {
+  multisource: multisourceZh,
   settingsUi: settingsUiZh,
+  multiview: {
+    title: '多屏预览',
+    nativeConsole: '原生控制台',
+    settings: '设置',
+    logout: '退出登录',
+    loading: '正在加载视频源…',
+    retry: '重试',
+    enlarge: '放大',
+    restore: '恢复布局',
+    enableInput: '启用键盘 / 鼠标',
+    disableInput: '禁用输入',
+    lockMouse: '锁定相对鼠标',
+    unlockMouse: '释放鼠标',
+    inputHint: '启用输入后，点击预览以聚焦键盘；鼠标需显式锁定，仅发送相对移动。Esc 或失焦释放按键和鼠标按钮。双击预览放大 / 恢复。',
+    lockError: '鼠标锁定失败或浏览器不支持，请使用支持的浏览器重试。',
+    streamError: '视频流出错，正在重试此视频源…',
+    statusError: '无法读取采集状态。',
+    frozen: '采集帧停止增长，正在重新打开此视频流…',
+    restarting: '采集已重启，正在重新打开此视频流…',
+    previewLabel: '{label} 预览 — 点击聚焦，双击放大',
+  },
   hidGuide: {
     driver_ch9329_otg: 'CH9329 + OTG 复合模式',
     compositeHelp: 'CH9329 负责键盘和鼠标，OTG 负责虚拟磁盘、USB 网络和 USB 音频。高级功能需在各自设置中启用。',

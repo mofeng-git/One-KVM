@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { createConfigResource, createRequestState } from '@/lib/configResource'
+import { ApiError } from '@/api/request'
+import i18n from '@/i18n'
 import {
   authConfigApi,
   atxConfigApi,
@@ -23,6 +25,7 @@ import type {
   OtgConfigResponse,
   OtgConfigUpdate,
   StreamConfigUpdate,
+  VideoConfig,
   VideoConfigUpdate,
 } from '@/types/generated'
 import type {
@@ -105,9 +108,35 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   async function updateVideo(update: VideoConfigUpdate) {
-    const response = await videoConfigApi.update(update)
-    video.value = response
-    return response
+    videoError.value = null
+    try {
+      const response = await videoConfigApi.update(update)
+      video.value = response
+      window.dispatchEvent(new Event('videoSourcesChanged'))
+      return response
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 503 && cause.data && typeof cause.data === 'object') {
+        const failure = cause.data as {
+          desired?: VideoConfig
+          applied?: { source_id: string; status: { state: string; reason?: string } | null }[]
+        }
+        const desired = failure.desired
+        if (desired) {
+          // A runtime apply failure can still persist the entire desired configuration.
+          video.value = desired
+          const states = (failure.applied ?? []).map(({ source_id, status }) => {
+            const label = desired.sources.find(source => source.id === source_id)?.label || source_id
+            const detail = status ? [status.state, status.reason].filter(Boolean).join(' · ')
+              : i18n.global.t('multisource.statusError')
+            return `${label}: ${detail}`
+          })
+          cause.message = [i18n.global.t('multisource.sourcesSaved'), cause.message, ...states].join('\n')
+          window.dispatchEvent(new Event('videoSourcesChanged'))
+        }
+      }
+      videoError.value = cause instanceof Error ? cause.message : String(cause)
+      throw cause
+    }
   }
 
   async function updateAudio(update: AudioConfigUpdate) {

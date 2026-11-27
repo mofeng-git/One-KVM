@@ -1,4 +1,8 @@
-use axum::{extract::State, Json};
+use axum::{
+    extract::State,
+    response::{IntoResponse, Response},
+    Json,
+};
 use std::sync::Arc;
 
 use crate::config::VideoConfig;
@@ -15,43 +19,64 @@ pub async fn get_video_config(State(state): State<Arc<AppState>>) -> Json<VideoC
 pub async fn update_video_config(
     State(state): State<Arc<AppState>>,
     Json(mut req): Json<VideoConfigUpdate>,
-) -> Result<Json<VideoConfig>> {
-    let selected_path = req
-        .device
-        .clone()
-        .or_else(|| state.config.get().video.device.clone());
-    if let Some(path) = selected_path {
+) -> Result<Response> {
+    let _apply_guard = try_apply_lock(&state.config_apply_locks.video, "video")?;
+    let _stream_guard = try_apply_lock(&state.config_apply_locks.stream, "stream")?;
+    if state.stream_manager.is_switching() {
+        return Err(crate::error::AppError::ServiceUnavailable(
+            "Stream mode is changing".into(),
+        ));
+    }
+    let mut candidate = state.config.get().video.clone();
+    req.apply_to(&mut candidate);
+    if let Some(path) = candidate.device.as_deref() {
+        let resolved = crate::video::multiview::canonical_device(path);
         let source_following = state
             .stream_manager
             .list_devices()
             .await
-            .ok()
-            .and_then(|devices| {
-                devices
-                    .into_iter()
-                    .find(|device| device.path.to_string_lossy() == path)
-            })
+            .unwrap_or_default()
+            .into_iter()
+            .find(|device| crate::video::multiview::canonical_device(&device.path) == resolved)
             .is_some_and(|device| {
                 device.control_mode == crate::video::device::VideoControlMode::SourceFollowing
             });
         if source_following {
             req.ignore_source_following_parameters();
+            candidate = state.config.get().video.clone();
+            req.apply_to(&mut candidate);
         }
     }
     req.validate()?;
-
-    let _apply_guard = try_apply_lock(&state.config_apply_locks.video, "video")?;
-
+    state
+        .stream_manager
+        .validate_video_config(&candidate)
+        .await?;
+    // Only validated desired state is persisted. Runtime failures explicitly report
+    // desired/applied instead of disguising a partial hardware apply as success.
     state
         .config
-        .update(|config| {
-            req.apply_to(&mut config.video);
-        })
+        .update(|config| config.video = candidate.clone())
         .await?;
-
-    let new_video_config = state.config.get().video.clone();
-
-    apply_video_config(&state, &new_video_config).await?;
-
-    Ok(Json(new_video_config))
+    match apply_video_config(&state, &candidate).await {
+        Ok(()) => Ok(Json(candidate).into_response()),
+        Err(error) => {
+            let mut applied = Vec::new();
+            for source in state.stream_manager.sources().await {
+                let status = state
+                    .stream_manager
+                    .source_status(&source.id, None)
+                    .await
+                    .ok();
+                applied.push(serde_json::json!({"source_id": source.id, "status": status}));
+            }
+            Ok((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": error.to_string(), "desired": candidate, "applied": applied
+                })),
+            )
+                .into_response())
+        }
+    }
 }

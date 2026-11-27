@@ -32,6 +32,7 @@ export function getHidStatus(hid: HidState | null, transport: InputTransport): S
 
   if (transport.useWebRtc) {
     if (transport.dataChannelReady) return 'connected'
+    if (transport.wsConnected && !transport.wsNetworkError && !transport.wsHidUnavailable) return 'connected'
     if (transport.rtcConnecting || transport.rtcConnected) return 'connecting'
   }
 

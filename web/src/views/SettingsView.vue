@@ -71,6 +71,7 @@ import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import TerminalDialog from '@/components/TerminalDialog.vue'
 import TotpSettingsCard from '@/components/TotpSettingsCard.vue'
 import VideoInputFields from '@/components/VideoInputFields.vue'
+import VideoSourcesSettings from '@/components/VideoSourcesSettings.vue'
 import ExtensionConfigModeEditor from '@/components/ExtensionConfigModeEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
@@ -2835,8 +2836,9 @@ watch(isWindows, () => {
 
           <!-- Video Section -->
           <div v-show="activeSection === 'video'" class="space-y-4">
+            <VideoSourcesSettings :active="activeSection === 'video'" @saved="loadConfig" />
             <!-- Video Device Settings -->
-            <Card>
+            <Card v-if="!configStore.video?.sources?.length">
               <CardHeader class="settings-card-heading"
                 ><CardTitle :help="t('settings.videoSettingsDesc')">{{
                   t('settings.videoSettings')

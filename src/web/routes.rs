@@ -347,6 +347,19 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
     // Stream endpoints (accessible with auth, but typically embedded in pages)
     let stream_routes = Router::new()
+        .route("/video/sources", get(handlers::video_sources))
+        .route(
+            "/video/sources/{id}/stream",
+            get(handlers::video_source_stream),
+        )
+        .route(
+            "/video/sources/{id}/snapshot",
+            get(handlers::video_source_snapshot),
+        )
+        .route(
+            "/video/sources/{id}/status",
+            get(handlers::video_source_status),
+        )
         .route("/stream", get(handlers::mjpeg_stream))
         .route("/stream/mjpeg", get(handlers::mjpeg_stream))
         .route("/snapshot", get(handlers::snapshot));

@@ -46,7 +46,7 @@ fn stream_with_timeout(
                     Err(TryRecvError::Closed) => return,
                 }
             }
-            if !handler.is_online() {
+            if !handler.is_online() || !guard.is_active() {
                 break;
             }
 

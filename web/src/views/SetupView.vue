@@ -5,12 +5,17 @@ import { selectionFrom } from '@/lib/hidGuide'
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { configApi, streamApi, type DeviceList, type EncoderBackendInfo, type PlatformCapabilities } from '@/api'
 import { toConfigFps } from '@/lib/fps'
 import { formatVideoDeviceLabel } from '@/lib/video-device-label'
 import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
 import VideoInputFields from '@/components/VideoInputFields.vue'
+import VideoSourceFields from '@/components/VideoSourceFields.vue'
+import type { VideoSourceConfig } from '@/types/generated'
+import { generateUUID } from '@/lib/utils'
+import { matchesVideoDevice, preferredVideoPath } from '@/lib/video-device-identity'
 import LanguageToggleButton from '@/components/LanguageToggleButton.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { Button } from '@/components/ui/button'
@@ -71,6 +76,14 @@ const videoDevice = ref('')
 const videoFormat = ref('')
 const videoResolution = ref('')
 const videoFps = ref<number | null>(null)
+const additionalSources = ref<VideoSourceConfig[]>([])
+function addCaptureSource() {
+  const device = devices.value.video.find(item => !matchesVideoDevice(item, videoDevice.value)
+    && !additionalSources.value.some(source => matchesVideoDevice(item, source.device)))
+  additionalSources.value.push({ id: generateUUID(), label: `${t('multisource.source')} ${additionalSources.value.length + 2}`,
+    enabled: true, device: device ? preferredVideoPath(device) : '', format: 'MJPEG',
+    width: 1920, height: 1080, fps: 30, quality: 80 })
+}
 
 const audioDevice = ref('')
 const audioEnabled = ref(true)
@@ -384,6 +397,15 @@ async function handleSetup() {
   if (!isSourceFollowing.value && videoFps.value) {
     setupData.video_fps = toConfigFps(videoFps.value)
   }
+  if (additionalSources.value.length) {
+    setupData.video_sources = [{
+      id: 'primary', label: t('multisource.primarySource'), enabled: true,
+      device: videoDevice.value, format: videoFormat.value || 'MJPEG',
+      width: width || 1920, height: height || 1080,
+      fps: toConfigFps(videoFps.value ?? 30), quality: 80,
+    }, ...additionalSources.value.map(source => ({ ...source }))]
+    setupData.primary_source_id = 'primary'
+  }
 
   const hid = hidSelection.value
   setupData.hid_backend = hid.backend
@@ -412,6 +434,9 @@ async function handleSetup() {
   const success = await authStore.setup(setupData)
 
   if (success) {
+    if (authStore.setupWarnings.length) toast.warning(t('multisource.setupPartial'), {
+      description: authStore.setupWarnings.join('\n'), duration: 10000,
+    })
     const loggedIn = await authStore.login(username.value, password.value)
     router.push(loggedIn ? '/' : '/login')
   } else {
@@ -624,6 +649,18 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             <p v-if="!devices.video.length" class="text-sm text-muted-foreground text-center py-4">
               {{ t('setup.noVideoDevices') }}
             </p>
+
+            <div class="space-y-3 border-t pt-3">
+              <div class="flex items-center justify-between gap-2">
+                <Label>{{ t('multisource.additionalSources') }}</Label>
+                <Button type="button" variant="outline" size="sm" :disabled="!videoDevice" @click="addCaptureSource">{{ t('multisource.addSource') }}</Button>
+              </div>
+              <div v-for="(source, index) in additionalSources" :key="source.id" class="space-y-3 rounded-lg border p-3">
+                <VideoSourceFields :model-value="source" :devices="devices.video" :active="step === 2" :primary="false"
+                  @update:model-value="additionalSources[index] = $event" />
+                <Button type="button" variant="ghost" size="sm" @click="additionalSources.splice(index, 1)">{{ t('multisource.removeSource') }}</Button>
+              </div>
+            </div>
 
             <!-- Audio Device Selection -->
             <div v-if="!isWindows" class="space-y-2 pt-2 border-t">

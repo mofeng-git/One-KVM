@@ -13,6 +13,7 @@ mod inventory;
 mod mcp;
 #[cfg(unix)]
 mod msd_api;
+mod multiview;
 mod setup;
 mod stream;
 mod system;
@@ -29,6 +30,7 @@ pub use inventory::*;
 pub use mcp::*;
 #[cfg(unix)]
 pub use msd_api::*;
+pub use multiview::*;
 pub use setup::*;
 pub use stream::*;
 pub use system::*;
