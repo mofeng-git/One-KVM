@@ -1,6 +1,7 @@
 #include "rkmpp_dmabuf_ffi.h"
 #include <array>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <new>
 #include "rkmpp_dma_jpeg.h"
@@ -39,7 +40,7 @@ struct RkmppDmaEncoder {
     std::array<size_t, 16> capacities{};
     size_t count = 0;
     size_t minimum = 0;
-    int width = 0, height = 0, stride = 0;
+    int width = 0, height = 0, stride = 0, vstride = 0;
     MppFrameFormat format = MPP_FMT_YUV420SP;
     bool jpeg = false;
     MppCtx decoder = nullptr;
@@ -78,6 +79,23 @@ struct RkmppDmaEncoder {
     ~RkmppDmaEncoder() { close(); }
 };
 
+static int alloc_mpp_buffer_group(MppBufferGroup *grp) {
+    const MppBufferType types[] = {
+        static_cast<MppBufferType>(MPP_BUFFER_TYPE_DRM | MPP_BUFFER_FLAGS_CACHABLE),
+        MPP_BUFFER_TYPE_DRM,
+        MPP_BUFFER_TYPE_ION,
+        MPP_BUFFER_TYPE_NORMAL,
+    };
+    int ret = -1;
+    for (MppBufferType type : types) {
+        ret = mpp_buffer_group_get_internal(grp, type);
+        if (ret == 0 && *grp) {
+            return 0;
+        }
+    }
+    return ret;
+}
+
 static bool set_cfg(RkmppDmaEncoder *e, const char *key, int value) {
     int ret = mpp_enc_cfg_set_s32(e->cfg, key, value);
     if (ret) fail(key, ret);
@@ -96,6 +114,28 @@ extern "C" int rkmpp_dma_reconfigure(RkmppDmaEncoder *e, int kbps, int gop) {
     return ret ? fail("MPP_ENC_SET_CFG", ret) : 0;
 }
 
+static bool is_rk33xx_soc() {
+    static const bool detected = []() {
+        const char *paths[] = {
+            "/proc/device-tree/compatible",
+            "/sys/firmware/devicetree/base/compatible",
+        };
+        for (const char *path : paths) {
+            FILE *f = std::fopen(path, "rb");
+            if (!f) continue;
+            char buf[512]{};
+            const size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
+            std::fclose(f);
+            for (size_t i = 0; i < n; ++i) {
+                if (buf[i] == '\0') buf[i] = ' ';
+            }
+            if (std::strstr(buf, "rk33") != nullptr) return true;
+        }
+        return false;
+    }();
+    return detected;
+}
+
 extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     int width, int height, int stride, int format, int codec, int fps,
     int kbps, int gop, const int *fds, const size_t *sizes, size_t count) {
@@ -111,7 +151,10 @@ extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     e->width = width; e->height = height; e->stride = stride; e->count = count;
     e->jpeg = format == 4;
     if (e->jpeg) e->stride = stride = (width + 15) & ~15;
-    const int vstride = e->jpeg ? (height + 15) & ~15 : height;
+    // RK33xx VEPU requires 16-aligned ver_stride (e.g. 1088 for 1080p) and reads
+    // the full aligned plane; reject undersized V4L2 buffers immediately at init.
+    const int vstride = (e->jpeg || is_rk33xx_soc()) ? ((height + 15) & ~15) : height;
+    e->vstride = vstride;
     e->format = format == 3 ? MPP_FMT_RGB888 : format == 2 ? MPP_FMT_YUV422_YUYV : format == 1 ? MPP_FMT_BGR888 : MPP_FMT_YUV420SP;
     auto abort_init = [e](const char *op, int ret) -> RkmppDmaEncoder * {
         fail(op, ret); delete e; return nullptr;
@@ -150,9 +193,9 @@ extern "C" RkmppDmaEncoder *rkmpp_dma_new(
     ret = e->api->control(e->ctx, MPP_ENC_SET_HEADER_MODE, &mode);
     if (ret) return abort_init("MPP_ENC_SET_HEADER_MODE", ret);
     // Reject arithmetic overflow even on 32-bit ARM; stride is supplied by a driver.
-    if (size_t(stride) > std::numeric_limits<size_t>::max() / size_t(height))
+    if (size_t(stride) > std::numeric_limits<size_t>::max() / size_t(vstride))
         return abort_init("DMA buffer size overflow", -1);
-    size_t minimum = size_t(stride) * height;
+    size_t minimum = size_t(stride) * size_t(vstride);
     if (format == 0) {
         if (minimum > std::numeric_limits<size_t>::max() / 3)
             return abort_init("DMA buffer size overflow", -1);
@@ -177,7 +220,7 @@ extern "C" RkmppDmaEncoder *rkmpp_dma_new(
         MppFrameFormat output = MPP_FMT_YUV420SP;
         ret = e->dec_api->control(e->decoder, MPP_DEC_SET_OUTPUT_FORMAT, &output);
         if (ret) return abort_init("JPEG NV12 output", ret);
-        ret = mpp_buffer_group_get_internal(&e->decoded_group, MPP_BUFFER_TYPE_DRM);
+        ret = alloc_mpp_buffer_group(&e->decoded_group);
         if (ret) return abort_init("JPEG output buffer group", ret);
         // MPP JPEG requires aligned storage; reserve the conservative size used
         // by its advanced-task decoder demo. One output reused after encode.
@@ -197,6 +240,14 @@ static int dma_read_sync(MppBuffer buffer, bool start) {
     do { ret = ioctl(mpp_buffer_get_fd(buffer), DMA_BUF_IOCTL_SYNC, &sync); }
     while (ret < 0 && errno == EINTR);
     return ret;
+}
+
+static void dma_flush_for_device(MppBuffer buffer) {
+    dma_buf_sync sync{};
+    sync.flags = DMA_BUF_SYNC_RW | DMA_BUF_SYNC_END;
+    int ret;
+    do { ret = ioctl(mpp_buffer_get_fd(buffer), DMA_BUF_IOCTL_SYNC, &sync); }
+    while (ret < 0 && errno == EINTR);
 }
 
 static int decode_jpeg(RkmppDmaEncoder *e, size_t index, size_t bytes_used) {
@@ -288,6 +339,8 @@ extern "C" int rkmpp_dma_encode(RkmppDmaEncoder *e, size_t index, size_t bytes_u
     if (e->jpeg && decode_jpeg(e, index, bytes_used)) {
         // Preserve the detailed decoder failure while ending BOTH engines.
         e->close(); return -1;
+    } else if (!e->jpeg) {
+        dma_flush_for_device(e->buffers[index]);
     }
     if (force_idr) {
         int ret = e->api->control(e->ctx, MPP_ENC_SET_IDR_FRAME, nullptr);
@@ -299,7 +352,7 @@ extern "C" int rkmpp_dma_encode(RkmppDmaEncoder *e, size_t index, size_t bytes_u
         ret = mpp_frame_init(&frame);
         if (ret) return abort_encode("mpp_frame_init", ret);
         mpp_frame_set_width(frame, e->width); mpp_frame_set_height(frame, e->height);
-        mpp_frame_set_hor_stride(frame, e->stride); mpp_frame_set_ver_stride(frame, e->height);
+        mpp_frame_set_hor_stride(frame, e->stride); mpp_frame_set_ver_stride(frame, e->vstride);
         mpp_frame_set_fmt(frame, e->format);
         mpp_frame_set_buffer(frame, e->buffers[index]);
     }

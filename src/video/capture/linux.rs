@@ -372,6 +372,25 @@ impl CaptureStream {
         ioctl::streamon(&stream.fd, stream.queue)
             .map_err(|e| AppError::VideoError(format!("Failed to start capture stream: {}", e)))?;
 
+        if caps.driver.eq_ignore_ascii_case("uvcvideo") {
+            let warmup_frames = std::env::var("ONE_KVM_UVC_WARMUP_FRAMES")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(3);
+            for _ in 0..warmup_frames {
+                let Ok(dqbuf) = stream.dequeue_buffer() else {
+                    break;
+                };
+                if let Err(e) = stream.queue_buffer(dqbuf.as_v4l2_buffer().index) {
+                    debug!("UVC warmup requeue failed: {}", e);
+                    break;
+                }
+            }
+            if warmup_frames > 0 {
+                debug!("Dropped {} UVC warmup frames after STREAMON", warmup_frames);
+            }
+        }
+
         // When the subdev path was used, SOURCE_CHANGE was already
         // subscribed *there* (the rkcif video node returns ENOTTY).
         // Otherwise try on the video node as a best-effort fallback for

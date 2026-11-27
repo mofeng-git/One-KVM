@@ -10,6 +10,11 @@ pub mod ffmpeg_ram;
     feature = "rkmpp"
 ))]
 pub mod rkmpp_dmabuf;
+#[cfg(all(
+    target_os = "linux",
+    feature = "rkmpp"
+))]
+pub mod rkmpp_native;
 
 #[no_mangle]
 pub extern "C" fn hwcodec_log(level: i32, message: *const std::os::raw::c_char) {
