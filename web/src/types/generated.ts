@@ -530,6 +530,19 @@ export interface WatchdogConfigUpdate {
 	enabled: boolean;
 }
 
+export interface WebCertificateInfo {
+	subject: string;
+	issuer: string;
+	/** Start of the certificate validity period, in RFC 3339 UTC. */
+	not_before: string;
+	/** End of the certificate validity period, in RFC 3339 UTC. */
+	not_after: string;
+	/** DNS names and IP addresses from the leaf certificate's subject alternative names. */
+	names: string[];
+	/** Absent when the private key could not be read or parsed. */
+	key_matches?: boolean;
+}
+
 /**
  * Web server settings returned by `GET` / `PATCH /api/config/web`.
  * 
@@ -541,8 +554,9 @@ export interface WebConfigResponse {
 	bind_addresses: string[];
 	bind_address: string;
 	https_enabled: boolean;
-	/** Whether a custom TLS certificate is active (non-empty cert + key paths in stored config). */
+	/** Whether a custom TLS certificate and key are configured. */
 	has_custom_cert: boolean;
+	custom_cert_info?: WebCertificateInfo;
 }
 
 export interface WebConfigUpdate {

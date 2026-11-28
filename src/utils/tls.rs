@@ -5,13 +5,20 @@ use openssl::x509::X509;
 use std::io;
 use std::path::Path;
 
-pub fn server_config_from_pem(cert_pem: &[u8], key_pem: &[u8]) -> io::Result<OpenSSLConfig> {
+pub fn certificate_chain_from_pem(
+    cert_pem: &[u8],
+) -> io::Result<(X509, impl Iterator<Item = X509>)> {
     let mut certificates = X509::stack_from_pem(cert_pem)
         .map_err(io::Error::other)?
         .into_iter();
     let certificate = certificates.next().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "TLS certificate chain is empty")
     })?;
+    Ok((certificate, certificates))
+}
+
+pub fn server_config_from_pem(cert_pem: &[u8], key_pem: &[u8]) -> io::Result<OpenSSLConfig> {
+    let (certificate, certificates) = certificate_chain_from_pem(cert_pem)?;
     let private_key = PKey::private_key_from_pem(key_pem).map_err(io::Error::other)?;
     let mut acceptor =
         SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).map_err(io::Error::other)?;

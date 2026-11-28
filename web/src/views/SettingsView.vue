@@ -372,6 +372,32 @@ const sslCertPem = ref('')
 const sslKeyPem = ref('')
 const certSaving = ref(false)
 const certClearing = ref(false)
+const savedCertificate = computed(() => webServerConfig.value.custom_cert_info)
+const certificateDateFormatter = computed(
+  () => new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'long' }),
+)
+const certificateValidity = computed(() => {
+  const cert = savedCertificate.value
+  if (!cert) return
+
+  const now = Date.now()
+  const end = Date.parse(cert.not_after)
+  if (now >= end) return { label: t('settings.sslCertExpired'), warning: true }
+  if (now < Date.parse(cert.not_before)) {
+    return { label: t('settings.sslCertNotYetValid'), warning: true }
+  }
+
+  const days = Math.floor((end - now) / 86_400_000)
+  const label =
+    days === 0 ? t('settings.sslCertLessThanOneDay') : t('settings.sslCertDaysRemaining', days)
+  return { label, warning: false }
+})
+const certificateKeyStatus = computed(() => {
+  const matches = savedCertificate.value?.key_matches
+  if (matches === true) return t('settings.sslCertKeyMatch')
+  if (matches === false) return t('settings.sslCertKeyMismatch')
+  return t('settings.sslCertKeyUnavailable')
+})
 const showRestartDialog = ref(false)
 const restarting = ref(false)
 const autoRestarting = ref(false)
@@ -2386,11 +2412,17 @@ watch([() => pluginStore.loaded, pluginSections, activeSection], ensureVisibleSe
                 </div></CardHeader
               >
               <CardContent class="space-y-4">
-                <!-- Active custom cert notice -->
-                <Alert v-if="webServerConfig.has_custom_cert" variant="success">
-                  <Check />
+                <Alert
+                  v-if="webServerConfig.has_custom_cert"
+                  :variant="savedCertificate ? 'success' : 'warning'"
+                  class="items-center [&>svg]:translate-y-0"
+                >
+                  <Check v-if="savedCertificate" />
+                  <AlertTriangle v-else />
                   <AlertDescription class="flex items-center justify-between gap-3">
-                    <span>{{ t('settings.sslCertActive') }}</span>
+                    <span>{{
+                      t(savedCertificate ? 'settings.sslCertConfigured' : 'settings.sslCertUnavailable')
+                    }}</span>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2407,6 +2439,42 @@ watch([() => pluginStore.loaded, pluginSections, activeSection], ensureVisibleSe
                     </Button>
                   </AlertDescription>
                 </Alert>
+
+                <div v-if="savedCertificate" class="space-y-3 rounded-md border bg-muted/40 p-3">
+                  <h3 class="text-sm font-medium">{{ t('settings.sslCertDetails') }}</h3>
+                  <dl
+                    class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dt]:text-muted-foreground [&>dd]:wrap-break-word"
+                  >
+                    <dt>{{ t('settings.sslCertSubject') }}</dt>
+                    <dd>{{ savedCertificate.subject || '—' }}</dd>
+                    <dt>{{ t('settings.sslCertIssuer') }}</dt>
+                    <dd>{{ savedCertificate.issuer || '—' }}</dd>
+                    <dt>{{ t('settings.sslCertValidity') }}</dt>
+                    <dd class="space-y-1">
+                      <div>
+                        <time :datetime="savedCertificate.not_before">{{
+                          certificateDateFormatter.format(Date.parse(savedCertificate.not_before))
+                        }}</time>
+                        –
+                        <time :datetime="savedCertificate.not_after">{{
+                          certificateDateFormatter.format(Date.parse(savedCertificate.not_after))
+                        }}</time>
+                      </div>
+                      <div
+                        v-if="certificateValidity"
+                        :class="certificateValidity.warning ? 'text-warning' : 'text-muted-foreground'"
+                      >
+                        {{ certificateValidity.label }}
+                      </div>
+                    </dd>
+                    <dt>{{ t('settings.sslCertNames') }}</dt>
+                    <dd>{{ savedCertificate.names.join(', ') || '—' }}</dd>
+                    <dt>{{ t('settings.sslCertPrivateKey') }}</dt>
+                    <dd :class="savedCertificate.key_matches ? 'text-success' : 'text-warning'">
+                      {{ certificateKeyStatus }}
+                    </dd>
+                  </dl>
+                </div>
 
                 <!-- Certificate textarea -->
                 <div class="settings-field space-y-2">

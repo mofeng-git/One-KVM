@@ -916,7 +916,25 @@ impl AudioConfigUpdate {
     }
 }
 
-/// hbbs/hbbr `-k` relay key: standard Base64 encoding of exactly 32 bytes (typically 44 chars with padding).
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebCertificateInfo {
+    pub subject: String,
+    pub issuer: String,
+    /// Start of the certificate validity period, in RFC 3339 UTC.
+    pub not_before: String,
+    /// End of the certificate validity period, in RFC 3339 UTC.
+    pub not_after: String,
+    /// DNS names and IP addresses from the leaf certificate's subject alternative names.
+    pub names: Vec<String>,
+    /// Absent when the private key could not be read or parsed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_matches: Option<bool>,
+}
+
+/// Web server settings returned by `GET` / `PATCH /api/config/web`.
+///
+/// Public API shape: certificate paths on disk are not exposed. The full stored model is `WebConfig` in `config::schema`.
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfigResponse {
@@ -925,31 +943,10 @@ pub struct WebConfigResponse {
     pub bind_addresses: Vec<String>,
     pub bind_address: String,
     pub https_enabled: bool,
-    /// Whether a custom TLS certificate is active (non-empty cert + key paths in stored config).
+    /// Whether a custom TLS certificate and key are configured.
     pub has_custom_cert: bool,
-}
-
-impl WebConfigResponse {
-    pub fn from_stored(web: &WebConfig) -> Self {
-        let has_custom_cert = web
-            .ssl_cert_path
-            .as_deref()
-            .map(|p| !p.is_empty())
-            .unwrap_or(false)
-            && web
-                .ssl_key_path
-                .as_deref()
-                .map(|p| !p.is_empty())
-                .unwrap_or(false);
-        Self {
-            http_port: web.http_port,
-            https_port: web.https_port,
-            bind_addresses: web.bind_addresses.clone(),
-            bind_address: web.bind_address.clone(),
-            https_enabled: web.https_enabled,
-            has_custom_cert,
-        }
-    }
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_cert_info: Option<WebCertificateInfo>,
 }
 
 #[typeshare]
