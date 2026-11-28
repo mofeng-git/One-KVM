@@ -2,36 +2,26 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Eye, EyeOff, Loader2, RefreshCw, Save } from 'lucide-vue-next'
-import { configApi, streamApi, type DeviceList, type EncoderBackendInfo } from '@/api'
+import { Eye, EyeOff, Loader2, Save } from 'lucide-vue-next'
+import { streamApi, type EncoderBackendInfo } from '@/api'
 import { EncoderType } from '@/types/generated'
 import { useConfigStore } from '@/stores/config'
-import { toConfigFps } from '@/lib/fps'
-import { formatVideoDeviceLabel } from '@/lib/video-device-label'
-import { getVideoFormatState } from '@/lib/video-format-support'
-import { useVideoDeviceConfiguration } from '@/composables/useVideoDeviceConfiguration'
 import CaptureActivityControl from '@/components/CaptureActivityControl.vue'
-import VideoInputFields from '@/components/VideoInputFields.vue'
 import CardTitle from '@/components/SettingsCardTitle.vue'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 const props = defineProps<{ active: boolean }>()
 const { t } = useI18n()
 const configStore = useConfigStore()
-const EMPTY_SELECT_VALUE = '__one-kvm-empty-select-value__'
 const showPasswords = ref(false)
-const devices = ref<Pick<DeviceList, 'video'>>({ video: [] })
 const config = ref({
-  video_device: '',
-  video_format: '',
-  video_width: 1920,
-  video_height: 1080,
-  video_fps: 30,
   encoder_backend: EncoderType.Auto,
+  webrtc_udp_port_range: '',
   stun_server: '',
   turn_server: '',
   turn_username: '',
@@ -45,114 +35,17 @@ const selectedBackendFormats = computed(() => {
   return backend?.supported_formats || []
 })
 
-const videoDeviceSelection = computed({
-  get: () => config.value.video_device,
-  set: (value) => {
-    config.value.video_device = value
-  },
-})
-const videoFormatSelection = computed({
-  get: () => config.value.video_format,
-  set: (value) => {
-    config.value.video_format = value
-  },
-})
-const videoResolutionSelection = computed({
-  get: () => `${config.value.video_width}x${config.value.video_height}`,
-  set: (value) => {
-    const [width, height] = value.split('x').map(Number)
-    if (width && height) {
-      config.value.video_width = width
-      config.value.video_height = height
-    }
-  },
-})
-const videoFpsSelection = computed<number | null>({
-  get: () => config.value.video_fps,
-  set: (value) => {
-    if (value !== null) config.value.video_fps = value
-  },
-})
-
-const videoConfiguration = useVideoDeviceConfiguration({
-  devices: computed(() => devices.value.video),
-  selection: {
-    device: videoDeviceSelection,
-    format: videoFormatSelection,
-    resolution: videoResolutionSelection,
-    fps: videoFpsSelection,
-  },
-  active: computed(() => props.active),
-  listenForStreamEvents: true,
-  preferredFormat: (device) =>
-    device.formats.find(
-      (format) =>
-        getVideoFormatState(format.format, 'config', config.value.encoder_backend) !==
-        'unsupported',
-    )?.format,
-})
-const {
-  selectedDevice,
-  isSourceFollowing,
-  availableFormats,
-  availableResolutions,
-  availableFps,
-  refreshInputStatus,
-  refreshingInputStatus,
-} = videoConfiguration
-
-const availableFormatOptions = computed(() => {
-  return availableFormats.value.map((format) => {
-    const state = getVideoFormatState(format.format, 'config', config.value.encoder_backend)
-    return {
-      ...format,
-      state,
-      disabled: state === 'unsupported',
-    }
-  })
-})
-
-const selectableFormats = computed(() => {
-  return availableFormatOptions.value.filter((format) => !format.disabled)
-})
-
-watch(
-  selectableFormats,
-  () => {
-    if (selectableFormats.value.length === 0) {
-      config.value.video_format = ''
-      return
-    }
-
-    const isValid = selectableFormats.value.some((f) => f.format === config.value.video_format)
-    if (!isValid) {
-      config.value.video_format = selectableFormats.value[0]?.format || ''
-    }
-  },
-  { deep: true },
-)
-
-const videoSaving = ref<'capture' | 'encoder' | 'connection' | null>(null)
-async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
-  if (videoSaving.value) return
+const configLoaded = ref(false)
+const videoSaving = ref<'encoder' | 'connection' | null>(null)
+async function saveVideoCard(card: 'encoder' | 'connection') {
+  if (videoSaving.value || !configLoaded.value) return
   videoSaving.value = card
   try {
-    if (card === 'capture') {
-      await configStore.updateVideo(
-        isSourceFollowing.value
-          ? { device: config.value.video_device || undefined }
-          : {
-              device: config.value.video_device || undefined,
-              format: config.value.video_format || undefined,
-              width: config.value.video_width,
-              height: config.value.video_height,
-              fps: toConfigFps(config.value.video_fps),
-            },
-      )
-    } else if (card === 'encoder') {
+    if (card === 'encoder') {
       await configStore.updateStream({ encoder: config.value.encoder_backend })
     } else {
       await configStore.updateStream({
+        webrtc_udp_port_range: config.value.webrtc_udp_port_range.trim(),
         stun_server: config.value.stun_server.trim(),
         turn_server: config.value.turn_server.trim(),
         turn_username: config.value.turn_username.trim(),
@@ -169,27 +62,20 @@ async function saveVideoCard(card: 'capture' | 'encoder' | 'connection') {
   }
 }
 
-async function loadVideoConfig() {
+async function loadStreamConfig() {
+  configLoaded.value = false
   try {
-    const [video, stream] = await Promise.all([
-      configStore.refreshVideo(), configStore.refreshStream(),
-    ])
+    const stream = await configStore.refreshStream()
     config.value = {
-      video_device: video.device || '',
-      video_format: video.format || '',
-      video_width: video.width || 1920,
-      video_height: video.height || 1080,
-      video_fps: video.fps || 30,
       encoder_backend: stream.encoder || EncoderType.Auto,
+      webrtc_udp_port_range: stream.webrtc_udp_port_range ?? '',
       stun_server: stream.stun_server || '',
       turn_server: stream.turn_server || '',
       turn_username: stream.turn_username || '',
       turn_password: stream.turn_password || '',
     }
+    configLoaded.value = true
   } catch { /* The request layer displays loading failures. */ }
-}
-async function loadDeviceConfig() {
-  try { devices.value = await configApi.listDevices() } catch {}
 }
 async function loadBackends() {
   try {
@@ -199,7 +85,7 @@ async function loadBackends() {
 }
 
 watch(() => props.active, async (active) => {
-  if (active) await Promise.all([loadVideoConfig(), loadDeviceConfig(), loadBackends()])
+  if (active) await Promise.all([loadStreamConfig(), loadBackends()])
 }, { immediate: true })
 </script>
 
@@ -207,71 +93,6 @@ watch(() => props.active, async (active) => {
 <!-- Video Section -->
 <div v-show="active" class="space-y-4">
   <CaptureActivityControl :active="active" />
-  <!-- Video Device Settings -->
-  <Card>
-    <CardHeader class="settings-card-heading"
-      ><CardTitle :help="t('settings.videoSettingsDesc')">{{
-        t('settings.videoSettings')
-      }}</CardTitle>
-      <div class="settings-card-actions">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          :aria-label="t('common.refresh')"
-          @click="loadDeviceConfig"
-        >
-          <RefreshCw class="size-4" />
-        </Button>
-        <div class="settings-save-action">
-          <Button :disabled="videoSaving !== null" @click="saveVideoCard('capture')"
-            ><Loader2 v-if="videoSaving === 'capture'" class="size-4 animate-spin" /><Save
-              v-else
-              class="size-4"
-            />{{ t('settingsUi.saveCapture') }}</Button
-          >
-        </div>
-      </div></CardHeader
-    >
-    <CardContent class="space-y-4">
-      <div class="settings-field space-y-2">
-        <Label for="video-device">{{ t('settings.videoDevice') }}</Label>
-        <Select
-          :model-value="config.video_device"
-          @update:model-value="
-            (value) =>
-              (config.video_device = value === EMPTY_SELECT_VALUE ? '' : String(value))
-          "
-        >
-          <SelectTrigger id="video-device" class="w-full"
-            ><SelectValue :placeholder="t('settings.selectDevice')"
-          /></SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="EMPTY_SELECT_VALUE">{{
-              t('settings.selectDevice')
-            }}</SelectItem>
-            <SelectItem v-for="dev in devices.video" :key="dev.path" :value="dev.path">{{
-              formatVideoDeviceLabel(dev)
-            }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <VideoInputFields
-        v-if="selectedDevice"
-        :device="selectedDevice"
-        :formats="availableFormatOptions"
-        :resolutions="availableResolutions"
-        :fps-options="availableFps"
-        :format="config.video_format"
-        :resolution="videoResolutionSelection"
-        :fps="config.video_fps"
-        :refreshing="refreshingInputStatus"
-        @update:format="config.video_format = $event"
-        @update:resolution="videoResolutionSelection = $event"
-        @update:fps="config.video_fps = $event"
-        @refresh="refreshInputStatus"
-      />
-    </CardContent>
-  </Card>
 
   <!-- Encoder Settings -->
   <Card>
@@ -281,7 +102,7 @@ watch(() => props.active, async (active) => {
       }}</CardTitle>
       <div class="settings-card-actions">
         <div class="settings-save-action">
-          <Button :disabled="videoSaving !== null" @click="saveVideoCard('encoder')"
+          <Button :disabled="!configLoaded || videoSaving !== null" @click="saveVideoCard('encoder')"
             ><Loader2 v-if="videoSaving === 'encoder'" class="size-4 animate-spin" /><Save
               v-else
               class="size-4"
@@ -338,7 +159,7 @@ watch(() => props.active, async (active) => {
       }}</CardTitle>
       <div class="settings-card-actions">
         <div class="settings-save-action">
-          <Button :disabled="videoSaving !== null" @click="saveVideoCard('connection')"
+          <Button :disabled="!configLoaded || videoSaving !== null" @click="saveVideoCard('connection')"
             ><Loader2
               v-if="videoSaving === 'connection'"
               class="size-4 animate-spin"
@@ -348,6 +169,20 @@ watch(() => props.active, async (active) => {
       </div></CardHeader
     >
     <CardContent class="space-y-4">
+      <div class="settings-field space-y-2">
+        <Label for="webrtc-udp-port-range">{{ t('settings.webrtcUdpPortRange') }}</Label>
+        <div class="space-y-2">
+          <Input
+            id="webrtc-udp-port-range"
+            v-model="config.webrtc_udp_port_range"
+            placeholder="50000-50100"
+            aria-describedby="webrtc-udp-port-range-help"
+          />
+          <p id="webrtc-udp-port-range-help" class="text-sm text-muted-foreground">
+            {{ t('settings.webrtcUdpPortRangeHelp') }}
+          </p>
+        </div>
+      </div>
       <div class="settings-field space-y-2">
         <Label for="stun-server">{{ t('settings.stunServer') }}</Label>
         <Input

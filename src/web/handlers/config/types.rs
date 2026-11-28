@@ -152,6 +152,7 @@ pub struct StreamConfigResponse {
     pub has_public_ice_servers: bool,
     /// Whether public ICE servers are currently in use (when STUN/TURN are unset)
     pub using_public_ice_servers: bool,
+    pub webrtc_udp_port_range: Option<String>,
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
@@ -168,6 +169,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
             bitrate_preset: config.bitrate_preset,
             has_public_ice_servers: public_ice::is_configured(),
             using_public_ice_servers: config.is_using_public_ice_servers(),
+            webrtc_udp_port_range: config.webrtc_udp_port_range.clone(),
             stun_server: config.stun_server.clone(),
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
@@ -183,6 +185,8 @@ pub struct StreamConfigUpdate {
     pub keep_capture_alive: Option<bool>,
     pub encoder: Option<EncoderType>,
     pub bitrate_preset: Option<BitratePreset>,
+    /// Local WebRTC ICE UDP port or inclusive range. Leave empty for automatic allocation.
+    pub webrtc_udp_port_range: Option<String>,
     /// STUN server URL (e.g., "stun:stun.l.google.com:19302")
     /// Leave empty to use public ICE servers
     pub stun_server: Option<String>,
@@ -197,6 +201,9 @@ pub struct StreamConfigUpdate {
 
 impl StreamConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(range) = self.webrtc_udp_port_range.as_deref() {
+            crate::webrtc::config::parse_udp_port_range(range)?;
+        }
         // BitratePreset is always valid (enum)
         // Validate STUN server format
         if let Some(ref stun) = self.stun_server {
@@ -230,6 +237,10 @@ impl StreamConfigUpdate {
         }
         if let Some(preset) = self.bitrate_preset {
             config.bitrate_preset = preset;
+        }
+        if let Some(range) = self.webrtc_udp_port_range.as_deref() {
+            let range = range.trim();
+            config.webrtc_udp_port_range = (!range.is_empty()).then(|| range.to_owned());
         }
         // STUN/TURN settings - empty string means clear (use public servers), Some("value") means set custom
         if let Some(ref stun) = self.stun_server {

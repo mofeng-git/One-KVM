@@ -81,6 +81,22 @@ pub(crate) async fn apply_stream_config(
         .stream_manager
         .set_keep_capture_alive(new_config.keep_capture_alive);
 
+    let ice_changed = old_config.webrtc_udp_port_range != new_config.webrtc_udp_port_range
+        || old_config.stun_server != new_config.stun_server
+        || old_config.turn_server != new_config.turn_server
+        || old_config.turn_username != new_config.turn_username
+        || old_config.turn_password != new_config.turn_password;
+
+    if options.force || ice_changed {
+        tracing::info!(
+            "Updating ICE config: UDP port range={:?}, STUN={:?}, TURN={:?}",
+            new_config.webrtc_udp_port_range,
+            new_config.stun_server,
+            new_config.turn_server
+        );
+        state.webrtc.update_ice_config(new_config).await;
+    }
+
     if options.force || old_config.encoder != new_config.encoder {
         let encoder_backend = encoder_type_to_backend(new_config.encoder.clone());
         tracing::info!(
@@ -96,28 +112,6 @@ pub(crate) async fn apply_stream_config(
             .stream_manager
             .set_bitrate_preset(new_config.bitrate_preset)
             .await?;
-    }
-
-    let ice_changed = old_config.stun_server != new_config.stun_server
-        || old_config.turn_server != new_config.turn_server
-        || old_config.turn_username != new_config.turn_username
-        || old_config.turn_password != new_config.turn_password;
-
-    if options.force || ice_changed {
-        tracing::info!(
-            "Updating ICE config: STUN={:?}, TURN={:?}",
-            new_config.stun_server,
-            new_config.turn_server
-        );
-        state
-            .webrtc
-            .update_ice_config(
-                new_config.stun_server.clone(),
-                new_config.turn_server.clone(),
-                new_config.turn_username.clone(),
-                new_config.turn_password.clone(),
-            )
-            .await;
     }
 
     state.stream_manager.resume_capture_if_requested().await;

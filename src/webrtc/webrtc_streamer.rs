@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, trace, warn};
 
 use crate::audio::{AudioController, OpusFrame};
+use crate::config::StreamConfig;
 use crate::error::{AppError, Result};
 use crate::events::{EventBus, StreamKind, SystemEvent};
 use crate::hid::HidController;
@@ -24,7 +25,7 @@ use crate::video::types::{
     VideoCodecType, VideoEncoderType,
 };
 
-use super::config::{TurnServer, WebRtcConfig};
+use super::config::WebRtcConfig;
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::universal_session::{UniversalSession, UniversalSessionConfig};
 
@@ -976,56 +977,9 @@ impl WebRtcStreamer {
         }
     }
 
-    /// Update ICE configuration (STUN/TURN servers)
-    ///
-    /// Note: Changes take effect for new sessions only.
-    /// Existing sessions need to be reconnected to use the new ICE config.
-    ///
-    /// If both stun_server and turn_server are empty/None, uses baked-in public STUN.
-    pub async fn update_ice_config(
-        &self,
-        stun_server: Option<String>,
-        turn_server: Option<String>,
-        turn_username: Option<String>,
-        turn_password: Option<String>,
-    ) {
-        let mut config = self.config.write().await;
-
-        // Clear existing servers
-        config.webrtc.stun_servers.clear();
-        config.webrtc.turn_servers.clear();
-
-        // Check if user configured custom servers
-        let has_custom_stun = stun_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-        let has_custom_turn = turn_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-
-        // If no custom servers, use baked-in public STUN
-        if !has_custom_stun && !has_custom_turn {
-            use crate::webrtc::config::public_ice;
-            let stun = public_ice::stun_server().to_string();
-            info!("Using public STUN server: {}", stun);
-            config.webrtc.stun_servers.push(stun);
-        } else {
-            // Use custom servers
-            if let Some(ref stun) = stun_server {
-                if !stun.is_empty() {
-                    config.webrtc.stun_servers.push(stun.clone());
-                    info!("Using custom STUN server: {}", stun);
-                }
-            }
-            if let Some(ref turn) = turn_server {
-                if !turn.is_empty() {
-                    let username = turn_username.unwrap_or_default();
-                    let credential = turn_password.unwrap_or_default();
-                    config.webrtc.turn_servers.push(TurnServer::new(
-                        turn.clone(),
-                        username.clone(),
-                        credential,
-                    ));
-                    info!("Using custom TURN server: {} (user: {})", turn, username);
-                }
-            }
-        }
+    /// Update ICE settings for new sessions.
+    pub(crate) async fn update_ice_config(&self, config: &StreamConfig) {
+        self.config.write().await.webrtc.apply_ice_settings(config);
     }
 
     /// Set HID controller for DataChannel

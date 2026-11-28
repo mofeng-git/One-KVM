@@ -19,7 +19,7 @@ use crate::state::{AppState, ShutdownAction};
 use crate::update::UpdateService;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::{Streamer, VideoStreamManager};
-use crate::webrtc::{WebRtcStreamer, WebRtcStreamerConfig};
+use crate::webrtc::{WebRtcConfig, WebRtcStreamer, WebRtcStreamerConfig};
 
 use super::supervisor::RuntimeSupervisor;
 
@@ -338,6 +338,8 @@ fn build_webrtc(
     resolution: Resolution,
     capture_keep_alive: crate::video::capture_keep_alive::CaptureKeepAlive,
 ) -> Arc<WebRtcStreamer> {
+    let mut webrtc_config = WebRtcConfig::default();
+    webrtc_config.apply_ice_settings(&config.stream);
     let webrtc = WebRtcStreamer::with_capture_keep_alive(
         WebRtcStreamerConfig {
             resolution,
@@ -347,65 +349,13 @@ fn build_webrtc(
             encoder_backend: crate::stream_encoder::encoder_type_to_backend(
                 config.stream.encoder.clone(),
             ),
-            webrtc: build_ice_config(config),
+            webrtc: webrtc_config,
             ..Default::default()
         },
         capture_keep_alive,
     );
     tracing::info!("WebRTC streamer created");
     webrtc
-}
-
-fn build_ice_config(config: &AppConfig) -> crate::webrtc::config::WebRtcConfig {
-    let mut stun_servers = Vec::new();
-    let mut turn_servers = Vec::new();
-    let has_custom_stun = config
-        .stream
-        .stun_server
-        .as_ref()
-        .is_some_and(|server| !server.is_empty());
-    let has_custom_turn = config
-        .stream
-        .turn_server
-        .as_ref()
-        .is_some_and(|server| !server.is_empty());
-
-    if !has_custom_stun && !has_custom_turn {
-        let stun = crate::webrtc::config::public_ice::stun_server().to_string();
-        tracing::info!("Using public STUN server: {}", stun);
-        stun_servers.push(stun);
-    } else {
-        if let Some(stun) = config
-            .stream
-            .stun_server
-            .as_ref()
-            .filter(|server| !server.is_empty())
-        {
-            tracing::info!("Using custom STUN server: {}", stun);
-            stun_servers.push(stun.clone());
-        }
-        if let Some(turn) = config
-            .stream
-            .turn_server
-            .as_ref()
-            .filter(|server| !server.is_empty())
-        {
-            let username = config.stream.turn_username.clone().unwrap_or_default();
-            let credential = config.stream.turn_password.clone().unwrap_or_default();
-            turn_servers.push(crate::webrtc::config::TurnServer::new(
-                turn.clone(),
-                username.clone(),
-                credential,
-            ));
-            tracing::info!("Using custom TURN server: {} (user: {})", turn, username);
-        }
-    }
-
-    crate::webrtc::config::WebRtcConfig {
-        stun_servers,
-        turn_servers,
-        ..Default::default()
-    }
 }
 
 #[cfg(unix)]

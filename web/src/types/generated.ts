@@ -178,6 +178,7 @@ export interface StreamConfig {
 	keep_capture_alive: boolean;
 	encoder: EncoderType;
 	bitrate_preset: BitratePreset;
+	webrtc_udp_port_range?: string;
 	stun_server?: string;
 	turn_server?: string;
 	turn_username?: string;
@@ -478,6 +479,7 @@ export interface StreamConfigResponse {
 	has_public_ice_servers: boolean;
 	/** Whether public ICE servers are currently in use (when STUN/TURN are unset) */
 	using_public_ice_servers: boolean;
+	webrtc_udp_port_range?: string;
 	stun_server?: string;
 	turn_server?: string;
 	turn_username?: string;
@@ -489,6 +491,8 @@ export interface StreamConfigUpdate {
 	keep_capture_alive?: boolean;
 	encoder?: EncoderType;
 	bitrate_preset?: BitratePreset;
+	/** Local WebRTC ICE UDP port or inclusive range. Leave empty for automatic allocation. */
+	webrtc_udp_port_range?: string;
 	/**
 	 * STUN server URL (e.g., "stun:stun.l.google.com:19302")
 	 * Leave empty to use public ICE servers

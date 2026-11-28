@@ -12,6 +12,7 @@ use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice::mdns::MulticastDnsMode;
+use webrtc::ice::udp_network::UDPNetwork;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
@@ -27,7 +28,7 @@ use webrtc::rtp_transceiver::rtp_codec::{
 };
 use webrtc::rtp_transceiver::RTCPFeedback;
 
-use super::config::WebRtcConfig;
+use super::config::{parse_udp_port_range, WebRtcConfig};
 use super::mdns::{default_mdns_host_name, mdns_mode};
 use super::rtp::OpusAudioTrack;
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
@@ -234,6 +235,11 @@ impl UniversalSession {
 
         let mut setting_engine = SettingEngine::default();
         setting_engine.set_ip_filter(Box::new(is_allowed_ice_ip));
+        if let Some(range) =
+            parse_udp_port_range(config.webrtc.udp_port_range.as_deref().unwrap_or_default())?
+        {
+            setting_engine.set_udp_network(UDPNetwork::Ephemeral(range));
+        }
         let mode = mdns_mode();
         setting_engine.set_ice_multicast_dns_mode(mode);
         if mode == MulticastDnsMode::QueryAndGather {
